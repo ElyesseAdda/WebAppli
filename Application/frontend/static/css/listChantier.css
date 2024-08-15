@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Roboto+Slab:wght@400;700&display=swap');
+
+table {
+    border-collapse: collapse;
+    font-size: 1em;
+    font-family: 'Roboto' , sans-serif;
+    align-items: center;
+    width: 998px;
+    border: 2px solid rgba(80, 80, 80, 0.55);
+}
+
+table thead tr {
+    background-color: rgba(27, 120, 188, 1);
+    color: #ffffff;
+    text-align: left;
+    font-weight: bold;
+    
+}
+
+table th, table td {
+    padding: 12px 15px;
+    align-items: center;
+    
+}
+
+table tbody tr {
+    border-bottom: 1px solid #dddddd;
+    font-family: 'Roboto slab' , sans-serif;
+}
+
+table tbody tr:nth-of-type(even) {
+    background-color: rgba(217, 217, 217, 0.5);
+}
+
+td {
+    color: rgba(0, 0, 0, 0.904);
+}
+
+.EnCours {
+    color:  green;
+}
+
+.ListContainer {
+    scroll-behavior: smooth;
+    width: 1000px;
+    height: 730px;
+    padding: 30px;
+    margin: 300px 0px 0px 400px;
+    border-radius: 10px;
+}
+
+.NewChantier {
+    position: absolute;
+    top: 250px;
+    left: 1200px;
+    background-color: #ffffff;
+    color: rgba(27, 120, 188, 1);
+    border: none;
+    font-size: medium;
+    font-family: 'Roboto' , sans-serif;
+    font-weight: bold;
+}
+
