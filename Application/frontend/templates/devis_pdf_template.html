@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+body {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.22px;
+  padding-left: 40px;
+  /* line-height: 1.40px; */
+  max-width: 800px;
+}
+h2 {
+  text-decoration: underline 3px;
+}
+h3 {
+  font-weight: bold;
+}
+.header h1{
+   
+    padding: 10px;
+    border: thick double black;
+  
+}
+.header,
+.footer {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.client-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr;
+  grid-column-gap: 0px;
+  grid-row-gap: 0px;
+}
+
+.client-info {
+  grid-area: 1 / 1 / 2 / 2;
+}
+.contact-info {
+  grid-area: 1 / 2 / 2 / 3;
+}
+
+.client-info,
+.chantier-info {
+  margin-bottom: 20px;
+}
+
+.date {
+  padding-left: 500px;
+}
+
+table {
+  margin-bottom: 10px;
+  width: 100%;
+  border: solid 2px black;
+
+}
+table h2 {
+    text-decoration: none;
+  }
+
+th,
+td {
+  border-collapse: separate;
+  border: solid 3px black; /* Bordure double noire */
+}
+
+.designation {
+  width: 400px;
+}
+.u {
+  width: 30px;
+  text-align: center;
+}
+.quantite {
+  width: 75px;
+  text-align: center;
+}
+.prix-unitaire {
+  width: 75px;
+  text-align: center;
+}
+.total-htb {
+  width: 100px;
+  text-align: right;
+}
+.total-ht {
+  width: 100px;
+  text-align: right;
+}
+
+.titre-colone {
+  text-align: center; /* Centre le texte */
+}
+.total {
+  font-weight: bold;
+}
+</style>
+  </head>
+  <body>
+    <div class="client-container">
+      <div class="client-info">
+        <h2>Client:</h2>
+        <h3>PROMOGIM</h3>
+        <p>ACTIPARC II. BAT E2 CHEMIN DE ST LAMBERT</p>
+        <p>13821, LA PENNE SUR HUVEAUNE</p>
+      </div>
+
+      <div class="contact-info">
+        <h2>Contact:</h2>
+        <p>Mr DEOM Jean-Baptiste</p>
+        <p>Tél: 06.99.83.87.40</p>
+        <p>Mail: jb.deom@promogim.fr</p>
+      </div>
+    </div>
+
+    <div class="date">
+      <p>A Marseille, le 21/05/2024</p>
+    </div>
+
+    <div class="header">
+      <h1>Devis de travaux</h1>
+    </div>
+
+    <div class="chantier-info">
+      <h2>ADRESSE DU CHANTIER:</h2>
+      <h3>RESIDENCE LA MAUSSANE</h3>
+      <p>Avenue de saint menet</p>
+      <p>13011 - Marseille</p>
+    </div>
+
+    <table class="titre-colone">
+      <thead>
+        <tr>
+          <th class="designation"><h2>DESIGNATION</h2></th>
+          <th class="u"><h2>U</h2></th>
+          <th class="quantite"><h2>Quantité</h2></th>
+          <th class="prix-unitaire"><h2>Prix Unitaire</h2></th>
+          <th class="total-ht"><h2>Total HT</h2></th>
+        </tr>
+      </thead>
+    </table>
+    <table class="partie-table">
+      <tbody>
+        <tr>
+          <td class="designation">faqfazfaz</td>
+          <td class="u">m²</td>
+          <td class="quantite">fgzqg</td>
+          <td class="prix-unitaire">zegegaz</td>
+          <td class="total-htb">fgzqsedfgzqse</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="total">
+      <p>Montant Global HT : azfaffaf</p>
+      <p>TVA 20% : fafafaqf</p>
+      <p>Total TTC : azegffgafga</p>
+    </div>
+
+    <div class="footer">
+      <p>Société fafaefgaegf - fafeagaqe</p>
+      <p>Téléphone : gaqgedag - Email : gaqgeag</p>
+    </div>
+  </body>
+</html>

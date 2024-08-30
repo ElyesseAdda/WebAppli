@@ -1,20 +1,36 @@
-import React, { Component } from "react";
-import { render } from "react-dom";
-import ListChantier from "./ListChantier"
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Layout from './Layout';
+import ListChantier from './ListChantier';
+import ChantierInfo from './ChantierInfo';
+import Dashboard from './Dashboard';
 
-export default class App extends Component {    
-    constructor(props) {
-        super(props);
-    }
 
-    render() {
-        return <div>
-        <ListChantier />
 
-        </div> 
-    }
+
+function App() {
+    return (
+        <Router>
+            <Layout>
+                <Routes>
+                    <Route index element={<Dashboard />} />
+                        <Route path="/chantier/:id" element={<ChantierInfo />} />                   
+                        <Route path="/ListChantier" element={<ListChantier />} />
+                        
+                </Routes>
+            </Layout>
+        </Router>
+        
+    );
+   
 }
 
-
-const appDiv = document.getElementById("app");
-render(<App/>, appDiv);
+// Créer un root et rendre l'application
+const rootElement = document.getElementById('app');
+if (rootElement) {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+} else {
+    console.error('Cannot find root element');
+}

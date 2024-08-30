@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    
 ]
 
 CORS_ALLOWED_ORIGINS = [
@@ -133,3 +134,5 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/dev/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+

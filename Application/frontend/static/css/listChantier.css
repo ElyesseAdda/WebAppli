@@ -5,7 +5,7 @@ table {
     font-size: 1em;
     font-family: 'Roboto' , sans-serif;
     align-items: center;
-    width: 998px;
+    width: 1400px;
     border: 2px solid rgba(80, 80, 80, 0.55);
 }
 
@@ -41,23 +41,56 @@ td {
 }
 
 .ListContainer {
+    background-color: #ffffff;
     scroll-behavior: smooth;
-    width: 1000px;
-    height: 730px;
+    width: 1400px;
+    height: 600px;
     padding: 30px;
     margin: 300px 0px 0px 400px;
     border-radius: 10px;
+    box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
+    -webkit-box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
+    -moz-box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
 }
 
 .NewChantier {
     position: absolute;
     top: 250px;
-    left: 1200px;
-    background-color: #ffffff;
-    color: rgba(27, 120, 188, 1);
+    left: 1500px;
+    background-color: rgba(27, 120, 188, 1);
+    color: rgb(255, 255, 255);
     border: none;
     font-size: medium;
     font-family: 'Roboto' , sans-serif;
     font-weight: bold;
 }
 
+li { 
+    list-style: none;
+    outline-style: none;
+}
+
+a{  position: relative;
+    color: rgba(27, 120, 188, 1);
+    text-decoration: none;
+    font-size: large;
+    font-weight: bold;
+}
+
+.En.Cours {
+    color :rgba(27, 120, 188, 1)
+}
+.En.Attente.Signature{
+    color :rgb(255, 123, 0)
+}
+.Terminer {
+    color :rgb(185, 0, 0)
+}
+
+.main-container {
+    height: 100%;
+    position: absolute;
+    width: 100%;
+    z-index: 1;
+    
+}

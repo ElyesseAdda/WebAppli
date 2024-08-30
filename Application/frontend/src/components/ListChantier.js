@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import './../../static/css/listChantier.css'
 import {FaPlusCircle} from 'react-icons/fa'
+import { Link } from 'react-router-dom';
+import SlideBar from './SlideBar';
+import Header from './Header'
+
 
 function ListChantiers() {
     const [chantiers, setChantiers] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8000/api/chantierchantiers/', {
+        fetch('http://127.0.0.1:8000/api/chantiers/', {
             method: 'GET', // Assure-toi que c'est bien une requête GET
             headers: {
                 'Content-Type': 'application/json'
@@ -34,9 +38,11 @@ function ListChantiers() {
     }
 
     return (
-        <div>
-            <button className='NewChantier' link='./'variant="contained"> <FaPlusCircle />   Ajouter un Chantier</button>
+        <div className='main-container'>
+            <Header />
+            <SlideBar />
             <div className='ListContainer'>
+            <Link to={`/api/chantier`}className='NewChantier' link='./'variant="contained"> <FaPlusCircle />   Ajouter un Chantier</Link>
                 <div className='List'>
                 <table>
                     <thead>
@@ -45,16 +51,22 @@ function ListChantiers() {
                             <th>Nom Client</th>
                             <th>Statut</th>
                             <th>Date de Création</th>
+                            <th>Taux facturation</th>
                             <th>Chiffre d'Affaires</th>
                         </tr>
                     </thead>
                     <tbody>
                         {chantiers.map(chantier => (
                             <tr key={chantier.id}>
-                                <td>{chantier.chantier_name}</td>
+                                <td>
+                                <Link to={`/chantier/${chantier.id}`}>
+                                            {chantier.chantier_name}
+                                        </Link>
+                                        </td>
                                 <td>{chantier.client_name}</td>
                                 <td className={chantier.state_chantier}> {chantier.state_chantier} </td>
                                 <td>{chantier.date_debut}</td>
+                                <td>A faire</td>
                                 <td>{chantier.chiffre_affaire} €</td>
                             </tr>
                         ))}
@@ -62,6 +74,7 @@ function ListChantiers() {
                 </table>
             </div>
         </div>
+        
     </div>
     );
 }
