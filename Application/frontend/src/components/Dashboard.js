@@ -45,7 +45,7 @@ function Dashboard() {
 
     return (
     <div className="dashboard">
-            
+         
             {/* Partie Chantier en cour */}
             <div className="dashboard-cards">
                 <div className="chantier-container">
@@ -69,6 +69,7 @@ function Dashboard() {
                         <p>Marge sur chantier</p>
                         <h2 className={getColorClass(data.chantier_en_cours)}>{data.chantier_en_cours} €</h2>
                     </div>
+                    <div className="ca-estime-part"> 
                 </div>
         <div className="element-container">
             <div className="devis-part"> 
@@ -152,8 +153,9 @@ function Dashboard() {
                     <h2>{data.total_facture_combined} €</h2>
                     </div>
                  </div> 
+                
                 </div>
-                <div className="ca-estime-part"> 
+
                     {/* --------------------------Partie CA Estime------------------------ */}
                 <div className="estime-part">
                  <div class="estime-container">

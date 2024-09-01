@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+<style>
+        
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  padding: 60px;
+  max-width: 800px;
+  padding-top: 0px;
+  
+}
+.bold {
+  font-weight: 700;
+}
+.p3000-container {
+  padding-bottom: 50px;
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-column-gap: 0px;
+  grid-row-gap: 0px;
+}
+.logo-container{
+  grid-area: 1 / 1 / 2 / 2;
+  width: 200px;
+}
+.logo {
+  padding-top: 30px;
+  padding-left: 20px;
+  width: 200px;
+  height: 140px; 
+}
+.P3000-info{
+  padding-top: 20px;
+  grid-area: 1 / 2 / 2 / 3;
+  color: rgba(27, 120, 188, 1);
+  text-align: right;
+  font-weight: 500;
+
+  p{
+    font-size: 12px;
+    font-style: italic;
+    line-height: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  
+  h2{
+  letter-spacing: -1px;
+  text-decoration: none;
+  font-style: normal;
+  font-size: 25px;
+  font-weight: 700;
+  margin-bottom: 0px;
+  }
+}
+
+.blue {
+  background-color: rgba(27, 120, 188, 1);
+  
+}
+h2 {
+  text-decoration: underline 2px;
+  font-size: medium;
+}
+h3 {
+  font-weight: bold;
+}
+.header {
+    padding: 0px;
+    border: solid 2px black;
+  h1 {
+    font-size: 18px;
+    margin: 1px;
+    border: solid 2px black;
+  }
+}
+.header,
+.footer {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.client-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 2fr;
+  grid-column-gap: 150px;
+  grid-row-gap: 0px;
+  margin-bottom: -30px;
+}
+
+.client-info {
+  line-height: 7px;
+  padding-left: 20px;
+  grid-area: 1 / 1 / 2 / 2;
+    h3{
+      padding-left: 20px;
+    }
+   p{
+    padding-left: 20px;
+    
+   }
+}
+.contact-info {
+  line-height: 7px;
+  padding-left: 80px;
+  grid-area: 1 / 2 / 2 / 3;
+}
+
+.client-info,
+.contact-info {
+  margin-bottom: 10px;
+}
+.chantier-info {
+  line-height: 7px;
+  h2{
+    font-weight: 800;
+    font-size: 12px;
+  }
+  h3{
+    margin-top: 0px;
+    margin-bottom: 0px;
+  }
+  p{
+    font-style: italic;
+
+  }
+
+}
+
+.date {
+  text-align: right;
+}
+
+table {
+  margin-bottom: 10px;
+  width: 100%;
+  border: solid 2px black;
+  max-height: 20px;
+
+  h2 {
+    text-decoration: none;
+    margin: 0px;
+  }
+}
+.titre-colone {
+  h2{
+    font-size: 12px;
+    font-weight: 800;
+  }
+}
+th,
+td {
+  border: solid 2px black; 
+}
+
+.designation {
+  width: 400px;
+}
+.u {
+  width: 20px;
+  text-align: center;
+}
+.quantite {
+  width: 75px;
+  text-align: center;
+}
+.prix-unitaire {
+  width: 75px;
+  text-align: center;
+  
+}
+.total-htb {
+  width: 100px;
+  text-align: right;
+}
+.total-ht {
+  width: 100px;
+  text-align: center;
+}
+
+.titre-colone {
+  text-align: center; /* Centre le texte */
+}
+.recap {
+  p{
+    text-align: right;
+
+  }
+}
+.titre-recap {
+  text-align: center;
+  font-weight: 800;
+  font-size: 11px;
+}
+.tva-value {
+  text-align: right;
+  padding-left: 448px;
+}
+.tva-valueb {
+  text-align: right;
+  padding-left: 500px;
+}
+.footer {
+  text-align: left;
+  line-height: 5px;
+  margin-top: 20px
+}
+
+
+</style>
+</head>
+  <body>
+    <div class="p3000-container ">
+      <div class="logo-container">
+        <img class="logo" src="../src/img/logo.png" alt="">
+      </div>
+
+      <div class="P3000-info">
+        <h2>SARL PEINTURE 3000</h2>
+        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+        <p>13014 - Marseille</p>
+        <p>Société à Reponsabilité Limitée au capital de 20 000,00€</p>
+        <p>N°Siren: 352 875 317 RCS Marseill</p>
+        <p>Mail: peinture3000@ymail.com</p>
+      </div>
+    </div>
+    </div>
+    <div class="client-container">
+      <div class="client-info">
+        <h2>Client:</h2>
+        <h3>PROMOGIM</h3>
+        <p>ACTIPARC II. BAT E2</p>
+        <p>CHEMIN DE ST LAMBERT</p>
+        <p>13821, LA PENNE SUR HUVEAUNE</p>
+      </div>
+
+      <div class="contact-info">
+        <h2>Contact:</h2>
+        <p>Mr DEOM Jean-Baptiste</p>
+        <p>Tél: 06.99.83.87.40</p>
+        <p>Mail: jb.deom@promogim.fr</p>
+      </div>
+    </div>
+
+    <div class="date">
+      <p>A Marseille, le 21/05/2024</p>
+    </div>
+
+    <div class="header">
+      <h1>Devis de travaux</h1>
+    </div>
+
+    <div class="chantier-info">
+      <h2>ADRESSE DU CHANTIER :</h2>
+      <h3>RESIDENCE LA MAUSSANE</h3>
+      <p>Avenue de saint menet</p>
+      <p>13011 - Marseille</p>
+    </div>
+
+    <table class="titre-colone">
+      <thead>
+          <th class="designation"><h2>DESIGNATION</h2></th>
+          <th class="u"><h2>U</h2></th>
+          <th class="quantite"><h2>Quantité</h2></th>
+          <th class="prix-unitaire"><h2>Prix Unitaire</h2></th>
+          <th class="total-ht"><h2>Total HT</h2></th>
+        </tr>
+      </thead>
+    </table>
+    <table class="partie-table">
+      <tbody>
+        <tr>
+          <tr class="bold">Nature des travaux : 
+            LOT N°50 - PEINTURES INTERIEURES</tr>
+          <tr>
+          <td class="designation">faqfazfaz</td>
+          <td class="u">m²</td>
+          <td class="quantite">fgzqg</td>
+          <td class="prix-unitaire">zegegaz</td>
+          <td class="total-htb">fgzqsedfgzqse</td>
+          </tr>
+        <table class="recap">
+          <tr>
+            <td class="titre-recap">RÉCAPITULATIF</td> 
+          </tr>
+          <tr class="blue">
+            <td>
+              <span>- Montant Global HT : </span>
+              <span class="tva-value">fafafaqf</span>
+            </td> 
+          </tr>
+          <tr>
+            <td>
+              <span class="tva-label">- TVA 20% :</span>
+              <span class="tva-valueb">fafafaqf</span>
+            </td>
+
+          </tr>
+          <tr>
+            <td>- Total TTC : <span class="tva-valueb">fafafaqf</span></td> 
+          </tr>
+          
+        </table>
+        </tbody>
+        </table>
+
+    <div class="footer">
+      <p>Devis valable 1 mois après réception</p>
+      <p>Signature du client suivie de la mention "Bon pour accord"</p>
+    </div>
+  </body>
+</html>

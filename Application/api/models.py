@@ -33,6 +33,7 @@ class Chantier(models.Model):
     cout_main_oeuvre = models.FloatField(null=True)
     cout_sous_traitance = models.FloatField(null=True)
     description = models.TextField(null=True)
+    
 
     #Partie validation des informations
     @property
@@ -57,21 +58,21 @@ class Agent(models.Model):
     conge = models.FloatField()
 
 
-# class Client(models.Model):
-#     name = models.CharField(max_length=25)
-#     surname = models.CharField(max_length=25)
-#     client_mail = models.EmailField()
-#     phone_Number = models.IntegerField()
-#     chantiers = models.ManyToManyField(Chantier, related_name='client', blank=True)
+class Client(models.Model):
+    name = models.CharField(max_length=25)
+    surname = models.CharField(max_length=25)
+    client_mail = models.EmailField()
+    phone_Number = models.IntegerField()
+    chantiers = models.ManyToManyField(Chantier, related_name='client', blank=True)
 
-#     def __str__(self):
-#         return f"{self.name} {self.surname}"
+    def __str__(self):
+        return f"{self.name} {self.surname}"
 
 
     
 class Fournisseur(models.Model):
     name = models.CharField(max_length=25,)
-    adresse = models.CharField(max_length=200,)
+    adress = models.CharField(max_length=200,)
     Fournisseur_mail = models.EmailField()
     phone_Number = models.IntegerField()
     description_fournisseur = models.CharField(max_length=250,)
@@ -85,7 +86,8 @@ class Materiel_produit(models.Model):
 
     
 class Facture(models.Model):
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='factures', null=True)  # Modification ici
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='factures', null=True)
+    client = models.ManyToManyField(Client, related_name='factures', blank=True)  # Modification ici
     price_ht = models.FloatField()
     date_creation = models.DateField(auto_now_add=True)
     date_modification = models.DateField(auto_now=True)
@@ -102,6 +104,7 @@ class Devis(models.Model):
     numero = models.CharField(max_length=100, unique=False, default='DEV-0001')
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Travaux')
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True)
+    client = models.ManyToManyField(Client, related_name='devis', blank=True)  # Modification ici
     price_ht = models.FloatField()
     date_creation = models.DateField(auto_now_add=True)
     date_modification = models.DateField(auto_now=True)
@@ -123,6 +126,7 @@ class Devis(models.Model):
 
 class Situation(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='situations', null=True)
+    client = models.ManyToManyField(Client, related_name='situations', blank=True)  # Modification ici
     price_ht = models.FloatField()
     date_creation = models.DateField(auto_now_add=True)
     date_modification = models.DateField(auto_now=True)
@@ -133,6 +137,7 @@ class Situation(models.Model):
 
 class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)
+    client = models.ManyToManyField(Client, related_name='quitus', blank=True)  # Modification ici
     state_quitus = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
     description_quitus = models.CharField(max_length=250)
 
@@ -140,17 +145,30 @@ class Quitus(models.Model):
         return f"Quitus {self.id}"
 
 class Partie(models.Model):
-    nom = models.CharField(max_length=255)
-    description = models.TextField()
+    titre = models.CharField(max_length=500, null=True)
 
+    def __str__(self):
+        return self.titre
 
 class SousPartie(models.Model):
-    partie = models.ForeignKey(Partie, on_delete=models.CASCADE)
-    nom = models.CharField(max_length=255)
-    description = models.TextField()
-    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    partie = models.ForeignKey(Partie, related_name='sous_parties', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
 
+    def __str__(self):
+        return f'{self.description} - {self.partie.titre}'
 
+    def nombre_lignes_details(self):
+        return self.lignes_details.count()
+    
+class LigneDetail(models.Model):
+    sous_partie = models.ForeignKey(SousPartie, related_name='lignes_details', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
+    unite = models.CharField(max_length=10)
+    prix = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)  # Ajout du champ prix
+
+    def __str__(self):
+        return f'{self.description} ({self.unite}) - {self.prix} €'
+    
 class DevisItem(models.Model):
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='items')
     sous_partie = models.ForeignKey(SousPartie, on_delete=models.CASCADE)

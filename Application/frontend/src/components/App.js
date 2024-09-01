@@ -5,6 +5,9 @@ import Layout from './Layout';
 import ListChantier from './ListChantier';
 import ChantierInfo from './ChantierInfo';
 import Dashboard from './Dashboard';
+import CreationPartie from './CreationPartie';
+
+
 
 
 
@@ -17,7 +20,7 @@ function App() {
                     <Route index element={<Dashboard />} />
                         <Route path="/chantier/:id" element={<ChantierInfo />} />                   
                         <Route path="/ListChantier" element={<ListChantier />} />
-                        
+                        <Route path="/CreationPartie" element={<CreationPartie />} />
                 </Routes>
             </Layout>
         </Router>
