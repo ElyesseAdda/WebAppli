@@ -50,7 +50,7 @@ function Dashboard() {
             <div className="dashboard-cards">
                 <div className="chantier-container">
                     <div className="chantier">
-                        <p>Chantiers</p>
+                        <p>aqgeazq</p>
                         <h1>{data.chantier_en_cours}</h1>
                     </div>
                     <div className="total">

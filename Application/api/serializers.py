@@ -1,5 +1,5 @@
 from rest_framework import serializers  
-from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail
+from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -38,4 +38,10 @@ class PartieSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Partie
+        fields = '__all__'
+
+class ClientSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = Client
         fields = '__all__'
