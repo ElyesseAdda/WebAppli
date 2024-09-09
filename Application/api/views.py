@@ -1,13 +1,14 @@
 from rest_framework import viewsets
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail
-from .forms import DevisForm
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer
+from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Avg, Count, Min, Sum
 from .forms import DevisForm, DevisItemForm
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 import subprocess
+import os
+import json
 
 
 # Create your views here.
@@ -71,45 +72,102 @@ def dashboard_data(request):
     }
     return JsonResponse(data)
 
-def create_devis(request):
-    if request.method == 'POST':
-        devis_form = DevisForm(request.POST)
-        if devis_form.is_valid():
-            devis = devis_form.save()
-            for sous_partie_id in request.POST.getlist('sous_partie'):
-                quantite = request.POST.get(f'quantite_{sous_partie_id}')
-                DevisItem.objects.create(
-                    devis=devis,
-                    sous_partie_id=sous_partie_id,
-                    quantite=quantite
-                )
-            return redirect('devis_detail', devis_id=devis.id)
+def generate_pdf_view(request):
+    try:
+        # Chemin vers le fichier generate_pdf.js
+        script_path = os.path.join('C:/Users/Boume/Desktop/Projet-React/P3000/WebAppli/Application/frontend/src/components/generate_pdf.js')
+        
+        # Exécuter le script Node.js qui lance Puppeteer
+        subprocess.run(['node', script_path], check=True)
+        
+        return JsonResponse({'status': 'PDF généré avec succès'})
+    except subprocess.CalledProcessError as e:
+        return JsonResponse({'error': 'Erreur lors de la génération du PDF'}, status=500)
+    
+
+
+def preview_devis(request):
+    devis_data_encoded = request.GET.get('devis')
+
+    if devis_data_encoded:
+        try:
+            devis_data = json.loads(devis_data_encoded)
+
+            # Récupérer le chantier associé
+            chantier = get_object_or_404(Chantier, id=devis_data['chantier'])
+            societe = chantier.societe
+            client = societe.client_name  # Ceci fait maintenant référence à un objet Client
+
+            parties_data = []
+            total_ht = 0
+
+            for partie_id in devis_data['parties']:
+                partie = get_object_or_404(Partie, id=partie_id)
+                sous_parties_data = []
+                sous_parties_ids = devis_data.get('sous_parties', [])
+                sous_parties = SousPartie.objects.filter(partie=partie, id__in=sous_parties_ids)
+
+                for sous_partie in sous_parties:
+                    lignes_details_data = []
+
+                    for ligne in LigneDetail.objects.filter(sous_partie=sous_partie):
+                        ligne_detail = next(
+                            (ld for ld in devis_data['lignes_details'] if ld['id'] == ligne.id), None
+                        )
+
+                        if ligne_detail:
+                            quantity = float(ligne_detail.get('quantity', 1))
+                            custom_price = float(ligne_detail.get('custom_price', ligne.prix))
+
+                            total_ligne = custom_price * quantity
+                            total_ht += total_ligne
+
+                            lignes_details_data.append({
+                                'description': ligne.description,
+                                'unite': ligne.unite,
+                                'quantity': quantity,
+                                'custom_price': custom_price,
+                                'total': total_ligne,
+                            })
+
+                    if lignes_details_data:
+                        sous_parties_data.append({
+                            'description': sous_partie.description,
+                            'lignes_details': lignes_details_data,
+                            'total_sous_partie': sum(l['total'] for l in lignes_details_data)
+                        })
+
+                if sous_parties_data:
+                    partie_total = sum(sp['total_sous_partie'] for sp in sous_parties_data)
+                    parties_data.append({
+                        'titre': partie.titre,
+                        'sous_parties': sous_parties_data,
+                        'total_partie': partie_total
+                    })
+
+            # Calculer la TVA (20%) et le montant TTC
+            tva = total_ht * 0.20
+            montant_ttc = total_ht + tva
+
+            context = {
+                'chantier': chantier,
+                'societe': societe,
+                'client': client,
+                'parties': parties_data,
+                'total_ht': total_ht,
+                'tva': tva,
+                'montant_ttc': montant_ttc
+            }
+
+            return render(request, 'preview_devis.html', context)
+
+        except json.JSONDecodeError as e:
+            return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
     else:
-        devis_form = DevisForm()
-        devis_item_form = DevisItemForm()
-    
-    return render(request, 'create_devis.html', {
-        'devis_form': devis_form,
-        'devis_item_form': devis_item_form,
-    })
+        return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
-def download_devis_pdf(request, chantier_id):
-    # Récupérer les données du chantier
-    chantier = Chantier.objects.get(id=chantier_id)
-    
-    # Générer l'HTML pour le devis
-    html_string = render_to_string('devis.html', {'chantier': chantier})
-    with open('devis_temp.html', 'w') as f:
-        f.write(html_string)
-    
-    # Exécuter le script Puppeteer pour générer le PDF
-    subprocess.run(['node', 'generate_pdf.js'])
 
-    # Lire le PDF généré
-    with open('devis.pdf', 'rb') as pdf_file:
-        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="devis_{chantier.nom}.pdf"'
-        return response
+
 
 class PartieViewSet(viewsets.ModelViewSet):
     queryset = Partie.objects.all()
@@ -122,3 +180,7 @@ class SousPartieViewSet(viewsets.ModelViewSet):
 class LigneDetailViewSet(viewsets.ModelViewSet):
     queryset = LigneDetail.objects.all()
     serializer_class = LigneDetailSerializer
+
+class ClientViewSet(viewsets.ModelViewSet):
+    queryset = Client.objects.all()
+    serializer_class = ClientSerializer

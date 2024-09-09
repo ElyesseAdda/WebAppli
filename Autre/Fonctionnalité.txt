@@ -1,0 +1,15 @@
+-Création document devis - facture - avenant - Quitus (Document d'intervention) - situation
+-Alerte relance client 
+-Alerte tâche en cour 
+-Suivi document 
+-Calcule prévisionnel m2 avec superficie - Matériel - Main d'œuvre avec séparation matériel et main d'œuvre 
+-Edition sans détail pour le client avec possibilité de modification prix
+-Planning sous traitant  
+-Pas de planning pour le moment 
+-Pas de signature en ligne 
+-Planification des relances clients - devis - réponse appel d'offre etc...
+-Modifier n°devis (Pour garder la main)
+-Plusieurs version devis (trame classique et vide )
+-Option stock associée à un chantier
+-Alerte fin de stock 
+-

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Roboto+Slab:wght@400;700&display=swap');
+
 
 table {
     border-collapse: collapse;
@@ -46,7 +46,6 @@ td {
     width: 1400px;
     height: 600px;
     padding: 30px;
-    margin: 300px 0px 0px 400px;
     border-radius: 10px;
     box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
     -webkit-box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);

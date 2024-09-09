@@ -11,7 +11,7 @@ function ListChantiers() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/chantiers/', {
+        fetch('http://127.0.0.1:8000/api/chantier/', {
             method: 'GET', // Assure-toi que c'est bien une requête GET
             headers: {
                 'Content-Type': 'application/json'
@@ -39,8 +39,6 @@ function ListChantiers() {
 
     return (
         <div className='main-container'>
-            <Header />
-            <SlideBar />
             <div className='ListContainer'>
             <Link to={`/api/chantier`}className='NewChantier' link='./'variant="contained"> <FaPlusCircle />   Ajouter un Chantier</Link>
                 <div className='List'>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Prévisualisation du Devis</title>
+    <style>
+     
+        /* Style général */
+        body {
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 12px;
+          padding: 60px;
+          max-width: 800px;
+          padding-top: 0px;
+        }
+        .bold {
+          font-weight: 700;
+        }
+  
+        /* Style du tableau */
+        table {
+          width: 100%;
+          boder: 2px solid black
+        }
+        th{
+          border: 2px solid black; /* Bordure double */
+          padding: 8px;
+          text-align: center; /* Alignement du texte au centre pour tout */
+          background-color: transparent; /* Pas de fond pour l'en-tête */
+          font-weight: bold;
+         
+        }
+  
+        /* Colonnes Désignation et Total */
+        .designation {
+          text-align: center; /* Alignement à gauche pour la désignation */
+          width: 500px;
+          max-width: 500px;
+        }
+        .ligne-details {
+          text-align: left; /* Alignement à gauche pour la désignation */
+          width: 400px;
+          max-width: 500px;
+        }
+        .total {
+          text-align: right;
+          font-weight: bold;
+        }
+  
+        /* Style d'en-tête et de pied de page */
+        .header {
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        .header h1 {
+          font-size: 20px;
+          text-decoration: underline;
+        }
+  
+        /* Infos client et chantier */
+        .info-section {
+          margin-bottom: 20px;
+        }
+        .info-section h2 {
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 10px;
+        }
+        .info-section p {
+          margin: 5px 0;
+        }
+  
+        /* Style pour les sections en bleu */
+        .blue {
+          background-color: rgba(27, 120, 188, 1);
+          color: white;
+          font-weight: bold;
+          padding: 5px;
+          text-align: left;
+          
+        }
+        .blue-light {
+          background-color: rgb(157, 197, 226);
+          color: black;
+          padding: 5px;
+          text-align: left;
+          font-weight: 600;
+        }
+        .unite{
+          width: 45px;
+          text-align: center;
+        }
+        .quantite{
+          width: 50px;
+          text-align: center;
+        }
+        .prix{
+          width: 70px;
+          text-align: center;
+        }
+        .totalHt{
+          width: 60px;
+          text-align: right;
+        }
+        .border{
+          border: solid 2px black;
+        }
+        .header,
+  .footer {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  
+  .client-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: 2fr;
+    grid-column-gap: 150px;
+    grid-row-gap: 0px;
+    margin-bottom: -30px;
+  }
+  
+  .client-info {
+    line-height: 7px;
+    padding-left: 20px;
+    grid-area: 1 / 1 / 2 / 2;
+      
+  }
+  .contact-info {
+    line-height: 7px;
+    grid-area: 1 / 2 / 2 / 3;
+  }
+  
+  .client-info,
+  .contact-info {
+    margin-bottom: 10px;
+  }
+  .chantier-info {
+    line-height: 7px;
+    h2{
+      font-weight: 800;
+      font-size: 12px;
+    }
+    h3{
+      margin-top: 0px;
+      margin-bottom: 0px;
+    }
+    p{
+      font-style: italic;
+  
+    }
+  
+  }
+  
+  .date {
+    text-align: right;
+    margin-top: 20px;
+  }
+  .p3000-container {
+    padding-bottom: 50px;
+    display: grid;
+    grid-template-rows: 1fr;
+    grid-column-gap: 0px;
+    grid-row-gap: 0px;
+  }
+  .logo-container{
+    grid-area: 1 / 1 / 2 / 2;
+    width: 200px;
+  }
+  .logo {
+    padding-top: 30px;
+    padding-left: 20px;
+    width: 200px;
+    height: 140px; 
+  }
+  .P3000-info{
+    padding-top: 20px;
+    grid-area: 1 / 2 / 2 / 3;
+    color: rgba(27, 120, 188, 1);
+    text-align: right;
+    font-weight: 500;
+  
+    p{
+      font-size: 12px;
+      font-style: italic;
+      line-height: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    
+    h2{
+    letter-spacing: -1px;
+    text-decoration: none;
+    font-style: normal;
+    font-size: 25px;
+    font-weight: 700;
+    margin-bottom: 0px;
+    }
+  }
+  .header {
+    padding: 0px;
+    border: solid 2px black;
+  h1 {
+    font-size: 18px;
+    margin: 1px;
+    border: solid 2px black;
+    text-decoration: none;
+  }
+  }
+  .header,
+  .footer {
+  text-align: center;
+  margin-bottom: 10px;
+  }
+  h2{
+    text-decoration: underline 2px black;
+  }
+</style>
+   
+</head>
+<body>
+  <div class="p3000-container">
+    <div class="logo-container">
+      <img class="logo" src="../../src/img/logo.png" alt="">
+    </div>
+    <div class="P3000-info">
+      <h2>SARL PEINTURE 3000</h2>
+      <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+      <p>13014 - Marseille</p>
+      <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
+      <p>N°Siren: 352 875 317 RCS Marseille</p>
+      <p>Mail: peinture3000@ymail.com</p>
+    </div>
+  </div>
+
+  <div class="client-container">
+    <div class="client-info">
+      <h2>Client:</h2>
+      <h3>{{ societe.nom_societe }}</h3>
+      <p>{{ societe.rue_societe }}</p>
+      <p>{{ societe.codepostal_societe }}, {{ societe.ville_societe }}</p>
+    </div>
+    <div class="contact-info">
+      <h2>Contact:</h2>
+      <p>{{ client.name }} {{ client.surname }}</p>
+      <p>Tél: {{ client.phone_Number }}</p>
+      <p>Mail: {{ client.client_mail }}</p>
+    </div>
+  </div>
+
+  <div class="date">
+    <p>A Marseille, le {% now "d/m/Y" %}</p>
+  </div>
+
+  <div class="header">
+    <h1>Devis de travaux</h1>
+  </div>
+
+  <div class="chantier-info">
+    <h2>ADRESSE DU CHANTIER :</h2>
+    <h3>RESIDENCE LA MAUSSANE</h3>
+    <p>Avenue de saint menet</p>
+    <p>13011 - Marseille</p>
+  </div>
+
+  <div class="border" style="margin-bottom:20px;">
+    <table>
+      <thead>
+        <tr>
+          <th class="designation">DESIGNATION</th>
+          <th class="unite">U</th>
+          <th class="quantite">Quantité</th>
+          <th class="prix">Prix Unitaire</th>
+          <th class="totalHt">Total HT</th>
+        </tr>
+      </thead>
+    </table>
+  </div>
+
+  <div class="border" style="padding: 2px;">
+    <table>
+      <tbody>
+        {% for partie in parties %}
+          <tr class="blue">
+            <td colspan="5">{{ partie.titre }} <span style="float: right;">{{ partie.total_partie|floatformat:2 }} €</span></td>
+          </tr>
+          {% for sous_partie in partie.sous_parties %}
+            <tr class="blue-light">
+              <td colspan="5">{{ sous_partie.description }} <span style="float: right;">{{ sous_partie.total_sous_partie|floatformat:2 }} €</span></td>
+            </tr>
+            {% for ligne in sous_partie.lignes_details %}
+            <tr>
+              <td class="ligne-details">{{ ligne.description }}</td>
+              <td class="unite">{{ ligne.unite }}</td>
+              <td class="quantite">{{ ligne.quantity }}</td>
+              <td class="prix">{{ ligne.custom_price|floatformat:2 }} €</td>
+              <td class="totalHt">{{ ligne.total|floatformat:2 }} €</td>
+            </tr>
+            {% endfor %}
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Totaux HT, TVA et TTC -->
+  <div class="total-summary">
+    <p>Total HT : {{ total_ht|floatformat:2 }} €</p>
+    <p>TVA (20%) : {{ tva|floatformat:2 }} €</p>
+    <p><strong>Montant TTC : {{ montant_ttc|floatformat:2 }} €</strong></p>
+</div>
+
+</body>
+</html>

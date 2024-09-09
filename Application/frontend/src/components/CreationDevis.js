@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import CreationPartie from './CreationPartie'; // Assurez-vous que le chemin est correct
 import './../../static/css/creationDevis.css';
+import ListePartiesSousParties from './ListPartiesSousParties';
 
 const CreationDevis = () => {
     const [chantiers, setChantiers] = useState([]);
@@ -17,6 +18,7 @@ const CreationDevis = () => {
     const [customPrices, setCustomPrices] = useState({});
     const [showCreationPartie, setShowCreationPartie] = useState(false); // État pour afficher ou masquer CreationPartie.js
 
+    // Charger les chantiers
     useEffect(() => {
         axios.get('/api/chantier/')
             .then(response => {
@@ -27,9 +29,10 @@ const CreationDevis = () => {
             });
     }, []);
 
+    // Charger les parties liées au chantier sélectionné
     useEffect(() => {
         if (selectedChantierId) {
-            axios.get('/api/parties/')
+            axios.get('/api/parties/', { params: { chantier: selectedChantierId } })
                 .then(response => {
                     setParties(response.data);
                 })
@@ -39,6 +42,7 @@ const CreationDevis = () => {
         }
     }, [selectedChantierId]);
 
+    // Charger toutes les sous-parties
     useEffect(() => {
         axios.get('/api/sous-parties/')
             .then(response => {
@@ -49,6 +53,7 @@ const CreationDevis = () => {
             });
     }, []);
 
+    // Filtrer les sous-parties en fonction des parties sélectionnées
     useEffect(() => {
         if (selectedParties.length > 0) {
             const filtered = sousParties.filter(sousPartie =>
@@ -78,6 +83,7 @@ const CreationDevis = () => {
         }
     };
 
+    // Charger les lignes de détail basées sur les sous-parties sélectionnées
     useEffect(() => {
         if (selectedSousParties.length > 0) {
             axios.get('/api/ligne-details/')
@@ -114,116 +120,142 @@ const CreationDevis = () => {
             sous_parties: selectedSousParties,
             lignes_details: filteredLignesDetails.map(ligne => ({
                 id: ligne.id,
-                quantity: quantities[ligne.id] || 1,  // Par défaut à 1 si non modifié
-                custom_price: customPrices[ligne.id] || ligne.prix  // Utiliser le prix modifié ou le prix original
+                quantity: quantities[ligne.id] || 1,
+                custom_price: customPrices[ligne.id] || ligne.prix
             }))
         };
-
-        axios.post('/api/devis/', devisData)
+    
+        // Envoyer les données du devis à l'API pour la génération du PDF
+        axios.post('/api/devisa/', devisData)
             .then(response => {
                 console.log('Devis généré:', response.data);
-                // Logique pour rediriger ou afficher le PDF du devis
+    
+                // Appeler l'API qui déclenche Puppeteer pour générer le PDF
+                return axios.get('./api/generate-pdf/');
+            })
+            .then(response => {
+                console.log('PDF généré avec succès');
             })
             .catch(error => {
-                console.error('Erreur lors de la génération du devis', error);
+                console.error('Erreur lors de la génération du PDF:', error);
             });
     };
 
+    const handlePreviewDevis = () => {
+        const devisData = {
+            chantier: selectedChantierId,
+            parties: selectedParties,
+            sous_parties: selectedSousParties,
+            lignes_details: filteredLignesDetails.map(ligne => ({
+                id: ligne.id,
+                description: ligne.description,
+                unite: ligne.unite,
+                quantity: quantities[ligne.id] || 1,
+                custom_price: customPrices[ligne.id] || ligne.prix
+            }))
+        };
+    
+        // Ouvrir un nouvel onglet avec les données du devis
+        const queryString = encodeURIComponent(JSON.stringify(devisData));
+        const previewUrl = `/api/preview-devis/?devis=${queryString}`;
+        window.open(previewUrl, '_blank');
+    };
+
     return (
-        <div className="creation-devis-container">
-            <h2>Création de Devis</h2>
+        <div>
+            <ListePartiesSousParties />
+            <div className="creation-devis-container">
 
-            <button onClick={() => setShowCreationPartie(true)}>
-                Ajouter une Partie ou Sous-Partie
-            </button>
-
-            {showCreationPartie && (
-                <div className="creation-partie-overlay">
-                    <div className="creation-partie-container">
-                        <button onClick={() => setShowCreationPartie(false)}>Fermer</button>
-                        <CreationPartie />
+                {showCreationPartie && (
+                    <div className="creation-partie-overlay">
+                        <div className="creation-partie-container">
+                            <button onClick={() => setShowCreationPartie(false)}>Fermer</button>
+                            <CreationPartie />
+                        </div>
                     </div>
+                )}
+
+                <div className="chantier-selection">
+                    <label>Sélectionner le Chantier:</label>
+                    <select
+                        value={selectedChantierId}
+                        onChange={(e) => setSelectedChantierId(e.target.value)}
+                    >
+                        <option value="">-- Sélectionner un Chantier --</option>
+                        {chantiers.map(chantier => (
+                            <option key={chantier.id} value={chantier.id}>
+                                {chantier.chantier_name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
-            )}
 
-            <div className="chantier-selection">
-                <label>Sélectionner le Chantier:</label>
-                <select
-                    value={selectedChantierId}
-                    onChange={(e) => setSelectedChantierId(e.target.value)}
-                >
-                    <option value="">-- Sélectionner un Chantier --</option>
-                    {chantiers.map(chantier => (
-                        <option key={chantier.id} value={chantier.id}>
-                            {chantier.chantier_name}
-                        </option>
+                <div className="parties-selection">
+                    <h3>Sélectionner les Parties</h3>
+                    {parties.map(partie => (
+                        <div key={partie.id}>
+                            <input
+                                type="checkbox"
+                                checked={selectedParties.includes(partie.id)}
+                                onChange={() => handlePartiesChange(partie.id)}
+                            />
+                            <label>{partie.titre}</label>
+                        </div>
                     ))}
-                </select>
-            </div>
+                </div>
 
-            <div className="parties-selection">
-                <h3>Sélectionner les Parties</h3>
-                {parties.map(partie => (
-                    <div key={partie.id}>
-                        <input
-                            type="checkbox"
-                            checked={selectedParties.includes(partie.id)}
-                            onChange={() => handlePartiesChange(partie.id)}
-                        />
-                        <label>{partie.titre}</label>
-                    </div>
-                ))}
-            </div>
-
-            <div className="sous-parties-selection">
-                <h3>Sélectionner les Sous-Parties</h3>
-                {filteredSousParties.map(sousPartie => (
-                    <div key={sousPartie.id}>
-                        <input
-                            type="checkbox"
-                            checked={selectedSousParties.includes(sousPartie.id)}
-                            onChange={() => handleSousPartiesChange(sousPartie.id)}
-                        />
-                        <label>{sousPartie.description}</label>
-                    </div>
-                ))}
-            </div>
-
-            <div className="lignes-details">
-                <h3>Lignes de Détail</h3>
-                {filteredLignesDetails.map(ligne => (
-                    <div key={ligne.id} className="ligne-detail">
-                        <div>
-                            <label>Description: </label>
-                            <span>{ligne.description}</span>
-                        </div>
-                        <div>
-                            <label>Unité: </label>
-                            <span>{ligne.unite}</span>
-                        </div>
-                        <div>
-                            <label>Quantité: </label>
+                <div className="sous-parties-selection">
+                    <h3>Sélectionner les Sous-Parties</h3>
+                    {filteredSousParties.map(sousPartie => (
+                        <div key={sousPartie.id}>
                             <input
-                                type="number"
-                                value={quantities[ligne.id] || ''}
-                                onChange={(e) => handleQuantityChange(ligne.id, e.target.value)}
+                                type="checkbox"
+                                checked={selectedSousParties.includes(sousPartie.id)}
+                                onChange={() => handleSousPartiesChange(sousPartie.id)}
                             />
+                            <label>{sousPartie.description}</label>
                         </div>
-                        <div>
-                            <label>Prix Unitaire: </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                value={customPrices[ligne.id] || ligne.prix}
-                                onChange={(e) => handlePriceChange(ligne.id, e.target.value)}
-                            />
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
 
-            <button onClick={handleGenerateDevis}>Générer le Devis</button>
+                <div className="lignes-details">
+                    <h3>Lignes de Détail</h3>
+                    {filteredLignesDetails.map(ligne => (
+                        <div key={ligne.id} className="ligne-detail">
+                            <div>
+                                <label>Description: </label>
+                                <span>{ligne.description}</span>
+                            </div>
+                            <div>
+                                <label>Unité: </label>
+                                <span>{ligne.unite}</span>
+                            </div>
+                            <div>
+                                <label>Quantité: </label>
+                                <input
+                                    type="number"
+                                    value={quantities[ligne.id] || ''}
+                                    onChange={(e) => handleQuantityChange(ligne.id, e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label>Prix Unitaire: </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={customPrices[ligne.id] || ligne.prix}
+                                    onChange={(e) => handlePriceChange(ligne.id, e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <button onClick={handleGenerateDevis}>Générer Devis</button>
+                <button onClick={handlePreviewDevis}>Prévisualiser Devis</button>
+            </div>
         </div>
+
     );
 };
 
