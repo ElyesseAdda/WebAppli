@@ -18,9 +18,6 @@ const puppeteer = require('puppeteer');
          });
 
         // Attendre quelques secondes avant de fermer le navigateur
-        await page.waitForTimeout(5000);
-
-        await browser.close();
     } catch (error) {
         console.error("Error generating PDF:", error);
     }

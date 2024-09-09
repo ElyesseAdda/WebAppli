@@ -1,0 +1,38 @@
+body{
+    padding-left: 400px;
+    max-width: 1920px;
+
+}
+
+.add-button {
+    
+    background-color: transparent;
+    color: rgba(27, 120, 188, 1);
+   
+}
+.add-button:hover{
+
+    color: white;
+    background-color: transparent;
+}
+span{
+    font-size: large;
+}
+ .creation-form {   
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        h2 {
+            color: rgba(27, 120, 188, 1);;
+        }
+ }
+ .valider {
+    background-color:rgba(27, 120, 188, 1);
+    margin-right: 20px;
+    width: 200px;
+}
+
+.supprimer {
+    background-color:rgb(255, 54, 54);
+    width: 200px;
+}

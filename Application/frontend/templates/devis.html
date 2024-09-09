@@ -228,21 +228,20 @@ td {
         <p>Mail: peinture3000@ymail.com</p>
       </div>
     </div>
-    </div>
+    
     <div class="client-container">
       <div class="client-info">
         <h2>Client:</h2>
-        <h3>PROMOGIM</h3>
-        <p>ACTIPARC II. BAT E2</p>
-        <p>CHEMIN DE ST LAMBERT</p>
-        <p>13821, LA PENNE SUR HUVEAUNE</p>
+        <h3>{{ societe.nom_societe }}</h3>
+        <p>{{societe.rue_societe}}</p>
+        <p>{{societe.codepostal_societe}}, {{societe.ville_societe}}</p>
       </div>
 
       <div class="contact-info">
         <h2>Contact:</h2>
-        <p>Mr DEOM Jean-Baptiste</p>
-        <p>Tél: 06.99.83.87.40</p>
-        <p>Mail: jb.deom@promogim.fr</p>
+        <p>{{client.name}}{{client.surname}}</p>
+        <p>Tél: {{cleint.phone_Number}}</p>
+        <p>Mail: {{client.client_mail}}</p>
       </div>
     </div>
 
