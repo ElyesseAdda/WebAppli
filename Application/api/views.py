@@ -6,6 +6,7 @@ from django.db.models import Avg, Count, Min, Sum
 from .forms import DevisForm, DevisItemForm
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
+from django.conf import settings
 import subprocess
 import os
 import json
@@ -71,19 +72,6 @@ def dashboard_data(request):
         'total_facture_combined': total_facture_combined,
     }
     return JsonResponse(data)
-
-def generate_pdf_view(request):
-    try:
-        # Chemin vers le fichier generate_pdf.js
-        script_path = os.path.join('C:/Users/Boume/Desktop/Projet-React/P3000/WebAppli/Application/frontend/src/components/generate_pdf.js')
-        
-        # Exécuter le script Node.js qui lance Puppeteer
-        subprocess.run(['node', script_path], check=True)
-        
-        return JsonResponse({'status': 'PDF généré avec succès'})
-    except subprocess.CalledProcessError as e:
-        return JsonResponse({'error': 'Erreur lors de la génération du PDF'}, status=500)
-    
 
 
 def preview_devis(request):
@@ -166,7 +154,57 @@ def preview_devis(request):
     else:
         return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
+def generate_pdf_from_preview(request):
+    devis_data_encoded = request.GET.get('devis')
+    print("Requête reçue pour générer le PDF")
 
+    if devis_data_encoded:
+        try:
+            # URL de la page de prévisualisation
+            preview_url = request.build_absolute_uri(f"/api/preview-devis/?devis={devis_data_encoded}")
+            print("URL de prévisualisation:", preview_url)
+
+            # Chemin vers le script Puppeteer
+            node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+            print("Chemin du script Node.js:", node_script_path)
+
+            # Commande pour exécuter Puppeteer avec Node.js
+            command = ['node', node_script_path, preview_url]
+            print("Exécution de Puppeteer:", command)
+
+            # Exécuter Puppeteer
+            result = subprocess.run(command, check=True)
+            print("Puppeteer exécuté avec succès")
+
+            # Lire le fichier PDF généré
+            pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+            print("Chemin du fichier PDF:", pdf_path)
+
+            if os.path.exists(pdf_path):
+                print("Le PDF existe, préparation de la réponse HTTP.")
+                with open(pdf_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                    response['Content-Disposition'] = 'attachment; filename="devis.pdf"'
+                    return response
+            else:
+                print("Le fichier PDF n'a pas été généré.")
+                return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+
+        except subprocess.CalledProcessError as e:
+            print("Erreur lors de l'exécution de Puppeteer:", e)
+            return JsonResponse({'error': str(e)}, status=500)
+
+    print("Aucune donnée de devis trouvée.")
+    return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
+
+    
+def check_nom_devis_existe(request):
+    nom_devis = request.GET.get('nom_devis', None)
+    
+    if nom_devis:
+        exists = Devis.objects.filter(nom_devis=nom_devis).exists()
+        return JsonResponse({'exists': exists})
+    return JsonResponse({'error': 'Nom de devis non fourni'}, status=400)
 
 
 class PartieViewSet(viewsets.ModelViewSet):

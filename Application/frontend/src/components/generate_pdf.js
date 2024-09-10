@@ -1,24 +1,44 @@
 const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 
 (async () => {
-    try {
-        const browser = await puppeteer.launch({ headless: false });
-        const page = await browser.newPage();
+  const args = process.argv.slice(2);
+  const previewUrl = args[0];  // L'URL de prévisualisation du devis
 
-        // Charger l'HTML depuis un fichier local
-        await page.goto(`file:///C:/Users/Boume/Desktop/Projet-React/P3000/WebAppli/Application/frontend/templates/devis.html`, {waitUntil: 'networkidle2'});
+  console.log("URL de prévisualisation:", previewUrl);  // Ajouter un log pour l'URL
 
-        // Générer le PDF
-        await page.pdf({
-            path: 'devis.pdf',
-            format: 'A4',
-            printBackground: true,
-            scale: 1,
-            preferCSSPageSize: true
-         });
+  try {
+    const browser = await puppeteer.launch({
+      headless: true, // Si vous voulez voir le navigateur, mettez à false
+      args: ['--no-sandbox', '--disable-setuid-sandbox']  // Ajout de paramètres pour Puppeteer
+    });
+    console.log("Navigateur lancé");
 
-        // Attendre quelques secondes avant de fermer le navigateur
-    } catch (error) {
-        console.error("Error generating PDF:", error);
-    }
+    const page = await browser.newPage();
+    console.log("Nouvelle page ouverte");
+
+    // Augmenter le délai d'attente à 60 secondes (60000 ms)
+    await page.goto(previewUrl, { waitUntil: 'networkidle0', timeout: 60000 });
+    console.log("Page chargée");
+
+    // Chemin pour stocker le PDF
+    const pdfPath = path.resolve(__dirname, 'devis.pdf');
+    console.log("Génération du PDF...");
+
+    await page.pdf({
+      path: pdfPath,
+      format: 'A4',
+      printBackground: true,
+    });
+
+    console.log("PDF généré et enregistré à:", pdfPath);
+
+    await browser.close();
+    console.log("Navigateur fermé");
+    process.exit(0);  // Sortie réussie
+  } catch (err) {
+    console.error('Erreur lors de la génération du PDF:', err);  // Affiche l'erreur complète
+    process.exit(1);  // Sortie avec une erreur
+  }
 })();

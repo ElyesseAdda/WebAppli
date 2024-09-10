@@ -17,6 +17,7 @@ const CreationDevis = () => {
     const [quantities, setQuantities] = useState({});
     const [customPrices, setCustomPrices] = useState({});
     const [showCreationPartie, setShowCreationPartie] = useState(false); // État pour afficher ou masquer CreationPartie.js
+    const [isPreviewed, setIsPreviewed] = useState(false); // Nouvel état pour savoir si le devis a été prévisualisé
 
     // Charger les chantiers
     useEffect(() => {
@@ -66,6 +67,7 @@ const CreationDevis = () => {
     }, [selectedParties, sousParties]);
 
     const handlePartiesChange = (partieId) => {
+        setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
         const isSelected = selectedParties.includes(partieId);
         if (isSelected) {
             setSelectedParties(selectedParties.filter(id => id !== partieId));
@@ -75,6 +77,7 @@ const CreationDevis = () => {
     };
 
     const handleSousPartiesChange = (sousPartieId) => {
+        setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
         const isSelected = selectedSousParties.includes(sousPartieId);
         if (isSelected) {
             setSelectedSousParties(selectedSousParties.filter(id => id !== sousPartieId));
@@ -106,41 +109,16 @@ const CreationDevis = () => {
     }, [allLignesDetails, selectedSousParties]);
 
     const handleQuantityChange = (ligneId, quantity) => {
+        setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
         setQuantities({ ...quantities, [ligneId]: quantity });
     };
 
     const handlePriceChange = (ligneId, price) => {
+        setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
         setCustomPrices({ ...customPrices, [ligneId]: price });
     };
 
-    const handleGenerateDevis = () => {
-        const devisData = {
-            chantier: selectedChantierId,
-            parties: selectedParties,
-            sous_parties: selectedSousParties,
-            lignes_details: filteredLignesDetails.map(ligne => ({
-                id: ligne.id,
-                quantity: quantities[ligne.id] || 1,
-                custom_price: customPrices[ligne.id] || ligne.prix
-            }))
-        };
-    
-        // Envoyer les données du devis à l'API pour la génération du PDF
-        axios.post('/api/devisa/', devisData)
-            .then(response => {
-                console.log('Devis généré:', response.data);
-    
-                // Appeler l'API qui déclenche Puppeteer pour générer le PDF
-                return axios.get('./api/generate-pdf/');
-            })
-            .then(response => {
-                console.log('PDF généré avec succès');
-            })
-            .catch(error => {
-                console.error('Erreur lors de la génération du PDF:', error);
-            });
-    };
-
+    // Fonction pour prévisualiser le devis
     const handlePreviewDevis = () => {
         const devisData = {
             chantier: selectedChantierId,
@@ -154,13 +132,42 @@ const CreationDevis = () => {
                 custom_price: customPrices[ligne.id] || ligne.prix
             }))
         };
-    
-        // Ouvrir un nouvel onglet avec les données du devis
+
         const queryString = encodeURIComponent(JSON.stringify(devisData));
         const previewUrl = `/api/preview-devis/?devis=${queryString}`;
+
+        // Ouvrir un nouvel onglet avec les données du devis
         window.open(previewUrl, '_blank');
+        setIsPreviewed(true); // Marquer que la prévisualisation a été faite
     };
 
+    // Fonction pour enregistrer le devis après la prévisualisation
+    const handleSaveDevis = () => {
+        console.log("Début de la génération du devis");
+    
+        const devisData = {
+            chantier: selectedChantierId,
+            parties: selectedParties,
+            sous_parties: selectedSousParties,
+            lignes_details: filteredLignesDetails.map(ligne => ({
+                id: ligne.id,
+                quantity: quantities[ligne.id] || 1,
+                custom_price: customPrices[ligne.id] || ligne.prix
+            }))
+        };
+    
+        console.log("Données du devis:", devisData);
+    
+        // Convertir les données du devis en chaîne JSON et encoder pour l'URL
+        const queryString = encodeURIComponent(JSON.stringify(devisData));
+        const pdfUrl = `/api/generate-pdf-from-preview/?devis=${queryString}`;
+    
+        console.log("URL générée pour le PDF:", pdfUrl);
+    
+        // Ouvrir le PDF dans un nouvel onglet pour téléchargement
+        window.open(pdfUrl, '_blank');
+    };
+    
     return (
         <div>
             <ListePartiesSousParties />
@@ -179,7 +186,10 @@ const CreationDevis = () => {
                     <label>Sélectionner le Chantier:</label>
                     <select
                         value={selectedChantierId}
-                        onChange={(e) => setSelectedChantierId(e.target.value)}
+                        onChange={(e) => {
+                            setSelectedChantierId(e.target.value);
+                            setIsPreviewed(false); // Annuler l'état de prévisualisation si le chantier est modifié
+                        }}
                     >
                         <option value="">-- Sélectionner un Chantier --</option>
                         {chantiers.map(chantier => (
@@ -251,11 +261,11 @@ const CreationDevis = () => {
                     ))}
                 </div>
 
-                <button onClick={handleGenerateDevis}>Générer Devis</button>
-                <button onClick={handlePreviewDevis}>Prévisualiser Devis</button>
+                <button className="Devisbutton" onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}>
+                    {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
+                </button>
             </div>
         </div>
-
     );
 };
 

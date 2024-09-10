@@ -220,9 +220,9 @@
 </head>
 <body>
   <div class="p3000-container">
-    <div class="logo-container">
-      <img class="logo" src="../../src/img/logo.png" alt="">
-    </div>
+   <div class="logo-container">
+      <img class="logo" src="../../static/frontend/src/img/logo.png" alt="">
+    </div> 
     <div class="P3000-info">
       <h2>SARL PEINTURE 3000</h2>
       <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
@@ -243,7 +243,7 @@
     <div class="contact-info">
       <h2>Contact:</h2>
       <p>{{ client.name }} {{ client.surname }}</p>
-      <p>Tél: {{ client.phone_Number }}</p>
+      <p>Tél: 0{{ client.phone_Number }}</p>
       <p>Mail: {{ client.client_mail }}</p>
     </div>
   </div>
@@ -308,6 +308,7 @@
     <p>Total HT : {{ total_ht|floatformat:2 }} €</p>
     <p>TVA (20%) : {{ tva|floatformat:2 }} €</p>
     <p><strong>Montant TTC : {{ montant_ttc|floatformat:2 }} €</strong></p>
+
 </div>
 
 </body>
