@@ -8,6 +8,7 @@ import Dashboard from './Dashboard';
 import CreationPartie from './CreationPartie';
 import ListePartiesSousParties from './ListPartiesSousParties';
 import CreationDevis from './CreationDevis';
+import StockForm from './StockForm';
 
 
 
@@ -26,6 +27,7 @@ function App() {
                         <Route path="/CreationDevis" element={<CreationDevis />} />
                         <Route path="/ListePartie" element={<ListePartiesSousParties />} />
                         <Route path="/CreationPartie" element={<CreationPartie />} />
+                        <Route path="/Stock" element={<StockForm />} />
                 </Routes>
             </Layout>
         </Router>

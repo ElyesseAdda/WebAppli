@@ -62,6 +62,11 @@ class Chantier(models.Model):
     
     def __str__(self):
         return f"Chantier {self.id} - {self.chantier_name}"
+
+    @property
+    def cout_main_oeuvre_total(self):
+        # Somme du coût de toutes les présences sur ce chantier
+        return sum(presence.cout_main_oeuvre for presence in self.presences.all())
     
     
 
@@ -73,7 +78,53 @@ class Agent(models.Model):
     taux_Horaire = models.FloatField()
     conge = models.FloatField()
 
-    
+    def __str__(self):
+        return f'{self.name} {self.surname}'
+
+class Presence(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='presences')
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='presences')
+    date = models.DateField()
+    heures_travail = models.FloatField()  # Heures travaillées ce jour-là
+
+    def __str__(self):
+        return f'{self.agent.name} {self.agent.surname} - {self.chantier.nom} ({self.date})'
+
+    @property
+    def cout_main_oeuvre(self):
+        # Calculer le coût pour cette journée de travail
+        return self.heures_travail * self.agent.taux_Horaire
+
+
+class Stock(models.Model):
+    code_produit = models.CharField(max_length=50, unique=True, default='')  # Code unique pour chaque produit
+    nom_materiel = models.CharField(max_length=50)
+    fournisseur = models.CharField(max_length=100, blank=True, null=True)  # Facultatif
+    prix_unitaire = models.FloatField(default='')  # Prix par unité
+    quantite_disponible = models.PositiveIntegerField(default=0)
+    quantite_entree = models.PositiveIntegerField(default=0)
+    quantite_sortie = models.PositiveIntegerField(default=0)
+    date_entree = models.DateTimeField(auto_now_add=True, null=True, blank=True)  # Date d'entrée du stock
+    date_sortie = models.DateTimeField(null=True, blank=True)  # Date de sortie du stock
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='stocks', null=True, blank=True)
+    agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True)  # Qui a utilisé le matériel
+
+    def __str__(self):
+        return self.nom_materiel
+
+    @property
+    def prix_total_stock(self):
+        return self.prix_unitaire * self.quantite_disponible  # Prix total du stock disponible
+
+    @property
+    def prix_total_commande(self):
+        return self.prix_unitaire * self.quantite_entree  # Prix total de la commande
+
+    @property
+    def prix_stock_sortie(self):
+        return self.prix_unitaire * self.quantite_sortie  # Prix total des sorties de stock
+
+        
 class Fournisseur(models.Model):
     name = models.CharField(max_length=25,)
     adress = models.CharField(max_length=200,)
