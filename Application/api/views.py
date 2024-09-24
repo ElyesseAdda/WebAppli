@@ -1,9 +1,8 @@
-from rest_framework import viewsets
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockCreateSerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Avg, Count, Min, Sum
-from .forms import DevisForm, DevisItemForm
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -11,6 +10,9 @@ from django.utils import timezone
 import subprocess
 import os
 import json
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer
+from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement
+from .forms import DevisForm, DevisItemForm
 
 
 # Create your views here.
@@ -224,10 +226,6 @@ class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
 
-class StockViewSet(viewsets.ModelViewSet):
-    queryset = Stock.objects.all()
-    serializer_class = StockSerializer
-
 class AgentViewSet(viewsets.ModelViewSet):
     queryset = Agent.objects.all()
     serializer_class = AgentSerializer
@@ -236,28 +234,41 @@ class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
 
-from rest_framework import viewsets
-from rest_framework.response import Response
-from .models import Stock
-from .serializers import StockSerializer
-from django.utils import timezone
+class StockViewSet(viewsets.ModelViewSet):
+    queryset = Stock.objects.all()
+    serializer_class = StockSerializer
 
-class StockEntryViewSet(viewsets.ViewSet):
-    """
-    Vue pour gérer les entrées de stock.
-    """
-    def list(self, request):
-        # Filtrer les stocks ayant des entrées
-        stock_entries = Stock.objects.filter(quantite_entree__gt=0)
-        serializer = StockSerializer(stock_entries, many=True)
-        return Response(serializer.data)
+    # Action personnalisée pour ajouter du stock
+    @action(detail=True, methods=['post'])
+    def add_stock(self, request, pk=None):
+        stock = self.get_object()  # Récupère l'objet stock par son ID
+        quantite = request.data.get('quantite')
 
-class StockOutViewSet(viewsets.ViewSet):
-    """
-    Vue pour gérer les sorties de stock.
-    """
-    def list(self, request):
-        # Filtrer les stocks ayant des sorties
-        stock_out = Stock.objects.filter(quantite_sortie__gt=0)
-        serializer = StockSerializer(stock_out, many=True)
-        return Response(serializer.data)
+        if not quantite or int(quantite) <= 0:
+            return Response({"error": "Quantité invalide"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mise à jour de la quantité disponible
+        stock.quantite_disponible += int(quantite)
+        stock.save()
+
+        return Response({"message": "Stock mis à jour avec succès"}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def remove_stock(self, request, pk=None):
+        stock = self.get_object()
+        quantite = request.data.get('quantite', 0)
+        chantier_id = request.data.get('chantier_id')
+        agent_id = request.data.get('agent_id')
+
+        if not quantite or int(quantite) <= 0 or stock.quantite_disponible < int(quantite):
+            return Response({"error": "Quantité insuffisante ou invalide"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mise à jour des quantités après retrait
+        stock.quantite_disponible -= int(quantite)
+        stock.quantite_sortie += int(quantite)
+        stock.save()
+
+        # Optionnel : Enregistrer le mouvement dans une table de log des mouvements
+        StockMovement.objects.create(stock=stock, quantite=int(quantite), chantier_id=chantier_id, agent_id=agent_id, mouvement_type='sortie')
+
+        return Response({"message": "Stock retiré avec succès"}, status=status.HTTP_200_OK)

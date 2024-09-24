@@ -124,6 +124,22 @@ class Stock(models.Model):
     def prix_stock_sortie(self):
         return self.prix_unitaire * self.quantite_sortie  # Prix total des sorties de stock
 
+class StockMovement(models.Model):
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='mouvements')
+    mouvement_type = models.CharField(max_length=10, choices=[('entree', 'Entrée'), ('sortie', 'Sortie')])
+    quantite = models.PositiveIntegerField()
+    date_mouvement = models.DateTimeField(auto_now_add=True)
+    chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
+    agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True)
+    commentaire = models.TextField(null=True, blank=True)  # Pour ajouter des détails supplémentaires
+
+    @property
+    def montant_total(self):
+        return self.quantite * self.stock.prix_unitaire
+
+    def __str__(self):
+        return f"{self.mouvement_type} de {self.quantite} pour {self.stock.nom_materiel} le {self.date_mouvement}"
+
         
 class Fournisseur(models.Model):
     name = models.CharField(max_length=25,)

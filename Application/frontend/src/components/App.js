@@ -9,6 +9,7 @@ import CreationPartie from './CreationPartie';
 import ListePartiesSousParties from './ListPartiesSousParties';
 import CreationDevis from './CreationDevis';
 import StockForm from './StockForm';
+import './../../static/css/app.css';
 
 
 

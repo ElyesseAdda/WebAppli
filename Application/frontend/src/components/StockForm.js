@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
 import ProductSelection from './ProductSelection';
-import NewProductForm from './NewProductForm';
-import SummaryList from './SummaryList';
-import StockEntries from './StockEntries';
+
 
 const StockForm = () => {
     const [summary, setSummary] = useState([]);
     const [showNewProductForm, setShowNewProductForm] = useState(false);
 
-    const handleSelectProduct = (product) => {
-        const quantite = prompt(`Entrez la quantité à ajouter pour ${product.nom_materiel}`);
-        if (quantite && !isNaN(quantite)) {
-            setSummary([...summary, { ...product, quantite: parseInt(quantite) }]);
+    // Fonction pour modifier la quantité d'un produit (ajouter ou retirer)
+    const handleModifyQuantity = (product, quantite) => {
+        const existingProductIndex = summary.findIndex(item => item.id === product.id);
+        if (existingProductIndex >= 0) {
+            // Mettre à jour la quantité si le produit existe déjà dans la liste des modifications
+            const updatedSummary = summary.map((item, index) =>
+                index === existingProductIndex ? { ...item, quantite: item.quantite + quantite } : item
+            );
+            setSummary(updatedSummary);
+        } else {
+            // Ajouter le produit à la liste des modifications
+            setSummary([...summary, { ...product, quantite }]);
         }
-    };
-
-    const handleAddProduct = (product) => {
-        setSummary([...summary, product]);
     };
 
     const handleRemoveProduct = (index) => {
@@ -35,20 +37,14 @@ const StockForm = () => {
     };
 
     const handleValidate = () => {
-        console.log("Validation des ajouts:", summary);
+        console.log("Validation des ajouts et retraits:", summary);
         // Envoyer la liste récapitulative au backend ici
     };
 
     return (
         <div>
-            <h1>Gestion des Entrées de Stock</h1>
-            <ProductSelection onSelectProduct={handleSelectProduct} />
-            <button onClick={() => setShowNewProductForm(!showNewProductForm)}>
-                {showNewProductForm ? 'Fermer le formulaire de création' : 'Nouveau Produit'}
-            </button>
-            {showNewProductForm && <NewProductForm onAddProduct={handleAddProduct} />}
-            <SummaryList summary={summary} onRemoveProduct={handleRemoveProduct} onEditProduct={handleEditProduct} />
-            <StockEntries summary={summary} onValidate={handleValidate} />
+            <h1 style={{color: 'white'}}>Gestion des Entrées et Sorties de Stock</h1>
+            <ProductSelection onModifyQuantity={handleModifyQuantity} />
         </div>
     );
 };
