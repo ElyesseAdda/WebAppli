@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet
+from .views import dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, StockMovementViewSet
 
 router = DefaultRouter()
 router.register(r'chantier', ChantierViewSet, basename='chantier')

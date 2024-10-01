@@ -10,7 +10,7 @@ from django.utils import timezone
 import subprocess
 import os
 import json
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer
 from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement
 from .forms import DevisForm, DevisItemForm
 
@@ -272,3 +272,9 @@ class StockViewSet(viewsets.ModelViewSet):
         StockMovement.objects.create(stock=stock, quantite=int(quantite), chantier_id=chantier_id, agent_id=agent_id, mouvement_type='sortie')
 
         return Response({"message": "Stock retiré avec succès"}, status=status.HTTP_200_OK)
+
+class StockMovementViewSet(viewsets.ModelViewSet):
+    queryset = StockMovement.objects.all()
+    serializer_class = StockMovementSerializer
+
+ 
