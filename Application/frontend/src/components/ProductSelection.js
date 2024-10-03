@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FiPlusCircle, FiMinusCircle } from "react-icons/fi";
 
-const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges, onSelectProduct }) => {
+const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges }) => {
     const [searchQuery, setSearchQuery] = useState('');  // Filtre pour la recherche générale
     const [designationQuery, setDesignationQuery] = useState('');  // Filtre pour la désignation
     const [fournisseurQuery, setFournisseurQuery] = useState('');  // Filtre pour le fournisseur
@@ -9,7 +9,6 @@ const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges, on
 
     // Fonction pour ajouter ou modifier une quantité d'un produit
     const handleQuantityChange = (product, type) => {
-        console.log("Product before modification:", product);
         let action = type === 'add' ? 'ajouter' : 'retirer';
         const quantite = prompt(`Entrez la quantité à ${action} pour ${product.nom_materiel}`);
         
@@ -21,32 +20,30 @@ const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges, on
             alert("Veuillez entrer une quantité valide positive.");
             return;
         }
-    
+
         const quantityChange = parseInt(quantite);
-        console.log("Quantité à modifier :", quantityChange);
-    
-        // Pour l'ajout de chantier et agent uniquement lors du retrait
+
+        // Demander chantier et agent uniquement lors du retrait
         let chantier = '';
         let agent = '';
         if (type === 'retirer') {
             chantier = prompt("Entrez le nom du chantier associé :");
             agent = prompt("Entrez le nom de l'agent qui a récupéré le matériel :");
-    
+
             if (!chantier || !agent) {
                 alert("Veuillez entrer un chantier et un nom d'agent.");
                 return;
             }
         }
-    
+
         if (type === 'retirer' && product.quantite_disponible < quantityChange) {
             alert("Quantité insuffisante pour retirer cette quantité.");
             return;
         }
-        
-        // Appel à onModifyQuantity avec les informations supplémentaires pour retrait
+
+        // Appel à onModifyQuantity avec chantier et agent pour les retraits
         onModifyQuantity(product, type === 'add' ? quantityChange : -quantityChange, chantier, agent);
     };
-    
 
     // Filtrer les produits en fonction de la recherche, désignation, fournisseur et stock faible
     const filteredProducts = productList.filter(product => {
@@ -55,11 +52,11 @@ const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges, on
         
         const matchesDesignation = designationQuery === '' || (product.designation && product.designation.toLowerCase().includes(designationQuery.toLowerCase()));
         const matchesFournisseur = fournisseurQuery === '' || (product.fournisseur && product.fournisseur.toLowerCase().includes(fournisseurQuery.toLowerCase()));
-        const matchesLowStock = !showLowStock || (product.stock_minimum && product.quantite_disponible < product.stock_minimum);
+        const matchesLowStock = !showLowStock || (product.quantite_minimum && product.quantite_disponible < product.quantite_minimum);
 
         return matchesSearch && matchesDesignation && matchesFournisseur && matchesLowStock;
     });
-    
+
     return (
         <div style={mainContainer}>
             <h2>Sélectionner un produit</h2>
@@ -112,7 +109,7 @@ const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges, on
                 </thead>
                 <tbody>
                     {filteredProducts.map((product, index) => {
-                        const stockIsLow = product.stock_minimum && product.quantite_disponible < product.stock_minimum;
+                        const stockIsLow = product.quantite_minimum && product.quantite_disponible < product.quantite_minimum;
                         return (
                             <tr 
                                 key={product.id} 
@@ -125,7 +122,7 @@ const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges, on
                                 <td style={{ ...cellStyle, color: stockIsLow ? 'red' : 'black' }}>
                                     {product.quantite_disponible}
                                 </td>
-                                <td style={cellStyle}>{product.stock_minimum || 'N/A'}</td>
+                                <td style={cellStyle}>{product.quantite_minimum || 'N/A'}</td>
                                 <td style={cellStyle}>{product.prix_unitaire.toFixed(2)} €</td>
                                 <td style={cellStyle}>{(product.quantite_disponible * product.prix_unitaire).toFixed(2)} €</td>
                                 <td style={cellStyle}>

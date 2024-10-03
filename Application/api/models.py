@@ -97,17 +97,19 @@ class Presence(models.Model):
 
 
 class Stock(models.Model):
-    code_produit = models.CharField(max_length=50, unique=True, default='')  # Code unique pour chaque produit
+    code_produit = models.CharField(max_length=50, unique=True, default='')
     nom_materiel = models.CharField(max_length=50)
-    fournisseur = models.CharField(max_length=100, blank=True, null=True)  # Facultatif
-    prix_unitaire = models.FloatField(default='')  # Prix par unité
+    fournisseur = models.CharField(max_length=100, blank=True, null=True)
+    prix_unitaire = models.FloatField(default=0)
     quantite_disponible = models.PositiveIntegerField(default=0)
+    quantite_minimum = models.PositiveIntegerField(null=True, blank=True)
+    designation = models.CharField(max_length=255, blank=True, null=True)
     quantite_entree = models.PositiveIntegerField(default=0)
-    quantite_sortie = models.PositiveIntegerField(default=0)
-    date_entree = models.DateTimeField(auto_now_add=True, null=True, blank=True)  # Date d'entrée du stock
-    date_sortie = models.DateTimeField(null=True, blank=True)  # Date de sortie du stock
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='stocks', null=True, blank=True)
-    agent = models.ForeignKey(Agent, on_delete=models.SET_NULL, null=True, blank=True)  # Qui a utilisé le matériel
+    quantite_sortie = models.PositiveIntegerField(default=0)  # Réintégrer ce champ
+    date_entree = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    date_sortie = models.DateTimeField(null=True, blank=True)
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='stocks', null=True, blank=True)
+    agent = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return self.nom_materiel
@@ -123,6 +125,23 @@ class Stock(models.Model):
     @property
     def prix_stock_sortie(self):
         return self.prix_unitaire * self.quantite_sortie  # Prix total des sorties de stock
+
+class StockHistory(models.Model):
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)  # Lien avec Stock
+    quantite = models.IntegerField()
+    type_operation = models.CharField(max_length=10, choices=[('ajout', 'Ajout'), ('retrait', 'Retrait')])
+    date_operation = models.DateTimeField(auto_now_add=True)
+    agent = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, blank=True)
+    chantier = models.ForeignKey('Chantier', on_delete=models.SET_NULL, null=True, blank=True)
+    montant = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.type_operation} - {self.stock.nom_materiel} - {self.quantite}"
+
+    @property
+    def montant_total(self):
+        # Calculer le montant total basé sur le prix unitaire du produit et la quantité
+        return self.quantite * self.stock.prix_unitaire
 
 class StockMovement(models.Model):
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='mouvements')

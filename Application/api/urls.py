@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, StockMovementViewSet
+from .views import dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, StockMovementViewSet, historique_stock
 
 router = DefaultRouter()
 router.register(r'chantier', ChantierViewSet, basename='chantier')
@@ -19,5 +19,7 @@ urlpatterns = [
     path('dashboard/', dashboard_data, name='dashboard_data'),
     path('generate-pdf-from-preview/', generate_pdf_from_preview, name='generate_pdf_from_preview'),
     path('preview-devis/', preview_devis, name='preview_devis'),
-    path('stock/', preview_devis, name='gestion_stocks'),
+    path('historique_stock/', historique_stock, name='historique_stock'),
+
+    
 ]

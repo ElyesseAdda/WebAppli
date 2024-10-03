@@ -1,17 +1,19 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Avg, Count, Min, Sum
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
+from rest_framework.decorators import api_view
 from django.conf import settings
 from django.utils import timezone
 import subprocess
 import os
 import json
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer
+from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory
 from .forms import DevisForm, DevisItemForm
 
 
@@ -241,8 +243,12 @@ class StockViewSet(viewsets.ModelViewSet):
     # Action personnalisée pour ajouter du stock
     @action(detail=True, methods=['post'])
     def add_stock(self, request, pk=None):
-        stock = self.get_object()  # Récupère l'objet stock par son ID
+        stock = self.get_object()
         quantite = request.data.get('quantite')
+        chantier_id = request.data.get('chantier_id')  # Récupérer l'ID du chantier
+        agent_id = request.data.get('agent_id')  # Récupérer l'ID de l'agent
+
+        print(f"Quantité: {quantite}, Chantier ID: {chantier_id}, Agent ID: {agent_id}")  # Log des données reçues
 
         if not quantite or int(quantite) <= 0:
             return Response({"error": "Quantité invalide"}, status=status.HTTP_400_BAD_REQUEST)
@@ -251,30 +257,101 @@ class StockViewSet(viewsets.ModelViewSet):
         stock.quantite_disponible += int(quantite)
         stock.save()
 
-        return Response({"message": "Stock mis à jour avec succès"}, status=status.HTTP_200_OK)
+        # Enregistrer l'historique de l'ajout de stock
+        chantier = get_object_or_404(Chantier, id=chantier_id) if chantier_id else None
+        agent = get_object_or_404(Agent, id=agent_id) if agent_id else None
+        self.enregistrer_historique_stock(stock, quantite, 'ajout', chantier, agent)
 
+        return Response({"message": "Stock ajouté avec succès"}, status=status.HTTP_200_OK)
+
+    # Action personnalisée pour retirer du stock
     @action(detail=True, methods=['post'])
     def remove_stock(self, request, pk=None):
         stock = self.get_object()
         quantite = request.data.get('quantite', 0)
-        chantier_id = request.data.get('chantier_id')
-        agent_id = request.data.get('agent_id')
+        chantier_id = request.data.get('chantier_id')  # Récupère correctement l'ID du chantier
+        agent_id = request.data.get('agent_id')  # Récupère correctement l'ID de l'agent
 
         if not quantite or int(quantite) <= 0 or stock.quantite_disponible < int(quantite):
             return Response({"error": "Quantité insuffisante ou invalide"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Récupérer l'objet Chantier
+        chantier = get_object_or_404(Chantier, id=chantier_id) if chantier_id else None
+        
+        # Récupérer l'objet Agent
+        agent = get_object_or_404(Agent, id=agent_id) if agent_id else None
+
         # Mise à jour des quantités après retrait
         stock.quantite_disponible -= int(quantite)
-        stock.quantite_sortie += int(quantite)
         stock.save()
 
-        # Optionnel : Enregistrer le mouvement dans une table de log des mouvements
-        StockMovement.objects.create(stock=stock, quantite=int(quantite), chantier_id=chantier_id, agent_id=agent_id, mouvement_type='sortie')
+        # Enregistrer le mouvement dans une table de log des mouvements
+        StockMovement.objects.create(stock=stock, quantite=int(quantite), chantier=chantier, agent=agent, mouvement_type='sortie')
+
+        # Enregistrer dans l'historique du stock
+        self.enregistrer_historique_stock(stock, quantite, 'retrait', chantier, agent)
 
         return Response({"message": "Stock retiré avec succès"}, status=status.HTTP_200_OK)
+    # Méthode pour enregistrer les modifications dans StockHistory
+    def enregistrer_historique_stock(self, produit, quantite, type_operation, chantier, agent):
+        montant = produit.prix_unitaire * abs(int(quantite))
 
+        # Log pour s'assurer que chantier et agent ne sont pas None
+        print(f"Produit: {produit}, Quantité: {quantite}, Type Opération: {type_operation}, Chantier: {chantier}, Agent: {agent}")
+
+        StockHistory.objects.create(
+            stock=produit,
+            quantite=quantite,
+            type_operation=type_operation,
+            chantier=chantier,  # L'objet Chantier doit être passé ici, pas un ID
+            agent=agent,        # L'objet Agent doit être passé ici, pas un ID
+            montant=montant
+        )
+
+    @api_view(['POST'])
+    def create_stock(request):
+        if request.method == 'POST':
+            serializer = StockSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
 class StockMovementViewSet(viewsets.ModelViewSet):
     queryset = StockMovement.objects.all()
     serializer_class = StockMovementSerializer
 
- 
+@api_view(['GET'])
+def historique_stock(request):
+    historique = StockHistory.objects.all().order_by('-date_operation')
+    serializer = StockHistorySerializer(historique, many=True)
+    return Response(serializer.data)
+
+class StockHistoryPagination(PageNumberPagination):
+    page_size = 10  # Nombre d'éléments par page
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+@api_view(['GET'])
+def historique_stock(request):
+    # Filtres optionnels pour type d'opération et dates
+    type_operation = request.GET.get('type', None)
+    start_date = request.GET.get('startDate', None)
+    end_date = request.GET.get('endDate', None)
+
+    historique = StockHistory.objects.all().order_by('-date_operation')
+
+    # Appliquer les filtres si présents
+    if type_operation:
+        historique = historique.filter(type_operation=type_operation)
+    if start_date:
+        historique = historique.filter(date_operation__gte=start_date)
+    if end_date:
+        historique = historique.filter(date_operation__lte=end_date)
+
+    # Pagination de l'historique
+    paginator = StockHistoryPagination()
+    result_page = paginator.paginate_queryset(historique, request)
+    serializer = StockHistorySerializer(result_page, many=True)
+    
+    return paginator.get_paginated_response(serializer.data)
+

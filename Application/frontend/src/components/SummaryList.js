@@ -2,16 +2,14 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChanges }) => {
-    // États locaux pour le chantier et l'agent
     const [chantier, setChantier] = useState('');
     const [agent, setAgent] = useState('');
     const [chantiers, setChantiers] = useState([]);
 
-    // Récupérer la liste des chantiers lors du chargement du composant
     useEffect(() => {
-        axios.get('/api/chantier/')  // Assurez-vous que cette URL correspond à votre API
+        axios.get('/api/chantier/')
             .then(response => {
-                setChantiers(response.data);  // Mettre à jour la liste des chantiers
+                setChantiers(response.data);
             })
             .catch(error => {
                 console.error("Erreur lors de la récupération des chantiers :", error);
@@ -19,7 +17,10 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
     }, []);
 
     const handleConfirm = () => {
-        // Pas d'alerte obligatoire pour le chantier et l'agent
+        // Ajout de log pour vérifier si chantier et agent sont bien sélectionnés
+        console.log("Chantier sélectionné : ", chantier);
+        console.log("Agent sélectionné : ", agent);
+        
         onConfirmChanges(chantier, agent);
     };
 
@@ -27,23 +28,23 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
         <div>
             <h2>Résumé des modifications</h2>
 
-            {/* Champs pour le chantier (select) et l'agent, placés en haut et alignés sur la même ligne */}
+            {/* Champs pour le chantier (select) et l'agent */}
             <div style={{ display: 'flex', justifyContent: 'left', marginBottom: '20px' }}>
-                <label style={{ marginRight: '20px' }}>
-                    Chantier:     
-                    <select 
-                        value={chantier}
-                        onChange={(e) => setChantier(e.target.value)}
-                        style={{ padding: '5px' }}
-                    >
-                        <option value="">Sélectionnez un chantier</option>
-                        {chantiers.map((chantier) => (
-                            <option key={chantier.id} value={chantier.chantier_name}>
-                                {chantier.chantier_name}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+            <label style={{ marginRight: '20px' }}>
+                Chantier:     
+                <select 
+                    value={chantier}  // L'ID du chantier
+                    onChange={(e) => setChantier(e.target.value)}  // Assurez-vous de stocker l'ID du chantier
+                    style={{ padding: '5px' }}
+                >
+                    <option value="">Sélectionnez un chantier</option>
+                    {chantiers.map((chantier) => (
+                        <option key={chantier.id} value={chantier.id}>  {/* Utilisez l'ID ici */}
+                            {chantier.chantier_name}
+                        </option>
+                    ))}
+                </select>
+            </label>
                 <label>
                     Agent:     
                     <input 
@@ -60,15 +61,15 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
                     <tr>
                         <th style={headerStyle}>Nom Produit</th>
                         <th style={headerStyle}>Quantité</th>
-                        <th>Actions</th>
+                        <th style={{ ...headerStyle, ...actionCellStyle }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {modifications.map((item, index) => (
                         <tr key={index} style={{ backgroundColor: index % 2 === 0 ? 'white' : 'rgb(204, 204, 204)' }}>
-                            <td>{item.nom_materiel}</td>
-                            <td>{item.quantite}</td>
-                            <td>
+                            <td style={cellStyle}>{item.nom_materiel}</td>
+                            <td style={cellStyle}>{item.quantite}</td>
+                            <td style={{ ...actionCellStyle, ...cellStyle }}>
                                 {/* Bouton Modifier */}
                                 <button onClick={() => onModifyItem(item.id, item.quantite)} style={buttonStyle}>
                                     Modifier
@@ -95,7 +96,7 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
 
 // Styles
 const tableStyle = {
-    width: '80%',
+    width: '90%',
     borderCollapse: 'collapse',
 };
 
@@ -106,6 +107,12 @@ const headerStyle = {
     borderBottom: '1px solid #ccc',
 };
 
+// Style pour les cellules du tableau
+const cellStyle = {
+    fontWeight: '700', // Un poids de police plus important pour les éléments du tableau
+    padding: '8px',
+};
+
 const buttonStyle = {
     padding: '8px 12px',
     cursor: 'pointer',
@@ -113,6 +120,10 @@ const buttonStyle = {
     border: 'none',
     color: 'white',
     fontWeight: 'bold',
+};
+
+const actionCellStyle = {
+    textAlign: 'center',
 };
 
 const confirmButtonStyle = {
