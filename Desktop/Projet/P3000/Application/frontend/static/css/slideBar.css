@@ -1,0 +1,61 @@
+body{
+    margin: 0.5px;
+}
+html{
+    margin: 0px
+}
+.slide-bar {
+    height: 100%;
+    position: fixed;
+    left: 0px;
+    top: 0px;
+    max-width: 250px;
+    padding-left: 50px;
+    padding-top: 50px;
+    padding-right: 50px;
+    border: solid 2px rgb(46, 46, 46) ;
+    border-radius: 10px;
+    background-color: white;
+    box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
+    -webkit-box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
+    -moz-box-shadow: 6px 7px 20px -6px rgba(33,33,33,1);
+}
+ ul{
+    display: block;
+    list-style-type: disc;
+    margin-block-start: 0em;
+    margin-block-end: 1em;
+    margin-inline-start: 0px;
+    margin-inline-end: 0px;
+    padding-inline-start: 0px;
+    list-style-position: outside;
+    
+    
+ }
+.logo {
+    height: 100px;
+    width: 150px;
+}
+.logo-container{
+    margin-bottom: 80px;
+    padding-left: 15px;
+}
+
+.link-container a{
+    color: black;
+    font-family: 'Roboto' , sans-serif;
+    padding-left: 15px;
+    line-height: 2.5;
+}
+
+.link-container svg {
+    color: rgba(27, 120, 188, 1);
+    width: 70px;
+    height: 50px;
+    position: relative;
+    top:15px;
+    right:15px;
+}
+.link-container  {
+   min-height: 500px;
+}

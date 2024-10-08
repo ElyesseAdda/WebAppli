@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/daygrid": "^6.1.15",
+    "@fullcalendar/interaction": "^6.1.15",
+    "@fullcalendar/react": "^6.1.15",
+    "@fullcalendar/resource-timeline": "^6.1.15",
+    "@fullcalendar/timegrid": "^6.1.15",
+    "axios": "^1.7.4",
+    "puppeteer": "^23.2.1",
+    "react-modal": "^3.16.1",
+    "react-toastify": "^10.0.5"
+  }
+}
