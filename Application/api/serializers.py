@@ -78,12 +78,14 @@ class StockSerializer(serializers.ModelSerializer):
 
 
 class StockHistorySerializer(serializers.ModelSerializer):
+    stock = StockSerializer()  # Sérialiseur imbriqué pour afficher les détails du stock
     chantier = ChantierSerializer()  # Sérialiseur imbriqué pour renvoyer le chantier
+    agent = AgentSerializer()  # Si vous avez un sérialiseur pour l'agent, vous pouvez l'imbriquer aussi
 
     class Meta:
         model = StockHistory
-        fields = ['id', 'stock', 'quantite', 'type_operation', 'date_operation', 'montant', 'chantier', 'agent']  # Inclure tous les champs que vous souhaitez
-
+        fields = ['id', 'stock', 'quantite', 'type_operation', 'date_operation', 'montant', 'chantier', 'agent']
+        
 class StockMovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockMovement

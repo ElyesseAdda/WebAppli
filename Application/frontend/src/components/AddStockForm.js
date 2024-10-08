@@ -1,14 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const AddStockForm = ({ onClose, onProductAdded }) => {  // Ajout de onProductAdded en prop
+const AddStockForm = ({ onClose, onProductAdded }) => {
   const [codeProduit, setCodeProduit] = useState('');
   const [nomMateriel, setNomMateriel] = useState('');
   const [fournisseur, setFournisseur] = useState('');
-  const [designation, setDesignation] = useState('');  // Nouveau champ
+  const [designation, setDesignation] = useState('');
   const [prixUnitaire, setPrixUnitaire] = useState(0);
   const [quantiteDisponible, setQuantiteDisponible] = useState(0);
-  const [quantiteMinimum, setQuantiteMinimum] = useState(0);  // Nouveau champ
+  const [quantiteMinimum, setQuantiteMinimum] = useState(0);
+
+  // Fonction pour récupérer le dernier code produit
+  useEffect(() => {
+    axios.get('/api/stock/latest_code')
+      .then(response => {
+        const lastCode = response.data.last_code_produit || '00';  // Par défaut, 'P000' si aucun produit n'est trouvé
+        const nextCode = incrementCode(lastCode);
+        setCodeProduit(nextCode);
+      })
+      .catch(error => {
+        console.error("Erreur lors de la récupération du dernier code produit :", error);
+      });
+  }, []);
+
+  // Fonction pour incrémenter le code produit
+  const incrementCode = (lastCode) => {
+    const codeNumber = parseInt(lastCode, 10) + 1;  // Extraire le nombre et l'incrémenter
+    return codeNumber.toString().padStart(lastCode.length, '0');  // Conserver le format avec le bon nombre de chiffres
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -17,9 +36,9 @@ const AddStockForm = ({ onClose, onProductAdded }) => {  // Ajout de onProductAd
       code_produit: codeProduit,
       nom_materiel: nomMateriel,
       fournisseur: fournisseur || 'N/A',
-      designation: designation || 'N/A',  // Désignation prise en compte
+      designation: designation || 'N/A',
       quantite_disponible: quantiteDisponible,
-      quantite_minimum: quantiteMinimum || 0,  // Quantité minimum prise en compte
+      quantite_minimum: quantiteMinimum || 0,
       prix_unitaire: prixUnitaire,
     };
 

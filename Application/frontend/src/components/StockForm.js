@@ -39,38 +39,46 @@ const StockForm = () => {
     };
 
     // Fonction pour ajouter ou retirer des quantités d'un produit et afficher SummaryList
-    const handleModifyQuantity = (product, quantite) => {
+    const handleModifyQuantity = (product, quantite, chantier = '', agent = '') => {
         if (quantite === undefined || isNaN(quantite) || quantite === 0) {
             console.error("Quantité invalide:", quantite);
             return;
         }
-
+    
+        // Vérification pour retrait
+        if (quantite < 0 && Math.abs(quantite) > product.quantite_disponible) {
+            alert(`Quantité insuffisante pour retirer ${Math.abs(quantite)} unités. Quantité disponible : ${product.quantite_disponible}.`);
+            return;
+        }
+    
         const existingProductIndex = summary.findIndex(item => item.id === product.id);
-
+    
         if (existingProductIndex >= 0) {
             // Met à jour la quantité dans le résumé s'il existe déjà
             const updatedSummary = summary.map((item, index) =>
                 index === existingProductIndex
-                    ? { ...item, quantite: item.quantite + quantite }
+                    ? { ...item, quantite: item.quantite + quantite, chantier, agent }
                     : item
             );
             setSummary(updatedSummary);
         } else {
             // Ajoute un nouveau produit à la liste des modifications
-            setSummary([...summary, { ...product, quantite }]);
+            setSummary([...summary, { ...product, quantite, chantier, agent }]);
         }
-
+    
         // Afficher le composant SummaryList
         setShowSummary(true);
     };
+    
 
     // Fonction pour modifier la quantité dans le SummaryList
     const handleModifyItem = (productId, newQuantity) => {
-        if (isNaN(newQuantity) || newQuantity === 0) {
+        if (isNaN(newQuantity)) {
             console.error("Nouvelle quantité invalide:", newQuantity);
             return;
         }
-
+    
+        // Ici, il faut veiller à ce que les retraits restent négatifs
         const updatedSummary = summary.map(item =>
             item.id === productId ? { ...item, quantite: newQuantity } : item
         );
@@ -160,10 +168,11 @@ const StockForm = () => {
                 <p>Chargement des produits...</p>
             ) : (
                 <ProductSelection 
-                    productList={productList}  // Passer la liste des produits
-                    onModifyQuantity={handleModifyQuantity}  // Passer la fonction de modification des quantités
-                    onValidateChanges={handleValidateChanges}  // Passer la fonction de validation
-                />
+                productList={productList}  // Passer la liste des produits
+                setProductList={setProductList}  // Passer la fonction pour mettre à jour les produits
+                onModifyQuantity={handleModifyQuantity}  // Passer la fonction de modification des quantités
+                onValidateChanges={handleValidateChanges}  // Passer la fonction de validation
+            />
             )}
 
             {/* Afficher le composant SummaryList uniquement s'il y a des modifications */}
@@ -176,7 +185,6 @@ const StockForm = () => {
                 />
             )}
         </div>
-        
     );
 };
 

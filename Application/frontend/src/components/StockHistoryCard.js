@@ -71,33 +71,38 @@ const StockHistoryCard = () => {
     const filterCards = (groupedHistory) => {
         return Object.keys(groupedHistory).reduce((result, date) => {
             const operations = groupedHistory[date];
-
-            // Filtrer les opérations dans la carte
+    
             const filteredOperations = operations.filter(item => {
                 const matchType = filterType ? item.type_operation === filterType : true;
-
-                const montantString = item.montant ? item.montant.toString() : '';
+    
+                // Ajouter le signe négatif si c'est un retrait
+                const montantString = item.type_operation === 'retrait'
+                    ? `-${item.montant.toString()}`
+                    : item.montant.toString();
+    
                 const quantiteString = item.quantite ? item.quantite.toString() : '';
-
+                const formattedDate = new Date(item.date_operation).toLocaleDateString();
+    
                 const matchSearch = searchQuery
                     ? (item.stock?.nom_materiel?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                        item.stock?.code_produit?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                        (item.chantier?.chantier_name && item.chantier.chantier_name.toLowerCase().includes(searchQuery.toLowerCase())) || 
                        (item.agent?.name && item.agent.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                       montantString.includes(searchQuery) || quantiteString.includes(searchQuery))
+                       montantString.includes(searchQuery) || quantiteString.includes(searchQuery) ||
+                       formattedDate.includes(searchQuery))
                     : true;
-
+    
                 return matchType && matchSearch;
             });
-
-            // Si une carte contient au moins une opération qui correspond, on l'ajoute au résultat
+    
             if (filteredOperations.length > 0) {
                 result[date] = filteredOperations;
             }
-
+    
             return result;
         }, {});
     };
+    
 
     const nextPage = () => {
         if (currentPage < totalPages) {
@@ -215,7 +220,7 @@ const StockHistoryCard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filterOperations(groupedHistory[selectedDate]).map((item, index) => (
+                            {filteredHistory[selectedDate]?.map((item, index) => (
                                 <tr 
                                     key={index} 
                                     style={{ 
@@ -239,10 +244,9 @@ const StockHistoryCard = () => {
                         </tbody>
                     </table>
 
-                    {/* Afficher les totaux en bas du tableau */}
                     <div style={{ marginTop: '20px', fontWeight: '700' }}>
                         {(() => {
-                            const filteredOperations = filterOperations(groupedHistory[selectedDate]);
+                            const filteredOperations = filteredHistory[selectedDate];
                             const { totalAjout, totalRetrait } = calculateSums(filteredOperations);
                             return (
                                 <>

@@ -9,6 +9,7 @@ import CreationPartie from './CreationPartie';
 import ListePartiesSousParties from './ListPartiesSousParties';
 import CreationDevis from './CreationDevis';
 import StockForm from './StockForm';
+import CalendrierAgent from './CalendrierAgent';
 import './../../static/css/app.css';
 
 
@@ -29,6 +30,7 @@ function App() {
                         <Route path="/ListePartie" element={<ListePartiesSousParties />} />
                         <Route path="/CreationPartie" element={<CreationPartie />} />
                         <Route path="/Stock" element={<StockForm />} />
+                        <Route path="/Agent" element={<CalendrierAgent />} />
                 </Routes>
             </Layout>
         </Router>

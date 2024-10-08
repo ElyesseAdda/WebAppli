@@ -1,48 +1,88 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { FiPlusCircle, FiMinusCircle } from "react-icons/fi";
 
-const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges }) => {
+const ProductSelection = ({ productList, setProductList, onModifyQuantity, onValidateChanges }) => {
     const [searchQuery, setSearchQuery] = useState('');  // Filtre pour la recherche générale
     const [designationQuery, setDesignationQuery] = useState('');  // Filtre pour la désignation
     const [fournisseurQuery, setFournisseurQuery] = useState('');  // Filtre pour le fournisseur
     const [showLowStock, setShowLowStock] = useState(false);  // Filtre pour afficher les stocks faibles
+    const [editRowId, setEditRowId] = useState(null);  // Gérer la ligne en mode édition
+    const [editedProduct, setEditedProduct] = useState({});  // Stocker les données modifiées
+
+    // Gérer l'édition
+    const handleEdit = (product) => {
+        setEditRowId(product.id);  // Mettre la ligne en mode édition
+        setEditedProduct(product);  // Mettre à jour les données de produit dans l'état
+    };
+
+    // Gérer la modification des champs d'input
+    const handleInputChange = (e, field) => {
+        setEditedProduct({
+            ...editedProduct,
+            [field]: e.target.value,
+        });
+    };
+
+    // Fonction pour sauvegarder les modifications dans la base de données
+    const handleSave = () => {
+        axios.put(`/api/stock/${editedProduct.id}/`, editedProduct)
+            .then(response => {
+                console.log("Produit mis à jour avec succès :", response.data);
+
+                // Mettre à jour la liste des produits avec le produit modifié
+                setProductList((prevList) =>
+                    prevList.map((item) =>
+                        item.id === editedProduct.id ? { ...editedProduct } : item
+                    )
+                );
+
+                // Quitter le mode édition après la sauvegarde
+                setEditRowId(null);
+                setEditedProduct({});  // Réinitialiser l'état de l'édition
+            })
+            .catch(error => {
+                console.error("Erreur lors de la mise à jour du produit :", error);
+            });
+    };
+
+    // Fonction pour annuler l'édition
+    const handleCancelEdit = () => {
+        setEditRowId(null);  // Quitter le mode édition
+        setEditedProduct({});  // Réinitialiser les données
+    };
 
     // Fonction pour ajouter ou modifier une quantité d'un produit
     const handleQuantityChange = (product, type) => {
         let action = type === 'add' ? 'ajouter' : 'retirer';
         const quantite = prompt(`Entrez la quantité à ${action} pour ${product.nom_materiel}`);
-        
-        if (quantite === null) {
+    
+        if (quantite === 0) {
             console.log("Action annulée par l'utilisateur");
             return;
         }
-        if (isNaN(quantite) || parseInt(quantite) <= 0) {
+    
+        const quantityChange = parseInt(quantite);
+    
+        // Ajout de logs pour vérifier la quantité disponible
+        console.log(`Quantité disponible pour ${product.nom_materiel}: ${product.quantite_disponible}`);
+        console.log(`Quantité entrée: ${quantityChange}`);
+    
+        if (isNaN(quantityChange) || quantityChange <= 0) {
             alert("Veuillez entrer une quantité valide positive.");
             return;
         }
-
-        const quantityChange = parseInt(quantite);
-
-        // Demander chantier et agent uniquement lors du retrait
-        let chantier = '';
-        let agent = '';
-        if (type === 'retirer') {
-            chantier = prompt("Entrez le nom du chantier associé :");
-            agent = prompt("Entrez le nom de l'agent qui a récupéré le matériel :");
-
-            if (!chantier || !agent) {
-                alert("Veuillez entrer un chantier et un nom d'agent.");
+    
+        if (action === 'retirer') {
+            if ((-quantityChange) > product.quantite_disponible) {
+                alert(`Impossible de retirer ${quantityChange} unités. Quantité disponible : ${product.quantite_disponible}.`);
                 return;
             }
-        }
 
-        if (type === 'retirer' && product.quantite_disponible < quantityChange) {
-            alert("Quantité insuffisante pour retirer cette quantité.");
-            return;
+            onModifyQuantity(product, -quantityChange);  // Retrait avec quantité négative
+        } else {
+            onModifyQuantity(product, quantityChange);  // Ajout
         }
-
-        // Appel à onModifyQuantity avec chantier et agent pour les retraits
-        onModifyQuantity(product, type === 'add' ? quantityChange : -quantityChange, chantier, agent);
     };
 
     // Filtrer les produits en fonction de la recherche, désignation, fournisseur et stock faible
@@ -110,28 +150,84 @@ const ProductSelection = ({ productList, onModifyQuantity, onValidateChanges }) 
                 <tbody>
                     {filteredProducts.map((product, index) => {
                         const stockIsLow = product.quantite_minimum && product.quantite_disponible < product.quantite_minimum;
+                        const isEditing = editRowId === product.id;  // Mode édition
+
                         return (
                             <tr 
                                 key={product.id} 
                                 style={{ backgroundColor: index % 2 === 0 ? '#d3d3d3' : '#ffffff', cursor: 'pointer' }}
+                                onDoubleClick={() => handleEdit(product)}  // Activer l'édition par double-clic
                             >
-                                <td style={cellStyle}>{product.code_produit}</td>
-                                <td style={cellStyle}>{product.nom_materiel}</td>
+                                {/* Champs modifiables */}
+                                <td style={cellStyle}>
+                                    {isEditing ? (
+                                        <input 
+                                            type="text"
+                                            value={editedProduct.code_produit}
+                                            onChange={(e) => handleInputChange(e, 'code_produit')}
+                                        />
+                                    ) : (
+                                        product.code_produit
+                                    )}
+                                </td>
+                                <td style={cellStyle}>
+                                    {isEditing ? (
+                                        <input 
+                                            type="text"
+                                            value={editedProduct.nom_materiel}
+                                            onChange={(e) => handleInputChange(e, 'nom_materiel')}
+                                        />
+                                    ) : (
+                                        product.nom_materiel
+                                    )}
+                                </td>
                                 <td style={cellStyle}>{product.fournisseur || 'N/A'}</td>
                                 <td style={cellStyle}>{product.designation || 'N/A'}</td>
                                 <td style={{ ...cellStyle, color: stockIsLow ? 'red' : 'black' }}>
-                                    {product.quantite_disponible}
+                                    {isEditing ? (
+                                        <input 
+                                            type="number"
+                                            value={editedProduct.quantite_disponible}
+                                            onChange={(e) => handleInputChange(e, 'quantite_disponible')}
+                                        />
+                                    ) : (
+                                        product.quantite_disponible
+                                    )}
                                 </td>
                                 <td style={cellStyle}>{product.quantite_minimum || 'N/A'}</td>
-                                <td style={cellStyle}>{product.prix_unitaire.toFixed(2)} €</td>
+                                <td style={cellStyle}>
+                                    {isEditing ? (
+                                        <input 
+                                            type="number"
+                                            value={editedProduct.prix_unitaire}
+                                            onChange={(e) => handleInputChange(e, 'prix_unitaire')}
+                                            step="0.01"
+                                        />
+                                    ) : (
+                                        product.prix_unitaire
+                                    )}
+                                </td>
                                 <td style={cellStyle}>{(product.quantite_disponible * product.prix_unitaire).toFixed(2)} €</td>
                                 <td style={cellStyle}>
-                                    <button onClick={(e) => { e.stopPropagation(); handleQuantityChange(product, 'add'); }} style={iconButtonStyle}>
-                                        <FiPlusCircle style={{ color: 'green', fontSize: '20px' }} />
-                                    </button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleQuantityChange(product, 'remove'); }} style={iconButtonStyle}>
-                                        <FiMinusCircle style={{ color: 'red', fontSize: '20px' }} />
-                                    </button>
+                                    {isEditing ? (
+                                        <>
+                                            <button onClick={handleSave}>
+                                                Sauvegarder
+                                            </button>
+                                            <button onClick={handleCancelEdit}>
+                                                Annuler
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button onClick={(e) => { e.stopPropagation(); handleQuantityChange(product, 'add'); }} style={iconButtonStyle}>
+                                                <FiPlusCircle style={{ color: 'green', fontSize: '20px' }} />
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleQuantityChange(product, 'remove'); }} style={iconButtonStyle}>
+                                                <FiMinusCircle style={{ color: 'red', fontSize: '20px' }} />
+                                            </button>
+                                        </>
+                                    )}
                                 </td>
                             </tr>
                         );

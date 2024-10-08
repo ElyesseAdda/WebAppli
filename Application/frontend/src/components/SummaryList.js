@@ -17,7 +17,6 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
     }, []);
 
     const handleConfirm = () => {
-        // Ajout de log pour vérifier si chantier et agent sont bien sélectionnés
         console.log("Chantier sélectionné : ", chantier);
         console.log("Agent sélectionné : ", agent);
         
@@ -29,29 +28,30 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
             <h2>Résumé des modifications</h2>
 
             {/* Champs pour le chantier (select) et l'agent */}
-            <div style={{ display: 'flex', justifyContent: 'left', marginBottom: '20px' }}>
-            <label style={{ marginRight: '20px' }}>
-                Chantier:     
-                <select 
-                    value={chantier}  // L'ID du chantier
-                    onChange={(e) => setChantier(e.target.value)}  // Assurez-vous de stocker l'ID du chantier
-                    style={{ padding: '5px' }}
-                >
-                    <option value="">Sélectionnez un chantier</option>
-                    {chantiers.map((chantier) => (
-                        <option key={chantier.id} value={chantier.id}>  {/* Utilisez l'ID ici */}
-                            {chantier.chantier_name}
-                        </option>
-                    ))}
-                </select>
-            </label>
-                <label>
-                    Agent:     
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'left', marginBottom: '10px' }}> 
+                <label style={{ marginBottom: '10px', width: '60%' }}>
+                    Chantier:  
+                    <select 
+                        value={chantier}  // L'ID du chantier
+                        onChange={(e) => setChantier(e.target.value)}  // Assurez-vous de stocker l'ID du chantier
+                        style={{ padding: '10px', width: '60%' }} 
+                    >
+                        <option value="">Sélectionnez un chantier</option>
+                        {chantiers.map((chantier) => (
+                            <option key={chantier.id} value={chantier.id}> 
+                                {chantier.chantier_name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label style={{ marginBottom: '10px', width: '60%' }}> 
+                    Agent:  
                     <input 
                         type="text" 
                         value={agent}
                         onChange={(e) => setAgent(e.target.value)}
                         placeholder="Nom de l'agent"
+                        style={{ padding: '10px', width: '60%' }}  
                     />
                 </label>
             </div>
@@ -60,31 +60,57 @@ const SummaryList = ({ modifications, onModifyItem, onRemoveItem, onConfirmChang
                 <thead>
                     <tr>
                         <th style={headerStyle}>Nom Produit</th>
+                        <th style={headerStyle}>Prix Unitaire</th>
                         <th style={headerStyle}>Quantité</th>
+                        <th style={headerStyle}>Montant Total</th>
                         <th style={{ ...headerStyle, ...actionCellStyle }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {modifications.map((item, index) => (
-                        <tr key={index} style={{ backgroundColor: index % 2 === 0 ? 'white' : 'rgb(204, 204, 204)' }}>
-                            <td style={cellStyle}>{item.nom_materiel}</td>
-                            <td style={cellStyle}>{item.quantite}</td>
-                            <td style={{ ...actionCellStyle, ...cellStyle }}>
-                                {/* Bouton Modifier */}
-                                <button onClick={() => onModifyItem(item.id, item.quantite)} style={buttonStyle}>
-                                    Modifier
-                                </button>
+                    {modifications.map((item, index) => {
+                        const montantTotal = (item.prix_unitaire * item.quantite).toFixed(2);  // Calcul du montant total
+                        const montantTotalStyle = { color: montantTotal >= 0 ? 'green' : 'red' };  // Style conditionnel
 
-                                {/* Bouton Supprimer avec couleur rouge et espacement de 10px */}
-                                <button 
-                                    onClick={() => onRemoveItem(item.id)} 
-                                    style={{ ...buttonStyle, backgroundColor: 'red', marginLeft: '10px' }}
-                                >
-                                    Supprimer
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
+                        return (
+                            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? 'white' : 'rgb(204, 204, 204)' }}>
+                                <td style={cellStyle}>{item.nom_materiel}</td>
+                                
+                                {/* Affichage du prix unitaire */}
+                                <td style={cellStyle}>
+                                    {item.prix_unitaire.toFixed(2)} €
+                                </td>
+
+                                {/* La quantité peut être positive ou négative selon l'opération */}
+                                <td style={cellStyle}>
+                                    <input 
+                                        type="number" 
+                                        value={item.quantite}
+                                        onChange={(e) => {
+                                            const newQuantity = Number(e.target.value);
+                                            // Permet de gérer des valeurs négatives pour les retraits
+                                            onModifyItem(item.id, newQuantity);
+                                        }}
+                                        style={{ width: '60px' }}
+                                    />
+                                </td>
+
+                                {/* Affichage du montant total avec couleur conditionnelle */}
+                                <td style={{ ...cellStyle, ...montantTotalStyle }}>
+                                    {montantTotal} €
+                                </td>
+
+                                <td style={{ ...actionCellStyle, ...cellStyle }}>
+                                    {/* Bouton Supprimer avec couleur rouge et espacement de 10px */}
+                                    <button 
+                                        onClick={() => onRemoveItem(item.id)} 
+                                        style={{ ...buttonStyle, backgroundColor: 'red', marginLeft: '10px' }}
+                                    >
+                                        Supprimer
+                                    </button>
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
 
@@ -107,7 +133,6 @@ const headerStyle = {
     borderBottom: '1px solid #ccc',
 };
 
-// Style pour les cellules du tableau
 const cellStyle = {
     fontWeight: '700', // Un poids de police plus important pour les éléments du tableau
     padding: '8px',

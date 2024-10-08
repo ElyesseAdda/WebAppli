@@ -355,3 +355,8 @@ def historique_stock(request):
     
     return paginator.get_paginated_response(serializer.data)
 
+@api_view(['GET'])
+def get_latest_code_produit(request):
+    last_stock = Stock.objects.order_by('-code_produit').first()  # Récupérer le dernier code produit
+    last_code = last_stock.code_produit if last_stock else '0'
+    return Response({'last_code_produit': last_code})
