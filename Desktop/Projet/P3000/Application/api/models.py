@@ -125,6 +125,16 @@ class Presence(models.Model):
         # Calcul du coût basé sur le taux horaire ajusté
         return self.heures_travail * self.taux_horaire_ajusté
 
+class Event(models.Model):
+    agent = models.ForeignKey('Agent', on_delete=models.CASCADE)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20)
+    hours_modified = models.IntegerField(default=0)  # S'il s'agit d'une modification des heures
+
+    def __str__(self):
+        return f"{self.agent} - {self.status} du {self.start_date} au {self.end_date}"
+
 class Stock(models.Model):
     code_produit = models.CharField(max_length=50, unique=True, default='')
     nom_materiel = models.CharField(max_length=50)

@@ -13,8 +13,9 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory
+import datetime
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer
+from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event
 from .forms import DevisForm, DevisItemForm
 
 
@@ -245,6 +246,10 @@ class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
 
+class EventViewSet(viewsets.ModelViewSet):
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer
+
 class StockViewSet(viewsets.ModelViewSet):
     queryset = Stock.objects.all()
     serializer_class = StockSerializer
@@ -370,3 +375,59 @@ def get_latest_code_produit(request):
     last_code = last_stock.code_produit if last_stock else '0'
     return Response({'last_code_produit': last_code})
 
+
+@api_view(['DELETE'])
+def delete_events_by_agent_and_period(request):
+    agent_id = request.query_params.get('agent')
+    start_date_str = request.query_params.get('start_date')
+    end_date_str = request.query_params.get('end_date')
+
+    # Vérification des paramètres reçus
+    if not agent_id or not start_date_str or not end_date_str:
+        print("Erreur: Paramètres manquants.")
+        return Response({'error': 'Paramètres manquants.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Convertir les dates de chaînes de caractères en objets datetime
+        start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError as e:
+        print(f'Erreur de format de date: {str(e)}')
+        return Response({'error': f'Erreur de format de date: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Boucler sur chaque jour de la période spécifiée
+        current_date = start_date
+        while current_date <= end_date:
+            
+            # Filtrer les événements correspondant à l'agent et à la date actuelle
+            events = Event.objects.filter(
+                agent_id=agent_id,
+                start_date=current_date
+            )
+
+            if events.exists():
+                print(f'Found events for agent {agent_id} on {current_date}. Deleting...')
+                events.delete()
+
+            # Passer à la date suivante
+            current_date += datetime.timedelta(days=1)
+
+        return Response({'message': 'Événements supprimés avec succès.'}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        # Retourner une erreur 500 avec le message d'exception
+        print(f'Erreur lors de la suppression des événements: {str(e)}')
+        return Response({'error': f'Erreur interne du serveur: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def get_agents_with_work_days(request):
+    agents = Agent.objects.all()
+    agents_data = [
+        {
+            'id': agent.id,
+            'name': f"{agent.name} {agent.surname}",
+            'jours_travail': agent.jours_travail if agent.jours_travail else "lundi, mardi, mercredi, jeudi, vendredi"
+        }
+        for agent in agents
+    ]
+    return JsonResponse(agents_data, safe=False)

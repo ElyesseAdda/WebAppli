@@ -1,14 +1,27 @@
 {
   "dependencies": {
+    "@date-io/dayjs": "^3.0.0",
+    "@emotion/react": "^11.10.5",
+    "@emotion/styled": "^11.10.5",
     "@fullcalendar/core": "^6.1.15",
     "@fullcalendar/daygrid": "^6.1.15",
     "@fullcalendar/interaction": "^6.1.15",
     "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/resource-timeline": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.15",
+    "@mui/material": "^5.11.0",
+    "@mui/x-date-pickers": "^5.0.0",
     "axios": "^1.7.4",
+    "date-fns": "^2.29.3",
+    "dayjs": "^1.11.13",
     "puppeteer": "^23.2.1",
+    "react": "^18.2.0",
+    "react-datepicker": "^7.4.0",
+    "react-dom": "^18.2.0",
     "react-modal": "^3.16.1",
     "react-toastify": "^10.0.5"
+  },
+  "devDependencies": {
+    "@types/react-modal": "^3.16.3"
   }
 }

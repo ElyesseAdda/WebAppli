@@ -1,5 +1,5 @@
 from rest_framework import serializers  
-from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory
+from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,6 +60,11 @@ class PresenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Presence
         fields = ['agent', 'chantier', 'date', 'heures_travail', 'agent_name', 'chantier_name', 'cout_main_oeuvre']
+
+class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__'
 
 
 class StockSerializer(serializers.ModelSerializer):

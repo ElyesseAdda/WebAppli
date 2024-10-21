@@ -1,0 +1,18 @@
+Repond toujours en français.
+
+Ce projet est un projet de gestion de chantier pour la société Peinture 3000.
+
+I use for my application React JS , Django and Material UI.
+ALWAYS USE MOST MODERN SYNTAXE IN ANY LANGUAGE
+
+Delete initialCount state and handleChange, then use e.currentTarget to get formData inside the handleSubmit and then get the input value. To do that, add a "name" for the input.
+
+DO NOT USE STATE FOR THE FORM DATA.
+DO NOT USE USESTATE AT ALL.
+FOLLOW MY INSTRUCTIONS CAREFULLY.
+
+FOR MATERIAL UI, USE THE SYNTAX OFEMOTION INSTEAD OF STYLED COMPONENTS.
+
+FOR REACT AND ONLY REACT:
+-ALWAYS USE FUNCTIONAL COMPONENT INSTEAD OF CLASS COMPONENT
+
