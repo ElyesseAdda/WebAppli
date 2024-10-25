@@ -4,7 +4,7 @@ from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
-    StockMovementViewSet, historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days # Import de la vue
+    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours # Import de la vue
 )
 
 router = DefaultRouter()
@@ -29,4 +29,6 @@ urlpatterns = [
     path('historique_stock/', historique_stock, name='historique_stock'),
     path('delete_events_by_agent_and_period/', delete_events_by_agent_and_period, name='delete-events-by-agent-and-period'),
     path('agents-with-work-days/', get_agents_with_work_days, name='agents-with-work-days'),
+    path('update_days_present/', update_days_present, name='update_days_present'),
+    path('recalculate_monthly_hours/', recalculate_monthly_hours, name='recalculate_monthly_hours'),
 ]

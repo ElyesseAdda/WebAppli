@@ -1,5 +1,5 @@
 from rest_framework import serializers  
-from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event
+from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -46,7 +46,16 @@ class ClientSerializer(serializers.ModelSerializer):
         model = Client
         fields = '__all__'
 
+class MonthlyHoursSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MonthlyHours
+        fields = ['month', 'hours']
+
+
 class AgentSerializer(serializers.ModelSerializer):
+    heures_travail_journalieres = serializers.ReadOnlyField()
+    monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
+
     class Meta:
         model = Agent
         fields = '__all__'
@@ -64,8 +73,7 @@ class PresenceSerializer(serializers.ModelSerializer):
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
-        fields = '__all__'
-
+        fields = ['id', 'agent', 'start_date', 'end_date', 'status', 'hours_modified']
 
 class StockSerializer(serializers.ModelSerializer):
     prix_total = serializers.SerializerMethodField()  # Champ personnalisé pour calculer le prix total
@@ -95,6 +103,8 @@ class StockMovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockMovement
         fields = '__all__'
+
+
 
 
 

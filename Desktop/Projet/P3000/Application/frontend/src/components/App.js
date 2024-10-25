@@ -10,6 +10,7 @@ import ListePartiesSousParties from './ListPartiesSousParties';
 import CreationDevis from './CreationDevis';
 import StockForm from './StockForm';
 import CalendrierAgentContainer from './CalendrierAgentContainer';
+import AgentCardContainer from './AgentCardContainer';
 import './../../static/css/app.css';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 
@@ -30,6 +31,8 @@ function App() {
                         <Route path="/CreationPartie" element={<CreationPartie />} />
                         <Route path="/Stock" element={<StockForm />} />
                         <Route path="/Agent" element={<CalendrierAgentContainer />} />
+                        <Route path="/AgentCard" element={<AgentCardContainer />} />
+                        
                     </Routes>
                 </Layout>
             </Router>

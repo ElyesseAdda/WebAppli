@@ -12,8 +12,12 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { styled } from '@mui/system';
 import { red, orange, purple, green } from '@mui/material/colors';
 import dayjs from 'dayjs';
+import 'dayjs/locale/fr'; // Importer la locale française
 import axios from 'axios';
 import './../../static/css/calendrierAgent.css';
+
+// Configurer dayjs pour utiliser la locale française
+dayjs.locale('fr');
 
 // Styles de la modale avec Emotion
 const ModalStyle = styled(Box)({
@@ -43,6 +47,8 @@ const fetchEvents = async () => {
 const createEvent = async (event) => {
   try {
     await axios.post('/api/events/', event);
+    // Recharger les agents pour mettre à jour les heures mensuelles
+    refreshAgents();
   } catch (error) {
     console.error("Erreur lors de la création de l'événement", error);
   }
@@ -88,49 +94,54 @@ const CalendrierAgent = ({ agents }) => {
     let adaptedEvents = [];
 
     if (loadedEvents && loadedEvents.length > 0) {
-      // Adapter les données reçues pour FullCalendar (inchangé)
       adaptedEvents = loadedEvents.map((event) => ({
         id: event.id,
         resourceId: event.agent.toString(),
         start: event.start_date,
         end: event.end_date,
-        title: event.status,
+        title: event.status === 'M' ? `${event.hours_modified}H` : event.status,
         color: getColorByStatus(event.status),
       }));
     }
 
     if (agentsWithWorkDays.length > 0) {
-      const monthDays = Array.from({ length: 31 }, (_, i) => dayjs().date(i + 1));
-
       const dayMapping = {
         'lundi': 1, 'mardi': 2, 'mercredi': 3, 'jeudi': 4, 'vendredi': 5, 'samedi': 6, 'dimanche': 0
       };
 
       agentsWithWorkDays.forEach((agent) => {
-        // Convertir la chaîne de jours de travail en tableau de nombres
         const workDays = agent.jours_travail
           ? agent.jours_travail.split(',').map(day => dayMapping[day.trim().toLowerCase()])
-          : [1, 2, 3, 4, 5]; // Par défaut, du lundi au vendredi si non défini
+          : [1, 2, 3, 4, 5];
 
-        monthDays.forEach((date) => {
-          const dayOfWeek = date.day();
-          const formattedDate = date.format('YYYY-MM-DD');
+        const currentYear = dayjs().year();
+        const nextYear = currentYear + 1;
 
-          // Vérifier s'il y a déjà un événement pour cet agent et cette date
-          const eventExists = adaptedEvents.some(
-            (event) => event.resourceId === agent.id.toString() && event.start === formattedDate
-          );
+        [currentYear, nextYear].forEach((year) => {
+          for (let month = 0; month < 12; month++) {
+            const daysInMonth = dayjs().year(year).month(month).daysInMonth();
+            const monthDays = Array.from({ length: daysInMonth }, (_, i) => dayjs().year(year).month(month).date(i + 1));
 
-          if (!eventExists) {
-            const isWorkDay = workDays.includes(dayOfWeek);
+            monthDays.forEach((date) => {
+              const dayOfWeek = date.day();
+              const formattedDate = date.format('YYYY-MM-DD');
 
-            adaptedEvents.push({
-              id: `${agent.id}-${formattedDate}`,
-              resourceId: agent.id.toString(),
-              start: formattedDate,
-              end: formattedDate,
-              title: isWorkDay ? 'P' : ' ',
-              color: isWorkDay ? 'green' : 'grey',
+              const eventExists = adaptedEvents.some(
+                (event) => event.resourceId === agent.id.toString() && event.start === formattedDate
+              );
+
+              if (!eventExists) {
+                const isWorkDay = workDays.includes(dayOfWeek);
+
+                adaptedEvents.push({
+                  id: `${agent.id}-${formattedDate}`,
+                  resourceId: agent.id.toString(),
+                  start: formattedDate,
+                  end: formattedDate,
+                  title: isWorkDay ? 'P' : ' ',
+                  color: isWorkDay ? 'green' : 'grey',
+                });
+              }
             });
           }
         });
@@ -159,14 +170,12 @@ const CalendrierAgent = ({ agents }) => {
       console.error("La date ou l'agent sélectionné est manquant");
       return;
     }
-  
+
     const startDate = dayjs(selectedDate).format('YYYY-MM-DD');
     const endDate = dayjs(selectedEndDate || selectedDate).format('YYYY-MM-DD');
-  
-    // Supprimer les événements existants pour la même période et le même agent (pour éviter les doublons)
+
     await deleteEventsByAgentAndPeriod(selectedAgent, startDate, endDate);
-  
-    // Mise à jour locale des événements pour supprimer ceux de l'agent et de la période spécifiés
+
     setEvents((prevEvents) =>
       prevEvents.filter(
         (event) =>
@@ -175,80 +184,63 @@ const CalendrierAgent = ({ agents }) => {
             dayjs(event.start).isBetween(startDate, endDate, null, '[]')
           )
       )
-    );    
-  
+    );
+
     const colorMap = {
       P: 'green',
       A: 'red',
       C: 'purple',
       M: 'orange',
     };
-  
+
     let currentDate = dayjs(startDate);
     const finalDate = dayjs(endDate);
     const newEvents = [];
-  
-    // Ajouter de nouveaux événements pour chaque jour de la période spécifiée
+
     while (currentDate.isBefore(finalDate, 'day') || currentDate.isSame(finalDate, 'day')) {
       const formattedDate = currentDate.format('YYYY-MM-DD');
-  
+
       const newEvent = {
         agent: selectedAgent,
         start_date: formattedDate,
         end_date: formattedDate,
         status: status,
-        hours_modified: status === 'horaire_modifie' ? hours : 0,
+        hours_modified: status === 'M' ? hours : 0,
       };
-  
+
       await createEvent(newEvent);
-  
+
+      if (status === 'P') {
+        await axios.post('/api/update_days_present/', {
+          agent_id: selectedAgent,
+          month: formattedDate,
+          increment: true
+        });
+      }
+
       newEvents.push({
         id: `${newEvent.agent}-${newEvent.start_date}`,
         resourceId: newEvent.agent.toString(),
         start: newEvent.start_date,
         end: newEvent.end_date,
-        title: status,
+        title: status === 'M' ? `${hours}H` : status,  // Corrigez ici pour afficher la lettre correspondante
         color: colorMap[status],
       });
-  
+
       currentDate = currentDate.add(1, 'day');
     }
-  
-    // Générer les événements par défaut 'P' pour les dates en dehors de la période modifiée
-    const monthDays = Array.from({ length: 31 }, (_, i) => dayjs().date(i + 1));
-  
-    agents.forEach((agent) => {
-      monthDays.forEach((date) => {
-        const isWeekend = date.day() === 6 || date.day() === 0; // 6 = Samedi, 0 = Dimanche
-        const formattedDate = date.format('YYYY-MM-DD');
-  
-        // Vérifier s'il y a déjà un événement pour cet agent et cette date
-        const isInModifiedPeriod =
-          dayjs(formattedDate).isBetween(startDate, endDate, null, '[]') &&
-          agent.id === selectedAgent;
-  
-        const eventExists = events.some(
-          (event) => event.resourceId === agent.id.toString() && event.start === formattedDate
-        );
-  
-        if (!eventExists && !isInModifiedPeriod) {
-          newEvents.push({
-            id: `${agent.id}-${formattedDate}`,
-            resourceId: agent.id.toString(),
-            start: formattedDate,
-            end: formattedDate,
-            title: isWeekend ? ' ' : 'P',
-            color: isWeekend ? 'grey' : 'green',
-          });
-        }
-      });
+
+    // Recalculer les heures mensuelles après la création des événements
+    await axios.post('/api/recalculate_monthly_hours/', {
+      agent_id: selectedAgent,
+      month: startDate
     });
-  
-    // Mettre à jour l'état des événements en ajoutant les nouveaux événements
+
     setEvents((prevEvents) => [...prevEvents, ...newEvents]);
     closeModal();
   };
 
+  
   const handleDateChange = (newValue, isEndDate = false) => {
     if (isEndDate) {
       setSelectedEndDate(dayjs(newValue));

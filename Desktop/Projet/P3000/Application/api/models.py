@@ -1,5 +1,7 @@
 from django.db import models
 from django.core.validators import RegexValidator
+from django.utils import timezone
+from datetime import datetime, timedelta
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -88,14 +90,38 @@ class Agent(models.Model):
     def __str__(self):
         return f'{self.name} {self.surname}'
 
+    
     @property
-    def heures_travail_effectives(self):
-        """ Calcule les heures de travail effectives en tenant compte des pauses """
-        if self.heure_debut and self.heure_fin and self.heure_pause_debut and self.heure_pause_fin:
-            heures_travail = (self.heure_fin.hour - self.heure_debut.hour) - (self.heure_pause_fin.hour - self.heure_pause_debut.hour)
-            return heures_travail
+    def heures_travail_journalieres(self):
+        """ Calcule les heures de travail journalières en tenant compte des pauses """
+        if self.heure_debut and self.heure_fin:
+            debut = datetime.combine(datetime.today(), self.heure_debut)
+            fin = datetime.combine(datetime.today(), self.heure_fin)
+            heures_travail = (fin - debut).total_seconds() / 3600  # Convertir en heures
+
+            if self.heure_pause_debut and self.heure_pause_fin:
+                pause_debut = datetime.combine(datetime.today(), self.heure_pause_debut)
+                pause_fin = datetime.combine(datetime.today(), self.heure_pause_fin)
+                pause = (pause_fin - pause_debut).total_seconds() / 3600  # Convertir en heures
+                heures_travail -= pause
+
+            return max(0, heures_travail)  # S'assurer que le résultat n'est pas négatif
         return 0
 
+
+class MonthlyPresence(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
+    month = models.DateField()  # Utilisez le premier jour du mois pour représenter le mois
+    days_present = models.IntegerField(default=0)
+
+
+class MonthlyHours(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='monthly_hours')
+    month = models.DateField(default=timezone.now)
+    hours = models.DecimalField(max_digits=6, decimal_places=2)
+    
+    class Meta:
+        unique_together = ('agent', 'month')
 
 class Presence(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='presences')
@@ -130,7 +156,7 @@ class Event(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     status = models.CharField(max_length=20)
-    hours_modified = models.IntegerField(default=0)  # S'il s'agit d'une modification des heures
+    hours_modified = models.IntegerField(default=0)  # Champ pour les heures modifiées
 
     def __str__(self):
         return f"{self.agent} - {self.status} du {self.start_date} au {self.end_date}"
@@ -313,3 +339,6 @@ class DevisItem(models.Model):
     def __str__(self):
         return f"{self.sous_partie.nom} - {self.quantite} x {self.sous_partie.prix_unitaire}"
     
+
+
+
