@@ -4,7 +4,7 @@ from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
-    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours # Import de la vue
+    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule # Import de la vue
 )
 
 router = DefaultRouter()
@@ -20,6 +20,7 @@ router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
 router.register(r'events', EventViewSet, basename='event')
 
+
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
@@ -31,4 +32,8 @@ urlpatterns = [
     path('agents-with-work-days/', get_agents_with_work_days, name='agents-with-work-days'),
     path('update_days_present/', update_days_present, name='update_days_present'),
     path('recalculate_monthly_hours/', recalculate_monthly_hours, name='recalculate_monthly_hours'),
+    path('assign_chantier/', assign_chantier, name='assign_chantier'),
+    path('get_schedule/', get_schedule, name='get_schedule'),
+    path('copy_schedule/', copy_schedule, name='copy_schedule'),
+    # ... autres routes
 ]

@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from datetime import datetime, timedelta
+from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -339,6 +340,20 @@ class DevisItem(models.Model):
     def __str__(self):
         return f"{self.sous_partie.nom} - {self.quantite} x {self.sous_partie.prix_unitaire}"
     
+
+class Schedule(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
+    week = models.IntegerField()
+    year = models.IntegerField(default=timezone.now().year)  # Ajout du champ année
+    day = models.CharField(max_length=10)  # "Lundi", "Mardi", etc.
+    hour = models.CharField(max_length=5)  # "06:00", "07:00", etc.
+    chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('agent', 'week', 'year', 'day', 'hour')  # Assurer l'unicité
+
+    def __str__(self):
+        return f"{self.agent.name} - Semaine {self.week}, {self.year} - {self.day} {self.hour}"
 
 
 

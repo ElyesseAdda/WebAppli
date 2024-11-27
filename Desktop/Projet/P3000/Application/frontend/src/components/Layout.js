@@ -1,19 +1,29 @@
-import React from 'react';
-import SlideBar from './SlideBar';
-import Header from './Header';
+import React, { useState } from "react";
+import "./../../static/css/layout.css";
+import Header from "./Header";
+import SlideBar from "./SlideBar";
 
 const Layout = ({ children }) => {
-    return (
-        <div className="layout">
-            <Header />
-            <div className="main-content">
-                <SlideBar />
-                <div className="content">
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
+  const [isSidebarVisible, setSidebarVisible] = useState(true);
+
+  const toggleSidebar = () => {
+    setSidebarVisible(!isSidebarVisible);
+  };
+
+  return (
+    <div
+      className={`layout ${
+        isSidebarVisible ? "sidebar-visible" : "sidebar-hidden"
+      }`}
+    >
+      <Header />
+      <SlideBar
+        toggleSidebar={toggleSidebar}
+        isSidebarVisible={isSidebarVisible}
+      />
+      <div className="main-content">{children}</div>
+    </div>
+  );
 };
 
 export default Layout;

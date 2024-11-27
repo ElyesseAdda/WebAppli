@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Avg, Count, Min, Sum
 from django.shortcuts import render, redirect, get_object_or_404
@@ -15,10 +15,12 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer
+from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule
 from .forms import DevisForm, DevisItemForm
 import logging
+from django.db import transaction
+from rest_framework.permissions import IsAdminUser
 
 logger = logging.getLogger(__name__)
 
@@ -449,6 +451,13 @@ class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        agent_id = self.request.query_params.get('agent_id', None)
+        if agent_id is not None:
+            queryset = queryset.filter(agent_id=agent_id)  # Filtrer par agent_id
+        return queryset
+
 class StockViewSet(viewsets.ModelViewSet):
     queryset = Stock.objects.all()
     serializer_class = StockSerializer
@@ -618,8 +627,162 @@ def recalculate_monthly_hours(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['POST'])
+def assign_chantier(request):
+    """
+    Assigne un chantier aux cellules sélectionnées.
+    Attendu : Liste d'objets contenant agentId, week, year, day, hour, chantierId
+    """
+    updates = request.data  # Directement la liste envoyée
+    logger.debug(f"Données reçues pour assign_chantier: {updates}")
+
+    if not isinstance(updates, list):
+        logger.error("Les données reçues ne sont pas une liste.")
+        return Response({'error': 'Les données doivent être une liste d\'objets.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            for index, update in enumerate(updates):
+                # Vérifiez que chaque mise à jour est un dictionnaire
+                if not isinstance(update, dict):
+                    logger.error(f"L'élément à l'index {index} n'est pas un objet.")
+                    return Response({'error': 'Chaque mise à jour doit être un objet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                agent_id = update.get('agentId')
+                week = update.get('week')
+                year = update.get('year')
+                day = update.get('day')
+                hour_str = update.get('hour')
+                chantier_id = update.get('chantierId')
+
+                # Validation des données
+                if not all([agent_id, week, year, day, hour_str, chantier_id]):
+                    logger.error(f"Champ manquant dans la mise à jour à l'index {index}.")
+                    return Response({'error': 'Tous les champs sont requis pour chaque mise à jour.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    # Convertir l'heure au format TimeField
+                    hour = datetime.strptime(hour_str, '%H:%M').time()
+                except ValueError:
+                    logger.error(f"Format d'heure invalide pour '{hour_str}' à l'index {index}.")
+                    return Response({'error': f'Format d\'heure invalide pour {hour_str}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    agent = Agent.objects.get(id=agent_id)
+                except Agent.DoesNotExist:
+                    logger.error(f"Agent avec id {agent_id} n'existe pas à l'index {index}.")
+                    return Response({'error': f'Agent avec id {agent_id} n\'existe pas.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    chantier = Chantier.objects.get(id=chantier_id)
+                except Chantier.DoesNotExist:
+                    logger.error(f"Chantier avec id {chantier_id} n'existe pas à l'index {index}.")
+                    return Response({'error': f'Chantier avec id {chantier_id} n\'existe pas.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Récupérer ou créer l'objet Schedule
+                schedule, created = Schedule.objects.get_or_create(
+                    agent=agent,
+                    week=week,
+                    year=year,
+                    day=day,
+                    hour=hour,
+                    defaults={'chantier': chantier}
+                )
+
+                if not created:
+                    # Mettre à jour le chantier si le Schedule existe déjà
+                    schedule.chantier = chantier
+                    schedule.save()
+                    logger.debug(f"Chantier mis à jour pour Schedule id {schedule.id}.")
+
+        logger.info("Chantiers assignés avec succès.")
+        return Response({'message': 'Chantiers assignés avec succès.'}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.exception("Erreur imprévue lors de l'assignation du chantier.")
+        return Response({'error': 'Une erreur imprévue est survenue.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_schedule(request):
+    """
+    Récupérer le planning d'un agent pour une semaine et une année données.
+    """
+    agent_id = request.GET.get('agent')
+    week = request.GET.get('week')
+    year = request.GET.get('year')  # Récupérer le paramètre année
+
+    if not agent_id or not week or not year:
+        return Response({'error': 'Paramètres "agent", "week" et "year" requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        schedules = Schedule.objects.filter(agent_id=agent_id, week=week, year=year)
+        serializer = ScheduleSerializer(schedules, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Schedule.DoesNotExist:
+        return Response({'error': 'Planification non trouvée.'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération du planning: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST']) # Restriction aux administrateurs si nécessaire
+def copy_schedule(request):
+    source_agent_id = request.data.get('sourceAgentId')
+    target_agent_id = request.data.get('targetAgentId')
+    source_week = request.data.get('sourceWeek')
+    target_week = request.data.get('targetWeek')
+    source_year = request.data.get('sourceYear')
+    target_year = request.data.get('targetYear')
+
+    if not all([source_agent_id, target_agent_id, source_week, target_week, source_year, target_year]):
+        return Response({'error': 'Tous les paramètres sont requis.'}, status=400)
+
+    try:
+        # Vérifier l'existence des agents
+        if not Agent.objects.filter(id=source_agent_id).exists():
+            return Response({'error': 'Agent source invalide.'}, status=400)
+        if not Agent.objects.filter(id=target_agent_id).exists():
+            return Response({'error': 'Agent cible invalide.'}, status=400)
+
+        # Récupérer le planning de l'agent source pour la semaine et l'année spécifiées
+        source_schedules = Schedule.objects.filter(
+            agent_id=source_agent_id,
+            week=source_week,
+            year=source_year
+        )
+        
+        if not source_schedules.exists():
+            return Response({'error': 'Aucun planning trouvé pour l\'agent source à la semaine et l\'année spécifiées.'}, status=404)
+
+        # Vérifier si un planning existe déjà pour l'agent cible à la semaine et l'année cibles
+        existing_target_schedules = Schedule.objects.filter(
+            agent_id=target_agent_id,
+            week=target_week,
+            year=target_year
+        )
+        if existing_target_schedules.exists():
+            return Response({'error': 'Un planning existe déjà pour l\'agent cible à la semaine et l\'année spécifiées.'}, status=400)
+
+        # Utiliser une transaction atomique pour garantir la cohérence des données
+        with transaction.atomic():
+            # Copier les plannings vers l'agent cible avec la nouvelle semaine et année
+            copied_schedules = []
+            for schedule in source_schedules:
+                new_schedule = Schedule(
+                    agent_id=target_agent_id,
+                    week=target_week,
+                    year=target_year,
+                    hour=schedule.hour,
+                    day=schedule.day,
+                    chantier_id=schedule.chantier_id
+                )
+                copied_schedules.append(new_schedule)
+            Schedule.objects.bulk_create(copied_schedules)
+
+        return Response({'message': 'Planning copié avec succès.'}, status=200)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 

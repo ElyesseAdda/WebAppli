@@ -1,12 +1,12 @@
-a{
-    color: white;
+a.fc-timeline-slot-cushion.fc-scrollgrid-sync-inner {
+  color: white;
 }
 
 .fc-media-screen {
-    padding-right: 20px;
+  padding-right: 20px;
 }
 
 .fc-timeline-event {
-    font-size: 18px;
-    height: 100%;
+  font-size: 18px;
+  height: 100%;
 }

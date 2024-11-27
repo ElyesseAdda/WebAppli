@@ -1,0 +1,17 @@
+.layout {
+  display: flex; /* Utiliser flexbox pour aligner les éléments */
+}
+
+.main-content {
+  transition: margin-left 0.5s ease; /* Transition fluide */
+  margin-left: 0; /* Valeur par défaut */
+  width: 100%; /* Prendre toute la largeur disponible */
+}
+
+.sidebar-visible .main-content {
+  margin-left: 250px; /* Décalage lorsque la barre latérale est visible */
+}
+
+.sidebar-hidden .main-content {
+  margin-left: 0; /* Pas de décalage lorsque la barre latérale est cachée */
+}
