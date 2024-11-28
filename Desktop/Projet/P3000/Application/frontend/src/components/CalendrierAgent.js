@@ -1,6 +1,7 @@
 import frLocale from "@fullcalendar/core/locales/fr";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
+import { MenuItem, Select } from "@mui/material";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import { green, orange, red } from "@mui/material/colors";
@@ -46,7 +47,11 @@ const fetchEvents = async () => {
 // Fonction pour créer un nouvel événement
 const createEvent = async (event) => {
   try {
-    await axios.post("/api/events/", event);
+    const eventData = { ...event };
+    if (event.status === "M") {
+      eventData.chantier = event.chantier; // Inclure le chantier
+    }
+    await axios.post("/api/events/", eventData);
     // Recharger les agents pour mettre à jour les heures mensuelles
     refreshAgents();
   } catch (error) {
@@ -82,6 +87,17 @@ const CalendrierAgent = ({ agents }) => {
   const [selectedEndDate, setSelectedEndDate] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [selectedAgentName, setSelectedAgentName] = useState(null);
+  const [chantiers, setChantiers] = useState([]);
+  const [selectedChantier, setSelectedChantier] = useState(null);
+
+  const fetchChantiers = async () => {
+    try {
+      const response = await axios.get("/api/chantier/");
+      setChantiers(response.data);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des chantiers:", error);
+    }
+  };
 
   const fetchAgentsWithWorkDays = async () => {
     try {
@@ -107,7 +123,12 @@ const CalendrierAgent = ({ agents }) => {
         resourceId: event.agent.toString(),
         start: event.start_date,
         end: event.end_date,
-        title: event.status === "M" ? `${event.hours_modified}H` : event.status,
+        title:
+          event.status === "M"
+            ? `${event.hours_modified}H (${
+                event.chantier_name || "Chantier inconnu"
+              })`
+            : event.status,
         color: getColorByStatus(event.status),
       }));
     }
@@ -176,6 +197,7 @@ const CalendrierAgent = ({ agents }) => {
 
   useEffect(() => {
     loadEvents();
+    fetchChantiers();
   }, []);
 
   const handleResourceClick = (agentId, agentName) => {
@@ -189,81 +211,142 @@ const CalendrierAgent = ({ agents }) => {
   };
 
   const addEvent = async (status, hours = 0) => {
-    if (!selectedDate || !selectedAgent) {
-      console.error("La date ou l'agent sélectionné est manquant");
-      return;
-    }
-
-    const startDate = dayjs(selectedDate).format("YYYY-MM-DD");
-    const endDate = dayjs(selectedEndDate || selectedDate).format("YYYY-MM-DD");
-
-    await deleteEventsByAgentAndPeriod(selectedAgent, startDate, endDate);
-
-    setEvents((prevEvents) =>
-      prevEvents.filter(
-        (event) =>
-          !(
-            event.resourceId === selectedAgent.toString() &&
-            dayjs(event.start).isBetween(startDate, endDate, null, "[]")
-          )
-      )
-    );
-
-    const colorMap = {
-      P: "green",
-      A: "red",
-      C: "purple",
-      M: "orange",
-    };
-
-    let currentDate = dayjs(startDate);
-    const finalDate = dayjs(endDate);
-    const newEvents = [];
-
-    while (
-      currentDate.isBefore(finalDate, "day") ||
-      currentDate.isSame(finalDate, "day")
-    ) {
-      const formattedDate = currentDate.format("YYYY-MM-DD");
-
-      const newEvent = {
-        agent: selectedAgent,
-        start_date: formattedDate,
-        end_date: formattedDate,
-        status: status,
-        hours_modified: status === "M" ? hours : 0,
-      };
-
-      await createEvent(newEvent);
-
-      if (status === "P") {
-        await axios.post("/api/update_days_present/", {
-          agent_id: selectedAgent,
-          month: formattedDate,
-          increment: true,
-        });
+    try {
+      if (!selectedDate || !selectedAgent) {
+        console.error("La date ou l'agent sélectionné est manquant");
+        return;
       }
 
-      newEvents.push({
-        id: `${newEvent.agent}-${newEvent.start_date}`,
-        resourceId: newEvent.agent.toString(),
-        start: newEvent.start_date,
-        end: newEvent.end_date,
-        title: status === "M" ? `${hours}H` : status, // Corrigez ici pour afficher la lettre correspondante
-        color: colorMap[status],
-      });
+      // Vérifier si un chantier est sélectionné pour les événements "M"
+      if (status === "M" && !selectedChantier) {
+        console.error(
+          "Un chantier doit être sélectionné pour les événements modifiés (M)."
+        );
+        alert(
+          "Veuillez sélectionner un chantier pour les événements modifiés."
+        );
+        return;
+      }
 
-      currentDate = currentDate.add(1, "day");
+      const startDate = dayjs(selectedDate).format("YYYY-MM-DD");
+      const endDate = dayjs(selectedEndDate || selectedDate).format(
+        "YYYY-MM-DD"
+      );
+
+      // Si c'est un événement A ou C, supprimer d'abord les schedules
+      if (status === "A" || status === "C") {
+        let currentDate = dayjs(startDate);
+        const finalDate = dayjs(endDate);
+
+        while (
+          currentDate.isBefore(finalDate, "day") ||
+          currentDate.isSame(finalDate, "day")
+        ) {
+          const weekNumber = currentDate.isoWeek();
+          const year = currentDate.year();
+          const dayName = currentDate.locale("fr").format("dddd");
+          const dayNameCapitalized =
+            dayName.charAt(0).toUpperCase() + dayName.slice(1);
+
+          // Créer un tableau de toutes les heures à supprimer
+          const deletions = Array.from({ length: 17 }, (_, i) => {
+            const hour = `${i + 6}:00`;
+            return {
+              agentId: selectedAgent,
+              week: weekNumber,
+              year: year,
+              day: dayNameCapitalized,
+              hour: hour,
+            };
+          });
+
+          try {
+            // Appeler l'API pour supprimer les schedules
+            await axios.post("/api/delete_schedule/", deletions);
+            console.log(
+              `Schedules supprimés pour le ${currentDate.format("YYYY-MM-DD")}`
+            );
+          } catch (error) {
+            console.error(
+              "Erreur lors de la suppression des schedules:",
+              error
+            );
+          }
+
+          currentDate = currentDate.add(1, "day");
+        }
+      }
+
+      await deleteEventsByAgentAndPeriod(selectedAgent, startDate, endDate);
+
+      setEvents((prevEvents) =>
+        prevEvents.filter(
+          (event) =>
+            !(
+              event.resourceId === selectedAgent.toString() &&
+              dayjs(event.start).isBetween(startDate, endDate, null, "[]")
+            )
+        )
+      );
+
+      const colorMap = {
+        P: "green",
+        A: "red",
+        C: "purple",
+        M: "orange",
+      };
+
+      let currentDate = dayjs(startDate);
+      const finalDate = dayjs(endDate);
+      const newEvents = [];
+
+      while (
+        currentDate.isBefore(finalDate, "day") ||
+        currentDate.isSame(finalDate, "day")
+      ) {
+        const formattedDate = currentDate.format("YYYY-MM-DD");
+
+        const newEvent = {
+          agent: selectedAgent,
+          start_date: formattedDate,
+          end_date: formattedDate,
+          status: status,
+          hours_modified: status === "M" ? hours : 0,
+          chantier: status === "M" ? selectedChantier : null,
+        };
+
+        try {
+          const response = await axios.post("/api/events/", newEvent);
+          console.log("Événement créé avec succès:", response.data);
+
+          if (status === "P") {
+            await axios.post("/api/update_days_present/", {
+              agent_id: selectedAgent,
+              month: formattedDate,
+              increment: true,
+            });
+          }
+
+          newEvents.push({
+            id: `${newEvent.agent}-${newEvent.start_date}`,
+            resourceId: newEvent.agent.toString(),
+            start: newEvent.start_date,
+            end: newEvent.end_date,
+            title: status === "M" ? `${hours}H` : status,
+            color: colorMap[status],
+            chantier: status === "M" ? selectedChantier : null,
+          });
+        } catch (error) {
+          console.error("Erreur lors de la création de l'événement:", error);
+        }
+
+        currentDate = currentDate.add(1, "day");
+      }
+
+      setEvents((prevEvents) => [...prevEvents, ...newEvents]);
+    } catch (error) {
+      console.error("Erreur dans addEvent:", error);
     }
-
-    // Recalculer les heures mensuelles après la création des événements
-    await axios.post("/api/recalculate_monthly_hours/", {
-      agent_id: selectedAgent,
-      month: startDate,
-    });
-
-    setEvents((prevEvents) => [...prevEvents, ...newEvents]);
-    closeModal();
   };
 
   const handleDateChange = (newValue, isEndDate = false) => {
@@ -353,6 +436,25 @@ const CalendrierAgent = ({ agents }) => {
               renderInput={(params) => <TextField {...params} fullWidth />}
             />
           </LocalizationProvider>
+
+          <Select
+            label="Sélectionner un chantier"
+            value={selectedChantier || ""}
+            onChange={(e) => setSelectedChantier(e.target.value)}
+            fullWidth
+            displayEmpty
+            style={{ marginTop: "16px", marginBottom: "16px" }}
+          >
+            <MenuItem value="">
+              <em>--Sélectionner un chantier--</em>
+            </MenuItem>
+            {chantiers.map((chantier) => (
+              <MenuItem key={chantier.id} value={chantier.id}>
+                {chantier.chantier_name}
+              </MenuItem>
+            ))}
+          </Select>
+
           <Button
             variant="contained"
             sx={{ bgcolor: green[500] }}

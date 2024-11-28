@@ -157,7 +157,8 @@ class Event(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     status = models.CharField(max_length=20)
-    hours_modified = models.IntegerField(default=0)  # Champ pour les heures modifiées
+    hours_modified = models.IntegerField(default=0)
+    chantier = models.ForeignKey('Chantier', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"{self.agent} - {self.status} du {self.start_date} au {self.end_date}"
@@ -354,6 +355,18 @@ class Schedule(models.Model):
 
     def __str__(self):
         return f"{self.agent.name} - Semaine {self.week}, {self.year} - {self.day} {self.hour}"
+
+class LaborCost(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
+    week = models.IntegerField()
+    year = models.IntegerField()
+    hours = models.DecimalField(max_digits=10, decimal_places=2)
+    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('agent', 'chantier', 'week', 'year')
 
 
 

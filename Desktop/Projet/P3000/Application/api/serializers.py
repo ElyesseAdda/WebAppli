@@ -1,5 +1,5 @@
 from rest_framework import serializers  
-from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, Schedule
+from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, Schedule, LaborCost
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -71,9 +71,11 @@ class PresenceSerializer(serializers.ModelSerializer):
         fields = ['agent', 'chantier', 'date', 'heures_travail', 'agent_name', 'chantier_name', 'cout_main_oeuvre']
 
 class EventSerializer(serializers.ModelSerializer):
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+
     class Meta:
         model = Event
-        fields = ['id', 'agent', 'start_date', 'end_date', 'status', 'hours_modified']
+        fields = ['id', 'agent', 'start_date', 'end_date', 'status', 'hours_modified', 'chantier', 'chantier_name']
 
 class StockSerializer(serializers.ModelSerializer):
     prix_total = serializers.SerializerMethodField()  # Champ personnalisé pour calculer le prix total
@@ -108,6 +110,11 @@ class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
         fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id']
+
+class LaborCostSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaborCost
+        fields = ['id', 'agent', 'chantier', 'week', 'year', 'hours', 'cost', 'created_at']
 
 
 

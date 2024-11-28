@@ -8,6 +8,7 @@ import {
   Typography,
 } from "@mui/material";
 import { styled } from "@mui/system";
+import dayjs from "dayjs";
 import React, { useState } from "react";
 
 // Function to capitalize the first letter
@@ -17,52 +18,55 @@ const capitalizeFirstLetter = (string) => {
 
 // Fonction pour regrouper les événements
 const groupEvents = (events) => {
-  // Trier les événements par date de départ
-  events.sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+  if (!events || events.length === 0) return [];
+
+  // Trier les événements par date
+  const sortedEvents = [...events].sort(
+    (a, b) => new Date(a.start_date) - new Date(b.start_date)
+  );
 
   const grouped = [];
-  let currentGroup = null;
+  let currentGroup = {
+    status: sortedEvents[0].status,
+    hours_modified: sortedEvents[0].hours_modified || 0,
+    startDate: sortedEvents[0].start_date,
+    endDate: sortedEvents[0].end_date,
+  };
 
-  events.forEach((event) => {
-    const date = new Date(event.start_date).toLocaleDateString("fr-FR");
-    const status = event.status;
+  for (let i = 1; i < sortedEvents.length; i++) {
+    const event = sortedEvents[i];
+    const prevEvent = sortedEvents[i - 1];
+    const isConsecutive =
+      dayjs(event.start_date).diff(dayjs(prevEvent.end_date), "day") === 1;
 
-    if (currentGroup && currentGroup.status === status) {
-      // Vérifier si la date actuelle est consécutive à la date de fin du groupe actuel
-      const lastDate = new Date(currentGroup.endDate);
-      const nextDate = new Date(event.start_date);
-
-      if (lastDate.getTime() + 86400000 === nextDate.getTime()) {
-        // 86400000 ms = 1 jour
-        currentGroup.endDate = event.start_date; // Mettre à jour la date de fin
+    // Déterminez si l'événement peut être ajouté au groupe courant
+    let canGroup = false;
+    if (currentGroup.status === event.status) {
+      if (event.status === "M") {
+        // Pour les événements "M", vérifier également `hours_modified`
+        canGroup = currentGroup.hours_modified === (event.hours_modified || 0);
       } else {
-        // Ajouter le groupe actuel et commencer un nouveau groupe
-        grouped.push(currentGroup);
-        currentGroup = {
-          status,
-          startDate: event.start_date,
-          endDate: event.start_date,
-          hours_modified: event.hours_modified,
-        };
+        canGroup = true;
       }
+    }
+
+    if (isConsecutive && canGroup) {
+      // Étendre le groupe courant
+      currentGroup.endDate = event.end_date;
     } else {
-      // Ajouter le groupe actuel si existant
-      if (currentGroup) {
-        grouped.push(currentGroup);
-      }
+      // Ajouter le groupe courant à la liste et démarrer un nouveau groupe
+      grouped.push({ ...currentGroup });
       currentGroup = {
-        status,
+        status: event.status,
+        hours_modified: event.hours_modified || 0,
         startDate: event.start_date,
-        endDate: event.start_date,
-        hours_modified: event.hours_modified,
+        endDate: event.end_date,
       };
     }
-  });
+  }
 
   // Ajouter le dernier groupe
-  if (currentGroup) {
-    grouped.push(currentGroup);
-  }
+  grouped.push({ ...currentGroup });
 
   return grouped;
 };
@@ -71,22 +75,20 @@ const groupEvents = (events) => {
 const formatEvents = (events) => {
   const groupedEvents = groupEvents(events);
   return groupedEvents.map((group) => {
-    const startDateFormatted = new Date(group.startDate).toLocaleDateString(
-      "fr-FR"
-    );
-    const endDateFormatted = new Date(group.endDate).toLocaleDateString(
-      "fr-FR"
-    );
+    const startDateFormatted = dayjs(group.startDate).format("DD/MM/YYYY");
+    const endDateFormatted = dayjs(group.endDate).format("DD/MM/YYYY");
 
     if (group.status === "M") {
-      // Si le statut est "M", afficher le format avec heures modifiées
-      return `${group.status} ${startDateFormatted} ${group.hours_modified}H`;
+      // Déplacer `hours_modified` à la fin de la chaîne
+      return `${group.status} ${startDateFormatted}${
+        startDateFormatted !== endDateFormatted ? ` - ${endDateFormatted}` : ""
+      } / ${group.hours_modified}H`;
     } else if (group.startDate === group.endDate) {
       // Si la date de début et la date de fin sont identiques, afficher uniquement la date de début
       return `${group.status} ${startDateFormatted}`;
     } else {
       // Sinon, afficher le format avec date de début et date de fin
-      return `${group.status} ${startDateFormatted} - ${endDateFormatted}`;
+      return `${group.status} ${startDateFormatted} ${endDateFormatted}`;
     }
   });
 };

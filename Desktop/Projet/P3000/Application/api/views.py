@@ -15,12 +15,14 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer
+from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost
 from .forms import DevisForm, DevisItemForm
 import logging
 from django.db import transaction
 from rest_framework.permissions import IsAdminUser
+from calendar import day_name
+import locale
 
 logger = logging.getLogger(__name__)
 
@@ -335,32 +337,40 @@ class AgentViewSet(viewsets.ModelViewSet):
         return list(hours_modified)
 
     def get_days_worked_in_month(self, agent):
-        today = datetime.today()
-        current_month = today.month
-        current_year = today.year
-
-        # Obtenez tous les jours du mois actuel
-        num_days = calendar.monthrange(current_year, current_month)[1]
-        days_in_month = [datetime(current_year, current_month, day) for day in range(1, num_days + 1)]
-
-        # Convertir les jours de travail de l'agent en indices de jours de la semaine
-        jours_travail = agent.jours_travail.split(', ')
-        jours_travail_indices = [list(calendar.day_name).index(jour.capitalize()) for jour in jours_travail]
-
-        # Compter les jours travaillés
-        days_worked = sum(1 for day in days_in_month if day.weekday() in jours_travail_indices)
-
-        # Log pour vérifier le calcul
-        print(f"Agent {agent.id}: {days_worked} jours travaillés en {calendar.month_name[current_month]} {current_year}")
-
-        return days_worked
+        try:
+            # Liste des jours en anglais dans l'ordre (lundi à dimanche)
+            english_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            
+            # Dictionnaire de correspondance français -> anglais
+            fr_to_en = {
+                'Lundi': 'Monday',
+                'Mardi': 'Tuesday',
+                'Mercredi': 'Wednesday',
+                'Jeudi': 'Thursday',
+                'Vendredi': 'Friday',
+                'Samedi': 'Saturday',
+                'Dimanche': 'Sunday'
+            }
+            
+            jours_travail = agent.jours_travail.split(',') if agent.jours_travail else []
+            # Obtenir les indices (0 pour Lundi, 1 pour Mardi, etc.)
+            jours_travail_indices = [english_days.index(fr_to_en[jour.strip().capitalize()]) for jour in jours_travail]
+            
+            return jours_travail_indices
+            
+        except Exception as e:
+            print(f"Erreur dans get_days_worked_in_month: {e}")
+            return []
 
     def retrieve(self, request, *args, **kwargs):
         agent = self.get_object()
         days_worked = self.get_days_worked_in_month(agent)
-        agent_data = self.get_serializer(agent).data
-        agent_data['days_worked'] = days_worked  # Inclure days_worked
-        return Response(agent_data)
+        
+        serializer = self.get_serializer(agent)
+        data = serializer.data
+        data['days_worked'] = days_worked
+        
+        return Response(data)
     
 @api_view(['DELETE'])
 def delete_events_by_agent_and_period(request):
@@ -783,6 +793,178 @@ def copy_schedule(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+def delete_schedule(request):
+    """
+    Supprime les horaires spécifiés.
+    Attendu : Liste d'objets contenant agentId, week, year, day, hour
+    """
+    deletions = request.data  # Liste d'objets
+
+    logger.debug(f"Données reçues pour delete_schedule: {deletions}")
+
+    if not isinstance(deletions, list):
+        logger.error("Les données reçues ne sont pas une liste.")
+        return Response({'error': 'Les données doivent être une liste d\'objets.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            for index, deletion in enumerate(deletions):
+                # Vérifiez que chaque mise à jour est un dictionnaire
+                if not isinstance(deletion, dict):
+                    logger.error(f"L'élément à l'index {index} n'est pas un objet.")
+                    return Response({'error': 'Chaque mise à jour doit être un objet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                agent_id = deletion.get('agentId')
+                week = deletion.get('week')
+                year = deletion.get('year')
+                day = deletion.get('day')
+                hour_str = deletion.get('hour')
+
+                # Validation des données nécessaires
+                if not all([agent_id, week, year, day, hour_str]):
+                    logger.error(f"Données manquantes dans l'élément à l'index {index}: {deletion}")
+                    return Response({'error': f'Données manquantes dans l\'élément à l\'index {index}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    agent = Agent.objects.get(id=agent_id)
+                except Agent.DoesNotExist:
+                    logger.error(f"Agent avec id {agent_id} n'existe pas à l'index {index}.")
+                    return Response({'error': f'Agent avec id {agent_id} n\'existe pas.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Convertir l'heure en format approprié en utilisant datetime.strptime
+                try:
+                    # Supposons que le format attendu est 'H:M' ou 'HH:MM'
+                    hour = datetime.strptime(hour_str, '%H:%M').time()
+                except ValueError:
+                    logger.error(f"Format d'heure invalide à l'index {index}: {hour_str}")
+                    return Response({'error': f'Format d\'heure invalide à l\'index {index}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Récupérer l'objet Schedule correspondant
+                try:
+                    schedule = Schedule.objects.get(
+                        agent=agent,
+                        week=week,
+                        year=year,
+                        day=day,
+                        hour=hour
+                    )
+                    schedule.delete()
+                    logger.debug(f"Schedule supprimé: {schedule}")
+                except Schedule.DoesNotExist:
+                    logger.warning(f"Schedule inexistant à l'index {index}: {deletion}")
+                    # Vous pouvez choisir de continuer ou de retourner une erreur
+                    continue
+
+        logger.info("Horaires supprimés avec succès.")
+        return Response({'message': 'Horaires supprimés avec succès.'}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.exception("Erreur imprévue lors de la suppression des horaires.")
+        return Response({'error': 'Une erreur imprévue est survenue.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def save_labor_costs(request):
+    """
+    Sauvegarde les coûts de main d'œuvre pour un agent sur une semaine donnée.
+    """
+    try:
+        with transaction.atomic():
+            agent_id = request.data.get('agent_id')
+            week = request.data.get('week')
+            year = request.data.get('year')
+            costs = request.data.get('costs', [])
+
+            if not all([agent_id, week, year, costs]):
+                return Response({
+                    'error': 'Données manquantes. agent_id, week, year et costs sont requis.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Supprimer les anciens enregistrements pour cette semaine/année/agent
+            LaborCost.objects.filter(
+                agent_id=agent_id,
+                week=week,
+                year=year
+            ).delete()
+
+            # Créer les nouveaux enregistrements
+            new_costs = []
+            for cost_data in costs:
+                try:
+                    chantier = Chantier.objects.get(chantier_name=cost_data['chantier_name'])
+                    new_cost = LaborCost(
+                        agent_id=agent_id,
+                        chantier=chantier,
+                        week=week,
+                        year=year,
+                        hours=cost_data['hours'],
+                        cost=cost_data['cost']
+                    )
+                    new_costs.append(new_cost)
+                except Chantier.DoesNotExist:
+                    return Response({
+                        'error': f'Chantier non trouvé: {cost_data["chantier_name"]}'
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+            # Sauvegarder tous les nouveaux coûts
+            LaborCost.objects.bulk_create(new_costs)
+
+            return Response({
+                'message': 'Coûts de main d\'œuvre sauvegardés avec succès',
+                'count': len(new_costs)
+            }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors de la sauvegarde des coûts: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_labor_costs(request):
+    try:
+        week = request.query_params.get('week')
+        year = request.query_params.get('year')
+        agent_id = request.query_params.get('agent_id')
+
+        queryset = LaborCost.objects.filter(
+            week=week,
+            year=year
+        )
+
+        if agent_id:
+            queryset = queryset.filter(agent_id=agent_id)
+
+        costs = queryset.select_related('agent', 'chantier').all()
+        
+        # Organiser les données par chantier
+        results = {}
+        for cost in costs:
+            chantier_name = cost.chantier.chantier_name
+            if chantier_name not in results:
+                results[chantier_name] = {
+                    'total_hours': 0,
+                    'total_cost': 0,
+                    'details': []
+                }
+            
+            results[chantier_name]['total_hours'] += float(cost.hours)
+            results[chantier_name]['total_cost'] += float(cost.cost)
+            results[chantier_name]['details'].append({
+                'agent_name': cost.agent.name,
+                'hours': float(cost.hours),
+                'cost': float(cost.cost)
+            })
+
+        return Response(results)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 
