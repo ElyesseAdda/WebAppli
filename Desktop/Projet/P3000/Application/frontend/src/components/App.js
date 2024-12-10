@@ -12,7 +12,7 @@ import Dashboard from "./Dashboard";
 import Layout from "./Layout";
 import ListChantier from "./ListChantier";
 import ListePartiesSousParties from "./ListPartiesSousParties";
-import PlanningHebdoAgent from "./PlanningHebdoAgent";
+import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 // Créer un thème par défaut
 const theme = createTheme();
@@ -31,7 +31,7 @@ function App() {
           <Route path="/Stock" element={<StockForm />} />
           <Route path="/Agent" element={<CalendrierAgentContainer />} />
           <Route path="/AgentCard" element={<AgentCardContainer />} />
-          <Route path="/PlanningHebdoAgent" element={<PlanningHebdoAgent />} />
+          <Route path="/PlanningContainer" element={<PlanningContainer />} />
         </Routes>
       </Layout>
     </Router>

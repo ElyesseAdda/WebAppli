@@ -363,7 +363,6 @@ class LaborCost(models.Model):
     year = models.IntegerField()
     hours = models.DecimalField(max_digits=10, decimal_places=2)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('agent', 'chantier', 'week', 'year')

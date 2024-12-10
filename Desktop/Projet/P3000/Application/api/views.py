@@ -23,6 +23,7 @@ from django.db import transaction
 from rest_framework.permissions import IsAdminUser
 from calendar import day_name
 import locale
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -868,9 +869,6 @@ def delete_schedule(request):
 
 @api_view(['POST'])
 def save_labor_costs(request):
-    """
-    Sauvegarde les coûts de main d'œuvre pour un agent sur une semaine donnée.
-    """
     try:
         with transaction.atomic():
             agent_id = request.data.get('agent_id')
@@ -879,48 +877,32 @@ def save_labor_costs(request):
             costs = request.data.get('costs', [])
 
             if not all([agent_id, week, year, costs]):
-                return Response({
-                    'error': 'Données manquantes. agent_id, week, year et costs sont requis.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Données manquantes. agent_id, week, year et costs sont requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Supprimer les anciens enregistrements pour cette semaine/année/agent
-            LaborCost.objects.filter(
-                agent_id=agent_id,
-                week=week,
-                year=year
-            ).delete()
+            LaborCost.objects.filter(agent_id=agent_id, week=week, year=year).delete()
 
-            # Créer les nouveaux enregistrements
             new_costs = []
             for cost_data in costs:
-                try:
-                    chantier = Chantier.objects.get(chantier_name=cost_data['chantier_name'])
-                    new_cost = LaborCost(
-                        agent_id=agent_id,
-                        chantier=chantier,
-                        week=week,
-                        year=year,
-                        hours=cost_data['hours'],
-                        cost=cost_data['cost']
-                    )
-                    new_costs.append(new_cost)
-                except Chantier.DoesNotExist:
-                    return Response({
-                        'error': f'Chantier non trouvé: {cost_data["chantier_name"]}'
-                    }, status=status.HTTP_404_NOT_FOUND)
+                chantier_name = cost_data.get('chantier_name')
+                chantier = get_object_or_404(Chantier, chantier_name=chantier_name)
 
-            # Sauvegarder tous les nouveaux coûts
+                hours = cost_data.get('hours')
+                cost = cost_data.get('cost')
+
+                new_cost = LaborCost(agent_id=agent_id, chantier=chantier, week=week, year=year, hours=hours, cost=cost)
+                new_costs.append(new_cost)
+
             LaborCost.objects.bulk_create(new_costs)
 
+            # Renvoyer les coûts sauvegardés
             return Response({
                 'message': 'Coûts de main d\'œuvre sauvegardés avec succès',
+                'costs': [{'chantier_name': cost.chantier.chantier_name, 'hours': cost.hours, 'cost': cost.cost} for cost in new_costs],
                 'count': len(new_costs)
             }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({
-            'error': f'Erreur lors de la sauvegarde des coûts: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': f'Erreur lors de la sauvegarde des coûts: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 def get_labor_costs(request):
@@ -965,6 +947,45 @@ def get_labor_costs(request):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+def get_events(request):
+    """
+    Récupère les événements en fonction des filtres spécifiés.
+    Paramètres :
+    - agent_id: ID de l'agent
+    - start_date: Date de début (YYYY-MM-DD)
+    - end_date: Date de fin (YYYY-MM-DD)
+    - status: Statut des événements ("M", "A", "C", etc.)
+    """
+    try:
+        agent_id = request.query_params.get('agent_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        status_param = request.query_params.get('status')
+
+        if not all([start_date, end_date, status_param]):
+            return Response({
+                'error': 'start_date, end_date et status sont requis.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        events = Event.objects.filter(
+            date__range=[start_date, end_date],
+            status=status_param
+        )
+
+        if agent_id:
+            events = events.filter(agent_id=agent_id)
+
+        # Sérialisation des événements
+        events_data = events.values('chantier', 'chantier_name', 'hours_modified', 'status')
+
+        return Response(events_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors de la récupération des événements: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

@@ -1,3 +1,4 @@
+import { Button, styled as muiStyled } from "@mui/material";
 import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
@@ -8,12 +9,26 @@ import LaborCostsSummary from "./LaborCostsSummary";
 dayjs.extend(isoWeek);
 dayjs.locale("fr"); // Définir la locale sur français
 
-const PlanningHebdoAgent = () => {
+// Styles personnalisés pour les boutons Material UI
+const StyledButton = muiStyled(Button)(({ theme }) => ({
+  margin: "10px",
+  textTransform: "none",
+  fontWeight: 500,
+}));
+
+const PlanningHebdoAgent = ({
+  selectedAgentId,
+  selectedWeek,
+  selectedYear,
+  schedule,
+  isLoading,
+  setIsLoading,
+  setSchedule,
+  onCostsCalculated,
+  setSelectedAgentId,
+  onCopyClick,
+}) => {
   const [agents, setAgents] = useState([]);
-  const [selectedAgentId, setSelectedAgentId] = useState(null);
-  const [schedule, setSchedule] = useState({});
-  const [selectedWeek, setSelectedWeek] = useState(dayjs().isoWeek());
-  const [selectedYear, setSelectedYear] = useState(dayjs().year()); // Ajout de l'état pour l'année
   const hours = Array.from({ length: 17 }, (_, i) => `${i + 6}:00`); // Heures de 6h à 22h
   const daysOfWeek = [
     "Lundi",
@@ -27,17 +42,16 @@ const PlanningHebdoAgent = () => {
   const [events, setEvents] = useState([]);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedCells, setSelectedCells] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [chantiers, setChantiers] = useState([]); // Nouvel état pour les chantiers
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
 
-  // Nouvel état pour le modal de copie de planning
-  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false); // État pour le modal de copie
-  const [targetAgentId, setTargetAgentId] = useState(null); // ID de l'agent cible
-  const [targetWeek, setTargetWeek] = useState(selectedWeek); // Semaine cible
-  const [targetYear, setTargetYear] = useState(selectedYear); // Année cible
-  const [isCopying, setIsCopying] = useState(false); // État pour le processus de copie
+  // Nouvel état pour le modal de copie
+  const [targetAgentId, setTargetAgentId] = useState(null);
+  const [targetWeek, setTargetWeek] = useState(selectedWeek);
+  const [targetYear, setTargetYear] = useState(selectedYear);
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
 
   const [showCostsSummary, setShowCostsSummary] = useState(false);
 
@@ -66,20 +80,23 @@ const PlanningHebdoAgent = () => {
     return weeks;
   };
 
-  // Récupérer les agents depuis l'API
-  useEffect(() => {
-    const fetchAgents = async () => {
-      try {
-        const response = await axios.get("/api/agent/"); // Assurez-vous que l'URL est correcte
-        setAgents(response.data);
-        if (response.data.length > 0) {
-          setSelectedAgentId(response.data[0].id); // Sélectionner le premier agent par défaut
-        }
-      } catch (error) {
-        console.error("Erreur lors de la récupération des agents :", error);
+  // Fonction pour récupérer les agents
+  const fetchAgents = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get("/api/agent/");
+      setAgents(response.data);
+      if (response.data.length > 0) {
+        setSelectedAgentId(response.data[0].id);
       }
-    };
+    } catch (error) {
+      console.error("Erreur lors de la récupération des agents :", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchAgents();
   }, []);
 
@@ -100,9 +117,9 @@ const PlanningHebdoAgent = () => {
   // Charger les plannings et les événements lorsqu'un agent, une semaine ou une année est sélectionné
   useEffect(() => {
     const fetchData = async () => {
-      if (selectedAgentId && selectedWeek && selectedYear) {
-        setIsLoading(true);
-        try {
+      setIsLoading(true);
+      try {
+        if (selectedAgentId && selectedWeek && selectedYear) {
           // Récupérer le planning
           const scheduleResponse = await axios.get(
             `/api/get_schedule/?agent=${selectedAgentId}&week=${selectedWeek}&year=${selectedYear}`
@@ -191,14 +208,14 @@ const PlanningHebdoAgent = () => {
 
           // Mettre à jour les événements
           setEvents(eventsData);
-        } catch (error) {
-          console.error("Erreur lors de la récupération des données :", error);
-          alert(
-            "Erreur lors de la récupération du planning ou des événements. Consultez la console pour plus de détails."
-          );
-        } finally {
-          setIsLoading(false);
         }
+      } catch (error) {
+        console.error("Erreur lors de la récupération des données :", error);
+        alert(
+          "Erreur lors de la récupération du planning ou des événements. Consultez la console pour plus de détails."
+        );
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -260,78 +277,69 @@ const PlanningHebdoAgent = () => {
 
   // Fonction pour gérer le changement d'agent
   const handleAgentChange = (event) => {
-    setSelectedAgentId(Number(event.target.value));
+    const agentId = Number(event.target.value);
+    onSelectionChange(agentId, selectedWeek, selectedYear); // Appel de la fonction pour mettre à jour le parent
   };
 
   // Fonction pour gérer le changement de semaine
   const handleWeekChange = (event) => {
-    setSelectedWeek(Number(event.target.value));
+    const week = Number(event.target.value);
+    onSelectionChange(selectedAgentId, week, selectedYear); // Appel de la fonction pour mettre à jour le parent
   };
 
   // Fonction pour gérer le changement d'année
   const handleYearChange = (event) => {
-    setSelectedYear(Number(event.target.value));
+    const year = Number(event.target.value);
+    onSelectionChange(selectedAgentId, selectedWeek, year); // Appel de la fonction pour mettre à jour le parent
   };
 
-  // Fonction pour gérer le changement d'agent cible dans le modal de copie
-  const handleTargetAgentChange = (event) => {
-    setTargetAgentId(event.target.value);
+  // Fonction pour gérer le changement d'agent cible
+  const handleTargetAgentChange = (e) => {
+    setTargetAgentId(Number(e.target.value));
+  };
+
+  // Fonction pour ouvrir le modal de copie
+  const openCopyModal = () => {
+    setTargetAgentId(null); // Réinitialiser l'agent cible
+    setTargetWeek(selectedWeek);
+    setTargetYear(selectedYear);
+    setIsCopyModalOpen(true);
+  };
+
+  // Fonction pour fermer le modal de copie
+  const closeCopyModal = () => {
+    setIsCopyModalOpen(false);
+    setTargetAgentId(null);
   };
 
   // Fonction pour copier le planning
   const copySchedule = async () => {
     if (!targetAgentId) {
-      alert("Veuillez sélectionner un agent cible pour copier le planning.");
+      alert("Veuillez sélectionner un agent cible.");
       return;
     }
 
     setIsCopying(true);
-
     try {
-      const sourceAgentId = selectedAgentId;
-      const sourceWeek = selectedWeek;
-      const sourceYear = selectedYear;
-      const newWeek = targetWeek;
-      const newYear = targetYear;
-
-      // Envoyer une requête POST pour copier le planning
-      const response = await axios.post("/api/copy_schedule/", {
-        sourceAgentId,
-        targetAgentId,
-        sourceWeek,
-        targetWeek: newWeek,
-        sourceYear,
-        targetYear: newYear,
+      await axios.post("/api/copy_schedule/", {
+        sourceAgentId: selectedAgentId,
+        targetAgentId: targetAgentId,
+        sourceWeek: selectedWeek,
+        targetWeek: targetWeek,
+        sourceYear: selectedYear,
+        targetYear: targetYear,
       });
 
-      console.log("Response from API copy_schedule:", response.data);
-
-      alert("Le planning a été copié avec succès.");
-
-      // Rafraîchir le planning après copie
-      fetchSchedule(selectedAgentId, selectedWeek, selectedYear);
+      alert("Planning copié avec succès!");
       closeCopyModal();
     } catch (error) {
-      console.error("Erreur lors de la copie du planning :", error);
+      console.error("Erreur lors de la copie du planning:", error);
       alert(
         "Erreur lors de la copie du planning. Consultez la console pour plus de détails."
       );
     } finally {
       setIsCopying(false);
     }
-  };
-
-  // Fonction pour ouvrir le modal de copie
-  const openCopyModal = () => {
-    setIsCopyModalOpen(true);
-  };
-
-  // Fonction pour fermer le modal de copie et réinitialiser les sélections
-  const closeCopyModal = () => {
-    setIsCopyModalOpen(false);
-    setTargetAgentId(null);
-    setTargetWeek(selectedWeek); // Réinitialiser à la semaine sélectionnée
-    setTargetYear(selectedYear); // Réinitialiser à l'année sélectionnée
   };
 
   // Fonction pour assigner un chantier aux cellules sélectionnées
@@ -347,13 +355,45 @@ const PlanningHebdoAgent = () => {
         week: selectedWeek,
         year: selectedYear,
         day: cell.day,
-        hour: cell.hour, // Format 'H:mm'
+        hour: cell.hour,
         chantierId: selectedChantier.id,
       }));
 
       await axios.post("/api/assign_chantier/", updates);
-      fetchSchedule(selectedAgentId, selectedWeek, selectedYear);
+
+      // Mettre à jour le state schedule localement
+      setSchedule((prevSchedule) => {
+        const newSchedule = { ...prevSchedule };
+        if (!newSchedule[selectedAgentId]) {
+          newSchedule[selectedAgentId] = {};
+        }
+
+        selectedCells.forEach((cell) => {
+          if (!newSchedule[selectedAgentId][cell.hour]) {
+            newSchedule[selectedAgentId][cell.hour] = {};
+          }
+          newSchedule[selectedAgentId][cell.hour][cell.day] =
+            selectedChantier.chantier_name;
+        });
+
+        return newSchedule;
+      });
+
+      // Réinitialiser la sélection
+      setSelectedCells([]);
       closeChantierModal();
+
+      // Calculer les nouvelles heures
+      const updatedHours = calculateUpdatedHours(selectedChantier.id);
+
+      // Mettre à jour les coûts
+      onCostsCalculated([
+        {
+          chantier_name: selectedChantier.chantier_name,
+          hours: updatedHours,
+          cost: updatedHours * agent.taux_Horaire,
+        },
+      ]);
     } catch (error) {
       console.error("Erreur lors de l'assignation du chantier :", error);
       alert(
@@ -385,10 +425,39 @@ const PlanningHebdoAgent = () => {
 
     try {
       await axios.post("/api/delete_schedule/", deletions);
-      alert("Assignations supprimées avec succès.");
-      // Rafraîchir le planning
-      fetchSchedule(selectedAgentId, selectedWeek, selectedYear);
+
+      // Mettre à jour le state schedule localement
+      setSchedule((prevSchedule) => {
+        const newSchedule = { ...prevSchedule };
+        if (!newSchedule[selectedAgentId]) {
+          newSchedule[selectedAgentId] = {};
+        }
+
+        selectedCells.forEach((cell) => {
+          if (!newSchedule[selectedAgentId][cell.hour]) {
+            newSchedule[selectedAgentId][cell.hour] = {};
+          }
+          newSchedule[selectedAgentId][cell.hour][cell.day] = ""; // Vider l'assignation
+        });
+
+        return newSchedule;
+      });
+
+      // Réinitialiser la sélection
+      setSelectedCells([]);
       closeChantierModal();
+
+      // Recalculer les heures après suppression
+      const updatedHours = calculateUpdatedHours(selectedChantier.id);
+
+      // Mettre à jour les coûts
+      onCostsCalculated([
+        {
+          chantier_name: selectedChantier.chantier_name,
+          hours: updatedHours,
+          cost: updatedHours * agent.taux_Horaire,
+        },
+      ]);
     } catch (error) {
       console.error("Erreur lors de la suppression des assignations :", error);
       alert(
@@ -437,78 +506,36 @@ const PlanningHebdoAgent = () => {
 
   // Ajouter cette fonction après les autres fonctions utilitaires
   const fetchSchedule = async (agentId, week, year) => {
-    if (!agentId || !week || !year) return;
-
     setIsLoading(true);
     try {
       // Récupérer le planning
-      const scheduleResponse = await axios.get(
+      const response = await axios.get(
         `/api/get_schedule/?agent=${agentId}&week=${week}&year=${year}`
       );
-
-      // Initialiser scheduleData avec toutes les heures et jours par défaut
-      const scheduleData = {};
-      hours.forEach((hour) => {
-        scheduleData[hour] = {};
-        daysOfWeek.forEach((day) => {
-          scheduleData[hour][day] = "";
-        });
-      });
-
-      // Remplir scheduleData avec les données de l'API
-      scheduleResponse.data.forEach((item) => {
-        const formattedHour = dayjs(item.hour, "HH:mm:ss").format("H:mm");
-        if (scheduleData[formattedHour] && daysOfWeek.includes(item.day)) {
-          scheduleData[formattedHour][item.day] = item.chantier_id
-            ? getChantierName(item.chantier_id)
-            : "";
-        }
-      });
-
-      // Récupérer les événements de la semaine
-      const startOfWeek = dayjs().year(year).isoWeek(week).startOf("isoWeek");
-      const endOfWeek = startOfWeek.add(6, "day").endOf("day");
-
-      const eventsResponse = await axios.get("/api/events/", {
-        params: {
-          agent: agentId,
-          start_date: startOfWeek.format("YYYY-MM-DD"),
-          end_date: endOfWeek.format("YYYY-MM-DD"),
-        },
-      });
-
-      const eventsData = eventsResponse.data.filter(
-        (event) => event.status === "A" || event.status === "C"
-      );
-
-      // Identifier les jours avec événements A ou C
-      const joursAvecEvents = eventsData.map((event) =>
-        dayjs(event.start_date).format("DD/MM/YYYY")
-      );
-
-      // Supprimer les assignations pour les jours avec événements A ou C
-      joursAvecEvents.forEach((date) => {
-        daysOfWeek.forEach((day, index) => {
-          const dateOfDay = startOfWeek.add(index, "day").format("DD/MM/YYYY");
-          if (dateOfDay === date) {
-            hours.forEach((hour) => {
-              scheduleData[hour][day] = ""; // Supprimer l'assignation
-            });
-          }
-        });
-      });
-
-      // Mettre à jour le planning et les événements
       setSchedule((prevSchedule) => ({
         ...prevSchedule,
-        [agentId]: { ...scheduleData },
+        [agentId]: response.data,
       }));
-      setEvents(eventsData);
     } catch (error) {
       console.error("Erreur lors de la récupération du planning :", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const calculateHoursPerChantier = (
+    schedule,
+    selectedAgentId,
+    selectedWeek,
+    selectedYear
+  ) => {
+    const hoursPerChantier = {};
+    const processedCells = new Set();
+
+    // Logique de calcul existante
+    // Référence aux lignes existantes :
+
+    return hoursPerChantier;
   };
 
   const calculateLaborCosts = async () => {
@@ -524,7 +551,7 @@ const PlanningHebdoAgent = () => {
 
       console.log("Schedule data:", schedule[selectedAgentId]); // Debug log
 
-      // Parcourir le planning
+      // Parcourir le planning initial pour comptabiliser les heures
       if (schedule[selectedAgentId]) {
         Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
           Object.entries(dayData).forEach(([day, chantierName]) => {
@@ -538,26 +565,36 @@ const PlanningHebdoAgent = () => {
               chantierName !== "null" &&
               !processedCells.has(cellKey)
             ) {
+              // Marquer la cellule comme traitée pour éviter le double comptage
               processedCells.add(cellKey);
 
-              if (!hoursPerChantier[chantierName]) {
-                hoursPerChantier[chantierName] = 0;
-              }
-
+              // Incrémenter le compteur d'heures pour le chantier
               hoursPerChantier[chantierName] =
-                parseFloat(hoursPerChantier[chantierName]) + 1;
+                (hoursPerChantier[chantierName] || 0) + 1;
 
               console.log(`Traitement cellule - ${cellKey}`);
               console.log(
                 `Total actuel pour ${chantierName}: ${hoursPerChantier[chantierName]}`
               );
+            } else {
+              if (!chantierName) {
+                console.log(
+                  `Cellule ignorée (chantierName manquant) - ${cellKey}`
+                );
+              }
+              if (processedCells.has(cellKey)) {
+                console.log(`Cellule déjà traitée - ${cellKey}`);
+              }
             }
           });
         });
       }
 
       console.log("Cellules traitées:", Array.from(processedCells));
-      console.log("Résultat final hoursPerChantier:", hoursPerChantier);
+      console.log(
+        "Résultat final hoursPerChantier après comptage initial:",
+        hoursPerChantier
+      );
 
       // Vérification avant de continuer
       if (Object.keys(hoursPerChantier).length === 0) {
@@ -573,38 +610,67 @@ const PlanningHebdoAgent = () => {
         .startOf("isoWeek");
       const endOfWeek = startOfWeek.add(6, "day").endOf("day");
 
+      // **Correction des paramètres envoyés à l'API**
       const modifiedHoursResponse = await axios.get("/api/events/", {
         params: {
-          agent: selectedAgentId,
+          agent_id: selectedAgentId, // Changement de 'agent' à 'agent_id'
           start_date: startOfWeek.format("YYYY-MM-DD"),
           end_date: endOfWeek.format("YYYY-MM-DD"),
           status: "M",
         },
       });
 
+      console.log("Événements 'M' reçus:", modifiedHoursResponse.data);
+
       // Ajouter les heures modifiées
-      modifiedHoursResponse.data.forEach((event) => {
+      modifiedHoursResponse.data.forEach((event, index) => {
         if (event.chantier) {
           const chantierName =
             event.chantier_name || `Chantier ${event.chantier}`;
+          const hoursToAdd = parseFloat(event.hours_modified || 0);
+
+          console.log(`Événement ${index + 1}:`);
+          console.log(`  Chantier: ${chantierName}`);
+          console.log(`  Heures Modifiées: ${hoursToAdd}`);
+
           if (!hoursPerChantier[chantierName]) {
             hoursPerChantier[chantierName] = 0;
           }
-          hoursPerChantier[chantierName] += event.hours_modified;
+          hoursPerChantier[chantierName] += hoursToAdd;
+
+          console.log(
+            `  Total après ajout des heures modifiées: ${hoursPerChantier[chantierName]}`
+          );
+        } else {
+          console.log(`Événement ${index + 1} ignoré (chantier manquant).`);
         }
       });
 
+      console.log(
+        "Résultat final hoursPerChantier après ajout des événements 'M':",
+        hoursPerChantier
+      );
+
       // 3. Récupérer le taux horaire de l'agent
       const agentResponse = await axios.get(`/api/agent/${selectedAgentId}/`);
-      const hourlyRate = agentResponse.data.taux_horaire || 0;
+      const hourlyRate = parseFloat(agentResponse.data.taux_Horaire || 0);
+
+      console.log(
+        `Taux horaire pour l'agent ${selectedAgentId}: ${hourlyRate}€`
+      );
 
       // 4. Calculer le coût pour chaque chantier
       const laborCosts = Object.entries(hoursPerChantier).map(
         ([chantierName, hours]) => {
+          const parsedHours = parseFloat(hours);
+          const parsedHourlyRate = parseFloat(hourlyRate || 0);
           const cost = {
             chantier_name: chantierName,
-            hours: parseFloat(hours),
-            cost: parseFloat(hours) * parseFloat(hourlyRate || 0),
+            hours: isNaN(parsedHours) ? 0 : parsedHours,
+            cost:
+              isNaN(parsedHours) || isNaN(parsedHourlyRate)
+                ? 0
+                : parsedHours * parsedHourlyRate,
           };
           console.log(`Préparation coût pour ${chantierName}:`, cost);
           return cost;
@@ -633,6 +699,10 @@ const PlanningHebdoAgent = () => {
       });
 
       console.log("Réponse de l'API:", response.data);
+
+      // Appeler la fonction du parent pour transmettre les coûts
+      onCostsCalculated(response.data.costs); // Transmettez les coûts au parent
+
       setShowCostsSummary(true);
       alert("Coûts de main d'œuvre calculés et enregistrés avec succès!");
     } catch (error) {
@@ -651,87 +721,11 @@ const PlanningHebdoAgent = () => {
     <div onMouseUp={handleMouseUp}>
       <h1>Planning Hebdomadaire des Agents</h1>
 
-      {/* Sélecteur d'année */}
-      <label htmlFor="year-select">Sélectionner une année :</label>
-      <select
-        id="year-select"
-        value={selectedYear}
-        onChange={handleYearChange}
-        style={{ width: "120px", margin: "0 10px" }}
-      >
-        {generateYears().map((year) => (
-          <option key={year} value={year}>
-            {year}
-          </option>
-        ))}
-      </select>
-
-      {/* Sélecteur de semaine */}
-      <label htmlFor="week-select">Sélectionner une semaine :</label>
-      <select
-        id="week-select"
-        value={selectedWeek}
-        onChange={handleWeekChange}
-        style={{ width: "120px", margin: "0 10px" }}
-      >
-        {generateWeeks().map((week) => (
-          <option key={week} value={week}>
-            Semaine {week}
-          </option>
-        ))}
-      </select>
-
-      {/* Sélecteur d'agent */}
-      <label htmlFor="agent-select">Sélectionner un agent :</label>
-      <select
-        id="agent-select"
-        value={selectedAgentId}
-        onChange={handleAgentChange}
-        style={{ width: "120px", margin: "0 10px" }}
-      >
-        {agents.map((agent) => (
-          <option key={agent.id} value={agent.id}>
-            {agent.name}
-          </option>
-        ))}
-      </select>
-
-      {/* Bouton pour Copier le Planning avec couleurs inversées */}
-      <button
-        onClick={openCopyModal}
-        style={{
-          marginLeft: "20px",
-          backgroundColor: "white",
-          color: "rgba(27, 120, 188, 1)",
-          fontWeight: "500",
-          border: "none",
-          padding: "10px 20px",
-          cursor: "pointer",
-          borderRadius: "5px",
-        }}
-      >
-        Copier le Planning
-      </button>
-
-      <div className="controls-container">
-        <button
-          onClick={calculateLaborCosts}
-          className="btn-calculate"
-          disabled={isLoading}
-        >
-          {isLoading ? "Calcul en cours..." : "Calculer Coûts Main d'Œuvre"}
-        </button>
-
-        <button
-          onClick={() => setShowCostsSummary(!showCostsSummary)}
-          className="btn-toggle-summary"
-        >
-          {showCostsSummary ? "Masquer le résumé" : "Afficher le résumé"}
-        </button>
-      </div>
-
       {showCostsSummary && (
         <LaborCostsSummary
+          key={`${selectedWeek}-${selectedYear}-${selectedAgentId}-${JSON.stringify(
+            schedule
+          )}`}
           week={selectedWeek}
           year={selectedYear}
           agentId={selectedAgentId}
@@ -819,149 +813,45 @@ const PlanningHebdoAgent = () => {
               ))}
             </select>
             <div style={{ marginTop: "10px" }}>
-              <button
+              <StyledButton
+                variant="contained"
                 onClick={assignChantier}
                 disabled={!selectedChantier}
-                style={{
+                sx={{
                   backgroundColor: "rgba(27, 120, 188, 1)",
-                  color: "white",
-                  border: "none",
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  borderRadius: "5px",
+                  "&:hover": {
+                    backgroundColor: "rgba(27, 120, 188, 0.8)",
+                  },
                 }}
               >
                 Assigner
-              </button>
-              <button
+              </StyledButton>
+              <StyledButton
+                variant="contained"
                 onClick={deleteChantierAssignment}
                 disabled={selectedCells.length === 0}
-                style={{
-                  marginLeft: "10px",
+                sx={{
                   backgroundColor: "red",
-                  color: "white",
-                  border: "none",
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  borderRadius: "5px",
+                  "&:hover": {
+                    backgroundColor: "darkred",
+                  },
                 }}
               >
                 Supprimer Assignation
-              </button>
-              <button
+              </StyledButton>
+              <StyledButton
+                variant="contained"
                 onClick={closeChantierModal}
-                style={{
-                  marginTop: "10px", // Ajout de l'espace au-dessus du bouton "Annuler"
+                sx={{
                   backgroundColor: "#ccc",
                   color: "black",
-                  border: "none",
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  borderRadius: "5px",
+                  "&:hover": {
+                    backgroundColor: "#999",
+                  },
                 }}
               >
                 Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal pour copier le planning */}
-      {isCopyModalOpen && (
-        <div className="modal">
-          <div className="modal-content">
-            <h2>Copier le Planning vers un Autre Agent</h2>
-
-            {/* Sélecteur d'agent cible */}
-            <label htmlFor="target-agent-select">
-              Sélectionner un agent cible :
-            </label>
-            <select
-              id="target-agent-select"
-              value={targetAgentId || ""}
-              onChange={handleTargetAgentChange}
-              style={{ width: "100%", padding: "8px", marginTop: "10px" }}
-            >
-              <option value="">--Sélectionner un agent cible--</option>
-              {agents
-                .filter((agent) => agent.id !== selectedAgentId) // Exclure l'agent actuel
-                .map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-            </select>
-
-            {/* Sélecteur d'année cible */}
-            <label htmlFor="target-year-select" style={{ marginTop: "10px" }}>
-              Sélectionner une année cible :
-            </label>
-            <select
-              id="target-year-select"
-              value={targetYear}
-              onChange={(e) => setTargetYear(Number(e.target.value))}
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
-            >
-              {generateYears().map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-
-            {/* Sélecteur de semaine cible */}
-            <label htmlFor="target-week-select" style={{ marginTop: "10px" }}>
-              Sélectionner une semaine cible :
-            </label>
-            <select
-              id="target-week-select"
-              value={targetWeek}
-              onChange={(e) => setTargetWeek(Number(e.target.value))}
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
-            >
-              {generateWeeks().map((week) => (
-                <option key={week} value={week}>
-                  Semaine {week}
-                </option>
-              ))}
-            </select>
-
-            <div
-              style={{
-                marginTop: "15px",
-                display: "flex",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={copySchedule}
-                disabled={!targetAgentId || isCopying}
-                style={{
-                  padding: "8px 12px",
-                  backgroundColor: "rgba(27, 120, 188, 1)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "5px",
-                  cursor: "pointer",
-                }}
-              >
-                {isCopying ? "Copie en cours..." : "Copier"}
-              </button>
-              <button
-                onClick={closeCopyModal}
-                style={{
-                  padding: "8px 12px",
-                  marginLeft: "10px",
-                  backgroundColor: "#ccc",
-                  color: "black",
-                  border: "none",
-                  borderRadius: "5px",
-                  cursor: "pointer",
-                }}
-              >
-                Annuler
-              </button>
+              </StyledButton>
             </div>
           </div>
         </div>
