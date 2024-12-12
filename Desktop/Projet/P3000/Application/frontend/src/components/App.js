@@ -1,3 +1,4 @@
+import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -15,26 +16,41 @@ import ListePartiesSousParties from "./ListPartiesSousParties";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 // Créer un thème par défaut
-const theme = createTheme();
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: "#1976d2",
+    },
+    secondary: {
+      main: "#dc004e",
+    },
+  },
+  typography: {
+    fontFamily: ["Roboto", "Arial", "sans-serif"].join(","),
+  },
+});
 
 function App() {
   return (
-    <Router>
-      <Layout>
-        <Routes>
-          <Route index element={<Dashboard />} />
-          <Route path="/chantier/:id" element={<ChantierInfo />} />
-          <Route path="/ListChantier" element={<ListChantier />} />
-          <Route path="/CreationDevis" element={<CreationDevis />} />
-          <Route path="/ListePartie" element={<ListePartiesSousParties />} />
-          <Route path="/CreationPartie" element={<CreationPartie />} />
-          <Route path="/Stock" element={<StockForm />} />
-          <Route path="/Agent" element={<CalendrierAgentContainer />} />
-          <Route path="/AgentCard" element={<AgentCardContainer />} />
-          <Route path="/PlanningContainer" element={<PlanningContainer />} />
-        </Routes>
-      </Layout>
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <Layout>
+          <Routes>
+            <Route index element={<Dashboard />} />
+            <Route path="/chantier/:id" element={<ChantierInfo />} />
+            <Route path="/ListChantier" element={<ListChantier />} />
+            <Route path="/CreationDevis" element={<CreationDevis />} />
+            <Route path="/ListePartie" element={<ListePartiesSousParties />} />
+            <Route path="/CreationPartie" element={<CreationPartie />} />
+            <Route path="/Stock" element={<StockForm />} />
+            <Route path="/Agent" element={<CalendrierAgentContainer />} />
+            <Route path="/AgentCard" element={<AgentCardContainer />} />
+            <Route path="/PlanningContainer" element={<PlanningContainer />} />
+          </Routes>
+        </Layout>
+      </Router>
+    </ThemeProvider>
   );
 }
 
@@ -42,13 +58,7 @@ function App() {
 const rootElement = document.getElementById("app");
 if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <ThemeProvider theme={theme}>
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    </ThemeProvider>
-  );
+  root.render(<App />);
 } else {
   console.error("Cannot find root element");
 }

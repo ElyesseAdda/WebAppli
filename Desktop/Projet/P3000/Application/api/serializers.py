@@ -112,9 +112,18 @@ class ScheduleSerializer(serializers.ModelSerializer):
         fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id']
 
 class LaborCostSerializer(serializers.ModelSerializer):
+    # Champs calculés/dérivés
+    agent_name = serializers.CharField(source='agent.name', read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    taux_horaire = serializers.FloatField(source='agent.taux_Horaire', read_only=True)
+
     class Meta:
         model = LaborCost
-        fields = ['id', 'agent', 'chantier', 'week', 'year', 'hours', 'cost', 'created_at']
+        fields = [
+            'id', 'agent', 'agent_name', 'chantier', 'chantier_name',
+            'week', 'year', 'hours', 'cost', 'taux_horaire',
+            'created_at', 'updated_at'
+        ]
 
 
 

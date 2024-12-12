@@ -20,10 +20,11 @@ from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie
 from .forms import DevisForm, DevisItemForm
 import logging
 from django.db import transaction
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, AllowAny
 from calendar import day_name
 import locale
 import traceback
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class ChantierViewSet(viewsets.ModelViewSet):
 class SocieteViewSet(viewsets.ModelViewSet):
     queryset = Societe.objects.all()
     serializer_class = SocieteSerializer
+    permission_classes = [AllowAny]
 
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = Devis.objects.all()
@@ -100,7 +102,7 @@ def preview_devis(request):
             # Récupérer le chantier associé
             chantier = get_object_or_404(Chantier, id=devis_data['chantier'])
             societe = chantier.societe
-            client = societe.client_name  # Ceci fait maintenant référence à un objet Client
+            client = societe.client_name
 
             parties_data = []
             total_ht = 0
@@ -113,28 +115,31 @@ def preview_devis(request):
 
                 for sous_partie in sous_parties:
                     lignes_details_data = []
+                    
+                    # Filtrer les lignes de détail envoyées pour cette sous-partie
+                    lignes_from_request = [
+                        ligne for ligne in devis_data['lignes_details']
+                        if LigneDetail.objects.get(id=ligne['id']).sous_partie_id == sous_partie.id
+                        and float(ligne['quantity']) > 0  # Ne garder que les lignes avec quantité > 0
+                    ]
 
-                    for ligne in LigneDetail.objects.filter(sous_partie=sous_partie):
-                        ligne_detail = next(
-                            (ld for ld in devis_data['lignes_details'] if ld['id'] == ligne.id), None
-                        )
+                    for ligne_detail in lignes_from_request:
+                        ligne_db = get_object_or_404(LigneDetail, id=ligne_detail['id'])
+                        quantity = float(ligne_detail['quantity'])
+                        custom_price = float(ligne_detail['custom_price'])
 
-                        if ligne_detail:
-                            quantity = float(ligne_detail.get('quantity', 1))
-                            custom_price = float(ligne_detail.get('custom_price', ligne.prix))
+                        total_ligne = custom_price * quantity
+                        total_ht += total_ligne
 
-                            total_ligne = custom_price * quantity
-                            total_ht += total_ligne
+                        lignes_details_data.append({
+                            'description': ligne_db.description,
+                            'unite': ligne_db.unite,
+                            'quantity': quantity,
+                            'custom_price': custom_price,
+                            'total': total_ligne,
+                        })
 
-                            lignes_details_data.append({
-                                'description': ligne.description,
-                                'unite': ligne.unite,
-                                'quantity': quantity,
-                                'custom_price': custom_price,
-                                'total': total_ligne,
-                            })
-
-                    if lignes_details_data:
+                    if lignes_details_data:  # N'ajouter la sous-partie que si elle a des lignes
                         sous_parties_data.append({
                             'description': sous_partie.description,
                             'lignes_details': lignes_details_data,
@@ -238,6 +243,7 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
+    permission_classes = [AllowAny]
 
 class AgentViewSet(viewsets.ModelViewSet):
     queryset = Agent.objects.all()
@@ -869,40 +875,79 @@ def delete_schedule(request):
 
 @api_view(['POST'])
 def save_labor_costs(request):
-    try:
-        with transaction.atomic():
-            agent_id = request.data.get('agent_id')
-            week = request.data.get('week')
-            year = request.data.get('year')
-            costs = request.data.get('costs', [])
+    with transaction.atomic():
+        try:
+            data = request.data
+            print("Données reçues complètes:", data)
+            print("Type de costs:", type(data.get('costs')))
+            print("Contenu de costs:", data.get('costs'))
+            
+            agent_id = data.get('agent_id')
+            week = data.get('week')
+            year = data.get('year')
+            costs = data.get('costs', [])
 
-            if not all([agent_id, week, year, costs]):
-                return Response({'error': 'Données manquantes. agent_id, week, year et costs sont requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not costs or not isinstance(costs, list) or len(costs) == 0:
+                return Response({
+                    'error': 'costs manquant ou vide',
+                    'received_costs': costs,
+                    'received_data': data
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            LaborCost.objects.filter(agent_id=agent_id, week=week, year=year).delete()
+            try:
+                agent = Agent.objects.get(id=agent_id)
+            except Agent.DoesNotExist:
+                return Response({'error': f'Agent {agent_id} non trouvé'}, status=status.HTTP_404_NOT_FOUND)
 
-            new_costs = []
-            for cost_data in costs:
-                chantier_name = cost_data.get('chantier_name')
-                chantier = get_object_or_404(Chantier, chantier_name=chantier_name)
+            labor_costs = []
+            for cost_entry in costs:
+                print("Traitement de l'entrée:", cost_entry)  # Debug
+                try:
+                    chantier = Chantier.objects.get(chantier_name=cost_entry['chantier_name'])
+                except Chantier.DoesNotExist:
+                    return Response(
+                        {'error': f'Chantier {cost_entry["chantier_name"]} non trouvé'}, 
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+                except KeyError:
+                    return Response(
+                        {'error': 'Format de coût invalide, chantier_name manquant'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-                hours = cost_data.get('hours')
-                cost = cost_data.get('cost')
+                try:
+                    labor_costs.append(LaborCost(
+                        agent=agent,
+                        chantier=chantier,
+                        week=week,
+                        year=year,
+                        hours=cost_entry['hours'],
+                        cost=cost_entry['hours'] * agent.taux_Horaire
+                    ))
+                except KeyError:
+                    return Response(
+                        {'error': 'Format de coût invalide, hours manquant'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-                new_cost = LaborCost(agent_id=agent_id, chantier=chantier, week=week, year=year, hours=hours, cost=cost)
-                new_costs.append(new_cost)
+            # Suppression des anciennes entrées
+            LaborCost.objects.filter(
+                agent=agent,
+                week=week,
+                year=year
+            ).delete()
 
-            LaborCost.objects.bulk_create(new_costs)
+            # Création des nouvelles entrées
+            created_costs = LaborCost.objects.bulk_create(labor_costs)
 
-            # Renvoyer les coûts sauvegardés
             return Response({
-                'message': 'Coûts de main d\'œuvre sauvegardés avec succès',
-                'costs': [{'chantier_name': cost.chantier.chantier_name, 'hours': cost.hours, 'cost': cost.cost} for cost in new_costs],
-                'count': len(new_costs)
-            }, status=status.HTTP_201_CREATED)
+                'message': 'Coûts sauvegardés avec succès',
+                'count': len(created_costs)
+            }, status=status.HTTP_200_OK)
 
-    except Exception as e:
-        return Response({'error': f'Erreur lors de la sauvegarde des coûts: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            print("Erreur:", str(e))  # Debug
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def get_labor_costs(request):
@@ -986,6 +1031,109 @@ def get_events(request):
         return Response({
             'error': f'Erreur lors de la récupération des événements: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_labor_costs_summary(request):
+    try:
+        # Récupération des paramètres de filtrage
+        agent_id = request.GET.get('agent_id')
+        chantier_id = request.GET.get('chantier_id')
+        week = request.GET.get('week')
+        year = request.GET.get('year')
+
+        # Construction de la requête
+        queryset = LaborCost.objects.all()
+
+        # Application des filtres
+        if agent_id:
+            queryset = queryset.filter(agent_id=agent_id)
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        if week:
+            queryset = queryset.filter(week=week)
+        if year:
+            queryset = queryset.filter(year=year)
+
+        # Calcul des totaux
+        summary = queryset.aggregate(
+            total_hours=Sum('hours'),
+            total_cost=Sum('cost')
+        )
+
+        return Response(summary)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def create_chantier_from_devis(request):
+    devis_id = request.data.get('devis_id')
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        
+        # Créer le chantier
+        chantier = Chantier.objects.create(
+            chantier_name=f"Chantier-{devis.numero}",
+            societe=devis.client.first().societe,
+            montant_ttc=devis.price_ht * 1.2,  # Exemple de calcul TVA
+            montant_ht=devis.price_ht,
+            state_chantier='En Cours',
+            ville=devis.client.first().societe.ville_societe,
+            rue=devis.client.first().societe.rue_societe,
+            code_postal=devis.client.first().societe.codepostal_societe
+        )
+        
+        return Response({'message': 'Chantier créé avec succès', 'id': chantier.id})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['POST'])
+def create_devis(request):
+    try:
+        with transaction.atomic():
+            # Récupérer les données de base du devis
+            devis_data = {
+                'numero': request.data['numero'],
+                'chantier_id': request.data['chantier'],
+                'price_ht': request.data['price_ht'],
+                'description': request.data.get('description', ''),
+                'type': request.data.get('type', 'Travaux'),
+                'state': 'En Cours'
+            }
+
+            # Créer le devis
+            devis = Devis.objects.create(**devis_data)
+
+            # Ajouter le client
+            chantier = Chantier.objects.get(id=request.data['chantier'])
+            if chantier.societe and chantier.societe.client_name:
+                devis.client.add(chantier.societe.client_name)
+
+            # Traiter les parties, sous-parties et lignes de détail
+            for partie_data in request.data['parties']:
+                for sous_partie_data in partie_data['sous_parties']:
+                    for ligne_detail in sous_partie_data['lignes_details']:
+                        if float(ligne_detail['quantity']) > 0:  # Ne traiter que les lignes avec quantité > 0
+                            DevisItem.objects.create(
+                                devis=devis,
+                                ligne_detail_id=ligne_detail['id'],
+                                quantite=ligne_detail['quantity'],
+                                prix_unitaire=ligne_detail['custom_price']
+                            )
+
+            return Response({
+                'id': devis.id,
+                'numero': devis.numero,
+                'message': 'Devis créé avec succès'
+            }, status=201)
+
+    except Exception as e:
+        print(f"Erreur lors de la création du devis: {str(e)}")
+        print(traceback.format_exc())
+        return Response({
+            'error': 'Erreur lors de la création du devis',
+            'details': str(e)
+        }, status=400)
 
 
 

@@ -10,7 +10,7 @@ const LaborCostsSummary = ({
   onCostsCalculated,
 }) => {
   useEffect(() => {
-    if (schedule && selectedAgentId && onCostsCalculated) {
+    if (schedule && selectedAgentId) {
       const hoursPerChantier = {};
 
       // Calcul des heures par chantier
@@ -30,14 +30,17 @@ const LaborCostsSummary = ({
         ([chantierName, hours]) => ({
           chantier_name: chantierName,
           hours: hours,
-          cost: hours * tauxHoraire,
         })
       );
 
-      // Envoi des données au parent
-      onCostsCalculated(laborCosts);
+      console.log("Données préparées pour l'API:", laborCosts); // Ajout de ce log
+
+      if (laborCosts.length > 0) {
+        // Vérification que laborCosts n'est pas vide
+        onCostsCalculated(laborCosts);
+      }
     }
-  }, [schedule, selectedAgentId, tauxHoraire, onCostsCalculated]);
+  }, [schedule, selectedAgentId, onCostsCalculated]);
 
   if (!isOpen) return null;
 

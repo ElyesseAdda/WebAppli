@@ -153,13 +153,19 @@ const PlanningContainer = () => {
 
   const handleCostsCalculated = async (laborCosts) => {
     try {
-      await axios.post("/api/save_labor_costs/", {
+      const payload = {
         agent_id: selectedAgentId,
         week: selectedWeek,
         year: selectedYear,
         costs: laborCosts,
-      });
+      };
+
+      console.log("Données envoyées à l'API:", payload);
+
+      const response = await axios.post("/api/save_labor_costs/", payload);
+      console.log("Réponse de l'API:", response.data);
     } catch (error) {
+      console.error("Erreur détaillée:", error.response?.data);
       console.error("Erreur lors de la sauvegarde des coûts:", error);
     }
   };

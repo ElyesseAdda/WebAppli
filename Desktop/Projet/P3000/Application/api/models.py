@@ -43,7 +43,8 @@ class Chantier(models.Model):
     societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='chantiers', null=True)
     date_debut = models.DateField(auto_now_add=True)
     date_fin = models.DateField(auto_now_add=False, null=True)
-    chiffre_affaire = models.FloatField(null=True)
+    montant_ttc = models.FloatField(null=True)
+    montant_ht = models.FloatField(null=True)
     state_chantier = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
     ville = models.CharField(max_length=100,)
     rue = models.CharField(max_length=100,)
@@ -258,15 +259,15 @@ class Facture(models.Model):
 
 
 class Devis(models.Model):
-    numero = models.CharField(max_length=100, unique=False, default='DEV-0001')
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Travaux')
+    numero = models.CharField(max_length=50, unique=True)
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True)
-    client = models.ManyToManyField(Client, related_name='devis', blank=True)  # Modification ici
+    client = models.ManyToManyField(Client, related_name='devis', blank=True)
     price_ht = models.FloatField()
     date_creation = models.DateField(auto_now_add=True)
     date_modification = models.DateField(auto_now=True)
     state = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    amount_facturé = models.DecimalField(max_digits=10, decimal_places=2, null=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Travaux')
+    description = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return f"Devis {self.id}"
@@ -330,16 +331,16 @@ class LigneDetail(models.Model):
     
 class DevisItem(models.Model):
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='items')
-    sous_partie = models.ForeignKey(SousPartie, on_delete=models.CASCADE)
+    ligne_detail = models.ForeignKey(LigneDetail, on_delete=models.CASCADE)
     quantite = models.DecimalField(max_digits=10, decimal_places=2)
-    total_ht = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
-
-    def save(self, *args, **kwargs):
-        self.total_ht = self.quantite * self.sous_partie.prix_unitaire
-        super().save(*args, **kwargs)
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    @property
+    def total(self):
+        return self.quantite * self.prix_unitaire
 
     def __str__(self):
-        return f"{self.sous_partie.nom} - {self.quantite} x {self.sous_partie.prix_unitaire}"
+        return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
     
 
 class Schedule(models.Model):
@@ -357,15 +358,24 @@ class Schedule(models.Model):
         return f"{self.agent.name} - Semaine {self.week}, {self.year} - {self.day} {self.hour}"
 
 class LaborCost(models.Model):
-    agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
+    agent = models.ForeignKey('Agent', on_delete=models.CASCADE, related_name='labor_costs')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='labor_costs')
     week = models.IntegerField()
     year = models.IntegerField()
     hours = models.DecimalField(max_digits=10, decimal_places=2)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('agent', 'chantier', 'week', 'year')
+        indexes = [
+            models.Index(fields=['agent', 'week', 'year']),
+            models.Index(fields=['chantier', 'week', 'year']),
+        ]
+
+    def __str__(self):
+        return f"{self.agent.name} - {self.chantier.chantier_name} - S{self.week}/{self.year}"
 
 
 
