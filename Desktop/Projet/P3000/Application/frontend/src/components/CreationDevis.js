@@ -20,15 +20,24 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
+import { FaEyeSlash } from "react-icons/fa";
+import { RiPencilFill } from "react-icons/ri";
 import ChantierForm from "./ChantierForm";
-import ClientSocieteForm from "./ClientSocieteForm";
+import ClientInfoModal from "./ClientInfoModal";
 import ClientTypeModal from "./ClientTypeModal";
 import CreatePartieModal from "./CreatePartieModal";
 import DevisModal from "./DevisModal";
+import EditModal from "./EditModal";
 import SelectSocieteModal from "./SelectSocieteModal";
+import SocieteInfoModal from "./SocieteInfoModal";
 
 const CreationDevis = () => {
+  const [hiddenParties, setHiddenParties] = useState([]);
+  const [hiddenSousParties, setHiddenSousParties] = useState([]);
+  const [hiddenLignes, setHiddenLignes] = useState([]);
+
   const [chantiers, setChantiers] = useState([]);
   const [selectedChantierId, setSelectedChantierId] = useState("");
   const [parties, setParties] = useState([]);
@@ -45,6 +54,7 @@ const CreationDevis = () => {
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
   const [showClientForm, setShowClientForm] = useState(false);
   const [clientData, setClientData] = useState({
+    id: null,
     name: "",
     surname: "",
     client_mail: "",
@@ -63,7 +73,6 @@ const CreationDevis = () => {
   const [showSelectSocieteModal, setShowSelectSocieteModal] = useState(false);
   const [selectedSocieteId, setSelectedSocieteId] = useState(null);
   const [selectedLignes, setSelectedLignes] = useState([]);
-  const [hiddenLignes, setHiddenLignes] = useState([]);
   const [slidingLines, setSlidingLines] = useState([]);
   const [openDevisModal, setOpenDevisModal] = useState(false);
   const [devisModalData, setDevisModalData] = useState({
@@ -74,12 +83,14 @@ const CreationDevis = () => {
     description: "",
   });
   const [openCreatePartieModal, setOpenCreatePartieModal] = useState(false);
-
-  const sortedLignesDetails = (lignes) => {
-    return [...lignes].sort((a, b) =>
-      a.description.localeCompare(b.description, "fr", { sensitivity: "base" })
-    );
-  };
+  const [editData, setEditData] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState(null);
+  const [slidingParties, setSlidingParties] = useState([]);
+  const [slidingSousParties, setSlidingSousParties] = useState([]);
+  const [slidingLignes, setSlidingLignes] = useState([]);
+  const [showClientInfoModal, setShowClientInfoModal] = useState(false);
+  const [showSocieteInfoModal, setShowSocieteInfoModal] = useState(false);
 
   // Charger les chantiers
   useEffect(() => {
@@ -286,6 +297,7 @@ const CreationDevis = () => {
   // Ajouter cette fonction de réinitialisation
   const resetForm = () => {
     setClientData({
+      id: null,
       name: "",
       surname: "",
       client_mail: "",
@@ -307,7 +319,7 @@ const CreationDevis = () => {
 
   const handleNewClient = () => {
     setShowClientTypeModal(false);
-    setShowClientForm(true);
+    setShowClientInfoModal(true);
   };
 
   const handleExistingClient = () => {
@@ -372,10 +384,6 @@ const CreationDevis = () => {
       }
     }, 300); // Durée de l'animation
   };
-
-  const visibleLignesDetails = filteredLignesDetails.filter(
-    (ligne) => !hiddenLignes.includes(ligne.id)
-  );
 
   // Ajoutez cette fonction de calcul du prix total
   const calculateTotalPrice = (ligne) => {
@@ -451,6 +459,275 @@ const CreationDevis = () => {
     }
   };
 
+  const handleEditPartie = (partie) => {
+    setItemToEdit({
+      ...partie,
+      type: "partie",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditSousPartie = (sousPartie) => {
+    setItemToEdit({
+      ...sousPartie,
+      type: "sousPartie",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditLigne = (ligne) => {
+    setItemToEdit({
+      ...ligne,
+      type: "ligne",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (editedData) => {
+    try {
+      let endpoint = "";
+      let dataToSend = {};
+
+      if (editedData.type === "partie") {
+        endpoint = `/api/parties/${editedData.id}/`;
+        dataToSend = {
+          titre: editedData.titre,
+        };
+      } else if (editedData.type === "sousPartie") {
+        endpoint = `/api/sous-parties/${editedData.id}/`;
+        dataToSend = {
+          description: editedData.description,
+          partie: editedData.partie,
+        };
+      } else if (editedData.type === "ligne") {
+        endpoint = `/api/ligne-details/${editedData.id}/`;
+        dataToSend = {
+          description: editedData.description,
+          unite: editedData.unite,
+          prix: editedData.prix,
+          sous_partie: editedData.sous_partie,
+        };
+      }
+
+      const response = await axios.put(endpoint, dataToSend);
+
+      // Mettre à jour les données locales
+      if (editedData.type === "partie") {
+        setParties(
+          parties.map((p) => (p.id === editedData.id ? response.data : p))
+        );
+      } else if (editedData.type === "sousPartie") {
+        setSousParties(
+          sousParties.map((sp) =>
+            sp.id === editedData.id ? response.data : sp
+          )
+        );
+      } else {
+        setAllLignesDetails(
+          allLignesDetails.map((l) =>
+            l.id === editedData.id ? response.data : l
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Erreur lors de la modification:", error);
+      alert("Une erreur est survenue lors de la modification");
+    }
+  };
+
+  const visibleParties = parties.filter(
+    (partie) => !hiddenParties.includes(partie.id)
+  );
+
+  const visibleSousParties = filteredSousParties.filter(
+    (sousPartie) => !hiddenSousParties.includes(sousPartie.id)
+  );
+
+  const visibleLignesDetails = filteredLignesDetails.filter(
+    (ligne) => !hiddenLignes.includes(ligne.id)
+  );
+
+  // Tri des parties
+  const sortedParties = useMemo(() => {
+    return [...visibleParties].sort((a, b) => {
+      const numA = parseInt(a.titre.match(/^(\d+)-/)?.[1] || "0");
+      const numB = parseInt(b.titre.match(/^(\d+)-/)?.[1] || "0");
+      if (numA && numB) {
+        return numA - numB;
+      }
+      return a.titre.localeCompare(b.titre, "fr", { sensitivity: "base" });
+    });
+  }, [visibleParties]);
+
+  // Tri des sous-parties
+  const sortedSousParties = useMemo(() => {
+    return [...visibleSousParties].sort((a, b) => {
+      // Extraire les numéros du début des descriptions s'ils existent
+      const numA = parseInt(a.description.match(/^(\d+)-/)?.[1] || "0");
+      const numB = parseInt(b.description.match(/^(\d+)-/)?.[1] || "0");
+
+      // Si les deux descriptions commencent par des numéros, trier par numéro
+      if (numA && numB) {
+        return numA - numB;
+      }
+
+      // Sinon, trier alphabétiquement
+      return a.description.localeCompare(b.description, "fr", {
+        sensitivity: "base",
+      });
+    });
+  }, [visibleSousParties]);
+
+  // Tri des lignes de détail
+  const sortedLignesDetails = useMemo(() => {
+    return (lignes) => {
+      return [...lignes].sort((a, b) => {
+        // Extraire les numéros du début des descriptions s'ils existent
+        const numA = parseInt(a.description.match(/^(\d+)-/)?.[1] || "0");
+        const numB = parseInt(b.description.match(/^(\d+)-/)?.[1] || "0");
+
+        // Si les deux descriptions commencent par des numéros, trier par numéro
+        if (numA && numB) {
+          return numA - numB;
+        }
+
+        // Sinon, trier alphabétiquement
+        return a.description.localeCompare(b.description, "fr", {
+          sensitivity: "base",
+        });
+      });
+    };
+  }, []);
+
+  const handleHidePartie = (partieId) => {
+    setSlidingParties([...slidingParties, partieId]);
+    setTimeout(() => {
+      setHiddenParties([...hiddenParties, partieId]);
+      setSelectedParties(selectedParties.filter((id) => id !== partieId));
+      setSlidingParties(slidingParties.filter((id) => id !== partieId));
+    }, 300);
+  };
+
+  const handleHideSousPartie = (sousPartieId) => {
+    setSlidingSousParties([...slidingSousParties, sousPartieId]);
+    setTimeout(() => {
+      setHiddenSousParties([...hiddenSousParties, sousPartieId]);
+      setSelectedSousParties(
+        selectedSousParties.filter((id) => id !== sousPartieId)
+      );
+      setSlidingSousParties(
+        slidingSousParties.filter((id) => id !== sousPartieId)
+      );
+    }, 300);
+  };
+
+  const handleHideLigne = (ligneId) => {
+    setSlidingLignes([...slidingLignes, ligneId]);
+    setTimeout(() => {
+      setHiddenLignes([...hiddenLignes, ligneId]);
+      setSelectedLignes(selectedLignes.filter((id) => id !== ligneId));
+      setSlidingLignes(slidingLignes.filter((id) => id !== ligneId));
+    }, 300);
+  };
+
+  const handleClientInfoSubmit = async () => {
+    try {
+      // Vérifier si le client existe déjà (par email)
+      const clientResponse = await axios.get("/api/client/", {
+        params: { client_mail: clientData.client_mail },
+      });
+
+      let clientId;
+      if (clientResponse.data.length > 0) {
+        // Client existe déjà
+        clientId = clientResponse.data[0].id;
+        alert(
+          "Ce client existe déjà, nous allons utiliser ses informations existantes."
+        );
+      } else {
+        // Créer le nouveau client
+        const newClientResponse = await axios.post("/api/client/", {
+          name: clientData.name,
+          surname: clientData.surname,
+          client_mail: clientData.client_mail,
+          phone_Number: parseInt(clientData.phone_Number),
+        });
+        clientId = newClientResponse.data.id;
+      }
+
+      // Stocker l'ID du client pour l'utiliser dans handleSocieteInfoSubmit
+      setClientData((prev) => ({ ...prev, id: clientId }));
+      setShowClientInfoModal(false);
+      setShowSocieteInfoModal(true);
+    } catch (error) {
+      console.error(
+        "Erreur lors de la vérification/création du client:",
+        error
+      );
+      alert("Erreur lors de la création du client");
+    }
+  };
+
+  const handleSocieteInfoSubmit = async () => {
+    try {
+      // Vérifier si la société existe déjà (par nom)
+      const societeResponse = await axios.get("/api/societe/", {
+        params: { nom_societe: clientData.societe.nom_societe },
+      });
+
+      let societeId;
+      if (societeResponse.data.length > 0) {
+        // Société existe déjà
+        societeId = societeResponse.data[0].id;
+        alert(
+          "Cette société existe déjà, nous allons utiliser ses informations existantes."
+        );
+      } else {
+        // Créer la nouvelle société
+        const newSocieteResponse = await axios.post("/api/societe/", {
+          nom_societe: clientData.societe.nom_societe,
+          ville_societe: clientData.societe.ville_societe,
+          rue_societe: clientData.societe.rue_societe,
+          codepostal_societe: clientData.societe.codepostal_societe,
+          client_name: clientData.id, // Utiliser l'ID du client stocké précédemment
+        });
+        societeId = newSocieteResponse.data.id;
+      }
+
+      setSelectedSocieteId(societeId);
+      setShowSocieteInfoModal(false);
+      setShowChantierForm(true);
+    } catch (error) {
+      console.error(
+        "Erreur lors de la vérification/création de la société:",
+        error
+      );
+      alert("Erreur lors de la création de la société");
+    }
+  };
+
+  const handleChange = (e, type) => {
+    const { name, value } = e.target;
+    if (type === "client") {
+      setClientData({ ...clientData, [name]: value });
+    } else if (type === "societe") {
+      setClientData({
+        ...clientData,
+        societe: { ...clientData.societe, [name]: value },
+      });
+    }
+  };
+
+  // Modifiez le gestionnaire de changement de type de devis
+  const handleDevisTypeChange = (e) => {
+    const newValue = e.target.value;
+    setDevisType(newValue);
+
+    if (newValue === "chantier") {
+      setShowClientTypeModal(true);
+    }
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -474,59 +751,297 @@ const CreationDevis = () => {
               ))}
             </Select>
           </FormControl>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 3,
+            }}
+          >
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Type de devis</FormLabel>
+              <RadioGroup
+                row
+                aria-label="devis-type"
+                name="devis-type"
+                value={devisType}
+                onChange={handleDevisTypeChange}
+              >
+                <FormControlLabel
+                  value="normal"
+                  control={<Radio />}
+                  label="Devis normal"
+                />
+                <FormControlLabel
+                  value="chantier"
+                  control={<Radio />}
+                  label="Devis chantier"
+                />
+              </RadioGroup>
+            </FormControl>
 
-          <Box sx={{ mb: 3 }}>
-            <Box
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setOpenCreatePartieModal(true)}
               sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                fontFamily: "'Work Sans', sans-serif",
+                textTransform: "none",
+                fontSize: "1rem",
               }}
             >
-              <Typography variant="h6" gutterBottom>
-                Parties
-              </Typography>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => setOpenCreatePartieModal(true)}
-              >
-                Créer une partie
-              </Button>
-            </Box>
+              Créer une nouvelle partie
+            </Button>
+          </Box>
 
-            {parties.map((partie) => (
-              <FormControlLabel
-                key={partie.id}
-                control={
-                  <Checkbox
-                    checked={selectedParties.includes(partie.id)}
-                    onChange={() => handlePartiesChange(partie.id)}
-                  />
-                }
-                label={partie.titre}
-              />
-            ))}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Parties
+            </Typography>
+            <Accordion>
+              <AccordionSummary
+                expandIcon={<span style={{ fontSize: "1.5rem" }}>+</span>}
+              >
+                <Typography>
+                  Sélectionner les parties ({selectedParties.length}{" "}
+                  sélectionnées)
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {sortedParties.map((partie) => (
+                    <Box
+                      key={partie.id}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingY: "2px",
+                        transition:
+                          "transform 0.3s ease-out, opacity 0.3s ease-out",
+                        transform: slidingParties.includes(partie.id)
+                          ? "translateX(100%)"
+                          : "translateX(0)",
+                        opacity: slidingParties.includes(partie.id) ? 0 : 1,
+                      }}
+                    >
+                      <FormControlLabel
+                        sx={{
+                          margin: 0,
+                          "& .MuiFormControlLabel-label": {
+                            fontFamily: "'Merriweather', serif",
+                            fontSize: "1rem",
+                            fontWeight: 500,
+                          },
+                        }}
+                        control={
+                          <Checkbox
+                            checked={selectedParties.includes(partie.id)}
+                            onChange={() => handlePartiesChange(partie.id)}
+                            sx={{
+                              padding: "4px",
+                              "& .MuiSvgIcon-root": {
+                                width: "24px",
+                                height: "24px",
+                              },
+                            }}
+                          />
+                        }
+                        label={partie.titre}
+                      />
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 1,
+                          alignItems: "center",
+                          height: "100%",
+                        }}
+                      >
+                        <button
+                          style={{
+                            backgroundColor: "transparent",
+                            color: "#4CAF50",
+                            border: "2px solid #4CAF50",
+                            borderRadius: "4px",
+                            padding: "2px",
+                            cursor: "pointer",
+                            height: "24px",
+                            width: "24px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          onClick={() => handleEditPartie(partie)}
+                        >
+                          <RiPencilFill size={16} />
+                        </button>
+                        <button
+                          style={{
+                            backgroundColor: "transparent",
+                            color: "#f44336",
+                            border: "2px solid #f44336",
+                            borderRadius: "4px",
+                            padding: "2px",
+                            cursor: "pointer",
+                            height: "24px",
+                            width: "24px",
+                            marginRight: "4px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          onClick={() => handleHidePartie(partie.id)}
+                        >
+                          <FaEyeSlash size={16} />
+                        </button>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
           </Box>
 
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Sous-Parties et Lignes de Détail
             </Typography>
-            {filteredSousParties.map((sousPartie) => (
-              <Accordion key={sousPartie.id}>
+            {sortedSousParties.map((sousPartie) => (
+              <Accordion
+                key={sousPartie.id}
+                sx={{
+                  mb: 1,
+                  transition: "transform 0.3s ease-out, opacity 0.3s ease-out",
+                  transform: slidingSousParties.includes(sousPartie.id)
+                    ? "translateX(100%)"
+                    : "translateX(0)",
+                  opacity: slidingSousParties.includes(sousPartie.id) ? 0 : 1,
+                }}
+              >
                 <AccordionSummary
-                  expandIcon={<span style={{ fontSize: "1.5rem" }}>+</span>}
-                >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={selectedSousParties.includes(sousPartie.id)}
-                        onChange={() => handleSousPartiesChange(sousPartie.id)}
-                      />
+                  expandIcon={
+                    <span
+                      style={{
+                        fontSize: "1.5rem",
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      +
+                    </span>
+                  }
+                  onClick={(e) => {
+                    // Empêcher la sélection/désélection si on clique sur les contrôles
+                    if (
+                      e.target.closest("button") ||
+                      e.target.closest(".MuiCheckbox-root")
+                    ) {
+                      e.stopPropagation();
+                      return;
                     }
-                    label={sousPartie.description}
-                  />
+                    // Si on clique sur le titre ou la zone générale, gérer la sélection
+                    if (
+                      !e.target.closest(
+                        ".MuiAccordionSummary-expandIconWrapper"
+                      )
+                    ) {
+                      handleSousPartiesChange(sousPartie.id);
+                    }
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      width: "auto",
+                    }}
+                  >
+                    <FormControlLabel
+                      sx={{
+                        "& .MuiFormControlLabel-label": {
+                          marginLeft: "-4px",
+                          fontFamily: "'Merriweather', serif",
+                          fontSize: "1rem",
+                          fontWeight: 500,
+                          color: "black",
+                          cursor: "pointer",
+                        },
+                      }}
+                      control={
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <button
+                            style={{
+                              backgroundColor: "transparent",
+                              color: "#4CAF50",
+                              border: "2px solid #4CAF50",
+                              borderRadius: "4px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              padding: "2px",
+                              marginRight: "4px",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditSousPartie(sousPartie);
+                            }}
+                          >
+                            <RiPencilFill size={16} />
+                          </button>
+                          <button
+                            style={{
+                              backgroundColor: "transparent",
+                              color: "#f44336",
+                              border: "2px solid #f44336",
+                              borderRadius: "4px",
+                              padding: "2px",
+                              cursor: "pointer",
+                              height: "24px",
+                              width: "24px",
+                              marginRight: "4px",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleHideSousPartie(sousPartie.id);
+                            }}
+                          >
+                            <FaEyeSlash size={16} />
+                          </button>
+                          <Checkbox
+                            checked={selectedSousParties.includes(
+                              sousPartie.id
+                            )}
+                            onChange={() =>
+                              handleSousPartiesChange(sousPartie.id)
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{
+                              marginLeft: "-12px",
+                              "& .MuiSvgIcon-root": {
+                                width: "30px",
+                                height: "30px",
+                              },
+                            }}
+                          />
+                        </Box>
+                      }
+                    />
+                  </Box>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontFamily: "'Work Sans', sans-serif",
+                      fontSize: "0.95rem",
+                      fontWeight: 500,
+                      paddingTop: "10px",
+                    }}
+                  >
+                    {" "}
+                    {sousPartie.description}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   {sortedLignesDetails(
@@ -540,10 +1055,10 @@ const CreationDevis = () => {
                         mb: 1,
                         transition:
                           "transform 0.3s ease-out, opacity 0.3s ease-out",
-                        transform: slidingLines.includes(ligne.id)
+                        transform: slidingLignes.includes(ligne.id)
                           ? "translateX(100%)"
                           : "translateX(0)",
-                        opacity: slidingLines.includes(ligne.id) ? 0 : 1,
+                        opacity: slidingLignes.includes(ligne.id) ? 0 : 1,
                       }}
                     >
                       <CardContent>
@@ -564,34 +1079,80 @@ const CreationDevis = () => {
                               gap: 2,
                             }}
                           >
-                            <button
-                              onClick={() => handleRemoveLigne(ligne.id)}
-                              style={{
-                                backgroundColor: "#ff4444",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                padding: "2px 4px",
-                                cursor: "pointer",
-                                fontSize: "12px",
-                                width: "16px",
-                                height: "16px",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                minWidth: "16px",
-                                lineHeight: "1",
-                                margin: "0px",
-                                transition: "background-color 0.2s ease",
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    gap: 1,
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <button
+                                    style={{
+                                      backgroundColor: "transparent",
+                                      color: "#4CAF50",
+                                      border: "2px solid #4CAF50",
+                                      borderRadius: "4px",
+                                      padding: "2px",
+                                      cursor: "pointer",
+                                      height: "24px",
+                                      width: "24px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                    onClick={() => handleEditLigne(ligne)}
+                                  >
+                                    <RiPencilFill size={16} />
+                                  </button>
+                                  <button
+                                    style={{
+                                      backgroundColor: "transparent",
+                                      color: "#f44336",
+                                      border: "2px solid #f44336",
+                                      borderRadius: "4px",
+                                      padding: "2px",
+                                      cursor: "pointer",
+                                      height: "24px",
+                                      width: "24px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                    onClick={() => handleHideLigne(ligne.id)}
+                                  >
+                                    <FaEyeSlash size={16} />
+                                  </button>
+                                  <Checkbox
+                                    checked={selectedLignes.includes(ligne.id)}
+                                    onChange={() =>
+                                      handleLigneSelection(ligne.id)
+                                    }
+                                    sx={{
+                                      marginLeft: "-12px",
+                                      "& .MuiSvgIcon-root": {
+                                        width: "30px",
+                                        height: "30px",
+                                      },
+                                    }}
+                                  />
+                                </Box>
+                              </Box>
+                            </Box>
+                            <Typography
+                              variant="subtitle1"
+                              sx={{
+                                fontFamily: "'Work Sans', sans-serif",
+                                fontSize: "0.95rem",
+                                fontWeight: 400,
                               }}
                             >
-                              ✕
-                            </button>
-                            <Checkbox
-                              checked={selectedLignes.includes(ligne.id)}
-                              onChange={() => handleLigneSelection(ligne.id)}
-                            />
-                            <Typography variant="subtitle1">
                               {ligne.description}
                             </Typography>
                           </Box>
@@ -639,31 +1200,6 @@ const CreationDevis = () => {
             ))}
           </Box>
 
-          <FormControl component="fieldset" sx={{ mb: 3 }}>
-            <FormLabel component="legend">Type de devis</FormLabel>
-            <RadioGroup
-              row
-              value={devisType}
-              onChange={(e) => {
-                setDevisType(e.target.value);
-                if (e.target.value === "chantier") {
-                  setShowClientTypeModal(true);
-                }
-              }}
-            >
-              <FormControlLabel
-                value="normal"
-                control={<Radio />}
-                label="Devis normal"
-              />
-              <FormControlLabel
-                value="chantier"
-                control={<Radio />}
-                label="Devis de chantier"
-              />
-            </RadioGroup>
-          </FormControl>
-
           <button
             className="Devisbutton"
             onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}
@@ -671,21 +1207,12 @@ const CreationDevis = () => {
             {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
           </button>
 
-          {showClientForm && (
-            <div className="client-form-overlay">
-              <div className="client-form-container">
-                <ClientSocieteForm
-                  clientData={clientData}
-                  setClientData={setClientData}
-                  onSubmit={handleClientFormSubmit}
-                />
-              </div>
-            </div>
-          )}
-
           <ClientTypeModal
             open={showClientTypeModal}
-            onClose={() => setShowClientTypeModal(false)}
+            onClose={() => {
+              setShowClientTypeModal(false);
+              setDevisType("normal"); // Réinitialiser le type si l'utilisateur annule
+            }}
             onNewClient={handleNewClient}
             onExistingClient={handleExistingClient}
           />
@@ -737,11 +1264,42 @@ const CreationDevis = () => {
 
           <CreatePartieModal
             open={openCreatePartieModal}
-            handleClose={() => setOpenCreatePartieModal(false)}
+            handleClose={() => {
+              setOpenCreatePartieModal(false);
+              setEditData(null);
+            }}
             onPartieCreated={handlePartieCreated}
+            editData={editData}
           />
         </Paper>
       </Box>
+
+      <EditModal
+        open={editModalOpen}
+        handleClose={() => setEditModalOpen(false)}
+        data={itemToEdit}
+        onSave={handleSaveEdit}
+      />
+      <ClientInfoModal
+        open={showClientInfoModal}
+        onClose={() => {
+          setShowClientInfoModal(false);
+          setDevisType("normal");
+        }}
+        clientData={clientData}
+        onChange={handleChange}
+        onSubmit={handleClientInfoSubmit}
+      />
+      <SocieteInfoModal
+        open={showSocieteInfoModal}
+        onClose={() => {
+          setShowSocieteInfoModal(false);
+          setShowClientInfoModal(true);
+        }}
+        societeData={clientData.societe}
+        onChange={handleChange}
+        onSubmit={handleSocieteInfoSubmit}
+      />
     </Container>
   );
 };

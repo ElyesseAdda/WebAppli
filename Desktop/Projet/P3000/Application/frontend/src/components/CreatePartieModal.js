@@ -267,6 +267,38 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
             </RadioGroup>
           </FormControl>
 
+          {(creationType === "sousPartie" || creationType === "ligne") && (
+            <FormControl fullWidth>
+              <InputLabel>Sélectionner une partie</InputLabel>
+              <Select
+                value={selectedPartieId}
+                onChange={(e) => setSelectedPartieId(e.target.value)}
+              >
+                {existingParties.map((partie) => (
+                  <MenuItem key={partie.id} value={partie.id}>
+                    {partie.titre}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {creationType === "ligne" && selectedPartieId && (
+            <FormControl fullWidth>
+              <InputLabel>Sélectionner une sous-partie</InputLabel>
+              <Select
+                value={selectedSousPartieId}
+                onChange={(e) => setSelectedSousPartieId(e.target.value)}
+              >
+                {existingSousParties.map((sousPartie) => (
+                  <MenuItem key={sousPartie.id} value={sousPartie.id}>
+                    {sousPartie.description}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
           {creationType === "partie" && (
             <>
               <TextField
@@ -441,41 +473,6 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
               />
             </Box>
           )}
-
-          {(creationType === "sousPartie" || creationType === "ligne") && (
-            <FormControl fullWidth>
-              <InputLabel>Sélectionner une partie</InputLabel>
-              <Select
-                value={selectedPartieId}
-                onChange={(e) => setSelectedPartieId(e.target.value)}
-              >
-                {existingParties.map((partie) => (
-                  <MenuItem key={partie.id} value={partie.id}>
-                    {partie.titre}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-
-          {creationType === "ligne" && selectedPartieId && (
-            <FormControl fullWidth>
-              <InputLabel>Sélectionner une sous-partie</InputLabel>
-              <Select
-                value={selectedSousPartieId}
-                onChange={(e) => setSelectedSousPartieId(e.target.value)}
-              >
-                {existingSousParties.map((sousPartie) => (
-                  <MenuItem key={sousPartie.id} value={sousPartie.id}>
-                    {sousPartie.description}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-
-          {/* Le reste du formulaire selon le type sélectionné */}
-          {/* ... */}
         </Box>
       </DialogContent>
       <DialogActions>
