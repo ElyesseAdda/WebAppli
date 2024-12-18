@@ -54,6 +54,36 @@ const DevisModal = ({
             multiline
             rows={4}
           />
+          <TextField
+            fullWidth
+            margin="normal"
+            name="date_debut"
+            label="Date de début"
+            type="date"
+            value={devisData.date_debut}
+            onChange={handleChange}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            name="date_fin"
+            label="Date de fin"
+            type="date"
+            value={devisData.date_fin}
+            onChange={handleChange}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            multiline
+            rows={4}
+            name="description"
+            label="Description du chantier"
+            value={devisData.description}
+            onChange={handleChange}
+          />
         </Box>
       </DialogContent>
       <DialogActions>

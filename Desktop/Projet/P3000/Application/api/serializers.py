@@ -1,5 +1,18 @@
 from rest_framework import serializers  
-from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, Schedule, LaborCost
+from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, Schedule, LaborCost, DevisLigne
+
+class DevisLigneSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DevisLigne
+        fields = ['ligne_detail', 'quantite', 'prix_unitaire', 'total_ht']
+
+class DevisSerializer(serializers.ModelSerializer):
+    lignes = DevisLigneSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Devis
+        fields = ['id', 'numero', 'chantier', 'client', 'date_creation', 
+                 'price_ht', 'price_ttc', 'description', 'status', 'lignes']
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -9,16 +22,6 @@ class ChantierSerializer(serializers.ModelSerializer):
 class SocieteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Societe
-        fields = '__all__'
-
-class DevisSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Devis
-        fields = '__all__'
-
-
-    class Meta:
-        model = Partie
         fields = '__all__'
 
 class LigneDetailSerializer(serializers.ModelSerializer):

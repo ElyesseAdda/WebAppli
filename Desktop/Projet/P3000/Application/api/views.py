@@ -16,8 +16,7 @@ import os
 import json
 import calendar
 from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer
-from .models import Chantier, Devis, Facture, Quitus, DevisItem, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost
-from .forms import DevisForm, DevisItemForm
+from .models import Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost, DevisLigne
 import logging
 from django.db import transaction
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -42,6 +41,14 @@ class SocieteViewSet(viewsets.ModelViewSet):
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = Devis.objects.all()
     serializer_class = DevisSerializer
+    
+    def get_queryset(self):
+        queryset = Devis.objects.all()
+        # Ajout de filtres optionnels
+        chantier_id = self.request.query_params.get('chantier', None)
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset
 
 
 def dashboard_data(request):
@@ -98,11 +105,40 @@ def preview_devis(request):
     if devis_data_encoded:
         try:
             devis_data = json.loads(devis_data_encoded)
+            chantier_id = devis_data['chantier']
 
-            # Récupérer le chantier associé
-            chantier = get_object_or_404(Chantier, id=devis_data['chantier'])
-            societe = chantier.societe
-            client = societe.client_name
+            if chantier_id == -1:
+                # Utiliser les données temporaires
+                temp_data = devis_data.get('tempData', {})
+                chantier = temp_data.get('chantier', {})
+                client = temp_data.get('client', {})
+                societe = temp_data.get('societe', {})
+
+                print("=== Données Temporaires ===")
+                print("Client:", client)
+                print("Société:", societe)
+                print("Chantier:", chantier)
+                print("Données complètes:", temp_data)
+                print("========================")
+
+                # S'assurer que tous les champs ont une valeur par défaut
+                for field in ['name', 'surname', 'phone_Number', 'client_mail']:
+                    if not client.get(field):
+                        client[field] = 'Non renseigné'
+
+                for field in ['nom_societe', 'ville_societe', 'rue_societe', 'codepostal_societe']:
+                    if not societe.get(field):
+                        societe[field] = 'Non renseigné'
+                    
+                for field in ['chantier_name', 'ville', 'rue', 'code_postal']:
+                    if not chantier.get(field):
+                        chantier[field] = 'Non renseigné'
+
+            else:
+                # Utiliser les données existantes
+                chantier = get_object_or_404(Chantier, id=chantier_id)
+                societe = chantier.societe
+                client = societe.client_name
 
             parties_data = []
             total_ht = 0
@@ -1091,49 +1127,77 @@ def create_chantier_from_devis(request):
 def create_devis(request):
     try:
         with transaction.atomic():
-            # Récupérer les données de base du devis
+            print("Données reçues:", request.data)  # Log des données reçues
+            
             devis_data = {
                 'numero': request.data['numero'],
                 'chantier_id': request.data['chantier'],
                 'price_ht': request.data['price_ht'],
                 'description': request.data.get('description', ''),
-                'type': request.data.get('type', 'Travaux'),
-                'state': 'En Cours'
+                'status': 'En attente'
             }
-
-            # Créer le devis
+            
+            print("Données du devis:", devis_data)
             devis = Devis.objects.create(**devis_data)
-
-            # Ajouter le client
+            
+            # Récupérer le client via le chantier
             chantier = Chantier.objects.get(id=request.data['chantier'])
             if chantier.societe and chantier.societe.client_name:
                 devis.client.add(chantier.societe.client_name)
-
-            # Traiter les parties, sous-parties et lignes de détail
-            for partie_data in request.data['parties']:
-                for sous_partie_data in partie_data['sous_parties']:
-                    for ligne_detail in sous_partie_data['lignes_details']:
-                        if float(ligne_detail['quantity']) > 0:  # Ne traiter que les lignes avec quantité > 0
-                            DevisItem.objects.create(
+            
+            # Traitement des lignes de détail
+            for partie_data in request.data.get('parties', []):
+                for sous_partie in partie_data.get('sous_parties', []):
+                    for ligne in sous_partie.get('lignes_details', []):
+                        if float(ligne['quantity']) > 0:
+                            DevisLigne.objects.create(
                                 devis=devis,
-                                ligne_detail_id=ligne_detail['id'],
-                                quantite=ligne_detail['quantity'],
-                                prix_unitaire=ligne_detail['custom_price']
+                                ligne_detail_id=ligne['id'],
+                                quantite=ligne['quantity'],
+                                prix_unitaire=ligne['custom_price']
                             )
-
+            
             return Response({
                 'id': devis.id,
                 'numero': devis.numero,
                 'message': 'Devis créé avec succès'
             }, status=201)
-
+            
     except Exception as e:
-        print(f"Erreur lors de la création du devis: {str(e)}")
-        print(traceback.format_exc())
+        print(f"Erreur détaillée: {str(e)}")
         return Response({
             'error': 'Erreur lors de la création du devis',
             'details': str(e)
         }, status=400)
+
+@api_view(['GET'])
+def list_devis(request):
+    try:
+        devis_list = Devis.objects.all().order_by('-date_creation')
+        data = []
+        
+        for devis in devis_list:
+            # Récupérer le client via le chantier
+            chantier = devis.chantier
+            client = chantier.societe.client_name if chantier and chantier.societe else None
+            client_name = f"{client.name} {client.surname}" if client else "Client non spécifié"
+            
+            devis_data = {
+                'id': devis.id,
+                'numero': devis.numero,
+                'chantier_name': devis.chantier.chantier_name,
+                'client_name': client_name,
+                'date_creation': devis.date_creation,
+                'price_ht': float(devis.price_ht),
+                'price_ttc': float(devis.price_ttc),
+                'status': devis.status
+            }
+            data.append(devis_data)
+            
+        return Response(data)
+    except Exception as e:
+        print(f"Erreur détaillée dans list_devis: {str(e)}")
+        return Response({'error': str(e)}, status=400)
 
 
 

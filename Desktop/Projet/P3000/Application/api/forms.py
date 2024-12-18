@@ -1,5 +1,5 @@
 from django import forms
-from .models import Devis, DevisItem, LigneDetail
+from .models import Devis, LigneDetail
 
 class DevisForm(forms.ModelForm):
     class Meta:
@@ -24,21 +24,3 @@ class DevisForm(forms.ModelForm):
         # L'état aura une valeur par défaut
         self.fields['state'].required = False
 
-class DevisItemForm(forms.ModelForm):
-    class Meta:
-        model = DevisItem
-        fields = [
-            'devis',
-            'ligne_detail',
-            'quantite',
-            'prix_unitaire'
-        ]
-
-    def clean(self):
-        cleaned_data = super().clean()
-        quantite = cleaned_data.get('quantite')
-        
-        if quantite is not None and quantite <= 0:
-            raise forms.ValidationError("La quantité doit être supérieure à 0")
-        
-        return cleaned_data

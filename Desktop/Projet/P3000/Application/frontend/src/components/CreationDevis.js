@@ -68,7 +68,7 @@ const CreationDevis = () => {
   });
   const [societeId, setSocieteId] = useState(null);
   const [showClientTypeModal, setShowClientTypeModal] = useState(false);
-  const [showChantierForm, setShowChantierForm] = useState(false);
+
   const [showExistingClientForm, setShowExistingClientForm] = useState(false);
   const [showSelectSocieteModal, setShowSelectSocieteModal] = useState(false);
   const [selectedSocieteId, setSelectedSocieteId] = useState(null);
@@ -91,6 +91,19 @@ const CreationDevis = () => {
   const [slidingLignes, setSlidingLignes] = useState([]);
   const [showClientInfoModal, setShowClientInfoModal] = useState(false);
   const [showSocieteInfoModal, setShowSocieteInfoModal] = useState(false);
+  const [pendingChantierData, setPendingChantierData] = useState({
+    client: null,
+    societe: null,
+    chantier: {
+      id: -1, // ID temporaire
+      chantier_name: "",
+      ville: "",
+      rue: "",
+      code_postal: "",
+    },
+    devis: null,
+  });
+  const [showChantierForm, setShowChantierForm] = useState(false);
 
   // Charger les chantiers
   useEffect(() => {
@@ -214,11 +227,70 @@ const CreationDevis = () => {
         custom_price: customPrices[ligne.id] || ligne.prix,
       })),
     };
+
+    if (selectedChantierId === -1) {
+      console.log("=== Données temporaires avant envoi ===");
+      console.log("Client:", pendingChantierData.client);
+      console.log("Société:", pendingChantierData.societe);
+      console.log("Chantier:", pendingChantierData.chantier);
+      console.log("pendingChantierData complet:", pendingChantierData);
+      console.log("================================");
+
+      devisData.tempData = {
+        client: {
+          name: pendingChantierData.client?.name || "Non renseigné",
+          surname: pendingChantierData.client?.surname || "",
+          phone_Number:
+            pendingChantierData.client?.phone_Number || "Non renseigné",
+          client_mail:
+            pendingChantierData.client?.client_mail || "Non renseigné",
+        },
+        societe: {
+          nom_societe:
+            pendingChantierData.societe?.nom_societe || "Non renseigné",
+          ville_societe:
+            pendingChantierData.societe?.ville_societe || "Non renseigné",
+          rue_societe:
+            pendingChantierData.societe?.rue_societe || "Non renseigné",
+          codepostal_societe:
+            pendingChantierData.societe?.codepostal_societe || "Non renseigné",
+        },
+        chantier: {
+          id: -1,
+          chantier_name:
+            pendingChantierData.chantier?.chantier_name || "Non renseigné",
+          ville: pendingChantierData.chantier?.ville || "Non renseigné",
+          rue: pendingChantierData.chantier?.rue || "Non renseigné",
+          code_postal:
+            pendingChantierData.chantier?.code_postal || "Non renseigné",
+        },
+      };
+
+      console.log("=== Données envoyées au serveur ===");
+      console.log("devisData.tempData:", devisData.tempData);
+      console.log("================================");
+    }
+
     const queryString = encodeURIComponent(JSON.stringify(devisData));
     const previewUrl = `/api/preview-devis/?devis=${queryString}`;
     window.open(previewUrl, "_blank");
     setIsPreviewed(true);
   };
+
+  // Ajouter un effet pour nettoyer les données temporaires
+  useEffect(() => {
+    const cleanupTempData = () => {
+      setPendingChantierData({
+        client: null,
+        societe: null,
+        chantier: null,
+        devis: null,
+      });
+    };
+
+    // Nettoyer lors du démontage du composant
+    return () => cleanupTempData();
+  }, []);
 
   // Modifier le gestionnaire onSubmit du ClientSocieteForm
   const handleClientFormSubmit = (newSocieteId) => {
@@ -227,26 +299,55 @@ const CreationDevis = () => {
   };
 
   // Modifier handleSaveDevis
-  const handleSaveDevis = () => {
-    const total_ht = calculateGrandTotal();
-    const tva = total_ht * 0.2;
-    const montant_ttc = (parseFloat(total_ht) + tva).toFixed(2);
+  const handleSaveDevis = async () => {
+    try {
+      if (!selectedChantierId) {
+        alert("Veuillez sélectionner un chantier");
+        return;
+      }
 
-    // Préparer les données pour le modal
-    setDevisModalData({
-      numero: `DEV-${new Date().getFullYear()}-${Math.floor(
-        Math.random() * 10000
-      )}`,
-      client:
-        chantiers.find((c) => c.id === selectedChantierId)?.societe
-          ?.nom_societe || "",
-      chantier_name:
-        chantiers.find((c) => c.id === selectedChantierId)?.chantier_name || "",
-      montant_ttc: montant_ttc,
-      description: "",
-    });
+      if (devisType === "chantier") {
+        // Code existant pour le devis chantier
+        let clientId, societeId;
+        const clientResponse = await axios.get("/api/client/", {
+          params: { client_mail: pendingChantierData.client.client_mail },
+        });
+        // ... reste du code existant pour le devis chantier
+      } else {
+        // Nouveau code pour le devis normal
+        const devisResponse = await axios.post("/api/create-devis/", {
+          numero: `DEV-${Date.now()}`,
+          chantier: selectedChantierId,
+          price_ht: calculateGrandTotal(),
+          description: "Devis normal",
+          parties: selectedParties.map((partieId) => ({
+            id: partieId,
+            sous_parties: selectedSousParties
+              .filter(
+                (spId) =>
+                  sousParties.find((sp) => sp.id === spId).partie === partieId
+              )
+              .map((spId) => ({
+                id: spId,
+                lignes_details: filteredLignesDetails
+                  .filter((ligne) => ligne.sous_partie === spId)
+                  .map((ligne) => ({
+                    id: ligne.id,
+                    quantity: quantities[ligne.id] || 0,
+                    custom_price: customPrices[ligne.id] || ligne.prix,
+                  })),
+              })),
+          })),
+        });
 
-    setOpenDevisModal(true);
+        console.log("Devis créé avec succès:", devisResponse.data);
+        alert("Devis enregistré avec succès!");
+        resetForm();
+      }
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      alert("Une erreur est survenue lors de la sauvegarde");
+    }
   };
 
   const handleDevisModalSubmit = async () => {
@@ -315,6 +416,7 @@ const CreationDevis = () => {
     setShowChantierForm(false);
     setShowClientTypeModal(false);
     setShowSelectSocieteModal(false);
+    setShowChantierForm(false);
   };
 
   const handleNewClient = () => {
@@ -327,25 +429,43 @@ const CreationDevis = () => {
     setShowSelectSocieteModal(true);
   };
 
-  const handleSocieteSelect = (societeId) => {
-    setSelectedSocieteId(societeId);
-    setShowSelectSocieteModal(false);
-    setShowChantierForm(true);
-  };
-
-  const handleChantierSubmit = async (chantierData) => {
+  const handleSocieteSelect = async (societeId) => {
     try {
-      const chantierWithSociete = {
-        ...chantierData,
-        societe: selectedSocieteId,
-      };
+      // Récupérer les données de la société
+      const societeResponse = await axios.get(`/api/societe/${societeId}/`);
+      const societeData = societeResponse.data;
 
-      const response = await axios.post("/api/chantier/", chantierWithSociete);
-      setSelectedChantierId(response.data.id);
-      setShowChantierForm(false);
+      // Récupérer les données du client
+      const clientResponse = await axios.get(
+        `/api/client/${societeData.client_name}/`
+      );
+      const clientData = clientResponse.data;
+
+      // Mettre à jour pendingChantierData avec les données récupérées
+      setPendingChantierData((prev) => ({
+        ...prev,
+        client: {
+          name: clientData.name,
+          surname: clientData.surname,
+          phone_Number: clientData.phone_Number,
+          client_mail: clientData.client_mail,
+        },
+        societe: {
+          nom_societe: societeData.nom_societe,
+          ville_societe: societeData.ville_societe,
+          rue_societe: societeData.rue_societe,
+          codepostal_societe: societeData.codepostal_societe,
+        },
+      }));
+
+      setSelectedSocieteId(societeId);
+      setShowSelectSocieteModal(false);
+      setShowChantierForm(true);
     } catch (error) {
-      console.error("Erreur lors de la création du chantier:", error);
-      alert("Erreur lors de la création du chantier");
+      console.error("Erreur lors de la récupération des données:", error);
+      alert(
+        "Erreur lors de la récupération des données du client et de la société"
+      );
     }
   };
 
@@ -677,32 +797,25 @@ const CreationDevis = () => {
 
       let societeId;
       if (societeResponse.data.length > 0) {
-        // Société existe déjà
         societeId = societeResponse.data[0].id;
         alert(
           "Cette société existe déjà, nous allons utiliser ses informations existantes."
         );
-      } else {
-        // Créer la nouvelle société
-        const newSocieteResponse = await axios.post("/api/societe/", {
-          nom_societe: clientData.societe.nom_societe,
-          ville_societe: clientData.societe.ville_societe,
-          rue_societe: clientData.societe.rue_societe,
-          codepostal_societe: clientData.societe.codepostal_societe,
-          client_name: clientData.id, // Utiliser l'ID du client stocké précédemment
-        });
-        societeId = newSocieteResponse.data.id;
       }
+
+      // Stocker les données de la société dans tous les cas
+      setPendingChantierData((prev) => ({
+        ...prev,
+        client: clientData,
+        societe: clientData.societe,
+      }));
 
       setSelectedSocieteId(societeId);
       setShowSocieteInfoModal(false);
-      setShowChantierForm(true);
+      setShowChantierForm(true); // Ouvrir le modal du chantier
     } catch (error) {
-      console.error(
-        "Erreur lors de la vérification/création de la société:",
-        error
-      );
-      alert("Erreur lors de la création de la société");
+      console.error("Erreur:", error);
+      alert("Une erreur est survenue");
     }
   };
 
@@ -728,6 +841,17 @@ const CreationDevis = () => {
     }
   };
 
+  const handleChantierInfoSubmit = (chantierInfo) => {
+    setPendingChantierData((prev) => ({
+      ...prev,
+      chantier: {
+        ...prev.chantier,
+        ...chantierInfo,
+      },
+    }));
+    setShowChantierForm(false);
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -744,6 +868,13 @@ const CreationDevis = () => {
               <MenuItem value="">
                 <em>-- Sélectionner un Chantier --</em>
               </MenuItem>
+              {pendingChantierData.chantier &&
+                pendingChantierData.chantier.id === -1 && (
+                  <MenuItem value={-1}>
+                    {pendingChantierData.chantier.chantier_name} (En cours de
+                    création)
+                  </MenuItem>
+                )}
               {chantiers.map((chantier) => (
                 <MenuItem key={chantier.id} value={chantier.id}>
                   {chantier.chantier_name}
@@ -1223,13 +1354,6 @@ const CreationDevis = () => {
             onSocieteSelect={handleSocieteSelect}
           />
 
-          <ChantierForm
-            open={showChantierForm}
-            onClose={() => setShowChantierForm(false)}
-            onSubmit={handleChantierSubmit}
-            societeId={selectedSocieteId}
-          />
-
           <Box
             sx={{
               position: "fixed",
@@ -1299,6 +1423,28 @@ const CreationDevis = () => {
         societeData={clientData.societe}
         onChange={handleChange}
         onSubmit={handleSocieteInfoSubmit}
+      />
+      <ChantierForm
+        open={showChantierForm}
+        onClose={() => setShowChantierForm(false)}
+        onSubmit={(chantierData) => {
+          setPendingChantierData((prev) => ({
+            ...prev,
+            chantier: {
+              ...prev.chantier,
+              ...chantierData,
+            },
+          }));
+          setSelectedChantierId(-1);
+          setShowChantierForm(false);
+        }}
+        societeId={selectedSocieteId}
+      />
+      <ChantierForm
+        open={showChantierForm}
+        onClose={() => setShowChantierForm(false)}
+        onSubmit={handleChantierInfoSubmit}
+        chantierData={pendingChantierData.chantier}
       />
     </Container>
   );

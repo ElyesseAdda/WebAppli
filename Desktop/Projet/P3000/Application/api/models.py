@@ -260,27 +260,55 @@ class Facture(models.Model):
 
 class Devis(models.Model):
     numero = models.CharField(max_length=50, unique=True)
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True)
-    client = models.ManyToManyField(Client, related_name='devis', blank=True)
-    price_ht = models.FloatField()
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis')
+    client = models.ManyToManyField(Client, related_name='devis')
     date_creation = models.DateField(auto_now_add=True)
-    date_modification = models.DateField(auto_now=True)
-    state = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Travaux')
+    price_ht = models.DecimalField(max_digits=10, decimal_places=2)
+    price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('En attente', 'En attente'),
+            ('Accepté', 'Accepté'),
+            ('Refusé', 'Refusé')
+        ],
+        default='En attente'
+    )
+
+    def save(self, *args, **kwargs):
+        # Calculer automatiquement le prix TTC
+        if self.price_ht:
+            self.price_ttc = float(self.price_ht) * 1.2
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Devis {self.id}"
+        return f"Devis {self.numero} - {self.chantier.chantier_name}"
+
+class LigneDetail(models.Model):
+    sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
+    unite = models.CharField(max_length=10)
+    prix = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f'{self.description} ({self.unite}) - {self.prix} €'
+
+class DevisLigne(models.Model):
+    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes')
+    ligne_detail = models.ForeignKey(LigneDetail, on_delete=models.CASCADE)
+    quantite = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
     
-    def get_nom_contact(self):
-        # On accède à l'objet Chantier via self.chantier
-        chantier = self.chantier
-        if chantier and chantier.societe:
-            # On retourne le nom du contact de la société
-            return chantier.societe.client_name
-        return None  # Si aucune société n'est associée
+    @property
+    def total_ht(self):
+        return self.quantite * self.prix_unitaire
 
+    def __str__(self):
+        return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
 
+    class Meta:
+        unique_together = ('devis', 'ligne_detail')
 
 class Situation(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='situations', null=True)
@@ -320,29 +348,6 @@ class SousPartie(models.Model):
     def nombre_lignes_details(self):
         return self.lignes_details.count()
     
-class LigneDetail(models.Model):
-    sous_partie = models.ForeignKey(SousPartie, related_name='lignes_details', on_delete=models.CASCADE)
-    description = models.CharField(max_length=255)
-    unite = models.CharField(max_length=10)
-    prix = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)  # Ajout du champ prix
-
-    def __str__(self):
-        return f'{self.description} ({self.unite}) - {self.prix} €'
-    
-class DevisItem(models.Model):
-    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='items')
-    ligne_detail = models.ForeignKey(LigneDetail, on_delete=models.CASCADE)
-    quantite = models.DecimalField(max_digits=10, decimal_places=2)
-    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    @property
-    def total(self):
-        return self.quantite * self.prix_unitaire
-
-    def __str__(self):
-        return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
-    
-
 class Schedule(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     week = models.IntegerField()
