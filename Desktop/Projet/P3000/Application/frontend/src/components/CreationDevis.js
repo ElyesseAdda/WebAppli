@@ -298,7 +298,21 @@ const CreationDevis = () => {
     setShowClientForm(false);
   };
 
-  // Modifier handleSaveDevis
+  // Fonction pour générer le numéro de devis
+  const generateDevisNumber = async () => {
+    try {
+      const response = await axios.get("/api/get-next-devis-number/");
+      return `DEV-${response.data.next_number}-${new Date()
+        .getFullYear()
+        .toString()
+        .slice(-2)}`;
+    } catch (error) {
+      console.error("Erreur lors de la génération du numéro de devis:", error);
+      return `DEV-ERR-${new Date().getFullYear().toString().slice(-2)}`;
+    }
+  };
+
+  // Modifier le handleSaveDevis
   const handleSaveDevis = async () => {
     try {
       if (!selectedChantierId) {
@@ -306,47 +320,32 @@ const CreationDevis = () => {
         return;
       }
 
-      if (devisType === "chantier") {
-        // Code existant pour le devis chantier
-        let clientId, societeId;
-        const clientResponse = await axios.get("/api/client/", {
-          params: { client_mail: pendingChantierData.client.client_mail },
-        });
-        // ... reste du code existant pour le devis chantier
-      } else {
-        // Nouveau code pour le devis normal
-        const devisResponse = await axios.post("/api/create-devis/", {
-          numero: `DEV-${Date.now()}`,
-          chantier: selectedChantierId,
-          price_ht: calculateGrandTotal(),
-          description: "Devis normal",
-          parties: selectedParties.map((partieId) => ({
-            id: partieId,
-            sous_parties: selectedSousParties
-              .filter(
-                (spId) =>
-                  sousParties.find((sp) => sp.id === spId).partie === partieId
-              )
-              .map((spId) => ({
-                id: spId,
-                lignes_details: filteredLignesDetails
-                  .filter((ligne) => ligne.sous_partie === spId)
-                  .map((ligne) => ({
-                    id: ligne.id,
-                    quantity: quantities[ligne.id] || 0,
-                    custom_price: customPrices[ligne.id] || ligne.prix,
-                  })),
-              })),
-          })),
-        });
-
-        console.log("Devis créé avec succès:", devisResponse.data);
-        alert("Devis enregistré avec succès!");
-        resetForm();
+      // Récupérer les informations du chantier sélectionné
+      let clientName = "Client non spécifié";
+      if (selectedChantierId !== -1) {
+        const chantierResponse = await axios.get(
+          `/api/chantier/${selectedChantierId}/`
+        );
+        const chantier = chantierResponse.data;
+        if (chantier.societe && chantier.societe.client_name) {
+          clientName = `${chantier.societe.client_name.name} ${chantier.societe.client_name.surname}`;
+        }
+      } else if (pendingChantierData.client) {
+        clientName = `${pendingChantierData.client.name} ${pendingChantierData.client.surname}`;
       }
+
+      const nextDevisNumber = await generateDevisNumber();
+
+      setDevisModalData({
+        numero: nextDevisNumber,
+        client: clientName,
+        price_ht: calculateGrandTotal(),
+        description: "",
+      });
+      setOpenDevisModal(true);
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
-      alert("Une erreur est survenue lors de la sauvegarde");
+      console.error("Erreur lors de la préparation du devis:", error);
+      alert("Une erreur est survenue lors de la préparation du devis");
     }
   };
 
@@ -1331,12 +1330,13 @@ const CreationDevis = () => {
             ))}
           </Box>
 
-          <button
-            className="Devisbutton"
+          <Button
+            variant="contained"
+            color="primary"
             onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}
           >
             {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
-          </button>
+          </Button>
 
           <ClientTypeModal
             open={showClientTypeModal}
@@ -1377,13 +1377,13 @@ const CreationDevis = () => {
             open={openDevisModal}
             handleClose={() => setOpenDevisModal(false)}
             devisData={devisModalData}
-            handleSubmit={handleDevisModalSubmit}
             handleChange={(e) =>
               setDevisModalData({
                 ...devisModalData,
                 [e.target.name]: e.target.value,
               })
             }
+            handleSubmit={handleDevisModalSubmit}
           />
 
           <CreatePartieModal

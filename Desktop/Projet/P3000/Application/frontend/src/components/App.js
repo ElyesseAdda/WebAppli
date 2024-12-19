@@ -12,6 +12,7 @@ import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Layout from "./Layout";
 import ListChantier from "./ListChantier";
+import ListeDevis from "./ListeDevis";
 import ListePartiesSousParties from "./ListPartiesSousParties";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
@@ -41,6 +42,7 @@ function App() {
             <Route path="/chantier/:id" element={<ChantierInfo />} />
             <Route path="/ListChantier" element={<ListChantier />} />
             <Route path="/CreationDevis" element={<CreationDevis />} />
+            <Route path="/ListeDevis" element={<ListeDevis />} />
             <Route path="/ListePartie" element={<ListePartiesSousParties />} />
             <Route path="/CreationPartie" element={<CreationPartie />} />
             <Route path="/Stock" element={<StockForm />} />

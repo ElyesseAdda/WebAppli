@@ -333,7 +333,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         # Récupérer les événements pour l'agent et le mois
         events = Event.objects.filter(agent=agent, start_date__year=year, start_date__month=month)
 
-        # Accumulateur pour les heures modifiées
+        # Accumulateur pour les heures modifi��es
         total_hours_modified = sum(event.hours_modified for event in events if event.status == 'M')
 
         # Appliquer les règles d'impact des événements
@@ -1190,13 +1190,32 @@ def list_devis(request):
                 'date_creation': devis.date_creation,
                 'price_ht': float(devis.price_ht),
                 'price_ttc': float(devis.price_ttc),
-                'status': devis.status
+                'status': devis.status,
+                'description': devis.description
             }
             data.append(devis_data)
             
         return Response(data)
     except Exception as e:
         print(f"Erreur détaillée dans list_devis: {str(e)}")
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+def get_next_devis_number(request):
+    try:
+        current_year = datetime.now().year % 100  # Obtenir les 2 derniers chiffres
+        last_devis = Devis.objects.filter(
+            numero__regex=f'^DEV-\\d{{3}}-{current_year}$'
+        ).order_by('-numero').first()
+        
+        if last_devis:
+            last_number = int(last_devis.numero.split('-')[1])
+            next_number = f"{(last_number + 1):03d}"
+        else:
+            next_number = "001"
+            
+        return Response({'next_number': next_number})
+    except Exception as e:
         return Response({'error': str(e)}, status=400)
 
 

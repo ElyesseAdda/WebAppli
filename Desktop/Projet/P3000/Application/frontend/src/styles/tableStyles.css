@@ -1,0 +1,28 @@
+.MuiTableContainer-root {
+  overflow-x: auto;
+}
+
+.MuiTable-root {
+  min-width: 650px;
+}
+
+.MuiTableRow-root:nth-of-type(even) {
+  background-color: rgba(217, 217, 217, 0.5);
+}
+
+.MuiTableRow-root:hover {
+  background-color: rgba(27, 120, 188, 0.1);
+}
+
+@media (max-width: 1200px) {
+  .MuiTableCell-root {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .MuiTableCell-root {
+    padding: 6px;
+    font-size: 0.9rem;
+  }
+}

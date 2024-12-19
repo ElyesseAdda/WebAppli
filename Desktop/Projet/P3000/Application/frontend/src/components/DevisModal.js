@@ -22,28 +22,27 @@ const DevisModal = ({
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
           <TextField
-            label="Nom du devis"
+            label="Numéro du devis"
             name="numero"
             value={devisData.numero || ""}
             onChange={handleChange}
-            disabled
           />
           <TextField
             label="Client"
             name="client"
             value={devisData.client || ""}
-            disabled
+            onChange={handleChange}
           />
           <TextField
-            label="Nom du chantier"
-            name="chantier_name"
-            value={devisData.chantier_name || ""}
+            label="Montant HT"
+            name="price_ht"
+            value={devisData.price_ht || ""}
             disabled
           />
           <TextField
             label="Montant TTC"
-            name="montant_ttc"
-            value={devisData.montant_ttc || ""}
+            name="price_ttc"
+            value={(parseFloat(devisData.price_ht || 0) * 1.2).toFixed(2) || ""}
             disabled
           />
           <TextField
@@ -53,36 +52,6 @@ const DevisModal = ({
             onChange={handleChange}
             multiline
             rows={4}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            name="date_debut"
-            label="Date de début"
-            type="date"
-            value={devisData.date_debut}
-            onChange={handleChange}
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            name="date_fin"
-            label="Date de fin"
-            type="date"
-            value={devisData.date_fin}
-            onChange={handleChange}
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            multiline
-            rows={4}
-            name="description"
-            label="Description du chantier"
-            value={devisData.description}
-            onChange={handleChange}
           />
         </Box>
       </DialogContent>

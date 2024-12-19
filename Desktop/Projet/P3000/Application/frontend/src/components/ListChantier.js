@@ -1,7 +1,63 @@
+import {
+  Box,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import { styled } from "@mui/material/styles";
 import React, { useEffect, useState } from "react";
-import { FaPlusCircle } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import "./../../static/css/listChantier.css";
+
+const StyledTableContainer = styled(TableContainer)({
+  margin: "0 auto",
+  width: "100%",
+  "& .MuiTableCell-root": {
+    fontFamily: "Work Sans, sans-serif",
+  },
+  "& .MuiTable-root": {
+    minWidth: "100%",
+  },
+});
+
+const HeaderCell = styled(TableCell)({
+  backgroundColor: "rgba(27, 120, 188, 1)",
+  color: "white",
+  fontWeight: "bold",
+});
+
+const ChantierName = styled(TableCell)({
+  "& a": {
+    color: "rgba(27, 120, 188, 1)",
+    textDecoration: "none",
+    fontWeight: 700,
+    fontFamily: "Merriweather, serif",
+  },
+});
+
+const StatusCell = styled(TableCell)(({ status }) => ({
+  color:
+    status === "En Cours"
+      ? "rgba(27, 120, 188, 1)"
+      : status === "En Attente Signature"
+      ? "rgb(255, 123, 0)"
+      : status === "Terminer"
+      ? "rgb(185, 0, 0)"
+      : "inherit",
+  fontWeight: 600,
+}));
+
+const StyledBox = styled(Box)({
+  width: "100%",
+  padding: "0 20px",
+  boxSizing: "border-box",
+  position: "relative",
+});
 
 function ListChantiers() {
   const [chantiers, setChantiers] = useState([]);
@@ -35,52 +91,48 @@ function ListChantiers() {
   }
 
   return (
-    <div className="main-container">
-      <div className="ListContainer">
-        <Link
-          to={`/api/chantier`}
-          className="NewChantier"
-          link="./"
-          variant="contained"
-        >
-          {" "}
-          <FaPlusCircle /> Ajouter un Chantier
-        </Link>
-        <div className="List">
-          <table>
-            <thead>
-              <tr>
-                <th>Nom Chantier</th>
-                <th>Nom Client</th>
-                <th>Statut</th>
-                <th>Date de Création</th>
-                <th>Taux facturation</th>
-                <th>Chiffre d'Affaires</th>
-              </tr>
-            </thead>
-            <tbody>
-              {chantiers.map((chantier) => (
-                <tr key={chantier.id}>
-                  <td>
-                    <Link to={`/chantier/${chantier.id}`}>
-                      {chantier.chantier_name}
-                    </Link>
-                  </td>
-                  <td>{chantier.client_name}</td>
-                  <td className={chantier.state_chantier}>
-                    {" "}
-                    {chantier.state_chantier}{" "}
-                  </td>
-                  <td>{chantier.date_debut}</td>
-                  <td>A faire</td>
-                  <td>{chantier.chiffre_affaire} €</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <StyledBox>
+      <Typography
+        variant="h5"
+        gutterBottom
+        sx={{ fontFamily: "Merriweather, serif" }}
+      >
+        Liste des Chantiers
+      </Typography>
+
+      <StyledTableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <HeaderCell>Nom Chantier</HeaderCell>
+              <HeaderCell>Nom Client</HeaderCell>
+              <HeaderCell>Statut</HeaderCell>
+              <HeaderCell>Date de Création</HeaderCell>
+              <HeaderCell>Taux facturation</HeaderCell>
+              <HeaderCell>Chiffre d'Affaires</HeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {chantiers.map((chantier) => (
+              <TableRow key={chantier.id}>
+                <ChantierName>
+                  <Link to={`/chantier/${chantier.id}`}>
+                    {chantier.chantier_name}
+                  </Link>
+                </ChantierName>
+                <TableCell>{chantier.client_name}</TableCell>
+                <StatusCell status={chantier.state_chantier}>
+                  {chantier.state_chantier}
+                </StatusCell>
+                <TableCell>{chantier.date_debut}</TableCell>
+                <TableCell>A faire</TableCell>
+                <TableCell>{chantier.chiffre_affaire} €</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </StyledTableContainer>
+    </StyledBox>
   );
 }
 
