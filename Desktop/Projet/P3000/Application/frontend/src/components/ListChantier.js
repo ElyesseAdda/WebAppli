@@ -8,6 +8,7 @@ import {
   TableSortLabel,
   Typography,
 } from "@mui/material";
+import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -15,7 +16,7 @@ import {
   AlignedCell,
   CenteredTableCell,
   CenteredTextField,
-  ChantierCell,
+  DevisNumber,
   FilterCell,
   PriceTextField,
   StatusCell,
@@ -34,6 +35,7 @@ const ListChantiers = () => {
     state_chantier: "Tous",
     date_debut: "",
     chiffre_affaire: "",
+    taux_facturation: "",
   });
   const [orderBy, setOrderBy] = useState("date_debut");
   const [order, setOrder] = useState("desc");
@@ -48,11 +50,8 @@ const ListChantiers = () => {
   const fetchChantiers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get("/api/chantier/");
-      console.log(
-        "Structure des données reçues:",
-        JSON.stringify(response.data[0], null, 2)
-      );
+      const response = await axios.get("/api/chantier-relations/");
+      console.log("Données reçues:", response.data);
       setChantiers(response.data);
       setFilteredChantiers(response.data);
     } catch (error) {
@@ -100,7 +99,14 @@ const ListChantiers = () => {
       if (property === "chiffre_affaire") {
         return (
           (isAsc ? 1 : -1) *
-          (parseFloat(a[property] || 0) - parseFloat(b[property] || 0))
+          (parseFloat(a.montant_ttc || 0) - parseFloat(b.montant_ttc || 0))
+        );
+      }
+      if (property === "taux_facturation") {
+        return (
+          (isAsc ? 1 : -1) *
+          (parseFloat(a.taux_facturation || 0) -
+            parseFloat(b.taux_facturation || 0))
         );
       }
       return (
@@ -179,8 +185,8 @@ const ListChantiers = () => {
                   <StyledTextField
                     label="Taux facturation"
                     variant="standard"
-                    disabled
-                    sx={{ color: "gray" }}
+                    value={filters.taux_facturation}
+                    onChange={handleFilterChange("taux_facturation")}
                   />
                 </FilterCell>
                 <AlignedCell>
@@ -217,23 +223,31 @@ const ListChantiers = () => {
             <TableBody>
               {filteredChantiers.map((chantier) => (
                 <TableRow key={chantier.id}>
-                  <ChantierCell>
+                  <DevisNumber sx={{ fontSize: "16px", fontWeight: 700 }}>
                     <Link to={`/chantier/${chantier.id}`}>
                       {chantier.chantier_name}
                     </Link>
-                  </ChantierCell>
-                  <CenteredTableCell>
-                    {chantier.societe?.client?.name &&
-                    chantier.societe?.client?.surname
-                      ? `${chantier.societe.client.name} ${chantier.societe.client.surname}`
+                  </DevisNumber>
+                  <CenteredTableCell sx={{ textAlign: "left" }}>
+                    {chantier.societe_info
+                      ? `${chantier.societe_info.client.name} ${chantier.societe_info.client.surname}`
                       : "Non assigné"}
                   </CenteredTableCell>
                   <CenteredTableCell>
                     {new Date(chantier.date_debut).toLocaleDateString()}
                   </CenteredTableCell>
-                  <CenteredTableCell>-</CenteredTableCell>
                   <CenteredTableCell>
-                    {chantier.chiffre_affaire || 0} €
+                    {chantier.taux_facturation}%
+                  </CenteredTableCell>
+                  <CenteredTableCell style={{ fontWeight: 600 }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ color: "gray" }}>
+                        Attendu: {chantier.montant_ttc || 0} €
+                      </span>
+                      <span style={{ color: green[500] }}>
+                        Réel: {chantier.ca_reel || 0} €
+                      </span>
+                    </div>
                   </CenteredTableCell>
                   <StatusCell status={chantier.state_chantier}>
                     {chantier.state_chantier}

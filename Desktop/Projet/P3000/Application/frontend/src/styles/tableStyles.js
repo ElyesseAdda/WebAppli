@@ -5,6 +5,7 @@ import {
   TableContainer,
   TextField,
 } from "@mui/material";
+import { blue } from "@mui/material/colors";
 import { styled } from "@mui/material/styles";
 
 // Container Styles
@@ -78,11 +79,15 @@ export const PriceTextField = styled(CenteredTextField)({
 });
 
 // Body Cells
-export const DevisNumber = styled(TableCell)({
-  color: "rgba(27, 120, 188, 1)",
-  fontWeight: 700,
-  fontFamily: "Merriweather, serif",
-});
+export const DevisNumber = styled(TableCell)`
+  color: rgba(27, 120, 188, 1);
+  fontweight: 700;
+  fontfamily: "Merriweather, serif";
+  &:hover {
+    color: ${blue[700]};
+    text-decoration: underline;
+  }
+`;
 
 export const ChantierCell = styled(TableCell)({
   fontWeight: 600,
@@ -114,4 +119,9 @@ export const StyledSelect = styled(Select)({
   "& .MuiSelect-icon": {
     color: "white",
   },
+});
+
+export const ActionCell = styled(CenteredTableCell)({
+  width: "50px",
+  padding: "8px",
 });

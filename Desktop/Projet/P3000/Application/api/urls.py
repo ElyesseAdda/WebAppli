@@ -4,7 +4,7 @@ from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
-    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis# Import de la vue
+    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis,get_chantier_relations, preview_saved_devis# Import de la vue
 )
 
 router = DefaultRouter()
@@ -42,5 +42,7 @@ urlpatterns = [
     path('create-devis/', create_devis, name='create-devis'),
     path('list-devis/', list_devis, name='list-devis'),
     path('get-next-devis-number/', get_next_devis_number, name='get-next-devis-number'),
+    path('chantier-relations/', get_chantier_relations, name='chantier-relations'),
+    path('preview-saved-devis/<int:devis_id>/', preview_saved_devis, name='preview-saved-devis'),
     # ... autres routes
 ]

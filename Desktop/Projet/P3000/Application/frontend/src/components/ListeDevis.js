@@ -1,4 +1,6 @@
 import {
+  IconButton,
+  Menu,
   MenuItem,
   Paper,
   Table,
@@ -8,8 +10,10 @@ import {
   TableSortLabel,
   Typography,
 } from "@mui/material";
+import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { TfiMore } from "react-icons/tfi";
 import {
   AlignedCell,
   CenteredTableCell,
@@ -38,6 +42,8 @@ const ListeDevis = () => {
   });
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedDevis, setSelectedDevis] = useState(null);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
 
@@ -101,6 +107,41 @@ const ListeDevis = () => {
     setFilteredDevis(sorted);
   };
 
+  const handlePreviewDevis = (devisId) => {
+    const previewUrl = `/api/preview-saved-devis/${devisId}/`;
+    window.open(previewUrl, "_blank");
+  };
+
+  const handleMoreClick = (event, devis) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedDevis(devis);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+    setSelectedDevis(null);
+  };
+
+  const handleModifyDevis = () => {
+    // À implémenter
+    handleClose();
+  };
+
+  const handleConvertToInvoice = () => {
+    // À implémenter
+    handleClose();
+  };
+
+  const handleChangeStatus = () => {
+    // À implémenter
+    handleClose();
+  };
+
+  const handleDeleteDevis = () => {
+    // À implémenter
+    handleClose();
+  };
+
   return (
     <div
       style={{
@@ -131,6 +172,7 @@ const ListeDevis = () => {
         <StyledTableContainer component={Paper}>
           <Table>
             <TableHead>
+              <TableRow></TableRow>
               <TableRow>
                 <FilterCell>
                   <StyledTextField
@@ -203,25 +245,77 @@ const ListeDevis = () => {
                     ))}
                   </StyledSelect>
                 </FilterCell>
+                <FilterCell />
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredDevis.map((devis) => (
-                <TableRow key={devis.id}>
-                  <DevisNumber>{devis.numero}</DevisNumber>
-                  <ChantierCell>{devis.chantier_name}</ChantierCell>
-                  <CenteredTableCell>{devis.client_name}</CenteredTableCell>
-                  <CenteredTableCell>
-                    {new Date(devis.date_creation).toLocaleDateString()}
-                  </CenteredTableCell>
-                  <CenteredTableCell>{devis.price_ttc} €</CenteredTableCell>
-                  <StatusCell status={devis.status}>{devis.status}</StatusCell>
-                </TableRow>
+                <React.Fragment key={devis.id}>
+                  <TableRow>
+                    <DevisNumber
+                      onClick={() => handlePreviewDevis(devis.id)}
+                      style={{ cursor: "pointer", fontWeight: 700 }}
+                    >
+                      {devis.numero}
+                    </DevisNumber>
+                    <ChantierCell>{devis.chantier_name}</ChantierCell>
+                    <CenteredTableCell>{devis.client_name}</CenteredTableCell>
+                    <CenteredTableCell>
+                      {new Date(devis.date_creation).toLocaleDateString()}
+                    </CenteredTableCell>
+                    <CenteredTableCell
+                      style={{ fontWeight: 600, color: green[500] }}
+                    >
+                      {devis.price_ttc} €
+                    </CenteredTableCell>
+                    <StatusCell status={devis.status}>
+                      {devis.status}
+                    </StatusCell>
+                    <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
+                      <IconButton
+                        onClick={(e) => handleMoreClick(e, devis)}
+                        sx={{
+                          width: 35,
+                          height: 35,
+                          backgroundColor: "rgba(0, 0, 0, 0.04)",
+                          "&:hover": {
+                            backgroundColor: "rgba(0, 0, 0, 0.08)",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                          },
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                          borderRadius: "50%",
+                        }}
+                      >
+                        <TfiMore size={16} color="#666" />
+                      </IconButton>
+                    </CenteredTableCell>
+                  </TableRow>
+                </React.Fragment>
               ))}
             </TableBody>
           </Table>
         </StyledTableContainer>
       </StyledBox>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleClose}
+        PaperProps={{
+          elevation: 3,
+          sx: {
+            borderRadius: 2,
+            minWidth: 150,
+          },
+        }}
+      >
+        <MenuItem onClick={handleModifyDevis}>Modifier le devis</MenuItem>
+        <MenuItem onClick={handleConvertToInvoice}>Éditer en facture</MenuItem>
+        <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
+        <MenuItem onClick={handleDeleteDevis} sx={{ color: "error.main" }}>
+          Supprimer
+        </MenuItem>
+      </Menu>
     </div>
   );
 };

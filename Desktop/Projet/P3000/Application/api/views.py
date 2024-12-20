@@ -24,6 +24,7 @@ from calendar import day_name
 import locale
 import traceback
 from django.views.decorators.csrf import ensure_csrf_cookie
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -1127,7 +1128,7 @@ def create_chantier_from_devis(request):
 def create_devis(request):
     try:
         with transaction.atomic():
-            print("Données reçues:", request.data)  # Log des données re��ues
+            print("Données reçues:", request.data)  # Log des données reçues
             
             devis_data = {
                 'numero': request.data['numero'],
@@ -1218,56 +1219,203 @@ def get_next_devis_number(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+# @api_view(['GET'])
+# def list_chantiers(request):
+#     chantiers = Chantier.objects.select_related(
+#         'societe',
+#         'societe__client_name'
+#     ).all()
+    
+#     data = []
+#     for chantier in chantiers:
+#         # Récupérer les informations de la société
+#         societe = None
+#         client = None
+#         if chantier.societe_id:
+#             try:
+#                 societe = Societe.objects.select_related('client_name').get(id=chantier.societe_id)
+#                 if societe.client_name:
+#                     client = {
+#                         'id': societe.client_name.id,
+#                         'name': societe.client_name.name,
+#                         'surname': societe.client_name.surname,
+#                         'client_mail': societe.client_name.client_mail,
+#                         'phone_Number': societe.client_name.phone_Number
+#                     }
+#             except Societe.DoesNotExist:
+#                 print(f"Société {chantier.societe_id} non trouvée pour le chantier {chantier.id}")
+
+#         data.append({
+#             'id': chantier.id,
+#             'chantier_name': chantier.chantier_name,
+#             'date_debut': chantier.date_debut,
+#             'date_fin': chantier.date_fin,
+#             'montant_ttc': chantier.montant_ttc,
+#             'montant_ht': chantier.montant_ht,
+#             'state_chantier': chantier.state_chantier,
+#             'ville': chantier.ville,
+#             'rue': chantier.rue,
+#             'code_postal': chantier.code_postal,
+#             'cout_materiel': chantier.cout_materiel,
+#             'cout_main_oeuvre': chantier.cout_main_oeuvre,
+#             'cout_sous_traitance': chantier.cout_sous_traitance,
+#             'description': chantier.description,
+#             'societe': {
+#                 'id': societe.id if societe else None,
+#                 'nom_societe': societe.nom_societe if societe else None,
+#                 'client': client
+#             } if societe else None
+#         })
+#     return Response(data)
+
 @api_view(['GET'])
-def list_chantiers(request):
-    chantiers = Chantier.objects.select_related(
-        'societe',
-        'societe__client_name'
-    ).all()
+def get_chantier_relations(request):
+    chantiers = Chantier.objects.all()
+    societes = Societe.objects.select_related('client_name').all()
+    
+    # Créer un dictionnaire de correspondance société -> client
+    societe_client_map = {
+        societe.id: {
+            'nom_societe': societe.nom_societe,
+            'client': {
+                'name': societe.client_name.name,
+                'surname': societe.client_name.surname,
+                'email': societe.client_name.client_mail,
+                'phone': societe.client_name.phone_Number
+            }
+        } for societe in societes
+    }
     
     data = []
     for chantier in chantiers:
-        # Récupérer les informations de la société
-        societe = None
-        client = None
-        if chantier.societe_id:
-            try:
-                societe = Societe.objects.select_related('client_name').get(id=chantier.societe_id)
-                if societe.client_name:
-                    client = {
-                        'id': societe.client_name.id,
-                        'name': societe.client_name.name,
-                        'surname': societe.client_name.surname,
-                        'client_mail': societe.client_name.client_mail,
-                        'phone_Number': societe.client_name.phone_Number
-                    }
-            except Societe.DoesNotExist:
-                print(f"Société {chantier.societe_id} non trouvée pour le chantier {chantier.id}")
-
+        # Convertir le montant_ttc en Decimal pour le calcul
+        montant_ttc = Decimal(str(chantier.montant_ttc)) if chantier.montant_ttc else Decimal('0')
+        
+        # Calculer le CA réel (somme des devis validés)
+        devis_valides = Devis.objects.filter(
+            chantier=chantier,
+            status='En attente'
+        )
+        ca_reel = sum(devis.price_ttc for devis in devis_valides)
+        
+        # Calculer le taux de facturation avec les valeurs du même type
+        taux_facturation = float((ca_reel / montant_ttc * 100) if montant_ttc else 0)
+        
+        societe_info = societe_client_map.get(chantier.societe_id) if chantier.societe_id else None
+        
         data.append({
             'id': chantier.id,
             'chantier_name': chantier.chantier_name,
             'date_debut': chantier.date_debut,
             'date_fin': chantier.date_fin,
             'montant_ttc': chantier.montant_ttc,
-            'montant_ht': chantier.montant_ht,
+            'ca_reel': ca_reel,
+            'taux_facturation': round(taux_facturation, 2),
             'state_chantier': chantier.state_chantier,
             'ville': chantier.ville,
             'rue': chantier.rue,
             'code_postal': chantier.code_postal,
-            'cout_materiel': chantier.cout_materiel,
-            'cout_main_oeuvre': chantier.cout_main_oeuvre,
-            'cout_sous_traitance': chantier.cout_sous_traitance,
-            'description': chantier.description,
-            'societe': {
-                'id': societe.id if societe else None,
-                'nom_societe': societe.nom_societe if societe else None,
-                'client': client
-            } if societe else None
+            'societe_info': societe_info
         })
+    
     return Response(data)
 
-
+@api_view(['GET'])
+def preview_saved_devis(request, devis_id):
+    try:
+        devis = Devis.objects.select_related(
+            'chantier',
+            'chantier__societe',
+            'chantier__societe__client_name'
+        ).get(id=devis_id)
+        
+        # Récupérer les données du devis
+        chantier = devis.chantier
+        societe = chantier.societe
+        client = societe.client_name
+        
+        # Récupérer les lignes du devis
+        devis_lignes = DevisLigne.objects.filter(devis=devis).values(
+            'ligne_detail',
+            'quantite',
+            'prix_unitaire'
+        )
+        
+        # Organiser les lignes par parties et sous-parties
+        parties_data = []
+        lignes_details = LigneDetail.objects.select_related(
+            'sous_partie__partie'
+        ).filter(id__in=[ligne['ligne_detail'] for ligne in devis_lignes])
+        
+        # Créer un dictionnaire pour les lignes du devis
+        lignes_map = {
+            ligne['ligne_detail']: {
+                'quantite': ligne['quantite'],
+                'prix_unitaire': ligne['prix_unitaire'],
+                'total_ht': float(ligne['quantite']) * float(ligne['prix_unitaire'])
+            } for ligne in devis_lignes
+        }
+        
+        # Organiser les parties et sous-parties
+        parties = {}
+        for ligne in lignes_details:
+            partie = ligne.sous_partie.partie
+            sous_partie = ligne.sous_partie
+            
+            if partie.id not in parties:
+                parties[partie.id] = {
+                    'titre': partie.titre,
+                    'sous_parties': {}
+                }
+            
+            if sous_partie.id not in parties[partie.id]['sous_parties']:
+                parties[partie.id]['sous_parties'][sous_partie.id] = {
+                    'description': sous_partie.description,
+                    'lignes_details': []
+                }
+            
+            ligne_data = lignes_map.get(ligne.id)
+            if ligne_data:
+                parties[partie.id]['sous_parties'][sous_partie.id]['lignes_details'].append({
+                    'description': ligne.description,
+                    'unite': ligne.unite,
+                    'quantity': ligne_data['quantite'],
+                    'custom_price': ligne_data['prix_unitaire'],
+                    'total': ligne_data['total_ht']
+                })
+        
+        # Convertir la structure en liste pour le template
+        for partie_id, partie_data in parties.items():
+            sous_parties_data = []
+            for sp_id, sp_data in partie_data['sous_parties'].items():
+                if sp_data['lignes_details']:
+                    sous_parties_data.append({
+                        'description': sp_data['description'],
+                        'lignes_details': sp_data['lignes_details'],
+                        'total_sous_partie': sum(l['total'] for l in sp_data['lignes_details'])
+                    })
+            
+            if sous_parties_data:
+                parties_data.append({
+                    'titre': partie_data['titre'],
+                    'sous_parties': sous_parties_data,
+                    'total_partie': sum(sp['total_sous_partie'] for sp in sous_parties_data)
+                })
+        
+        context = {
+            'chantier': chantier,
+            'societe': societe,
+            'client': client,
+            'parties': parties_data,
+            'total_ht': float(devis.price_ht),
+            'tva': float(devis.price_ttc) - float(devis.price_ht),
+            'montant_ttc': float(devis.price_ttc)
+        }
+        
+        return render(request, 'preview_devis.html', context)
+        
+    except Devis.DoesNotExist:
+        return JsonResponse({'error': 'Devis non trouvé'}, status=404)
 
 
 
