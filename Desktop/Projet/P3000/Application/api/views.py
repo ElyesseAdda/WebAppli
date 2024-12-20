@@ -1294,7 +1294,7 @@ def get_chantier_relations(request):
         # Calculer le CA réel (somme des devis validés)
         devis_valides = Devis.objects.filter(
             chantier=chantier,
-            status='En attente'
+            status='Validé'
         )
         ca_reel = sum(devis.price_ttc for devis in devis_valides)
         
@@ -1416,6 +1416,38 @@ def preview_saved_devis(request, devis_id):
         
     except Devis.DoesNotExist:
         return JsonResponse({'error': 'Devis non trouvé'}, status=404)
+
+@api_view(['PUT'])
+def update_devis_status(request, devis_id):
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        new_status = request.data.get('status')
+        
+        if new_status not in ["En attente", "Validé", "Refusé"]:
+            return Response(
+                {"error": "Statut invalide"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        devis.status = new_status
+        devis.save()
+        
+        return Response({
+            "id": devis.id,
+            "status": devis.status,
+            "message": "Statut mis à jour avec succès"
+        })
+        
+    except Devis.DoesNotExist:
+        return Response(
+            {"error": "Devis non trouvé"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {"error": str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 

@@ -28,6 +28,7 @@ import {
   StyledTableContainer,
   StyledTextField,
 } from "../styles/tableStyles";
+import StatusChangeModal from "./StatusChangeModal";
 
 const ListeDevis = () => {
   const [devis, setDevis] = useState([]);
@@ -44,6 +45,8 @@ const ListeDevis = () => {
   const [order, setOrder] = useState("desc");
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedDevis, setSelectedDevis] = useState(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [devisToUpdate, setDevisToUpdate] = useState(null);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
 
@@ -133,8 +136,37 @@ const ListeDevis = () => {
   };
 
   const handleChangeStatus = () => {
-    // À implémenter
+    setDevisToUpdate(selectedDevis);
+    setShowStatusModal(true);
     handleClose();
+  };
+
+  const handleStatusUpdate = async (newStatus) => {
+    try {
+      if (!devisToUpdate) return;
+
+      await axios.put(`/api/list-devis/${devisToUpdate.id}/update_status/`, {
+        status: newStatus,
+      });
+
+      // Mettre à jour l'état local après succès
+      setDevis(
+        devis.map((d) =>
+          d.id === devisToUpdate.id ? { ...d, status: newStatus } : d
+        )
+      );
+      setFilteredDevis(
+        filteredDevis.map((d) =>
+          d.id === devisToUpdate.id ? { ...d, status: newStatus } : d
+        )
+      );
+
+      setShowStatusModal(false);
+      setDevisToUpdate(null);
+    } catch (error) {
+      console.error("Erreur lors de la modification du statut:", error);
+      alert("Erreur lors de la modification du statut");
+    }
   };
 
   const handleDeleteDevis = () => {
@@ -316,6 +348,16 @@ const ListeDevis = () => {
           Supprimer
         </MenuItem>
       </Menu>
+
+      <StatusChangeModal
+        open={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setDevisToUpdate(null);
+        }}
+        currentStatus={devisToUpdate?.status || "En attente"}
+        onStatusChange={handleStatusUpdate}
+      />
     </div>
   );
 };
