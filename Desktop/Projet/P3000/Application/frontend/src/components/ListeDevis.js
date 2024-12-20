@@ -33,7 +33,7 @@ const ListeDevis = () => {
     chantier_name: "",
     client_name: "",
     date_creation: "",
-    price_ht: "",
+    price_ttc: "",
     status: "Tous",
   });
   const [orderBy, setOrderBy] = useState("date");
@@ -71,7 +71,7 @@ const ListeDevis = () => {
           return devisDate.includes(newFilters[key]);
         }
 
-        if (key === "price_ht" && newFilters[key]) {
+        if (key === "price_ttc" && newFilters[key]) {
           const devisPrice = devis[key].toString();
           return devisPrice.includes(newFilters[key]);
         }
@@ -90,7 +90,7 @@ const ListeDevis = () => {
     setOrderBy(property);
 
     const sorted = [...filteredDevis].sort((a, b) => {
-      if (property === "price_ht") {
+      if (property === "price_ttc") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
         );
@@ -102,112 +102,127 @@ const ListeDevis = () => {
   };
 
   return (
-    <StyledBox>
-      <Typography
-        variant="h5"
-        gutterBottom
-        sx={{
-          fontFamily: "Merriweather, serif",
-          position: "relative",
-          top: "0px",
-          right: "20px",
-        }}
-      >
-        Liste des Devis
-      </Typography>
+    <div
+      style={{
+        backgroundColor: "#ffffff",
+        width: "100%",
+        maxWidth: "1400px",
+        height: "auto",
+        padding: "20px",
+        paddingBottom: "70px",
+        borderRadius: "10px",
+        boxShadow: "6px 7px 20px -6px rgba(33, 33, 33, 1)",
+        margin: "20px auto",
+      }}
+    >
+      <StyledBox>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{
+            fontFamily: "Merriweather, serif",
+            position: "relative",
+            marginBottom: "20px",
+          }}
+        >
+          Liste des Devis
+        </Typography>
 
-      <StyledTableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <FilterCell>
-                <StyledTextField
-                  label="Numéro"
-                  variant="standard"
-                  value={filters.numero}
-                  onChange={handleFilterChange("numero")}
-                />
-              </FilterCell>
-              <FilterCell>
-                <StyledTextField
-                  label="Chantier"
-                  variant="standard"
-                  value={filters.chantier_name}
-                  onChange={handleFilterChange("chantier_name")}
-                />
-              </FilterCell>
-              <FilterCell>
-                <StyledTextField
-                  label="Client"
-                  variant="standard"
-                  value={filters.client_name}
-                  onChange={handleFilterChange("client_name")}
-                />
-              </FilterCell>
-              <AlignedCell>
-                <TableSortLabel
-                  active={orderBy === "date_creation"}
-                  direction={orderBy === "date_creation" ? order : "asc"}
-                  onClick={() => handleSort("date_creation")}
-                >
-                  <CenteredTextField
+        <StyledTableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <FilterCell>
+                  <StyledTextField
+                    label="Numéro"
                     variant="standard"
-                    type="date"
-                    value={filters.date_creation}
-                    onChange={handleFilterChange("date_creation")}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ pt: "15px" }}
+                    value={filters.numero}
+                    onChange={handleFilterChange("numero")}
                   />
-                </TableSortLabel>
-              </AlignedCell>
-              <AlignedCell>
-                <TableSortLabel
-                  active={orderBy === "price_ht"}
-                  direction={orderBy === "price_ht" ? order : "asc"}
-                  onClick={() => handleSort("price_ht")}
-                >
-                  <PriceTextField
-                    label="Prix HT"
+                </FilterCell>
+                <FilterCell>
+                  <StyledTextField
+                    label="Chantier"
                     variant="standard"
-                    value={filters.price_ht}
-                    onChange={handleFilterChange("price_ht")}
+                    value={filters.chantier_name}
+                    onChange={handleFilterChange("chantier_name")}
                   />
-                </TableSortLabel>
-              </AlignedCell>
-              <FilterCell>
-                <StyledSelect
-                  value={filters.status}
-                  onChange={handleFilterChange("status")}
-                  variant="standard"
-                  sx={{ pt: "10px" }}
-                >
-                  <MenuItem value="Tous">Tous</MenuItem>
-                  {statusOptions.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </StyledSelect>
-              </FilterCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredDevis.map((devis) => (
-              <TableRow key={devis.id}>
-                <DevisNumber>{devis.numero}</DevisNumber>
-                <ChantierCell>{devis.chantier_name}</ChantierCell>
-                <CenteredTableCell>{devis.client_name}</CenteredTableCell>
-                <CenteredTableCell>
-                  {new Date(devis.date_creation).toLocaleDateString()}
-                </CenteredTableCell>
-                <CenteredTableCell>{devis.price_ht} €</CenteredTableCell>
-                <StatusCell status={devis.status}>{devis.status}</StatusCell>
+                </FilterCell>
+                <FilterCell>
+                  <StyledTextField
+                    label="Client"
+                    variant="standard"
+                    value={filters.client_name}
+                    onChange={handleFilterChange("client_name")}
+                  />
+                </FilterCell>
+                <AlignedCell>
+                  <TableSortLabel
+                    active={orderBy === "date_creation"}
+                    direction={orderBy === "date_creation" ? order : "asc"}
+                    onClick={() => handleSort("date_creation")}
+                    sx={{ textAlign: "center" }}
+                  >
+                    <CenteredTextField
+                      variant="standard"
+                      type="date"
+                      value={filters.date_creation}
+                      onChange={handleFilterChange("date_creation")}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ pt: "15px" }}
+                    />
+                  </TableSortLabel>
+                </AlignedCell>
+                <AlignedCell>
+                  <TableSortLabel
+                    active={orderBy === "price_ttc"}
+                    direction={orderBy === "price_ttc" ? order : "asc"}
+                    onClick={() => handleSort("price_ttc")}
+                    sx={{ textAlign: "center" }}
+                  >
+                    <PriceTextField
+                      label="Prix TTC"
+                      variant="standard"
+                      value={filters.price_ttc}
+                      onChange={handleFilterChange("price_ttc")}
+                    />
+                  </TableSortLabel>
+                </AlignedCell>
+                <FilterCell>
+                  <StyledSelect
+                    value={filters.status}
+                    onChange={handleFilterChange("status")}
+                    variant="standard"
+                    sx={{ pt: "10px" }}
+                  >
+                    <MenuItem value="Tous">Tous</MenuItem>
+                    {statusOptions.map((status) => (
+                      <MenuItem key={status} value={status}>
+                        {status}
+                      </MenuItem>
+                    ))}
+                  </StyledSelect>
+                </FilterCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </StyledTableContainer>
-    </StyledBox>
+            </TableHead>
+            <TableBody>
+              {filteredDevis.map((devis) => (
+                <TableRow key={devis.id}>
+                  <DevisNumber>{devis.numero}</DevisNumber>
+                  <ChantierCell>{devis.chantier_name}</ChantierCell>
+                  <CenteredTableCell>{devis.client_name}</CenteredTableCell>
+                  <CenteredTableCell>
+                    {new Date(devis.date_creation).toLocaleDateString()}
+                  </CenteredTableCell>
+                  <CenteredTableCell>{devis.price_ttc} €</CenteredTableCell>
+                  <StatusCell status={devis.status}>{devis.status}</StatusCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </StyledTableContainer>
+      </StyledBox>
+    </div>
   );
 };
 

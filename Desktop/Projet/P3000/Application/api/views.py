@@ -333,7 +333,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         # Récupérer les événements pour l'agent et le mois
         events = Event.objects.filter(agent=agent, start_date__year=year, start_date__month=month)
 
-        # Accumulateur pour les heures modifi��es
+        # Accumulateur pour les heures modifiées
         total_hours_modified = sum(event.hours_modified for event in events if event.status == 'M')
 
         # Appliquer les règles d'impact des événements
@@ -1127,7 +1127,7 @@ def create_chantier_from_devis(request):
 def create_devis(request):
     try:
         with transaction.atomic():
-            print("Données reçues:", request.data)  # Log des données reçues
+            print("Données reçues:", request.data)  # Log des données re��ues
             
             devis_data = {
                 'numero': request.data['numero'],
@@ -1217,6 +1217,55 @@ def get_next_devis_number(request):
         return Response({'next_number': next_number})
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+def list_chantiers(request):
+    chantiers = Chantier.objects.select_related(
+        'societe',
+        'societe__client_name'
+    ).all()
+    
+    data = []
+    for chantier in chantiers:
+        # Récupérer les informations de la société
+        societe = None
+        client = None
+        if chantier.societe_id:
+            try:
+                societe = Societe.objects.select_related('client_name').get(id=chantier.societe_id)
+                if societe.client_name:
+                    client = {
+                        'id': societe.client_name.id,
+                        'name': societe.client_name.name,
+                        'surname': societe.client_name.surname,
+                        'client_mail': societe.client_name.client_mail,
+                        'phone_Number': societe.client_name.phone_Number
+                    }
+            except Societe.DoesNotExist:
+                print(f"Société {chantier.societe_id} non trouvée pour le chantier {chantier.id}")
+
+        data.append({
+            'id': chantier.id,
+            'chantier_name': chantier.chantier_name,
+            'date_debut': chantier.date_debut,
+            'date_fin': chantier.date_fin,
+            'montant_ttc': chantier.montant_ttc,
+            'montant_ht': chantier.montant_ht,
+            'state_chantier': chantier.state_chantier,
+            'ville': chantier.ville,
+            'rue': chantier.rue,
+            'code_postal': chantier.code_postal,
+            'cout_materiel': chantier.cout_materiel,
+            'cout_main_oeuvre': chantier.cout_main_oeuvre,
+            'cout_sous_traitance': chantier.cout_sous_traitance,
+            'description': chantier.description,
+            'societe': {
+                'id': societe.id if societe else None,
+                'nom_societe': societe.nom_societe if societe else None,
+                'client': client
+            } if societe else None
+        })
+    return Response(data)
 
 
 

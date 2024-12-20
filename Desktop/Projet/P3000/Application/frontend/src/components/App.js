@@ -40,10 +40,10 @@ function App() {
           <Routes>
             <Route index element={<Dashboard />} />
             <Route path="/chantier/:id" element={<ChantierInfo />} />
-            <Route path="/ListChantier" element={<ListChantier />} />
+            <Route path="/ListeChantier" element={<ListChantier />} />
             <Route path="/CreationDevis" element={<CreationDevis />} />
-            <Route path="/ListeDevis" element={<ListeDevis />} />
             <Route path="/ListePartie" element={<ListePartiesSousParties />} />
+            <Route path="/ListeDevis" element={<ListeDevis />} />
             <Route path="/CreationPartie" element={<CreationPartie />} />
             <Route path="/Stock" element={<StockForm />} />
             <Route path="/Agent" element={<CalendrierAgentContainer />} />
