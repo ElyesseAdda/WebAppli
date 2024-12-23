@@ -5,12 +5,24 @@
     <title>Prévisualisation du Devis</title>
     <style>
       /* Style général */
+
       body {
         font-family: Arial, Helvetica, sans-serif;
-        font-size: 12px;
-        padding: 60px;
-        max-width: 800px;
-        padding-top: 0px;
+        font-size: 16px;
+        margin-left: 50px;
+       
+        {% comment %} max-width: 800px;  {% endcomment %}
+        {% comment %} padding: 0px; {% endcomment %}
+        width: 210mm;     /* Largeur A4 */
+        height: 297mm;    /* Hauteur A4 */
+        margin-right: 90px;
+        margin-top: 0px;
+        overflow: hidden;
+      }
+      @page {
+        size: A4;
+        margin: 10mm;
+        scale: 70%;
       }
       .bold {
         font-weight: 700;
@@ -18,42 +30,18 @@
 
       /* Style du tableau */
       table {
-        width: 100%;
-        boder: 2px solid black;
+        {% comment %} width: 100%; {% endcomment %}
+        
       }
       th {
-        border: 2px solid black; /* Bordure double */
-        padding: 8px;
-        text-align: center; /* Alignement du texte au centre pour tout */
-        background-color: transparent; /* Pas de fond pour l'en-tête */
-        font-weight: bold;
+        
       }
 
       /* Colonnes Désignation et Total */
-      .designation {
-        text-align: center; /* Alignement à gauche pour la désignation */
-        width: 500px;
-        max-width: 500px;
-      }
-      .ligne-details {
-        text-align: left; /* Alignement à gauche pour la désignation */
-        width: 400px;
-        max-width: 500px;
-      }
-      .total {
-        text-align: right;
-        font-weight: bold;
-      }
+      
 
       /* Style d'en-tête et de pied de page */
-      .header {
-        margin-bottom: 20px;
-        text-align: center;
-      }
-      .header h1 {
-        font-size: 20px;
-        text-decoration: underline;
-      }
+      
 
       /* Infos client et chantier */
       .info-section {
@@ -69,44 +57,168 @@
       }
 
       /* Style pour les sections en bleu */
-      .blue {
+      .partie {
         background-color: rgba(27, 120, 188, 1);
         color: white;
         font-weight: bold;
-        padding: 5px;
+        padding: 0px;
+        padding-bottom: 10px;
         text-align: left;
+        background-clip: content-box;
+        font-size: 0.8rem;
       }
-      .blue-light {
+      .sous-partie {
         background-color: rgb(157, 197, 226);
         color: black;
         padding: 5px;
         text-align: left;
         font-weight: 600;
+        font-size: 0.8rem;
+      }
+      .ligne-details {
+        text-align: left;
+        width: 502px;
+        font-size: 0.8rem;
+        text-indent: 22px;
+      }
+      .designation {
+        text-align: center; /* Alignement à gauche pour la désignation */
+        width: 480px;
+        font-size: 0.8rem;
+        border: 2px solid black;
+      }
+      
+      .total {
+        text-align: right;
+        font-weight: bold;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
       }
       .unite {
-        width: 45px;
+        width: 30px;
         text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .unitetableau {
+        
+        text-align: center;
+        font-size: 12px;
+        margin-right: 2px;
+        width: 22px;
+        font-size: 0.8rem;
+        
       }
       .quantite {
-        width: 50px;
+        width: 78px;
         text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .quantitetableau {
+        
+        text-align: center;
+        width: 87px;
+        font-size: 0.8rem;
+        
       }
       .prix {
-        width: 70px;
+        width: 58px;
         text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .prixtableau {
+       
+        text-align: center;
+        font-size: 0.8rem;
+        width: 65px;
+        
       }
       .totalHt {
-        width: 60px;
+        width: 108px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .totalHttableau {
+        
         text-align: right;
+        width: 110px;
+        font-size: 0.8rem;
+      }
+      .bordertitre {
+        border: solid 2px black;
+        margin-bottom: 10px;
       }
       .border {
         border: solid 2px black;
+        padding: 2px;
       }
-      .header,
+      {% comment %} .header,
       .footer {
         text-align: center;
         margin-bottom: 10px;
+      } {% endcomment %}
+      .ghost-container {
+        position: relative;
+        margin: 0;
+        width: 100%;
       }
+
+      .ghost-grid {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: grid;
+        grid-template-columns: 480px 27px 80px 60px 103px;;
+        gap: 6px;
+        pointer-events: none;
+        height: calc(100% - 4px);
+      }
+
+      .ghost-cell {
+        border: 2px solid black;
+        margin: 0px;
+        
+        background: transparent;
+        height: 100%;
+      }
+
+      .ghost-cell.text {
+        grid-column: 1;
+        width: 481px;
+        
+       
+      }
+
+      .ghost-cell.unite {
+        grid-column: 2;
+        width: 27px;
+        
+      }
+
+      .ghost-cell.quantite {
+        grid-column: 3;
+        width: 87px;
+        
+      }
+
+      .ghost-cell.prix {
+        grid-column: 4;
+        width: 60px;
+        
+      }
+
+      .ghost-cell.total {
+        grid-column: 5;
+        width: 110px;
+        
+      }
+
 
       .client-container {
         display: grid;
@@ -115,16 +227,46 @@
         grid-column-gap: 150px;
         grid-row-gap: 0px;
         margin-bottom: -30px;
+          h3 {
+            text-decoration: underline 2px black;
+            text-underline-offset: 2px;
+            font-size: 16px;
+            font-weight: 700;
+            
+          }
+          h4 {
+            font-size: 16px;
+            font-weight: 800;
+            margin-bottom: 6px;
+          }
+          p {
+            font-size: 16px;
+            font-weight: 500;
+            margin: 2px;
+            line-height: 1.2;
+          }
       }
-
+      
       .client-info {
-        line-height: 7px;
-        padding-left: 20px;
+        line-height: 8px;
+      
         grid-area: 1 / 1 / 2 / 2;
+        h3 {
+          margin-bottom: 0px;
+        }
+        h4 {
+          margin-top: 12px;
+        }
       }
       .contact-info {
         line-height: 7px;
         grid-area: 1 / 2 / 2 / 3;
+        h3 {
+          margin-bottom: 8px;
+        }
+        h4 {
+          margin-top: 14px;
+        }
       }
 
       .client-info,
@@ -132,26 +274,37 @@
         margin-bottom: 10px;
       }
       .chantier-info {
-        line-height: 7px;
+        line-height: 6px;
         h2 {
-          font-weight: 800;
-          font-size: 12px;
+          font-weight: 700;
+          font-size: 16px;
+          margin-bottom: 15px;
+          text-decoration: underline 2px black;
+          text-underline-offset: 2px;
+          
         }
         h3 {
           margin-top: 0px;
           margin-bottom: 0px;
+          font-size: 16px;
+          font-weight: 700;
+
         }
         p {
-          font-style: italic;
+          
+          font-size: 16px;
+          font-weight: 500;
         }
       }
 
       .date {
-        text-align: right;
-        margin-top: 20px;
+        font-size: 14px;
+        text-align: left;
+        margin-top: 30px;
+        font-weight: 500;
       }
       .p3000-container {
-        padding-bottom: 50px;
+        padding-bottom: 20px;
         display: grid;
         grid-template-rows: 1fr;
         grid-column-gap: 0px;
@@ -159,43 +312,43 @@
       }
       .logo-container {
         grid-area: 1 / 1 / 2 / 2;
-        width: 200px;
+        width: 300px;
       }
       .logo {
-        padding-top: 30px;
-        padding-left: 20px;
-        width: 200px;
-        height: 140px;
+        
+        
+        width: 250px;
+        height: 160px;
       }
       .P3000-info {
-        padding-top: 20px;
+        
         grid-area: 1 / 2 / 2 / 3;
         color: rgba(27, 120, 188, 1);
         text-align: right;
-        font-weight: 500;
+        font-weight: 600;
 
         p {
-          font-size: 12px;
+          font-size: 18px;
           font-style: italic;
-          line-height: 12px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
+          line-height: 16px;
+          font-weight: 500;
+          
         }
 
         h2 {
           letter-spacing: -1px;
           text-decoration: none;
           font-style: normal;
-          font-size: 25px;
+          font-size: 26px;
           font-weight: 700;
-          margin-bottom: 0px;
+          margin: 0px;
         }
       }
       .header {
-        padding: 0px;
+        padding: 1px;
         border: solid 2px black;
         h1 {
-          font-size: 18px;
+          font-size: 20px;
           margin: 1px;
           border: solid 2px black;
           text-decoration: none;
@@ -209,16 +362,68 @@
       h2 {
         text-decoration: underline 2px black;
       }
+
+      
+      .devis-grid {
+        position: relative;
+        z-index: 1;
+      }
+
+      .recap-table {
+        width: 100%;
+        
+        margin-top: 20px;
+        border: 2px solid black;
+      }
+
+      .recap-table th {
+        
+        color: black;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .recap-table td {
+        border: 2px solid black;
+        font-size: 0.8rem;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+
+      .recap-table tr {
+        margin-bottom: 10px;
+      }
+
+      .recap-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+
+      .montant-row {
+        background-color: rgba(27, 120, 188, 1);
+        color: white;
+      }
+
+      .label {
+        text-align: left;
+      }
+
+      .montant {
+        text-align: right;
+        min-width: 100px;
+      }
+
+      
     </style>
   </head>
   <body>
     <div class="p3000-container">
       <div class="logo-container">
-        <img
-          class="logo"
-          src="/static/frontend/src/img/logo.png"
-          alt="Logo Peinture 3000"
-        />
+        <img class="logo" src="/static/frontend/src/img/logo.png" alt="" />
       </div>
       <div class="P3000-info">
         <h2>SARL PEINTURE 3000</h2>
@@ -226,25 +431,25 @@
         <p>13014 - Marseille</p>
         <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
         <p>N°Siren: 352 875 317 RCS Marseille</p>
-        <p>Mail: peinture3000@ymail.com</p>
+        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
       </div>
     </div>
 
     <div class="client-container">
       <div class="client-info">
-        <h2>Client:</h2>
-        <h3>{{ societe.nom_societe }}</h3>
+        <h3>Client:</h3>
+        <h4>{{ societe.nom_societe }}</h4>
         <p>{{ societe.rue_societe }}</p>
         <p>{{ societe.codepostal_societe }}, {{ societe.ville_societe }}</p>
       </div>
 
       <div class="contact-info">
-        <h2>Contact:</h2>
+        <h3>Contact:</h3>
         <p>{{ client.name }} {{ client.surname }}</p>
+        <p>Mail: {{ client.client_mail }}</p>
         <p>
           Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
         </p>
-        <p>Mail: {{ client.client_mail }}</p>
       </div>
     </div>
 
@@ -263,26 +468,39 @@
       <p>{{ chantier.code_postal }} - {{ chantier.ville }}</p>
     </div>
 
-    <div class="border" style="margin-bottom: 20px">
-      <table>
-        <thead>
-          <tr>
-            <th class="designation">DESIGNATION</th>
-            <th class="unite">U</th>
-            <th class="quantite">Quantité</th>
-            <th class="prix">Prix Unitaire</th>
-            <th class="totalHt">Total HT</th>
-          </tr>
-        </thead>
-      </table>
+    
+
+      <!-- Votre tableau existant -->
+    <div class="bordertitre" style="position: relative; z-index: 1 ">
+        <table>
+          <thead>
+            <tr>
+              <th class="designation">DESIGNATION</th>
+              <th class="unite">U</th>
+              <th class="quantite">Quantité</th>
+              <th class="prix">Prix <br>Unitaire</th>
+              <th class="totalHt">Total HT</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
     </div>
 
     <div class="border" style="padding: 2px">
+      <div class="ghost-container">
+        <!-- Grille fantôme -->
+        <div class="ghost-grid"> 
+          <div class="ghost-cell text"></div>
+          <div class="ghost-cell unite"></div>
+          <div class="ghost-cell quantite"></div>
+          <div class="ghost-cell prix"></div>
+          <div class="ghost-cell total"></div> 
+    </div>
       <table>
         <tbody>
           {% for partie in parties %}
-          <tr class="blue">
-            <td colspan="5">
+          <tr class="partie">
+            <td class="partie" colspan="5">
               {{ partie.titre }}
               <span style="float: right"
                 >{{ partie.total_partie|floatformat:2 }} €</span
@@ -290,7 +508,7 @@
             </td>
           </tr>
           {% for sous_partie in partie.sous_parties %}
-          <tr class="blue-light">
+          <tr class="sous-partie">
             <td colspan="5">
               {{ sous_partie.description }}
               <span style="float: right"
@@ -301,21 +519,45 @@
           {% for ligne in sous_partie.lignes_details %}
           <tr>
             <td class="ligne-details">{{ ligne.description }}</td>
-            <td class="unite">{{ ligne.unite }}</td>
-            <td class="quantite">{{ ligne.quantity }}</td>
-            <td class="prix">{{ ligne.custom_price|floatformat:2 }} €</td>
-            <td class="totalHt">{{ ligne.total|floatformat:2 }} €</td>
+            <td class="unitetableau">{{ ligne.unite }}</td>
+            <td class="quantitetableau">{{ ligne.quantity }}</td>
+            <td class="prixtableau">{{ ligne.custom_price|floatformat:2 }} </td>
+            <td class="totalHttableau">{{ ligne.total|floatformat:2 }} €</td>
           </tr>
           {% endfor %} {% endfor %} {% endfor %}
         </tbody>
       </table>
     </div>
-
-    <!-- Totaux HT, TVA et TTC -->
-    <div class="total-summary">
-      <p>Total HT : {{ total_ht|floatformat:2 }} €</p>
-      <p>TVA (20%) : {{ tva|floatformat:2 }} €</p>
-      <p><strong>Montant TTC : {{ montant_ttc|floatformat:2 }} €</strong></p>
     </div>
+    <!-- Totaux HT, TVA et TTC -->
+    <table class="recap-table">
+      <tr>
+        <th colspan="2">RÉCAPITULATIF</th>
+      </tr>
+      <tr class="montant-row">
+        <td colspan="2">
+          <div class="recap-line">
+            <span class="label">- MONTANT GLOBAL HT</span>
+            <span class="montant">{{ total_ht|floatformat:2 }} €</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line">
+            <span class="label">- TVA AUTOLIQUIDATION</span>
+            <span class="montant">{{ tva|floatformat:2 }} €</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2">
+          <div class="recap-line">
+            <span class="label">- MONTANT TOTAL T.T.C.</span>
+            <span class="montant">{{ montant_ttc|floatformat:2 }} €</span>
+          </div>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
