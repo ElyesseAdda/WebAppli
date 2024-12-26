@@ -6,21 +6,30 @@ import {
   DialogTitle,
   TextField,
 } from "@mui/material";
-import React from "react";
+import React, { useState } from "react";
 
-const ClientInfoModal = ({ open, onClose, clientData, onSubmit, onChange }) => {
+const ClientInfoModal = ({ open, onClose, onSubmit }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    surname: "",
+    client_mail: "",
+    phone_Number: "",
+  });
+
+  const handleChange = (e) => {
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
   const handleSubmit = () => {
-    // Valider que tous les champs requis sont remplis
-    if (
-      !clientData.name ||
-      !clientData.surname ||
-      !clientData.client_mail ||
-      !clientData.phone_Number
-    ) {
-      alert("Veuillez remplir tous les champs obligatoires");
+    // Validation du numéro de téléphone
+    if (isNaN(parseInt(formData.phone_Number))) {
+      alert("Le numéro de téléphone doit être un nombre");
       return;
     }
-    onSubmit();
+    onSubmit(formData);
   };
 
   return (
@@ -32,8 +41,8 @@ const ClientInfoModal = ({ open, onClose, clientData, onSubmit, onChange }) => {
           margin="normal"
           name="name"
           label="Nom"
-          value={clientData.name}
-          onChange={(e) => onChange(e, "client")}
+          value={formData.name}
+          onChange={handleChange}
           required
         />
         <TextField
@@ -41,8 +50,8 @@ const ClientInfoModal = ({ open, onClose, clientData, onSubmit, onChange }) => {
           margin="normal"
           name="surname"
           label="Prénom"
-          value={clientData.surname}
-          onChange={(e) => onChange(e, "client")}
+          value={formData.surname}
+          onChange={handleChange}
           required
         />
         <TextField
@@ -51,8 +60,8 @@ const ClientInfoModal = ({ open, onClose, clientData, onSubmit, onChange }) => {
           name="client_mail"
           label="Email"
           type="email"
-          value={clientData.client_mail}
-          onChange={(e) => onChange(e, "client")}
+          value={formData.client_mail}
+          onChange={handleChange}
           required
         />
         <TextField
@@ -61,8 +70,8 @@ const ClientInfoModal = ({ open, onClose, clientData, onSubmit, onChange }) => {
           name="phone_Number"
           label="Téléphone"
           type="tel"
-          value={clientData.phone_Number}
-          onChange={(e) => onChange(e, "client")}
+          value={formData.phone_Number}
+          onChange={handleChange}
           required
         />
       </DialogContent>

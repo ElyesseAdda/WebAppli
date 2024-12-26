@@ -6,27 +6,25 @@ import {
   DialogTitle,
   TextField,
 } from "@mui/material";
-import React from "react";
+import React, { useState } from "react";
 
-const SocieteInfoModal = ({
-  open,
-  onClose,
-  societeData,
-  onSubmit,
-  onChange,
-}) => {
+const SocieteInfoModal = ({ open, onClose, onSubmit }) => {
+  const [formData, setFormData] = useState({
+    nom_societe: "",
+    ville_societe: "",
+    rue_societe: "",
+    codepostal_societe: "",
+  });
+
+  const handleChange = (e) => {
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
   const handleSubmit = () => {
-    // Valider que tous les champs requis sont remplis
-    if (
-      !societeData.nom_societe ||
-      !societeData.ville_societe ||
-      !societeData.rue_societe ||
-      !societeData.codepostal_societe
-    ) {
-      alert("Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-    onSubmit();
+    onSubmit(formData);
   };
 
   return (
@@ -38,8 +36,8 @@ const SocieteInfoModal = ({
           margin="normal"
           name="nom_societe"
           label="Nom de la société"
-          value={societeData.nom_societe}
-          onChange={(e) => onChange(e, "societe")}
+          value={formData.nom_societe}
+          onChange={handleChange}
           required
         />
         <TextField
@@ -47,8 +45,8 @@ const SocieteInfoModal = ({
           margin="normal"
           name="ville_societe"
           label="Ville"
-          value={societeData.ville_societe}
-          onChange={(e) => onChange(e, "societe")}
+          value={formData.ville_societe}
+          onChange={handleChange}
           required
         />
         <TextField
@@ -56,8 +54,8 @@ const SocieteInfoModal = ({
           margin="normal"
           name="rue_societe"
           label="Rue"
-          value={societeData.rue_societe}
-          onChange={(e) => onChange(e, "societe")}
+          value={formData.rue_societe}
+          onChange={handleChange}
           required
         />
         <TextField
@@ -65,8 +63,8 @@ const SocieteInfoModal = ({
           margin="normal"
           name="codepostal_societe"
           label="Code postal"
-          value={societeData.codepostal_societe}
-          onChange={(e) => onChange(e, "societe")}
+          value={formData.codepostal_societe}
+          onChange={handleChange}
           required
         />
       </DialogContent>

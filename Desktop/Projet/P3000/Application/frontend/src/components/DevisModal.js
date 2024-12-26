@@ -27,12 +27,7 @@ const DevisModal = ({
             value={devisData.numero || ""}
             onChange={handleChange}
           />
-          <TextField
-            label="Client"
-            name="client"
-            value={devisData.client || ""}
-            onChange={handleChange}
-          />
+
           <TextField
             label="Montant HT"
             name="price_ht"

@@ -45,7 +45,7 @@ const ClientSocieteForm = ({ clientData, setClientData, onSubmit }) => {
 
   return (
     <div className="client-societe-form">
-      <h3>Informations Client</h3>
+      <h3>Informations</h3>
       <div>
         <input
           type="text"
