@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Facture</title>
+    <style>
+      /* Réutiliser les styles existants */
+      {% include 'devis_styles.html' %}
+
+      /* Styles pour la zone signature/cachet */
+      .signature-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 40px;
+        margin-bottom: 20px;
+      }
+
+      .signature-box, .cachet-box {
+        border: 1px solid black;
+        height: 150px;
+        padding: 10px;
+      }
+
+      .signature-box {
+        text-align: left;
+      }
+
+      .cachet-box {
+        text-align: center;
+      }
+
+      .cachet-box img {
+        max-height: 100%;
+        max-width: 100%;
+        object-fit: contain;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Réutiliser le contenu du devis -->
+    {% include 'devis_content.html' %}
+
+    <!-- Ajouter la zone signature/cachet -->
+    <div class="signature-container">
+      <div class="signature-box">
+        <p>Signature du client suivie de la mention "bon pour accord"</p>
+      </div>
+      <div class="cachet-box">
+        <img src="/static/images/cachet.png" alt="Cachet de l'entreprise" />
+      </div>
+    </div>
+  </body>
+</html>

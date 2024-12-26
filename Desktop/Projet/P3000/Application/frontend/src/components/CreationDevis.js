@@ -39,7 +39,7 @@ const CreationDevis = () => {
   const [hiddenLignes, setHiddenLignes] = useState([]);
 
   const [chantiers, setChantiers] = useState([]);
-  const [selectedChantierId, setSelectedChantierId] = useState("");
+  const [selectedChantierId, setSelectedChantierId] = useState(null);
   const [parties, setParties] = useState([]);
   const [selectedParties, setSelectedParties] = useState([]);
   const [sousParties, setSousParties] = useState([]);
@@ -107,15 +107,17 @@ const CreationDevis = () => {
 
   // Charger les chantiers
   useEffect(() => {
-    axios
-      .get("/api/chantier/")
-      .then((response) => {
-        setChantiers(response.data);
-      })
-      .catch((error) => {
-        console.error("Erreur lors du chargement des chantiers", error);
-      });
+    fetchChantiers();
   }, []);
+
+  const fetchChantiers = async () => {
+    try {
+      const response = await axios.get("/api/chantier/");
+      setChantiers(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des chantiers:", error);
+    }
+  };
 
   // Charger les parties liées au chantier sélectionné
   useEffect(() => {
@@ -351,10 +353,27 @@ const CreationDevis = () => {
 
   const handleDevisModalSubmit = async () => {
     try {
+      let finalChantierId = selectedChantierId;
+      let newChantier = null;
+
+      // Si c'est un nouveau chantier (ID = null), créer d'abord le chantier
+      if (selectedChantierId === null && pendingChantierData.chantier) {
+        const chantierResponse = await axios.post("/api/chantier/", {
+          chantier_name: pendingChantierData.chantier.chantier_name,
+          ville: pendingChantierData.chantier.ville,
+          rue: pendingChantierData.chantier.rue,
+          code_postal: pendingChantierData.chantier.code_postal,
+          societe: selectedSocieteId,
+        });
+        finalChantierId = chantierResponse.data.id;
+        newChantier = chantierResponse.data;
+        setChantiers((prevChantiers) => [...prevChantiers, newChantier]);
+      }
+
       const devisData = {
         numero: devisModalData.numero,
-        chantier: selectedChantierId,
-        client: [selectedSocieteId], // Selon votre modèle
+        chantier: finalChantierId, // Utiliser l'ID du chantier créé ou existant
+        client: [selectedSocieteId],
         price_ht: calculateGrandTotal(),
         description: devisModalData.description,
         parties: selectedParties.map((partieId) => ({
@@ -377,19 +396,26 @@ const CreationDevis = () => {
         })),
       };
 
-      const response = await axios.post("/api/create-devis/", devisData);
+      console.log("Données envoyées:", devisData);
+      const response = await axios.post("/api/create_devis/", devisData);
+
+      if (newChantier) {
+        // Optionnel: Sélectionner le nouveau chantier créé
+        setSelectedChantierId(newChantier.id);
+      }
 
       setOpenDevisModal(false);
       resetForm();
+      fetchChantiers(); // Rafraîchir la liste des chantiers
 
-      // Générer le PDF après la sauvegarde
+      // Générer le PDF
       const queryString = encodeURIComponent(JSON.stringify(devisData));
       window.open(
         `/api/generate-pdf-from-preview/?devis=${queryString}`,
         "_blank"
       );
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
+      console.error("Erreur détaillée:", error.response?.data);
       alert("Une erreur est survenue lors de la sauvegarde du devis");
     }
   };
@@ -415,7 +441,6 @@ const CreationDevis = () => {
     setShowChantierForm(false);
     setShowClientTypeModal(false);
     setShowSelectSocieteModal(false);
-    setShowChantierForm(false);
   };
 
   const handleNewClient = () => {

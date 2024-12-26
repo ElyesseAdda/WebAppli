@@ -39,7 +39,7 @@ class Societe(models.Model):
     
 
 class Chantier(models.Model):
-    chantier_name = models.CharField(max_length=25,unique=True)
+    chantier_name = models.CharField(max_length=255,unique=True)
     societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='chantiers', null=True)
     date_debut = models.DateField(auto_now_add=True)
     date_fin = models.DateField(auto_now_add=False, null=True)
@@ -48,7 +48,7 @@ class Chantier(models.Model):
     state_chantier = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
     ville = models.CharField(max_length=100,)
     rue = models.CharField(max_length=100,)
-    code_postal = models.CharField(max_length=100,)
+    code_postal =models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
     cout_materiel = models.FloatField(null=True)
     cout_main_oeuvre = models.FloatField(null=True)
     cout_sous_traitance = models.FloatField(null=True)

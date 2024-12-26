@@ -1142,9 +1142,13 @@ def create_devis(request):
             devis = Devis.objects.create(**devis_data)
             
             # Récupérer le client via le chantier
-            chantier = Chantier.objects.get(id=request.data['chantier'])
+            chantier = get_object_or_404(Chantier, id=request.data['chantier'])
             if chantier.societe and chantier.societe.client_name:
                 devis.client.add(chantier.societe.client_name)
+            
+            # Mettre à jour le montant_ht du chantier
+            chantier.montant_ttc = devis.price_ht
+            chantier.save()
             
             # Traitement des lignes de détail
             for partie_data in request.data.get('parties', []):
@@ -1162,14 +1166,14 @@ def create_devis(request):
                 'id': devis.id,
                 'numero': devis.numero,
                 'message': 'Devis créé avec succès'
-            }, status=201)
+            }, status=status.HTTP_201_CREATED)
             
     except Exception as e:
         print(f"Erreur détaillée: {str(e)}")
         return Response({
             'error': 'Erreur lors de la création du devis',
             'details': str(e)
-        }, status=400)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def list_devis(request):
