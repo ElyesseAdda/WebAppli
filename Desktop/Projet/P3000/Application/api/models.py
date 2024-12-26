@@ -265,6 +265,8 @@ class Devis(models.Model):
     date_creation = models.DateField(auto_now_add=True)
     price_ht = models.DecimalField(max_digits=10, decimal_places=2)
     price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
+    tva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20.00)
+    nature_travaux = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(null=True, blank=True)
     status = models.CharField(
         max_length=20,
@@ -277,9 +279,10 @@ class Devis(models.Model):
     )
 
     def save(self, *args, **kwargs):
-        # Calculer automatiquement le prix TTC
+        # Calculer automatiquement le prix TTC avec le taux de TVA spécifié
         if self.price_ht:
-            self.price_ttc = float(self.price_ht) * 1.2
+            tva_multiplier = 1 + (self.tva_rate / 100)
+            self.price_ttc = float(self.price_ht) * tva_multiplier
         super().save(*args, **kwargs)
 
     def __str__(self):

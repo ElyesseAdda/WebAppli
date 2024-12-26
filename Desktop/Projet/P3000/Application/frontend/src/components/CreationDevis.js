@@ -11,6 +11,7 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
+  InputAdornment,
   MenuItem,
   Paper,
   Radio,
@@ -100,6 +101,8 @@ const CreationDevis = () => {
   const [showClientInfoModal, setShowClientInfoModal] = useState(false);
   const [showSocieteInfoModal, setShowSocieteInfoModal] = useState(false);
   const [showChantierForm, setShowChantierForm] = useState(false);
+  const [tvaRate, setTvaRate] = useState(20);
+  const [natureTravaux, setNatureTravaux] = useState("");
 
   // Charger les chantiers
   useEffect(() => {
@@ -220,6 +223,8 @@ const CreationDevis = () => {
       client: [selectedSocieteId],
       price_ht: calculateGrandTotal(),
       description: devisModalData.description,
+      tva_rate: tvaRate,
+      nature_travaux: natureTravaux,
       parties: selectedParties,
       sous_parties: selectedSousParties,
       lignes_details: filteredLignesDetails
@@ -421,6 +426,8 @@ const CreationDevis = () => {
         chantier: chantierIdToUse,
         client: [societeId],
         price_ht: calculateGrandTotal(),
+        tva_rate: tvaRate,
+        nature_travaux: natureTravaux,
         description: devisModalData.description,
         parties: selectedParties.map((partieId) => ({
           id: partieId,
@@ -1048,7 +1055,25 @@ const CreationDevis = () => {
               Créer une nouvelle partie
             </Button>
           </Box>
-
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <TextField
+              fullWidth
+              label="Nature des travaux"
+              value={natureTravaux}
+              onChange={(e) => setNatureTravaux(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              type="number"
+              label="Taux de TVA (%)"
+              value={tvaRate}
+              onChange={(e) => setTvaRate(parseFloat(e.target.value))}
+              InputProps={{
+                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+              }}
+              sx={{ mb: 2 }}
+            />
+          </Box>
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Parties

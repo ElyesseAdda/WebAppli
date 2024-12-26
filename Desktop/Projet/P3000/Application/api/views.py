@@ -191,10 +191,10 @@ def preview_devis(request):
                         'total_partie': partie_total
                     })
 
-            # Calculer la TVA (20%) et le montant TTC
-            tva = total_ht * 0.20
+            # Calculer la TVA avec le taux personnalisé      
+            tva_rate = float(devis_data.get('tva_rate', 20.0))
+            tva = total_ht * (tva_rate / 100)
             montant_ttc = total_ht + tva
-
             context = {
                 'chantier': chantier,
                 'societe': societe,
@@ -202,8 +202,13 @@ def preview_devis(request):
                 'parties': parties_data,
                 'total_ht': total_ht,
                 'tva': tva,
-                'montant_ttc': montant_ttc
+                'montant_ttc': montant_ttc,
+                'devis': {
+                    'tva_rate': tva_rate,
+                    'nature_travaux': devis_data.get('nature_travaux', '')
+                }
             }
+
 
             return render(request, 'preview_devis.html', context)
 
@@ -1128,17 +1133,16 @@ def create_chantier_from_devis(request):
 def create_devis(request):
     try:
         with transaction.atomic():
-            print("Données reçues:", request.data)  # Log des données reçues
-            
             devis_data = {
                 'numero': request.data['numero'],
                 'chantier_id': request.data['chantier'],
                 'price_ht': request.data['price_ht'],
+                'tva_rate': request.data.get('tva_rate', 20.00),  # Valeur par défaut 20%
+                'nature_travaux': request.data.get('nature_travaux', ''),
                 'description': request.data.get('description', ''),
                 'status': 'En attente'
             }
             
-            print("Données du devis:", devis_data)
             devis = Devis.objects.create(**devis_data)
             
             # Récupérer le client via le chantier
@@ -1413,7 +1417,11 @@ def preview_saved_devis(request, devis_id):
             'parties': parties_data,
             'total_ht': float(devis.price_ht),
             'tva': float(devis.price_ttc) - float(devis.price_ht),
-            'montant_ttc': float(devis.price_ttc)
+            'montant_ttc': float(devis.price_ttc),
+            'devis': {
+                'tva_rate': float(devis.tva_rate),
+                'nature_travaux': devis.nature_travaux
+            }
         }
         
         return render(request, 'preview_devis.html', context)

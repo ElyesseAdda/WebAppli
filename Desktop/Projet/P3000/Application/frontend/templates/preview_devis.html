@@ -17,7 +17,8 @@
         height: 297mm;    /* Hauteur A4 */
         margin-right: 90px;
         margin-top: 0px;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
       }
       @page {
         size: A4;
@@ -66,6 +67,7 @@
         text-align: left;
         background-clip: content-box;
         font-size: 0.8rem;
+        margin-top: 20px;
       }
       .sous-partie {
         background-color: rgb(157, 197, 226);
@@ -417,6 +419,27 @@
         min-width: 100px;
       }
 
+      .nature-travaux {
+        margin-top: 0px;
+        line-height: 6px;
+      }
+
+      .nature-travaux h5 {
+        font-weight: 700;
+        font-size: 16px;
+        margin-bottom: 15px;
+        margin-top: 6px;
+        text-decoration: underline 2px black;
+        
+      }
+
+      .nature-travaux p {
+        font-size: 14px;
+        font-weight: 700;
+        margin-top: 10px;
+
+      }
+
       
     </style>
   </head>
@@ -468,9 +491,10 @@
       <p>{{ chantier.code_postal }} - {{ chantier.ville }}</p>
     </div>
 
+    <!-- Ajout de la nature des travaux -->
     
 
-      <!-- Votre tableau existant -->
+    <!-- Votre tableau existant -->
     <div class="bordertitre" style="position: relative; z-index: 1 ">
         <table>
           <thead>
@@ -497,7 +521,17 @@
           <div class="ghost-cell total"></div> 
     </div>
       <table>
+        
         <tbody>
+          <tr>
+            <td colspan="5">
+            {% if devis.nature_travaux %}
+            <div class="nature-travaux">
+              <h5>Nature des travaux :</h5>
+            <p style="text-transform: uppercase;">{{ devis.nature_travaux }}</p></div>
+            </td>
+          </tr>
+          {% endif %}
           {% for partie in parties %}
           <tr class="partie">
             <td class="partie" colspan="5">
@@ -545,7 +579,7 @@
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label">- TVA AUTOLIQUIDATION</span>
+            <span class="label">- TVA {{ devis.tva_rate|floatformat:2 }}%</span>
             <span class="montant">{{ tva|floatformat:2 }} €</span>
           </div>
         </td>
