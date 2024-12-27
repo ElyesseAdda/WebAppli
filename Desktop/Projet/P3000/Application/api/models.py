@@ -3,6 +3,7 @@ from django.core.validators import RegexValidator
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
+from decimal import Decimal
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -281,12 +282,58 @@ class Devis(models.Model):
     def save(self, *args, **kwargs):
         # Calculer automatiquement le prix TTC avec le taux de TVA spécifié
         if self.price_ht:
-            tva_multiplier = 1 + (self.tva_rate / 100)
-            self.price_ttc = float(self.price_ht) * tva_multiplier
+            tva_multiplier = Decimal('1') + (self.tva_rate / Decimal('100'))
+            self.price_ttc = self.price_ht * tva_multiplier
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Devis {self.numero} - {self.chantier.chantier_name}"
+
+    def save_special_lines(self, special_lines_data):
+        # Supprimer les anciennes lignes spéciales
+        self.lignes_speciales.all().delete()
+        
+        # Sauvegarder les lignes spéciales globales
+        for line in special_lines_data.get('global', []):
+            LigneSpeciale.objects.create(
+                devis=self,
+                description=line['description'],
+                value=line['value'],
+                value_type=line['valueType'],
+                type=line['type'],
+                is_highlighted=line['isHighlighted'],
+                niveau='global'
+            )
+        
+        # Sauvegarder les lignes spéciales des parties
+        for partie_id, lines in special_lines_data.get('parties', {}).items():
+            partie = Partie.objects.get(id=partie_id)
+            for line in lines:
+                LigneSpeciale.objects.create(
+                    devis=self,
+                    description=line['description'],
+                    value=line['value'],
+                    value_type=line['valueType'],
+                    type=line['type'],
+                    is_highlighted=line['isHighlighted'],
+                    niveau='partie',
+                    partie=partie
+                )
+        
+        # Sauvegarder les lignes spéciales des sous-parties
+        for sous_partie_id, lines in special_lines_data.get('sousParties', {}).items():
+            sous_partie = SousPartie.objects.get(id=sous_partie_id)
+            for line in lines:
+                LigneSpeciale.objects.create(
+                    devis=self,
+                    description=line['description'],
+                    value=line['value'],
+                    value_type=line['valueType'],
+                    type=line['type'],
+                    is_highlighted=line['isHighlighted'],
+                    niveau='sous_partie',
+                    sous_partie=sous_partie
+                )
 
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
@@ -384,6 +431,34 @@ class LaborCost(models.Model):
 
     def __str__(self):
         return f"{self.agent.name} - {self.chantier.chantier_name} - S{self.week}/{self.year}"
+
+class LigneSpeciale(models.Model):
+    NIVEAU_CHOICES = [
+        ('global', 'Global'),
+        ('partie', 'Partie'),
+        ('sous_partie', 'Sous-partie')
+    ]
+    TYPE_CHOICES = [
+        ('reduction', 'Réduction'),
+        ('addition', 'Addition')
+    ]
+    VALUE_TYPE_CHOICES = [
+        ('percentage', 'Pourcentage'),
+        ('fixed', 'Montant fixe')
+    ]
+
+    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes_speciales')
+    description = models.CharField(max_length=255)
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    value_type = models.CharField(max_length=10, choices=VALUE_TYPE_CHOICES)
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    is_highlighted = models.BooleanField(default=False)
+    niveau = models.CharField(max_length=12, choices=NIVEAU_CHOICES)
+    partie = models.ForeignKey(Partie, on_delete=models.CASCADE, null=True, blank=True)
+    sous_partie = models.ForeignKey(SousPartie, on_delete=models.CASCADE, null=True, blank=True)
+
+    class Meta:
+        ordering = ['id']
 
 
 

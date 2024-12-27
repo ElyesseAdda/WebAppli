@@ -67,7 +67,7 @@
         text-align: left;
         background-clip: content-box;
         font-size: 0.8rem;
-        margin-top: 20px;
+        padding-top: 20px;
       }
       .sous-partie {
         background-color: rgb(157, 197, 226);
@@ -149,6 +149,7 @@
         text-align: right;
         width: 110px;
         font-size: 0.8rem;
+        font-weight: 700;
       }
       .bordertitre {
         border: solid 2px black;
@@ -440,6 +441,16 @@
 
       }
 
+      .special-line {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .highlighted {
+        background-color: yellow;
+        color: #dc3545;
+      }
+
       
     </style>
   </head>
@@ -541,6 +552,22 @@
               >
             </td>
           </tr>
+          {% for special_line in partie.special_lines %}
+          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %}">
+              <td colspan="4" class="special-line">
+                  {{ special_line.description }}
+                  {% if special_line.valueType == 'percentage' %}
+                      ({{ special_line.value }}%)
+                  {% else %}
+                      ({{ special_line.value }}€)
+                  {% endif %}
+              </td>
+              <td class="totalHttableau">
+                  {% if special_line.type == 'reduction' %}-{% endif %}
+                  {{ special_line.montant|floatformat:2 }} €
+              </td>
+          </tr>
+          {% endfor %}
           {% for sous_partie in partie.sous_parties %}
           <tr class="sous-partie">
             <td colspan="5">
@@ -550,6 +577,22 @@
               >
             </td>
           </tr>
+          {% for special_line in sous_partie.special_lines %}
+          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %}">
+              <td colspan="4" class="special-line">
+                  {{ special_line.description }}
+                  {% if special_line.valueType == 'percentage' %}
+                      ({{ special_line.value }}%)
+                  {% else %}
+                      ({{ special_line.value }}€)
+                  {% endif %}
+              </td>
+              <td class="totalHttableau">
+                  {% if special_line.type == 'reduction' %}{% endif %}
+                  {{ special_line.montant|floatformat:2 }} €
+              </td>
+          </tr>
+          {% endfor %}
           {% for ligne in sous_partie.lignes_details %}
           <tr>
             <td class="ligne-details">{{ ligne.description }}</td>
@@ -559,6 +602,22 @@
             <td class="totalHttableau">{{ ligne.total|floatformat:2 }} €</td>
           </tr>
           {% endfor %} {% endfor %} {% endfor %}
+          {% for special_line in special_lines_global %}
+          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %}">
+              <td colspan="4" class="special-line">
+                  {{ special_line.description }}
+                  {% if special_line.valueType == 'percentage' %}
+                      ({{ special_line.value }}%)
+                  {% else %}
+                      ({{ special_line.value }}€)
+                  {% endif %}
+              </td>
+              <td class="totalHttableau">
+                  {% if special_line.type == 'reduction' %}{% endif %}
+                  {{ special_line.montant|floatformat:2 }} €
+              </td>
+          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -579,7 +638,7 @@
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label">- TVA {{ devis.tva_rate|floatformat:2 }}%</span>
+            <span class="label">- TVA ({{ devis.tva_rate|floatformat:2 }}%)</span>
             <span class="montant">{{ tva|floatformat:2 }} €</span>
           </div>
         </td>

@@ -22,7 +22,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
-import { FaEyeSlash } from "react-icons/fa";
+import { FaEyeSlash, FaPlus } from "react-icons/fa";
 import { RiPencilFill } from "react-icons/ri";
 import ChantierForm from "./ChantierForm";
 import ClientInfoModal from "./ClientInfoModal";
@@ -32,6 +32,7 @@ import DevisModal from "./DevisModal";
 import EditModal from "./EditModal";
 import SelectSocieteModal from "./SelectSocieteModal";
 import SocieteInfoModal from "./SocieteInfoModal";
+import SpecialLineModal from "./SpecialeLineModal";
 
 const CreationDevis = () => {
   const [pendingChantierData, setPendingChantierData] = useState({
@@ -103,6 +104,16 @@ const CreationDevis = () => {
   const [showChantierForm, setShowChantierForm] = useState(false);
   const [tvaRate, setTvaRate] = useState(20);
   const [natureTravaux, setNatureTravaux] = useState("");
+  const [specialLines, setSpecialLines] = useState({
+    parties: {}, // {partieId: [{type: 'prorata', value: 10, isHighlighted: true}, ...]}
+    sousParties: {}, // {sousPartieId: [{type: 'remise', value: 5, isHighlighted: false}, ...]}
+    global: [], // [{type: 'prorata', value: 2, isHighlighted: true}, ...]
+  });
+  const [openSpecialLineModal, setOpenSpecialLineModal] = useState(false);
+  const [currentSpecialLineTarget, setCurrentSpecialLineTarget] = useState({
+    type: "",
+    id: null,
+  });
 
   // Charger les chantiers
   useEffect(() => {
@@ -221,7 +232,7 @@ const CreationDevis = () => {
       numero: devisModalData.numero,
       chantier: selectedChantierId,
       client: [selectedSocieteId],
-      price_ht: calculateGrandTotal(),
+      price_ht: calculateGrandTotal().totalHT,
       description: devisModalData.description,
       tva_rate: tvaRate,
       nature_travaux: natureTravaux,
@@ -234,6 +245,7 @@ const CreationDevis = () => {
           quantity: quantities[ligne.id] || 0,
           custom_price: customPrices[ligne.id] || ligne.prix,
         })),
+      specialLines: specialLines,
     };
 
     if (selectedChantierId === -1) {
@@ -345,7 +357,7 @@ const CreationDevis = () => {
       setDevisModalData({
         numero: nextDevisNumber,
         client: clientName,
-        price_ht: calculateGrandTotal(),
+        price_ht: calculateGrandTotal().totalHT,
         description: "",
       });
       setOpenDevisModal(true);
@@ -357,6 +369,9 @@ const CreationDevis = () => {
 
   const handleDevisModalSubmit = async () => {
     try {
+      const totals = calculateGrandTotal();
+      const totalHT = totals.totalHT;
+      const totalTTC = totals.totalTTC;
       let clientId, societeId, chantierIdToUse;
 
       // Vérification des données requises
@@ -406,8 +421,14 @@ const CreationDevis = () => {
         }
 
         // 3. Créer le chantier
-        const chantierResponse = await axios.post("/api/chantier/", {
+        const updatedChantierData = {
           ...pendingChantierData.chantier,
+          montant_ht: totalHT,
+          montant_ttc: totalTTC,
+        };
+
+        const chantierResponse = await axios.post("/api/chantier/", {
+          ...updatedChantierData,
           societe: societeId,
         });
         chantierIdToUse = chantierResponse.data.id;
@@ -425,7 +446,8 @@ const CreationDevis = () => {
         numero: devisModalData.numero,
         chantier: chantierIdToUse,
         client: [societeId],
-        price_ht: calculateGrandTotal(),
+        price_ht: totalHT,
+        price_ttc: totalTTC,
         tva_rate: tvaRate,
         nature_travaux: natureTravaux,
         description: devisModalData.description,
@@ -451,6 +473,7 @@ const CreationDevis = () => {
                 })),
             })),
         })),
+        specialLines: specialLines,
       };
 
       const response = await axios.post("/api/create-devis/", devisData);
@@ -650,12 +673,76 @@ const CreationDevis = () => {
     return (quantity * price).toFixed(2);
   };
 
+  const calculateTotalWithSpecialLines = (baseTotal, specialLines) => {
+    let total = baseTotal;
+    specialLines.forEach((line) => {
+      const value = parseFloat(line.value);
+      let montant;
+
+      if (line.valueType === "percentage") {
+        montant = (baseTotal * value) / 100;
+      } else {
+        montant = value;
+      }
+
+      if (line.type === "reduction") {
+        total -= montant;
+      } else {
+        total += montant;
+      }
+    });
+    return total;
+  };
+
   const calculateGrandTotal = () => {
-    return visibleLignesDetails
-      .reduce((total, ligne) => {
+    // Calculer d'abord le total HT des lignes de détail
+    let totalHT = visibleLignesDetails.reduce((total, ligne) => {
+      if (selectedLignes.includes(ligne.id)) {
         return total + parseFloat(calculateTotalPrice(ligne));
-      }, 0)
-      .toFixed(2);
+      }
+      return total;
+    }, 0);
+
+    // Appliquer les lignes spéciales par partie
+    selectedParties.forEach((partieId) => {
+      const partieSpecialLines = specialLines.parties[partieId] || [];
+      partieSpecialLines.forEach((specialLine) => {
+        let montant =
+          specialLine.valueType === "percentage"
+            ? (totalHT * specialLine.value) / 100
+            : parseFloat(specialLine.value);
+
+        if (specialLine.type === "reduction") {
+          totalHT -= montant;
+        } else {
+          totalHT += montant;
+        }
+      });
+    });
+
+    // Appliquer les lignes spéciales globales
+    const globalSpecialLines = specialLines.global || [];
+    globalSpecialLines.forEach((specialLine) => {
+      let montant =
+        specialLine.valueType === "percentage"
+          ? (totalHT * specialLine.value) / 100
+          : parseFloat(specialLine.value);
+
+      if (specialLine.type === "reduction") {
+        totalHT -= montant;
+      } else {
+        totalHT += montant;
+      }
+    });
+
+    // Calculer la TVA et le total TTC
+    const tva = (totalHT * tvaRate) / 100;
+    const totalTTC = totalHT + tva;
+
+    return {
+      totalHT: parseFloat(totalHT.toFixed(2)),
+      totalTTC: parseFloat(totalTTC.toFixed(2)),
+    };
   };
 
   const handlePartieCreated = (createdData) => {
@@ -739,6 +826,30 @@ const CreationDevis = () => {
       type: "ligne",
     });
     setEditModalOpen(true);
+  };
+
+  const handleAddSpecialLine = (type, id) => {
+    setOpenSpecialLineModal(true);
+    setCurrentSpecialLineTarget({ type, id });
+  };
+
+  const handleSpecialLineSave = (lineData) => {
+    setSpecialLines((prev) => {
+      const target = currentSpecialLineTarget;
+      if (target.type === "global") {
+        return {
+          ...prev,
+          global: [...prev.global, lineData],
+        };
+      }
+      return {
+        ...prev,
+        [target.type]: {
+          ...prev[target.type],
+          [target.id]: [...(prev[target.type][target.id] || []), lineData],
+        },
+      };
+    });
   };
 
   const handleSaveEdit = async (editedData) => {
@@ -1068,6 +1179,11 @@ const CreationDevis = () => {
               label="Taux de TVA (%)"
               value={tvaRate}
               onChange={(e) => setTvaRate(parseFloat(e.target.value))}
+              inputProps={{
+                step: "0.01",
+                min: "0",
+                max: "100",
+              }}
               InputProps={{
                 endAdornment: <InputAdornment position="end">%</InputAdornment>,
               }}
@@ -1105,30 +1221,39 @@ const CreationDevis = () => {
                         opacity: slidingParties.includes(partie.id) ? 0 : 1,
                       }}
                     >
-                      <FormControlLabel
+                      <Box
                         sx={{
-                          margin: 0,
-                          "& .MuiFormControlLabel-label": {
-                            fontFamily: "'Merriweather', serif",
-                            fontSize: "1rem",
-                            fontWeight: 500,
-                          },
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
                         }}
-                        control={
+                      >
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
                           <Checkbox
                             checked={selectedParties.includes(partie.id)}
                             onChange={() => handlePartiesChange(partie.id)}
                             sx={{
-                              padding: "4px",
                               "& .MuiSvgIcon-root": {
-                                width: "24px",
-                                height: "24px",
+                                width: "30px",
+                                height: "30px",
                               },
                             }}
                           />
-                        }
-                        label={partie.titre}
-                      />
+                          <Typography variant="h6">{partie.titre}</Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() =>
+                            handleAddSpecialLine("parties", partie.id)
+                          }
+                          startIcon={<FaPlus size={16} />}
+                        >
+                          Ligne spéciale
+                        </Button>
+                      </Box>
                       <Box
                         sx={{
                           display: "flex",
@@ -1518,7 +1643,7 @@ const CreationDevis = () => {
             }}
           >
             <Typography variant="h6" sx={{ color: "primary.main" }}>
-              Total HT: {calculateGrandTotal()} €
+              Total TTC: {calculateGrandTotal().totalTTC} €
             </Typography>
           </Box>
 
@@ -1580,6 +1705,11 @@ const CreationDevis = () => {
         }}
         societeId={selectedSocieteId}
         chantierData={pendingChantierData.chantier}
+      />
+      <SpecialLineModal
+        open={openSpecialLineModal}
+        onClose={() => setOpenSpecialLineModal(false)}
+        onSave={handleSpecialLineSave}
       />
     </Container>
   );
