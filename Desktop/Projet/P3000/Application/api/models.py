@@ -243,21 +243,6 @@ class Materiel_produit(models.Model):
     price_ht = models.FloatField()
     name_fournisseur = models.CharField(max_length=25,)
 
-    
-class Facture(models.Model):
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='factures', null=True)
-    client = models.ManyToManyField(Client, related_name='factures', blank=True)  # Modification ici
-    price_ht = models.FloatField()
-    date_creation = models.DateField(auto_now_add=True)
-    date_modification = models.DateField(auto_now=True)
-    state_facture = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    num_bon_commande = models.CharField(max_length=100, null=True)
-    num_facture = models.CharField(max_length=100)
-    amount_facturé = models.DecimalField(max_digits=10, decimal_places=2, null=True)
-
-    def __str__(self):
-        return f"Facture {self.id}"
-
 
 class Devis(models.Model):
     numero = models.CharField(max_length=50, unique=True)
@@ -343,7 +328,32 @@ class LigneDetail(models.Model):
 
     def __str__(self):
         return f'{self.description} ({self.unite}) - {self.prix} €'
+    
+class Facture(models.Model):
+    numero_facture = models.CharField(max_length=100)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
+    date_creation = models.DateField(auto_now_add=True)
+    date_modification = models.DateField(auto_now=True)
+    date_echeance = models.DateField(null=True, blank=True)
+    price_ht = models.DecimalField(max_digits=10, decimal_places=2)
+    price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
+    tva_rate = models.DecimalField(max_digits=5, decimal_places=2)
+    state_facture = models.CharField(max_length=50, default='En Cours')
+    mode_paiement = models.CharField(max_length=50)
+    adresse_facturation = models.CharField(max_length=255)
+    devis_origine = models.ForeignKey(Devis, on_delete=models.SET_NULL, null=True)
+    lignes = models.ManyToManyField(LigneDetail, through='FactureLigne')
 
+    def __str__(self):
+        return f"Facture {self.numero_facture} - {self.chantier.chantier_name}"
+
+    @property
+    def client(self):
+        return self.chantier.societe.client_name
+
+    @property
+    def societe(self):
+        return self.chantier.societe
 class DevisLigne(models.Model):
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes')
     ligne_detail = models.ForeignKey(LigneDetail, on_delete=models.CASCADE)
@@ -459,6 +469,54 @@ class LigneSpeciale(models.Model):
 
     class Meta:
         ordering = ['id']
+
+class FactureLigne(models.Model):
+    facture = models.ForeignKey(Facture, on_delete=models.CASCADE, related_name='lignes_details')
+    ligne_detail = models.ForeignKey(LigneDetail, on_delete=models.CASCADE)
+    quantite = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    total_ht = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def save(self, *args, **kwargs):
+        self.total_ht = self.quantite * self.prix_unitaire
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
+
+
+class FactureSpecialLine(models.Model):
+    facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    value_type = models.CharField(max_length=20, choices=[('fixed', 'Fixe'), ('percentage', 'Pourcentage')])
+    type = models.CharField(max_length=20, choices=[('reduction', 'Réduction'), ('addition', 'Addition')])
+    niveau = models.CharField(max_length=20, choices=[
+        ('global', 'Global'),
+        ('partie', 'Partie'),
+        ('sous_partie', 'Sous-partie')
+    ])
+    partie_id = models.IntegerField(null=True, blank=True)
+    sous_partie_id = models.IntegerField(null=True, blank=True)
+    is_highlighted = models.BooleanField(default=False)
+
+class FacturePartie(models.Model):
+    facture = models.ForeignKey('Facture', on_delete=models.CASCADE, related_name='parties')
+    titre = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    ordre = models.IntegerField(default=0)
+
+class FactureSousPartie(models.Model):
+    partie = models.ForeignKey(FacturePartie, on_delete=models.CASCADE, related_name='sous_parties')
+    description = models.TextField()
+    ordre = models.IntegerField(default=0)
+
+class FactureLigneDetail(models.Model):
+    sous_partie = models.ForeignKey(FactureSousPartie, on_delete=models.CASCADE, related_name='lignes_details')
+    description = models.TextField()
+    unite = models.CharField(max_length=50)
+    quantite = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
 
 
 

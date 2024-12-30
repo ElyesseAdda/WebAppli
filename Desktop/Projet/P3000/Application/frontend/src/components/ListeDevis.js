@@ -1,7 +1,9 @@
 import {
+  Box,
   IconButton,
   Menu,
   MenuItem,
+  Modal,
   Paper,
   Table,
   TableBody,
@@ -28,6 +30,7 @@ import {
   StyledTableContainer,
   StyledTextField,
 } from "../styles/tableStyles";
+import CreationFacture from "./CreationFacture";
 import StatusChangeModal from "./StatusChangeModal";
 
 const ListeDevis = () => {
@@ -47,6 +50,7 @@ const ListeDevis = () => {
   const [selectedDevis, setSelectedDevis] = useState(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [devisToUpdate, setDevisToUpdate] = useState(null);
+  const [factureModalOpen, setFactureModalOpen] = useState(false);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
 
@@ -172,6 +176,39 @@ const ListeDevis = () => {
   const handleDeleteDevis = () => {
     // À implémenter
     handleClose();
+  };
+
+  const handleCreateFacture = (devis) => {
+    console.log("Devis sélectionné pour la facture:", devis); // Debug
+    const selectedDevis = Array.isArray(devis) ? devis[0] : devis;
+    setSelectedDevis(selectedDevis);
+    setFactureModalOpen(true);
+  };
+
+  const handleFactureModalClose = () => {
+    setFactureModalOpen(false);
+    setSelectedDevis(null);
+  };
+
+  const handleFactureSubmit = async (factureData) => {
+    try {
+      console.log("Données envoyées:", factureData);
+      const response = await axios.post("/api/facture/", factureData);
+
+      const previewUrl = `/api/preview-facture/${response.data.id}/`;
+      window.open(previewUrl, "_blank");
+
+      handleFactureModalClose();
+      fetchDevis();
+    } catch (error) {
+      console.error(
+        "Erreur lors de la création de la facture:",
+        error.response?.data || error
+      );
+      alert(
+        "Erreur lors de la création de la facture. Veuillez vérifier les données."
+      );
+    }
   };
 
   return (
@@ -342,7 +379,9 @@ const ListeDevis = () => {
         }}
       >
         <MenuItem onClick={handleModifyDevis}>Modifier le devis</MenuItem>
-        <MenuItem onClick={handleConvertToInvoice}>Éditer en facture</MenuItem>
+        <MenuItem onClick={() => handleCreateFacture(selectedDevis)}>
+          Éditer en facture
+        </MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
         <MenuItem onClick={handleDeleteDevis} sx={{ color: "error.main" }}>
           Supprimer
@@ -358,6 +397,32 @@ const ListeDevis = () => {
         currentStatus={devisToUpdate?.status || "En attente"}
         onStatusChange={handleStatusUpdate}
       />
+
+      <Modal
+        open={factureModalOpen}
+        onClose={handleFactureModalClose}
+        aria-labelledby="modal-modal-title"
+        aria-describedby="modal-modal-description"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 400,
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            borderRadius: 1,
+          }}
+        >
+          <CreationFacture
+            devis={selectedDevis}
+            onClose={handleFactureModalClose}
+            onSubmit={handleFactureSubmit}
+          />
+        </Box>
+      </Modal>
     </div>
   );
 };

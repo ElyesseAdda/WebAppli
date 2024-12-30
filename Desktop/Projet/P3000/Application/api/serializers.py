@@ -1,5 +1,9 @@
 from rest_framework import serializers  
-from .models import Chantier, Societe, Devis, Partie, SousPartie,  LigneDetail, Client, Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, Schedule, LaborCost, DevisLigne
+from .models import (
+    Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
+    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
+    Schedule, LaborCost, DevisLigne, Facture, FactureLigne, FactureSpecialLine
+)
 
 class DevisLigneSerializer(serializers.ModelSerializer):
     class Meta:
@@ -27,7 +31,7 @@ class SocieteSerializer(serializers.ModelSerializer):
 class LigneDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigneDetail
-        fields = '__all__'
+        fields = ['id', 'description', 'unite', 'prix']
 
 class SousPartieSerializer(serializers.ModelSerializer):
     lignes_details = LigneDetailSerializer(many=True, read_only=True)
@@ -130,5 +134,102 @@ class LaborCostSerializer(serializers.ModelSerializer):
 
 
 
+class FactureLigneSerializer(serializers.ModelSerializer):
+    ligne_detail = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    class Meta:
+        model = FactureLigne
+        fields = ['ligne_detail', 'quantite', 'prix_unitaire', 'total_ht']
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['ligne_detail'] = instance.ligne_detail.id
+        representation['total_ht'] = float(representation['total_ht'])
+        return representation
 
+class FactureSerializer(serializers.ModelSerializer):
+    lignes = FactureLigneSerializer(source='lignes_details', many=True, read_only=True)
+
+    class Meta:
+        model = Facture
+        fields = [
+            'id', 'numero_facture', 'date_echeance', 'mode_paiement',
+            'adresse_facturation', 'devis_origine', 'lignes', 'price_ht', 
+            'price_ttc', 'tva_rate', 'chantier'
+        ]
+        read_only_fields = ['price_ht', 'price_ttc', 'tva_rate', 'chantier']
+
+    def validate(self, data):
+        if 'devis_origine' not in data:
+            raise serializers.ValidationError({"devis_origine": "Ce champ est obligatoire"})
+        return data
+
+    def create(self, validated_data):
+        devis = validated_data['devis_origine']
+        
+        facture = Facture.objects.create(
+            numero_facture=validated_data['numero_facture'],
+            date_echeance=validated_data.get('date_echeance'),
+            mode_paiement=validated_data['mode_paiement'],
+            adresse_facturation=validated_data['adresse_facturation'],
+            devis_origine=devis,
+            price_ht=devis.price_ht,
+            price_ttc=devis.price_ttc,
+            tva_rate=devis.tva_rate,
+            chantier=devis.chantier
+        )
+
+        # Copier les lignes du devis
+        devis_lignes = DevisLigne.objects.filter(devis=devis)
+        for devis_ligne in devis_lignes:
+            FactureLigne.objects.create(
+                facture=facture,
+                ligne_detail=devis_ligne.ligne_detail,
+                quantite=devis_ligne.quantite,
+                prix_unitaire=devis_ligne.prix_unitaire,
+                total_ht=devis_ligne.total_ht
+            )
+
+        # Copier les lignes spéciales
+        self._copy_special_lines(devis, facture)
+        
+        return facture
+
+    def _copy_special_lines(self, devis, facture):
+        # Copier les lignes spéciales globales
+        for ligne in devis.lignes_speciales.filter(niveau='global'):
+            FactureSpecialLine.objects.create(
+                facture=facture,
+                description=ligne.description,
+                value=ligne.value,
+                value_type=ligne.value_type,
+                type=ligne.type,
+                is_highlighted=ligne.is_highlighted,
+                niveau='global'
+            )
+
+        # Copier les lignes spéciales des parties
+        for ligne in devis.lignes_speciales.filter(niveau='partie'):
+            FactureSpecialLine.objects.create(
+                facture=facture,
+                description=ligne.description,
+                value=ligne.value,
+                value_type=ligne.value_type,
+                type=ligne.type,
+                is_highlighted=ligne.is_highlighted,
+                niveau='partie',
+                partie_id=ligne.partie_id
+            )
+
+        # Copier les lignes spéciales des sous-parties
+        for ligne in devis.lignes_speciales.filter(niveau='sous_partie'):
+            FactureSpecialLine.objects.create(
+                facture=facture,
+                description=ligne.description,
+                value=ligne.value,
+                value_type=ligne.value_type,
+                type=ligne.type,
+                is_highlighted=ligne.is_highlighted,
+                niveau='sous_partie',
+                sous_partie_id=ligne.sous_partie_id
+            )

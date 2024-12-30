@@ -13,6 +13,7 @@ import Dashboard from "./Dashboard";
 import Layout from "./Layout";
 import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
+import ListeFactures from "./ListeFactures";
 import ListePartiesSousParties from "./ListPartiesSousParties";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
@@ -49,6 +50,7 @@ function App() {
             <Route path="/Agent" element={<CalendrierAgentContainer />} />
             <Route path="/AgentCard" element={<AgentCardContainer />} />
             <Route path="/PlanningContainer" element={<PlanningContainer />} />
+            <Route path="/ListeFactures" element={<ListeFactures />} />
           </Routes>
         </Layout>
       </Router>

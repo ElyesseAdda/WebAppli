@@ -15,8 +15,8 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer
-from .models import Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost, DevisLigne, LigneSpeciale
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer
+from .models import Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost, DevisLigne, LigneSpeciale, FactureLigne, FactureSpecialLine, FacturePartie, FactureSousPartie, FactureLigneDetail
 import logging
 from django.db import transaction
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -50,6 +50,10 @@ class DevisViewSet(viewsets.ModelViewSet):
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         return queryset
+    
+class FactureViewSet(viewsets.ModelViewSet):
+    queryset = Facture.objects.all()
+    serializer_class = FactureSerializer
 
 
 def dashboard_data(request):
@@ -1568,7 +1572,294 @@ def update_devis_status(request, devis_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+@api_view(['POST'])
+def create_facture(request):
+    try:
+        devis_id = request.data.get('devis_id')
+        print(f"1. Devis ID reçu: {devis_id}")
+        
+        devis = Devis.objects.get(id=devis_id)
+        print(f"2. Devis trouvé: {devis}")
+        print(f"3. Données du devis:")
+        print(f"   - Price HT: {devis.price_ht}")
+        print(f"   - TVA Rate: {devis.tva_rate}")
+        print(f"   - Chantier: {devis.chantier}")
+        
+        # Calculer le price_ttc
+        price_ht = devis.price_ht
+        tva_rate = devis.tva_rate
+        price_ttc = price_ht * (1 + tva_rate / 100)
+        print(f"4. Calculs effectués:")
+        print(f"   - Price HT: {price_ht}")
+        print(f"   - TVA Rate: {tva_rate}")
+        print(f"   - Price TTC calculé: {price_ttc}")
+        
+        # Vérifier les données reçues
+        print(f"5. Données reçues dans request.data:")
+        print(f"   - numero_facture: {request.data.get('numero_facture')}")
+        print(f"   - date_echeance: {request.data.get('date_echeance')}")
+        print(f"   - mode_paiement: {request.data.get('mode_paiement')}")
+        print(f"   - adresse_facturation: {request.data.get('adresse_facturation')}")
+        
+        # Créer la facture
+        facture = Facture.objects.create(
+            numero_facture=request.data.get('numero_facture'),
+            date_echeance=request.data.get('date_echeance'),
+            mode_paiement=request.data.get('mode_paiement'),
+            adresse_facturation=request.data.get('adresse_facturation'),
+            price_ht=devis.price_ht,
+            price_ttc=devis.price_ttc,
+            tva_rate=devis.tva_rate,
+            chantier=devis.chantier,
+            devis_origine=devis
+        )
+        print(f"6. Facture créée: {facture}")
+        print(f"7. Vérification des données de la facture:")
+        print(f"   - ID: {facture.id}")
+        print(f"   - Price HT: {facture.price_ht}")
+        print(f"   - Price TTC: {facture.price_ttc}")
+        print(f"   - TVA Rate: {facture.tva_rate}")
+        print(f"   - Chantier: {facture.chantier}")
 
+        # Copier les lignes du devis
+        devis_lignes = DevisLigne.objects.filter(devis=devis)
+        for devis_ligne in devis_lignes:
+            FactureLigne.objects.create(
+                facture=facture,
+                ligne_detail=devis_ligne.ligne_detail,
+                quantite=devis_ligne.quantite,
+                prix_unitaire=devis_ligne.prix_unitaire,
+                total_ht=devis_ligne.total_ht
+            )
+
+        return Response({
+            'id': facture.id,
+            'lignes': [
+                {
+                    'ligne_detail': ligne.ligne_detail_id,
+                    'quantite': str(ligne.quantite),
+                    'prix_unitaire': str(ligne.prix_unitaire),
+                    'total_ht': float(ligne.total_ht)
+                }
+                for ligne in facture.lignes_details.all()
+            ]
+        })
+
+    except Exception as e:
+        print(f"Erreur lors de la création de la facture: {str(e)}")
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def preview_facture(request, facture_id):
+    try:
+        facture = Facture.objects.select_related(
+            'chantier',
+            'chantier__societe',
+            'chantier__societe__client_name'
+        ).get(id=facture_id)
+        
+        # Récupérer les lignes de détail de la facture
+        lignes_details = FactureLigne.objects.filter(facture=facture).select_related(
+            'ligne_detail', 
+            'ligne_detail__sous_partie', 
+            'ligne_detail__sous_partie__partie'
+        )
+        
+        # Organiser les données par partie et sous-partie
+        parties_data = []
+        total_ht = Decimal('0')
+        
+        # Regrouper les lignes par partie et sous-partie
+        parties_dict = {}
+        for ligne in lignes_details:
+            partie = ligne.ligne_detail.sous_partie.partie
+            sous_partie = ligne.ligne_detail.sous_partie
+            
+            if partie.id not in parties_dict:
+                parties_dict[partie.id] = {
+                    'titre': partie.titre,
+                    'sous_parties': {},
+                    'total_partie': Decimal('0')
+                }
+            
+            if sous_partie.id not in parties_dict[partie.id]['sous_parties']:
+                parties_dict[partie.id]['sous_parties'][sous_partie.id] = {
+                    'description': sous_partie.description,
+                    'lignes_details': [],
+                    'total_sous_partie': Decimal('0')
+                }
+            
+            total_ligne = ligne.quantite * ligne.prix_unitaire
+            parties_dict[partie.id]['sous_parties'][sous_partie.id]['lignes_details'].append({
+                'id': ligne.ligne_detail.id,
+                'description': ligne.ligne_detail.description,
+                'unite': ligne.ligne_detail.unite,
+                'quantity': float(ligne.quantite),
+                'custom_price': float(ligne.prix_unitaire),
+                'total': float(total_ligne)
+            })
+            parties_dict[partie.id]['sous_parties'][sous_partie.id]['total_sous_partie'] += total_ligne
+            parties_dict[partie.id]['total_partie'] += total_ligne
+
+        # Traiter les lignes spéciales et construire la structure finale
+        for partie_id, partie_data in parties_dict.items():
+            sous_parties_data = []
+            
+            for sous_partie_id, sous_partie_data in partie_data['sous_parties'].items():
+                # Traiter les lignes spéciales de la sous-partie
+                special_lines = []
+                for ligne_speciale in FactureSpecialLine.objects.filter(
+                    facture=facture,
+                    niveau='sous_partie',
+                    sous_partie_id=sous_partie_id
+                ):
+                    montant = ligne_speciale.value
+                    if ligne_speciale.value_type == 'percentage':
+                        montant = (sous_partie_data['total_sous_partie'] * ligne_speciale.value) / 100
+                    
+                    special_lines.append({
+                        'description': ligne_speciale.description,
+                        'value': float(ligne_speciale.value),
+                        'valueType': ligne_speciale.value_type,
+                        'type': ligne_speciale.type,
+                        'montant': float(montant),
+                        'isHighlighted': ligne_speciale.is_highlighted
+                    })
+                    
+                    if ligne_speciale.type == 'reduction':
+                        sous_partie_data['total_sous_partie'] -= montant
+                    else:
+                        sous_partie_data['total_sous_partie'] += montant
+                
+                sous_partie_data['special_lines'] = special_lines
+                sous_parties_data.append(sous_partie_data)
+            
+            # Traiter les lignes spéciales de la partie
+            special_lines_partie = []
+            for ligne_speciale in FactureSpecialLine.objects.filter(
+                facture=facture,
+                niveau='partie',
+                partie_id=partie_id
+            ):
+                montant = ligne_speciale.value
+                if ligne_speciale.value_type == 'percentage':
+                    montant = (partie_data['total_partie'] * ligne_speciale.value) / 100
+                
+                special_lines_partie.append({
+                    'description': ligne_speciale.description,
+                    'value': float(ligne_speciale.value),
+                    'valueType': ligne_speciale.value_type,
+                    'type': ligne_speciale.type,
+                    'montant': float(montant),
+                    'isHighlighted': ligne_speciale.is_highlighted
+                })
+                
+                if ligne_speciale.type == 'reduction':
+                    partie_data['total_partie'] -= montant
+                else:
+                    partie_data['total_partie'] += montant
+            
+            parties_data.append({
+                'titre': partie_data['titre'],
+                'sous_parties': sous_parties_data,
+                'total_partie': float(partie_data['total_partie']),
+                'special_lines': special_lines_partie
+            })
+            total_ht += partie_data['total_partie']
+
+        # Traiter les lignes spéciales globales
+        special_lines_global = []
+        for ligne_speciale in FactureSpecialLine.objects.filter(facture=facture, niveau='global'):
+            montant = ligne_speciale.value
+            if ligne_speciale.value_type == 'percentage':
+                montant = (total_ht * ligne_speciale.value) / 100
+            
+            special_lines_global.append({
+                'description': ligne_speciale.description,
+                'value': float(ligne_speciale.value),
+                'valueType': ligne_speciale.value_type,
+                'type': ligne_speciale.type,
+                'montant': float(montant),
+                'isHighlighted': ligne_speciale.is_highlighted
+            })
+            
+            if ligne_speciale.type == 'reduction':
+                total_ht -= montant
+            else:
+                total_ht += montant
+
+        # Calculer TVA et TTC
+        tva = total_ht * (facture.tva_rate / Decimal('100'))
+        total_ttc = total_ht + tva
+
+        context = {
+            'facture': {
+                'numero': facture.numero_facture,
+                'date_creation': facture.date_creation.strftime('%Y-%m-%d'),
+                'date_echeance': facture.date_echeance.strftime('%Y-%m-%d') if facture.date_echeance else None,
+                'mode_paiement': facture.mode_paiement,
+                'adresse_facturation': facture.adresse_facturation
+            },
+            'chantier': {
+                'nom': facture.chantier.chantier_name,
+                'rue': facture.chantier.rue,
+                'code_postal': facture.chantier.code_postal,
+                'ville': facture.chantier.ville
+            },
+            'societe': {
+                'nom': facture.chantier.societe.nom_societe,
+                'rue': facture.chantier.societe.rue_societe,
+                'code_postal': facture.chantier.societe.codepostal_societe,
+                'ville': facture.chantier.societe.ville_societe
+            },
+            'client': {
+                'name': facture.chantier.societe.client_name.name,
+                'surname': facture.chantier.societe.client_name.surname,
+                'email': facture.chantier.societe.client_name.client_mail,
+                'phone': facture.chantier.societe.client_name.phone_Number
+            },
+            'parties': parties_data,
+            'total_ht': float(total_ht),
+            'tva': float(tva),
+            'montant_ttc': float(total_ttc),
+            'special_lines_global': special_lines_global,
+            'tva_rate': float(facture.tva_rate),
+            'nature_travaux': facture.devis_origine.nature_travaux if facture.devis_origine else ''
+        }
+
+        return render(request, 'facture.html', context)
+
+    except Facture.DoesNotExist:
+        return HttpResponse('Facture non trouvée', status=404)
+    except Exception as e:
+        print(f"Erreur lors de la prévisualisation de la facture: {str(e)}")
+        return HttpResponse(str(e), status=500)
+
+@api_view(['POST'])
+def create_facture_from_devis(request):
+    serializer = FactureSerializer(data=request.data)
+    if serializer.is_valid():
+        devis_id = serializer.validated_data.get('devis_origine').id
+        devis = get_object_or_404(Devis, id=devis_id)
+
+        facture = serializer.save()
+        return Response(FactureSerializer(facture).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def check_facture_numero(request, numero_facture):
+    """
+    Vérifie si un numéro de facture existe déjà
+    """
+    try:
+        exists = Facture.objects.filter(numero_facture=numero_facture).exists()
+        return Response({'exists': exists})
+    except Exception as e:
+        print(f"Erreur lors de la vérification du numéro de facture: {e}")
+        return Response(
+            {'error': 'Erreur lors de la vérification du numéro de facture'}, 
+            status=500
+        )
 
 
 
