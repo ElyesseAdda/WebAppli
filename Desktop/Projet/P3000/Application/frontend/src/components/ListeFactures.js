@@ -150,7 +150,7 @@ const ListeFactures = () => {
   };
 
   const handlePreviewFacture = (factureId) => {
-    window.open(`/api/facture/preview/${factureId}/`, "_blank");
+    window.open(`/api/preview-facture/${factureId}/`, "_blank");
   };
 
   const handleMenuClick = (event, facture) => {
@@ -201,7 +201,7 @@ const ListeFactures = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <FilterCell>
+                <FilterCell sx={{ textAlign: "left" }}>
                   <CenteredTextField
                     placeholder="N° Facture"
                     value={filters.numero_facture}
@@ -245,7 +245,7 @@ const ListeFactures = () => {
                   <TableRow key={facture.id}>
                     <DevisNumber
                       onClick={() => handlePreviewFacture(facture.id)}
-                      style={{ cursor: "pointer", fontWeight: 700 }}
+                      sx={{ cursor: "pointer", fontWeight: 700 }}
                     >
                       {facture.numero_facture}
                     </DevisNumber>
@@ -265,10 +265,13 @@ const ListeFactures = () => {
                       {new Date(facture.date_creation).toLocaleDateString()}
                     </CenteredTableCell>
                     <CenteredTableCell
-                      style={{ fontWeight: 600, color: green[500] }}
+                      sx={{
+                        fontWeight: 600,
+                        color: green[500],
+                      }}
                     >
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span> {facture.price_ttc} €</span>
+                      <div sx={{ display: "flex", flexDirection: "column" }}>
+                        <p sx={{ fontSize: "14px" }}>{facture.price_ttc} €</p>
                       </div>
                     </CenteredTableCell>
                     <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
