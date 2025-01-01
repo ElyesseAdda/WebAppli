@@ -9,9 +9,11 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { TfiMore } from "react-icons/tfi";
+import { Link } from "react-router-dom";
 import {
   AlignedCell,
   CenteredTableCell,
@@ -19,34 +21,137 @@ import {
   ChantierCell,
   DevisNumber,
   FilterCell,
+  PriceTextField,
   StyledBox,
   StyledTableContainer,
 } from "../styles/tableStyles";
 
 const ListeFactures = () => {
   const [factures, setFactures] = useState([]);
+  const [filteredFactures, setFilteredFactures] = useState([]);
+  const [orderBy, setOrderBy] = useState("date");
+  const [order, setOrder] = useState("desc");
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedFacture, setSelectedFacture] = useState(null);
   const [filters, setFilters] = useState({
-    numero: "",
+    numero_facture: "",
     client: "",
     chantier: "",
+    date_creation: "",
     montant: "",
   });
-
-  const fetchFactures = async () => {
-    try {
-      const response = await axios.get("/api/facture/");
-      console.log("Factures reçues:", response.data);
-      setFactures(response.data);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des factures:", error);
-    }
-  };
+  const [chantierDetails, setChantierDetails] = useState({});
 
   useEffect(() => {
     fetchFactures();
   }, []);
+
+  const fetchChantierDetails = async (chantierId) => {
+    try {
+      const response = await axios.get(`/api/chantier/${chantierId}/details/`);
+      setChantierDetails((prevDetails) => ({
+        ...prevDetails,
+        [chantierId]: response.data,
+      }));
+      return response.data;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const fetchFactures = async () => {
+    try {
+      const response = await axios.get("/api/facture/");
+      const facturesWithDetails = await Promise.all(
+        response.data.map(async (facture) => {
+          if (facture.chantier) {
+            const details = await fetchChantierDetails(facture.chantier);
+            return {
+              ...facture,
+              chantierDetails: details,
+            };
+          }
+          return facture;
+        })
+      );
+      setFactures(facturesWithDetails);
+      setFilteredFactures(facturesWithDetails);
+    } catch (error) {
+      // Gérer l'erreur silencieusement
+    }
+  };
+
+  const handleFilterChange = (field) => (event) => {
+    const newFilters = {
+      ...filters,
+      [field]: event.target.value,
+    };
+    setFilters(newFilters);
+
+    let filtered = factures.filter((facture) => {
+      const result = Object.keys(newFilters).every((key) => {
+        if (!newFilters[key]) return true;
+
+        switch (key) {
+          case "numero_facture":
+            return facture.numero_facture
+              ?.toLowerCase()
+              .includes(newFilters[key].toLowerCase());
+
+          case "client":
+            const clientName =
+              facture.chantierDetails?.societe?.client?.nom ||
+              `${facture.chantierDetails?.societe?.client?.name} ${facture.chantierDetails?.societe?.client?.surname}` ||
+              "";
+            return clientName
+              .toLowerCase()
+              .includes(newFilters[key].toLowerCase());
+
+          case "chantier":
+            return facture.chantierDetails?.nom
+              ?.toLowerCase()
+              .includes(newFilters[key].toLowerCase());
+
+          case "date_creation":
+            const factureDate = new Date(
+              facture.date_creation
+            ).toLocaleDateString();
+            return factureDate.includes(newFilters[key]);
+
+          case "montant":
+            const factureMontant = facture.price_ttc?.toString() || "";
+            return factureMontant.includes(newFilters[key]);
+
+          default:
+            return true;
+        }
+      });
+      return result;
+    });
+
+    setFilteredFactures(filtered);
+  };
+
+  const handleSort = (property) => {
+    const isAsc = orderBy === property && order === "asc";
+    setOrder(isAsc ? "desc" : "asc");
+    setOrderBy(property);
+
+    const sorted = [...filteredFactures].sort((a, b) => {
+      if (property === "montant_ttc") {
+        return (
+          (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
+        );
+      }
+      return (isAsc ? 1 : -1) * (a[property] < b[property] ? -1 : 1);
+    });
+
+    setFilteredFactures(sorted);
+  };
+
+  const handlePreviewFacture = (factureId) => {
+    window.open(`/api/facture/preview/${factureId}/`, "_blank");
+  };
 
   const handleMenuClick = (event, facture) => {
     setAnchorEl(event.currentTarget);
@@ -58,39 +163,18 @@ const ListeFactures = () => {
     setSelectedFacture(null);
   };
 
-  const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const filteredFactures = factures.filter((facture) => {
-    return (
-      facture.numero_facture
-        ?.toLowerCase()
-        .includes(filters.numero.toLowerCase()) &&
-      (facture.chantier?.chantier_name || "")
-        .toLowerCase()
-        .includes(filters.chantier.toLowerCase()) &&
-      (facture.chantier?.societe?.client_name?.name || "")
-        .toLowerCase()
-        .includes(filters.client.toLowerCase()) &&
-      (facture.montant_ttc?.toString() || "").includes(filters.montant)
-    );
-  });
-
-  const handlePreviewFacture = (factureId) => {
-    window.open(`/api/facture/preview/${factureId}/`, "_blank");
-  };
-
   const handleDeleteFacture = async () => {
     if (!selectedFacture) return;
 
-    try {
-      await axios.delete(`/api/facture/${selectedFacture.id}/`);
-      fetchFactures();
-      handleClose();
-    } catch (error) {
-      console.error("Erreur lors de la suppression de la facture:", error);
-      alert("Erreur lors de la suppression de la facture");
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette facture ?")) {
+      try {
+        await axios.delete(`/api/facture/${selectedFacture.id}/`);
+        fetchFactures();
+        handleClose();
+      } catch (error) {
+        console.error("Erreur lors de la suppression de la facture:", error);
+        alert("Erreur lors de la suppression de la facture");
+      }
     }
   };
 
@@ -120,61 +204,94 @@ const ListeFactures = () => {
                 <FilterCell>
                   <CenteredTextField
                     placeholder="N° Facture"
-                    value={filters.numero}
-                    onChange={(e) =>
-                      handleFilterChange("numero", e.target.value)
-                    }
+                    value={filters.numero_facture}
+                    onChange={handleFilterChange("numero_facture")}
                   />
                 </FilterCell>
                 <FilterCell>
                   <CenteredTextField
                     placeholder="Client"
                     value={filters.client}
-                    onChange={(e) =>
-                      handleFilterChange("client", e.target.value)
-                    }
+                    onChange={handleFilterChange("client")}
                   />
                 </FilterCell>
                 <FilterCell>
                   <CenteredTextField
                     placeholder="Chantier"
                     value={filters.chantier}
-                    onChange={(e) =>
-                      handleFilterChange("chantier", e.target.value)
-                    }
+                    onChange={handleFilterChange("chantier")}
                   />
                 </FilterCell>
                 <FilterCell>
                   <CenteredTextField
-                    placeholder="Montant"
+                    placeholder="Date"
+                    value={filters.date_creation}
+                    onChange={handleFilterChange("date_creation")}
+                  />
+                </FilterCell>
+                <FilterCell>
+                  <PriceTextField
+                    placeholder="Montant T.T.C"
                     value={filters.montant}
-                    onChange={(e) =>
-                      handleFilterChange("montant", e.target.value)
-                    }
+                    onChange={handleFilterChange("montant")}
                   />
                 </FilterCell>
                 <FilterCell />
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredFactures.map((facture) => (
-                <TableRow key={facture.id}>
-                  <DevisNumber onClick={() => handlePreviewFacture(facture.id)}>
-                    {facture.numero_facture}
-                  </DevisNumber>
-                  <AlignedCell>
-                    {facture.chantier?.societe?.client_name?.name}{" "}
-                    {facture.chantier?.societe?.client_name?.surname}
-                  </AlignedCell>
-                  <ChantierCell>{facture.chantier?.chantier_name}</ChantierCell>
-                  <CenteredTableCell>{facture.montant_ttc}€</CenteredTableCell>
-                  <CenteredTableCell>
-                    <IconButton onClick={(e) => handleMenuClick(e, facture)}>
-                      <TfiMore />
-                    </IconButton>
-                  </CenteredTableCell>
-                </TableRow>
-              ))}
+              {filteredFactures.map((facture) => {
+                return (
+                  <TableRow key={facture.id}>
+                    <DevisNumber
+                      onClick={() => handlePreviewFacture(facture.id)}
+                      style={{ cursor: "pointer", fontWeight: 700 }}
+                    >
+                      {facture.numero_facture}
+                    </DevisNumber>
+                    <AlignedCell
+                      sx={{ backgroundColor: "white", textAlign: "center" }}
+                    >
+                      {facture.chantierDetails?.societe?.client?.nom ||
+                        `${facture.chantierDetails?.societe?.client?.name} ${facture.chantierDetails?.societe?.client?.surname}` ||
+                        "Non assigné"}
+                    </AlignedCell>
+                    <ChantierCell sx={{ textAlign: "center" }}>
+                      <Link to={`/chantier/${facture.chantier}`}>
+                        {facture.chantierDetails?.nom || "Non assigné"}
+                      </Link>
+                    </ChantierCell>
+                    <CenteredTableCell>
+                      {new Date(facture.date_creation).toLocaleDateString()}
+                    </CenteredTableCell>
+                    <CenteredTableCell
+                      style={{ fontWeight: 600, color: green[500] }}
+                    >
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <span> {facture.price_ttc} €</span>
+                      </div>
+                    </CenteredTableCell>
+                    <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
+                      <IconButton
+                        onClick={(e) => handleMenuClick(e, facture)}
+                        sx={{
+                          width: 35,
+                          height: 35,
+                          backgroundColor: "rgba(0, 0, 0, 0.04)",
+                          "&:hover": {
+                            backgroundColor: "rgba(0, 0, 0, 0.08)",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                          },
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                          borderRadius: "50%",
+                        }}
+                      >
+                        <TfiMore size={16} color="#666" />
+                      </IconButton>
+                    </CenteredTableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </StyledTableContainer>

@@ -233,3 +233,72 @@ class FactureSerializer(serializers.ModelSerializer):
                 niveau='sous_partie',
                 sous_partie_id=ligne.sous_partie_id
             )
+
+class ChantierDetailSerializer(serializers.ModelSerializer):
+    societe_details = serializers.SerializerMethodField()
+    statistiques = serializers.SerializerMethodField()
+    adresse = serializers.SerializerMethodField()
+    couts = serializers.SerializerMethodField()
+    dates = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Chantier
+        fields = [
+            'id', 
+            'chantier_name',
+            'state_chantier',
+            'description',
+            'societe_details',
+            'statistiques',
+            'adresse',
+            'couts',
+            'dates'
+        ]
+
+    def get_societe_details(self, obj):
+        if not obj.societe:
+            return None
+        
+        return {
+            'id': obj.societe.id,
+            'nom_societe': obj.societe.nom_societe,
+            'client': {
+                'nom': f"{obj.societe.client_name.name} {obj.societe.client_name.surname}" if obj.societe.client_name else None,
+                'email': obj.societe.client_name.client_mail if obj.societe.client_name else None,
+                'telephone': obj.societe.client_name.phone_Number if obj.societe.client_name else None
+            } if obj.societe.client_name else None
+        }
+
+    def get_statistiques(self, obj):
+        return {
+            'nombre_devis': obj.nombre_devis,
+            'nombre_factures': obj.nombre_facture,
+            'cout_main_oeuvre_total': obj.cout_main_oeuvre_total,
+            'montant_total_ttc': obj.montant_ttc or 0,
+            'montant_total_ht': obj.montant_ht or 0,
+            'marge_brute': (obj.montant_ht or 0) - (
+                (obj.cout_materiel or 0) + 
+                (obj.cout_main_oeuvre or 0) + 
+                (obj.cout_sous_traitance or 0)
+            )
+        }
+
+    def get_adresse(self, obj):
+        return {
+            'rue': obj.rue,
+            'ville': obj.ville,
+            'code_postal': obj.code_postal
+        }
+
+    def get_couts(self, obj):
+        return {
+            'materiel': obj.cout_materiel,
+            'main_oeuvre': obj.cout_main_oeuvre,
+            'sous_traitance': obj.cout_sous_traitance
+        }
+
+    def get_dates(self, obj):
+        return {
+            'debut': obj.date_debut,
+            'fin': obj.date_fin
+        }

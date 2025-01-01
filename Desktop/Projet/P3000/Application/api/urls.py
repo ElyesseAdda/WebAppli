@@ -4,7 +4,7 @@ from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
-    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, create_facture_from_devis,check_facture_numero# Import de la vue
+    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, create_facture_from_devis,check_facture_numero, get_chantier_details# Import de la vue
 )
 
 router = DefaultRouter()
@@ -43,12 +43,13 @@ urlpatterns = [
     path('create-devis/', create_devis, name='create-devis'),
     path('list-devis/', list_devis, name='list-devis'),
     path('get-next-devis-number/', get_next_devis_number, name='get-next-devis-number'),
-    path('chantier-relations/', get_chantier_relations, name='chantier-relations'),
+    path('chantier/<int:chantier_id>/relations/', get_chantier_relations, name='chantier-relations'),
     path('preview-saved-devis/<int:devis_id>/', preview_saved_devis, name='preview-saved-devis'),
     path('list-devis/<int:devis_id>/update_status/', update_devis_status, name='update_devis_status'),
     path('create-facture/', create_facture, name='create-facture'),
     path('preview-facture/<int:facture_id>/', preview_facture, name='preview-facture'),
     path('facture/create-from-devis/', create_facture_from_devis, name='create_facture_from_devis'),
     path('check-facture-numero/<str:numero_facture>/', check_facture_numero, name='check_facture_numero'),
+    path('chantier/<int:chantier_id>/details/', get_chantier_details, name='chantier-details'),
     # ... autres routes
 ]

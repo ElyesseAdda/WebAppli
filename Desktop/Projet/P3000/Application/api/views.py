@@ -15,7 +15,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer
 from .models import Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost, DevisLigne, LigneSpeciale, FactureLigne, FactureSpecialLine, FacturePartie, FactureSousPartie, FactureLigneDetail
 import logging
 from django.db import transaction
@@ -1798,7 +1798,8 @@ def preview_facture(request, facture_id):
                 'date_creation': facture.date_creation.strftime('%Y-%m-%d'),
                 'date_echeance': facture.date_echeance.strftime('%Y-%m-%d') if facture.date_echeance else None,
                 'mode_paiement': facture.mode_paiement,
-                'adresse_facturation': facture.adresse_facturation
+                'adresse_facturation': facture.adresse_facturation,
+                'type_travaux': facture.devis_origine.nature_travaux if facture.devis_origine else ''  # Ajout ici
             },
             'chantier': {
                 'nom': facture.chantier.chantier_name,
@@ -1860,6 +1861,66 @@ def check_facture_numero(request, numero_facture):
             {'error': 'Erreur lors de la vérification du numéro de facture'}, 
             status=500
         )
+
+@api_view(['GET'])
+def get_chantier_details(request, chantier_id):
+    """
+    Endpoint pour récupérer toutes les informations détaillées d'un chantier
+    """
+    try:
+        chantier = get_object_or_404(Chantier, id=chantier_id)
+        
+        # Calculer les statistiques
+        # stats = {
+        #     'nombre_devis': chantier.nombre_devis,
+        #     'nombre_factures': chantier.nombre_facture,
+        #     'cout_main_oeuvre_total': chantier.cout_main_oeuvre_total,
+        #     'montant_total_ttc': chantier.montant_ttc or 0,
+        #     'montant_total_ht': chantier.montant_ht or 0,
+        #     'marge_brute': (chantier.montant_ht or 0) - (
+        #         (chantier.cout_materiel or 0) + 
+        #         (chantier.cout_main_oeuvre or 0) + 
+        #         (chantier.cout_sous_traitance or 0)
+        #     )
+        # }
+        
+        # Récupérer les informations détaillées
+        details = {
+            'id': chantier.id,
+            'nom': chantier.chantier_name,
+            'statut': chantier.state_chantier,
+            'dates': {
+                'debut': chantier.date_debut,
+                'fin': chantier.date_fin
+            },
+            'adresse': {
+                'rue': chantier.rue,
+                'ville': chantier.ville,
+                'code_postal': chantier.code_postal
+            },
+            'couts': {
+                'materiel': chantier.cout_materiel,
+                'main_oeuvre': chantier.cout_main_oeuvre,
+                'sous_traitance': chantier.cout_sous_traitance
+            },
+            'societe': {
+                'id': chantier.societe.id if chantier.societe else None,
+                'nom': chantier.societe.nom_societe if chantier.societe else None,
+                'client': {
+                    'nom': f"{chantier.societe.client_name.name} {chantier.societe.client_name.surname}" if chantier.societe and chantier.societe.client_name else None,
+                    'email': chantier.societe.client_name.client_mail if chantier.societe and chantier.societe.client_name else None
+                } if chantier.societe else None
+            },
+            # 'statistiques': stats
+        }
+        
+        return Response(details)
+        
+    except Exception as e:
+        return Response({
+            'error': str(e),
+            'message': 'Erreur lors de la récupération des détails du chantier'
+        }, status=500)
 
 
 
