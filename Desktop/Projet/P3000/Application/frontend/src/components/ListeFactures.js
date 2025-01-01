@@ -1,4 +1,10 @@
 import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   Menu,
   MenuItem,
@@ -13,6 +19,7 @@ import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { TfiMore } from "react-icons/tfi";
+import { TiWarning } from "react-icons/ti";
 import { Link } from "react-router-dom";
 import {
   AlignedCell,
@@ -41,6 +48,7 @@ const ListeFactures = () => {
     montant: "",
   });
   const [chantierDetails, setChantierDetails] = useState({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchFactures();
@@ -166,16 +174,23 @@ const ListeFactures = () => {
   const handleDeleteFacture = async () => {
     if (!selectedFacture) return;
 
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette facture ?")) {
-      try {
-        await axios.delete(`/api/facture/${selectedFacture.id}/`);
-        fetchFactures();
-        handleClose();
-      } catch (error) {
-        console.error("Erreur lors de la suppression de la facture:", error);
-        alert("Erreur lors de la suppression de la facture");
-      }
+    try {
+      await axios.delete(`/api/facture/${selectedFacture.id}/`);
+      fetchFactures();
+      handleClose();
+      setDeleteDialogOpen(false);
+    } catch (error) {
+      console.error("Erreur lors de la suppression de la facture:", error);
+      alert(
+        "Erreur lors de la suppression de la facture. " +
+          (error.response?.data?.message || "Veuillez réessayer.")
+      );
     }
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+    setAnchorEl(null);
   };
 
   return (
@@ -224,7 +239,7 @@ const ListeFactures = () => {
                 </FilterCell>
                 <FilterCell>
                   <CenteredTextField
-                    placeholder="Date"
+                    placeholder="Date d'échéance"
                     value={filters.date_creation}
                     onChange={handleFilterChange("date_creation")}
                   />
@@ -315,10 +330,60 @@ const ListeFactures = () => {
         <MenuItem onClick={() => handlePreviewFacture(selectedFacture?.id)}>
           Voir la facture
         </MenuItem>
-        <MenuItem onClick={handleDeleteFacture} sx={{ color: "error.main" }}>
+        <MenuItem
+          onClick={handleDeleteClick}
+          sx={{
+            color: "error.main",
+            "&:hover": {
+              backgroundColor: "error.light",
+              color: "error.contrastText",
+            },
+          }}
+        >
           Supprimer
         </MenuItem>
       </Menu>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            padding: 1,
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <TiWarning size={24} color="#f44336" />
+          Confirmation de suppression
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Êtes-vous sûr de vouloir supprimer la facture{" "}
+            <strong>{selectedFacture?.numero_facture}</strong> ?
+            <br />
+            Cette action est irréversible.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            variant="outlined"
+            sx={{ borderRadius: 2 }}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleDeleteFacture}
+            variant="contained"
+            color="error"
+            sx={{ borderRadius: 2 }}
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

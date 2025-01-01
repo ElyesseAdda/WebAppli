@@ -193,10 +193,28 @@ const CreationDevis = () => {
   // Charger les lignes de détail basées sur les sous-parties sélectionnées
   useEffect(() => {
     if (selectedSousParties.length > 0) {
+      // Récupérer les sous-parties sélectionnées avec leurs lignes de détail
       axios
-        .get("/api/ligne-details/")
+        .get("/api/sous-parties/", {
+          params: {
+            id__in: selectedSousParties.join(","),
+          },
+        })
         .then((response) => {
-          setAllLignesDetails(response.data);
+          // Extraire toutes les lignes de détail des sous-parties
+          const allLignes = response.data.reduce((acc, sousPartie) => {
+            const lignesWithSousPartie = sousPartie.lignes_details.map(
+              (ligne) => ({
+                ...ligne,
+                sous_partie: sousPartie.id,
+              })
+            );
+            return [...acc, ...lignesWithSousPartie];
+          }, []);
+
+          console.log("Lignes de détail extraites:", allLignes);
+          setAllLignesDetails(allLignes);
+          setFilteredLignesDetails(allLignes);
         })
         .catch((error) => {
           console.error(
@@ -206,15 +224,9 @@ const CreationDevis = () => {
         });
     } else {
       setAllLignesDetails([]);
+      setFilteredLignesDetails([]);
     }
   }, [selectedSousParties]);
-
-  useEffect(() => {
-    const filtered = allLignesDetails.filter((ligne) =>
-      selectedSousParties.includes(ligne.sous_partie)
-    );
-    setFilteredLignesDetails(filtered);
-  }, [allLignesDetails, selectedSousParties]);
 
   const handleQuantityChange = (ligneId, quantity) => {
     setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
@@ -1093,6 +1105,22 @@ const CreationDevis = () => {
     }
   };
 
+  useEffect(() => {
+    console.log("allLignesDetails:", allLignesDetails);
+    console.log("selectedSousParties:", selectedSousParties);
+    console.log("filteredLignesDetails après filtrage:", filteredLignesDetails);
+  }, [allLignesDetails, selectedSousParties, filteredLignesDetails]);
+
+  useEffect(() => {
+    const filtered = allLignesDetails.filter((ligne) => {
+      console.log("Filtrage ligne:", ligne);
+      console.log("sous_partie de la ligne:", ligne.sous_partie);
+      console.log("selectedSousParties:", selectedSousParties);
+      return selectedSousParties.includes(ligne.sous_partie);
+    });
+    setFilteredLignesDetails(filtered);
+  }, [allLignesDetails, selectedSousParties]);
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -1449,9 +1477,12 @@ const CreationDevis = () => {
                 </AccordionSummary>
                 <AccordionDetails>
                   {sortedLignesDetails(
-                    visibleLignesDetails.filter(
-                      (ligne) => ligne.sous_partie === sousPartie.id
-                    )
+                    visibleLignesDetails.filter((ligne) => {
+                      console.log("Checking ligne:", ligne);
+                      console.log("Sous-partie ID:", ligne.sous_partie);
+                      console.log("Current sous-partie:", sousPartie.id);
+                      return ligne.sous_partie === sousPartie.id;
+                    })
                   ).map((ligne) => (
                     <Card
                       key={ligne.id}
