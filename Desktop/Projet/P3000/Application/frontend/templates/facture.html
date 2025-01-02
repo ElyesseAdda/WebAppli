@@ -673,7 +673,7 @@
                   {% endif %}
               </td>
               <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}{% endif %}
+                  {% if special_line.type == 'reduction' %}-{% endif %}
                   {{ special_line.montant|floatformat:2 }} €
               </td>
           </tr>

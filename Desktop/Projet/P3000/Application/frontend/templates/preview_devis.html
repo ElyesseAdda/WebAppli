@@ -14,9 +14,9 @@
         {% comment %} max-width: 800px;  {% endcomment %}
         {% comment %} padding: 0px; {% endcomment %}
         width: 210mm;     /* Largeur A4 */
-        height: 297mm;    /* Hauteur A4 */
+        {% comment %} height: 297mm;    /* Hauteur A4 */ {% endcomment %}
         margin-right: 90px;
-        margin-top: 0px;
+        margin-top: 10px;
         overflow-x: hidden;
         overflow-y: auto;
       }
@@ -588,7 +588,7 @@
                   {% endif %}
               </td>
               <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}{% endif %}
+                  {% if special_line.type == 'reduction' %}-{% endif %}
                   {{ special_line.montant|floatformat:2 }} €
               </td>
           </tr>

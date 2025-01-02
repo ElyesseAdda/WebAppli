@@ -22,7 +22,8 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
-import { FaEyeSlash, FaPlus } from "react-icons/fa";
+import { FaEyeSlash } from "react-icons/fa";
+import { FiPlusCircle } from "react-icons/fi";
 import { RiPencilFill } from "react-icons/ri";
 import ChantierForm from "./ChantierForm";
 import ClientInfoModal from "./ClientInfoModal";
@@ -32,7 +33,7 @@ import DevisModal from "./DevisModal";
 import EditModal from "./EditModal";
 import SelectSocieteModal from "./SelectSocieteModal";
 import SocieteInfoModal from "./SocieteInfoModal";
-import SpecialLineModal from "./SpecialeLineModal";
+import SpecialLineModal from "./SpecialLineModal";
 
 const CreationDevis = () => {
   const [pendingChantierData, setPendingChantierData] = useState({
@@ -107,6 +108,7 @@ const CreationDevis = () => {
   const [specialLines, setSpecialLines] = useState({
     parties: {}, // {partieId: [{type: 'prorata', value: 10, isHighlighted: true}, ...]}
     sousParties: {}, // {sousPartieId: [{type: 'remise', value: 5, isHighlighted: false}, ...]}
+    lignes: {}, // {ligneId: [{type: 'supplement', value: 15, isHighlighted: true}, ...]}
     global: [], // [{type: 'prorata', value: 2, isHighlighted: true}, ...]
   });
   const [openSpecialLineModal, setOpenSpecialLineModal] = useState(false);
@@ -682,7 +684,20 @@ const CreationDevis = () => {
   const calculateTotalPrice = (ligne) => {
     const quantity = quantities[ligne.id] || 0;
     const price = customPrices[ligne.id] || ligne.prix;
-    return (quantity * price).toFixed(2);
+    let total = quantity * price;
+
+    // Ajouter les lignes spéciales pour cette ligne
+    if (specialLines.lignes[ligne.id]) {
+      specialLines.lignes[ligne.id].forEach((specialLine) => {
+        if (specialLine.type === "supplement") {
+          total += specialLine.value;
+        } else if (specialLine.type === "remise") {
+          total -= (total * specialLine.value) / 100;
+        }
+      });
+    }
+
+    return total;
   };
 
   const calculateTotalWithSpecialLines = (baseTotal, specialLines) => {
@@ -697,11 +712,12 @@ const CreationDevis = () => {
         montant = value;
       }
 
+      // Afficher le signe négatif pour les réductions
       if (line.type === "reduction") {
-        total -= montant;
-      } else {
-        total += montant;
+        montant = -Math.abs(montant); // Force la valeur à être négative
       }
+
+      total += montant; // On ajoute toujours le montant (qui sera négatif pour les réductions)
     });
     return total;
   };
@@ -1121,6 +1137,20 @@ const CreationDevis = () => {
     setFilteredLignesDetails(filtered);
   }, [allLignesDetails, selectedSousParties]);
 
+  const handleDeleteSpecialLine = (type, id, index) => {
+    setSpecialLines((prev) => {
+      const newSpecialLines = { ...prev };
+      if (type === "global") {
+        newSpecialLines.global = prev.global.filter((_, i) => i !== index);
+      } else {
+        newSpecialLines[type][id] = prev[type][id].filter(
+          (_, i) => i !== index
+        );
+      }
+      return newSpecialLines;
+    });
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -1277,7 +1307,32 @@ const CreationDevis = () => {
                           onClick={() =>
                             handleAddSpecialLine("parties", partie.id)
                           }
-                          startIcon={<FaPlus size={16} />}
+                          startIcon={
+                            <FiPlusCircle
+                              size={16}
+                              style={{ strokeWidth: 2 }}
+                            />
+                          }
+                          sx={{
+                            borderRadius: "20px",
+                            textTransform: "none",
+                            fontSize: "0.65rem",
+                            padding: "4px 10px",
+                            marginLeft: "10px",
+                            borderColor: "primary.main",
+                            color: "primary.main",
+                            backgroundColor: "white",
+                            "&:hover": {
+                              backgroundColor: "primary.main",
+                              color: "white",
+                              borderColor: "primary.main",
+                              boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+                            },
+                            transition: "all 0.3s ease",
+                            minWidth: "130px",
+                            height: "32px",
+                            fontWeight: 500,
+                          }}
                         >
                           Ligne spéciale
                         </Button>
@@ -1323,7 +1378,10 @@ const CreationDevis = () => {
                             alignItems: "center",
                             justifyContent: "center",
                           }}
-                          onClick={() => handleHidePartie(partie.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleHidePartie(partie.id);
+                          }}
                         >
                           <FaEyeSlash size={16} />
                         </button>
@@ -1462,18 +1520,42 @@ const CreationDevis = () => {
                       }
                     />
                   </Box>
-                  <Typography
-                    variant="subtitle1"
-                    sx={{
-                      fontFamily: "'Work Sans', sans-serif",
-                      fontSize: "0.95rem",
-                      fontWeight: 500,
-                      paddingTop: "10px",
-                    }}
-                  >
-                    {" "}
-                    {sousPartie.description}
-                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <Typography variant="subtitle1">
+                      {sousPartie.description}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        handleAddSpecialLine("sousParties", sousPartie.id)
+                      }
+                      startIcon={
+                        <FiPlusCircle size={16} style={{ strokeWidth: 2 }} />
+                      }
+                      sx={{
+                        borderRadius: "20px",
+                        textTransform: "none",
+                        fontSize: "0.85rem",
+                        padding: "4px 12px",
+                        borderColor: "primary.main",
+                        color: "primary.main",
+                        backgroundColor: "white",
+                        "&:hover": {
+                          backgroundColor: "primary.main",
+                          color: "white",
+                          borderColor: "primary.main",
+                          boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+                        },
+                        transition: "all 0.3s ease",
+                        minWidth: "130px",
+                        height: "32px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Ligne spéciale
+                    </Button>
+                  </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   {sortedLignesDetails(
@@ -1580,16 +1662,15 @@ const CreationDevis = () => {
                                 </Box>
                               </Box>
                             </Box>
-                            <Typography
-                              variant="subtitle1"
+                            <Box
                               sx={{
-                                fontFamily: "'Work Sans', sans-serif",
-                                fontSize: "0.95rem",
-                                fontWeight: 400,
+                                display: "flex",
+                                gap: 1,
+                                alignItems: "center",
                               }}
                             >
-                              {ligne.description}
-                            </Typography>
+                              <Typography>{ligne.description}</Typography>
+                            </Box>
                           </Box>
                           <Typography
                             variant="subtitle1"
@@ -1741,6 +1822,20 @@ const CreationDevis = () => {
         open={openSpecialLineModal}
         onClose={() => setOpenSpecialLineModal(false)}
         onSave={handleSpecialLineSave}
+        currentSpecialLines={
+          currentSpecialLineTarget.type === "global"
+            ? specialLines.global
+            : specialLines[currentSpecialLineTarget.type]?.[
+                currentSpecialLineTarget.id
+              ] || []
+        }
+        onDelete={(index) =>
+          handleDeleteSpecialLine(
+            currentSpecialLineTarget.type,
+            currentSpecialLineTarget.id,
+            index
+          )
+        }
       />
     </Container>
   );

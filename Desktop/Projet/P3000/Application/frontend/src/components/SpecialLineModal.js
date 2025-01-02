@@ -31,6 +31,7 @@ const SpecialLineModal = ({ open, onClose, onSave }) => {
     });
     // Réinitialiser les champs
     setDescription("");
+    e;
     setValue("");
     setIsHighlighted(false);
     setValueType("percentage");
