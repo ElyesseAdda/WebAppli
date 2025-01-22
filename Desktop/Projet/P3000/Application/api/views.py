@@ -1922,6 +1922,12 @@ def get_chantier_details(request, chantier_id):
             'message': 'Erreur lors de la récupération des détails du chantier'
         }, status=500)
 
+@api_view(['GET'])
+def check_chantier_name(request):
+    chantier_name = request.query_params.get('chantier_name', '')
+    exists = Chantier.objects.filter(chantier_name=chantier_name).exists()
+    return Response({'exists': exists})
+
 
 
 

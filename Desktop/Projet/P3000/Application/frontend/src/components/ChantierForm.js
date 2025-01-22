@@ -7,6 +7,7 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
+import axios from "axios";
 import React, { useEffect, useState } from "react";
 
 const ChantierForm = ({ open, onClose, onSubmit, societeId }) => {
@@ -18,6 +19,11 @@ const ChantierForm = ({ open, onClose, onSubmit, societeId }) => {
     societe: societeId,
   });
 
+  // Nouvel état pour gérer l'erreur
+  const [nameError, setNameError] = useState("");
+  // État pour gérer le délai de vérification
+  const [checkTimeout, setCheckTimeout] = useState(null);
+
   useEffect(() => {
     setChantierData((prev) => ({
       ...prev,
@@ -25,14 +31,58 @@ const ChantierForm = ({ open, onClose, onSubmit, societeId }) => {
     }));
   }, [societeId]);
 
-  const handleChange = (e) => {
-    setChantierData({
-      ...chantierData,
-      [e.target.name]: e.target.value,
-    });
+  const checkChantierName = async (name) => {
+    try {
+      const response = await axios.get("/api/check-chantier-name/", {
+        params: { chantier_name: name },
+      });
+
+      if (response.data.exists) {
+        setNameError(`Un chantier avec le nom "${name}" existe déjà`);
+        return false;
+      } else {
+        setNameError("");
+        return true;
+      }
+    } catch (error) {
+      console.error("Erreur lors de la vérification du nom:", error);
+      setNameError("Erreur lors de la vérification du nom");
+      return false;
+    }
   };
 
-  const handleSubmit = () => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setChantierData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // Si le champ modifié est le nom du chantier
+    if (name === "chantier_name") {
+      // Annuler le timeout précédent
+      if (checkTimeout) clearTimeout(checkTimeout);
+
+      // Créer un nouveau timeout pour la vérification
+      if (value.trim()) {
+        const newTimeout = setTimeout(() => {
+          checkChantierName(value);
+        }, 500); // Attendre 500ms après la dernière frappe
+        setCheckTimeout(newTimeout);
+      } else {
+        setNameError("");
+      }
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Vérifier une dernière fois le nom avant la soumission
+    if (chantierData.chantier_name.trim()) {
+      const isValid = await checkChantierName(chantierData.chantier_name);
+      if (!isValid) {
+        return; // Ne pas soumettre si le nom existe déjà
+      }
+    }
     onSubmit(chantierData);
   };
 
@@ -52,6 +102,8 @@ const ChantierForm = ({ open, onClose, onSubmit, societeId }) => {
             onChange={handleChange}
             fullWidth
             required
+            error={!!nameError}
+            helperText={nameError}
           />
           <TextField
             name="ville"
@@ -81,7 +133,11 @@ const ChantierForm = ({ open, onClose, onSubmit, societeId }) => {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSubmit} variant="contained">
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={!!nameError} // Désactiver le bouton si il y a une erreur
+        >
           Créer le chantier
         </Button>
       </DialogActions>

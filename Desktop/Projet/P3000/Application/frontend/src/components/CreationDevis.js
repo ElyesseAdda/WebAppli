@@ -170,7 +170,6 @@ const CreationDevis = () => {
   }, [selectedParties, sousParties]);
 
   const handlePartiesChange = (partieId) => {
-    console.log("Sélection partie:", partieId);
     setIsPreviewed(false);
     const isSelected = selectedParties.includes(partieId);
     if (isSelected) {
@@ -214,7 +213,6 @@ const CreationDevis = () => {
             return [...acc, ...lignesWithSousPartie];
           }, []);
 
-          console.log("Lignes de détail extraites:", allLignes);
           setAllLignesDetails(allLignes);
           setFilteredLignesDetails(allLignes);
         })
@@ -383,13 +381,25 @@ const CreationDevis = () => {
 
   const handleDevisModalSubmit = async () => {
     try {
+      console.log("=== Début de handleDevisModalSubmit ===");
       const totals = calculateGrandTotal();
+      console.log("Totaux calculés:", totals);
+
       const totalHT = totals.totalHT;
       const totalTTC = totals.totalTTC;
       let clientId, societeId, chantierIdToUse;
 
+      // Log des données initiales
+      console.log("Données initiales:", {
+        selectedChantierId,
+        pendingChantierData,
+        societeId,
+        clientId,
+      });
+
       // Vérification des données requises
       if (selectedChantierId === -1) {
+        console.log("Nouveau chantier détecté, vérification des données...");
         if (
           !pendingChantierData.client ||
           !pendingChantierData.societe ||
@@ -405,92 +415,92 @@ const CreationDevis = () => {
         }
       }
 
-      // Avant la création du client
-      console.log("Données client:", pendingChantierData.client);
-
-      // Avant la création de la société
-      console.log("Données société:", pendingChantierData.societe);
-
-      // Avant la création du chantier
-      console.log("Données chantier:", pendingChantierData.chantier);
-
       // Création du client/société/chantier uniquement si nouveau chantier
       if (selectedChantierId === -1) {
+        console.log("Création d'un nouveau client/société/chantier");
+
         // 1. Créer le client
-        if (pendingChantierData.client) {
-          const clientResponse = await axios.post(
-            "/api/client/",
-            pendingChantierData.client
-          );
-          clientId = clientResponse.data.id;
-        }
+        console.log("Données client à créer:", pendingChantierData.client);
+        const clientResponse = await axios.post("/api/client/", {
+          ...pendingChantierData.client,
+          phone_Number: pendingChantierData.client.phone_Number.toString(),
+        });
+        clientId = clientResponse.data.id;
+        console.log("Client créé avec l'ID:", clientId);
 
         // 2. Créer la société
-        if (pendingChantierData.societe) {
-          const societeResponse = await axios.post("/api/societe/", {
-            ...pendingChantierData.societe,
-            client_name: clientId,
-          });
-          societeId = societeResponse.data.id;
-        }
+        console.log("Données société à créer:", {
+          ...pendingChantierData.societe,
+          client_name: clientId,
+        });
+        const societeResponse = await axios.post("/api/societe/", {
+          ...pendingChantierData.societe,
+          client_name: clientId,
+          codepostal_societe:
+            pendingChantierData.societe.codepostal_societe.toString(),
+        });
+        societeId = societeResponse.data.id;
+        console.log("Société créée avec l'ID:", societeId);
 
         // 3. Créer le chantier
         const updatedChantierData = {
-          ...pendingChantierData.chantier,
+          chantier_name: pendingChantierData.chantier.chantier_name.trim(),
+          ville: pendingChantierData.chantier.ville,
+          rue: pendingChantierData.chantier.rue,
+          code_postal: pendingChantierData.chantier.code_postal.toString(),
           montant_ht: totalHT,
           montant_ttc: totalTTC,
+          societe: societeId,
         };
 
-        const chantierResponse = await axios.post("/api/chantier/", {
-          ...updatedChantierData,
-          societe: societeId,
-        });
+        console.log("Données chantier à créer:", updatedChantierData);
+        const chantierResponse = await axios.post(
+          "/api/chantier/",
+          updatedChantierData
+        );
         chantierIdToUse = chantierResponse.data.id;
       } else {
+        console.log("Utilisation d'un chantier existant:", selectedChantierId);
         chantierIdToUse = selectedChantierId;
-        // Récupérer la société associée au chantier existant
         const chantierResponse = await axios.get(
           `/api/chantier/${selectedChantierId}/`
         );
-        societeId = chantierResponse.data.societe.id;
+        societeId = chantierResponse.data.societe;
       }
 
-      // Créer le devis avec uniquement les lignes sélectionnées
+      // Préparation des données du devis
       const devisData = {
         numero: devisModalData.numero,
         chantier: chantierIdToUse,
-        client: [societeId],
-        price_ht: totalHT,
-        price_ttc: totalTTC,
-        tva_rate: tvaRate,
-        nature_travaux: natureTravaux,
-        description: devisModalData.description,
-        parties: selectedParties.map((partieId) => ({
-          id: partieId,
-          sous_parties: selectedSousParties
-            .filter(
-              (spId) =>
-                sousParties.find((sp) => sp.id === spId).partie === partieId
-            )
-            .map((spId) => ({
-              id: spId,
-              lignes_details: filteredLignesDetails
-                .filter(
-                  (ligne) =>
-                    ligne.sous_partie === spId &&
-                    selectedLignes.includes(ligne.id)
-                )
-                .map((ligne) => ({
-                  id: ligne.id,
-                  quantity: quantities[ligne.id] || 1,
-                  custom_price: customPrices[ligne.id] || ligne.prix,
-                })),
-            })),
-        })),
-        specialLines: specialLines,
+        client: [clientId], // Le client sera défini via client.set() dans le backend
+        price_ht: parseFloat(totalHT.toFixed(2)),
+        price_ttc: parseFloat(totalTTC.toFixed(2)),
+        tva_rate: parseFloat(tvaRate),
+        nature_travaux: natureTravaux || "",
+        description: devisModalData.description || "",
+        lignes_details: selectedLignes.map((ligneId) => {
+          const quantity = parseFloat(quantities[ligneId]) || 0;
+          const custom_price =
+            parseFloat(customPrices[ligneId]) ||
+            parseFloat(
+              filteredLignesDetails.find((l) => l.id === ligneId)?.prix
+            ) ||
+            0;
+
+          return {
+            ligne: parseInt(ligneId),
+            quantity: quantity.toString(), // Conversion en string pour Decimal
+            custom_price: custom_price.toString(), // Conversion en string pour Decimal
+          };
+        }),
       };
 
+      // Vérification des valeurs avant envoi
+      console.log("Structure finale du devis à envoyer:", devisData);
+
       const response = await axios.post("/api/create-devis/", devisData);
+      console.log("Réponse de création du devis:", response.data);
+
       if (response.data) {
         alert("Devis créé avec succès!");
 
@@ -557,8 +567,24 @@ const CreationDevis = () => {
         setFilteredLignesDetails([]);
       }
     } catch (error) {
-      console.error("Erreur lors de la création du devis:", error);
-      alert(`Erreur lors de la création du devis: ${error.message}`);
+      console.error("Erreur détaillée lors de la création du devis:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        data: error.response?.config?.data, // Afficher les données envoyées
+      });
+
+      // Message d'erreur plus détaillé pour l'utilisateur
+      let errorMessage = "Erreur lors de la création du devis: ";
+      if (error.response?.data?.error) {
+        errorMessage += error.response.data.error;
+      } else if (error.message) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += "Une erreur inconnue s'est produite";
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -1032,7 +1058,6 @@ const CreationDevis = () => {
       alert("Tous les champs sont obligatoires");
       return;
     }
-    console.log("Données client reçues:", clientData);
     if (!clientData) {
       console.error("clientData est undefined");
       return;
@@ -1055,7 +1080,6 @@ const CreationDevis = () => {
   };
 
   const handleSocieteInfoSubmit = async (societeData) => {
-    console.log("Données société reçues:", societeData);
     setPendingChantierData((prev) => ({
       ...prev,
       societe: {
@@ -1121,17 +1145,14 @@ const CreationDevis = () => {
     }
   };
 
-  useEffect(() => {
-    console.log("allLignesDetails:", allLignesDetails);
-    console.log("selectedSousParties:", selectedSousParties);
-    console.log("filteredLignesDetails après filtrage:", filteredLignesDetails);
-  }, [allLignesDetails, selectedSousParties, filteredLignesDetails]);
+  useEffect(() => {}, [
+    allLignesDetails,
+    selectedSousParties,
+    filteredLignesDetails,
+  ]);
 
   useEffect(() => {
     const filtered = allLignesDetails.filter((ligne) => {
-      console.log("Filtrage ligne:", ligne);
-      console.log("sous_partie de la ligne:", ligne.sous_partie);
-      console.log("selectedSousParties:", selectedSousParties);
       return selectedSousParties.includes(ligne.sous_partie);
     });
     setFilteredLignesDetails(filtered);
@@ -1560,9 +1581,6 @@ const CreationDevis = () => {
                 <AccordionDetails>
                   {sortedLignesDetails(
                     visibleLignesDetails.filter((ligne) => {
-                      console.log("Checking ligne:", ligne);
-                      console.log("Sous-partie ID:", ligne.sous_partie);
-                      console.log("Current sous-partie:", sousPartie.id);
                       return ligne.sous_partie === sousPartie.id;
                     })
                   ).map((ligne) => (
