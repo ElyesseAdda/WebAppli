@@ -322,6 +322,7 @@ class Devis(models.Model):
 
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
+    partie = models.ForeignKey('Partie', related_name='lignes_details', on_delete=models.CASCADE, null=True, blank=True)
     description = models.CharField(max_length=255)
     unite = models.CharField(max_length=10)
     prix = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -367,8 +368,7 @@ class DevisLigne(models.Model):
     def __str__(self):
         return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
 
-    class Meta:
-        unique_together = ('devis', 'ligne_detail')
+    
 
 class Situation(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='situations', null=True)

@@ -25,6 +25,7 @@ import locale
 import traceback
 from django.views.decorators.csrf import ensure_csrf_cookie
 from decimal import Decimal
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -40,16 +41,21 @@ class SocieteViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
 class DevisViewSet(viewsets.ModelViewSet):
-    queryset = Devis.objects.all()
+    queryset = Devis.objects.all().prefetch_related('lignes')
     serializer_class = DevisSerializer
-    
+
     def get_queryset(self):
-        queryset = Devis.objects.all()
-        # Ajout de filtres optionnels
-        chantier_id = self.request.query_params.get('chantier', None)
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         return queryset
+    
+    @action(detail=True, methods=['get'])
+    def format_lignes(self, request, pk=None):
+        devis = self.get_object()
+        serializer = self.get_serializer(devis)
+        return Response(serializer.data)
     
 class FactureViewSet(viewsets.ModelViewSet):
     queryset = Facture.objects.all()
@@ -1206,12 +1212,17 @@ def create_chantier_from_devis(request):
 
 @api_view(['POST'])
 def create_devis(request):
+    print("Données reçues:", request.data)
     try:
         with transaction.atomic():
+            # Récupérer le chantier et ses relations
+            chantier = Chantier.objects.select_related('societe__client_name').get(id=request.data['chantier'])
+            
             devis_data = {
                 'numero': request.data['numero'],
                 'chantier_id': request.data['chantier'],
                 'price_ht': Decimal(str(request.data['price_ht'])),
+                'price_ttc': Decimal(str(request.data['price_ttc'])),
                 'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
                 'nature_travaux': request.data.get('nature_travaux', ''),
                 'description': request.data.get('description', ''),
@@ -1220,22 +1231,23 @@ def create_devis(request):
             
             devis = Devis.objects.create(**devis_data)
             
-            # Ajout du client
-            if request.data.get('client'):
-                devis.client.set(request.data['client'])
+            # Associer le client du chantier au devis
+            if chantier.societe and chantier.societe.client_name:
+                devis.client.set([chantier.societe.client_name.id])
+                print(f"Client associé au devis: {chantier.societe.client_name.id}")
+            else:
+                print("Pas de client trouvé pour ce chantier")
             
             # Traitement des lignes de détail
-            for partie_data in request.data.get('parties', []):
-                partie_id = partie_data['id']
-                for sous_partie_data in partie_data.get('sous_parties', []):
-                    for ligne in sous_partie_data.get('lignes_details', []):
-                        if float(ligne['quantity']) > 0:
-                            DevisLigne.objects.create(
-                                devis=devis,
-                                ligne_detail_id=ligne['id'],
-                                quantite=Decimal(str(ligne['quantity'])),
-                                prix_unitaire=Decimal(str(ligne['custom_price']))
-                            )
+            lignes_data = request.data.get('lignes', [])
+            for ligne in lignes_data:
+                if ligne.get('quantity') and float(ligne['quantity']) > 0:
+                    DevisLigne.objects.create(
+                        devis=devis,
+                        ligne_detail_id=ligne['ligne'],
+                        quantite=Decimal(str(ligne['quantity'])),
+                        prix_unitaire=Decimal(str(ligne['custom_price']))
+                    )
             
             # Sauvegarder les lignes spéciales
             if 'specialLines' in request.data:
@@ -1283,6 +1295,8 @@ def create_devis(request):
             
             return Response({'id': devis.id}, status=status.HTTP_201_CREATED)
             
+    except Chantier.DoesNotExist:
+        return Response({'error': 'Chantier non trouvé'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         print(f"Erreur lors de la création du devis: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1576,30 +1590,18 @@ def update_devis_status(request, devis_id):
 def create_facture(request):
     try:
         devis_id = request.data.get('devis_id')
-        print(f"1. Devis ID reçu: {devis_id}")
+       
         
         devis = Devis.objects.get(id=devis_id)
-        print(f"2. Devis trouvé: {devis}")
-        print(f"3. Données du devis:")
-        print(f"   - Price HT: {devis.price_ht}")
-        print(f"   - TVA Rate: {devis.tva_rate}")
-        print(f"   - Chantier: {devis.chantier}")
+        
         
         # Calculer le price_ttc
         price_ht = devis.price_ht
         tva_rate = devis.tva_rate
         price_ttc = price_ht * (1 + tva_rate / 100)
-        print(f"4. Calculs effectués:")
-        print(f"   - Price HT: {price_ht}")
-        print(f"   - TVA Rate: {tva_rate}")
-        print(f"   - Price TTC calculé: {price_ttc}")
+       
         
         # Vérifier les données reçues
-        print(f"5. Données reçues dans request.data:")
-        print(f"   - numero_facture: {request.data.get('numero_facture')}")
-        print(f"   - date_echeance: {request.data.get('date_echeance')}")
-        print(f"   - mode_paiement: {request.data.get('mode_paiement')}")
-        print(f"   - adresse_facturation: {request.data.get('adresse_facturation')}")
         
         # Créer la facture
         facture = Facture.objects.create(
@@ -1613,13 +1615,7 @@ def create_facture(request):
             chantier=devis.chantier,
             devis_origine=devis
         )
-        print(f"6. Facture créée: {facture}")
-        print(f"7. Vérification des données de la facture:")
-        print(f"   - ID: {facture.id}")
-        print(f"   - Price HT: {facture.price_ht}")
-        print(f"   - Price TTC: {facture.price_ttc}")
-        print(f"   - TVA Rate: {facture.tva_rate}")
-        print(f"   - Chantier: {facture.chantier}")
+        
 
         # Copier les lignes du devis
         devis_lignes = DevisLigne.objects.filter(devis=devis)
@@ -1927,6 +1923,42 @@ def check_chantier_name(request):
     chantier_name = request.query_params.get('chantier_name', '')
     exists = Chantier.objects.filter(chantier_name=chantier_name).exists()
     return Response({'exists': exists})
+
+@api_view(['GET'])
+def check_client(request):
+    email = request.query_params.get('email')
+    surname = request.query_params.get('surname')
+    
+    try:
+        # Rechercher un client qui correspond exactement à l'email ET au surname
+        client = Client.objects.filter(
+            client_mail=email,
+            surname=surname
+        ).first()
+        
+        if client:
+            return Response({'client': ClientSerializer(client).data})
+        return Response({'client': None})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def check_societe(request):
+    nom_societe = request.query_params.get('nom_societe')
+    code_postal = request.query_params.get('codepostal_societe')
+    
+    try:
+        # Utiliser filter() au lieu de get() pour obtenir tous les résultats correspondants
+        societes = Societe.objects.filter(
+            nom_societe=nom_societe,
+            codepostal_societe=code_postal
+        )
+        if societes.exists():
+            # Retourner la première société trouvée
+            return Response({'societe': SocieteSerializer(societes.first()).data})
+        return Response({'societe': None})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 

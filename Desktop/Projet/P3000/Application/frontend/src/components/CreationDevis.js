@@ -325,6 +325,37 @@ const CreationDevis = () => {
     }
   };
 
+  // Ajouter ces fonctions de vérification
+  const checkClientExists = async (clientData) => {
+    try {
+      const response = await axios.get("/api/check-client/", {
+        params: {
+          email: clientData.client_mail,
+          phone: clientData.phone_Number,
+        },
+      });
+      return response.data.client || null;
+    } catch (error) {
+      console.error("Erreur lors de la vérification du client:", error);
+      return null;
+    }
+  };
+
+  const checkSocieteExists = async (societeData) => {
+    try {
+      const response = await axios.get("/api/check-societe/", {
+        params: {
+          nom_societe: societeData.nom_societe,
+          codepostal_societe: societeData.codepostal_societe,
+        },
+      });
+      return response.data.societe || null;
+    } catch (error) {
+      console.error("Erreur lors de la vérification de la société:", error);
+      return null;
+    }
+  };
+
   // Modifier le handleSaveDevis
   const handleSaveDevis = async () => {
     try {
@@ -419,28 +450,43 @@ const CreationDevis = () => {
       if (selectedChantierId === -1) {
         console.log("Création d'un nouveau client/société/chantier");
 
-        // 1. Créer le client
-        console.log("Données client à créer:", pendingChantierData.client);
-        const clientResponse = await axios.post("/api/client/", {
-          ...pendingChantierData.client,
-          phone_Number: pendingChantierData.client.phone_Number.toString(),
-        });
-        clientId = clientResponse.data.id;
-        console.log("Client créé avec l'ID:", clientId);
+        // 1. Vérifier si le client existe
+        let clientId;
+        const existingClient = await checkClientExists(
+          pendingChantierData.client
+        );
+        if (existingClient) {
+          console.log("Client existant trouvé:", existingClient);
+          clientId = existingClient.id;
+        } else {
+          // Créer le client uniquement s'il n'existe pas
+          console.log("Création d'un nouveau client");
+          const clientResponse = await axios.post("/api/client/", {
+            ...pendingChantierData.client,
+            phone_Number: pendingChantierData.client.phone_Number.toString(),
+          });
+          clientId = clientResponse.data.id;
+        }
 
-        // 2. Créer la société
-        console.log("Données société à créer:", {
-          ...pendingChantierData.societe,
-          client_name: clientId,
-        });
-        const societeResponse = await axios.post("/api/societe/", {
-          ...pendingChantierData.societe,
-          client_name: clientId,
-          codepostal_societe:
-            pendingChantierData.societe.codepostal_societe.toString(),
-        });
-        societeId = societeResponse.data.id;
-        console.log("Société créée avec l'ID:", societeId);
+        // 2. Vérifier si la société existe
+        let societeId;
+        const existingSociete = await checkSocieteExists(
+          pendingChantierData.societe
+        );
+        if (existingSociete) {
+          console.log("Société existante trouvée:", existingSociete);
+          societeId = existingSociete.id;
+        } else {
+          // Créer la société uniquement si elle n'existe pas
+          console.log("Création d'une nouvelle société");
+          const societeResponse = await axios.post("/api/societe/", {
+            ...pendingChantierData.societe,
+            client_name: clientId,
+            codepostal_societe:
+              pendingChantierData.societe.codepostal_societe.toString(),
+          });
+          societeId = societeResponse.data.id;
+        }
 
         // 3. Créer le chantier
         const updatedChantierData = {
@@ -451,6 +497,7 @@ const CreationDevis = () => {
           montant_ht: totalHT,
           montant_ttc: totalTTC,
           societe: societeId,
+          client: clientId,
         };
 
         console.log("Données chantier à créer:", updatedChantierData);
@@ -472,28 +519,26 @@ const CreationDevis = () => {
       const devisData = {
         numero: devisModalData.numero,
         chantier: chantierIdToUse,
-        client: [clientId], // Le client sera défini via client.set() dans le backend
+        client: [clientId],
         price_ht: parseFloat(totalHT.toFixed(2)),
         price_ttc: parseFloat(totalTTC.toFixed(2)),
         tva_rate: parseFloat(tvaRate),
         nature_travaux: natureTravaux || "",
         description: devisModalData.description || "",
-        lignes_details: selectedLignes.map((ligneId) => {
-          const quantity = parseFloat(quantities[ligneId]) || 0;
-          const custom_price =
-            parseFloat(customPrices[ligneId]) ||
-            parseFloat(
-              filteredLignesDetails.find((l) => l.id === ligneId)?.prix
-            ) ||
-            0;
-
-          return {
-            ligne: parseInt(ligneId),
-            quantity: quantity.toString(), // Conversion en string pour Decimal
-            custom_price: custom_price.toString(), // Conversion en string pour Decimal
-          };
-        }),
+        lignes: selectedLignes.map((ligneId) => ({
+          ligne: parseInt(ligneId),
+          quantity: quantities[ligneId] || 0,
+          custom_price:
+            customPrices[ligneId] ||
+            filteredLignesDetails.find((l) => l.id === ligneId)?.prix ||
+            0,
+        })),
       };
+
+      console.log("Lignes sélectionnées:", selectedLignes);
+      console.log("Quantities:", quantities);
+      console.log("Custom Prices:", customPrices);
+      console.log("Données complètes du devis:", devisData);
 
       // Vérification des valeurs avant envoi
       console.log("Structure finale du devis à envoyer:", devisData);

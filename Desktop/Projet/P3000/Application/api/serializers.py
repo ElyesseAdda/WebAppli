@@ -6,17 +6,35 @@ from .models import (
 )
 
 class DevisLigneSerializer(serializers.ModelSerializer):
+    total_ht = serializers.SerializerMethodField()
+
     class Meta:
         model = DevisLigne
         fields = ['ligne_detail', 'quantite', 'prix_unitaire', 'total_ht']
 
+    def get_total_ht(self, obj):
+        return obj.quantite * obj.prix_unitaire
+
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Devis
-        fields = ['id', 'numero', 'chantier', 'client', 'date_creation', 
-                 'price_ht', 'price_ttc', 'description', 'status', 'lignes']
+        fields = [
+            'id',
+            'numero',
+            'date_creation',
+            'price_ht',
+            'price_ttc',
+            'tva_rate',
+            'nature_travaux',
+            'description',
+            'status',
+            'chantier',
+            'client',
+            
+            'lignes',
+        ]
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -244,7 +262,7 @@ class ChantierDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chantier
         fields = [
-            'id', 
+            
             'chantier_name',
             'state_chantier',
             'description',
