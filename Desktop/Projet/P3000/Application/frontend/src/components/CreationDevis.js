@@ -833,12 +833,20 @@ const CreationDevis = () => {
     return total;
   };
 
+  const handleAddGlobalSpecialLine = () => {
+    setOpenSpecialLineModal(true);
+    setCurrentSpecialLineTarget({
+      type: "global",
+      id: null,
+    });
+  };
+
   const calculateGrandTotal = (specialLines) => {
     console.group("Calcul du Total du Devis");
 
     // 1. Calcul initial du total HT des lignes de détail et par sous-partie
     let totalHT = 0;
-    const sousPartieTotals = {}; // Pour stocker les totaux par sous-partie
+    const sousPartieTotals = {};
 
     console.log("1. Calcul des lignes détail sélectionnées:");
     selectedLignes.forEach((ligneId) => {
@@ -849,24 +857,60 @@ const CreationDevis = () => {
         const ligneTotalHT = quantity * price;
         totalHT += ligneTotalHT;
 
-        // Calculer le total par sous-partie
         const sousPartieId = ligne.sous_partie;
         if (!sousPartieTotals[sousPartieId]) {
           sousPartieTotals[sousPartieId] = 0;
         }
         sousPartieTotals[sousPartieId] += ligneTotalHT;
-
-        console.log(
-          `   Ligne ${ligneId}: Quantité=${quantity} × Prix=${price} = ${ligneTotalHT}€`
-        );
       }
     });
-    console.log(`Total HT initial: ${totalHT}€`);
-    console.log("Totaux par sous-partie:", sousPartieTotals);
 
-    // 2. Appliquer les lignes spéciales
+    // 2. Appliquer les lignes spéciales par niveau
     if (specialLines) {
-      // Lignes spéciales globales
+      // Appliquer d'abord les lignes spéciales des sous-parties
+      if (specialLines.sousParties) {
+        Object.entries(specialLines.sousParties).forEach(
+          ([sousPartieId, lines]) => {
+            const sousPartieTotal = sousPartieTotals[sousPartieId] || 0;
+            lines.forEach((line) => {
+              let montant = 0;
+              if (line.valueType === "percentage") {
+                montant = (sousPartieTotal * parseFloat(line.value)) / 100;
+              } else {
+                montant = parseFloat(line.value);
+              }
+
+              if (line.type === "reduction") {
+                totalHT -= montant;
+              } else {
+                totalHT += montant;
+              }
+            });
+          }
+        );
+      }
+
+      // Puis les lignes spéciales des parties
+      if (specialLines.parties) {
+        Object.entries(specialLines.parties).forEach(([partieId, lines]) => {
+          lines.forEach((line) => {
+            let montant = 0;
+            if (line.valueType === "percentage") {
+              montant = (totalHT * parseFloat(line.value)) / 100;
+            } else {
+              montant = parseFloat(line.value);
+            }
+
+            if (line.type === "reduction") {
+              totalHT -= montant;
+            } else {
+              totalHT += montant;
+            }
+          });
+        });
+      }
+
+      // Enfin, appliquer les lignes spéciales globales
       if (specialLines.global && specialLines.global.length > 0) {
         console.group("Lignes spéciales globales:");
         specialLines.global.forEach((line) => {
@@ -887,73 +931,13 @@ const CreationDevis = () => {
         });
         console.groupEnd();
       }
-
-      // Lignes spéciales par partie
-      if (specialLines.parties) {
-        console.group("Lignes spéciales par partie:");
-        Object.entries(specialLines.parties).forEach(([partieId, lines]) => {
-          lines.forEach((line) => {
-            let montant = 0;
-            if (line.valueType === "percentage") {
-              montant = (totalHT * parseFloat(line.value)) / 100;
-            } else {
-              montant = parseFloat(line.value);
-            }
-
-            if (line.type === "reduction") {
-              totalHT -= montant;
-              console.log(
-                `   Partie ${partieId} - ${line.description}: -${montant}€`
-              );
-            } else {
-              totalHT += montant;
-              console.log(
-                `   Partie ${partieId} - ${line.description}: +${montant}€`
-              );
-            }
-          });
-        });
-        console.groupEnd();
-      }
-
-      // Lignes spéciales par sous-partie
-      if (specialLines.sousParties) {
-        console.group("Lignes spéciales par sous-partie:");
-        Object.entries(specialLines.sousParties).forEach(
-          ([sousPartieId, lines]) => {
-            const sousPartieTotal = sousPartieTotals[sousPartieId] || 0;
-            lines.forEach((line) => {
-              let montant = 0;
-              if (line.valueType === "percentage") {
-                // Calculer le pourcentage sur le total de la sous-partie
-                montant = (sousPartieTotal * parseFloat(line.value)) / 100;
-              } else {
-                montant = parseFloat(line.value);
-              }
-
-              if (line.type === "reduction") {
-                totalHT -= montant;
-                console.log(
-                  `   Sous-partie ${sousPartieId} - ${line.description}: -${montant}€ (basé sur ${sousPartieTotal}€)`
-                );
-              } else {
-                totalHT += montant;
-                console.log(
-                  `   Sous-partie ${sousPartieId} - ${line.description}: +${montant}€ (basé sur ${sousPartieTotal}€)`
-                );
-              }
-            });
-          }
-        );
-        console.groupEnd();
-      }
     }
 
     // 3. Calcul final avec TVA
     const tva = (totalHT * parseFloat(tvaRate)) / 100;
     const totalTTC = totalHT + tva;
 
-    console.log("\n3. Calculs finaux:");
+    console.log("\nCalculs finaux:");
     console.log(`   Total HT: ${totalHT}€`);
     console.log(`   TVA (${tvaRate}%): ${tva}€`);
     console.log(`   Total TTC: ${totalTTC}€`);
@@ -1946,6 +1930,22 @@ const CreationDevis = () => {
                 </AccordionDetails>
               </Accordion>
             ))}
+          </Box>
+          <Box sx={{ mb: 3, display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleAddGlobalSpecialLine}
+              startIcon={<FiPlusCircle />}
+              sx={{
+                borderRadius: "20px",
+                textTransform: "none",
+                fontSize: "0.85rem",
+                padding: "8px 16px",
+              }}
+            >
+              Ajouter une ligne spéciale globale
+            </Button>
           </Box>
 
           <Button
