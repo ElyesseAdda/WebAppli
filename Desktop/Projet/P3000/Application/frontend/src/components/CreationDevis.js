@@ -1050,8 +1050,13 @@ const CreationDevis = () => {
   };
 
   const handleAddSpecialLine = (type, id) => {
+    // Assurons-nous que le type est correctement défini
+    const targetType = type === "parties" ? "parties" : "sousParties";
     setOpenSpecialLineModal(true);
-    setCurrentSpecialLineTarget({ type, id });
+    setCurrentSpecialLineTarget({
+      type: targetType, // Utiliser le type correct
+      id: id.toString(), // Assurez-vous que l'ID est une chaîne
+    });
   };
 
   const handleSpecialLineSave = (lineData) => {
@@ -1065,6 +1070,7 @@ const CreationDevis = () => {
         isHighlighted: lineData.isHighlighted || false,
       };
 
+      // Si c'est une ligne globale
       if (target.type === "global") {
         return {
           ...prev,
@@ -1072,7 +1078,8 @@ const CreationDevis = () => {
         };
       }
 
-      const targetKey = target.type === "partie" ? "parties" : "sousParties";
+      // Pour les parties et sous-parties
+      const targetKey = target.type; // Utiliser directement le type correct
       return {
         ...prev,
         [targetKey]: {
