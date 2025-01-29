@@ -4,6 +4,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -246,79 +247,29 @@ class Materiel_produit(models.Model):
 
 class Devis(models.Model):
     numero = models.CharField(max_length=50, unique=True)
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis')
-    client = models.ManyToManyField(Client, related_name='devis')
-    date_creation = models.DateField(auto_now_add=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
     price_ht = models.DecimalField(max_digits=10, decimal_places=2)
     price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
     tva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20.00)
-    nature_travaux = models.CharField(max_length=255, blank=True, null=True)
-    description = models.TextField(null=True, blank=True)
-    status = models.CharField(
-        max_length=20,
-        choices=[
-            ('En attente', 'En attente'),
-            ('Accepté', 'Accepté'),
-            ('Refusé', 'Refusé')
-        ],
-        default='En attente'
-    )
+    nature_travaux = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En attente')
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis')
+    client = models.ManyToManyField(Client, related_name='devis')
+    
+    # Nouveau champ pour les lignes spéciales
+    lignes_speciales = models.JSONField(default=dict, blank=True)
 
-    def save(self, *args, **kwargs):
-        # Calculer automatiquement le prix TTC avec le taux de TVA spécifié
-        if self.price_ht:
-            tva_multiplier = Decimal('1') + (self.tva_rate / Decimal('100'))
-            self.price_ttc = self.price_ht * tva_multiplier
-        super().save(*args, **kwargs)
+    def save_special_lines(self, special_lines_data):
+        self.lignes_speciales = {
+            'global': special_lines_data.get('global', []),
+            'parties': special_lines_data.get('parties', {}),
+            'sousParties': special_lines_data.get('sousParties', {})
+        }
+        self.save()
 
     def __str__(self):
         return f"Devis {self.numero} - {self.chantier.chantier_name}"
-
-    def save_special_lines(self, special_lines_data):
-        # Supprimer les anciennes lignes spéciales
-        self.lignes_speciales.all().delete()
-        
-        # Sauvegarder les lignes spéciales globales
-        for line in special_lines_data.get('global', []):
-            LigneSpeciale.objects.create(
-                devis=self,
-                description=line['description'],
-                value=line['value'],
-                value_type=line['valueType'],
-                type=line['type'],
-                is_highlighted=line['isHighlighted'],
-                niveau='global'
-            )
-        
-        # Sauvegarder les lignes spéciales des parties
-        for partie_id, lines in special_lines_data.get('parties', {}).items():
-            partie = Partie.objects.get(id=partie_id)
-            for line in lines:
-                LigneSpeciale.objects.create(
-                    devis=self,
-                    description=line['description'],
-                    value=line['value'],
-                    value_type=line['valueType'],
-                    type=line['type'],
-                    is_highlighted=line['isHighlighted'],
-                    niveau='partie',
-                    partie=partie
-                )
-        
-        # Sauvegarder les lignes spéciales des sous-parties
-        for sous_partie_id, lines in special_lines_data.get('sousParties', {}).items():
-            sous_partie = SousPartie.objects.get(id=sous_partie_id)
-            for line in lines:
-                LigneSpeciale.objects.create(
-                    devis=self,
-                    description=line['description'],
-                    value=line['value'],
-                    value_type=line['valueType'],
-                    type=line['type'],
-                    is_highlighted=line['isHighlighted'],
-                    niveau='sous_partie',
-                    sous_partie=sous_partie
-                )
 
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
@@ -331,22 +282,19 @@ class LigneDetail(models.Model):
         return f'{self.description} ({self.unite}) - {self.prix} €'
     
 class Facture(models.Model):
-    numero_facture = models.CharField(max_length=100)
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
-    date_creation = models.DateField(auto_now_add=True)
-    date_modification = models.DateField(auto_now=True)
-    date_echeance = models.DateField(null=True, blank=True)
+    numero = models.CharField(max_length=50, unique=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
     price_ht = models.DecimalField(max_digits=10, decimal_places=2)
     price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
-    tva_rate = models.DecimalField(max_digits=5, decimal_places=2)
-    state_facture = models.CharField(max_length=50, default='En Cours')
-    mode_paiement = models.CharField(max_length=50)
-    adresse_facturation = models.CharField(max_length=255)
-    devis_origine = models.ForeignKey(Devis, on_delete=models.SET_NULL, null=True)
-    lignes = models.ManyToManyField(LigneDetail, through='FactureLigne')
+    tva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20.00)
+    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='factures')
+    state_facture = models.CharField(max_length=20, choices=STATE_CHOICES, default='En attente')
+    
+    # Nouveau champ pour les lignes spéciales
+    lignes_speciales = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
-        return f"Facture {self.numero_facture} - {self.chantier.chantier_name}"
+        return f"Facture {self.numero} - {self.chantier.chantier_name}"
 
     @property
     def client(self):
@@ -355,6 +303,7 @@ class Facture(models.Model):
     @property
     def societe(self):
         return self.chantier.societe
+
 class DevisLigne(models.Model):
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes')
     ligne_detail = models.ForeignKey(LigneDetail, on_delete=models.CASCADE)
@@ -442,33 +391,7 @@ class LaborCost(models.Model):
     def __str__(self):
         return f"{self.agent.name} - {self.chantier.chantier_name} - S{self.week}/{self.year}"
 
-class LigneSpeciale(models.Model):
-    NIVEAU_CHOICES = [
-        ('global', 'Global'),
-        ('partie', 'Partie'),
-        ('sous_partie', 'Sous-partie')
-    ]
-    TYPE_CHOICES = [
-        ('reduction', 'Réduction'),
-        ('addition', 'Addition')
-    ]
-    VALUE_TYPE_CHOICES = [
-        ('percentage', 'Pourcentage'),
-        ('fixed', 'Montant fixe')
-    ]
 
-    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes_speciales')
-    description = models.CharField(max_length=255)
-    value = models.DecimalField(max_digits=10, decimal_places=2)
-    value_type = models.CharField(max_length=10, choices=VALUE_TYPE_CHOICES)
-    type = models.CharField(max_length=10, choices=TYPE_CHOICES)
-    is_highlighted = models.BooleanField(default=False)
-    niveau = models.CharField(max_length=12, choices=NIVEAU_CHOICES)
-    partie = models.ForeignKey(Partie, on_delete=models.CASCADE, null=True, blank=True)
-    sous_partie = models.ForeignKey(SousPartie, on_delete=models.CASCADE, null=True, blank=True)
-
-    class Meta:
-        ordering = ['id']
 
 class FactureLigne(models.Model):
     facture = models.ForeignKey(Facture, on_delete=models.CASCADE, related_name='lignes_details')
@@ -485,20 +408,7 @@ class FactureLigne(models.Model):
         return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
 
 
-class FactureSpecialLine(models.Model):
-    facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
-    description = models.CharField(max_length=255)
-    value = models.DecimalField(max_digits=10, decimal_places=2)
-    value_type = models.CharField(max_length=20, choices=[('fixed', 'Fixe'), ('percentage', 'Pourcentage')])
-    type = models.CharField(max_length=20, choices=[('reduction', 'Réduction'), ('addition', 'Addition')])
-    niveau = models.CharField(max_length=20, choices=[
-        ('global', 'Global'),
-        ('partie', 'Partie'),
-        ('sous_partie', 'Sous-partie')
-    ])
-    partie_id = models.IntegerField(null=True, blank=True)
-    sous_partie_id = models.IntegerField(null=True, blank=True)
-    is_highlighted = models.BooleanField(default=False)
+
 
 class FacturePartie(models.Model):
     facture = models.ForeignKey('Facture', on_delete=models.CASCADE, related_name='parties')

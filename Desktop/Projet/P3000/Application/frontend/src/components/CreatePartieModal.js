@@ -87,39 +87,82 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
       let createdData = null;
 
       if (creationType === "partie") {
+        if (!partieTitle.trim()) {
+          alert("Le titre de la partie est requis");
+          return;
+        }
+
+        // 1. Créer la partie
         const partieResponse = await axios.post("/api/parties/", {
           titre: partieTitle,
         });
+        console.log("Partie créée:", partieResponse.data);
 
-        // Créer les sous-parties et leurs lignes
         const sousPartiesData = [];
+
+        // 2. Créer les sous-parties une par une
         for (const sousPartie of sousParties) {
           if (sousPartie.description.trim()) {
-            const sousPartieResponse = await axios.post("/api/sous-parties/", {
-              description: sousPartie.description,
-              partie: partieResponse.data.id,
-            });
+            try {
+              // Créer la sous-partie
+              const sousPartieResponse = await axios.post(
+                "/api/sous-parties/",
+                {
+                  description: sousPartie.description,
+                  partie: partieResponse.data.id,
+                }
+              );
+              console.log("Sous-partie créée:", sousPartieResponse.data);
 
-            // Créer les lignes de cette sous-partie
-            const lignesPromises = sousPartie.lignes.map(async (ligne) => {
-              if (ligne.description.trim() && ligne.prix.toString().trim()) {
-                const ligneResponse = await axios.post("/api/ligne-details/", {
-                  description: ligne.description,
-                  unite: ligne.unite,
-                  prix: parseFloat(ligne.prix),
-                  sous_partie: sousPartieResponse.data.id,
-                });
-                return ligneResponse.data;
+              // Attendre que la sous-partie soit bien créée
+              await new Promise((resolve) => setTimeout(resolve, 100));
+
+              // 3. Créer les lignes une par une pour cette sous-partie
+              const lignesCreees = [];
+              for (const ligne of sousPartie.lignes) {
+                if (ligne.description.trim()) {
+                  try {
+                    const prix = ligne.prix.toString().replace(",", ".").trim();
+                    if (isNaN(parseFloat(prix))) {
+                      throw new Error(
+                        `Prix invalide pour la ligne: ${ligne.description}`
+                      );
+                    }
+
+                    const ligneData = {
+                      description: ligne.description.trim(),
+                      unite: ligne.unite.trim() || "unité",
+                      prix: parseFloat(prix),
+                      sous_partie: sousPartieResponse.data.id,
+                    };
+
+                    console.log("Tentative de création de ligne:", ligneData);
+                    const ligneResponse = await axios.post(
+                      "/api/ligne-details/",
+                      ligneData
+                    );
+                    console.log("Ligne créée:", ligneResponse.data);
+                    lignesCreees.push(ligneResponse.data);
+                  } catch (error) {
+                    console.error(
+                      "Erreur création ligne:",
+                      error.response?.data || error
+                    );
+                    throw new Error(
+                      `Erreur lors de la création de la ligne ${ligne.description}`
+                    );
+                  }
+                }
               }
-            });
 
-            const createdLignes = await Promise.all(lignesPromises);
-            sousPartiesData.push({
-              ...sousPartieResponse.data,
-              lignes_details: createdLignes.filter(
-                (ligne) => ligne !== undefined
-              ),
-            });
+              sousPartiesData.push({
+                ...sousPartieResponse.data,
+                lignes_details: lignesCreees,
+              });
+            } catch (error) {
+              console.error("Erreur création sous-partie:", error);
+              throw error;
+            }
           }
         }
 
@@ -131,94 +174,106 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
           },
         };
       } else if (creationType === "sousPartie") {
-        // Logique pour créer uniquement une sous-partie
+        // Logique similaire pour la création d'une seule sous-partie
         if (!selectedPartieId || !sousParties[0].description.trim()) {
           alert("Veuillez sélectionner une partie et saisir une description.");
           return;
         }
 
-        // Vérifier si la sous-partie existe déjà
-        const sousPartieExists = existingSousParties.some(
-          (sp) =>
-            sp.description.toLowerCase() ===
-            sousParties[0].description.trim().toLowerCase()
-        );
-
-        if (sousPartieExists) {
-          alert("Cette sous-partie existe déjà.");
-          return;
-        }
-
-        // Créer la sous-partie
         const sousPartieResponse = await axios.post("/api/sous-parties/", {
           description: sousParties[0].description,
           partie: selectedPartieId,
         });
+        console.log("Sous-partie créée:", sousPartieResponse.data);
 
-        // Créer toutes les lignes de détail associées
-        const lignesPromises = sousParties[0].lignes.map(async (ligne) => {
+        // Attendre que la sous-partie soit bien créée
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const lignesCreees = [];
+        for (const ligne of sousParties[0].lignes) {
           if (ligne.description.trim() && ligne.prix.toString().trim()) {
-            const ligneResponse = await axios.post("/api/ligne-details/", {
-              description: ligne.description,
-              unite: ligne.unite,
-              prix: parseFloat(ligne.prix),
+            const ligneData = {
+              description: ligne.description.trim(),
+              unite: ligne.unite.trim() || "unité",
+              prix: parseFloat(ligne.prix.toString().replace(",", ".")),
               sous_partie: sousPartieResponse.data.id,
-            });
-            return ligneResponse.data;
-          }
-        });
+            };
 
-        // Attendre que toutes les lignes soient créées
-        const createdLignes = await Promise.all(lignesPromises);
+            const ligneResponse = await axios.post(
+              "/api/ligne-details/",
+              ligneData
+            );
+            lignesCreees.push(ligneResponse.data);
+          }
+        }
 
         createdData = {
           type: "sousPartie",
           data: {
             ...sousPartieResponse.data,
-            lignes_details: createdLignes.filter(
-              (ligne) => ligne !== undefined
-            ),
+            lignes_details: lignesCreees,
           },
         };
       } else if (creationType === "ligne") {
-        // Logique pour créer uniquement une ligne
         if (
           !selectedSousPartieId ||
           !sousParties[0].lignes[0].description.trim()
         ) {
           alert(
-            "Veuillez sélectionner une sous-partie et saisir une description."
+            "Veuillez sélectionner une sous-partie et saisir au moins une description."
           );
           return;
         }
 
-        // Vérifier si la ligne existe déjà
-        const ligneExists = existingLignes.some(
-          (l) =>
-            l.description.toLowerCase() ===
-            sousParties[0].lignes[0].description.trim().toLowerCase()
+        // Filtrer les lignes valides
+        const lignesValides = sousParties[0].lignes.filter(
+          (ligne) => ligne.description.trim() && ligne.prix.toString().trim()
         );
 
-        if (ligneExists) {
-          alert("Cette ligne existe déjà.");
+        if (lignesValides.length === 0) {
+          alert("Veuillez saisir au moins une ligne valide.");
           return;
         }
 
-        const ligneResponse = await axios.post("/api/ligne-details/", {
-          description: sousParties[0].lignes[0].description,
-          unite: sousParties[0].lignes[0].unite,
-          prix: parseFloat(sousParties[0].lignes[0].prix),
-          sous_partie: selectedSousPartieId,
-        });
-        createdData = { type: "ligne", data: ligneResponse.data };
+        // Vérifier les doublons pour chaque ligne
+        for (const ligne of lignesValides) {
+          const ligneExists = existingLignes.some(
+            (l) =>
+              l.description.toLowerCase() ===
+              ligne.description.trim().toLowerCase()
+          );
+
+          if (ligneExists) {
+            alert(`La ligne "${ligne.description}" existe déjà.`);
+            return;
+          }
+        }
+
+        // Créer toutes les lignes
+        const lignesPromises = lignesValides.map((ligne) =>
+          axios.post("/api/ligne-details/", {
+            description: ligne.description.trim(),
+            unite: ligne.unite.trim() || "unité",
+            prix: parseFloat(ligne.prix.toString().replace(",", ".")),
+            sous_partie: selectedSousPartieId,
+          })
+        );
+
+        const responses = await Promise.all(lignesPromises);
+        const lignesCreees = responses.map((response) => response.data);
+
+        createdData = {
+          type: "ligne",
+          data: lignesCreees,
+        };
       }
 
       onPartieCreated(createdData);
       handleClose();
       resetForm();
     } catch (error) {
-      console.error("Erreur lors de la création:", error);
-      alert("Erreur lors de la création");
+      console.error("Erreur détaillée:", error);
+      alert(`Erreur lors de la création: ${error.message}`);
     }
   };
 
@@ -441,36 +496,49 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
           )}
 
           {creationType === "ligne" && selectedSousPartieId && (
-            <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
-              <TextField
-                fullWidth
-                label="Description"
-                value={sousParties[0].lignes[0].description}
-                onChange={(e) => {
-                  const newSousParties = [...sousParties];
-                  newSousParties[0].lignes[0].description = e.target.value;
-                  setSousParties(newSousParties);
-                }}
-              />
-              <TextField
-                label="Unité"
-                value={sousParties[0].lignes[0].unite}
-                onChange={(e) => {
-                  const newSousParties = [...sousParties];
-                  newSousParties[0].lignes[0].unite = e.target.value;
-                  setSousParties(newSousParties);
-                }}
-              />
-              <TextField
-                label="Prix"
-                type="number"
-                value={sousParties[0].lignes[0].prix}
-                onChange={(e) => {
-                  const newSousParties = [...sousParties];
-                  newSousParties[0].lignes[0].prix = e.target.value;
-                  setSousParties(newSousParties);
-                }}
-              />
+            <Box
+              sx={{ border: "1px solid #ddd", p: 2, borderRadius: 1, mt: 2 }}
+            >
+              {sousParties[0].lignes.map((ligne, ligneIndex) => (
+                <Box key={ligneIndex} sx={{ display: "flex", gap: 1, mt: 2 }}>
+                  <TextField
+                    fullWidth
+                    label="Description"
+                    value={ligne.description}
+                    onChange={(e) => {
+                      const newSousParties = [...sousParties];
+                      newSousParties[0].lignes[ligneIndex].description =
+                        e.target.value;
+                      setSousParties(newSousParties);
+                    }}
+                  />
+                  <TextField
+                    label="Unité"
+                    value={ligne.unite}
+                    onChange={(e) => {
+                      const newSousParties = [...sousParties];
+                      newSousParties[0].lignes[ligneIndex].unite =
+                        e.target.value;
+                      setSousParties(newSousParties);
+                    }}
+                  />
+                  <TextField
+                    label="Prix"
+                    type="number"
+                    value={ligne.prix}
+                    onChange={(e) => {
+                      const newSousParties = [...sousParties];
+                      newSousParties[0].lignes[ligneIndex].prix =
+                        e.target.value;
+                      setSousParties(newSousParties);
+                    }}
+                  />
+                </Box>
+              ))}
+
+              <Button onClick={() => handleAddLigne(0)} sx={{ mt: 1 }}>
+                + Ajouter une ligne
+              </Button>
             </Box>
           )}
         </Box>

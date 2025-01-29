@@ -117,6 +117,9 @@ const CreationDevis = () => {
     id: null,
   });
 
+  // Ajouter cet état pour gérer les termes de recherche par sous-partie
+  const [searchTerms, setSearchTerms] = useState({});
+
   // Charger les chantiers
   useEffect(() => {
     fetchChantiers();
@@ -244,7 +247,7 @@ const CreationDevis = () => {
       numero: devisModalData.numero,
       chantier: selectedChantierId,
       client: [selectedSocieteId],
-      price_ht: calculateGrandTotal().totalHT,
+      price_ht: calculateGrandTotal(specialLines).totalHT,
       description: devisModalData.description,
       tva_rate: tvaRate,
       nature_travaux: natureTravaux,
@@ -400,7 +403,7 @@ const CreationDevis = () => {
       setDevisModalData({
         numero: nextDevisNumber,
         client: clientName,
-        price_ht: calculateGrandTotal().totalHT,
+        price_ht: calculateGrandTotal(specialLines).totalHT,
         description: "",
       });
       setOpenDevisModal(true);
@@ -413,7 +416,7 @@ const CreationDevis = () => {
   const handleDevisModalSubmit = async () => {
     try {
       console.log("=== Début de handleDevisModalSubmit ===");
-      const totals = calculateGrandTotal();
+      const totals = calculateGrandTotal(specialLines);
       console.log("Totaux calculés:", totals);
 
       const totalHT = totals.totalHT;
@@ -533,15 +536,44 @@ const CreationDevis = () => {
             filteredLignesDetails.find((l) => l.id === ligneId)?.prix ||
             0,
         })),
+        // Ajout des lignes spéciales structurées
+        lignes_speciales: {
+          global: specialLines.global || [],
+          parties: Object.fromEntries(
+            Object.entries(specialLines.parties || {}).map(
+              ([partieId, lines]) => [
+                partieId,
+                lines.map((line) => ({
+                  description: line.description,
+                  value: parseFloat(line.value),
+                  valueType: line.valueType,
+                  type: line.type,
+                  isHighlighted: line.isHighlighted || false,
+                })),
+              ]
+            )
+          ),
+          sousParties: Object.fromEntries(
+            Object.entries(specialLines.sousParties || {}).map(
+              ([sousPartieId, lines]) => [
+                sousPartieId,
+                lines.map((line) => ({
+                  description: line.description,
+                  value: parseFloat(line.value),
+                  valueType: line.valueType,
+                  type: line.type,
+                  isHighlighted: line.isHighlighted || false,
+                })),
+              ]
+            )
+          ),
+        },
       };
 
-      console.log("Lignes sélectionnées:", selectedLignes);
-      console.log("Quantities:", quantities);
-      console.log("Custom Prices:", customPrices);
-      console.log("Données complètes du devis:", devisData);
-
-      // Vérification des valeurs avant envoi
-      console.log("Structure finale du devis à envoyer:", devisData);
+      console.log(
+        "Structure des lignes spéciales à envoyer:",
+        devisData.lignes_speciales
+      );
 
       const response = await axios.post("/api/create-devis/", devisData);
       console.log("Réponse de création du devis:", response.data);
@@ -610,6 +642,13 @@ const CreationDevis = () => {
         // Réinitialiser les filtres
         setFilteredSousParties([]);
         setFilteredLignesDetails([]);
+
+        // Réinitialiser aussi les lignes spéciales
+        setSpecialLines({
+          global: [],
+          parties: {},
+          sousParties: {},
+        });
       }
     } catch (error) {
       console.error("Erreur détaillée lors de la création du devis:", {
@@ -793,50 +832,132 @@ const CreationDevis = () => {
     return total;
   };
 
-  const calculateGrandTotal = () => {
-    // Calculer d'abord le total HT des lignes de détail
-    let totalHT = visibleLignesDetails.reduce((total, ligne) => {
-      if (selectedLignes.includes(ligne.id)) {
-        return total + parseFloat(calculateTotalPrice(ligne));
-      }
-      return total;
-    }, 0);
+  const calculateGrandTotal = (specialLines) => {
+    console.group("Calcul du Total du Devis");
 
-    // Appliquer les lignes spéciales par partie
-    selectedParties.forEach((partieId) => {
-      const partieSpecialLines = specialLines.parties[partieId] || [];
-      partieSpecialLines.forEach((specialLine) => {
-        let montant =
-          specialLine.valueType === "percentage"
-            ? (totalHT * specialLine.value) / 100
-            : parseFloat(specialLine.value);
+    // 1. Calcul initial du total HT des lignes de détail et par sous-partie
+    let totalHT = 0;
+    const sousPartieTotals = {}; // Pour stocker les totaux par sous-partie
 
-        if (specialLine.type === "reduction") {
-          totalHT -= montant;
-        } else {
-          totalHT += montant;
+    console.log("1. Calcul des lignes détail sélectionnées:");
+    selectedLignes.forEach((ligneId) => {
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      if (ligne) {
+        const quantity = quantities[ligneId] || 0;
+        const price = customPrices[ligneId] || ligne.prix;
+        const ligneTotalHT = quantity * price;
+        totalHT += ligneTotalHT;
+
+        // Calculer le total par sous-partie
+        const sousPartieId = ligne.sous_partie;
+        if (!sousPartieTotals[sousPartieId]) {
+          sousPartieTotals[sousPartieId] = 0;
         }
-      });
-    });
+        sousPartieTotals[sousPartieId] += ligneTotalHT;
 
-    // Appliquer les lignes spéciales globales
-    const globalSpecialLines = specialLines.global || [];
-    globalSpecialLines.forEach((specialLine) => {
-      let montant =
-        specialLine.valueType === "percentage"
-          ? (totalHT * specialLine.value) / 100
-          : parseFloat(specialLine.value);
-
-      if (specialLine.type === "reduction") {
-        totalHT -= montant;
-      } else {
-        totalHT += montant;
+        console.log(
+          `   Ligne ${ligneId}: Quantité=${quantity} × Prix=${price} = ${ligneTotalHT}€`
+        );
       }
     });
+    console.log(`Total HT initial: ${totalHT}€`);
+    console.log("Totaux par sous-partie:", sousPartieTotals);
 
-    // Calculer la TVA et le total TTC
-    const tva = (totalHT * tvaRate) / 100;
+    // 2. Appliquer les lignes spéciales
+    if (specialLines) {
+      // Lignes spéciales globales
+      if (specialLines.global && specialLines.global.length > 0) {
+        console.group("Lignes spéciales globales:");
+        specialLines.global.forEach((line) => {
+          let montant = 0;
+          if (line.valueType === "percentage") {
+            montant = (totalHT * parseFloat(line.value)) / 100;
+          } else {
+            montant = parseFloat(line.value);
+          }
+
+          if (line.type === "reduction") {
+            totalHT -= montant;
+            console.log(`   ${line.description}: -${montant}€`);
+          } else {
+            totalHT += montant;
+            console.log(`   ${line.description}: +${montant}€`);
+          }
+        });
+        console.groupEnd();
+      }
+
+      // Lignes spéciales par partie
+      if (specialLines.parties) {
+        console.group("Lignes spéciales par partie:");
+        Object.entries(specialLines.parties).forEach(([partieId, lines]) => {
+          lines.forEach((line) => {
+            let montant = 0;
+            if (line.valueType === "percentage") {
+              montant = (totalHT * parseFloat(line.value)) / 100;
+            } else {
+              montant = parseFloat(line.value);
+            }
+
+            if (line.type === "reduction") {
+              totalHT -= montant;
+              console.log(
+                `   Partie ${partieId} - ${line.description}: -${montant}€`
+              );
+            } else {
+              totalHT += montant;
+              console.log(
+                `   Partie ${partieId} - ${line.description}: +${montant}€`
+              );
+            }
+          });
+        });
+        console.groupEnd();
+      }
+
+      // Lignes spéciales par sous-partie
+      if (specialLines.sousParties) {
+        console.group("Lignes spéciales par sous-partie:");
+        Object.entries(specialLines.sousParties).forEach(
+          ([sousPartieId, lines]) => {
+            const sousPartieTotal = sousPartieTotals[sousPartieId] || 0;
+            lines.forEach((line) => {
+              let montant = 0;
+              if (line.valueType === "percentage") {
+                // Calculer le pourcentage sur le total de la sous-partie
+                montant = (sousPartieTotal * parseFloat(line.value)) / 100;
+              } else {
+                montant = parseFloat(line.value);
+              }
+
+              if (line.type === "reduction") {
+                totalHT -= montant;
+                console.log(
+                  `   Sous-partie ${sousPartieId} - ${line.description}: -${montant}€ (basé sur ${sousPartieTotal}€)`
+                );
+              } else {
+                totalHT += montant;
+                console.log(
+                  `   Sous-partie ${sousPartieId} - ${line.description}: +${montant}€ (basé sur ${sousPartieTotal}€)`
+                );
+              }
+            });
+          }
+        );
+        console.groupEnd();
+      }
+    }
+
+    // 3. Calcul final avec TVA
+    const tva = (totalHT * parseFloat(tvaRate)) / 100;
     const totalTTC = totalHT + tva;
+
+    console.log("\n3. Calculs finaux:");
+    console.log(`   Total HT: ${totalHT}€`);
+    console.log(`   TVA (${tvaRate}%): ${tva}€`);
+    console.log(`   Total TTC: ${totalTTC}€`);
+
+    console.groupEnd();
 
     return {
       totalHT: parseFloat(totalHT.toFixed(2)),
@@ -935,20 +1056,31 @@ const CreationDevis = () => {
   const handleSpecialLineSave = (lineData) => {
     setSpecialLines((prev) => {
       const target = currentSpecialLineTarget;
+      const newLine = {
+        description: lineData.description,
+        value: parseFloat(lineData.value),
+        valueType: lineData.valueType,
+        type: lineData.type,
+        isHighlighted: lineData.isHighlighted || false,
+      };
+
       if (target.type === "global") {
         return {
           ...prev,
-          global: [...prev.global, lineData],
+          global: [...(prev.global || []), newLine],
         };
       }
+
+      const targetKey = target.type === "partie" ? "parties" : "sousParties";
       return {
         ...prev,
-        [target.type]: {
-          ...prev[target.type],
-          [target.id]: [...(prev[target.type][target.id] || []), lineData],
+        [targetKey]: {
+          ...prev[targetKey],
+          [target.id]: [...(prev[targetKey]?.[target.id] || []), newLine],
         },
       };
     });
+    setOpenSpecialLineModal(false);
   };
 
   const handleSaveEdit = async (editedData) => {
@@ -1215,6 +1347,16 @@ const CreationDevis = () => {
       }
       return newSpecialLines;
     });
+  };
+
+  // Ajouter cette fonction pour filtrer les lignes de détail
+  const getFilteredLignes = (sousPartieId, lignes) => {
+    const searchTerm = searchTerms[sousPartieId]?.toLowerCase() || "";
+    if (!searchTerm) return lignes;
+
+    return lignes.filter((ligne) =>
+      ligne.description.toLowerCase().includes(searchTerm)
+    );
   };
 
   return (
@@ -1624,10 +1766,26 @@ const CreationDevis = () => {
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Rechercher une ligne..."
+                    sx={{ mb: 2 }}
+                    onChange={(e) =>
+                      setSearchTerms((prev) => ({
+                        ...prev,
+                        [sousPartie.id]: e.target.value,
+                      }))
+                    }
+                    value={searchTerms[sousPartie.id] || ""}
+                  />
                   {sortedLignesDetails(
-                    visibleLignesDetails.filter((ligne) => {
-                      return ligne.sous_partie === sousPartie.id;
-                    })
+                    getFilteredLignes(
+                      sousPartie.id,
+                      visibleLignesDetails.filter((ligne) => {
+                        return ligne.sous_partie === sousPartie.id;
+                      })
+                    )
                   ).map((ligne) => (
                     <Card
                       key={ligne.id}
@@ -1818,7 +1976,7 @@ const CreationDevis = () => {
             }}
           >
             <Typography variant="h6" sx={{ color: "primary.main" }}>
-              Total TTC: {calculateGrandTotal().totalTTC} €
+              Total TTC: {calculateGrandTotal(specialLines).totalTTC} €
             </Typography>
           </Box>
 

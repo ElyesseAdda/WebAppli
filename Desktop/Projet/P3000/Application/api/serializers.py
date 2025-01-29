@@ -1,8 +1,9 @@
 from rest_framework import serializers  
+from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
-    Schedule, LaborCost, DevisLigne, Facture, FactureLigne, FactureSpecialLine
+    Schedule, LaborCost, DevisLigne, Facture, FactureLigne,
 )
 
 class DevisLigneSerializer(serializers.ModelSerializer):
@@ -15,31 +16,59 @@ class DevisLigneSerializer(serializers.ModelSerializer):
     def get_total_ht(self, obj):
         return obj.quantite * obj.prix_unitaire
 
+
+
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, read_only=True)
+    lignes_speciales = serializers.JSONField(required=False)
 
     class Meta:
         model = Devis
         fields = [
-            'id',
-            'numero',
-            'date_creation',
-            'price_ht',
-            'price_ttc',
-            'tva_rate',
-            'nature_travaux',
-            'description',
-            'status',
-            'chantier',
-            'client',
-            
-            'lignes',
+            'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
+            'tva_rate', 'nature_travaux', 'description', 'status',
+            'chantier', 'client', 'lignes', 'lignes_speciales'
         ]
+
+    def get_lignes_speciales(self, obj):
+        lignes = obj.lignes_speciales.all()
+        result = {
+            'global': [],
+            'parties': {},
+            'sousParties': {}
+        }
+
+        for ligne in lignes:
+            ligne_data = {
+                'id': ligne.id,
+                'description': ligne.description,
+                'value': float(ligne.value),
+                'valueType': ligne.value_type,
+                'type': ligne.type,
+                'isHighlighted': ligne.is_highlighted
+            }
+
+            if ligne.niveau == 'global':
+                result['global'].append(ligne_data)
+            elif ligne.niveau == 'partie':
+                partie_id = str(ligne.partie.id)
+                if partie_id not in result['parties']:
+                    result['parties'][partie_id] = []
+                result['parties'][partie_id].append(ligne_data)
+            elif ligne.niveau == 'sous_partie':
+                sous_partie_id = str(ligne.sous_partie.id)
+                if sous_partie_id not in result['sousParties']:
+                    result['sousParties'][sous_partie_id] = []
+                result['sousParties'][sous_partie_id].append(ligne_data)
+
+        return result
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chantier
-        fields = '__all__'      
+        fields = '__all__'     
+
+
 
 class SocieteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -49,7 +78,32 @@ class SocieteSerializer(serializers.ModelSerializer):
 class LigneDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigneDetail
-        fields = ['id', 'description', 'unite', 'prix']
+        fields = ['id', 'description', 'unite', 'prix', 'sous_partie']
+
+    def validate(self, data):
+        """
+        Vérifie si une ligne de détail similaire existe déjà dans la même sous-partie
+        """
+        description = data.get('description', '').strip().lower()
+        sous_partie = data.get('sous_partie')
+        
+        if description and sous_partie:
+            # Vérifie si une ligne avec la même description existe dans la sous-partie
+            existing_ligne = LigneDetail.objects.filter(
+                Q(description__iexact=description) &
+                Q(sous_partie=sous_partie)
+            ).first()
+            
+            if existing_ligne:
+                raise serializers.ValidationError({
+                    'description': f'Cette ligne existe déjà dans la sous-partie "{sous_partie.description}". '
+                                 f'Détails de la ligne existante : '
+                                 f'Description: {existing_ligne.description}, '
+                                 f'Unité: {existing_ligne.unite}, '
+                                 f'Prix: {existing_ligne.prix}€'
+                })
+        
+        return data
 
 class SousPartieSerializer(serializers.ModelSerializer):
     lignes_details = LigneDetailSerializer(many=True, read_only=True)
@@ -58,12 +112,62 @@ class SousPartieSerializer(serializers.ModelSerializer):
         model = SousPartie
         fields = '__all__'
 
+    def validate(self, data):
+        """
+        Vérifie si une sous-partie similaire existe déjà dans la même partie
+        """
+        description = data.get('description', '').strip().lower()
+        partie = data.get('partie')
+        
+        if description and partie:
+            # Vérifie si une sous-partie avec la même description existe dans la partie
+            existing_sous_partie = SousPartie.objects.filter(
+                Q(description__iexact=description) &
+                Q(partie=partie)
+            ).first()
+            
+            if existing_sous_partie:
+                nb_lignes = existing_sous_partie.lignes_details.count()
+                raise serializers.ValidationError({
+                    'description': f'Cette sous-partie existe déjà dans la partie "{partie.titre}". '
+                                 f'Détails de la sous-partie existante : '
+                                 f'Description: {existing_sous_partie.description}, '
+                                 f'Nombre de lignes: {nb_lignes}'
+                })
+        
+        return data
+
 class PartieSerializer(serializers.ModelSerializer):
     sous_parties = SousPartieSerializer(many=True, read_only=True)
 
     class Meta:
         model = Partie
         fields = '__all__'
+
+    def validate(self, data):
+        """
+        Vérifie si une partie avec le même titre existe déjà
+        """
+        titre = data.get('titre', '').strip().lower()
+        
+        if titre:
+            # Vérifie si une partie avec le même titre existe
+            existing_partie = Partie.objects.filter(
+                titre__iexact=titre
+            ).first()
+            
+            if existing_partie:
+                nb_sous_parties = existing_partie.sous_parties.count()
+                total_lignes = sum(sp.lignes_details.count() for sp in existing_partie.sous_parties.all())
+                raise serializers.ValidationError({
+                    'titre': f'Cette partie existe déjà. '
+                            f'Détails de la partie existante : '
+                            f'Titre: {existing_partie.titre}, '
+                            f'Nombre de sous-parties: {nb_sous_parties}, '
+                            f'Nombre total de lignes: {total_lignes}'
+                })
+        
+        return data
 
 class ClientSerializer(serializers.ModelSerializer):
     
@@ -166,91 +270,21 @@ class FactureLigneSerializer(serializers.ModelSerializer):
         return representation
 
 class FactureSerializer(serializers.ModelSerializer):
-    lignes = FactureLigneSerializer(source='lignes_details', many=True, read_only=True)
+    lignes = FactureLigneSerializer(many=True, read_only=True)
+    lignes_speciales = serializers.JSONField(required=False)
 
     class Meta:
         model = Facture
         fields = [
-            'id', 'numero_facture', 'date_echeance', 'mode_paiement',
-            'adresse_facturation', 'devis_origine', 'lignes', 'price_ht', 
-            'price_ttc', 'tva_rate', 'chantier'
+            'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
+            'tva_rate', 'devis', 'state_facture', 'lignes', 'lignes_speciales'
         ]
-        read_only_fields = ['price_ht', 'price_ttc', 'tva_rate', 'chantier']
-
-    def validate(self, data):
-        if 'devis_origine' not in data:
-            raise serializers.ValidationError({"devis_origine": "Ce champ est obligatoire"})
-        return data
 
     def create(self, validated_data):
-        devis = validated_data['devis_origine']
-        
-        facture = Facture.objects.create(
-            numero_facture=validated_data['numero_facture'],
-            date_echeance=validated_data.get('date_echeance'),
-            mode_paiement=validated_data['mode_paiement'],
-            adresse_facturation=validated_data['adresse_facturation'],
-            devis_origine=devis,
-            price_ht=devis.price_ht,
-            price_ttc=devis.price_ttc,
-            tva_rate=devis.tva_rate,
-            chantier=devis.chantier
-        )
-
-        # Copier les lignes du devis
-        devis_lignes = DevisLigne.objects.filter(devis=devis)
-        for devis_ligne in devis_lignes:
-            FactureLigne.objects.create(
-                facture=facture,
-                ligne_detail=devis_ligne.ligne_detail,
-                quantite=devis_ligne.quantite,
-                prix_unitaire=devis_ligne.prix_unitaire,
-                total_ht=devis_ligne.total_ht
-            )
-
-        # Copier les lignes spéciales
-        self._copy_special_lines(devis, facture)
-        
-        return facture
-
-    def _copy_special_lines(self, devis, facture):
-        # Copier les lignes spéciales globales
-        for ligne in devis.lignes_speciales.filter(niveau='global'):
-            FactureSpecialLine.objects.create(
-                facture=facture,
-                description=ligne.description,
-                value=ligne.value,
-                value_type=ligne.value_type,
-                type=ligne.type,
-                is_highlighted=ligne.is_highlighted,
-                niveau='global'
-            )
-
-        # Copier les lignes spéciales des parties
-        for ligne in devis.lignes_speciales.filter(niveau='partie'):
-            FactureSpecialLine.objects.create(
-                facture=facture,
-                description=ligne.description,
-                value=ligne.value,
-                value_type=ligne.value_type,
-                type=ligne.type,
-                is_highlighted=ligne.is_highlighted,
-                niveau='partie',
-                partie_id=ligne.partie_id
-            )
-
-        # Copier les lignes spéciales des sous-parties
-        for ligne in devis.lignes_speciales.filter(niveau='sous_partie'):
-            FactureSpecialLine.objects.create(
-                facture=facture,
-                description=ligne.description,
-                value=ligne.value,
-                value_type=ligne.value_type,
-                type=ligne.type,
-                is_highlighted=ligne.is_highlighted,
-                niveau='sous_partie',
-                sous_partie_id=ligne.sous_partie_id
-            )
+        devis = validated_data.get('devis')
+        if devis and devis.lignes_speciales:
+            validated_data['lignes_speciales'] = devis.lignes_speciales
+        return super().create(validated_data)
 
 class ChantierDetailSerializer(serializers.ModelSerializer):
     societe_details = serializers.SerializerMethodField()

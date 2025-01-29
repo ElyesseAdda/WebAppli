@@ -4,7 +4,8 @@ from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
-    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, create_facture_from_devis,check_facture_numero, get_chantier_details, check_chantier_name, check_client, check_societe# Import de la vue
+    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, create_facture_from_devis,check_facture_numero, get_chantier_details, check_chantier_name, check_client, check_societe, calculate_special_lines, get_devis_special_lines, 
+    
 )
 
 router = DefaultRouter()
@@ -20,6 +21,7 @@ router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
+
 
 
 urlpatterns = [
@@ -54,5 +56,7 @@ urlpatterns = [
     path('check-chantier-name/', check_chantier_name, name='check-chantier-name'),
     path('check-client/', check_client, name='check-client'),
     path('check-societe/', check_societe, name='check-societe'),
+    path('calculate-special-lines/<int:devis_id>/', calculate_special_lines, name='calculate-special-lines'),
+    path('devis/<int:devis_id>/special-lines/', get_devis_special_lines, name='get_devis_special_lines'),
     # ... autres routes
 ]
