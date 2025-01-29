@@ -34,6 +34,7 @@ import EditModal from "./EditModal";
 import SelectSocieteModal from "./SelectSocieteModal";
 import SocieteInfoModal from "./SocieteInfoModal";
 import SpecialLineModal from "./SpecialLineModal";
+import SpecialLinesOverview from "./SpecialLinesOverview";
 
 const CreationDevis = () => {
   const [pendingChantierData, setPendingChantierData] = useState({
@@ -1335,16 +1336,19 @@ const CreationDevis = () => {
     setFilteredLignesDetails(filtered);
   }, [allLignesDetails, selectedSousParties]);
 
-  const handleDeleteSpecialLine = (type, id, index) => {
+  const handleDeleteSpecialLineFromOverview = (groupId, index) => {
     setSpecialLines((prev) => {
       const newSpecialLines = { ...prev };
-      if (type === "global") {
+
+      if (groupId === "global") {
         newSpecialLines.global = prev.global.filter((_, i) => i !== index);
       } else {
+        const [type, id] = groupId.split("-");
         newSpecialLines[type][id] = prev[type][id].filter(
           (_, i) => i !== index
         );
       }
+
       return newSpecialLines;
     });
   };
@@ -2051,13 +2055,18 @@ const CreationDevis = () => {
               ] || []
         }
         onDelete={(index) =>
-          handleDeleteSpecialLine(
+          handleDeleteSpecialLineFromOverview(
             currentSpecialLineTarget.type,
-            currentSpecialLineTarget.id,
             index
           )
         }
       />
+      <Box sx={{ my: 3 }}>
+        <SpecialLinesOverview
+          specialLines={specialLines}
+          onDelete={handleDeleteSpecialLineFromOverview}
+        />
+      </Box>
     </Container>
   );
 };
