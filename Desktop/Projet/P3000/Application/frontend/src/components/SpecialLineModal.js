@@ -21,7 +21,22 @@ const SpecialLineModal = ({ open, onClose, onSave }) => {
   const [valueType, setValueType] = useState("percentage"); // 'percentage' ou 'fixed'
   const [type, setType] = useState("reduction"); // 'reduction' ou 'addition'
 
+  // Nouvelle fonction pour valider l'entrée
+  const handleValueChange = (e) => {
+    const input = e.target.value;
+    // Autoriser uniquement les chiffres, le point décimal et le champ vide
+    if (input === "" || /^\d*\.?\d*$/.test(input)) {
+      setValue(input);
+    }
+  };
+
   const handleSave = () => {
+    // Vérifier si la valeur est valide avant de sauvegarder
+    if (!value || isNaN(parseFloat(value))) {
+      alert("Veuillez entrer une valeur numérique valide");
+      return;
+    }
+
     onSave({
       description,
       value: parseFloat(value),
@@ -92,13 +107,22 @@ const SpecialLineModal = ({ open, onClose, onSave }) => {
         </FormControl>
 
         <TextField
-          type="number"
+          type="text" // Changé de "number" à "text" pour un meilleur contrôle
           label={valueType === "percentage" ? "Valeur (%)" : "Montant (€)"}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={handleValueChange}
           fullWidth
           margin="dense"
-          step="0.01"
+          inputProps={{
+            inputMode: "decimal",
+            pattern: "[0-9]*\\.?[0-9]*",
+          }}
+          error={value !== "" && isNaN(parseFloat(value))}
+          helperText={
+            value !== "" && isNaN(parseFloat(value))
+              ? "Veuillez entrer un nombre valide"
+              : ""
+          }
         />
 
         <FormControlLabel
@@ -113,7 +137,11 @@ const SpecialLineModal = ({ open, onClose, onSave }) => {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSave} color="primary">
+        <Button
+          onClick={handleSave}
+          color="primary"
+          disabled={!value || isNaN(parseFloat(value))}
+        >
           Sauvegarder
         </Button>
       </DialogActions>

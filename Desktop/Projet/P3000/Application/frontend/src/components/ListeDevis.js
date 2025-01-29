@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   IconButton,
   Menu,
   MenuItem,
@@ -51,6 +52,7 @@ const ListeDevis = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [devisToUpdate, setDevisToUpdate] = useState(null);
   const [factureModalOpen, setFactureModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
 
@@ -126,7 +128,6 @@ const ListeDevis = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
-    setSelectedDevis(null);
   };
 
   const handleModifyDevis = () => {
@@ -174,8 +175,32 @@ const ListeDevis = () => {
   };
 
   const handleDeleteDevis = () => {
-    // À implémenter
+    setDeleteModalOpen(true);
     handleClose();
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      if (!selectedDevis) {
+        console.error("Aucun devis sélectionné");
+        return;
+      }
+
+      await axios.delete(`/api/devisa/${selectedDevis.id}/`);
+      // Mettre à jour la liste des devis après la suppression
+      setDevis(devis.filter((d) => d.id !== selectedDevis.id));
+      setFilteredDevis(filteredDevis.filter((d) => d.id !== selectedDevis.id));
+      setDeleteModalOpen(false);
+      setSelectedDevis(null);
+    } catch (error) {
+      console.error("Erreur lors de la suppression du devis:", error);
+      alert("Erreur lors de la suppression du devis");
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setSelectedDevis(null);
   };
 
   const handleCreateFacture = (devis) => {
@@ -186,7 +211,7 @@ const ListeDevis = () => {
   };
 
   const handleFactureModalClose = () => {
-    setFactureModalOpen(false);
+    setFactureModalClose(false);
     setSelectedDevis(null);
   };
 
@@ -421,6 +446,53 @@ const ListeDevis = () => {
             onClose={handleFactureModalClose}
             onSubmit={handleFactureSubmit}
           />
+        </Box>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        aria-labelledby="delete-modal-title"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 400,
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          <Typography
+            id="delete-modal-title"
+            variant="h6"
+            component="h2"
+            gutterBottom
+          >
+            Confirmer la suppression
+          </Typography>
+          <Typography variant="body1" gutterBottom>
+            Êtes-vous sûr de vouloir supprimer le devis {selectedDevis?.numero}{" "}
+            ?
+          </Typography>
+          <Box
+            sx={{ mt: 3, display: "flex", justifyContent: "flex-end", gap: 2 }}
+          >
+            <Button variant="outlined" onClick={handleCloseDeleteModal}>
+              Annuler
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleConfirmDelete}
+            >
+              Supprimer
+            </Button>
+          </Box>
         </Box>
       </Modal>
     </div>
