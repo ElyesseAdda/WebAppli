@@ -5,8 +5,10 @@ from .models import (
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne,
 )
+from decimal import Decimal
 
 class DevisLigneSerializer(serializers.ModelSerializer):
+    ligne_detail = serializers.PrimaryKeyRelatedField(queryset=LigneDetail.objects.all())
     total_ht = serializers.SerializerMethodField()
 
     class Meta:
@@ -19,8 +21,10 @@ class DevisLigneSerializer(serializers.ModelSerializer):
 
 
 class DevisSerializer(serializers.ModelSerializer):
-    lignes = DevisLigneSerializer(many=True, read_only=True)
+    lignes = DevisLigneSerializer(many=True, required=False)
     lignes_speciales = serializers.JSONField(required=False)
+    client = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    chantier = serializers.PrimaryKeyRelatedField(queryset=Chantier.objects.all())
 
     class Meta:
         model = Devis
@@ -29,6 +33,7 @@ class DevisSerializer(serializers.ModelSerializer):
             'tva_rate', 'nature_travaux', 'description', 'status',
             'chantier', 'client', 'lignes', 'lignes_speciales'
         ]
+        read_only_fields = ['date_creation', 'client']
 
     def get_lignes_speciales(self, obj):
         lignes = obj.lignes_speciales.all()
@@ -62,6 +67,30 @@ class DevisSerializer(serializers.ModelSerializer):
                 result['sousParties'][sous_partie_id].append(ligne_data)
 
         return result
+    
+    def update(self, instance, validated_data):
+        if 'lignes' in validated_data:
+            DevisLigne.objects.filter(devis=instance).delete()
+            
+            lignes_data = validated_data.pop('lignes')
+            for ligne_data in lignes_data:
+                DevisLigne.objects.create(
+                    devis=instance,
+                    ligne_detail=ligne_data['ligne_detail'],
+                    quantite=Decimal(str(ligne_data['quantite'])),
+                    prix_unitaire=Decimal(str(ligne_data['prix_unitaire']))
+                )
+
+        # Mettre à jour les lignes spéciales
+        if 'lignes_speciales' in validated_data:
+            instance.lignes_speciales = validated_data.pop('lignes_speciales')
+
+        # Mettre à jour les autres champs
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
 
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:

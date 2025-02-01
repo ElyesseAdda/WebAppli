@@ -15,6 +15,7 @@ import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListePartiesSousParties from "./ListPartiesSousParties";
+import ModificationDevis from "./ModificationDevis";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 // Créer un thème par défaut
@@ -51,6 +52,10 @@ function App() {
             <Route path="/AgentCard" element={<AgentCardContainer />} />
             <Route path="/PlanningContainer" element={<PlanningContainer />} />
             <Route path="/ListeFactures" element={<ListeFactures />} />
+            <Route
+              path="/ModificationDevis/:devisId"
+              element={<ModificationDevis />}
+            />
           </Routes>
         </Layout>
       </Router>

@@ -131,7 +131,9 @@ const ListeDevis = () => {
   };
 
   const handleModifyDevis = () => {
-    // À implémenter
+    if (selectedDevis) {
+      window.location.href = `/ModificationDevis/${selectedDevis.id}`;
+    }
     handleClose();
   };
 
