@@ -31,7 +31,7 @@ class DevisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'client', 'lignes', 'lignes_speciales'
+            'chantier', 'client', 'lignes', 'lignes_speciales', 'devis_chantier'
         ]
         read_only_fields = ['date_creation', 'client']
 
@@ -299,21 +299,34 @@ class FactureLigneSerializer(serializers.ModelSerializer):
         return representation
 
 class FactureSerializer(serializers.ModelSerializer):
-    lignes = FactureLigneSerializer(many=True, read_only=True)
-    lignes_speciales = serializers.JSONField(required=False)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
 
     class Meta:
         model = Facture
         fields = [
-            'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
-            'tva_rate', 'devis', 'state_facture', 'lignes', 'lignes_speciales'
+            'id', 'numero', 'date_creation', 'state_facture',
+            'date_echeance', 'date_paiement', 'mode_paiement', 'devis',
+            'price_ht', 'price_ttc', 'chantier', 'chantier_name',
+            'devis_numero'
         ]
+        read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 
-    def create(self, validated_data):
-        devis = validated_data.get('devis')
-        if devis and devis.lignes_speciales:
-            validated_data['lignes_speciales'] = devis.lignes_speciales
-        return super().create(validated_data)
+    def validate_numero(self, value):
+        if not value.startswith('FACT-'):
+            raise serializers.ValidationError("Le numéro de facture doit commencer par 'FACT-'")
+        
+        if Facture.objects.filter(numero=value).exists():
+            raise serializers.ValidationError("Ce numéro de facture existe déjà")
+            
+        return value
+
+    def validate(self, data):
+        if data.get('state_facture') == 'Payée' and not data.get('date_paiement'):
+            raise serializers.ValidationError({
+                "date_paiement": "La date de paiement est requise lorsque la facture est marquée comme payée"
+            })
+        return data
 
 class ChantierDetailSerializer(serializers.ModelSerializer):
     societe_details = serializers.SerializerMethodField()

@@ -1202,6 +1202,7 @@ def create_devis(request):
                 'nature_travaux': request.data.get('nature_travaux', ''),
                 'description': request.data.get('description', ''),
                 'status': 'En attente',
+                'devis_chantier': request.data.get('devis_chantier', False),
                 'lignes_speciales': request.data.get('lignes_speciales', {})
             }
             
@@ -1332,7 +1333,7 @@ def preview_saved_devis(request, devis_id):
         societe = chantier.societe
         client = societe.client_name
 
-        total_ht = 0
+        total_ht = Decimal('0')
         parties_data = []
 
         # Récupérer les lignes spéciales du devis
@@ -1340,18 +1341,18 @@ def preview_saved_devis(request, devis_id):
 
         for partie in Partie.objects.filter(id__in=[ligne.ligne_detail.sous_partie.partie.id for ligne in devis.lignes.all()]).distinct():
             sous_parties_data = []
-            total_partie = 0
+            total_partie = Decimal('0')
 
             # Récupérer les lignes spéciales pour cette partie
             special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie.id), [])
 
             for sous_partie in SousPartie.objects.filter(partie=partie, id__in=[ligne.ligne_detail.sous_partie.id for ligne in devis.lignes.all()]).distinct():
                 lignes_details_data = []
-                total_sous_partie = 0
+                total_sous_partie = Decimal('0')
 
                 # Calculer le total des lignes de détail
                 for ligne in devis.lignes.filter(ligne_detail__sous_partie=sous_partie):
-                    total_ligne = ligne.quantite * ligne.prix_unitaire
+                    total_ligne = Decimal(str(ligne.quantite)) * Decimal(str(ligne.prix_unitaire))
                     lignes_details_data.append({
                         'description': ligne.ligne_detail.description,
                         'unite': ligne.ligne_detail.unite,
@@ -1445,7 +1446,7 @@ def preview_saved_devis(request, devis_id):
                 total_ht += montant
 
         # Calculer TVA et TTC
-        tva = total_ht * (devis.tva_rate / Decimal('100'))
+        tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
         montant_ttc = total_ht + tva
 
         context = {
@@ -1471,223 +1472,210 @@ def update_devis_status(request, devis_id):
         devis = Devis.objects.get(id=devis_id)
         new_status = request.data.get('status')
         
-        if new_status not in ["En attente", "Validé", "Refusé"]:
-            return Response(
-                {"error": "Statut invalide"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Utiliser update() pour mettre à jour uniquement le statut
+        Devis.objects.filter(id=devis_id).update(status=new_status)
         
-        devis.status = new_status
-        devis.save()
+        # Récupérer le devis mis à jour
+        devis.refresh_from_db()
         
         return Response({
-            "id": devis.id,
-            "status": devis.status,
-            "message": "Statut mis à jour avec succès"
+            'id': devis.id,
+            'status': devis.status,
+            'message': 'Statut mis à jour avec succès'
         })
-        
     except Devis.DoesNotExist:
-        return Response(
-            {"error": "Devis non trouvé"}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({'error': 'Devis non trouvé'}, status=404)
     except Exception as e:
-        return Response(
-            {"error": str(e)}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['POST'])
 def create_facture(request):
     try:
         devis_id = request.data.get('devis_id')
-       
+        devis = get_object_or_404(Devis, id=devis_id)
         
-        devis = Devis.objects.get(id=devis_id)
-        
-        
-        # Calculer le price_ttc
-        price_ht = devis.price_ht
-        tva_rate = devis.tva_rate
-        price_ttc = price_ht * (1 + tva_rate / 100)
-       
-        
-        # Vérifier les données reçues
+        # Vérifier si une facture existe déjà pour ce devis
+        if Facture.objects.filter(devis=devis).exists():
+            return Response({
+                'error': 'Une facture existe déjà pour ce devis'
+            }, status=400)
         
         # Créer la facture
         facture = Facture.objects.create(
-            numero_facture=request.data.get('numero_facture'),
+            numero=request.data.get('numero'),
+            devis=devis,
             date_echeance=request.data.get('date_echeance'),
             mode_paiement=request.data.get('mode_paiement'),
-            adresse_facturation=request.data.get('adresse_facturation'),
-            price_ht=devis.price_ht,
-            price_ttc=devis.price_ttc,
-            tva_rate=devis.tva_rate,
-            chantier=devis.chantier,
-            devis_origine=devis
+            # Les champs suivants seront automatiquement remplis par la méthode save()
+            # price_ht = devis.price_ht
+            # price_ttc = devis.price_ttc
+            # chantier = devis.chantier
         )
-        
 
-        # Copier les lignes du devis
-        devis_lignes = DevisLigne.objects.filter(devis=devis)
-        for devis_ligne in devis_lignes:
-            FactureLigne.objects.create(
-                facture=facture,
-                ligne_detail=devis_ligne.ligne_detail,
-                quantite=devis_ligne.quantite,
-                prix_unitaire=devis_ligne.prix_unitaire,
-                total_ht=devis_ligne.total_ht
-            )
+        # Sérialiser la réponse
+        serializer = FactureSerializer(facture)
+        return Response(serializer.data, status=201)
 
+    except Devis.DoesNotExist:
         return Response({
-            'id': facture.id,
-            'lignes': [
-                {
-                    'ligne_detail': ligne.ligne_detail_id,
-                    'quantite': str(ligne.quantite),
-                    'prix_unitaire': str(ligne.prix_unitaire),
-                    'total_ht': float(ligne.total_ht)
-                }
-                for ligne in facture.lignes_details.all()
-            ]
-        })
-
+            'error': 'Devis non trouvé'
+        }, status=404)
     except Exception as e:
-        return Response({'error': str(e)}, status=500)
+        return Response({
+            'error': str(e)
+        }, status=500)
 
 @api_view(['GET'])
 def preview_facture(request, facture_id):
     try:
         facture = Facture.objects.select_related(
-            'chantier',
-            'chantier__societe',
-            'chantier__societe__client_name'
+            'devis',
+            'devis__chantier',
+            'devis__chantier__societe',
+            'devis__chantier__societe__client_name'
         ).get(id=facture_id)
         
-        # Récupérer les lignes de détail de la facture
-        lignes_details = FactureLigne.objects.filter(facture=facture).select_related(
-            'ligne_detail', 
-            'ligne_detail__sous_partie', 
-            'ligne_detail__sous_partie__partie'
-        )
-        
-        # Organiser les données par partie et sous-partie
-        parties_data = []
+        devis = facture.devis
+        chantier = devis.chantier
+        societe = chantier.societe
+        client = societe.client_name
+
+        # Initialiser les totaux
         total_ht = Decimal('0')
-        
-        # Regrouper les lignes par partie et sous-partie
-        parties_dict = {}
-        for ligne in lignes_details:
-            partie = ligne.ligne_detail.sous_partie.partie
-            sous_partie = ligne.ligne_detail.sous_partie
-            
-            if partie.id not in parties_dict:
-                parties_dict[partie.id] = {
-                    'titre': partie.titre,
-                    'sous_parties': {},
-                    'total_partie': Decimal('0')
-                }
-            
-            if sous_partie.id not in parties_dict[partie.id]['sous_parties']:
-                parties_dict[partie.id]['sous_parties'][sous_partie.id] = {
-                    'description': sous_partie.description,
-                    'lignes_details': [],
-                    'total_sous_partie': Decimal('0')
-                }
-            
-            total_ligne = ligne.quantite * ligne.prix_unitaire
-            parties_dict[partie.id]['sous_parties'][sous_partie.id]['lignes_details'].append({
-                'id': ligne.ligne_detail.id,
-                'description': ligne.ligne_detail.description,
-                'unite': ligne.ligne_detail.unite,
-                'quantity': float(ligne.quantite),
-                'custom_price': float(ligne.prix_unitaire),
-                'total': float(total_ligne)
-            })
-            parties_dict[partie.id]['sous_parties'][sous_partie.id]['total_sous_partie'] += total_ligne
-            parties_dict[partie.id]['total_partie'] += total_ligne
+        parties_data = []
 
-        # Récupérer les lignes spéciales
-        lignes_speciales = facture.lignes_speciales or {}
+        # Récupérer les lignes spéciales du devis
+        lignes_speciales = devis.lignes_speciales or {}
 
-        # Traiter les lignes spéciales et construire la structure finale
-        for partie_id, partie_data in parties_dict.items():
+        # Traiter les parties et leurs lignes
+        for partie in Partie.objects.filter(
+            id__in=[ligne.ligne_detail.sous_partie.partie.id 
+                   for ligne in devis.lignes.all()]
+        ).distinct():
             sous_parties_data = []
-            
-            for sous_partie_id, sous_partie_data in partie_data['sous_parties'].items():
-                # Traiter les lignes spéciales de la sous-partie
-                special_lines = lignes_speciales.get('sousParties', {}).get(str(sous_partie_id), [])
-                for special_line in special_lines:
-                    montant = special_line['value']
-                    if special_line['valueType'] == 'percentage':
-                        montant = (sous_partie_data['total_sous_partie'] * Decimal(str(special_line['value']))) / Decimal('100')
-                    else:
-                        montant = Decimal(str(special_line['value']))
-                    
-                    if special_line['type'] == 'reduction':
-                        sous_partie_data['total_sous_partie'] -= montant
-                    else:
-                        sous_partie_data['total_sous_partie'] += montant
-                    
-                    special_line['montant'] = float(montant)
-                
-                sous_partie_data['special_lines'] = special_lines
-                sous_parties_data.append(sous_partie_data)
-            
-            # Traiter les lignes spéciales de la partie
-            special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_id), [])
-            for special_line in special_lines_partie:
-                montant = special_line['value']
-                if special_line['valueType'] == 'percentage':
-                    montant = (partie_data['total_partie'] * Decimal(str(special_line['value']))) / Decimal('100')
-                else:
-                    montant = Decimal(str(special_line['value']))
-                
-                if special_line['type'] == 'reduction':
-                    partie_data['total_partie'] -= montant
-                else:
-                    partie_data['total_partie'] += montant
-                
-                special_line['montant'] = float(montant)
-            
-            parties_data.append({
-                'titre': partie_data['titre'],
-                'sous_parties': sous_parties_data,
-                'total_partie': float(partie_data['total_partie']),
-                'special_lines': special_lines_partie
-            })
-            total_ht += partie_data['total_partie']
+            total_partie = Decimal('0')
 
-        # Traiter les lignes spéciales globales
+            # Récupérer les lignes spéciales pour cette partie
+            special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie.id), [])
+
+            for sous_partie in SousPartie.objects.filter(
+                partie=partie, 
+                id__in=[ligne.ligne_detail.sous_partie.id 
+                       for ligne in devis.lignes.all()]
+            ).distinct():
+                lignes_details_data = []
+                total_sous_partie = Decimal('0')
+
+                # Calculer le total des lignes de détail
+                for ligne in devis.lignes.filter(ligne_detail__sous_partie=sous_partie):
+                    total_ligne = ligne.quantite * ligne.prix_unitaire
+                    lignes_details_data.append({
+                        'description': ligne.ligne_detail.description,
+                        'unite': ligne.ligne_detail.unite,
+                        'quantity': float(ligne.quantite),
+                        'custom_price': float(ligne.prix_unitaire),
+                        'total': float(total_ligne)
+                    })
+                    total_sous_partie += total_ligne
+
+                if lignes_details_data:
+                    # Récupérer les lignes spéciales pour cette sous-partie
+                    special_lines_sous_partie = lignes_speciales.get('sousParties', {}).get(str(sous_partie.id), [])
+                    sous_partie_data = {
+                        'description': sous_partie.description,
+                        'lignes_details': lignes_details_data,
+                        'total_sous_partie': total_sous_partie,
+                        'special_lines': []
+                    }
+
+                    # Appliquer les lignes spéciales de la sous-partie
+                    for special_line in special_lines_sous_partie:
+                        montant = (total_sous_partie * Decimal(str(special_line['value'])) / Decimal('100')) \
+                            if special_line['valueType'] == 'percentage' \
+                            else Decimal(str(special_line['value']))
+
+                        if special_line['type'] == 'reduction':
+                            total_sous_partie -= montant
+                        else:
+                            total_sous_partie += montant
+
+                        sous_partie_data['special_lines'].append({
+                            'description': special_line['description'],
+                            'value': special_line['value'],
+                            'valueType': special_line['valueType'],
+                            'type': special_line['type'],
+                            'montant': montant,
+                            'isHighlighted': special_line.get('isHighlighted', False)
+                        })
+
+                    sous_partie_data['total_sous_partie'] = total_sous_partie
+                    sous_parties_data.append(sous_partie_data)
+                    total_partie += total_sous_partie
+
+            if sous_parties_data:
+                partie_data = {
+                    'titre': partie.titre,
+                    'sous_parties': sous_parties_data,
+                    'total_partie': total_partie,
+                    'special_lines': []
+                }
+
+                # Appliquer les lignes spéciales de la partie
+                for special_line in special_lines_partie:
+                    montant = (total_partie * Decimal(str(special_line['value'])) / Decimal('100')) \
+                        if special_line['valueType'] == 'percentage' \
+                        else Decimal(str(special_line['value']))
+
+                    if special_line['type'] == 'reduction':
+                        total_partie -= montant
+                    else:
+                        total_partie += montant
+
+                    partie_data['special_lines'].append({
+                        'description': special_line['description'],
+                        'value': special_line['value'],
+                        'valueType': special_line['valueType'],
+                        'type': special_line['type'],
+                        'montant': montant,
+                        'isHighlighted': special_line.get('isHighlighted', False)
+                    })
+
+                partie_data['total_partie'] = total_partie
+                parties_data.append(partie_data)
+                total_ht += total_partie
+
+        # Appliquer les lignes spéciales globales
         special_lines_global = lignes_speciales.get('global', [])
         for special_line in special_lines_global:
-            montant = special_line['value']
-            if special_line['valueType'] == 'percentage':
-                montant = (total_ht * Decimal(str(special_line['value']))) / Decimal('100')
-            else:
-                montant = Decimal(str(special_line['value']))
-            
+            montant = (total_ht * Decimal(str(special_line['value'])) / Decimal('100')) \
+                if special_line['valueType'] == 'percentage' \
+                else Decimal(str(special_line['value']))
+
             if special_line['type'] == 'reduction':
                 total_ht -= montant
             else:
                 total_ht += montant
-            
-            special_line['montant'] = float(montant)
+
+            special_line['montant'] = montant
 
         # Calculer TVA et TTC
-        tva = total_ht * (facture.tva_rate / Decimal('100'))
-        total_ttc = total_ht + tva
+        tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
+        montant_ttc = total_ht + tva  # Changé de total_ttc à montant_ttc
 
         context = {
             'facture': facture,
+            'devis': devis,
+            'chantier': chantier,
+            'societe': societe,
+            'client': client,
             'parties': parties_data,
             'total_ht': float(total_ht),
             'tva': float(tva),
-            'total_ttc': float(total_ttc),
+            'montant_ttc': float(montant_ttc),  # Changé de total_ttc à montant_ttc
             'special_lines_global': special_lines_global
         }
 
-        return render(request, 'preview_facture.html', context)
+        return render(request, 'facture.html', context)
 
     except Exception as e:
         print(f"Erreur lors de la prévisualisation de la facture: {str(e)}")
@@ -1930,9 +1918,27 @@ def calculate_special_lines(request, devis_id):
 def get_devis_special_lines(request, devis_id):
     return calculate_special_lines(request, devis_id)
 
+@api_view(['GET'])
+def get_devis_factures(request, devis_id):
+    try:
+        factures = Facture.objects.filter(devis_id=devis_id)
+        serializer = FactureSerializer(factures, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+    
 
-
-
+@api_view(['PUT'])
+def update_facture_status(request, facture_id):
+    try:
+        facture = Facture.objects.get(id=facture_id)
+        facture.state_facture = request.data.get('state_facture')
+        facture.save()
+        return Response({'status': 'success'})
+    except Facture.DoesNotExist:
+        return Response({'error': 'Facture non trouvée'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 
 

@@ -14,9 +14,9 @@
         {% comment %} max-width: 800px;  {% endcomment %}
         {% comment %} padding: 0px; {% endcomment %}
         width: 210mm;     /* Largeur A4 */
-        height: 297mm;    /* Hauteur A4 */
+        {% comment %} height: 297mm;    /* Hauteur A4 */ {% endcomment %}
         margin-right: 90px;
-        margin-top: 0px;
+        margin-top: 10px;
         overflow-x: hidden;
         overflow-y: auto;
       }
@@ -275,14 +275,6 @@
       .client-info,
       .contact-info {
         margin-bottom: 10px;
-        line-height: 6px;
-
-        h3 {
-          font-size: 16px;
-          font-weight: 700;
-          text-decoration: underline 2px black;
-          text-underline-offset: 2px;
-        }
       }
       .chantier-info {
         line-height: 6px;
@@ -505,6 +497,7 @@
       .cachet-content p {
         margin: 3px 0;
       }
+      
     </style>
   </head>
   <body>
@@ -514,7 +507,7 @@
       </div>
       <div class="P3000-info">
         <h2>SARL PEINTURE 3000</h2>
-        <p>24-26 Boulevard Gay Lussac, Immeuble Énergie</p>
+        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
         <p>13014 - Marseille</p>
         <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
         <p>N°Siren: 352 875 317 RCS Marseille</p>
@@ -525,16 +518,19 @@
     <div class="client-container">
       <div class="client-info">
         <h3>Client:</h3>
-        <h4>{{ societe.nom }}</h4>
-        <p>{{ societe.rue }}</p>
-        <p>{{ societe.code_postal }}, {{ societe.ville }}</p>
+        <h4>{{ societe.nom_societe }}</h4>
+        <p>{{ societe.rue_societe }}</p>
+        <p>{{ societe.codepostal_societe }}, {{ societe.ville_societe }}</p>
       </div>
-      <div class="adresse facturation">
-        <h3>Adresse de facturation :</h3>
-        <p>{{ facture.adresse_facturation }}</p>
-        
+
+      <div class="contact-info">
+        <h3>Contact:</h3>
+        <p>{{ client.name }} {{ client.surname }}</p>
+        <p>Mail: {{ client.client_mail }}</p>
+        <p>
+          Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
+        </p>
       </div>
-      
     </div>
 
     <div class="date">
@@ -542,25 +538,16 @@
     </div>
 
     <div class="header">
-      <h1>{{ facture.numero }}</h1>
+      <h1>{{facture.numero}}</h1>
     </div>
-    <div class="chantier-container" style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: 1fr; grid-column-gap: 150px; grid-row-gap: 0px;">
+
     <div class="chantier-info">
-      <h2>Adresse du chantier :</h2>
-      <h3>{{ chantier.nom }}</h3>
+      <h2>ADRESSE DU CHANTIER :</h2>
+      <h3>{{ chantier.chantier_name }}</h3>
       <p>{{ chantier.rue }}</p>
       <p>{{ chantier.code_postal }} - {{ chantier.ville }}</p>
     </div>
 
-    <div class="contact-info">
-      <h3>Contact:</h3>
-      <p>{{ client.name }} {{ client.surname }}</p>
-      <p>Mail: {{ client.email }}</p>
-      <p>
-        Tél: {% if client.phone %}0{{ client.phone}}{% endif %}
-      </p>
-    </div>
-    </div>
     <!-- Ajout de la nature des travaux -->
     
 
@@ -595,11 +582,10 @@
         <tbody>
           <tr>
             <td colspan="5">
-              {% if facture.type_travaux %}
-              <div class="nature-travaux">
+            {% if devis.nature_travaux %}
+            <div class="nature-travaux">
               <h5>Nature des travaux :</h5>
-            <p style="text-transform: uppercase;">{{ facture.type_travaux }}</p>
-          </div>
+            <p style="text-transform: uppercase;">{{ devis.nature_travaux }}</p></div>
             </td>
           </tr>
           {% endif %}
@@ -648,7 +634,7 @@
                   {% endif %}
               </td>
               <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}{% endif %}
+                  {% if special_line.type == 'reduction' %}-{% endif %}
                   {{ special_line.montant|floatformat:2 }} €
               </td>
           </tr>
@@ -673,7 +659,7 @@
                   {% endif %}
               </td>
               <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}-{% endif %}
+                  {% if special_line.type == 'reduction' %}{% endif %}
                   {{ special_line.montant|floatformat:2 }} €
               </td>
           </tr>
@@ -712,7 +698,6 @@
         </td>
       </tr>
     </table>
-   
     <div class="signature-grid">
       <div class="signature-box">
         <div class="signature-title">Signature du client suivie de la mention "bon pour accord"</div>
@@ -721,9 +706,6 @@
       <div class="cachet-box">
         <div class="cachet-title">Cachet de l'entreprise</div>
         <div class="cachet-content">
-          
-        </div>
-      </div>
-    </div>
+
   </body>
 </html>

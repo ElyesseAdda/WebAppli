@@ -1,8 +1,11 @@
-const puppeteer = require("puppeteer");
-const fs = require("fs");
-const path = require("path");
+import { dirname, resolve } from "path";
+import puppeteer from "puppeteer";
+import { fileURLToPath } from "url";
 
-(async () => {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const generatePDF = async () => {
   const args = process.argv.slice(2);
   const previewUrl = args[0]; // L'URL de prévisualisation du devis
 
@@ -18,12 +21,18 @@ const path = require("path");
     const page = await browser.newPage();
     console.log("Nouvelle page ouverte");
 
+    // Définir la largeur maximum pour une page A4 portrait
+    await page.setViewport({
+      width: 794, // ~210mm en pixels (72dpi)
+      deviceScaleFactor: 1,
+    });
+
     // Augmenter le délai d'attente à 60 secondes (60000 ms)
     await page.goto(previewUrl, { waitUntil: "networkidle0", timeout: 60000 });
     console.log("Page chargée");
 
     // Chemin pour stocker le PDF
-    const pdfPath = path.resolve(__dirname, "devis.pdf");
+    const pdfPath = resolve(__dirname, "devis.pdf");
     console.log("Génération du PDF...");
 
     await page.pdf({
@@ -37,8 +46,9 @@ const path = require("path");
         bottom: "20px",
         left: "20px",
       },
-      preferCSSPageSize: false,
+      preferCSSPageSize: true, // Utiliser les dimensions CSS
       scale: 0.8,
+      width: "210mm", // Largeur A4
     });
 
     console.log("PDF généré et enregistré à:", pdfPath);
@@ -50,4 +60,6 @@ const path = require("path");
     console.error("Erreur lors de la génération du PDF:", err); // Affiche l'erreur complète
     process.exit(1); // Sortie avec une erreur
   }
-})();
+};
+
+generatePDF();

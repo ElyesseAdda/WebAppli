@@ -13,25 +13,29 @@ import {
   TableBody,
   TableHead,
   TableRow,
+  TableSortLabel,
   Typography,
 } from "@mui/material";
 import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { FaFileInvoiceDollar } from "react-icons/fa";
 import { TfiMore } from "react-icons/tfi";
 import { TiWarning } from "react-icons/ti";
-import { Link } from "react-router-dom";
 import {
   AlignedCell,
   CenteredTableCell,
   CenteredTextField,
-  ChantierCell,
   DevisNumber,
   FilterCell,
   PriceTextField,
+  StatusCell,
   StyledBox,
+  StyledSelect,
   StyledTableContainer,
+  StyledTextField,
 } from "../styles/tableStyles";
+import StatusChangeModal from "./StatusChangeModal";
 
 const ListeFactures = () => {
   const [factures, setFactures] = useState([]);
@@ -42,13 +46,17 @@ const ListeFactures = () => {
   const [selectedFacture, setSelectedFacture] = useState(null);
   const [filters, setFilters] = useState({
     numero_facture: "",
-    client: "",
-    chantier: "",
+    chantier_name: "",
     date_creation: "",
     montant: "",
+    state_facture: "Tous",
   });
   const [chantierDetails, setChantierDetails] = useState({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [factureToUpdate, setFactureToUpdate] = useState(null);
+
+  const statusOptions = ["En cours", "Attente paiement", "Payée"];
 
   useEffect(() => {
     fetchFactures();
@@ -70,22 +78,13 @@ const ListeFactures = () => {
   const fetchFactures = async () => {
     try {
       const response = await axios.get("/api/facture/");
-      const facturesWithDetails = await Promise.all(
-        response.data.map(async (facture) => {
-          if (facture.chantier) {
-            const details = await fetchChantierDetails(facture.chantier);
-            return {
-              ...facture,
-              chantierDetails: details,
-            };
-          }
-          return facture;
-        })
-      );
-      setFactures(facturesWithDetails);
-      setFilteredFactures(facturesWithDetails);
+      const facturesData = response.data;
+
+      // Plus besoin de recalculer le TTC puisqu'il est déjà dans la base de données
+      setFactures(facturesData);
+      setFilteredFactures(facturesData);
     } catch (error) {
-      // Gérer l'erreur silencieusement
+      console.error("Erreur lors du chargement des factures:", error);
     }
   };
 
@@ -97,44 +96,39 @@ const ListeFactures = () => {
     setFilters(newFilters);
 
     let filtered = factures.filter((facture) => {
-      const result = Object.keys(newFilters).every((key) => {
-        if (!newFilters[key]) return true;
+      return Object.keys(newFilters).every((key) => {
+        if (!newFilters[key] || newFilters[key] === "Tous") return true;
 
         switch (key) {
           case "numero_facture":
-            return facture.numero_facture
+            return facture.numero
               ?.toLowerCase()
               .includes(newFilters[key].toLowerCase());
 
-          case "client":
-            const clientName =
-              facture.chantierDetails?.societe?.client?.nom ||
-              `${facture.chantierDetails?.societe?.client?.name} ${facture.chantierDetails?.societe?.client?.surname}` ||
-              "";
-            return clientName
-              .toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-
-          case "chantier":
-            return facture.chantierDetails?.nom
+          case "chantier_name":
+            return facture.chantier_name
               ?.toLowerCase()
               .includes(newFilters[key].toLowerCase());
 
           case "date_creation":
-            const factureDate = new Date(
-              facture.date_creation
-            ).toLocaleDateString();
-            return factureDate.includes(newFilters[key]);
+            if (!newFilters[key]) return true;
+            // Convertir la date de la facture au format YYYY-MM-DD pour la comparaison
+            const factureDate = new Date(facture.date_creation)
+              .toISOString()
+              .split("T")[0];
+            return factureDate === newFilters[key];
 
           case "montant":
             const factureMontant = facture.price_ttc?.toString() || "";
             return factureMontant.includes(newFilters[key]);
 
+          case "state_facture":
+            return facture.state_facture === newFilters[key];
+
           default:
             return true;
         }
       });
-      return result;
     });
 
     setFilteredFactures(filtered);
@@ -146,7 +140,13 @@ const ListeFactures = () => {
     setOrderBy(property);
 
     const sorted = [...filteredFactures].sort((a, b) => {
-      if (property === "montant_ttc") {
+      if (property === "date_creation") {
+        return (
+          (isAsc ? 1 : -1) *
+          (new Date(a[property]).getTime() - new Date(b[property]).getTime())
+        );
+      }
+      if (property === "price_ttc") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
         );
@@ -193,6 +193,63 @@ const ListeFactures = () => {
     setAnchorEl(null);
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "Payée":
+        return "#4caf50"; // vert
+      case "Attente paiement":
+        return "#ff9800"; // orange
+      case "En cours":
+        return "#f44336"; // rouge
+      default:
+        return "#666";
+    }
+  };
+
+  const handleRedirectToDevis = (devisNumero) => {
+    // Encode les paramètres pour l'URL
+    const searchParams = new URLSearchParams({
+      numero: devisNumero,
+    }).toString();
+
+    // Ouvre dans un nouvel onglet
+    window.open(`/ListeDevis?${searchParams}`, "_blank");
+  };
+
+  const handleChangeStatus = () => {
+    setFactureToUpdate(selectedFacture);
+    setShowStatusModal(true);
+    handleClose();
+  };
+
+  const handleStatusUpdate = async (newStatus) => {
+    try {
+      if (!factureToUpdate) return;
+
+      await axios.put(`/api/facture/${factureToUpdate.id}/update_status/`, {
+        state_facture: newStatus,
+      });
+
+      // Mise à jour locale des données
+      setFactures(
+        factures.map((f) =>
+          f.id === factureToUpdate.id ? { ...f, state_facture: newStatus } : f
+        )
+      );
+      setFilteredFactures(
+        filteredFactures.map((f) =>
+          f.id === factureToUpdate.id ? { ...f, state_facture: newStatus } : f
+        )
+      );
+
+      setShowStatusModal(false);
+      setFactureToUpdate(null);
+    } catch (error) {
+      console.error("Erreur lors de la modification du statut:", error);
+      alert("Erreur lors de la modification du statut");
+    }
+  };
+
   return (
     <div
       style={{
@@ -207,109 +264,146 @@ const ListeFactures = () => {
         margin: "20px auto",
       }}
     >
-      <Typography variant="h5" sx={{ mb: 3 }}>
-        Liste des Factures
-      </Typography>
-
       <StyledBox>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{
+            fontFamily: "Merriweather, serif",
+            position: "relative",
+            marginBottom: "20px",
+          }}
+        >
+          Liste des Factures
+        </Typography>
+
         <StyledTableContainer component={Paper}>
           <Table>
             <TableHead>
+              <TableRow></TableRow>
               <TableRow>
-                <FilterCell sx={{ textAlign: "left" }}>
-                  <CenteredTextField
-                    placeholder="N° Facture"
+                <FilterCell>
+                  <StyledTextField
+                    label="Numéro"
+                    variant="standard"
                     value={filters.numero_facture}
                     onChange={handleFilterChange("numero_facture")}
                   />
                 </FilterCell>
                 <FilterCell>
-                  <CenteredTextField
-                    placeholder="Client"
-                    value={filters.client}
-                    onChange={handleFilterChange("client")}
+                  <StyledTextField
+                    label="Chantier"
+                    variant="standard"
+                    value={filters.chantier_name}
+                    onChange={handleFilterChange("chantier_name")}
                   />
                 </FilterCell>
+                <AlignedCell>
+                  <TableSortLabel
+                    active={orderBy === "date_creation"}
+                    direction={orderBy === "date_creation" ? order : "asc"}
+                    onClick={() => handleSort("date_creation")}
+                    sx={{ textAlign: "center" }}
+                  >
+                    <CenteredTextField
+                      variant="standard"
+                      type="date"
+                      value={filters.date_creation}
+                      onChange={handleFilterChange("date_creation")}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ pt: "15px" }}
+                    />
+                  </TableSortLabel>
+                </AlignedCell>
+                <AlignedCell>
+                  <TableSortLabel
+                    active={orderBy === "price_ttc"}
+                    direction={orderBy === "price_ttc" ? order : "asc"}
+                    onClick={() => handleSort("price_ttc")}
+                    sx={{ textAlign: "center" }}
+                  >
+                    <PriceTextField
+                      label="Prix TTC"
+                      variant="standard"
+                      value={filters.montant}
+                      onChange={handleFilterChange("montant")}
+                    />
+                  </TableSortLabel>
+                </AlignedCell>
                 <FilterCell>
-                  <CenteredTextField
-                    placeholder="Chantier"
-                    value={filters.chantier}
-                    onChange={handleFilterChange("chantier")}
-                  />
-                </FilterCell>
-                <FilterCell>
-                  <CenteredTextField
-                    placeholder="Date d'échéance"
-                    value={filters.date_creation}
-                    onChange={handleFilterChange("date_creation")}
-                  />
-                </FilterCell>
-                <FilterCell>
-                  <PriceTextField
-                    placeholder="Montant T.T.C"
-                    value={filters.montant}
-                    onChange={handleFilterChange("montant")}
-                  />
+                  <StyledSelect
+                    value={filters.state_facture}
+                    onChange={handleFilterChange("state_facture")}
+                    variant="standard"
+                    sx={{ pt: "10px" }}
+                  >
+                    <MenuItem value="Tous">Tous</MenuItem>
+                    <MenuItem value="En cours">En cours</MenuItem>
+                    <MenuItem value="Attente paiement">
+                      Attente paiement
+                    </MenuItem>
+                    <MenuItem value="Payée">Payée</MenuItem>
+                  </StyledSelect>
                 </FilterCell>
                 <FilterCell />
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredFactures.map((facture) => {
-                return (
-                  <TableRow key={facture.id}>
-                    <DevisNumber
-                      onClick={() => handlePreviewFacture(facture.id)}
-                      sx={{ cursor: "pointer", fontWeight: 700 }}
-                    >
-                      {facture.numero_facture}
-                    </DevisNumber>
-                    <AlignedCell
-                      sx={{ backgroundColor: "white", textAlign: "center" }}
-                    >
-                      {facture.chantierDetails?.societe?.client?.nom ||
-                        `${facture.chantierDetails?.societe?.client?.name} ${facture.chantierDetails?.societe?.client?.surname}` ||
-                        "Non assigné"}
-                    </AlignedCell>
-                    <ChantierCell sx={{ textAlign: "center" }}>
-                      <Link to={`/chantier/${facture.chantier}`}>
-                        {facture.chantierDetails?.nom || "Non assigné"}
-                      </Link>
-                    </ChantierCell>
-                    <CenteredTableCell>
-                      {new Date(facture.date_creation).toLocaleDateString()}
-                    </CenteredTableCell>
-                    <CenteredTableCell
-                      sx={{
-                        fontWeight: 600,
-                        color: green[500],
+              {filteredFactures.map((facture) => (
+                <TableRow key={facture.id}>
+                  <DevisNumber
+                    onClick={() => handlePreviewFacture(facture.id)}
+                    sx={{ cursor: "pointer", fontWeight: 700 }}
+                  >
+                    {facture.numero}
+                  </DevisNumber>
+                  <CenteredTableCell>
+                    {facture.chantier_name}
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRedirectToDevis(facture.devis_numero);
                       }}
+                      sx={{
+                        ml: 1,
+                        width: 24,
+                        height: 24,
+                        backgroundColor: "rgba(0, 0, 0, 0.04)",
+                        "&:hover": {
+                          backgroundColor: "rgba(0, 0, 0, 0.08)",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                        },
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                      }}
+                      title="Voir le devis associé"
                     >
-                      <div sx={{ display: "flex", flexDirection: "column" }}>
-                        <p sx={{ fontSize: "14px" }}>{facture.price_ttc} €</p>
-                      </div>
-                    </CenteredTableCell>
-                    <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
-                      <IconButton
-                        onClick={(e) => handleMenuClick(e, facture)}
-                        sx={{
-                          width: 35,
-                          height: 35,
-                          backgroundColor: "rgba(0, 0, 0, 0.04)",
-                          "&:hover": {
-                            backgroundColor: "rgba(0, 0, 0, 0.08)",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                          },
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                          borderRadius: "50%",
-                        }}
-                      >
-                        <TfiMore size={16} color="#666" />
-                      </IconButton>
-                    </CenteredTableCell>
-                  </TableRow>
-                );
-              })}
+                      <FaFileInvoiceDollar size={14} color="#666" />
+                    </IconButton>
+                  </CenteredTableCell>
+                  <CenteredTableCell>
+                    {new Date(facture.date_creation).toLocaleDateString()}
+                  </CenteredTableCell>
+                  <CenteredTableCell
+                    sx={{ fontWeight: 600, color: green[500] }}
+                  >
+                    {facture.price_ttc?.toFixed(2)} €
+                  </CenteredTableCell>
+                  <StatusCell
+                    sx={{
+                      color: getStatusColor(facture.state_facture),
+                      fontWeight: 600,
+                    }}
+                  >
+                    {facture.state_facture}
+                  </StatusCell>
+                  <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
+                    <IconButton onClick={(e) => handleMenuClick(e, facture)}>
+                      <TfiMore size={16} color="#666" />
+                    </IconButton>
+                  </CenteredTableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </StyledTableContainer>
@@ -330,6 +424,7 @@ const ListeFactures = () => {
         <MenuItem onClick={() => handlePreviewFacture(selectedFacture?.id)}>
           Voir la facture
         </MenuItem>
+        <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
         <MenuItem
           onClick={handleDeleteClick}
           sx={{
@@ -361,7 +456,7 @@ const ListeFactures = () => {
         <DialogContent>
           <DialogContentText>
             Êtes-vous sûr de vouloir supprimer la facture{" "}
-            <strong>{selectedFacture?.numero_facture}</strong> ?
+            <strong>{selectedFacture?.numero}</strong> ?
             <br />
             Cette action est irréversible.
           </DialogContentText>
@@ -384,6 +479,18 @@ const ListeFactures = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <StatusChangeModal
+        open={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setFactureToUpdate(null);
+        }}
+        currentStatus={factureToUpdate?.state_facture}
+        onStatusChange={handleStatusUpdate}
+        type="facture"
+        title="Modifier l'état de la facture"
+      />
     </div>
   );
 };

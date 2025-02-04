@@ -7,7 +7,7 @@ import React, { useEffect, useState } from "react";
 
 const formatNumeroFacture = (numeroDevis) => {
   if (!numeroDevis) return "";
-  return numeroDevis.replace("DEV-", "FACT-");
+  return numeroDevis.replace(/^DEV-/, "FACT-");
 };
 
 const CreationFacture = ({ devis, onClose, onSubmit }) => {
@@ -20,7 +20,7 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
   }
 
   const [formData, setFormData] = useState({
-    numero_facture: formatNumeroFacture(devis.numero),
+    numero_facture: formatNumeroFacture(devis?.numero),
     adresse_facturation: "",
     date_echeance: null,
     mode_paiement: "virement",
@@ -121,55 +121,24 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!formData.numero_facture || !formData.mode_paiement) {
-      alert("Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-
     try {
-      // Vérifier si le numéro de facture existe déjà
-      const response = await axios.get(
-        `/api/check-facture-numero/${formData.numero_facture}/`
-      );
-      if (response.data.exists) {
-        alert(
-          "Ce numéro de facture existe déjà. Veuillez en choisir un autre."
-        );
-        return;
+      if (!devis) {
+        throw new Error("Aucun devis fourni");
       }
 
-      const dataToSubmit = {
-        devis_origine: devis.id,
-        numero_facture: formData.numero_facture,
-        adresse_facturation: formData.adresse_facturation,
+      const factureData = {
+        numero: formData.numero_facture,
+        devis: devis.id,
         date_echeance: formData.date_echeance,
         mode_paiement: formData.mode_paiement,
-        price_ht: devis.price_ht,
-        price_ttc: devis.price_ttc,
-        tva_rate: devis.tva_rate || 20.0,
-        chantier: devis.chantier,
-        client: devis.client,
-        societe: societeData?.id,
       };
 
-      console.log("Données envoyées au serveur:", dataToSubmit);
-
-      const createResponse = await axios.post("/api/facture/", dataToSubmit);
-      console.log("Réponse du serveur:", createResponse.data);
-      if (createResponse.data) {
-        onSubmit(createResponse.data);
-        onClose();
-      }
+      console.log("Données de la facture à envoyer:", factureData);
+      await onSubmit(factureData);
+      onClose();
     } catch (error) {
-      if (error.response?.status === 409) {
-        alert(
-          "Ce numéro de facture existe déjà. Veuillez en choisir un autre."
-        );
-      } else {
-        console.error("Erreur détaillée:", error.response?.data || error);
-        alert("Erreur lors de la création de la facture.");
-      }
+      console.error("Erreur lors de la création de la facture:", error);
+      alert(`Erreur lors de la création de la facture: ${error.message}`);
     }
   };
 

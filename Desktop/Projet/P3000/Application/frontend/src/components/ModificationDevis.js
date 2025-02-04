@@ -1634,6 +1634,10 @@ const ModificationDevis = () => {
                           ? "translateX(100%)"
                           : "translateX(0)",
                         opacity: slidingLignes.includes(ligne.id) ? 0 : 1,
+                        backgroundColor: "rgba(179, 179, 179, 0.6)",
+                        "& .MuiTypography-root": {
+                          color: "white",
+                        },
                       }}
                     >
                       <CardContent>

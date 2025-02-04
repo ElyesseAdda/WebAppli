@@ -53,12 +53,46 @@ const ListeDevis = () => {
   const [devisToUpdate, setDevisToUpdate] = useState(null);
   const [factureModalOpen, setFactureModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteFacturesModalOpen, setDeleteFacturesModalOpen] = useState(false);
+  const [facturesToDelete, setFacturesToDelete] = useState([]);
+  const [newStatus, setNewStatus] = useState(null);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
 
   useEffect(() => {
     fetchDevis();
+
+    // Récupère les paramètres de l'URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const numeroFilter = urlParams.get("numero");
+
+    // Si un numéro de devis est spécifié dans l'URL, met à jour le filtre
+    if (numeroFilter) {
+      setFilters((prev) => ({
+        ...prev,
+        numero: numeroFilter,
+      }));
+
+      // Appliquer le filtre immédiatement sur les devis existants
+      const filtered = devis.filter((devis) =>
+        devis.numero?.toLowerCase().includes(numeroFilter.toLowerCase())
+      );
+      setFilteredDevis(filtered);
+    }
   }, []);
+
+  // Ajouter un nouvel useEffect pour réagir aux changements de devis
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const numeroFilter = urlParams.get("numero");
+
+    if (numeroFilter && devis.length > 0) {
+      const filtered = devis.filter((devis) =>
+        devis.numero?.toLowerCase().includes(numeroFilter.toLowerCase())
+      );
+      setFilteredDevis(filtered);
+    }
+  }, [devis]);
 
   const fetchDevis = async () => {
     try {
@@ -81,18 +115,40 @@ const ListeDevis = () => {
       return Object.keys(newFilters).every((key) => {
         if (!newFilters[key] || newFilters[key] === "Tous") return true;
 
-        if (key === "date_creation" && newFilters[key]) {
-          const devisDate = new Date(devis[key]).toLocaleDateString();
-          return devisDate.includes(newFilters[key]);
-        }
+        switch (key) {
+          case "numero":
+            return devis.numero
+              ?.toLowerCase()
+              .includes(newFilters[key].toLowerCase());
 
-        if (key === "price_ttc" && newFilters[key]) {
-          const devisPrice = devis[key].toString();
-          return devisPrice.includes(newFilters[key]);
-        }
+          case "chantier_name":
+            return devis.chantier_name
+              ?.toLowerCase()
+              .includes(newFilters[key].toLowerCase());
 
-        const value = devis[key]?.toString().toLowerCase() || "";
-        return value.includes(newFilters[key].toLowerCase());
+          case "client_name":
+            return devis.client_name
+              ?.toLowerCase()
+              .includes(newFilters[key].toLowerCase());
+
+          case "date_creation":
+            if (!newFilters[key]) return true;
+            // Convertir la date du devis au format YYYY-MM-DD pour la comparaison
+            const devisDate = new Date(devis.date_creation)
+              .toISOString()
+              .split("T")[0];
+            return devisDate === newFilters[key];
+
+          case "price_ttc":
+            const devisPrice = devis.price_ttc?.toString() || "";
+            return devisPrice.includes(newFilters[key]);
+
+          case "status":
+            return devis.status === newFilters[key];
+
+          default:
+            return true;
+        }
       });
     });
 
@@ -105,6 +161,12 @@ const ListeDevis = () => {
     setOrderBy(property);
 
     const sorted = [...filteredDevis].sort((a, b) => {
+      if (property === "date_creation") {
+        return (
+          (isAsc ? 1 : -1) *
+          (new Date(a[property]).getTime() - new Date(b[property]).getTime())
+        );
+      }
       if (property === "price_ttc") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
@@ -132,6 +194,11 @@ const ListeDevis = () => {
 
   const handleModifyDevis = () => {
     if (selectedDevis) {
+      if (selectedDevis.status !== "En attente") {
+        alert("Seuls les devis en attente peuvent être modifiés");
+        handleClose();
+        return;
+      }
       window.location.href = `/ModificationDevis/${selectedDevis.id}`;
     }
     handleClose();
@@ -152,27 +219,110 @@ const ListeDevis = () => {
     try {
       if (!devisToUpdate) return;
 
+      // Si on change l'état depuis "Validé", vérifier les factures associées
+      if (devisToUpdate.status === "Validé" && newStatus !== "Validé") {
+        const response = await axios.get(
+          `/api/list-devis/${devisToUpdate.id}/factures/`
+        );
+        const factures = response.data;
+
+        if (factures.length > 0) {
+          // Stocker l'ID du devis dans facturesToDelete
+          setFacturesToDelete(
+            factures.map((f) => ({
+              ...f,
+              devisId: devisToUpdate.id,
+            }))
+          );
+          setNewStatus(newStatus);
+          setDeleteFacturesModalOpen(true);
+          setShowStatusModal(false);
+          return;
+        }
+      }
+
+      await updateDevisStatus(newStatus);
+    } catch (error) {
+      console.error("Erreur lors de la modification du statut:", error);
+      alert("Erreur lors de la modification du statut");
+    }
+  };
+
+  const updateDevisStatus = async (status) => {
+    try {
       await axios.put(`/api/list-devis/${devisToUpdate.id}/update_status/`, {
-        status: newStatus,
+        status: status,
       });
 
-      // Mettre à jour l'état local après succès
       setDevis(
         devis.map((d) =>
-          d.id === devisToUpdate.id ? { ...d, status: newStatus } : d
+          d.id === devisToUpdate.id ? { ...d, status: status } : d
         )
       );
       setFilteredDevis(
         filteredDevis.map((d) =>
-          d.id === devisToUpdate.id ? { ...d, status: newStatus } : d
+          d.id === devisToUpdate.id ? { ...d, status: status } : d
         )
       );
 
       setShowStatusModal(false);
       setDevisToUpdate(null);
+      setNewStatus(null);
     } catch (error) {
-      console.error("Erreur lors de la modification du statut:", error);
-      alert("Erreur lors de la modification du statut");
+      console.error("Erreur lors de la mise à jour du statut:", error);
+      alert("Erreur lors de la mise à jour du statut");
+    }
+  };
+
+  const handleConfirmDeleteFactures = async () => {
+    try {
+      if (facturesToDelete.length === 0) return;
+
+      // Récupérer l'ID du devis depuis la première facture
+      const devisId = facturesToDelete[0].devisId;
+      const statusToUpdate = newStatus;
+
+      // Supprimer toutes les factures associées
+      await Promise.all(
+        facturesToDelete.map((facture) =>
+          axios.delete(`/api/facture/${facture.id}/`)
+        )
+      );
+
+      // Mettre à jour le statut du devis
+      await axios.put(`/api/list-devis/${devisId}/update_status/`, {
+        status: statusToUpdate,
+      });
+
+      // Mettre à jour l'état local
+      setDevis(
+        devis.map((d) =>
+          d.id === devisId ? { ...d, status: statusToUpdate } : d
+        )
+      );
+      setFilteredDevis(
+        filteredDevis.map((d) =>
+          d.id === devisId ? { ...d, status: statusToUpdate } : d
+        )
+      );
+
+      // Message de succès
+      const nombreFactures = facturesToDelete.length;
+      const message =
+        nombreFactures === 1
+          ? `La facture ${facturesToDelete[0].numero} a été supprimée avec succès.`
+          : `${nombreFactures} factures ont été supprimées avec succès.`;
+      alert(message);
+
+      // Réinitialiser les états
+      setDeleteFacturesModalOpen(false);
+      setFacturesToDelete([]);
+      setDevisToUpdate(null);
+      setNewStatus(null);
+      setShowStatusModal(false);
+    } catch (error) {
+      console.error("Erreur lors de la suppression des factures:", error);
+      alert("Erreur lors de la suppression des factures");
     }
   };
 
@@ -206,14 +356,25 @@ const ListeDevis = () => {
   };
 
   const handleCreateFacture = (devis) => {
-    console.log("Devis sélectionné pour la facture:", devis); // Debug
     const selectedDevis = Array.isArray(devis) ? devis[0] : devis;
-    setSelectedDevis(selectedDevis);
-    setFactureModalOpen(true);
+    // Récupérer les données complètes du devis
+    axios
+      .get(`/api/devisa/${selectedDevis.id}/`)
+      .then((response) => {
+        setSelectedDevis(response.data);
+        setFactureModalOpen(true);
+      })
+      .catch((error) => {
+        console.error(
+          "Erreur lors de la récupération des détails du devis:",
+          error
+        );
+        alert("Erreur lors de la récupération des détails du devis");
+      });
   };
 
   const handleFactureModalClose = () => {
-    setFactureModalClose(false);
+    setFactureModalOpen(false);
     setSelectedDevis(null);
   };
 
@@ -222,6 +383,10 @@ const ListeDevis = () => {
       console.log("Données envoyées:", factureData);
       const response = await axios.post("/api/facture/", factureData);
 
+      // Message de succès
+      alert(`La facture ${response.data.numero} a été créée avec succès.`);
+
+      // Ouvrir la prévisualisation dans un nouvel onglet
       const previewUrl = `/api/preview-facture/${response.data.id}/`;
       window.open(previewUrl, "_blank");
 
@@ -405,7 +570,21 @@ const ListeDevis = () => {
           },
         }}
       >
-        <MenuItem onClick={handleModifyDevis}>Modifier le devis</MenuItem>
+        <MenuItem
+          onClick={handleModifyDevis}
+          disabled={selectedDevis?.status !== "En attente"}
+          sx={{
+            color:
+              selectedDevis?.status !== "En attente"
+                ? "text.disabled"
+                : "inherit",
+            "&.Mui-disabled": {
+              opacity: 0.6,
+            },
+          }}
+        >
+          Modifier le devis
+        </MenuItem>
         <MenuItem onClick={() => handleCreateFacture(selectedDevis)}>
           Éditer en facture
         </MenuItem>
@@ -421,8 +600,10 @@ const ListeDevis = () => {
           setShowStatusModal(false);
           setDevisToUpdate(null);
         }}
-        currentStatus={devisToUpdate?.status || "En attente"}
+        currentStatus={devisToUpdate?.status}
         onStatusChange={handleStatusUpdate}
+        type="devis"
+        title="Modifier l'état du devis"
       />
 
       <Modal
@@ -493,6 +674,63 @@ const ListeDevis = () => {
               onClick={handleConfirmDelete}
             >
               Supprimer
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
+      <Modal
+        open={deleteFacturesModalOpen}
+        onClose={() => {
+          setDeleteFacturesModalOpen(false);
+          setFacturesToDelete([]);
+          setNewStatus(null);
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 400,
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="h6" component="h2" gutterBottom>
+            Attention !
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Le changement d'état de ce devis entraînera la suppression des
+            factures suivantes :
+          </Typography>
+          <Box sx={{ mt: 2, mb: 2 }}>
+            {facturesToDelete.map((facture) => (
+              <Typography key={facture.id} sx={{ color: "error.main" }}>
+                • {facture.numero}
+              </Typography>
+            ))}
+          </Box>
+          <Typography sx={{ mt: 2, mb: 3 }}>Voulez-vous continuer ?</Typography>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2 }}>
+            <Button
+              onClick={() => {
+                setDeleteFacturesModalOpen(false);
+                setFacturesToDelete([]);
+                setNewStatus(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleConfirmDeleteFactures}
+            >
+              Confirmer
             </Button>
           </Box>
         </Box>

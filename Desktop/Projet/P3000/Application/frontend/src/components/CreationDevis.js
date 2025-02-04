@@ -529,6 +529,7 @@ const CreationDevis = () => {
         tva_rate: parseFloat(tvaRate),
         nature_travaux: natureTravaux || "",
         description: devisModalData.description || "",
+        devis_chantier: devisType === "chantier",
         lignes: selectedLignes.map((ligneId) => ({
           ligne: parseInt(ligneId),
           quantity: quantities[ligneId] || 0,

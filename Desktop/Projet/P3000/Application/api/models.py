@@ -248,17 +248,16 @@ class Materiel_produit(models.Model):
 class Devis(models.Model):
     numero = models.CharField(max_length=50, unique=True)
     date_creation = models.DateTimeField(auto_now_add=True)
-    price_ht = models.DecimalField(max_digits=10, decimal_places=2)
-    price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
-    tva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20.00)
-    nature_travaux = models.CharField(max_length=255, blank=True)
-    description = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En attente')
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis')
-    client = models.ManyToManyField(Client, related_name='devis')
-    
-    # Nouveau champ pour les lignes spéciales
+    price_ht = models.FloatField()
+    price_ttc = models.FloatField()
+    tva_rate = models.FloatField()
+    nature_travaux = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True)
+    client = models.ManyToManyField(Client, related_name='devis', blank=True)
     lignes_speciales = models.JSONField(default=dict, blank=True)
+    devis_chantier = models.BooleanField(default=False)  # Nouveau champ
 
     def save_special_lines(self, special_lines_data):
         self.lignes_speciales = {
@@ -282,27 +281,46 @@ class LigneDetail(models.Model):
         return f'{self.description} ({self.unite}) - {self.prix} €'
     
 class Facture(models.Model):
+    FACTURE_STATUS = [
+        ('En cours', 'En cours'),
+        ('Attente paiement', 'Attente paiement'),
+        ('Payée', 'Payée')
+    ]
+
+
+
     numero = models.CharField(max_length=50, unique=True)
     date_creation = models.DateTimeField(auto_now_add=True)
-    price_ht = models.DecimalField(max_digits=10, decimal_places=2)
-    price_ttc = models.DecimalField(max_digits=10, decimal_places=2)
-    tva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20.00)
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='factures')
-    state_facture = models.CharField(max_length=20, choices=STATE_CHOICES, default='En attente')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='factures')
+    state_facture = models.CharField(max_length=20, choices=FACTURE_STATUS, default='En attente')
+    date_echeance = models.DateField(null=True, blank=True)
+    date_paiement = models.DateField(null=True, blank=True)  # Nouveau champ
+    mode_paiement = models.CharField(max_length=50, default='virement')
+    price_ht = models.FloatField()
+    price_ttc = models.FloatField()
     
-    # Nouveau champ pour les lignes spéciales
-    lignes_speciales = models.JSONField(default=dict, blank=True)
-
     def __str__(self):
-        return f"Facture {self.numero} - {self.chantier.chantier_name}"
+        return f"Facture {self.numero}"
+
+    def save(self, *args, **kwargs):
+        if self.devis and not self.id:  # Seulement lors de la création
+            self.price_ht = self.devis.price_ht
+            self.price_ttc = self.devis.price_ttc
+            self.chantier = self.devis.chantier
+        super().save(*args, **kwargs)
 
     @property
-    def client(self):
-        return self.chantier.societe.client_name
+    def tva_rate(self):
+        return self.devis.tva_rate
 
     @property
-    def societe(self):
-        return self.chantier.societe
+    def lignes(self):
+        return self.devis.lignes
+
+    @property
+    def lignes_speciales(self):
+        return self.devis.lignes_speciales
 
 class DevisLigne(models.Model):
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes')
