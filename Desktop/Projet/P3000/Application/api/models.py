@@ -79,11 +79,12 @@ class Chantier(models.Model):
 class Agent(models.Model):
     name = models.CharField(max_length=25)
     surname = models.CharField(max_length=25)
-    address = models.CharField(max_length=100)
+    address = models.CharField(max_length=100, blank=True, null=True)
     phone_Number = models.IntegerField()
-    taux_Horaire = models.FloatField()
-    conge = models.FloatField()
+    taux_Horaire = models.FloatField(null=True, blank=True)
+    conge = models.FloatField(null=True, blank=True)
     
+
     # Nouveaux champs pour les heures de travail
     heure_debut = models.TimeField(null=True, blank=True)  # Heure de début de travail
     heure_fin = models.TimeField(null=True, blank=True)  # Heure de fin de travail
@@ -443,6 +444,8 @@ class BonCommande(models.Model):
     montant_total = models.DecimalField(max_digits=10, decimal_places=2)
     date_creation = models.DateTimeField(auto_now_add=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+    date_livraison = models.DateField(null=True, blank=True)
+    magasin_retrait = models.CharField(max_length=200, null=True, blank=True)
 
     def __str__(self):
         return self.numero
@@ -462,6 +465,18 @@ class LigneBonCommande(models.Model):
         # Calculer automatiquement le total
         self.total = self.quantite * self.prix_unitaire
         super().save(*args, **kwargs)
+
+class FournisseurMagasin(models.Model):
+    fournisseur = models.CharField(max_length=100)
+    magasin = models.CharField(max_length=200)
+    derniere_utilisation = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('fournisseur', 'magasin')
+        ordering = ['-derniere_utilisation']
+
+    def __str__(self):
+        return f"{self.fournisseur} - {self.magasin}"
 
 
 

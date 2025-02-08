@@ -1,4 +1,10 @@
 import {
+  Autocomplete,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Menu,
   MenuItem,
@@ -7,9 +13,14 @@ import {
   TableBody,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
+import fr from "date-fns/locale/fr";
 import React, { useCallback, useEffect, useState } from "react";
 import { TfiMore } from "react-icons/tfi";
 import {
@@ -42,6 +53,12 @@ const ListeBonCommande = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [statusAnchorEl, setStatusAnchorEl] = useState(null);
   const [selectedBC, setSelectedBC] = useState(null);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [date, setDate] = useState(null);
+  const [magasin, setMagasin] = useState("");
+  const [magasins, setMagasins] = useState([]);
+  const [inputValue, setInputValue] = useState("");
 
   const fetchBonsCommande = async () => {
     if (isLoading) return;
@@ -149,21 +166,53 @@ const ListeBonCommande = () => {
     setStatusAnchorEl(null);
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const loadMagasins = async (fournisseur) => {
     try {
-      if (!selectedBC) {
-        throw new Error("Aucun bon de commande sélectionné");
-      }
+      const response = await axios.get(
+        `/api/fournisseur-magasins/?fournisseur=${fournisseur}`
+      );
+      setMagasins(response.data.map((m) => m.magasin));
+    } catch (error) {
+      console.error("Erreur lors du chargement des magasins:", error);
+    }
+  };
 
-      await axios.patch(`/api/update-bon-commande/${selectedBC.id}/`, {
-        statut: newStatus,
-      });
+  const handleStatusChange = (status) => {
+    setSelectedStatus(status);
+    if (status === "retrait_magasin" && selectedBC) {
+      loadMagasins(selectedBC.fournisseur);
+    }
+    setStatusModalOpen(true);
+    handleStatusMenuClose();
+  };
+
+  const handleStatusConfirm = async () => {
+    try {
+      const formattedDate = date
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+            2,
+            "0"
+          )}-${String(date.getDate()).padStart(2, "0")}`
+        : null;
+
+      const data = {
+        statut: selectedStatus,
+        date_livraison: formattedDate,
+        magasin_retrait: magasin || "",
+      };
+
+      console.log("Data envoyée à l'API:", data);
+
+      await axios.patch(`/api/update-bon-commande/${selectedBC.id}/`, data);
       fetchBonsCommande();
-      handleStatusMenuClose();
-      setSelectedBC(null);
+      setStatusModalOpen(false);
+      setDate(null);
+      setMagasin("");
+      setInputValue("");
     } catch (error) {
       console.error("Erreur lors de la mise à jour du statut:", error);
-      alert(error.message || "Erreur lors de la mise à jour du statut");
+      console.error("Data qui a causé l'erreur:", date);
+      alert("Erreur lors de la mise à jour du statut");
     }
   };
 
@@ -356,6 +405,62 @@ const ListeBonCommande = () => {
           Retrait Magasin
         </MenuItem>
       </Menu>
+
+      <Dialog open={statusModalOpen} onClose={() => setStatusModalOpen(false)}>
+        <DialogTitle>
+          {selectedStatus === "en_attente"
+            ? "En attente Livraison"
+            : selectedStatus === "livre_chantier"
+            ? "Livré Chantier"
+            : "Retrait Magasin"}
+        </DialogTitle>
+        <DialogContent>
+          {selectedStatus !== "en_attente" && (
+            <LocalizationProvider
+              dateAdapter={AdapterDateFns}
+              adapterLocale={fr}
+            >
+              <DatePicker
+                label="Date de livraison"
+                value={date}
+                onChange={(newDate) => setDate(newDate)}
+                renderInput={(params) => (
+                  <TextField {...params} fullWidth sx={{ mt: 2 }} />
+                )}
+              />
+            </LocalizationProvider>
+          )}
+
+          {selectedStatus === "retrait_magasin" && (
+            <Autocomplete
+              freeSolo
+              value={magasin}
+              onChange={(event, newValue) => {
+                setMagasin(newValue);
+              }}
+              inputValue={inputValue}
+              onInputChange={(event, newInputValue) => {
+                setInputValue(newInputValue);
+              }}
+              options={magasins}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Magasin"
+                  fullWidth
+                  sx={{ mt: 2 }}
+                />
+              )}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusModalOpen(false)}>Annuler</Button>
+          <Button onClick={handleStatusConfirm} variant="contained">
+            Confirmer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

@@ -15,6 +15,8 @@ from .views import (
     create_bon_commande, preview_saved_bon_commande,
     get_bon_commande_detail,
     update_bon_commande,
+    fournisseur_magasins,
+    list_fournisseur_magasins,
 )
 
 router = DefaultRouter()
@@ -82,5 +84,7 @@ urlpatterns = [
     path('preview-saved-bon-commande/<int:id>/', preview_saved_bon_commande, name='preview_saved_bon_commande'),
     path('detail-bon-commande/<int:id>/', get_bon_commande_detail, name='get-bon-commande-detail'),
     path('update-bon-commande/<int:id>/', update_bon_commande, name='update-bon-commande'),
+    path('fournisseur-magasins/', fournisseur_magasins, name='fournisseur-magasins'),
+    path('list-fournisseur-magasins/', list_fournisseur_magasins, name='list_fournisseur_magasins'),
     # ... autres routes
 ]

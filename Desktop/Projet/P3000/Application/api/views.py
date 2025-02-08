@@ -22,7 +22,7 @@ from .models import (
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction
@@ -2009,7 +2009,9 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'agent': bc.agent.id,
                 'montant_total': bc.montant_total,
                 'date_creation': bc.date_creation,
-                'statut': bc.statut  # Ajout du statut
+                'statut': bc.statut,
+                'date_livraison': bc.date_livraison,  # Ajout du champ
+                'magasin_retrait': bc.magasin_retrait  # Ajout du champ
             })
         return Response(data)
 
@@ -2041,7 +2043,7 @@ def preview_bon_commande(request):
         fournisseur = bon_commande_data['fournisseur']
         chantier = get_object_or_404(Chantier, id=bon_commande_data['chantier'])
         agent = {
-            'id': bon_commande_data['agent'],  # On passe l'ID pour la condition dans le template
+            'id': bon_commande_data['agent'],
         }
 
         context = {
@@ -2051,7 +2053,10 @@ def preview_bon_commande(request):
             'agent': agent,
             'lignes': bon_commande_data['lignes'],
             'montant_total': bon_commande_data['montant_total'],
-            'date': timezone.now()
+            'date': timezone.now(),
+            'statut': bon_commande_data.get('statut', 'en_attente'),
+            'date_livraison': bon_commande_data.get('date_livraison'),
+            'magasin_retrait': bon_commande_data.get('magasin_retrait')
         }
         
         return render(request, 'bon_commande.html', context)
@@ -2117,6 +2122,18 @@ def preview_saved_bon_commande(request, id):
         chantier = bon_commande.chantier
         agent = bon_commande.agent
 
+        # Formatage de la date directement dans la vue
+        formatted_date = None
+        if bon_commande.date_livraison:
+            try:
+                if isinstance(bon_commande.date_livraison, str):
+                    date_obj = datetime.strptime(bon_commande.date_livraison, '%Y-%m-%d')
+                else:
+                    date_obj = bon_commande.date_livraison
+                formatted_date = date_obj.strftime('%d/%m/%y').upper()
+            except ValueError:
+                formatted_date = None
+
         context = {
             'numero': bon_commande.numero,
             'fournisseur': bon_commande.fournisseur,
@@ -2124,12 +2141,16 @@ def preview_saved_bon_commande(request, id):
             'agent': agent,
             'lignes': lignes,
             'montant_total': bon_commande.montant_total,
-            'date': bon_commande.date_creation
+            'date': bon_commande.date_creation,
+            'statut': bon_commande.statut,
+            'date_livraison': formatted_date,  # Date déjà formatée
+            'magasin_retrait': bon_commande.magasin_retrait
         }
         
         return render(request, 'bon_commande.html', context)
         
     except Exception as e:
+        print("Error:", str(e))
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -2147,11 +2168,14 @@ def list_bons_commande(request):
                 'agent': bc.agent.id,
                 'montant_total': bc.montant_total,
                 'date_creation': bc.date_creation,
-                'statut': bc.statut  # Ajout du statut
+                'statut': bc.statut,
+                'date_livraison': bc.date_livraison,  # Ajout du champ
+                'magasin_retrait': bc.magasin_retrait  # Ajout du champ
             })
         return Response(data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+   
 
 @api_view(['GET'])
 def get_bon_commande_detail(request, id):
@@ -2213,10 +2237,61 @@ def update_bon_commande(request, id):
 def update_bon_commande(request, id):
     try:
         bon_commande = get_object_or_404(BonCommande, id=id)
-        if 'statut' in request.data:
-            bon_commande.statut = request.data['statut']
-            bon_commande.save()
-        return Response({'message': 'Statut mis à jour avec succès'})
+        data = request.data
+        
+        # Mise à jour des champs du bon de commande
+        if 'statut' in data:
+            bon_commande.statut = data['statut']
+        if 'date_livraison' in data:
+            bon_commande.date_livraison = data['date_livraison']
+        if 'magasin_retrait' in data:
+            bon_commande.magasin_retrait = data['magasin_retrait']
+        if 'montant_total' in data:
+            bon_commande.montant_total = data['montant_total']
+            
+        bon_commande.save()
+        
+        return Response({'message': 'Bon de commande mis à jour avec succès'})
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@api_view(['GET', 'POST'])
+def fournisseur_magasins(request):
+    if request.method == 'GET':
+        fournisseur = request.GET.get('fournisseur', '')
+        if fournisseur:
+            magasins = FournisseurMagasin.objects.filter(fournisseur=fournisseur)
+        else:
+            magasins = FournisseurMagasin.objects.all()
+        return Response([{'fournisseur': m.fournisseur, 'magasin': m.magasin} for m in magasins])
+
+    elif request.method == 'POST':
+        fournisseur = request.data.get('fournisseur')
+        magasin = request.data.get('magasin')
+        if not fournisseur or not magasin:
+            return Response({'error': 'Fournisseur et magasin sont requis'}, status=400)
+        
+        FournisseurMagasin.objects.get_or_create(
+            fournisseur=fournisseur,
+            magasin=magasin
+        )
+        return Response({'status': 'success'})
+
+@api_view(['GET'])
+def list_fournisseur_magasins(request):
+    try:
+        magasins = FournisseurMagasin.objects.all().order_by('fournisseur', '-derniere_utilisation')
+        data = [{
+            'id': fm.id,
+            'fournisseur': fm.fournisseur,
+            'magasin': fm.magasin,
+            'derniere_utilisation': fm.derniere_utilisation
+        } for fm in magasins]
+        return Response(data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

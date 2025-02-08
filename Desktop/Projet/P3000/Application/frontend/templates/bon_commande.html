@@ -356,7 +356,18 @@
       </div>
       <div class="adresse-livraison">
         <h3>Adresse de Livraison et date:</h3>
-        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+        {% if statut == 'en_attente' %}
+        <p>En attente Livraison</p>
+        {% elif statut == 'livre_chantier' %}
+        <p>
+          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_livraison }}
+        </p>
+        {% elif statut == 'retrait_magasin' %}
+        <p>
+          RETRAIT {{ fournisseur|upper }} {{ magasin_retrait|upper }} LE 
+          {{ date_livraison }}
+        </p>
+        {% endif %}
       </div>
     </div>
     <div class="cachez">
