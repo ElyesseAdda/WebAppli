@@ -1,64 +1,259 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import {
+  Autocomplete,
+  Box,
+  Button,
+  IconButton,
+  Modal,
+  TextField,
+  Typography,
+} from "@mui/material";
+import axios from "axios";
+import React, { useEffect, useState } from "react";
+import { FiX } from "react-icons/fi";
 
-const NewProductForm = ({ onAddProduct }) => {
-    const [codeProduit, setCodeProduit] = useState('');
-    const [nomMateriel, setNomMateriel] = useState('');
-    const [fournisseur, setFournisseur] = useState('');
-    const [quantite, setQuantite] = useState(0);
-    const [prixUnitaire, setPrixUnitaire] = useState(0);
+const style = {
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: 400,
+  bgcolor: "background.paper",
+  borderRadius: "8px",
+  boxShadow: 24,
+  p: 4,
+};
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+const inputStyle = {
+  marginBottom: "1rem",
+  width: "100%",
+};
 
-        const newProduct = {
-            code_produit: codeProduit,
-            nom_materiel: nomMateriel,
-            fournisseur: fournisseur,
-            quantite_disponible: quantite,
-            prix_unitaire: prixUnitaire,
-        };
+const NewProductForm = ({ open, handleClose, onAddProduct }) => {
+  const [formData, setFormData] = useState({
+    code_produit: "",
+    designation: "",
+    fournisseur: "",
+    prix_unitaire: "",
+    unite: "",
+  });
 
-        axios.post('/api/stock/', newProduct)
-            .then(response => {
-                onAddProduct(response.data);  // Ajouter le nouveau produit à la liste
-                setCodeProduit('');
-                setNomMateriel('');
-                setFournisseur('');
-                setQuantite(0);
-                setPrixUnitaire(0);
-            })
-            .catch(error => {
-                console.error("Erreur lors de l'ajout du produit:", error);
-            });
+  const [errors, setErrors] = useState({});
+  const [fournisseurs, setFournisseurs] = useState([]);
+
+  useEffect(() => {
+    const fetchFournisseurs = async () => {
+      try {
+        console.log("Fetching fournisseurs..."); // Pour le debug
+        const response = await axios.get("/api/stockf/fournisseurs/");
+        console.log("Response:", response.data); // Pour le debug
+        const uniqueFournisseurs = [
+          ...new Set(
+            response.data.filter(
+              (fournisseur) => fournisseur && fournisseur.trim()
+            )
+          ),
+        ];
+        setFournisseurs(uniqueFournisseurs);
+      } catch (error) {
+        console.error("Erreur lors du chargement des fournisseurs:", error);
+        console.error("URL appelée:", error.config?.url); // Pour le debug
+      }
     };
 
-    return (
+    if (open) {
+      fetchFournisseurs();
+    }
+  }, [open]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prevState) => ({
+      ...prevState,
+      [name]: value,
+    }));
+    // Effacer l'erreur quand l'utilisateur commence à taper
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.code_produit)
+      newErrors.code_produit = "Le code produit est requis";
+    if (!formData.designation)
+      newErrors.designation = "La désignation est requise";
+    if (!formData.unite) newErrors.unite = "L'unité est requise";
+    if (!formData.prix_unitaire || formData.prix_unitaire <= 0) {
+      newErrors.prix_unitaire = "Le prix unitaire doit être supérieur à 0";
+    }
+    return newErrors;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    try {
+      const response = await axios.post("/api/stock/", {
+        ...formData,
+        fournisseur: formData.fournisseur || null,
+        prix_unitaire: parseFloat(formData.prix_unitaire),
+      });
+
+      onAddProduct(response.data);
+      if (window.refreshStockList) {
+        window.refreshStockList();
+      }
+      handleClose();
+      setFormData({
+        code_produit: "",
+        designation: "",
+        fournisseur: "",
+        prix_unitaire: "",
+        unite: "",
+      });
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du produit:", error);
+      setErrors({
+        submit: "Une erreur est survenue lors de l'ajout du produit",
+      });
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={handleClose}
+      aria-labelledby="modal-nouveau-produit"
+    >
+      <Box sx={style}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2,
+          }}
+        >
+          <Typography variant="h6" component="h2">
+            Nouveau Produit
+          </Typography>
+          <IconButton onClick={handleClose} size="small">
+            <FiX />
+          </IconButton>
+        </Box>
+
         <form onSubmit={handleSubmit}>
-            <h2>Créer un nouveau produit</h2>
-            <div>
-                <label>Code Produit:</label>
-                <input type="text" value={codeProduit} onChange={(e) => setCodeProduit(e.target.value)} />
-            </div>
-            <div>
-                <label>Nom du Matériel:</label>
-                <input type="text" value={nomMateriel} onChange={(e) => setNomMateriel(e.target.value)} />
-            </div>
-            <div>
-                <label>Fournisseur:</label>
-                <input type="text" value={fournisseur} onChange={(e) => setFournisseur(e.target.value)} />
-            </div>
-            <div>
-                <label>Quantité Disponible:</label>
-                <input type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
-            </div>
-            <div>
-                <label>Prix Unitaire:</label>
-                <input type="number" step="0.01" value={prixUnitaire} onChange={(e) => setPrixUnitaire(e.target.value)} />
-            </div>
-            <button type="submit">Ajouter le produit</button>
+          <TextField
+            name="code_produit"
+            label="Code Produit"
+            value={formData.code_produit}
+            onChange={handleChange}
+            error={!!errors.code_produit}
+            helperText={errors.code_produit}
+            sx={inputStyle}
+          />
+
+          <TextField
+            name="designation"
+            label="Désignation"
+            value={formData.designation}
+            onChange={handleChange}
+            error={!!errors.designation}
+            helperText={errors.designation}
+            sx={inputStyle}
+          />
+
+          <Autocomplete
+            freeSolo
+            options={fournisseurs}
+            value={formData.fournisseur}
+            onChange={(event, newValue) => {
+              setFormData((prev) => ({
+                ...prev,
+                fournisseur: newValue || "",
+              }));
+            }}
+            onInputChange={(event, newInputValue) => {
+              setFormData((prev) => ({
+                ...prev,
+                fournisseur: newInputValue,
+              }));
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                name="fournisseur"
+                label="Fournisseur"
+                error={!!errors.fournisseur}
+                helperText={errors.fournisseur}
+                sx={inputStyle}
+              />
+            )}
+          />
+
+          <TextField
+            name="prix_unitaire"
+            label="Prix Unitaire"
+            type="number"
+            value={formData.prix_unitaire}
+            onChange={handleChange}
+            error={!!errors.prix_unitaire}
+            helperText={errors.prix_unitaire}
+            InputProps={{
+              inputProps: { min: 0, step: "0.01" },
+            }}
+            sx={inputStyle}
+          />
+
+          <TextField
+            name="unite"
+            label="Unité"
+            value={formData.unite}
+            onChange={handleChange}
+            error={!!errors.unite}
+            helperText={errors.unite}
+            sx={inputStyle}
+          />
+
+          {errors.submit && (
+            <Typography color="error" sx={{ mt: 1, mb: 1 }}>
+              {errors.submit}
+            </Typography>
+          )}
+
+          <Box
+            sx={{ display: "flex", justifyContent: "flex-end", gap: 2, mt: 2 }}
+          >
+            <Button variant="outlined" onClick={handleClose}>
+              Annuler
+            </Button>
+            <Button
+              variant="contained"
+              type="submit"
+              sx={{
+                backgroundColor: "rgba(27, 120, 188, 1)",
+                "&:hover": {
+                  backgroundColor: "rgba(27, 120, 188, 0.8)",
+                },
+              }}
+            >
+              Ajouter
+            </Button>
+          </Box>
         </form>
-    );
+      </Box>
+    </Modal>
+  );
 };
 
 export default NewProductForm;

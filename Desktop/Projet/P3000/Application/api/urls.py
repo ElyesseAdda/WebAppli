@@ -4,8 +4,17 @@ from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
-    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, create_facture_from_devis,check_facture_numero, get_chantier_details, check_chantier_name, check_client, check_societe, calculate_special_lines, get_devis_special_lines, get_devis_factures, update_facture_status,
-    
+    historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
+    get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
+    delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
+    list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, 
+    create_facture_from_devis,check_facture_numero, get_chantier_details, check_chantier_name, check_client, check_societe,
+    calculate_special_lines, get_devis_special_lines, get_devis_factures, update_facture_status, get_fournisseurs,
+    bon_commande_view, BonCommandeViewSet, get_products_by_fournisseur, preview_bon_commande, generate_bon_commande_number,
+    preview_bon_commande, get_fournisseurs, get_products_by_fournisseur,
+    create_bon_commande, preview_saved_bon_commande,
+    get_bon_commande_detail,
+    update_bon_commande,
 )
 
 router = DefaultRouter()
@@ -21,6 +30,7 @@ router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
+router.register(r'bons-commande', BonCommandeViewSet)
 
 
 
@@ -60,5 +70,17 @@ urlpatterns = [
     path('devis/<int:devis_id>/special-lines/', get_devis_special_lines, name='get_devis_special_lines'),
     path('list-devis/<int:devis_id>/factures/', get_devis_factures, name='get-devis-factures'),
     path('facture/<int:facture_id>/update_status/', update_facture_status, name='update-facture-status'),
+    path('stockf/fournisseurs/', get_fournisseurs, name='get-fournisseurs'),
+    path('bon-commande/', bon_commande_view, name='bon-commande'),
+    path('products-by-fournisseur/', get_products_by_fournisseur, name='products-by-fournisseur'),
+    path('preview-bon-commande/<int:bon_commande_id>/', preview_bon_commande, name='preview-bon-commande'),
+    path('generate-bon-commande-number/', generate_bon_commande_number, name='generate-bon-commande-number'),
+    path('preview-bon-commande/', preview_bon_commande, name='preview-bon-commande'),
+    path('get_fournisseurs/', get_fournisseurs, name='get_fournisseurs'),
+    path('products-by-fournisseur/', get_products_by_fournisseur, name='products-by-fournisseur'),
+    path('bons-commande/', create_bon_commande, name='create-bon-commande'),
+    path('preview-saved-bon-commande/<int:id>/', preview_saved_bon_commande, name='preview_saved_bon_commande'),
+    path('detail-bon-commande/<int:id>/', get_bon_commande_detail, name='get-bon-commande-detail'),
+    path('update-bon-commande/<int:id>/', update_bon_commande, name='update-bon-commande'),
     # ... autres routes
 ]

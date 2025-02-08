@@ -3,7 +3,7 @@ from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
-    Schedule, LaborCost, DevisLigne, Facture, FactureLigne,
+    Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande
 )
 from decimal import Decimal
 
@@ -236,20 +236,12 @@ class EventSerializer(serializers.ModelSerializer):
         fields = ['id', 'agent', 'start_date', 'end_date', 'status', 'hours_modified', 'chantier', 'chantier_name']
 
 class StockSerializer(serializers.ModelSerializer):
-    prix_total = serializers.SerializerMethodField()  # Champ personnalisé pour calculer le prix total
-
+  
     class Meta:
         model = Stock
-        fields = [
-            'id','code_produit', 'nom_materiel', 'fournisseur', 'designation',
-            'quantite_disponible', 'quantite_minimum', 'prix_unitaire', 'prix_total'
-        ]
+        fields = '__all__'
 
-    def get_prix_total(self, obj):
-        # Calculer le prix total basé sur la quantité disponible et le prix unitaire
-        return obj.quantite_disponible * obj.prix_unitaire if obj.quantite_disponible and obj.prix_unitaire else 0
-
-
+    
 class StockHistorySerializer(serializers.ModelSerializer):
     stock = StockSerializer()  # Sérialiseur imbriqué pour afficher les détails du stock
     chantier = ChantierSerializer()  # Sérialiseur imbriqué pour renvoyer le chantier
@@ -396,3 +388,15 @@ class ChantierDetailSerializer(serializers.ModelSerializer):
             'debut': obj.date_debut,
             'fin': obj.date_fin
         }
+
+class LigneBonCommandeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneBonCommande
+        fields = '__all__'
+
+class BonCommandeSerializer(serializers.ModelSerializer):
+    lignes = LigneBonCommandeSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = BonCommande
+        fields = '__all__'

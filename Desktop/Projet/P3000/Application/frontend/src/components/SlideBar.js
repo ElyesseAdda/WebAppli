@@ -1,5 +1,5 @@
 import React from "react";
-import { FaMoneyBillWave, FaWarehouse } from "react-icons/fa";
+import { FaFileInvoice, FaMoneyBillWave, FaWarehouse } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
@@ -52,6 +52,12 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
             <a href="/">
               <FaWarehouse />
               Stocks
+            </a>
+          </li>
+          <li>
+            <a href="/BonCommande">
+              <FaFileInvoice />
+              Bons de Commande
             </a>
           </li>
         </ul>

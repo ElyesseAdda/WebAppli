@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Prévisualisation du Devis</title>
+    <style>
+        /* Style général */
+
+        body {
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 16px;
+          margin-left: 50px;
+
+          {% comment %} max-width: 800px;  {% endcomment %}
+          {% comment %} padding: 0px; {% endcomment %}
+          width: 210mm;     /* Largeur A4 */
+          {% comment %} height: 297mm;    /* Hauteur A4 */ {% endcomment %}
+          margin-right: 90px;
+          margin-top: 10px;
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+        @page {
+          size: A4;
+          margin: 10mm;
+          scale: 70%;
+        }
+        .bold {
+          font-weight: 700;
+        }
+
+        /* Style du tableau */
+        table {
+          {% comment %} width: 100%; {% endcomment %}
+
+        }
+        th {
+
+        }
+
+
+
+
+
+
+        .client-container {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          grid-template-rows: 2fr;
+          grid-column-gap: 150px;
+          grid-row-gap: 0px;
+          margin-bottom: -30px;
+            h3 {
+
+              font-size: 16px;
+              font-weight: 700;
+
+            }
+            h4 {
+              font-size: 16px;
+              font-weight: 800;
+              margin-bottom: 6px;
+            }
+            p {
+              font-size: 16px;
+              font-weight: 500;
+              margin: 2px 0px;
+              line-height: 1.2;
+            }
+        }
+
+        .client-info {
+          line-height: 8px;
+
+          grid-area: 1 / 1 / 2 / 2;
+          h3 {
+            margin-bottom: 0px;
+          }
+          h4 {
+            margin-top: 12px;
+          }
+        }
+        .contact-info {
+          line-height: 7px;
+          grid-area: 1 / 2 / 2 / 3;
+          h3 {
+            margin-bottom: 8px;
+            text-decoration: underline 2px black;
+            text-underline-offset: 2px;
+          }
+          h4 {
+            margin-top: 14px;
+          }
+
+        }
+
+        .client-info,
+        .contact-info {
+          margin-bottom: 20px;
+          h3 {
+            margin-bottom: 8px;
+            text-decoration: underline 2px black;
+            text-underline-offset: 2px;
+            font-size: 16px;
+            font-weight: 700;
+          }
+        }
+        .chantier-info {
+          line-height: 6px;
+          h2 {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 15px;
+            text-decoration: underline 2px black;
+            text-underline-offset: 2px;
+
+          }
+          h3 {
+            margin-top: 0px;
+            margin-bottom: 0px;
+            font-size: 16px;
+            font-weight: 700;
+
+          }
+          p {
+
+            font-size: 16px;
+            font-weight: 500;
+          }
+        }
+
+        .date {
+          font-size: 14px;
+          text-align: right;
+          margin-top: 30px;
+          font-weight: 500;
+        }
+        .p3000-container {
+          padding-bottom: 20px;
+          display: grid;
+          grid-template-rows: 1fr;
+          grid-column-gap: 0px;
+          grid-row-gap: 0px;
+        }
+        .logo-container {
+          grid-area: 1 / 1 / 2 / 2;
+          width: 300px;
+        }
+        .logo {
+
+
+          width: 250px;
+          height: 160px;
+        }
+        .P3000-info {
+
+          grid-area: 1 / 2 / 2 / 3;
+          color: rgba(27, 120, 188, 1);
+          text-align: right;
+          font-weight: 600;
+
+          p {
+            font-size: 18px;
+            font-style: italic;
+            line-height: 16px;
+            font-weight: 500;
+
+          }
+
+          h2 {
+            letter-spacing: -1px;
+            text-decoration: none;
+            font-style: normal;
+            font-size: 26px;
+            font-weight: 700;
+            margin: 0px;
+          }
+        }
+        .header {
+          padding: 1px;
+          border: solid 3px black;
+          h1 {
+            font-size: 20px;
+            margin: 1px;
+
+            text-decoration: none;
+          }
+        }
+        .header,
+        .footer {
+          text-align: center;
+          margin-bottom: 10px;
+        }
+        h2 {
+          text-decoration: underline 2px black;
+        }
+        .Fournisseur {
+          font-size: 16px;
+          font-weight: 700;
+          line-height: 5px;
+          h4 {
+            text-decoration: underline 2px black;
+            text-underline-offset: 2px;
+            font-style: italic;
+          }
+
+        }
+        .adresse {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr;
+          grid-column-gap: 0px;
+          grid-row-gap: 0px;
+
+          h3 {
+            font-size: 16px;
+            font-weight: 700;
+          }
+        }
+        .adresse-facturation {
+          grid-area: 1 / 1 / 2 / 2;
+          font-size: 16px;
+
+        }
+
+        .adresse-livraison {
+          grid-area: 1 / 2 / 2 / 3;
+          font-size: 16px;
+          font-weight: 700;
+            p{color: rgb(255, 0, 0);
+            }
+        }
+        .cachez {
+          border: solid 5px black;
+          border-radius: 20px;
+          height: 110px;
+          width: 300px;
+          margin-bottom: 20px;
+
+
+          img {
+
+            height: 90%;
+            width: 70%;
+
+        }
+      }
+      .box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="p3000-container">
+      <div class="logo-container">
+        <img class="logo" src="/static/frontend/src/img/logo.png" alt="" />
+      </div>
+      <div class="P3000-info">
+        <h2>SARL PEINTURE 3000</h2>
+        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+        <p>13014 - Marseille</p>
+        <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
+        <p>N°Siren: 352 875 317 RCS Marseille</p>
+        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
+      </div>
+    </div>
+
+    <div class="client-container">
+      <div class="chantier-info">
+        <h2>Chantier:</h2>
+        <h3>{{ chantier.chantier_name }}</h3>
+        <p>{{ chantier.rue }}</p>
+        <p>{{ chantier.code_postal }} - {{ chantier.ville }}</p>
+      </div>
+      <div class="contact-info">
+        <h3>Émetteur:</h3>
+        {% if agent.id == 1 %}
+        <p>Mr Adel Majri</p>
+        <p>Mail: adel.majri@peinture3000.fr</p>
+        <p>Tél: 07.61.56.66.72</p>
+        {% elif agent.id == 2 %}
+        <p>Mr Amine Belaoued</p>
+        <p>Mail: amine.belaoued@peinture3000.fr</p>
+        <p>Tél: 07.70.18.12.27</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="client-info">
+      <h3>Contact qui réceptionne:</h3>
+      <p>Mr Saif JLASSI</p>
+      <p>FT SERVICES</p>
+      <p>Tél: 07.58.1.14.67</p>
+    </div>
+    <div class="date">
+      <p>A Marseille, le {% now "d/m/Y" %}</p>
+    </div>
+
+    <div class="header">
+      <h1>BON DE COMMANDE N°{{ numero|slice:"3:" }}</h1>
+    </div>
+
+    <div class="Fournisseur">
+      <h4>Fournisseur:</h4>
+      <p>{{ fournisseur }}</p>
+    </div>
+
+    <table style="width: 100%; margin-top: 20px; border-collapse: collapse">
+      <thead>
+        <tr>
+          <th style="border: 1px solid black; padding: 8px">Désignation</th>
+          <th style="border: 1px solid black; padding: 8px">Quantité</th>
+          <th style="border: 1px solid black; padding: 8px">Prix unitaire</th>
+          <th style="border: 1px solid black; padding: 8px">Total HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ligne in lignes %}
+        <tr>
+          <td style="border: 1px solid black; padding: 8px">
+            {{ ligne.designation }}
+          </td>
+          <td style="border: 1px solid black; padding: 8px; text-align: center">
+            {{ ligne.quantite }}
+          </td>
+          <td style="border: 1px solid black; padding: 8px; text-align: right">
+            {{ ligne.prix_unitaire }} €
+          </td>
+          <td style="border: 1px solid black; padding: 8px; text-align: right">
+            {{ ligne.total }} €
+          </td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td
+            colspan="3"
+            style="border: 1px solid black; padding: 8px; text-align: right"
+          >
+            <strong>Total HT</strong>
+          </td>
+          <td style="border: 1px solid black; padding: 8px; text-align: right">
+            <strong>{{ montant_total }} €</strong>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="adresse">
+      <div class="adresse-facturation">
+        <h3>Adresse de facturation:</h3>
+        <p>24-26 Boulevard Gay Lussac</p>
+        <p>13014 - Marseille</p>
+      </div>
+      <div class="adresse-livraison">
+        <h3>Adresse de Livraison et date:</h3>
+        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+      </div>
+    </div>
+    <div class="cachez">
+      <div class="box">
+        <img
+          class="tampon"
+          src="/static/frontend/src/img/bctampon.png"
+          alt=""
+        />
+      </div>
+    </div>
+  </body>
+</html>

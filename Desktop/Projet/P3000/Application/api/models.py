@@ -168,33 +168,16 @@ class Event(models.Model):
 
 class Stock(models.Model):
     code_produit = models.CharField(max_length=50, unique=True, default='')
-    nom_materiel = models.CharField(max_length=50)
+    designation = models.CharField(max_length=50)
     fournisseur = models.CharField(max_length=100, blank=True, null=True)
     prix_unitaire = models.FloatField(default=0)
-    quantite_disponible = models.PositiveIntegerField(default=0)
-    quantite_minimum = models.PositiveIntegerField(null=True, blank=True)
-    designation = models.CharField(max_length=255, blank=True, null=True)
-    quantite_entree = models.PositiveIntegerField(default=0)
-    quantite_sortie = models.PositiveIntegerField(default=0)  # Réintégrer ce champ
-    date_entree = models.DateTimeField(auto_now_add=True, null=True, blank=True)
-    date_sortie = models.DateTimeField(null=True, blank=True)
-    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='stocks', null=True, blank=True)
-    agent = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, blank=True)
+    unite = models.CharField(max_length=50)
+    
+
 
     def __str__(self):
-        return self.nom_materiel
+        return self.nom_materiel 
 
-    @property
-    def prix_total_stock(self):
-        return self.prix_unitaire * self.quantite_disponible  # Prix total du stock disponible
-
-    @property
-    def prix_total_commande(self):
-        return self.prix_unitaire * self.quantite_entree  # Prix total de la commande
-
-    @property
-    def prix_stock_sortie(self):
-        return self.prix_unitaire * self.quantite_sortie  # Prix total des sorties de stock
 
 class StockHistory(models.Model):
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE)  # Lien avec Stock
@@ -232,10 +215,10 @@ class StockMovement(models.Model):
         
 class Fournisseur(models.Model):
     name = models.CharField(max_length=25,)
-    adress = models.CharField(max_length=200,)
     Fournisseur_mail = models.EmailField()
     phone_Number = models.IntegerField()
     description_fournisseur = models.CharField(max_length=250,)
+    magasin = models.CharField(max_length=250,)
 
 
 class Materiel_produit(models.Model):
@@ -445,6 +428,40 @@ class FactureLigneDetail(models.Model):
     unite = models.CharField(max_length=50)
     quantite = models.DecimalField(max_digits=10, decimal_places=2)
     prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+
+class BonCommande(models.Model):
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente Livraison'),
+        ('livre_chantier', 'Livré Chantier'),
+        ('retrait_magasin', 'Retrait Magasin'),
+    ]
+    
+    numero = models.CharField(max_length=50, unique=True)
+    fournisseur = models.CharField(max_length=100)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
+    montant_total = models.DecimalField(max_digits=10, decimal_places=2)
+    date_creation = models.DateTimeField(auto_now_add=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+
+    def __str__(self):
+        return self.numero
+
+class LigneBonCommande(models.Model):
+    bon_commande = models.ForeignKey(BonCommande, related_name='lignes', on_delete=models.CASCADE)
+    produit = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    designation = models.CharField(max_length=255)
+    quantite = models.IntegerField()
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    total = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.designation} - {self.quantite} x {self.prix_unitaire}€"
+
+    def save(self, *args, **kwargs):
+        # Calculer automatiquement le total
+        self.total = self.quantite * self.prix_unitaire
+        super().save(*args, **kwargs)
 
 
 

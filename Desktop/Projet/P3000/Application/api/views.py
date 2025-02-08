@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Avg, Count, Min, Sum
+from django.db.models import Avg, Count, Min, Sum, F
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -15,8 +15,15 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer
-from .models import Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, LigneDetail, Client, Stock, Agent, Presence, StockMovement, StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, LaborCost, DevisLigne,  FactureLigne, FacturePartie, FactureSousPartie, FactureLigneDetail
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer
+from .models import (
+    Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
+    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
+    LaborCost, DevisLigne, FactureLigne, FacturePartie, 
+    FactureSousPartie, FactureLigneDetail, BonCommande, 
+    LigneBonCommande, Fournisseur  # Changé BonCommandeLigne en LigneBonCommande
+)
 import logging
 from django.db import transaction
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -1940,8 +1947,278 @@ def update_facture_status(request, facture_id):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+@api_view(['GET'])
+def get_fournisseurs(request):
+    # Récupérer uniquement les noms distincts des fournisseurs depuis Stock
+    fournisseurs = Stock.objects.values_list('fournisseur', flat=True).distinct()
+    return Response(list(fournisseurs))
+
+def bon_commande_view(request):
+    return render(request, 'bon_commande.html')
 
 
+class BonCommandeViewSet(viewsets.ModelViewSet):
+    queryset = BonCommande.objects.all()
+    serializer_class = BonCommandeSerializer
+
+    def create(self, request, *args, **kwargs):
+        try:
+            with transaction.atomic():
+                # Création du bon de commande
+                bon_commande_data = {
+                    'numero': request.data.get('numero'),
+                    'fournisseur': request.data.get('fournisseur'),
+                    'chantier_id': request.data.get('chantier'),
+                    'agent_id': request.data.get('agent'),
+                    'montant_total': request.data.get('montant_total', 0)
+                }
+
+                bon_commande = BonCommande.objects.create(**bon_commande_data)
+
+                # Création des lignes
+                lignes = request.data.get('lignes', [])
+                for ligne in lignes:
+                    LigneBonCommande.objects.create(
+                        bon_commande=bon_commande,
+                        produit_id=ligne['produit'],
+                        designation=ligne['designation'],
+                        quantite=ligne['quantite'],
+                        prix_unitaire=ligne['prix_unitaire'],
+                        total=ligne['total']
+                    )
+
+                serializer = self.get_serializer(bon_commande)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            print(f"Erreur détaillée: {str(e)}")  # Ajout d'un log pour debug
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    def list(self, request):
+        bons_commande = self.get_queryset()
+        data = []
+        for bc in bons_commande:
+            data.append({
+                'id': bc.id,
+                'numero': bc.numero,
+                'fournisseur': bc.fournisseur,
+                'chantier': bc.chantier.id,
+                'chantier_name': bc.chantier.chantier_name,
+                'agent': bc.agent.id,
+                'montant_total': bc.montant_total,
+                'date_creation': bc.date_creation,
+                'statut': bc.statut  # Ajout du statut
+            })
+        return Response(data)
+
+@api_view(['GET'])
+def get_products_by_fournisseur(request):
+    fournisseur_name = request.query_params.get('fournisseur')
+    if not fournisseur_name:
+        return Response(
+            {'error': 'Fournisseur name is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        products = Stock.objects.filter(fournisseur=fournisseur_name)
+        serializer = StockSerializer(products, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+def preview_bon_commande(request):
+    try:
+        bon_commande_data = json.loads(request.GET.get('bon_commande', '{}'))
+        
+        # Récupérer les informations détaillées
+        fournisseur = bon_commande_data['fournisseur']
+        chantier = get_object_or_404(Chantier, id=bon_commande_data['chantier'])
+        agent = {
+            'id': bon_commande_data['agent'],  # On passe l'ID pour la condition dans le template
+        }
+
+        context = {
+            'numero': bon_commande_data['numero'],
+            'fournisseur': fournisseur,
+            'chantier': chantier,
+            'agent': agent,
+            'lignes': bon_commande_data['lignes'],
+            'montant_total': bon_commande_data['montant_total'],
+            'date': timezone.now()
+        }
+        
+        return render(request, 'bon_commande.html', context)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def generate_bon_commande_number(request):
+    try:
+        last_bon = BonCommande.objects.order_by('-numero').first()
+        
+        if last_bon:
+            last_number = int(last_bon.numero.split('-')[1])
+            next_number = f"BC-{(last_number + 1):04d}"
+        else:
+            next_number = "BC-0001"
+            
+        return Response({'numero': next_number})
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+def create_bon_commande(request):
+    try:
+        data = request.data
+        
+        # Créer le bon de commande
+        bon_commande = BonCommande.objects.create(
+            numero=data['numero'],
+            fournisseur=data['fournisseur'],
+            chantier_id=data['chantier'],
+            agent_id=data['agent'],
+            montant_total=data['montant_total']
+        )
+
+        # Créer les lignes de bon de commande
+        for ligne in data['lignes']:
+            LigneBonCommande.objects.create(
+                bon_commande=bon_commande,
+                produit_id=ligne['produit'],
+                designation=ligne['designation'],
+                quantite=ligne['quantite'],
+                prix_unitaire=ligne['prix_unitaire'],
+                total=ligne['total']
+            )
+
+        return Response({'message': 'Bon de commande créé avec succès'}, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def preview_saved_bon_commande(request, id):
+    try:
+        bon_commande = get_object_or_404(BonCommande, id=id)
+        lignes = bon_commande.lignes.all()
+        
+        # Récupérer les informations détaillées
+        chantier = bon_commande.chantier
+        agent = bon_commande.agent
+
+        context = {
+            'numero': bon_commande.numero,
+            'fournisseur': bon_commande.fournisseur,
+            'chantier': chantier,
+            'agent': agent,
+            'lignes': lignes,
+            'montant_total': bon_commande.montant_total,
+            'date': bon_commande.date_creation
+        }
+        
+        return render(request, 'bon_commande.html', context)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def list_bons_commande(request):
+    try:
+        bons_commande = BonCommande.objects.all()
+        data = []
+        for bc in bons_commande:
+            data.append({
+                'id': bc.id,
+                'numero': bc.numero,
+                'fournisseur': bc.fournisseur,
+                'chantier': bc.chantier.id,
+                'chantier_name': bc.chantier.chantier_name,
+                'agent': bc.agent.id,
+                'montant_total': bc.montant_total,
+                'date_creation': bc.date_creation,
+                'statut': bc.statut  # Ajout du statut
+            })
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def get_bon_commande_detail(request, id):
+    try:
+        bon_commande = get_object_or_404(BonCommande, id=id)
+        lignes = []
+        for ligne in bon_commande.lignes.all():
+            lignes.append({
+                'produit': ligne.produit.id,
+                'designation': ligne.designation,
+                'quantite': ligne.quantite,
+                'prix_unitaire': float(ligne.prix_unitaire),
+                'total': float(ligne.total)
+            })
+        
+        data = {
+            'id': bon_commande.id,
+            'numero': bon_commande.numero,
+            'fournisseur': bon_commande.fournisseur,
+            'chantier': bon_commande.chantier.id,
+            'agent': bon_commande.agent.id,
+            'montant_total': float(bon_commande.montant_total),
+            'date_creation': bon_commande.date_creation,
+            'lignes': lignes
+        }
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PUT'])
+def update_bon_commande(request, id):
+    try:
+        bon_commande = get_object_or_404(BonCommande, id=id)
+        data = request.data
+        
+        # Mise à jour des champs du bon de commande
+        bon_commande.montant_total = data['montant_total']
+        bon_commande.save()
+        
+        # Supprimer toutes les anciennes lignes
+        bon_commande.lignes.all().delete()
+        
+        # Créer les nouvelles lignes
+        for ligne_data in data['lignes']:
+            LigneBonCommande.objects.create(
+                bon_commande=bon_commande,
+                produit_id=ligne_data['produit'],
+                designation=ligne_data['designation'],
+                quantite=ligne_data['quantite'],
+                prix_unitaire=ligne_data['prix_unitaire'],
+                total=ligne_data['quantite'] * ligne_data['prix_unitaire']
+            )
+        
+        return Response({'message': 'Bon de commande mis à jour avec succès'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PATCH'])
+def update_bon_commande(request, id):
+    try:
+        bon_commande = get_object_or_404(BonCommande, id=id)
+        if 'statut' in request.data:
+            bon_commande.statut = request.data['statut']
+            bon_commande.save()
+        return Response({'message': 'Statut mis à jour avec succès'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 

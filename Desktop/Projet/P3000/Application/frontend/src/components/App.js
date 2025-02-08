@@ -5,12 +5,14 @@ import ReactDOM from "react-dom/client";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import "./../../static/css/app.css";
 import AgentCardContainer from "./AgentCardContainer";
+import BonCommandeModif from "./BonCommandeModif";
 import CalendrierAgentContainer from "./CalendrierAgentContainer";
 import ChantierInfo from "./ChantierInfo";
 import CreationDevis from "./CreationDevis";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Layout from "./Layout";
+import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
@@ -18,6 +20,7 @@ import ListePartiesSousParties from "./ListPartiesSousParties";
 import ModificationDevis from "./ModificationDevis";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
+
 // Créer un thème par défaut
 const theme = createTheme({
   palette: {
@@ -56,6 +59,8 @@ function App() {
               path="/ModificationDevis/:devisId"
               element={<ModificationDevis />}
             />
+            <Route path="/BonCommande" element={<ListeBonCommande />} />
+            <Route path="/ModificationBC/:id" element={<BonCommandeModif />} />
           </Routes>
         </Layout>
       </Router>
