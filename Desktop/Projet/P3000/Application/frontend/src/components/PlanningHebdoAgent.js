@@ -4,6 +4,8 @@ import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
 import isoWeek from "dayjs/plugin/isoWeek";
 import React, { useEffect, useState } from "react";
+
+import "./../../static/css/planningHebdo.css";
 import LaborCostsSummary from "./LaborCostsSummary";
 
 dayjs.extend(isoWeek);
@@ -382,18 +384,6 @@ const PlanningHebdoAgent = ({
       // Réinitialiser la sélection
       setSelectedCells([]);
       closeChantierModal();
-
-      // Calculer les nouvelles heures
-      const updatedHours = calculateUpdatedHours(selectedChantier.id);
-
-      // Mettre à jour les coûts
-      onCostsCalculated([
-        {
-          chantier_name: selectedChantier.chantier_name,
-          hours: updatedHours,
-          cost: updatedHours * agent.taux_Horaire,
-        },
-      ]);
     } catch (error) {
       console.error("Erreur lors de l'assignation du chantier :", error);
       alert(
@@ -744,12 +734,12 @@ const PlanningHebdoAgent = ({
               Semaine {selectedWeek} {selectedYear}
             </h2>
 
-            <table border="1" className={isLoading ? "loading" : ""}>
+            <table className={`planning-table ${isLoading ? "loading" : ""}`}>
               <thead>
                 <tr>
-                  <th>Heures</th>
+                  <th className="hours-header">Heures</th>
                   {getDatesOfWeek(selectedWeek).map((date, index) => (
-                    <th key={index}>
+                    <th key={index} className="date-header">
                       {daysOfWeek[index]}
                       <br />
                       {date}
@@ -760,14 +750,14 @@ const PlanningHebdoAgent = ({
               <tbody>
                 {hours.map((hour) => (
                   <tr key={hour}>
-                    <td>{hour}</td>
+                    <td className="hour-cell">{hour}</td>
                     {daysOfWeek.map((day) => (
                       <td
                         key={`${hour}-${day}`}
                         onMouseDown={() => handleMouseDown(hour, day)}
                         onMouseEnter={() => handleMouseEnter(hour, day)}
+                        className={`schedule-cell`}
                         style={{
-                          cursor: "pointer",
                           backgroundColor: getCellStyle(
                             hour,
                             day,
@@ -775,11 +765,7 @@ const PlanningHebdoAgent = ({
                           ),
                         }}
                       >
-                        {schedule[selectedAgentId] &&
-                        schedule[selectedAgentId][hour] &&
-                        schedule[selectedAgentId][hour][day]
-                          ? schedule[selectedAgentId][hour][day]
-                          : ""}
+                        {schedule[selectedAgentId]?.[hour]?.[day] || ""}
                       </td>
                     ))}
                   </tr>

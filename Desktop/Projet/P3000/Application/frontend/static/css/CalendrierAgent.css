@@ -10,3 +10,22 @@ a.fc-timeline-slot-cushion.fc-scrollgrid-sync-inner {
   font-size: 18px;
   height: 100%;
 }
+
+/* Ajout du style pour les cellules de dates */
+.fc-timeline-slot {
+  background-color: rgba(27, 120, 188, 1) !important;
+}
+
+.fc-timeline-slot-cushion {
+  color: white !important;
+}
+
+/* Pour s'assurer que le texte des dates reste bien visible */
+.fc-timeline-slot-inner {
+  color: white !important;
+}
+
+.fc-datagrid-cell-frame {
+  background-color: rgba(27, 120, 188, 1) !important;
+  color: white !important;
+}

@@ -1,15 +1,9 @@
 // AgentCard.js
-import {
-  Box,
-  Card,
-  CardContent,
-  MenuItem,
-  Select,
-  Typography,
-} from "@mui/material";
+import { Box, MenuItem, Select } from "@mui/material";
 import { styled } from "@mui/system";
 import dayjs from "dayjs";
 import React, { useState } from "react";
+import "./../../static/css/agentCard.css";
 
 // Function to capitalize the first letter
 const capitalizeFirstLetter = (string) => {
@@ -105,23 +99,6 @@ const getColorByStatus = (status) => {
 };
 
 // Styled Card component
-const StyledCard = styled(Card)(() => ({
-  minWidth: 400,
-  maxWidth: 600,
-  margin: "0 auto",
-  marginBottom: 20,
-  marginTop: 100,
-  boxShadow: "0 8px 16px rgba(0, 0, 0, 0.2)",
-  borderRadius: 12,
-  overflow: "hidden",
-  padding: "16px",
-  minHeight: 400,
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "left",
-  backgroundColor: "#f9f9f9",
-}));
 
 // Ajout d'un style pour le conteneur des événements
 const EventsContainer = styled(Box)(() => ({
@@ -170,84 +147,74 @@ const AgentCard = ({ agent, events }) => {
   console.log(agent); // Vérifiez que les données de l'agent sont correctes
 
   return (
-    <StyledCard>
-      <CardContent>
-        <Typography
-          variant="h5"
-          component="div"
-          align="left"
-          sx={{ color: "rgb(22, 94, 145)", fontWeight: "bold", mb: 2 }}
-        >
-          {`${agent.name} ${agent.surname}`}
-        </Typography>
+    <div className="agent-card">
+      <div className="agent-header">
+        <h2 className="agent-name">{`${agent.name} ${agent.surname}`}</h2>
+      </div>
 
-        {/* Sélecteur de mois */}
-        <MonthSelector value={selectedMonth} onChange={handleMonthChange}>
-          {Array.from({ length: 12 }, (_, index) => (
-            <MenuItem key={index} value={index}>
-              {new Date(0, index)
-                .toLocaleString("fr-FR", { month: "long" })
-                .charAt(0)
-                .toUpperCase() +
-                new Date(0, index)
-                  .toLocaleString("fr-FR", { month: "long" })
-                  .slice(1)}
-            </MenuItem>
-          ))}
-        </MonthSelector>
+      <Select
+        className="month-selector"
+        value={selectedMonth}
+        onChange={handleMonthChange}
+        fullWidth
+      >
+        {Array.from({ length: 12 }, (_, index) => (
+          <MenuItem key={index} value={index}>
+            {new Date(0, index)
+              .toLocaleString("fr-FR", { month: "long" })
+              .toUpperCase()}
+          </MenuItem>
+        ))}
+      </Select>
 
-        {filteredMonthlyHours.length > 0 ? (
-          filteredMonthlyHours.map((monthlyHour) => (
-            <Typography
-              key={monthlyHour.month}
-              sx={{ mb: 1.5, color: "rgb(22, 94, 145)", fontWeight: "bold" }}
+      {filteredMonthlyHours.length > 0 ? (
+        filteredMonthlyHours.map((monthlyHour) => (
+          <div key={monthlyHour.month} className="monthly-hours">
+            {`${capitalizeFirstLetter(
+              new Date(monthlyHour.month).toLocaleDateString("fr-FR", {
+                month: "long",
+                year: "numeric",
+              })
+            )}, ${monthlyHour.hours}H`}
+          </div>
+        ))
+      ) : (
+        <div className="no-events">
+          Pas d'heures mensuelles disponibles pour ce mois
+        </div>
+      )}
+
+      <div className="monthly-cost">
+        <strong>Coût mensuel:</strong> {monthlyCost.toFixed(2)} €
+      </div>
+
+      <div className="events-container">
+        {eventSummary.length > 0 ? (
+          eventSummary.map((event, index) => (
+            <div
+              key={index}
+              className={`event-item ${getEventClass(event.split(" ")[0])}`}
             >
-              {`${capitalizeFirstLetter(
-                new Date(monthlyHour.month).toLocaleDateString("fr-FR", {
-                  month: "long",
-                  year: "numeric",
-                })
-              )},
-               ${monthlyHour.hours}H`}
-            </Typography>
+              {event}
+            </div>
           ))
         ) : (
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Pas d'heures mensuelles disponibles pour ce mois
-          </Typography>
+          <div className="no-events">Aucun événement disponible</div>
         )}
-
-        {/* Affichage du coût mensuel */}
-        <Typography sx={{ mt: 2, mb: 1 }} color="text.secondary">
-          <strong>Coût mensuel:</strong> {monthlyCost.toFixed(2)} €
-        </Typography>
-
-        <Typography sx={{ mt: 2, mb: 1 }} color="text.secondary">
-          <strong>Résumé des événements:</strong>
-        </Typography>
-        <EventsContainer>
-          {eventSummary.length > 0 ? (
-            eventSummary.map((event, index) => (
-              <Typography
-                key={index}
-                sx={{
-                  mb: 0.5,
-                  color: getColorByStatus(event.split(" ")[0]),
-                  fontWeight: "bold",
-                }}
-              >
-                {event}
-              </Typography>
-            ))
-          ) : (
-            <Typography color="text.secondary">
-              Aucun événement disponible
-            </Typography>
-          )}
-        </EventsContainer>
-      </CardContent>
-    </StyledCard>
+      </div>
+    </div>
   );
+};
+
+// Fonction utilitaire pour déterminer la classe CSS de l'événement
+const getEventClass = (status) => {
+  const classMap = {
+    P: "present",
+    A: "absent",
+    C: "conge",
+    M: "modified",
+  };
+  return classMap[status] || "";
 };
 
 export default AgentCard;

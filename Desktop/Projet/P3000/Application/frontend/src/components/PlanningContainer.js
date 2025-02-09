@@ -95,12 +95,12 @@ const PlanningContainer = () => {
     setIsCopying(true);
     try {
       await axios.post("/api/copy_schedule/", {
-        source_agent: selectedAgentId,
-        target_agent: targetAgentId,
-        source_week: selectedWeek,
-        target_week: targetWeek,
-        source_year: selectedYear,
-        target_year: targetYear,
+        sourceAgentId: selectedAgentId,
+        targetAgentId: targetAgentId,
+        sourceWeek: selectedWeek,
+        targetWeek: targetWeek,
+        sourceYear: selectedYear,
+        targetYear: targetYear,
       });
       alert("Planning copié avec succès!");
       setIsCopyModalOpen(false);
