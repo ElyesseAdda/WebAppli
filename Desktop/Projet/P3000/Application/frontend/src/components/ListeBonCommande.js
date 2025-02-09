@@ -47,6 +47,9 @@ const ListeBonCommande = () => {
     date_creation: "",
     montant_total: "",
     statut: "",
+    statut_paiement: "",
+    montant_paye: "",
+    reste_a_payer: "",
   });
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
@@ -59,6 +62,9 @@ const ListeBonCommande = () => {
   const [magasin, setMagasin] = useState("");
   const [magasins, setMagasins] = useState([]);
   const [inputValue, setInputValue] = useState("");
+  const [paymentStatusAnchorEl, setPaymentStatusAnchorEl] = useState(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
 
   const fetchBonsCommande = async () => {
     if (isLoading) return;
@@ -153,7 +159,6 @@ const ListeBonCommande = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
-    setSelectedBC(null);
   };
 
   const handleStatusMenuOpen = () => {
@@ -227,6 +232,71 @@ const ListeBonCommande = () => {
     handleClose();
   };
 
+  const handleDeleteBC = async () => {
+    if (!selectedBC) return;
+
+    if (
+      window.confirm("Êtes-vous sûr de vouloir supprimer ce bon de commande ?")
+    ) {
+      try {
+        await axios.delete(`/api/delete-bons-commande/${selectedBC.id}/`);
+        await fetchBonsCommande(); // Recharger la liste après suppression
+        handleClose(); // Fermer le menu
+      } catch (error) {
+        console.error(
+          "Erreur lors de la suppression du bon de commande:",
+          error
+        );
+        alert("Erreur lors de la suppression du bon de commande");
+      }
+    }
+  };
+
+  const handlePaymentMenuOpen = () => {
+    setPaymentModalOpen(true);
+    handleClose();
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!selectedBC) {
+      alert("Veuillez sélectionner un bon de commande");
+      return;
+    }
+
+    try {
+      const montantPaye = parseFloat(paymentAmount);
+      if (isNaN(montantPaye) || montantPaye <= 0) {
+        alert("Veuillez entrer un montant valide");
+        return;
+      }
+
+      // Calculer le nouveau statut de paiement
+      let nouveauStatut;
+      if (montantPaye >= selectedBC.montant_total) {
+        nouveauStatut = "paye";
+      } else if (montantPaye > 0) {
+        nouveauStatut = "paye_partiel";
+      } else {
+        nouveauStatut = "non_paye";
+      }
+
+      const data = {
+        montant_paye: montantPaye,
+        statut_paiement: nouveauStatut,
+        date_paiement: new Date().toISOString().split("T")[0],
+      };
+
+      await axios.patch(`/api/bons-commande/${selectedBC.id}/`, data);
+      await fetchBonsCommande();
+      setPaymentModalOpen(false);
+      setPaymentAmount("");
+      setSelectedBC(null);
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du paiement:", error);
+      alert("Erreur lors de la mise à jour du paiement");
+    }
+  };
+
   return (
     <div
       style={{
@@ -292,13 +362,12 @@ const ListeBonCommande = () => {
                   sx={{ pt: "15px" }}
                 />
               </FilterCell>
-              <FilterCell sx={{ textAlign: "center" }}>
+              <FilterCell>
                 <StyledTextField
                   label="Montant"
                   variant="standard"
                   value={filters.montant_total}
                   onChange={handleFilterChange("montant_total")}
-                  sx={{ textAlign: "center" }}
                 />
               </FilterCell>
               <FilterCell>
@@ -307,6 +376,36 @@ const ListeBonCommande = () => {
                   variant="standard"
                   value={filters.statut}
                   onChange={handleFilterChange("statut")}
+                />
+              </FilterCell>
+              <FilterCell>
+                <StyledTextField
+                  label="Paiement"
+                  variant="standard"
+                  value={filters.statut_paiement}
+                  onChange={handleFilterChange("statut_paiement")}
+                  disabled
+                  sx={{ opacity: 1 }}
+                />
+              </FilterCell>
+              <FilterCell>
+                <StyledTextField
+                  label="Payé"
+                  variant="standard"
+                  value={filters.montant_paye}
+                  onChange={handleFilterChange("montant_paye")}
+                  disabled
+                  sx={{ opacity: 1 }}
+                />
+              </FilterCell>
+              <FilterCell>
+                <StyledTextField
+                  label="À Payer"
+                  variant="standard"
+                  value={filters.reste_a_payer}
+                  onChange={handleFilterChange("reste_a_payer")}
+                  disabled
+                  sx={{ opacity: 1 }}
                 />
               </FilterCell>
               <FilterCell />
@@ -375,6 +474,63 @@ const ListeBonCommande = () => {
                   )}
                 </CenteredTableCell>
                 <CenteredTableCell>
+                  {bc.statut_paiement === "non_paye" && (
+                    <span
+                      style={{
+                        color: "#FF0000",
+                        fontSize: "14px",
+                        whiteSpace: "nowrap",
+                        display: "block",
+                        textAlign: "center",
+                      }}
+                    >
+                      Non Payé
+                    </span>
+                  )}
+                  {bc.statut_paiement === "paye" && (
+                    <span
+                      style={{
+                        color: "#4CAF50",
+                        fontSize: "14px",
+                        whiteSpace: "nowrap",
+                        display: "block",
+                        textAlign: "center",
+                      }}
+                    >
+                      Payé
+                    </span>
+                  )}
+                  {bc.statut_paiement === "paye_partiel" && (
+                    <span
+                      style={{
+                        color: "#FFA500",
+                        fontSize: "14px",
+                        whiteSpace: "nowrap",
+                        display: "block",
+                        textAlign: "center",
+                      }}
+                    >
+                      Payé Partiellement
+                    </span>
+                  )}
+                </CenteredTableCell>
+                <CenteredTableCell
+                  sx={{
+                    whiteSpace: "nowrap",
+                    textAlign: "center",
+                  }}
+                >
+                  {bc.montant_paye} €
+                </CenteredTableCell>
+                <CenteredTableCell
+                  sx={{
+                    whiteSpace: "nowrap",
+                    textAlign: "center",
+                  }}
+                >
+                  {bc.reste_a_payer} €
+                </CenteredTableCell>
+                <CenteredTableCell>
                   <IconButton onClick={(e) => handleMenuOpen(e, bc)}>
                     <TfiMore />
                   </IconButton>
@@ -388,6 +544,10 @@ const ListeBonCommande = () => {
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
         <MenuItem onClick={handleModifyBC}>Modifier BC</MenuItem>
         <MenuItem onClick={handleStatusMenuOpen}>Modifier le statut</MenuItem>
+        <MenuItem onClick={handlePaymentMenuOpen}>Gérer le paiement</MenuItem>
+        <MenuItem onClick={handleDeleteBC} sx={{ color: "red" }}>
+          Supprimer BC
+        </MenuItem>
       </Menu>
 
       <Menu
@@ -458,6 +618,52 @@ const ListeBonCommande = () => {
           <Button onClick={() => setStatusModalOpen(false)}>Annuler</Button>
           <Button onClick={handleStatusConfirm} variant="contained">
             Confirmer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={paymentModalOpen}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          setSelectedBC(null);
+        }}
+      >
+        <DialogTitle>Gérer le paiement</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Montant total : {selectedBC?.montant_total} €
+          </Typography>
+          <Typography variant="body1" gutterBottom>
+            Déjà payé : {selectedBC?.montant_paye || 0} €
+          </Typography>
+          <Typography variant="body1" gutterBottom>
+            Reste à payer : {selectedBC?.reste_a_payer} €
+          </Typography>
+          <TextField
+            label="Montant du paiement"
+            type="number"
+            value={paymentAmount}
+            onChange={(e) => setPaymentAmount(e.target.value)}
+            fullWidth
+            margin="normal"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setPaymentModalOpen(false);
+              setSelectedBC(null);
+            }}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handlePaymentSubmit}
+            variant="contained"
+            color="primary"
+          >
+            Valider
           </Button>
         </DialogActions>
       </Dialog>

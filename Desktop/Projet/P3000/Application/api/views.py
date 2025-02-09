@@ -1970,8 +1970,13 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     'fournisseur': request.data.get('fournisseur'),
                     'chantier_id': request.data.get('chantier'),
                     'agent_id': request.data.get('agent'),
-                    'montant_total': request.data.get('montant_total', 0)
+                    'montant_total': request.data.get('montant_total', 0),
+                    'statut': request.data.get('statut', 'en_attente'),
+                    'date_livraison': request.data.get('date_livraison'),
+                    'magasin_retrait': request.data.get('magasin_retrait')
+                    
                 }
+
 
                 bon_commande = BonCommande.objects.create(**bon_commande_data)
 
@@ -2007,11 +2012,16 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'chantier': bc.chantier.id,
                 'chantier_name': bc.chantier.chantier_name,
                 'agent': bc.agent.id,
-                'montant_total': bc.montant_total,
+                'montant_total': float(bc.montant_total),
                 'date_creation': bc.date_creation,
                 'statut': bc.statut,
-                'date_livraison': bc.date_livraison,  # Ajout du champ
-                'magasin_retrait': bc.magasin_retrait  # Ajout du champ
+                'date_livraison': bc.date_livraison,
+                'magasin_retrait': bc.magasin_retrait,
+                # Ajout des nouveaux champs
+                'statut_paiement': bc.statut_paiement,
+                'montant_paye': float(bc.montant_paye),
+                'date_paiement': bc.date_paiement,
+                'reste_a_payer': float(bc.montant_total - bc.montant_paye)
             })
         return Response(data)
 
@@ -2170,7 +2180,11 @@ def list_bons_commande(request):
                 'date_creation': bc.date_creation,
                 'statut': bc.statut,
                 'date_livraison': bc.date_livraison,  # Ajout du champ
-                'magasin_retrait': bc.magasin_retrait  # Ajout du champ
+                'magasin_retrait': bc.magasin_retrait,  # Ajout du champ
+                'statut_paiement': bc.statut_paiement,
+                'montant_paye': bc.montant_paye,
+                'date_paiement': bc.date_paiement,
+                'reste_a_payer': bc.reste_a_payer
             })
         return Response(data)
     except Exception as e:
@@ -2236,26 +2250,46 @@ def update_bon_commande(request, id):
 @api_view(['PATCH'])
 def update_bon_commande(request, id):
     try:
-        bon_commande = get_object_or_404(BonCommande, id=id)
-        data = request.data
+        bon_commande = BonCommande.objects.get(id=id)
         
-        # Mise à jour des champs du bon de commande
-        if 'statut' in data:
-            bon_commande.statut = data['statut']
-        if 'date_livraison' in data:
-            bon_commande.date_livraison = data['date_livraison']
-        if 'magasin_retrait' in data:
-            bon_commande.magasin_retrait = data['magasin_retrait']
-        if 'montant_total' in data:
-            bon_commande.montant_total = data['montant_total']
+        # Mise à jour du statut de livraison
+        if 'statut' in request.data:
+            bon_commande.statut = request.data['statut']
+            if request.data.get('date_livraison'):
+                bon_commande.date_livraison = request.data['date_livraison']
+            if request.data.get('magasin_retrait'):
+                bon_commande.magasin_retrait = request.data['magasin_retrait']
+
+        # Mise à jour du paiement
+        if 'montant_paye' in request.data:
+            montant_paye = Decimal(request.data['montant_paye'])
+            bon_commande.montant_paye = montant_paye
             
+            # Mise à jour automatique du statut de paiement
+            if montant_paye >= bon_commande.montant_total:
+                bon_commande.statut_paiement = 'paye'
+            elif montant_paye > 0:
+                bon_commande.statut_paiement = 'paye_partiel'
+            else:
+                bon_commande.statut_paiement = 'non_paye'
+
+            if request.data.get('date_paiement'):
+                bon_commande.date_paiement = request.data['date_paiement']
+
         bon_commande.save()
         
-        return Response({'message': 'Bon de commande mis à jour avec succès'})
-        
+        # Sérialiser la réponse
+        serializer = BonCommandeSerializer(bon_commande)
+        return Response(serializer.data)
+
+    except BonCommande.DoesNotExist:
+        return Response(
+            {"error": "Bon de commande non trouvé"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
     except Exception as e:
         return Response(
-            {'error': str(e)},
+            {"error": str(e)}, 
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -2294,6 +2328,17 @@ def list_fournisseur_magasins(request):
         return Response(data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['DELETE'])
+def delete_bon_commande(request, id):
+    try:
+        bon_commande = BonCommande.objects.get(id=id)
+        bon_commande.delete()
+        return Response({"message": "Bon de commande supprimé avec succès"}, status=status.HTTP_204_NO_CONTENT)
+    except BonCommande.DoesNotExist:
+        return Response({"error": "Bon de commande non trouvé"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

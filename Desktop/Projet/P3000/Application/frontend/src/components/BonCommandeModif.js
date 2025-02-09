@@ -2,6 +2,7 @@ import {
   Box,
   Button,
   Checkbox,
+  InputAdornment,
   Paper,
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { FiSearch } from "react-icons/fi";
 import { useParams } from "react-router-dom";
 
 const BonCommandeModif = () => {
@@ -23,6 +25,7 @@ const BonCommandeModif = () => {
   const [selectedProducts, setSelectedProducts] = useState({});
   const [quantities, setQuantities] = useState({});
   const [isPreviewed, setIsPreviewed] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     fetchBonCommande();
@@ -62,6 +65,16 @@ const BonCommandeModif = () => {
       ...prev,
       [productId]: !prev[productId],
     }));
+
+    // Focus sur l'input de quantité quand la checkbox est cochée
+    setTimeout(() => {
+      const quantityInput = document.getElementById(
+        `quantity-modif-${productId}`
+      );
+      if (quantityInput && !selectedProducts[productId]) {
+        quantityInput.focus();
+      }
+    }, 0);
   };
 
   const handleQuantityChange = (productId, value) => {
@@ -133,16 +146,61 @@ const BonCommandeModif = () => {
     }
   };
 
+  // Fonction pour calculer le total général
+  const calculateGrandTotal = () => {
+    return allProducts
+      .filter((product) => selectedProducts[product.id])
+      .reduce((total, product) => {
+        const quantity = quantities[product.id] || 0;
+        return total + quantity * product.prix_unitaire;
+      }, 0);
+  };
+
+  // Filtrer les produits en fonction du terme de recherche
+  const filteredProducts = allProducts.filter((product) => {
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      product.code_produit?.toLowerCase().includes(searchTermLower) ||
+      product.designation?.toLowerCase().includes(searchTermLower) ||
+      product.unite?.toLowerCase().includes(searchTermLower) ||
+      product.prix_unitaire?.toString().includes(searchTermLower)
+    );
+  });
+
   if (!bonCommande) return <div>Chargement...</div>;
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, margin: "0 auto" }}>
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>
-          Modification du Bon de Commande {bonCommande.numero}
-        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 3,
+          }}
+        >
+          <Typography variant="h5">
+            Modification du Bon de Commande {bonCommande.numero}
+          </Typography>
+          <TextField
+            size="small"
+            variant="outlined"
+            placeholder="Rechercher..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <FiSearch style={{ fontSize: "1.2rem" }} />
+                </InputAdornment>
+              ),
+              sx: { width: "300px" },
+            }}
+          />
+        </Box>
 
-        <TableContainer>
+        <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
@@ -154,8 +212,12 @@ const BonCommandeModif = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {allProducts.map((product) => (
-                <TableRow key={product.id}>
+              {filteredProducts.map((product) => (
+                <TableRow
+                  key={product.id}
+                  hover
+                  selected={selectedProducts[product.id]}
+                >
                   <TableCell padding="checkbox">
                     <Checkbox
                       checked={selectedProducts[product.id] || false}
@@ -165,15 +227,19 @@ const BonCommandeModif = () => {
                   <TableCell>
                     {product.designation || product.nom_materiel}
                   </TableCell>
-                  <TableCell>{product.prix_unitaire} €</TableCell>
+                  <TableCell>{product.prix_unitaire.toFixed(2)} €</TableCell>
                   <TableCell>
                     <TextField
+                      id={`quantity-modif-${product.id}`}
                       type="number"
-                      value={quantities[product.id] || 0}
+                      size="small"
+                      value={quantities[product.id] || ""}
                       onChange={(e) =>
                         handleQuantityChange(product.id, e.target.value)
                       }
                       disabled={!selectedProducts[product.id]}
+                      InputProps={{ inputProps: { min: 0 } }}
+                      sx={{ width: "100px" }}
                     />
                   </TableCell>
                   <TableCell>
@@ -189,14 +255,39 @@ const BonCommandeModif = () => {
         </TableContainer>
 
         <Box
-          sx={{ mt: 3, display: "flex", gap: 2, justifyContent: "flex-end" }}
+          sx={{
+            mt: 2,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            px: 3,
+          }}
         >
-          <Button
-            variant="contained"
-            onClick={isPreviewed ? handleSave : handlePreview}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              typography: "h6",
+              color: "primary.main",
+            }}
           >
-            {isPreviewed ? "Enregistrer les modifications" : "Aperçu"}
-          </Button>
+            Total: {calculateGrandTotal().toFixed(2)} €
+          </Box>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              onClick={() => (window.location.href = "/BonCommande")}
+              variant="outlined"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              disabled={Object.keys(selectedProducts).length === 0}
+            >
+              Enregistrer les modifications
+            </Button>
+          </Box>
         </Box>
       </Paper>
     </Box>

@@ -395,8 +395,9 @@ class LigneBonCommandeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class BonCommandeSerializer(serializers.ModelSerializer):
-    lignes = LigneBonCommandeSerializer(many=True, read_only=True)
-    
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    reste_a_payer = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
     class Meta:
         model = BonCommande
         fields = '__all__'

@@ -11,6 +11,7 @@ function BonCommandeForm({ onBonCommandeCreated }) {
   const [selectedData, setSelectedData] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [numeroBC, setNumeroBC] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     // Générer un numéro de bon de commande lors du montage du composant
@@ -33,6 +34,7 @@ function BonCommandeForm({ onBonCommandeCreated }) {
       agent: data.agent,
     });
     setStep(2);
+    setIsModalOpen(true);
     handleCloseModal();
   };
 
@@ -78,6 +80,14 @@ function BonCommandeForm({ onBonCommandeCreated }) {
     }));
   };
 
+  const handleValidate = (products) => {
+    setSelectedProducts(products);
+    handlePreviewBonCommande(products);
+    if (onBonCommandeCreated) {
+      onBonCommandeCreated();
+    }
+  };
+
   const renderStep = () => {
     switch (step) {
       case 1:
@@ -100,11 +110,15 @@ function BonCommandeForm({ onBonCommandeCreated }) {
       case 2:
         return (
           <ProduitSelectionTable
+            open={true}
+            onClose={() => {
+              setStep(1);
+              setIsModalOpen(false);
+            }}
             fournisseur={selectedData.fournisseur}
+            onValidate={handleValidate}
             numeroBC={numeroBC}
             selectedData={selectedData}
-            onValidate={handleProductSelection}
-            onCancel={() => setStep(1)}
           />
         );
       default:

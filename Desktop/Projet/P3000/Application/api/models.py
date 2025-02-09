@@ -437,6 +437,12 @@ class BonCommande(models.Model):
         ('retrait_magasin', 'Retrait Magasin'),
     ]
     
+    STATUT_PAIEMENT_CHOICES = [
+        ('non_paye', 'Non Payé'),
+        ('paye', 'Payé'),
+        ('paye_partiel', 'Payé Partiellement'),
+    ]
+    
     numero = models.CharField(max_length=50, unique=True)
     fournisseur = models.CharField(max_length=100)
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
@@ -446,9 +452,26 @@ class BonCommande(models.Model):
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     date_livraison = models.DateField(null=True, blank=True)
     magasin_retrait = models.CharField(max_length=200, null=True, blank=True)
+    # Nouveaux champs pour le paiement
+    statut_paiement = models.CharField(
+        max_length=20, 
+        choices=STATUT_PAIEMENT_CHOICES, 
+        default='non_paye'
+    )
+    montant_paye = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0
+    )
+    date_paiement = models.DateField(null=True, blank=True)
+    mode_paiement = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
         return self.numero
+
+    @property
+    def reste_a_payer(self):
+        return self.montant_total - self.montant_paye
 
 class LigneBonCommande(models.Model):
     bon_commande = models.ForeignKey(BonCommande, related_name='lignes', on_delete=models.CASCADE)

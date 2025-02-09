@@ -17,6 +17,7 @@ from .views import (
     update_bon_commande,
     fournisseur_magasins,
     list_fournisseur_magasins,
+    delete_bon_commande,
 )
 
 router = DefaultRouter()
@@ -86,5 +87,6 @@ urlpatterns = [
     path('update-bon-commande/<int:id>/', update_bon_commande, name='update-bon-commande'),
     path('fournisseur-magasins/', fournisseur_magasins, name='fournisseur-magasins'),
     path('list-fournisseur-magasins/', list_fournisseur_magasins, name='list_fournisseur_magasins'),
+    path('delete-bons-commande/<int:id>/', delete_bon_commande, name='delete-bon-commande'),
     # ... autres routes
 ]
