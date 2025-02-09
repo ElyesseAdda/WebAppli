@@ -84,7 +84,10 @@ class Agent(models.Model):
     taux_Horaire = models.FloatField(null=True, blank=True)
     conge = models.FloatField(null=True, blank=True)
     
-
+    # Modification du champ primes pour stocker par mois
+    # Format: { "2024-01": { "description": montant }, "2024-02": { "description": montant } }
+    primes = models.JSONField(default=dict, blank=True, null=True)
+    
     # Nouveaux champs pour les heures de travail
     heure_debut = models.TimeField(null=True, blank=True)  # Heure de début de travail
     heure_fin = models.TimeField(null=True, blank=True)  # Heure de fin de travail

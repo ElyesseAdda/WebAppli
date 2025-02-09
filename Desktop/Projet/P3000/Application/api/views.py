@@ -15,7 +15,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer
 from .models import (
     Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -2339,6 +2339,120 @@ def delete_bon_commande(request, id):
         return Response({"error": "Bon de commande non trouvé"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET', 'POST'])  # Ajout de GET dans les méthodes autorisées
+def add_prime(request, agent_id):
+    if request.method == 'GET':
+        try:
+            agent = Agent.objects.get(id=agent_id)
+            month_year = request.query_params.get('month_year')
+            
+            if not month_year:
+                return Response(
+                    {"error": "month_year est requis"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            primes = agent.primes or {}
+            return Response(primes.get(month_year, []))
+            
+        except Agent.DoesNotExist:
+            return Response(
+                {"error": "Agent non trouvé"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    elif request.method == 'POST':
+        try:
+            agent = Agent.objects.get(id=agent_id)
+            serializer = AgentPrimeSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                month_year = request.data.get('month_year')
+                if not month_year:
+                    return Response(
+                        {"error": "month_year est requis"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                primes = agent.primes or {}
+                if month_year not in primes:
+                    primes[month_year] = []
+                    
+                nouvelle_prime = {
+                    'description': serializer.validated_data['description'],
+                    'montant': float(serializer.validated_data['montant'])
+                }
+                
+                primes[month_year].append(nouvelle_prime)
+                agent.primes = primes
+                agent.save()
+                
+                return Response(primes[month_year], status=status.HTTP_201_CREATED)
+                
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Agent.DoesNotExist:
+            return Response(
+                {"error": "Agent non trouvé"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+@api_view(['DELETE'])
+def delete_prime(request, agent_id, prime_id):
+    try:
+        agent = Agent.objects.get(id=agent_id)
+        month_year = request.query_params.get('month_year')
+        
+        if not month_year:
+            return Response(
+                {"error": "month_year est requis"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        primes = agent.primes or {}
+        if month_year in primes:
+            try:
+                prime_index = int(prime_id)
+                if 0 <= prime_index < len(primes[month_year]):
+                    primes[month_year].pop(prime_index)
+                    agent.primes = primes
+                    agent.save()
+                    return Response(status=status.HTTP_204_NO_CONTENT)
+            except (ValueError, IndexError):
+                pass
+                
+        return Response(
+            {"error": "Prime non trouvée"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+        
+    except Agent.DoesNotExist:
+        return Response(
+            {"error": "Agent non trouvé"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+def get_agent_primes(request, agent_id):
+    try:
+        agent = Agent.objects.get(id=agent_id)
+        month_year = request.query_params.get('month_year')
+        
+        if not month_year:
+            return Response(
+                {"error": "month_year est requis"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        primes = agent.primes or {}
+        return Response(primes.get(month_year, []))
+        
+    except Agent.DoesNotExist:
+        return Response(
+            {"error": "Agent non trouvé"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
 
 
 

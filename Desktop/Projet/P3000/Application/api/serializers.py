@@ -209,10 +209,14 @@ class MonthlyHoursSerializer(serializers.ModelSerializer):
         model = MonthlyHours
         fields = ['month', 'hours']
 
+class AgentPrimeSerializer(serializers.Serializer):
+    description = serializers.CharField(max_length=100)
+    montant = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 class AgentSerializer(serializers.ModelSerializer):
     heures_travail_journalieres = serializers.ReadOnlyField()
     monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
+    primes = serializers.JSONField(required=False)
 
     class Meta:
         model = Agent

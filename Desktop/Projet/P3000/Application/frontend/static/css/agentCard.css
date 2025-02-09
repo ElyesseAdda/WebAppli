@@ -9,11 +9,6 @@
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.agent-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(27, 120, 188, 0.2);
-}
-
 .agent-header {
   display: flex;
   align-items: center;
@@ -148,4 +143,100 @@
   .monthly-hours {
     font-size: 16px;
   }
+}
+
+/* Styles pour la section des primes */
+.primes-section {
+  margin-top: 20px;
+  padding: 16px;
+  background-color: rgba(27, 120, 188, 0.05);
+  border-radius: 8px;
+}
+
+.primes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  h3 {
+    background-color: transparent;
+  }
+}
+
+.primes-header h3 {
+  margin: 0;
+  color: rgba(27, 120, 188, 1);
+  font-size: 18px;
+}
+
+.add-prime-button {
+  color: rgba(27, 120, 188, 1);
+  font-size: 1.2rem;
+}
+
+.add-prime-button:hover {
+  background-color: rgba(27, 120, 188, 0.1);
+  transform: scale(1.1);
+}
+
+.delete-prime-button {
+  color: #d32f2f;
+  font-size: 1rem;
+}
+
+.delete-prime-button:hover {
+  background-color: rgba(211, 47, 47, 0.1);
+  transform: scale(1.1);
+}
+
+.primes-list {
+  margin-bottom: 16px;
+}
+
+.prime-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 4px 0;
+  background-color: white;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.prime-item:hover {
+  background-color: rgba(27, 120, 188, 0.05);
+}
+
+.prime-item span {
+  flex-grow: 1;
+  margin-right: 12px;
+}
+
+.no-primes {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 12px;
+}
+
+.primes-total {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(27, 120, 188, 0.2);
+  font-size: 16px;
+  color: rgba(27, 120, 188, 1);
+}
+
+/* Style pour les boutons avec icônes */
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
 }

@@ -1,8 +1,20 @@
 // AgentCard.js
-import { Box, MenuItem, Select } from "@mui/material";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  MenuItem,
+  Select,
+  TextField,
+} from "@mui/material";
 import { styled } from "@mui/system";
+import axios from "axios";
 import dayjs from "dayjs";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { FaPlus, FaTrash } from "react-icons/fa";
 import "./../../static/css/agentCard.css";
 
 // Function to capitalize the first letter
@@ -113,7 +125,70 @@ const MonthSelector = styled(Select)(() => ({
 }));
 
 const AgentCard = ({ agent, events }) => {
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // Mois par défaut : mois actuel
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [openPrimeModal, setOpenPrimeModal] = useState(false);
+  const [newPrime, setNewPrime] = useState({ description: "", montant: "" });
+  const [primes, setPrimes] = useState([]);
+
+  // Fonction pour formater le mois-année pour l'API
+  const getMonthYearString = () => {
+    const month = (selectedMonth + 1).toString().padStart(2, "0");
+    return `${selectedYear}-${month}`;
+  };
+
+  // Charger les primes pour le mois sélectionné
+  const loadPrimes = useCallback(async () => {
+    try {
+      const response = await axios.get(
+        `/api/agents/${agent.id}/primes/?month_year=${getMonthYearString()}`
+      );
+      setPrimes(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des primes:", error);
+    }
+  }, [agent.id, selectedMonth, selectedYear]);
+
+  // Charger les primes quand le mois change ou l'agent change
+  useEffect(() => {
+    loadPrimes();
+  }, [loadPrimes, agent.id, selectedMonth, selectedYear]);
+
+  const handleAddPrime = async () => {
+    if (!newPrime.description || !newPrime.montant) return;
+
+    try {
+      await axios.post(`/api/agents/${agent.id}/primes/`, {
+        description: newPrime.description,
+        montant: parseFloat(newPrime.montant),
+        month_year: getMonthYearString(),
+      });
+
+      loadPrimes(); // Recharger les primes
+      setNewPrime({ description: "", montant: "" });
+      setOpenPrimeModal(false);
+    } catch (error) {
+      console.error("Erreur lors de l'ajout de la prime:", error);
+      alert("Erreur lors de l'ajout de la prime");
+    }
+  };
+
+  const handleDeletePrime = async (index) => {
+    try {
+      await axios.delete(
+        `/api/agents/${
+          agent.id
+        }/primes/${index}/?month_year=${getMonthYearString()}`
+      );
+      loadPrimes(); // Recharger les primes
+    } catch (error) {
+      console.error("Erreur lors de la suppression de la prime:", error);
+      alert("Erreur lors de la suppression de la prime");
+    }
+  };
+
+  // Calcul du total des primes pour le mois sélectionné
+  const totalPrimes = primes.reduce((acc, prime) => acc + prime.montant, 0);
 
   // Fonction pour gérer le changement de mois
   const handleMonthChange = (event) => {
@@ -187,6 +262,79 @@ const AgentCard = ({ agent, events }) => {
       <div className="monthly-cost">
         <strong>Coût mensuel:</strong> {monthlyCost.toFixed(2)} €
       </div>
+
+      <div className="primes-section">
+        <div className="primes-header">
+          <h3>
+            Primes{" "}
+            {new Date(selectedYear, selectedMonth).toLocaleDateString("fr-FR", {
+              month: "long",
+              year: "numeric",
+            })}
+          </h3>
+          <button
+            onClick={() => setOpenPrimeModal(true)}
+            className="icon-button add-prime-button"
+          >
+            <FaPlus />
+          </button>
+        </div>
+
+        <div className="primes-list">
+          {primes.map((prime, index) => (
+            <div key={index} className="prime-item">
+              <span>
+                {prime.description}: {prime.montant.toFixed(2)} €
+              </span>
+              <button
+                onClick={() => handleDeletePrime(index)}
+                className="icon-button delete-prime-button"
+              >
+                <FaTrash />
+              </button>
+            </div>
+          ))}
+          {primes.length === 0 && (
+            <div className="no-primes">Aucune prime pour ce mois</div>
+          )}
+        </div>
+
+        <div className="primes-total">
+          <strong>Total des primes:</strong> {totalPrimes.toFixed(2)} €
+        </div>
+      </div>
+
+      <Dialog open={openPrimeModal} onClose={() => setOpenPrimeModal(false)}>
+        <DialogTitle>Ajouter une prime</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Description"
+            fullWidth
+            value={newPrime.description}
+            onChange={(e) =>
+              setNewPrime({ ...newPrime, description: e.target.value })
+            }
+          />
+          <TextField
+            margin="dense"
+            label="Montant (€)"
+            type="number"
+            fullWidth
+            value={newPrime.montant}
+            onChange={(e) =>
+              setNewPrime({ ...newPrime, montant: e.target.value })
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenPrimeModal(false)}>Annuler</Button>
+          <Button onClick={handleAddPrime} variant="contained">
+            Ajouter
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <div className="events-container">
         {eventSummary.length > 0 ? (

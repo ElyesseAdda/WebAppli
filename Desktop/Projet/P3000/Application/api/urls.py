@@ -18,6 +18,9 @@ from .views import (
     fournisseur_magasins,
     list_fournisseur_magasins,
     delete_bon_commande,
+    add_prime,
+    delete_prime,
+    get_agent_primes,
 )
 
 router = DefaultRouter()
@@ -88,5 +91,7 @@ urlpatterns = [
     path('fournisseur-magasins/', fournisseur_magasins, name='fournisseur-magasins'),
     path('list-fournisseur-magasins/', list_fournisseur_magasins, name='list_fournisseur_magasins'),
     path('delete-bons-commande/<int:id>/', delete_bon_commande, name='delete-bon-commande'),
-    # ... autres routes
+    path('agents/<int:agent_id>/primes/', add_prime, name='add_prime'),
+    path('agents/<int:agent_id>/primes/<int:prime_id>/', delete_prime, name='delete_prime'),
+    path('agents/<int:agent_id>/primes/', get_agent_primes, name='get_agent_primes'),
 ]
