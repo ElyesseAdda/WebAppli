@@ -20,7 +20,8 @@
     "react-datepicker": "^7.4.0",
     "react-dom": "^18.2.0",
     "react-modal": "^3.16.1",
-    "react-toastify": "^10.0.5"
+    "react-toastify": "^10.0.5",
+    "recharts": "^2.15.1"
   },
   "devDependencies": {
     "@types/react-modal": "^3.16.3"

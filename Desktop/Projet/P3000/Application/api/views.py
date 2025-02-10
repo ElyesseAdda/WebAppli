@@ -22,7 +22,7 @@ from .models import (
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction
@@ -72,37 +72,40 @@ class FactureViewSet(viewsets.ModelViewSet):
 
 
 def dashboard_data(request):
+    # Chantiers
     state_chantier = Chantier.objects.filter(state_chantier='En Cours').count()
-    cout_materiel = Chantier.objects.aggregate(Sum('cout_materiel'))['cout_materiel__sum']
-    cout_main_oeuvre = Chantier.objects.aggregate(Sum('cout_main_oeuvre'))['cout_main_oeuvre__sum']
-    cout_sous_traitance = Chantier.objects.aggregate(Sum('cout_sous_traitance'))['cout_sous_traitance__sum']
-    chiffre_affaire = Chantier.objects.aggregate(Sum('chiffre_affaire'))['chiffre_affaire__sum']
-   
-    devis_terminer = Devis.objects.filter(state='Terminé').count()
+    cout_materiel = Chantier.objects.aggregate(Sum('cout_materiel'))['cout_materiel__sum'] or 0
+    cout_main_oeuvre = Chantier.objects.aggregate(Sum('cout_main_oeuvre'))['cout_main_oeuvre__sum'] or 0
+    cout_sous_traitance = Chantier.objects.aggregate(Sum('cout_sous_traitance'))['cout_sous_traitance__sum'] or 0
+    montant_total = Chantier.objects.aggregate(Sum('montant_ttc'))['montant_ttc__sum'] or 0
+
+    # Devis - correction de 'state' en 'status'
+    devis_terminer = Devis.objects.filter(status='Terminé').count()
+    devis_en_cour = Devis.objects.filter(status='En Cours').count()
+    devis_facturé = Devis.objects.filter(status='Facturé').count()
+    
+    # Factures
     facture_terminer = Facture.objects.filter(state_facture='Terminé').count()
-    
-    devis_en_cour = Devis.objects.filter(state='En Cours').count()
     facture_en_cour = Facture.objects.filter(state_facture='En Cours').count()
-    
-    devis_facturé = Devis.objects.filter(state='Facturé').count()
     facture_facturé = Facture.objects.filter(state_facture='Facturé').count()
-   
-    total_devis_terminer = Devis.objects.filter(state='Terminé').aggregate(total=Sum('amount_facturé'))['total'] or 0
-    total_devis_facturé = Devis.objects.filter(state='Facturé').aggregate(total=Sum('amount_facturé'))['total'] or 0
+
+    # Totaux Devis - utilisation de price_ttc au lieu de amount_facturé
+    total_devis_terminer = Devis.objects.filter(status='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_devis_facturé = Devis.objects.filter(status='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
     
-    total_facture_terminer = Facture.objects.filter(state_facture='Terminé').aggregate(total=Sum('amount_facturé'))['total'] or 0
-    total_facture_facturé = Facture.objects.filter(state_facture='Facturé').aggregate(total=Sum('amount_facturé'))['total'] or 0
+    # Totaux Factures - utilisation de price_ttc au lieu de amount_facturé
+    total_facture_terminer = Facture.objects.filter(state_facture='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_facture_facturé = Facture.objects.filter(state_facture='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
     
     total_devis_combined = total_devis_facturé + total_devis_terminer
-
-    total_facture_combined = total_facture_facturé + total_facture_terminer
+    total_facture_combined = total_facture_terminer + total_facture_facturé
 
     data = {
         'chantier_en_cours': state_chantier,
         'cout_materiel': cout_materiel,
         'cout_main_oeuvre': cout_main_oeuvre,
         'cout_sous_traitance': cout_sous_traitance,
-        'chiffre_affaire': chiffre_affaire,
+        'montant_total': montant_total,
         'devis_terminer': devis_terminer,
         'facture_terminer': facture_terminer,
         'devis_en_cour': devis_en_cour,
@@ -356,6 +359,71 @@ class SousPartieViewSet(viewsets.ModelViewSet):
 class LigneDetailViewSet(viewsets.ModelViewSet):
     queryset = LigneDetail.objects.all()
     serializer_class = LigneDetailSerializer
+
+    def create(self, request, *args, **kwargs):
+        try:
+            data = request.data.copy()
+            
+            # Conversion des valeurs en décimal avec quantize pour 2 décimales
+            TWOPLACES = Decimal('0.01')
+            cout_main_oeuvre = Decimal(str(data.get('cout_main_oeuvre', 0))).quantize(TWOPLACES)
+            cout_materiel = Decimal(str(data.get('cout_materiel', 0))).quantize(TWOPLACES)
+            taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
+            marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
+
+            # Calcul du prix avec arrondis intermédiaires
+            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+            prix = (sous_total + montant_marge).quantize(TWOPLACES)
+
+            # Ajout du prix calculé aux données
+            data['prix'] = prix
+
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            data = request.data.copy()
+            
+            # Conversion des valeurs en décimal
+            cout_main_oeuvre = Decimal(str(data.get('cout_main_oeuvre', 0)))
+            cout_materiel = Decimal(str(data.get('cout_materiel', 0)))
+            taux_fixe = Decimal(str(data.get('taux_fixe', 0)))
+            marge = Decimal(str(data.get('marge', 0)))
+
+            # Calcul du prix
+            base = cout_main_oeuvre + cout_materiel
+            montant_taux_fixe = base * (taux_fixe / Decimal('100'))
+            sous_total = base + montant_taux_fixe
+            montant_marge = sous_total * (marge / Decimal('100'))
+            prix = sous_total + montant_marge
+
+            # Ajout du prix calculé aux données
+            data['prix'] = prix
+
+            serializer = self.get_serializer(instance, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(serializer.data)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
@@ -2453,6 +2521,17 @@ def get_agent_primes(request, agent_id):
             {"error": "Agent non trouvé"}, 
             status=status.HTTP_404_NOT_FOUND
         )
+
+@api_view(['POST'])
+def update_taux_fixe(request):
+    try:
+        nouveau_taux = Decimal(request.data.get('taux_fixe', 19))
+        taux = TauxFixe.objects.create(valeur=nouveau_taux)
+        return Response({'message': f'Taux fixe mis à jour à {nouveau_taux}%'}, 
+                       status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, 
+                       status=status.HTTP_400_BAD_REQUEST)
 
 
 

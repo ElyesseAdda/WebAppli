@@ -107,7 +107,17 @@ class SocieteSerializer(serializers.ModelSerializer):
 class LigneDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigneDetail
-        fields = ['id', 'description', 'unite', 'prix', 'sous_partie']
+        fields = [
+            'id', 
+            'description', 
+            'unite', 
+            'cout_main_oeuvre',
+            'cout_materiel',
+            'taux_fixe',
+            'marge',
+            'prix',
+            'sous_partie'
+        ]
 
     def validate(self, data):
         """

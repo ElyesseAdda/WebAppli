@@ -257,12 +257,49 @@ class Devis(models.Model):
     def __str__(self):
         return f"Devis {self.numero} - {self.chantier.chantier_name}"
 
+class TauxFixe(models.Model):
+    valeur = models.DecimalField(max_digits=5, decimal_places=2, default=19)
+    date_modification = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Sauvegarder le nouveau taux
+        super().save(*args, **kwargs)
+        # Mettre à jour tous les prix des lignes détails
+        LigneDetail.objects.all().update(taux_fixe=self.valeur)
+        # Recalculer les prix pour toutes les lignes
+        for ligne in LigneDetail.objects.all():
+            ligne.calculer_prix()
+            ligne.save(update_fields=['prix'])
+
+    class Meta:
+        get_latest_by = 'date_modification'
+
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
     partie = models.ForeignKey('Partie', related_name='lignes_details', on_delete=models.CASCADE, null=True, blank=True)
     description = models.CharField(max_length=255)
     unite = models.CharField(max_length=10)
-    prix = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    # Nouveaux champs pour la décomposition du prix
+    cout_main_oeuvre = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cout_materiel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    taux_fixe = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    prix = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def calculer_prix(self):
+        base = self.cout_main_oeuvre + self.cout_materiel
+        montant_taux_fixe = base * (self.taux_fixe / Decimal('100'))
+        sous_total = base + montant_taux_fixe
+        montant_marge = sous_total * (self.marge / Decimal('100'))
+        self.prix = sous_total + montant_marge
+
+    def save(self, *args, **kwargs):
+        if not self.taux_fixe:
+            # Utiliser le dernier taux fixe enregistré
+            dernier_taux = TauxFixe.objects.latest()
+            self.taux_fixe = dernier_taux.valeur
+        self.calculer_prix()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.description} ({self.unite}) - {self.prix} €'
