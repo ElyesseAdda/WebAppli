@@ -22,7 +22,7 @@ from .models import (
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction
@@ -41,6 +41,47 @@ logger = logging.getLogger(__name__)
 class ChantierViewSet(viewsets.ModelViewSet):
     queryset = Chantier.objects.all()
     serializer_class = ChantierSerializer
+    
+    def create(self, request, *args, **kwargs):
+        # Récupérer les données estimées du frontend
+        cout_estime_main_oeuvre = request.data.get('cout_estime_main_oeuvre', 0)
+        cout_estime_materiel = request.data.get('cout_estime_materiel', 0)
+        marge_estimee = request.data.get('marge_estimee', 0)
+        
+        # Créer le chantier avec les estimations
+        serializer = self.get_serializer(data={
+            **request.data,
+            'cout_estime_main_oeuvre': cout_estime_main_oeuvre,
+            'cout_estime_materiel': cout_estime_materiel,
+            'marge_estimee': marge_estimee
+        })
+        
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data, 
+            status=status.HTTP_201_CREATED, 
+            headers=headers
+        )
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Mettre à jour les estimations si fournies
+        if 'cout_estime_main_oeuvre' in request.data:
+            instance.cout_estime_main_oeuvre = request.data['cout_estime_main_oeuvre']
+        if 'cout_estime_materiel' in request.data:
+            instance.cout_estime_materiel = request.data['cout_estime_materiel']
+        if 'marge_estimee' in request.data:
+            instance.marge_estimee = request.data['marge_estimee']
+            
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response(serializer.data)
 
 
 
@@ -2522,16 +2563,33 @@ def get_agent_primes(request, agent_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
+@api_view(['GET'])
+def get_taux_fixe(request):
+    taux_fixe, created = Parametres.objects.get_or_create(
+        code='TAUX_FIXE',
+        defaults={'valeur': 20.00, 'description': 'Taux fixe par défaut'}
+    )
+    return Response({'valeur': taux_fixe.valeur})
+
 @api_view(['POST'])
 def update_taux_fixe(request):
     try:
-        nouveau_taux = Decimal(request.data.get('taux_fixe', 19))
-        taux = TauxFixe.objects.create(valeur=nouveau_taux)
-        return Response({'message': f'Taux fixe mis à jour à {nouveau_taux}%'}, 
-                       status=status.HTTP_200_OK)
+        nouveau_taux = request.data.get('taux_fixe')
+        if nouveau_taux is None:
+            return Response({'error': 'Taux fixe manquant'}, status=400)
+            
+        taux_fixe, created = Parametres.objects.get_or_create(
+            code='TAUX_FIXE',
+            defaults={'valeur': nouveau_taux, 'description': 'Taux fixe par défaut'}
+        )
+        
+        if not created:
+            taux_fixe.valeur = nouveau_taux
+            taux_fixe.save()
+            
+        return Response({'valeur': taux_fixe.valeur})
     except Exception as e:
-        return Response({'error': str(e)}, 
-                       status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e)}, status=400)
 
 
 

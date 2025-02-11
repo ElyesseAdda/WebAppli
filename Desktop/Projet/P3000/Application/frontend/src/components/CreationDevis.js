@@ -360,7 +360,61 @@ const CreationDevis = () => {
     }
   };
 
-  // Modifier le handleSaveDevis
+  // Fonction de calcul des totaux estimés
+  const calculateEstimatedTotals = () => {
+    let totals = {
+      cout_estime_main_oeuvre: 0,
+      cout_estime_materiel: 0,
+      cout_avec_taux_fixe: 0,
+      marge_estimee: 0,
+    };
+
+    // 1. Calculer les coûts directs
+    selectedLignes.forEach((ligneId) => {
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      if (ligne) {
+        const quantity = quantities[ligneId] || 0;
+        const cout_main_oeuvre =
+          quantity * parseFloat(ligne.cout_main_oeuvre || 0);
+        const cout_materiel = quantity * parseFloat(ligne.cout_materiel || 0);
+
+        totals.cout_estime_main_oeuvre += cout_main_oeuvre;
+        totals.cout_estime_materiel += cout_materiel;
+      }
+    });
+
+    // 2. Calculer le total des coûts directs
+    const coutsDirects =
+      totals.cout_estime_main_oeuvre + totals.cout_estime_materiel;
+
+    // 3. Calculer le montant du taux fixe (20% des coûts directs)
+    const tauxFixe = 20;
+    const montantTauxFixe = coutsDirects * (tauxFixe / 100);
+    totals.cout_avec_taux_fixe = coutsDirects + montantTauxFixe;
+
+    // 4. Obtenir le total HT
+    const grandTotal = calculateGrandTotal(specialLines);
+    const totalHT = parseFloat(grandTotal.totalHT);
+
+    // 5. Calculer la marge (20% du coût avec taux fixe)
+    totals.marge_estimee = totalHT - totals.cout_avec_taux_fixe;
+
+    // 6. Arrondir tous les résultats à 2 décimales
+    totals.cout_estime_main_oeuvre = parseFloat(
+      totals.cout_estime_main_oeuvre.toFixed(2)
+    );
+    totals.cout_estime_materiel = parseFloat(
+      totals.cout_estime_materiel.toFixed(2)
+    );
+    totals.cout_avec_taux_fixe = parseFloat(
+      totals.cout_avec_taux_fixe.toFixed(2)
+    );
+    totals.marge_estimee = parseFloat(totals.marge_estimee.toFixed(2));
+
+    return totals;
+  };
+
+  // Prépare les données pour le modal
   const handleSaveDevis = async () => {
     try {
       if (!selectedChantierId) {
@@ -379,7 +433,6 @@ const CreationDevis = () => {
           clientName = `${chantier.societe.client_name.name} ${chantier.societe.client_name.surname}`;
         }
       } else if (pendingChantierData.client) {
-        // Pour un nouveau client
         clientName = `${pendingChantierData.client.name} ${pendingChantierData.client.surname}`;
       }
 
@@ -414,14 +467,16 @@ const CreationDevis = () => {
     }
   };
 
+  // Gère la soumission finale du devis
   const handleDevisModalSubmit = async () => {
     try {
       console.log("=== Début de handleDevisModalSubmit ===");
-      const totals = calculateGrandTotal(specialLines);
-      console.log("Totaux calculés:", totals);
+      const totals = calculateEstimatedTotals(); // Calcul des coûts estimés
+      const grandTotal = calculateGrandTotal(specialLines);
+      console.log("Totaux calculés:", grandTotal);
 
-      const totalHT = totals.totalHT;
-      const totalTTC = totals.totalTTC;
+      const totalHT = grandTotal.totalHT;
+      const totalTTC = grandTotal.totalTTC;
       let clientId, societeId, chantierIdToUse;
 
       // Log des données initiales
@@ -448,14 +503,8 @@ const CreationDevis = () => {
           alert("Données client ou société manquantes");
           return;
         }
-      }
-
-      // Création du client/société/chantier uniquement si nouveau chantier
-      if (selectedChantierId === -1) {
-        console.log("Création d'un nouveau client/société/chantier");
 
         // 1. Vérifier si le client existe
-        let clientId;
         const existingClient = await checkClientExists(
           pendingChantierData.client
         );
@@ -463,7 +512,6 @@ const CreationDevis = () => {
           console.log("Client existant trouvé:", existingClient);
           clientId = existingClient.id;
         } else {
-          // Créer le client uniquement s'il n'existe pas
           console.log("Création d'un nouveau client");
           const clientResponse = await axios.post("/api/client/", {
             ...pendingChantierData.client,
@@ -473,7 +521,6 @@ const CreationDevis = () => {
         }
 
         // 2. Vérifier si la société existe
-        let societeId;
         const existingSociete = await checkSocieteExists(
           pendingChantierData.societe
         );
@@ -481,7 +528,6 @@ const CreationDevis = () => {
           console.log("Société existante trouvée:", existingSociete);
           societeId = existingSociete.id;
         } else {
-          // Créer la société uniquement si elle n'existe pas
           console.log("Création d'une nouvelle société");
           const societeResponse = await axios.post("/api/societe/", {
             ...pendingChantierData.societe,
@@ -492,7 +538,7 @@ const CreationDevis = () => {
           societeId = societeResponse.data.id;
         }
 
-        // 3. Créer le chantier
+        // 3. Créer le chantier avec les coûts estimés
         const updatedChantierData = {
           chantier_name: pendingChantierData.chantier.chantier_name.trim(),
           ville: pendingChantierData.chantier.ville,
@@ -502,6 +548,11 @@ const CreationDevis = () => {
           montant_ttc: totalTTC,
           societe: societeId,
           client: clientId,
+          // Ajout des coûts estimés
+          cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
+          cout_estime_materiel: totals.cout_estime_materiel,
+          cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
+          marge_estimee: totals.marge_estimee,
         };
 
         console.log("Données chantier à créer:", updatedChantierData);
@@ -517,9 +568,19 @@ const CreationDevis = () => {
           `/api/chantier/${selectedChantierId}/`
         );
         societeId = chantierResponse.data.societe;
+
+        // Mise à jour des coûts estimés pour le chantier existant
+        await axios.patch(`/api/chantier/${chantierIdToUse}/`, {
+          montant_ht: totalHT,
+          montant_ttc: totalTTC,
+          cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
+          cout_estime_materiel: totals.cout_estime_materiel,
+          cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
+          marge_estimee: totals.marge_estimee,
+        });
       }
 
-      // Préparation des données du devis
+      // Préparation des données du devis avec les coûts estimés
       const devisData = {
         numero: devisModalData.numero,
         chantier: chantierIdToUse,
@@ -530,15 +591,22 @@ const CreationDevis = () => {
         nature_travaux: natureTravaux || "",
         description: devisModalData.description || "",
         devis_chantier: devisType === "chantier",
-        lignes: selectedLignes.map((ligneId) => ({
-          ligne: parseInt(ligneId),
-          quantity: quantities[ligneId] || 0,
-          custom_price:
-            customPrices[ligneId] ||
-            filteredLignesDetails.find((l) => l.id === ligneId)?.prix ||
-            0,
-        })),
-        // Ajout des lignes spéciales structurées
+        // Ajout des coûts estimés
+        cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
+        cout_estime_materiel: totals.cout_estime_materiel,
+        cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
+        marge_estimee: totals.marge_estimee,
+        lignes: selectedLignes.map((ligneId) => {
+          const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+          return {
+            ligne: parseInt(ligneId),
+            quantity: quantities[ligneId] || 0,
+            custom_price: customPrices[ligneId] || ligne?.prix || 0,
+            cout_main_oeuvre: ligne?.cout_main_oeuvre || 0,
+            cout_materiel: ligne?.cout_materiel || 0,
+            taux_fixe: ligne?.taux_fixe || defaultTauxFixe,
+          };
+        }),
         lignes_speciales: {
           global: specialLines.global || [],
           parties: Object.fromEntries(
@@ -582,95 +650,11 @@ const CreationDevis = () => {
 
       if (response.data) {
         alert("Devis créé avec succès!");
-
-        // Réinitialiser tous les états
-        setPendingChantierData({
-          client: {
-            name: "",
-            surname: "",
-            client_mail: "",
-            phone_Number: "",
-          },
-          societe: {
-            nom_societe: "",
-            ville_societe: "",
-            rue_societe: "",
-            codepostal_societe: "",
-          },
-          chantier: {
-            id: -1,
-            chantier_name: "",
-            ville: "",
-            rue: "",
-            code_postal: "",
-          },
-          devis: null,
-        });
-
-        // Réinitialiser les sélections
-        setSelectedParties([]);
-        setSelectedSousParties([]);
-        setSelectedLignes([]);
-        setSelectedChantierId(null);
-        setSelectedSocieteId(null);
-
-        // Réinitialiser les quantités et prix personnalisés
-        setQuantities({});
-        setCustomPrices({});
-
-        // Réinitialiser les états des modales
-        setOpenDevisModal(false);
-        setShowClientTypeModal(false);
-        setShowClientInfoModal(false);
-        setShowSocieteInfoModal(false);
-        setShowChantierForm(false);
-        setShowSelectSocieteModal(false);
-
-        // Réinitialiser les données du devis
-        setDevisModalData({
-          numero: "",
-          client: "",
-          chantier_name: "",
-          montant_ttc: "",
-          description: "",
-        });
-
-        // Réinitialiser l'état de prévisualisation
-        setIsPreviewed(false);
-
-        // Réinitialiser le type de devis
-        setDevisType("normal");
-
-        // Réinitialiser les filtres
-        setFilteredSousParties([]);
-        setFilteredLignesDetails([]);
-
-        // Réinitialiser aussi les lignes spéciales
-        setSpecialLines({
-          global: [],
-          parties: {},
-          sousParties: {},
-        });
+        window.location.href = "/ListeDevis";
       }
     } catch (error) {
-      console.error("Erreur détaillée lors de la création du devis:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        data: error.response?.config?.data, // Afficher les données envoyées
-      });
-
-      // Message d'erreur plus détaillé pour l'utilisateur
-      let errorMessage = "Erreur lors de la création du devis: ";
-      if (error.response?.data?.error) {
-        errorMessage += error.response.data.error;
-      } else if (error.message) {
-        errorMessage += error.message;
-      } else {
-        errorMessage += "Une erreur inconnue s'est produite";
-      }
-
-      alert(errorMessage);
+      console.error("Erreur lors de la création du devis:", error);
+      alert("Erreur lors de la création du devis");
     }
   };
 
@@ -1355,6 +1339,14 @@ const CreationDevis = () => {
     );
   };
 
+  // Fonction pour calculer le pourcentage de marge
+  const calculateMargePercentage = (totals) => {
+    // La marge doit être calculée sur le coût avec taux fixe
+    return totals.cout_avec_taux_fixe > 0
+      ? (totals.marge_estimee / totals.cout_avec_taux_fixe) * 100
+      : 0;
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -1916,7 +1908,7 @@ const CreationDevis = () => {
                             <TextField
                               label="Prix Unitaire"
                               type="number"
-                              step="0.01"
+                              step="0.10"
                               value={customPrices[ligne.id] || ligne.prix}
                               onChange={(e) =>
                                 handlePriceChange(ligne.id, e.target.value)
@@ -1973,6 +1965,7 @@ const CreationDevis = () => {
             onSocieteSelect={handleSocieteSelect}
           />
 
+          {/* Box commune pour Total TTC et coûts estimés */}
           <Box
             sx={{
               position: "fixed",
@@ -1985,11 +1978,64 @@ const CreationDevis = () => {
               zIndex: 1000,
               border: "2px solid",
               borderColor: "primary.main",
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
             }}
           >
-            <Typography variant="h6" sx={{ color: "primary.main" }}>
-              Total TTC: {calculateGrandTotal(specialLines).totalTTC} €
-            </Typography>
+            {/* Totaux HT et TTC */}
+            <Box
+              sx={{
+                borderBottom: "1px solid",
+                borderColor: "primary.main",
+                pb: 1,
+              }}
+            >
+              <Typography variant="h6" sx={{ color: "primary.main" }}>
+                Total HT: {calculateGrandTotal(specialLines).totalHT} €
+              </Typography>
+              <Typography variant="h6" sx={{ color: "primary.main" }}>
+                Total TTC: {calculateGrandTotal(specialLines).totalTTC} €
+              </Typography>
+            </Box>
+
+            {/* Coûts estimés */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ color: "primary.main" }}>
+                Main d'œuvre HT:{" "}
+                {calculateEstimatedTotals().cout_estime_main_oeuvre.toFixed(2)}{" "}
+                €
+              </Typography>
+              <Typography variant="subtitle1" sx={{ color: "primary.main" }}>
+                Matériel HT:{" "}
+                {calculateEstimatedTotals().cout_estime_materiel.toFixed(2)} €
+              </Typography>
+              <Typography variant="subtitle1" sx={{ color: "primary.main" }}>
+                Coût avec taux fixe HT:{" "}
+                {calculateEstimatedTotals().cout_avec_taux_fixe.toFixed(2)} €
+              </Typography>
+              {(() => {
+                const totals = calculateEstimatedTotals();
+                const margePercentage = calculateMargePercentage(totals);
+                return (
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      color:
+                        margePercentage < 10 ? "error.main" : "primary.main",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    Marge HT: {totals.marge_estimee.toFixed(2)} €
+                    <span style={{ fontSize: "0.8em" }}>
+                      ({margePercentage.toFixed(1)}%)
+                    </span>
+                  </Typography>
+                );
+              })()}
+            </Box>
           </Box>
 
           <DevisModal

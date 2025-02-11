@@ -95,7 +95,14 @@ class DevisSerializer(serializers.ModelSerializer):
 class ChantierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chantier
-        fields = '__all__'     
+        fields = [
+            'id', 'chantier_name', 'societe', 'date_debut', 'date_fin',
+            'montant_ttc', 'montant_ht', 'state_chantier', 'ville', 'rue',
+            'code_postal', 'cout_materiel', 'cout_main_oeuvre', 
+            'cout_sous_traitance', 'description',
+            # Nouveaux champs
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'marge_estimee'
+        ]
 
 
 

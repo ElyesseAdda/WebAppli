@@ -41,21 +41,52 @@ class Societe(models.Model):
     
 
 class Chantier(models.Model):
-    chantier_name = models.CharField(max_length=255,unique=True)
+    chantier_name = models.CharField(max_length=255, unique=True)
     societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='chantiers', null=True)
     date_debut = models.DateField(auto_now_add=True)
     date_fin = models.DateField(auto_now_add=False, null=True)
     montant_ttc = models.FloatField(null=True)
     montant_ht = models.FloatField(null=True)
     state_chantier = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    ville = models.CharField(max_length=100,)
-    rue = models.CharField(max_length=100,)
-    code_postal =models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
+    ville = models.CharField(max_length=100)
+    rue = models.CharField(max_length=100)
+    code_postal = models.CharField(
+        max_length=10,
+        validators=[RegexValidator(
+            regex=r'^\d{5}$',
+            message='Le code postal doit être exactement 5 chiffres.',
+            code='invalid_codepostal'
+        )],
+        blank=True,
+        null=True
+    )
+    
+    # Champs existants pour les coûts réels
     cout_materiel = models.FloatField(null=True)
     cout_main_oeuvre = models.FloatField(null=True)
     cout_sous_traitance = models.FloatField(null=True)
-    description = models.TextField(null=True)
     
+    # Nouveaux champs pour les coûts estimés
+    cout_estime_main_oeuvre = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Coût estimé main d'œuvre"
+    )
+    cout_estime_materiel = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Coût estimé matériel"
+    )
+    marge_estimee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Marge estimée"
+    )
+    
+    description = models.TextField(null=True)
 
     #Partie validation des informations
     @property
@@ -540,6 +571,19 @@ class FournisseurMagasin(models.Model):
 
     def __str__(self):
         return f"{self.fournisseur} - {self.magasin}"
+
+class Parametres(models.Model):
+    code = models.CharField(max_length=50, unique=True)
+    valeur = models.DecimalField(max_digits=5, decimal_places=2)
+    description = models.CharField(max_length=255, blank=True)
+    date_modification = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Paramètre"
+        verbose_name_plural = "Paramètres"
+
+    def __str__(self):
+        return f"{self.code}: {self.valeur}"
 
 
 

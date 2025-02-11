@@ -22,6 +22,7 @@ from .views import (
     delete_prime,
     get_agent_primes,
     update_taux_fixe,
+    get_taux_fixe,
 )
 
 router = DefaultRouter()
@@ -95,5 +96,6 @@ urlpatterns = [
     path('agents/<int:agent_id>/primes/', add_prime, name='add_prime'),
     path('agents/<int:agent_id>/primes/<int:prime_id>/', delete_prime, name='delete_prime'),
     path('agents/<int:agent_id>/primes/', get_agent_primes, name='get_agent_primes'),
+    path('parametres/taux-fixe/', get_taux_fixe, name='get_taux_fixe'),
     path('update-taux-fixe/', update_taux_fixe, name='update_taux_fixe'),
 ]

@@ -24,6 +24,36 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
   const [partieTitle, setPartieTitle] = useState("");
   const [selectedPartieId, setSelectedPartieId] = useState("");
   const [selectedSousPartieId, setSelectedSousPartieId] = useState("");
+  const [defaultTauxFixe, setDefaultTauxFixe] = useState("20"); // Valeur par défaut temporaire
+
+  // Charger le taux fixe depuis le backend
+  useEffect(() => {
+    const fetchTauxFixe = async () => {
+      try {
+        const response = await axios.get("/api/parametres/taux-fixe/");
+        const tauxFixe = response.data.valeur.toString();
+        setDefaultTauxFixe(tauxFixe);
+
+        // Mettre à jour toutes les sous-parties existantes avec le nouveau taux
+        setSousParties((prevSousParties) =>
+          prevSousParties.map((sousPartie) => ({
+            ...sousPartie,
+            lignes: sousPartie.lignes.map((ligne) => ({
+              ...ligne,
+              taux_fixe: tauxFixe,
+            })),
+          }))
+        );
+      } catch (error) {
+        console.error("Erreur lors du chargement du taux fixe:", error);
+      }
+    };
+
+    if (open) {
+      fetchTauxFixe();
+    }
+  }, [open]);
+
   const [sousParties, setSousParties] = useState([
     {
       description: "",
@@ -33,12 +63,13 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
           unite: "",
           cout_main_oeuvre: "",
           cout_materiel: "",
-          taux_fixe: "19",
+          taux_fixe: defaultTauxFixe, // Utiliser la valeur du backend
           marge: "20",
         },
       ],
     },
   ]);
+
   const [existingParties, setExistingParties] = useState([]);
   const [existingSousParties, setExistingSousParties] = useState([]);
   const [existingLignes, setExistingLignes] = useState([]);
@@ -55,7 +86,7 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
             unite: "",
             cout_main_oeuvre: "",
             cout_materiel: "",
-            taux_fixe: "19",
+            taux_fixe: defaultTauxFixe, // Utiliser la valeur du backend
             marge: "20",
           },
         ],
@@ -70,7 +101,7 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
       unite: "",
       cout_main_oeuvre: "",
       cout_materiel: "",
-      taux_fixe: "19",
+      taux_fixe: defaultTauxFixe, // Utiliser la valeur du backend
       marge: "20",
     });
     setSousParties(newSousParties);
@@ -124,6 +155,9 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
         // 1. Créer la partie
         const partieResponse = await axios.post("/api/parties/", {
           titre: partieTitle,
+          cout_estime_main_oeuvre: 0,
+          cout_estime_materiel: 0,
+          marge_estimee: 0,
         });
         console.log("Partie créée:", partieResponse.data);
 
@@ -329,7 +363,7 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
             unite: "",
             cout_main_oeuvre: "",
             cout_materiel: "",
-            taux_fixe: "19",
+            taux_fixe: defaultTauxFixe,
             marge: "20",
           },
         ],
