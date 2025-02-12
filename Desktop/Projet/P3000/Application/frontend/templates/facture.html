@@ -22,6 +22,8 @@
       }
       @page {
         size: A4;
+        width: 210mm;     /* Largeur A4 */
+        height: 297mm;    /* Hauteur A4 */
         margin: 10mm;
         scale: 70%;
       }
@@ -68,6 +70,9 @@
         background-clip: content-box;
         font-size: 0.8rem;
         padding-top: 20px;
+        
+        height: 20px;
+        line-height: 25px;
       }
       .sous-partie {
         background-color: rgb(157, 197, 226);
@@ -76,12 +81,16 @@
         text-align: left;
         font-weight: 600;
         font-size: 0.8rem;
+        height: 20px;
+        line-height: 20px;
       }
       .ligne-details {
         text-align: left;
         width: 502px;
         font-size: 0.8rem;
         text-indent: 22px;
+        height: 20px;
+        
       }
       .designation {
         text-align: center; /* Alignement à gauche pour la désignation */
@@ -264,6 +273,7 @@
       .contact-info {
         line-height: 7px;
         grid-area: 1 / 2 / 2 / 3;
+        padding-left: 50px;
         h3 {
           margin-bottom: 8px;
         }
@@ -307,6 +317,7 @@
         font-weight: 500;
       }
       .p3000-container {
+        padding-top: 45px;
         padding-bottom: 20px;
         display: grid;
         grid-template-rows: 1fr;
@@ -320,8 +331,8 @@
       .logo {
         
         
-        width: 250px;
-        height: 160px;
+        width: 220px;
+        height: 140px;
       }
       .P3000-info {
         
@@ -331,9 +342,9 @@
         font-weight: 600;
 
         p {
-          font-size: 18px;
+          font-size: 16px;
           font-style: italic;
-          line-height: 16px;
+          line-height: 10px;
           font-weight: 500;
           
         }
@@ -664,6 +675,13 @@
               </td>
           </tr>
           {% endfor %}
+          <tr style="margin-top: 20px;">
+            <td colspan="4" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
+                MONTANT GLOBAL HT APRÈS FRAIS DIVERS & AUTRES
+            </td>
+            <td class="totalHttableau" style="padding-top: 15px;">
+                {{ total_ht|floatformat:2 }} €
+            </td>
         </tbody>
       </table>
     </div>

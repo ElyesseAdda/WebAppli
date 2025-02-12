@@ -71,7 +71,34 @@ const ClientInfoModal = ({ open, onClose, onSubmit }) => {
           label="Téléphone"
           type="tel"
           value={formData.phone_Number}
-          onChange={handleChange}
+          onChange={(e) => {
+            // Ne garde que les chiffres
+            const numericValue = e.target.value.replace(/\D/g, "");
+            // Crée un événement synthétique avec la nouvelle valeur
+            const syntheticEvent = {
+              target: {
+                name: e.target.name,
+                value: numericValue,
+              },
+            };
+            handleChange(syntheticEvent);
+          }}
+          onKeyDown={(e) => {
+            // Empêche la saisie de caractères non numériques
+            if (
+              !/[0-9]/.test(e.key) &&
+              e.key !== "Backspace" &&
+              e.key !== "Delete" &&
+              e.key !== "ArrowLeft" &&
+              e.key !== "ArrowRight"
+            ) {
+              e.preventDefault();
+            }
+          }}
+          inputProps={{
+            inputMode: "numeric",
+            pattern: "[0-9]*",
+          }}
           required
         />
       </DialogContent>

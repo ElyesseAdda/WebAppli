@@ -452,14 +452,16 @@ const CreationDevis = () => {
         clientName = "Client non spécifié";
       }
 
-      const nextDevisNumber = await generateDevisNumber();
-
+      // Initialiser devisModalData avec les informations de base
       setDevisModalData({
-        numero: nextDevisNumber,
+        numero: "", // Le numéro sera généré par DevisModal
         client: clientName,
+        chantier: selectedChantierId,
+        devis_chantier: devisType === "chantier",
         price_ht: calculateGrandTotal(specialLines).totalHT,
         description: "",
       });
+
       setOpenDevisModal(true);
     } catch (error) {
       console.error("Erreur lors de la préparation du devis:", error);
@@ -1347,6 +1349,13 @@ const CreationDevis = () => {
       : 0;
   };
 
+  const handleDevisModalChange = (e) => {
+    setDevisModalData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -2042,13 +2051,9 @@ const CreationDevis = () => {
             open={openDevisModal}
             handleClose={() => setOpenDevisModal(false)}
             devisData={devisModalData}
-            handleChange={(e) =>
-              setDevisModalData({
-                ...devisModalData,
-                [e.target.name]: e.target.value,
-              })
-            }
             handleSubmit={handleDevisModalSubmit}
+            handleChange={handleDevisModalChange}
+            pendingChantierData={pendingChantierData}
           />
 
           <CreatePartieModal

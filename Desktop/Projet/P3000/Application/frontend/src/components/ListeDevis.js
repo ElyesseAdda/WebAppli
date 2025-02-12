@@ -1,7 +1,7 @@
 import {
   Box,
   Button,
-  IconButton,
+  ButtonGroup,
   Menu,
   MenuItem,
   Modal,
@@ -16,6 +16,7 @@ import {
 import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { AiFillFilePdf } from "react-icons/ai";
 import { TfiMore } from "react-icons/tfi";
 import {
   AlignedCell,
@@ -35,6 +36,10 @@ import CreationFacture from "./CreationFacture";
 import StatusChangeModal from "./StatusChangeModal";
 import TransformationCIEModal from "./TransformationCIEModal";
 import TransformationTSModal from "./TransformationTSModal";
+
+const formatNumber = (number) => {
+  return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+};
 
 const ListeDevis = () => {
   const [devis, setDevis] = useState([]);
@@ -451,6 +456,62 @@ const ListeDevis = () => {
     }
   };
 
+  const handleGeneratePDF = async (devis) => {
+    try {
+      console.log("Tentative de génération du PDF pour le devis:", devis.id);
+
+      // Appel à l'API existante
+      const response = await axios.post(
+        "/api/generate-pdf-from-preview/",
+        {
+          devis_id: devis.id,
+          // Ajoutons des logs pour déboguer
+          preview_url: `/api/preview-saved-devis/${devis.id}/`,
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Vérifier si la réponse est bien un PDF
+      if (response.headers["content-type"] === "application/pdf") {
+        // Créer un URL pour le blob
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+
+        // Créer un lien temporaire pour télécharger le PDF
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = `devis-${devis.numero}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+      } else {
+        // Si ce n'est pas un PDF, c'est probablement une erreur
+        const reader = new FileReader();
+        reader.onload = function () {
+          const errorMessage = JSON.parse(reader.result);
+          console.error("Erreur serveur:", errorMessage);
+          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      console.error("Erreur détaillée:", error.response?.data);
+      console.error("Status:", error.response?.status);
+      console.error("Headers:", error.response?.headers);
+      alert(
+        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
+      );
+    }
+  };
+
   return (
     <div
       style={{
@@ -536,6 +597,13 @@ const ListeDevis = () => {
                       variant="standard"
                       value={filters.price_ttc}
                       onChange={handleFilterChange("price_ttc")}
+                      sx={{
+                        maxWidth: "60px", // Limite la largeur maximale
+                        minWidth: "40px", // Assure une largeur minimale
+                        "& input": {
+                          textAlign: "center",
+                        },
+                      }}
                     />
                   </TableSortLabel>
                 </AlignedCell>
@@ -575,28 +643,60 @@ const ListeDevis = () => {
                     <CenteredTableCell
                       style={{ fontWeight: 600, color: green[500] }}
                     >
-                      {devis.price_ttc} €
+                      {formatNumber(devis.price_ttc)} €
                     </CenteredTableCell>
                     <StatusCell status={devis.status}>
                       {devis.status}
                     </StatusCell>
-                    <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
-                      <IconButton
-                        onClick={(e) => handleMoreClick(e, devis)}
+                    <CenteredTableCell
+                      sx={{
+                        width: "60px",
+                        padding: "0 8px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <ButtonGroup
+                        variant="outlined"
+                        size="small"
+                        aria-label="actions button group"
                         sx={{
-                          width: 35,
-                          height: 35,
-                          backgroundColor: "rgba(0, 0, 0, 0.04)",
-                          "&:hover": {
-                            backgroundColor: "rgba(0, 0, 0, 0.08)",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                          paddingTop: "10px",
+                          "& .MuiButtonGroup-grouped": {
+                            minWidth: "35px",
+                            padding: "4px",
+                            border: "none",
+                            "&:hover": {
+                              backgroundColor: "rgba(0, 0, 0, 0.04)",
+                            },
                           },
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                          borderRadius: "50%",
                         }}
                       >
-                        <TfiMore size={16} color="#666" />
-                      </IconButton>
+                        <Button
+                          onClick={(e) => handleMoreClick(e, devis)}
+                          sx={{
+                            backgroundColor: "rgba(0, 0, 0, 0.04)",
+                            "&:hover": {
+                              backgroundColor: "rgba(0, 0, 0, 0.08)",
+                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                            },
+                          }}
+                        >
+                          <TfiMore size={16} color="#666" />
+                        </Button>
+                        <Button
+                          onClick={() => handleGeneratePDF(devis)}
+                          sx={{
+                            color: "primary.main",
+                            "&:hover": {
+                              backgroundColor: "rgba(25, 118, 210, 0.04)",
+                            },
+                          }}
+                        >
+                          <AiFillFilePdf style={{ fontSize: "24px" }} />
+                        </Button>
+                      </ButtonGroup>
                     </CenteredTableCell>
                   </TableRow>
                 </React.Fragment>

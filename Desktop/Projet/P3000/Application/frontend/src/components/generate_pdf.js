@@ -1,11 +1,7 @@
-import { dirname, resolve } from "path";
-import puppeteer from "puppeteer";
-import { fileURLToPath } from "url";
+const path = require("path");
+const puppeteer = require("puppeteer");
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const generatePDF = async () => {
+async function generatePDF() {
   const args = process.argv.slice(2);
   const previewUrl = args[0]; // L'URL de prévisualisation du devis
 
@@ -13,53 +9,78 @@ const generatePDF = async () => {
 
   try {
     const browser = await puppeteer.launch({
-      headless: true, // Si vous voulez voir le navigateur, mettez à false
-      args: ["--no-sandbox", "--disable-setuid-sandbox"], // Ajout de paramètres pour Puppeteer
+      headless: "new", // "new" est la nouvelle syntaxe recommandée
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--window-size=1920,1080",
+      ], // Ajout de paramètres pour Puppeteer
     });
     console.log("Navigateur lancé");
 
     const page = await browser.newPage();
     console.log("Nouvelle page ouverte");
 
-    // Définir la largeur maximum pour une page A4 portrait
-    await page.setViewport({
-      width: 794, // ~210mm en pixels (72dpi)
-      deviceScaleFactor: 1,
-    });
+    try {
+      await page.setViewport({
+        width: 794,
+        height: 1123, // A4 height in pixels
+        deviceScaleFactor: 1,
+      });
+      console.log("Viewport configuré");
 
-    // Augmenter le délai d'attente à 60 secondes (60000 ms)
-    await page.goto(previewUrl, { waitUntil: "networkidle0", timeout: 60000 });
-    console.log("Page chargée");
+      console.log("Tentative de chargement de la page:", previewUrl);
+      const response = await page.goto(previewUrl, {
+        waitUntil: ["load", "networkidle0"],
+        timeout: 60000,
+      });
 
-    // Chemin pour stocker le PDF
-    const pdfPath = resolve(__dirname, "devis.pdf");
-    console.log("Génération du PDF...");
+      if (!response.ok()) {
+        throw new Error(`Page load failed with status: ${response.status()}`);
+      }
+      console.log("Page chargée avec succès");
 
-    await page.pdf({
-      path: pdfPath,
-      format: "A4",
-      printBackground: true,
-      landscape: false,
-      margin: {
-        top: "20px",
-        right: "20px",
-        bottom: "20px",
-        left: "20px",
-      },
-      preferCSSPageSize: true, // Utiliser les dimensions CSS
-      scale: 0.8,
-      width: "210mm", // Largeur A4
-    });
+      // Attendre que le contenu soit complètement chargé
+      await page.waitForSelector("body", { timeout: 5000 });
+      console.log("Contenu de la page détecté");
 
-    console.log("PDF généré et enregistré à:", pdfPath);
+      const pdfPath = path.resolve(__dirname, "devis.pdf");
+      console.log("Début de la génération du PDF vers:", pdfPath);
 
-    await browser.close();
-    console.log("Navigateur fermé");
-    process.exit(0); // Sortie réussie
+      await page.pdf({
+        path: pdfPath,
+        format: "A4",
+        printBackground: true,
+        landscape: false,
+        // margin: {
+        //   top: "20px",
+        //   right: "20px",
+        //   bottom: "20px",
+        //   left: "20px",
+        // },
+        preferCSSPageSize: true,
+        scale: 1,
+      });
+
+      console.log("PDF généré avec succès");
+      await browser.close();
+      console.log("Navigateur fermé");
+      process.exit(0); // Sortie réussie
+    } catch (pageError) {
+      console.error("Erreur lors du traitement de la page:", pageError);
+      await page.screenshot({ path: "error-screenshot.png" });
+      throw pageError;
+    }
   } catch (err) {
-    console.error("Erreur lors de la génération du PDF:", err); // Affiche l'erreur complète
+    console.error("Erreur détaillée:", err);
+    console.error("Stack trace:", err.stack);
     process.exit(1); // Sortie avec une erreur
   }
-};
+}
 
-generatePDF();
+generatePDF().catch((err) => {
+  console.error("Erreur non gérée:", err);
+  process.exit(1);
+});

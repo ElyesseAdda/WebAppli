@@ -73,7 +73,24 @@ const ClientSocieteForm = ({ clientData, setClientData, onSubmit }) => {
           name="phone_Number"
           placeholder="Téléphone"
           value={clientData.phone_Number}
-          onChange={(e) => handleChange(e, "client")}
+          onChange={(e) => {
+            // Ne garde que les chiffres de la valeur entrée
+            const numericValue = e.target.value.replace(/\D/g, "");
+            // Crée un événement synthétique avec la nouvelle valeur
+            const syntheticEvent = {
+              target: {
+                name: e.target.name,
+                value: numericValue,
+              },
+            };
+            handleChange(syntheticEvent, "client");
+          }}
+          onKeyPress={(e) => {
+            // Empêche la saisie de caractères non numériques
+            if (!/[0-9]/.test(e.key)) {
+              e.preventDefault();
+            }
+          }}
         />
       </div>
 

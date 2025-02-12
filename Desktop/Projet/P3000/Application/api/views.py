@@ -348,37 +348,70 @@ def preview_devis(request):
         return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
 def generate_pdf_from_preview(request):
-    devis_data_encoded = request.GET.get('devis')
+    try:
+        # Ajout de logs
+        print("Début de generate_pdf_from_preview")
+        print("Request body:", request.body)
+        
+        data = json.loads(request.body)
+        devis_id = data.get('devis_id')
+        print("Devis ID:", devis_id)
 
-    if devis_data_encoded:
-        try:
-            # URL de la page de prévisualisation
-            preview_url = request.build_absolute_uri(f"/api/preview-devis/?devis={devis_data_encoded}")
+        if not devis_id:
+            return JsonResponse({'error': 'ID du devis manquant'}, status=400)
 
-            # Chemin vers le script Puppeteer
-            node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        # URL de la page de prévisualisation pour un devis sauvegardé
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        print("Preview URL:", preview_url)
 
-            # Commande pour exécuter Puppeteer avec Node.js
-            command = ['node', node_script_path, preview_url]
+        # Chemin vers le script Puppeteer
+        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        print("Node script path:", node_script_path)
 
-            # Exécuter Puppeteer
-            result = subprocess.run(command, check=True)
+        # Commande pour exécuter Puppeteer avec Node.js
+        command = ['node', node_script_path, preview_url]
+        print("Commande à exécuter:", command)
 
-            # Lire le fichier PDF généré
-            pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+        # Exécuter Puppeteer avec capture de la sortie
+        result = subprocess.run(
+            command, 
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print("Sortie standard:", result.stdout)
+        print("Sortie d'erreur:", result.stderr)
 
-            if os.path.exists(pdf_path):
-                with open(pdf_path, 'rb') as pdf_file:
-                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-                    response['Content-Disposition'] = 'attachment; filename="devis.pdf"'
-                    return response
-            else:
-                return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+        # Lire le fichier PDF généré
+        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+        print("Chemin du PDF:", pdf_path)
+        print("Le fichier existe ?", os.path.exists(pdf_path))
 
-        except subprocess.CalledProcessError as e:
-            return JsonResponse({'error': str(e)}, status=500)
+        if os.path.exists(pdf_path):
+            with open(pdf_path, 'rb') as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+                print("PDF généré avec succès")
+                return response
+        else:
+            error_msg = 'Le fichier PDF n\'a pas été généré.'
+            print(error_msg)
+            return JsonResponse({'error': error_msg}, status=500)
 
-    return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
+    except json.JSONDecodeError as e:
+        error_msg = f'Données JSON invalides: {str(e)}'
+        print(error_msg)
+        return JsonResponse({'error': error_msg}, status=400)
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.output}'
+        print(error_msg)
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(error_msg)
+        print("Type d'erreur:", type(e))
+        print("Traceback:", traceback.format_exc())
+        return JsonResponse({'error': error_msg}, status=500)
 
 
 def check_nom_devis_existe(request):
@@ -1375,20 +1408,49 @@ def list_devis(request):
 @api_view(['GET'])
 def get_next_devis_number(request):
     try:
-        current_year = datetime.now().year % 100  # Obtenir les 2 derniers chiffres
+        current_year = datetime.now().year % 100
+        chantier_id = request.GET.get('chantier_id')
+        is_devis_chantier = request.GET.get('devis_chantier') == 'true'
+        
+        # Obtenir le dernier numéro de devis (séquence globale)
         last_devis = Devis.objects.filter(
-            numero__regex=f'^DEV-\\d{{3}}-{current_year}$'
+            numero__regex=f'^DEV-\\d{{3}}-{current_year}'
         ).order_by('-numero').first()
         
+        # Générer le prochain numéro de base
         if last_devis:
-            last_number = int(last_devis.numero.split('-')[1])
-            next_number = f"{(last_number + 1):03d}"
+            match = re.search(r'DEV-(\d{3})-\d{2}', last_devis.numero)
+            next_number = f"{(int(match.group(1)) + 1):03d}" if match else "001"
         else:
             next_number = "001"
             
-        return Response({'next_number': next_number})
+        base_number = f"DEV-{next_number}-{current_year}"
+        
+        # Construire le numéro complet selon le type
+        if is_devis_chantier and chantier_id and chantier_id != '-1':
+            try:
+                chantier = Chantier.objects.get(id=chantier_id)
+                # Format spécifique pour les devis de chantier
+                full_number = f"{base_number} - {chantier.chantier_name}"
+            except Chantier.DoesNotExist:
+                full_number = base_number
+        elif chantier_id and chantier_id != '-1':
+            next_ts = get_next_ts_number(chantier_id)
+            full_number = f"{base_number} - TS N°{next_ts}"
+        else:
+            full_number = base_number
+
+        return Response({
+            'base_number': base_number,
+            'full_number': full_number,
+        })
     except Exception as e:
-        return Response({'error': str(e)}, status=400)
+        logger.error(f"Erreur dans get_next_devis_number: {str(e)}")
+        base_number = f"DEV-001-{current_year}"
+        return Response({
+            'base_number': base_number,
+            'full_number': base_number,
+        })
 
 @api_view(['GET'])
 def get_chantier_relations(request):
