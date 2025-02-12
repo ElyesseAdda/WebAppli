@@ -33,6 +33,8 @@ import {
 } from "../styles/tableStyles";
 import CreationFacture from "./CreationFacture";
 import StatusChangeModal from "./StatusChangeModal";
+import TransformationCIEModal from "./TransformationCIEModal";
+import TransformationTSModal from "./TransformationTSModal";
 
 const ListeDevis = () => {
   const [devis, setDevis] = useState([]);
@@ -56,6 +58,11 @@ const ListeDevis = () => {
   const [deleteFacturesModalOpen, setDeleteFacturesModalOpen] = useState(false);
   const [facturesToDelete, setFacturesToDelete] = useState([]);
   const [newStatus, setNewStatus] = useState(null);
+  const [tsModalOpen, setTsModalOpen] = useState(false);
+  const [selectedDevisForTS, setSelectedDevisForTS] = useState(null);
+  const [selectedChantier, setSelectedChantier] = useState(null);
+  const [cieModalOpen, setCieModalOpen] = useState(false);
+  const [selectedDevisForCIE, setSelectedDevisForCIE] = useState(null);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
 
@@ -355,22 +362,63 @@ const ListeDevis = () => {
     setSelectedDevis(null);
   };
 
-  const handleCreateFacture = (devis) => {
-    const selectedDevis = Array.isArray(devis) ? devis[0] : devis;
-    // Récupérer les données complètes du devis
-    axios
-      .get(`/api/devisa/${selectedDevis.id}/`)
-      .then((response) => {
-        setSelectedDevis(response.data);
-        setFactureModalOpen(true);
-      })
-      .catch((error) => {
-        console.error(
-          "Erreur lors de la récupération des détails du devis:",
-          error
+  const handleCreateFacture = async (devis, type) => {
+    try {
+      if (type === "TS") {
+        // D'abord récupérer les détails complets du devis
+        const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
+        const devisComplet = devisResponse.data;
+        console.log("Devis complet:", devisComplet);
+
+        // Vérifier que ce n'est PAS un devis de chantier
+        if (devisComplet.devis_chantier === true) {
+          alert("Les devis de chantier ne peuvent pas être transformés en TS");
+          return;
+        }
+
+        // Si ce n'est pas un devis de chantier, on continue
+        const response = await axios.get(
+          `/api/chantier/${devisComplet.chantier}/`
         );
-        alert("Erreur lors de la récupération des détails du devis");
-      });
+        setSelectedChantier(response.data);
+        setSelectedDevisForTS(devisComplet);
+        setTsModalOpen(true);
+      } else if (type === "CIE") {
+        // Pour la transformation en CIE
+        const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
+        const devisComplet = devisResponse.data;
+        const response = await axios.get(
+          `/api/chantier/${devisComplet.chantier}/`
+        );
+        setSelectedChantier(response.data);
+        setSelectedDevisForCIE(devisComplet);
+        setCieModalOpen(true);
+      } else {
+        // Pour la facture classique
+        setSelectedDevis(devis);
+        setFactureModalOpen(true);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des données:", error);
+      console.log("Détails de l'erreur:", error.response?.data);
+      alert("Erreur lors de la préparation de la transformation");
+    }
+  };
+
+  const handleTSModalClose = () => {
+    setTsModalOpen(false);
+    setSelectedDevisForTS(null);
+    setSelectedChantier(null);
+    // Rafraîchir la liste des devis après la création d'un TS
+    fetchDevis();
+  };
+
+  const handleCIEModalClose = () => {
+    setCieModalOpen(false);
+    setSelectedDevisForCIE(null);
+    setSelectedChantier(null);
+    // Rafraîchir la liste des devis après la création d'une facture CIE
+    fetchDevis();
   };
 
   const handleFactureModalClose = () => {
@@ -558,35 +606,40 @@ const ListeDevis = () => {
         </StyledTableContainer>
       </StyledBox>
 
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleClose}
-        PaperProps={{
-          elevation: 3,
-          sx: {
-            borderRadius: 2,
-            minWidth: 150,
-          },
-        }}
-      >
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
         <MenuItem
-          onClick={handleModifyDevis}
-          disabled={selectedDevis?.status !== "En attente"}
-          sx={{
-            color:
-              selectedDevis?.status !== "En attente"
-                ? "text.disabled"
-                : "inherit",
-            "&.Mui-disabled": {
-              opacity: 0.6,
-            },
+          onClick={() => {
+            handleClose();
+            navigate(`/modification-devis/${selectedDevis?.id}`);
           }}
         >
           Modifier le devis
         </MenuItem>
-        <MenuItem onClick={() => handleCreateFacture(selectedDevis)}>
+        <MenuItem
+          onClick={() => {
+            handleClose();
+            handleCreateFacture(selectedDevis, "facture");
+          }}
+        >
           Éditer en facture
+        </MenuItem>
+        {selectedDevis && selectedDevis.devis_chantier !== true && (
+          <MenuItem
+            onClick={() => {
+              handleClose();
+              handleCreateFacture(selectedDevis, "TS");
+            }}
+          >
+            Transformer en TS
+          </MenuItem>
+        )}
+        <MenuItem
+          onClick={() => {
+            handleClose();
+            handleCreateFacture(selectedDevis, "CIE");
+          }}
+        >
+          Transformer en CIE
         </MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
         <MenuItem onClick={handleDeleteDevis} sx={{ color: "error.main" }}>
@@ -604,6 +657,20 @@ const ListeDevis = () => {
         onStatusChange={handleStatusUpdate}
         type="devis"
         title="Modifier l'état du devis"
+      />
+
+      <TransformationTSModal
+        open={tsModalOpen}
+        onClose={handleTSModalClose}
+        devis={selectedDevisForTS}
+        chantier={selectedChantier}
+      />
+
+      <TransformationCIEModal
+        open={cieModalOpen}
+        onClose={handleCIEModalClose}
+        devis={selectedDevisForCIE}
+        chantier={selectedChantier}
       />
 
       <Modal

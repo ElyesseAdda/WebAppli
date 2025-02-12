@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Avg, Count, Min, Sum, F
+from django.db.models import Avg, Count, Min, Sum, F, Max
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -15,14 +15,14 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer
 from .models import (
     Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction
@@ -33,6 +33,7 @@ import traceback
 from django.views.decorators.csrf import ensure_csrf_cookie
 from decimal import Decimal
 from django.db.models import Q
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -2590,6 +2591,225 @@ def update_taux_fixe(request):
         return Response({'valeur': taux_fixe.valeur})
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+def get_chantier_avenants(request, chantier_id):
+    """Récupère tous les avenants d'un chantier"""
+    avenants = Avenant.objects.filter(chantier_id=chantier_id)
+    serializer = AvenantSerializer(avenants, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+def get_next_ts_number(request, chantier_id):
+    """Récupère le prochain numéro de TS disponible pour un chantier"""
+    max_numero = FactureTS.objects.filter(chantier_id=chantier_id).aggregate(
+        Max('numero_ts')
+    )['numero_ts__max'] or 0
+    return Response({'next_number': f"{max_numero + 1:03d}"})
+
+@api_view(['POST'])
+@transaction.atomic
+def create_facture_ts(request):
+    try:
+        devis = Devis.objects.get(id=request.data['devis_id'])
+        chantier_id = request.data['chantier_id']
+        designation = request.data.get('designation', '')
+        
+        # Générer le numéro de TS
+        last_ts = Facture.objects.filter(
+            chantier_id=chantier_id,
+            type_facture='ts'
+        ).order_by('-numero').first()
+
+        if last_ts:
+            # Extraire le dernier numéro de TS et incrémenter
+            last_number = int(last_ts.numero.split('n°')[-1].split('/')[0])
+            ts_number = f"{devis.numero} - TS n°{last_number + 1:03d}"
+        else:
+            # Premier TS pour ce chantier
+            ts_number = f"{devis.numero} - TS n°001"
+
+        # Ajouter la désignation au numéro si elle existe
+        if designation:
+            ts_number = f"{ts_number} / {designation}"
+
+        # Créer la facture TS
+        facture_ts = Facture.objects.create(
+            numero=ts_number,
+            devis=devis,
+            chantier_id=chantier_id,
+            type_facture='ts',
+            price_ht=devis.price_ht,
+            price_ttc=devis.price_ttc,
+            designation=designation,
+            avenant_id=request.data.get('avenant_id')
+        )
+
+        # Si on doit créer un nouvel avenant
+        if request.data.get('create_new_avenant'):
+            last_avenant = Avenant.objects.filter(chantier_id=chantier_id).order_by('-numero').first()
+            new_avenant_number = (last_avenant.numero + 1) if last_avenant else 1
+            
+            avenant = Avenant.objects.create(
+                chantier_id=chantier_id,
+                numero=new_avenant_number,
+                designation=designation
+            )
+            
+            facture_ts.avenant = avenant
+            facture_ts.save()
+
+        return Response({
+            "success": True,
+            "message": f"Facture TS {ts_number} créée avec succès",
+            "facture_id": facture_ts.id,
+            "numero_ts": ts_number
+        })
+
+    except Devis.DoesNotExist:
+        return Response(
+            {"error": "Devis non trouvé"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+def get_next_ts_number(chantier_id):
+    """Récupère le prochain numéro de TS disponible pour un chantier"""
+    # Chercher le dernier numéro TS dans les factures en excluant les devis de chantier
+    last_ts = Facture.objects.filter(
+        chantier_id=chantier_id,
+        devis__devis_chantier=False  # Exclure les devis de chantier
+    ).exclude(
+        numero__isnull=True
+    ).order_by('-numero').first()
+
+    if last_ts:
+        # Extraire le numéro de TS (ex: "TS N°001" -> 1)
+        try:
+            last_number = int(re.search(r'TS N°(\d+)', last_ts.numero).group(1))
+            return f"{last_number + 1:03d}"
+        except (AttributeError, ValueError):
+            return "001"
+    return "001"
+
+@api_view(['POST'])
+@transaction.atomic
+def create_facture_cie(request):
+    try:
+        devis = Devis.objects.get(id=request.data['devis_id'])
+        
+        # Vérifier que ce n'est pas un devis de chantier
+        if devis.devis_chantier:
+            return Response(
+                {"error": "Les devis de chantier ne peuvent pas être transformés en facture CIE"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        chantier_id = request.data['chantier_id']
+        mois = request.data.get('mois_situation')
+        annee = request.data.get('annee_situation')
+        designation = request.data.get('designation', '')
+
+        # Vérification des données requises
+        if not mois or not annee:
+            return Response(
+                {"error": "Le mois et l'année de situation sont requis pour une facture CIE"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not (1 <= int(mois) <= 12):
+            return Response(
+                {"error": "Le mois doit être compris entre 1 et 12"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Obtenir le prochain numéro de TS
+        next_ts_number = get_next_ts_number(chantier_id)
+        
+        # Générer le numéro de facture CIE avec le numéro TS
+        cie_number = f"{devis.numero} - TS N°{next_ts_number}"
+        
+        # Ajouter la désignation et le mois/année
+        if designation:
+            cie_number = f"{cie_number} / {designation}"
+        cie_number = f"{cie_number} ({mois:02d}/{annee})"
+
+        # Créer la facture CIE
+        facture_cie = Facture.objects.create(
+            numero=cie_number,
+            devis=devis,
+            chantier_id=chantier_id,
+            type_facture='cie',
+            price_ht=devis.price_ht,
+            price_ttc=devis.price_ttc,
+            designation=designation,
+            mois_situation=mois,
+            annee_situation=annee
+        )
+
+        return Response({
+            "success": True,
+            "message": f"Facture CIE {cie_number} créée avec succès",
+            "facture_id": facture_cie.id,
+            "numero_cie": cie_number
+        })
+
+    except Devis.DoesNotExist:
+        return Response(
+            {"error": "Devis non trouvé"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+@api_view(['GET'])
+def get_situation_mensuelle(request, chantier_id, mois, annee):
+    try:
+        # Récupérer toutes les factures CIE du mois pour ce chantier
+        factures_cie = Facture.objects.filter(
+            chantier_id=chantier_id,
+            type_facture='cie',
+            mois_situation=mois,
+            annee_situation=annee
+        )
+
+        # Calculer les totaux
+        total_ht = sum(facture.price_ht for facture in factures_cie)
+        total_ttc = sum(facture.price_ttc for facture in factures_cie)
+
+        # Récupérer le détail de chaque facture
+        factures_detail = []
+        for facture in factures_cie:
+            factures_detail.append({
+                'id': facture.id,
+                'numero': facture.numero,
+                'designation': facture.designation,
+                'price_ht': facture.price_ht,
+                'price_ttc': facture.price_ttc,
+                'date_creation': facture.date_creation,
+                'devis_numero': facture.devis.numero
+            })
+
+        return Response({
+            'mois': mois,
+            'annee': annee,
+            'total_ht': total_ht,
+            'total_ttc': total_ttc,
+            'factures': factures_detail
+        })
+
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 

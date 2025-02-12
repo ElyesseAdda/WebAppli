@@ -23,6 +23,11 @@ from .views import (
     get_agent_primes,
     update_taux_fixe,
     get_taux_fixe,
+    get_chantier_avenants,
+    get_next_ts_number,
+    create_facture_ts,
+    get_situation_mensuelle,
+    create_facture_cie,
 )
 
 router = DefaultRouter()
@@ -98,4 +103,9 @@ urlpatterns = [
     path('agents/<int:agent_id>/primes/', get_agent_primes, name='get_agent_primes'),
     path('parametres/taux-fixe/', get_taux_fixe, name='get_taux_fixe'),
     path('update-taux-fixe/', update_taux_fixe, name='update_taux_fixe'),
+    path('avenant_chantier/<int:chantier_id>/avenants/', get_chantier_avenants, name='chantier-avenants'),
+    path('next_ts_number_chantier/<int:chantier_id>/next-ts-number/', get_next_ts_number, name='next-ts-number'),
+    path('create-facture-ts/', create_facture_ts, name='create-facture-ts'),
+    path('situation-mensuelle/<int:chantier_id>/<int:mois>/<int:annee>/', get_situation_mensuelle, name='get_situation_mensuelle'),
+    path('create-facture-cie/', create_facture_cie, name='create-facture-cie'),
 ]

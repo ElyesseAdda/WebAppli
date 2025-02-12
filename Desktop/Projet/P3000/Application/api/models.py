@@ -342,23 +342,45 @@ class Facture(models.Model):
         ('Payée', 'Payée')
     ]
 
-
+    FACTURE_TYPE = [
+        ('classique', 'Classique'),
+        ('ts', 'Travaux Supplémentaires'),
+        ('cie', 'CIE')  # Ajout du type CIE
+    ]
 
     numero = models.CharField(max_length=50, unique=True)
     date_creation = models.DateTimeField(auto_now_add=True)
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='factures')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='factures')
     state_facture = models.CharField(max_length=20, choices=FACTURE_STATUS, default='En attente')
+    type_facture = models.CharField(max_length=20, choices=FACTURE_TYPE, default='classique')
+    designation = models.CharField(max_length=255, blank=True)
     date_echeance = models.DateField(null=True, blank=True)
-    date_paiement = models.DateField(null=True, blank=True)  # Nouveau champ
+    date_paiement = models.DateField(null=True, blank=True)
     mode_paiement = models.CharField(max_length=50, default='virement')
     price_ht = models.FloatField()
     price_ttc = models.FloatField()
+    avenant = models.ForeignKey('Avenant', on_delete=models.SET_NULL, null=True, blank=True)
     
-    def __str__(self):
-        return f"Facture {self.numero}"
+    # Champs spécifiques pour les factures CIE
+    mois_situation = models.IntegerField(null=True, blank=True)  # 1-12 pour le mois
+    annee_situation = models.IntegerField(null=True, blank=True)  # année de la situation
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(
+                    type_facture='cie',
+                    mois_situation__isnull=False,
+                    annee_situation__isnull=False
+                ) | ~models.Q(type_facture='cie'),
+                name='cie_requires_situation_date'
+            )
+        ]
 
     def save(self, *args, **kwargs):
+        if self.type_facture == 'cie' and (not self.mois_situation or not self.annee_situation):
+            raise ValidationError("Les factures CIE doivent avoir un mois et une année de situation")
         if self.devis and not self.id:  # Seulement lors de la création
             self.price_ht = self.devis.price_ht
             self.price_ttc = self.devis.price_ttc
@@ -584,6 +606,53 @@ class Parametres(models.Model):
 
     def __str__(self):
         return f"{self.code}: {self.valeur}"
+
+class Avenant(models.Model):
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='avenants')
+    numero = models.IntegerField()  # Numéro séquentiel de l'avenant pour ce chantier
+    date_creation = models.DateTimeField(auto_now_add=True)
+    montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        unique_together = ('chantier', 'numero')  # Garantit l'unicité du numéro d'avenant par chantier
+        ordering = ['numero']
+
+    def __str__(self):
+        return f"Avenant n°{self.numero} - {self.chantier}"
+
+class FactureTS(models.Model):
+    devis = models.OneToOneField('Devis', on_delete=models.CASCADE, related_name='facture_ts')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='factures_ts')
+    avenant = models.ForeignKey(Avenant, on_delete=models.CASCADE, related_name='factures_ts')
+    numero_ts = models.IntegerField()  # Numéro séquentiel du TS pour ce chantier
+    designation = models.CharField(max_length=255, blank=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
+    montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
+    montant_ttc = models.DecimalField(max_digits=10, decimal_places=2)
+    tva_rate = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        unique_together = ('chantier', 'numero_ts')  # Garantit l'unicité du numéro TS par chantier
+        ordering = ['numero_ts']
+
+    def __str__(self):
+        return f"{self.devis.numero} - TS n°{self.numero_ts:03d}"
+
+    def save(self, *args, **kwargs):
+        # Mettre à jour le montant total de l'avenant
+        super().save(*args, **kwargs)
+        self.avenant.montant_total = self.avenant.factures_ts.aggregate(
+            total=models.Sum('montant_ht')
+        )['total'] or 0
+        self.avenant.save()
+
+    @property
+    def numero_complet(self):
+        """Retourne le numéro complet formaté : DEV-001-25 - TS n°001 - Désignation"""
+        base = f"{self.devis.numero} - TS n°{self.numero_ts:03d}"
+        if self.designation:
+            return f"{base} - {self.designation}"
+        return base
 
 
 

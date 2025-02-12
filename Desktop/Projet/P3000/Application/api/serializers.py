@@ -3,7 +3,8 @@ from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
-    Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande
+    Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
+    Avenant, FactureTS
 )
 from decimal import Decimal
 
@@ -321,7 +322,7 @@ class FactureSerializer(serializers.ModelSerializer):
             'id', 'numero', 'date_creation', 'state_facture',
             'date_echeance', 'date_paiement', 'mode_paiement', 'devis',
             'price_ht', 'price_ttc', 'chantier', 'chantier_name',
-            'devis_numero'
+            'devis_numero', 'type_facture', 'designation'
         ]
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 
@@ -422,3 +423,43 @@ class BonCommandeSerializer(serializers.ModelSerializer):
     class Meta:
         model = BonCommande
         fields = '__all__'
+
+class AvenantSerializer(serializers.ModelSerializer):
+    nombre_ts = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Avenant
+        fields = ['id', 'numero', 'chantier', 'date_creation', 'montant_total', 'nombre_ts']
+        read_only_fields = ['numero', 'montant_total']
+
+    def get_nombre_ts(self, obj):
+        return obj.factures_ts.count()
+
+class FactureTSSerializer(serializers.ModelSerializer):
+    numero_complet = serializers.CharField(read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
+    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
+    
+    class Meta:
+        model = FactureTS
+        fields = [
+            'id', 'devis', 'chantier', 'avenant', 'numero_ts', 
+            'designation', 'date_creation', 'montant_ht', 'montant_ttc',
+            'tva_rate', 'numero_complet', 'devis_numero', 'avenant_numero',
+            'type_facture'
+        ]
+        read_only_fields = ['numero_ts']
+
+class FactureTSCreateSerializer(serializers.Serializer):
+    devis_id = serializers.IntegerField()
+    chantier_id = serializers.IntegerField()
+    designation = serializers.CharField(required=False, allow_blank=True)
+    create_new_avenant = serializers.BooleanField()
+    avenant_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, data):
+        if not data['create_new_avenant'] and not data.get('avenant_id'):
+            raise serializers.ValidationError(
+                "Un avenant existant doit être sélectionné si create_new_avenant est False"
+            )
+        return data
