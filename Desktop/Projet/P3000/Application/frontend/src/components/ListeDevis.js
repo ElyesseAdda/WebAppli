@@ -17,6 +17,7 @@ import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { AiFillFilePdf } from "react-icons/ai";
+import { FaClipboardList } from "react-icons/fa";
 import { TfiMore } from "react-icons/tfi";
 import { useNavigate } from "react-router-dom";
 import {
@@ -34,6 +35,7 @@ import {
   StyledTextField,
 } from "../styles/tableStyles";
 import CreationFacture from "./CreationFacture";
+import CreationSituation from "./CreationSituation";
 import StatusChangeModal from "./StatusChangeModal";
 import TransformationCIEModal from "./TransformationCIEModal";
 import TransformationTSModal from "./TransformationTSModal";
@@ -69,6 +71,9 @@ const ListeDevis = () => {
   const [selectedChantier, setSelectedChantier] = useState(null);
   const [cieModalOpen, setCieModalOpen] = useState(false);
   const [selectedDevisForCIE, setSelectedDevisForCIE] = useState(null);
+  const [situationModalOpen, setSituationModalOpen] = useState(false);
+  const [selectedDevisForSituation, setSelectedDevisForSituation] =
+    useState(null);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
   const navigate = useNavigate();
@@ -768,6 +773,37 @@ const ListeDevis = () => {
         <MenuItem onClick={handleDeleteDevis} sx={{ color: "error.main" }}>
           Supprimer
         </MenuItem>
+        <MenuItem
+          onClick={async () => {
+            handleClose();
+            try {
+              // Récupérer le devis complet avec tous ses champs
+              const response = await axios.get(
+                `/api/devisa/${selectedDevis.id}/`
+              );
+              const devisComplet = response.data;
+
+              if (devisComplet.devis_chantier === true) {
+                const chantierResponse = await axios.get(
+                  `/api/chantier/${devisComplet.chantier}/`
+                );
+                setSelectedChantier(chantierResponse.data);
+                setSelectedDevisForSituation(devisComplet);
+                setSituationModalOpen(true);
+              } else {
+                alert(
+                  "Seuls les devis de chantier peuvent avoir des situations"
+                );
+              }
+            } catch (error) {
+              console.error("Erreur lors du chargement des données:", error);
+              alert("Erreur lors du chargement des données");
+            }
+          }}
+        >
+          <FaClipboardList style={{ marginRight: "8px" }} />
+          Créer une situation
+        </MenuItem>
       </Menu>
 
       <StatusChangeModal
@@ -925,6 +961,16 @@ const ListeDevis = () => {
           </Box>
         </Box>
       </Modal>
+
+      <CreationSituation
+        open={situationModalOpen}
+        onClose={() => {
+          setSituationModalOpen(false);
+          setSelectedDevisForSituation(null);
+        }}
+        devis={selectedDevisForSituation}
+        chantier={selectedChantier}
+      />
     </div>
   );
 };

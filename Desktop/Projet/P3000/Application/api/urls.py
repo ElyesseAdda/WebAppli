@@ -26,8 +26,11 @@ from .views import (
     get_chantier_avenants,
     get_next_ts_number,
     create_facture_ts,
-    get_situation_mensuelle,
+    
     create_facture_cie,
+    SituationViewSet,
+    LigneSituationViewSet,
+    get_devis_structure,
 )
 
 router = DefaultRouter()
@@ -44,8 +47,8 @@ router.register(r'presence', PresenceViewSet, basename='presence')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
 router.register(r'bons-commande', BonCommandeViewSet)
-
-
+router.register(r'situations', SituationViewSet)
+router.register(r'lignes-situation', LigneSituationViewSet)
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
@@ -106,6 +109,7 @@ urlpatterns = [
     path('avenant_chantier/<int:chantier_id>/avenants/', get_chantier_avenants, name='chantier-avenants'),
     path('next_ts_number_chantier/<int:chantier_id>/next-ts-number/', get_next_ts_number, name='next-ts-number'),
     path('create-facture-ts/', create_facture_ts, name='create-facture-ts'),
-    path('situation-mensuelle/<int:chantier_id>/<int:mois>/<int:annee>/', get_situation_mensuelle, name='get_situation_mensuelle'),
+    # path('situation-mensuelle/<int:chantier_id>/<int:mois>/<int:annee>/', get_situation_mensuelle, name='get_situation_mensuelle'),
     path('create-facture-cie/', create_facture_cie, name='create-facture-cie'),
+    path('devis-structure/<int:devis_id>/structure/', get_devis_structure, name='devis-structure'),
 ]

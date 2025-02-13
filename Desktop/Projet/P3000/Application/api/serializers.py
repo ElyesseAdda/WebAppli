@@ -4,7 +4,7 @@ from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
-    Avenant, FactureTS
+    Avenant, FactureTS, Situation, LigneSituation
 )
 from decimal import Decimal
 
@@ -526,3 +526,129 @@ class FactureCIECreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Le chantier spécifié n'existe pas")
 
         return data
+
+class LigneSituationSerializer(serializers.ModelSerializer):
+    ligne_devis_description = serializers.CharField(source='ligne_devis.ligne_detail.description', read_only=True)
+    unite = serializers.CharField(source='ligne_devis.ligne_detail.unite', read_only=True)
+    prix_unitaire = serializers.DecimalField(source='ligne_devis.prix_unitaire', max_digits=10, decimal_places=2, read_only=True)
+    quantite = serializers.DecimalField(source='ligne_devis.quantite', max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = LigneSituation
+        fields = [
+            'id',
+            'ligne_devis',
+            'ligne_devis_description',
+            'unite',
+            'prix_unitaire',
+            'quantite',
+            'pourcentage_precedent',
+            'pourcentage_actuel',
+            'montant_ht_precedent',
+            'montant_ht_actuel',
+            'montant_ht_cumule'
+        ]
+        read_only_fields = ['montant_ht_precedent', 'montant_ht_actuel', 'montant_ht_cumule']
+
+    def validate(self, data):
+        if data['pourcentage_actuel'] < data.get('pourcentage_precedent', 0):
+            raise serializers.ValidationError(
+                "Le pourcentage actuel ne peut pas être inférieur au pourcentage précédent"
+            )
+        if data['pourcentage_actuel'] > 100:
+            raise serializers.ValidationError(
+                "Le pourcentage ne peut pas dépasser 100%"
+            )
+        return data
+
+class SituationSerializer(serializers.ModelSerializer):
+    lignes = LigneSituationSerializer(many=True, read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    validated_by_name = serializers.CharField(source='validated_by.name', read_only=True)
+
+    class Meta:
+        model = Situation
+        fields = [
+            'id',
+            'numero',
+            'chantier',
+            'chantier_name',
+            'devis',
+            'mois',
+            'annee',
+            'date_creation',
+            'date_validation',
+            'statut',
+            'montant_ht_cumule',
+            'montant_precedent',
+            'montant_actuel',
+            'created_by',
+            'created_by_name',
+            'validated_by',
+            'validated_by_name',
+            'commentaire',
+            'lignes'
+        ]
+        read_only_fields = ['numero', 'montant_ht_cumule', 'montant_precedent', 'montant_actuel']
+
+class SituationCreateSerializer(serializers.ModelSerializer):
+    lignes = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True
+    )
+
+    class Meta:
+        model = Situation
+        fields = [
+            'chantier',
+            'devis',
+            'mois',
+            'annee',
+            'commentaire',
+            'lignes'
+        ]
+
+    def validate(self, data):
+        # Vérifier si une situation existe déjà pour ce mois/année/chantier
+        if Situation.objects.filter(
+            chantier=data['chantier'],
+            mois=data['mois'],
+            annee=data['annee']
+        ).exists():
+            raise serializers.ValidationError(
+                f"Une situation existe déjà pour {data['mois']}/{data['annee']}"
+            )
+
+        # Vérifier que le devis appartient bien au chantier
+        if data['devis'].chantier != data['chantier']:
+            raise serializers.ValidationError(
+                "Le devis ne correspond pas au chantier sélectionné"
+            )
+
+        return data
+
+    def create(self, validated_data):
+        lignes_data = validated_data.pop('lignes')
+        
+        # Générer le numéro de situation
+        numero = f"SIT-{validated_data['annee']}-{validated_data['mois']:02d}-{validated_data['chantier'].id:03d}"
+        
+        # Créer la situation
+        situation = Situation.objects.create(
+            numero=numero,
+            **validated_data
+        )
+
+        # Créer les lignes de situation
+        for ligne_data in lignes_data:
+            ligne_devis = DevisLigne.objects.get(id=ligne_data['ligne_devis'])
+            LigneSituation.objects.create(
+                situation=situation,
+                ligne_devis=ligne_devis,
+                pourcentage_precedent=ligne_data.get('pourcentage_precedent', 0),
+                pourcentage_actuel=ligne_data['pourcentage_actuel']
+            )
+
+        return situation
+

@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
@@ -415,15 +415,72 @@ class DevisLigne(models.Model):
     
 
 class Situation(models.Model):
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='situations', null=True)
-    client = models.ManyToManyField(Client, related_name='situations', blank=True)  # Modification ici
-    price_ht = models.FloatField()
-    date_creation = models.DateField(auto_now_add=True)
-    date_modification = models.DateField(auto_now=True)
+    STATUT_CHOICES = [
+        ('brouillon', 'Brouillon'),
+        ('validee', 'Validée'),
+        ('facturee', 'Facturée')
+    ]
+
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='situations')
+    devis = models.ForeignKey('Devis', on_delete=models.CASCADE, related_name='situations')
+    numero = models.CharField(max_length=50)  # Format: SIT-YYYY-MM-XXX
+    mois = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    annee = models.IntegerField()
+    date_creation = models.DateTimeField(auto_now_add=True)
+    date_validation = models.DateTimeField(null=True, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    
+    # Montants calculés
+    montant_ht_cumule = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_actuel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Métadonnées
+    created_by = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, related_name='situations_creees')
+    validated_by = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, related_name='situations_validees')
+    commentaire = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ['chantier', 'mois', 'annee']
+        ordering = ['annee', 'mois']
 
     def __str__(self):
-        return f"Situation {self.id}"
+        return f"Situation {self.numero} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"
 
+class LigneSituation(models.Model):
+    situation = models.ForeignKey(Situation, on_delete=models.CASCADE, related_name='lignes')
+    ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, related_name='situations')
+    
+    # Avancements
+    pourcentage_precedent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
+    # Montants calculés
+    montant_ht_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_ht_actuel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_ht_cumule = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        unique_together = ['situation', 'ligne_devis']
+
+    def clean(self):
+        if self.pourcentage_actuel < self.pourcentage_precedent:
+            raise ValidationError("Le pourcentage actuel ne peut pas être inférieur au pourcentage précédent")
+        if self.pourcentage_actuel > 100:
+            raise ValidationError("Le pourcentage ne peut pas dépasser 100%")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        # Calculer les montants
+        prix_unitaire = self.ligne_devis.prix_unitaire
+        quantite = self.ligne_devis.quantite
+        montant_total = prix_unitaire * quantite
+        
+        self.montant_ht_precedent = (montant_total * self.pourcentage_precedent) / 100
+        self.montant_ht_actuel = (montant_total * (self.pourcentage_actuel - self.pourcentage_precedent)) / 100
+        self.montant_ht_cumule = (montant_total * self.pourcentage_actuel) / 100
+        
+        super().save(*args, **kwargs)
 
 class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)

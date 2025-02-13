@@ -15,14 +15,14 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer, LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, LigneSituationSerializer
 from .models import (
     Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, LigneSituation  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction
@@ -2815,53 +2815,180 @@ def create_facture_cie(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-@api_view(['GET'])
-def get_situation_mensuelle(request, chantier_id, mois, annee):
-    try:
-        # Récupérer toutes les factures CIE du mois pour ce chantier
-        factures_cie = Facture.objects.filter(
-            chantier_id=chantier_id,
-            type_facture='cie',
-            mois_situation=mois,
-            annee_situation=annee
-        )
+class SituationViewSet(viewsets.ModelViewSet):
+    queryset = Situation.objects.all()
+    serializer_class = SituationSerializer
 
-        # Calculer les totaux
-        total_ht = sum(facture.price_ht for facture in factures_cie)
-        total_ttc = sum(facture.price_ttc for facture in factures_cie)
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return SituationCreateSerializer
+        return SituationSerializer
 
-        # Récupérer le détail de chaque facture
-        factures_detail = []
-        for facture in factures_cie:
-            factures_detail.append({
-                'id': facture.id,
-                'numero': facture.numero,
-                'designation': facture.designation,
-                'price_ht': facture.price_ht,
-                'price_ttc': facture.price_ttc,
-                'date_creation': facture.date_creation,
-                'devis_numero': facture.devis.numero
-            })
+    def get_queryset(self):
+        queryset = Situation.objects.all()
+        chantier_id = self.request.query_params.get('chantier', None)
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset.order_by('-annee', '-mois')
 
-        return Response({
-            'mois': mois,
-            'annee': annee,
-            'total_ht': total_ht,
-            'total_ttc': total_ttc,
-            'factures': factures_detail
-        })
+    @action(detail=False, methods=['get'])
+    def derniere_situation(self, request):
+        """Récupère la dernière situation d'un chantier"""
+        chantier_id = request.query_params.get('chantier', None)
+        if not chantier_id:
+            return Response(
+                {"error": "L'ID du chantier est requis"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-    except Exception as e:
+        derniere_situation = Situation.objects.filter(
+            chantier_id=chantier_id
+        ).order_by('-annee', '-mois').first()
+
+        if derniere_situation:
+            serializer = self.get_serializer(derniere_situation)
+            return Response(serializer.data)
         return Response(
-            {"error": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
+            {"message": "Aucune situation trouvée pour ce chantier"},
+            status=status.HTTP_404_NOT_FOUND
         )
 
+    @action(detail=True, methods=['post'])
+    def valider(self, request, pk=None):
+        """Valide une situation"""
+        situation = self.get_object()
+        if situation.statut != 'brouillon':
+            return Response(
+                {"error": "Seule une situation en brouillon peut être validée"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        with transaction.atomic():
+            situation.statut = 'validee'
+            situation.date_validation = timezone.now()
+            situation.validated_by = request.user
+            situation.save()
 
+        serializer = self.get_serializer(situation)
+        return Response(serializer.data)
 
+    @action(detail=True, methods=['post'])
+    def facturer(self, request, pk=None):
+        """Marque une situation comme facturée"""
+        situation = self.get_object()
+        if situation.statut != 'validee':
+            return Response(
+                {"error": "Seule une situation validée peut être facturée"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        with transaction.atomic():
+            situation.statut = 'facturee'
+            situation.save()
 
+        serializer = self.get_serializer(situation)
+        return Response(serializer.data)
 
+    @action(detail=True, methods=['get'])
+    def lignes_precedentes(self, request, pk=None):
+        """Récupère les lignes de la situation précédente"""
+        situation = self.get_object()
+        situation_precedente = Situation.objects.filter(
+            chantier=situation.chantier,
+            annee__lte=situation.annee,
+            mois__lt=situation.mois
+        ).order_by('-annee', '-mois').first()
+
+        if situation_precedente:
+            serializer = LigneSituationSerializer(
+                situation_precedente.lignes.all(), 
+                many=True
+            )
+            return Response(serializer.data)
+        return Response([])
+
+    # @action(detail=True, methods=['get'])
+    # def apercu_pdf(self, request, pk=None):
+    #     """Génère un aperçu PDF de la situation"""
+    #     situation = self.get_object()
+    #     try:
+    #         # Logique de génération du PDF à implémenter
+    #         pdf_url = generate_situation_pdf(situation)
+    #         return Response({"pdf_url": pdf_url})
+    #     except Exception as e:
+    #         return Response(
+    #             {"error": f"Erreur lors de la génération du PDF: {str(e)}"},
+    #             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    #         )
+
+class LigneSituationViewSet(viewsets.ModelViewSet):
+    queryset = LigneSituation.objects.all()
+    serializer_class = LigneSituationSerializer
+
+    def get_queryset(self):
+        queryset = LigneSituation.objects.all()
+        situation_id = self.request.query_params.get('situation', None)
+        if situation_id:
+            queryset = queryset.filter(situation_id=situation_id)
+        return queryset
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.situation.statut != 'brouillon':
+            return Response(
+                {"error": "Impossible de modifier une ligne d'une situation validée ou facturée"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return super().update(request, *args, **kwargs)
+
+@api_view(['GET'])
+def get_devis_structure(request, devis_id):
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        lignes_devis = DevisLigne.objects.filter(devis=devis)
+        
+        # Structure pour organiser les données
+        structure = {}
+        
+        for ligne in lignes_devis:
+            ligne_detail = LigneDetail.objects.get(id=ligne.ligne_detail.id)
+            sous_partie = ligne_detail.sous_partie
+            partie = sous_partie.partie
+            
+            if partie.id not in structure:
+                structure[partie.id] = {
+                    'id': partie.id,
+                    'titre': partie.titre,  # Utilisation de titre au lieu de nom
+                    'sous_parties': {}
+                }
+                
+            if sous_partie.id not in structure[partie.id]['sous_parties']:
+                structure[partie.id]['sous_parties'][sous_partie.id] = {
+                    'id': sous_partie.id,
+                    'description': sous_partie.description,  # Utilisation de description au lieu de nom
+                    'lignes': []
+                }
+                
+            structure[partie.id]['sous_parties'][sous_partie.id]['lignes'].append({
+                'id': ligne.id,
+                'description': ligne_detail.description,
+                'quantite': str(ligne.quantite),
+                'prix_unitaire': str(ligne.prix_unitaire),
+                'total_ht': str(ligne.total_ht),
+                'ligne_detail_id': ligne_detail.id
+            })
+            
+        # Convertir en liste pour l'API
+        result = []
+        for partie in structure.values():
+            partie['sous_parties'] = list(partie['sous_parties'].values())
+            result.append(partie)
+            
+        return Response(result)
+        
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 
