@@ -36,7 +36,6 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
   useEffect(() => {
     if (open && chantier?.id) {
       fetchAvenants();
-      fetchNextTSNumber();
     }
   }, [open, chantier]);
 
@@ -53,47 +52,47 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
   };
 
   // Récupérer le prochain numéro de TS pour ce chantier
-  const fetchNextTSNumber = async () => {
-    try {
-      const response = await axios.get(
-        `/api/next_ts_number_chantier/${chantier.id}/next-ts-number/`
-      );
-      setNextTSNumber(response.data.next_number);
-    } catch (error) {
-      console.error("Erreur lors de la récupération du numéro de TS:", error);
-    }
-  };
 
   const handleSubmit = async () => {
     try {
       const tsData = {
         devis_id: devis.id,
         chantier_id: chantier.id,
-        designation: designation,
         create_new_avenant: createNewAvenant,
         ...(createNewAvenant ? {} : { avenant_id: parseInt(selectedAvenant) }),
-        ts_number: nextTSNumber,
+        numero_ts: designation,
       };
 
-      console.log("Données envoyées:", tsData); // Debug
+      console.log("Données envoyées:", tsData);
 
       const response = await axios.post("/api/create-facture-ts/", tsData);
 
-      // Message de succès
       alert(`La facture TS a été créée avec succès.`);
 
-      // Ouvrir la prévisualisation dans un nouvel onglet si nécessaire
       if (response.data.preview_url) {
         window.open(response.data.preview_url, "_blank");
       }
 
       onClose();
     } catch (error) {
-      console.error("Erreur lors de la création de la facture TS:", error);
-      console.log("Détails de l'erreur:", error.response?.data);
-      alert(
-        "Erreur lors de la création de la facture TS. Veuillez vérifier les données."
-      );
+      console.error("Erreur complète:", error);
+      console.error("Response data:", error.response?.data);
+
+      if (error.response?.data?.error) {
+        // Vérifier si c'est une erreur de contrainte unique
+        if (error.response.data.error.includes("UNIQUE constraint failed")) {
+          const numeroFacture = `${devis.numero}${
+            designation ? ` / ${designation}` : ""
+          }`;
+          alert(
+            `Une facture avec le numéro "${numeroFacture}" existe déjà. Veuillez choisir une autre désignation.`
+          );
+        } else {
+          alert(`Erreur : ${error.response.data.error}`);
+        }
+      } else {
+        alert("Une erreur inattendue s'est produite. Veuillez réessayer.");
+      }
     }
   };
 

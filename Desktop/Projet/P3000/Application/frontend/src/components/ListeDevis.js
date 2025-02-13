@@ -18,6 +18,7 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { AiFillFilePdf } from "react-icons/ai";
 import { TfiMore } from "react-icons/tfi";
+import { useNavigate } from "react-router-dom";
 import {
   AlignedCell,
   CenteredTableCell,
@@ -70,6 +71,7 @@ const ListeDevis = () => {
   const [selectedDevisForCIE, setSelectedDevisForCIE] = useState(null);
 
   const statusOptions = ["En attente", "Validé", "Refusé"];
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDevis();
@@ -367,10 +369,9 @@ const ListeDevis = () => {
     setSelectedDevis(null);
   };
 
-  const handleCreateFacture = async (devis, type) => {
+  const handleTransformDevis = async (devis, type) => {
     try {
       if (type === "TS") {
-        // D'abord récupérer les détails complets du devis
         const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
         const devisComplet = devisResponse.data;
         console.log("Devis complet:", devisComplet);
@@ -381,7 +382,12 @@ const ListeDevis = () => {
           return;
         }
 
-        // Si ce n'est pas un devis de chantier, on continue
+        // Vérifier si une facture existe déjà
+        if (devisComplet.factures && devisComplet.factures.length > 0) {
+          alert(`Une facture existe déjà pour le devis ${devisComplet.numero}`);
+          return;
+        }
+
         const response = await axios.get(
           `/api/chantier/${devisComplet.chantier}/`
         );
@@ -389,9 +395,15 @@ const ListeDevis = () => {
         setSelectedDevisForTS(devisComplet);
         setTsModalOpen(true);
       } else if (type === "CIE") {
-        // Pour la transformation en CIE
         const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
         const devisComplet = devisResponse.data;
+
+        // Vérifier si une facture existe déjà
+        if (devisComplet.factures && devisComplet.factures.length > 0) {
+          alert(`Une facture existe déjà pour le devis ${devisComplet.numero}`);
+          return;
+        }
+
         const response = await axios.get(
           `/api/chantier/${devisComplet.chantier}/`
         );
@@ -405,8 +417,19 @@ const ListeDevis = () => {
       }
     } catch (error) {
       console.error("Erreur lors de la récupération des données:", error);
-      console.log("Détails de l'erreur:", error.response?.data);
-      alert("Erreur lors de la préparation de la transformation");
+
+      // Afficher un message d'erreur plus détaillé
+      if (error.response?.data?.error) {
+        alert(`Erreur : ${error.response.data.error}`);
+      } else if (error.response?.status === 400) {
+        alert(
+          "Erreur : La facture ne peut pas être créée car elle existe déjà ou le numéro est déjà utilisé."
+        );
+      } else {
+        alert(
+          "Erreur lors de la préparation de la transformation. Veuillez réessayer."
+        );
+      }
     }
   };
 
@@ -710,7 +733,7 @@ const ListeDevis = () => {
         <MenuItem
           onClick={() => {
             handleClose();
-            navigate(`/modification-devis/${selectedDevis?.id}`);
+            navigate(`/ModificationDevis/${selectedDevis?.id}`);
           }}
         >
           Modifier le devis
@@ -718,7 +741,7 @@ const ListeDevis = () => {
         <MenuItem
           onClick={() => {
             handleClose();
-            handleCreateFacture(selectedDevis, "facture");
+            handleTransformDevis(selectedDevis, "facture");
           }}
         >
           Éditer en facture
@@ -727,19 +750,19 @@ const ListeDevis = () => {
           <MenuItem
             onClick={() => {
               handleClose();
-              handleCreateFacture(selectedDevis, "TS");
+              handleTransformDevis(selectedDevis, "TS");
             }}
           >
-            Transformer en TS
+            Éditer en TS
           </MenuItem>
         )}
         <MenuItem
           onClick={() => {
             handleClose();
-            handleCreateFacture(selectedDevis, "CIE");
+            handleTransformDevis(selectedDevis, "CIE");
           }}
         >
-          Transformer en CIE
+          Éditer en CIE
         </MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
         <MenuItem onClick={handleDeleteDevis} sx={{ color: "error.main" }}>

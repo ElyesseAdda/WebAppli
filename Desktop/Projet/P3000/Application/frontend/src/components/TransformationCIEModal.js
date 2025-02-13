@@ -22,7 +22,7 @@ const TransformationCIEModal = ({ open, onClose, devis, chantier }) => {
       const cieData = {
         devis_id: devis.id,
         chantier_id: chantier.id,
-        designation: designation,
+        numero_ts: designation,
         mois_situation: parseInt(mois),
         annee_situation: parseInt(annee),
       };
@@ -41,11 +41,24 @@ const TransformationCIEModal = ({ open, onClose, devis, chantier }) => {
 
       onClose();
     } catch (error) {
-      console.error("Erreur lors de la création de la facture CIE:", error);
-      console.log("Détails de l'erreur:", error.response?.data);
-      alert(
-        "Erreur lors de la création de la facture CIE. Veuillez vérifier les données."
-      );
+      console.error("Erreur complète:", error);
+      console.error("Response data:", error.response?.data);
+
+      if (error.response?.data?.error) {
+        // Vérifier si c'est une erreur de contrainte unique
+        if (error.response.data.error.includes("UNIQUE constraint failed")) {
+          const numeroFacture = `${devis.numero}${
+            designation ? ` / ${designation}` : ""
+          }`;
+          alert(
+            `Une facture avec le numéro "${numeroFacture}" existe déjà. Veuillez choisir une autre désignation.`
+          );
+        } else {
+          alert(`Erreur : ${error.response.data.error}`);
+        }
+      } else {
+        alert("Une erreur inattendue s'est produite. Veuillez réessayer.");
+      }
     }
   };
 

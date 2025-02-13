@@ -453,7 +453,7 @@ class FactureTSSerializer(serializers.ModelSerializer):
 class FactureTSCreateSerializer(serializers.Serializer):
     devis_id = serializers.IntegerField()
     chantier_id = serializers.IntegerField()
-    designation = serializers.CharField(required=False, allow_blank=True)
+    numero_ts = serializers.CharField(required=False, allow_blank=True)
     create_new_avenant = serializers.BooleanField()
     avenant_id = serializers.IntegerField(required=False, allow_null=True)
 
@@ -462,4 +462,67 @@ class FactureTSCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "Un avenant existant doit être sélectionné si create_new_avenant est False"
             )
+
+        try:
+            devis = Devis.objects.get(id=data['devis_id'])
+            
+            # Vérifier si une facture existe déjà pour ce devis
+            if Facture.objects.filter(devis=devis).exists():
+                raise serializers.ValidationError(
+                    f"Une facture existe déjà pour le devis {devis.numero}"
+                )
+
+            # Vérifier si le numéro de facture existe déjà
+            potential_numero = f"{devis.numero} / {data.get('numero_ts', '')}"
+            if Facture.objects.filter(numero=potential_numero).exists():
+                raise serializers.ValidationError(
+                    f"Une facture avec le numéro {potential_numero} existe déjà"
+                )
+
+        except Devis.DoesNotExist:
+            raise serializers.ValidationError("Le devis spécifié n'existe pas")
+
+        try:
+            Chantier.objects.get(id=data['chantier_id'])
+        except Chantier.DoesNotExist:
+            raise serializers.ValidationError("Le chantier spécifié n'existe pas")
+
+        return data
+
+class FactureCIECreateSerializer(serializers.Serializer):
+    devis_id = serializers.IntegerField()
+    chantier_id = serializers.IntegerField()
+    numero_ts = serializers.CharField(required=False, allow_blank=True)
+    mois_situation = serializers.IntegerField(min_value=1, max_value=12)
+    annee_situation = serializers.IntegerField(min_value=2000, max_value=2100)
+
+    def validate(self, data):
+        try:
+            devis = Devis.objects.get(id=data['devis_id'])
+            
+            # Vérifier si une facture existe déjà pour ce devis
+            if Facture.objects.filter(devis=devis).exists():
+                raise serializers.ValidationError(
+                    f"Une facture existe déjà pour le devis {devis.numero}"
+                )
+
+            # Vérifier si le numéro de facture existe déjà
+            potential_numero = f"{devis.numero} / {data.get('numero_ts', '')}"
+            if Facture.objects.filter(numero=potential_numero).exists():
+                raise serializers.ValidationError(
+                    f"Une facture avec le numéro {potential_numero} existe déjà"
+                )
+
+            if devis.devis_chantier:
+                raise serializers.ValidationError(
+                    "Les devis de chantier ne peuvent pas être transformés en facture CIE"
+                )
+        except Devis.DoesNotExist:
+            raise serializers.ValidationError("Le devis spécifié n'existe pas")
+
+        try:
+            Chantier.objects.get(id=data['chantier_id'])
+        except Chantier.DoesNotExist:
+            raise serializers.ValidationError("Le chantier spécifié n'existe pas")
+
         return data

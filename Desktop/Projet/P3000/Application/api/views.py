@@ -2675,37 +2675,24 @@ def create_facture_ts(request):
     try:
         devis = Devis.objects.get(id=request.data['devis_id'])
         chantier_id = request.data['chantier_id']
-        designation = request.data.get('designation', '')
+        designation = request.data.get('numero_ts', '')  # Changé de 'designation' à 'numero_ts'
         
-        # Générer le numéro de TS
-        last_ts = Facture.objects.filter(
-            chantier_id=chantier_id,
-            type_facture='ts'
-        ).order_by('-numero').first()
-
-        if last_ts:
-            # Extraire le dernier numéro de TS et incrémenter
-            last_number = int(last_ts.numero.split('n°')[-1].split('/')[0])
-            ts_number = f"{devis.numero} - TS n°{last_number + 1:03d}"
-        else:
-            # Premier TS pour ce chantier
-            ts_number = f"{devis.numero} - TS n°001"
-
-        # Ajouter la désignation au numéro si elle existe
-        if designation:
-            ts_number = f"{ts_number} / {designation}"
-
         # Créer la facture TS
         facture_ts = Facture.objects.create(
-            numero=ts_number,
+            numero=devis.numero,  # Le numéro de base est celui du devis
             devis=devis,
             chantier_id=chantier_id,
             type_facture='ts',
             price_ht=devis.price_ht,
             price_ttc=devis.price_ttc,
-            designation=designation,
+            designation=designation,  # La désignation sera ajoutée au numéro
             avenant_id=request.data.get('avenant_id')
         )
+
+        # Mettre à jour le numéro avec la désignation
+        if designation:
+            facture_ts.numero = f"{devis.numero} / {designation}"
+            facture_ts.save()
 
         # Si on doit créer un nouvel avenant
         if request.data.get('create_new_avenant'):
@@ -2714,8 +2701,7 @@ def create_facture_ts(request):
             
             avenant = Avenant.objects.create(
                 chantier_id=chantier_id,
-                numero=new_avenant_number,
-                designation=designation
+                numero=new_avenant_number
             )
             
             facture_ts.avenant = avenant
@@ -2723,9 +2709,9 @@ def create_facture_ts(request):
 
         return Response({
             "success": True,
-            "message": f"Facture TS {ts_number} créée avec succès",
+            "message": f"Facture TS créée avec succès",
             "facture_id": facture_ts.id,
-            "numero_ts": ts_number
+            "numero_ts": facture_ts.numero
         })
 
     except Devis.DoesNotExist:
@@ -2774,7 +2760,7 @@ def create_facture_cie(request):
         chantier_id = request.data['chantier_id']
         mois = request.data.get('mois_situation')
         annee = request.data.get('annee_situation')
-        designation = request.data.get('designation', '')
+        designation = request.data.get('numero_ts', '')  # Changé pour correspondre au format TS
 
         # Vérification des données requises
         if not mois or not annee:
@@ -2788,17 +2774,15 @@ def create_facture_cie(request):
                 {"error": "Le mois doit être compris entre 1 et 12"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Obtenir le prochain numéro de TS
-        next_ts_number = get_next_ts_number(chantier_id)
         
-        # Générer le numéro de facture CIE avec le numéro TS
-        cie_number = f"{devis.numero} - TS N°{next_ts_number}"
+        # Construire le numéro de facture CIE
+        cie_number = devis.numero  # Utiliser le numéro existant
         
-        # Ajouter la désignation et le mois/année
+        # Ajouter la désignation si elle existe
         if designation:
             cie_number = f"{cie_number} / {designation}"
-        cie_number = f"{cie_number} ({mois:02d}/{annee})"
+            
+       
 
         # Créer la facture CIE
         facture_cie = Facture.objects.create(
@@ -2815,7 +2799,7 @@ def create_facture_cie(request):
 
         return Response({
             "success": True,
-            "message": f"Facture CIE {cie_number} créée avec succès",
+            "message": f"Facture CIE créée avec succès",
             "facture_id": facture_cie.id,
             "numero_cie": cie_number
         })
