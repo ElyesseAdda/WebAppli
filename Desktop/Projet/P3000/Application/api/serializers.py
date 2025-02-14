@@ -4,7 +4,7 @@ from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
-    Avenant, FactureTS, Situation, LigneSituation
+    Avenant, FactureTS, Situation, SituationLigne
 )
 from decimal import Decimal
 
@@ -424,31 +424,42 @@ class BonCommandeSerializer(serializers.ModelSerializer):
         model = BonCommande
         fields = '__all__'
 
-class AvenantSerializer(serializers.ModelSerializer):
-    nombre_ts = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Avenant
-        fields = ['id', 'numero', 'chantier', 'date_creation', 'montant_total', 'nombre_ts']
-        read_only_fields = ['numero', 'montant_total']
-
-    def get_nombre_ts(self, obj):
-        return obj.factures_ts.count()
-
 class FactureTSSerializer(serializers.ModelSerializer):
-    numero_complet = serializers.CharField(read_only=True)
-    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
-    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
+    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
     
     class Meta:
         model = FactureTS
         fields = [
-            'id', 'devis', 'chantier', 'avenant', 'numero_ts', 
-            'designation', 'date_creation', 'montant_ht', 'montant_ttc',
-            'tva_rate', 'numero_complet', 'devis_numero', 'avenant_numero',
-            'type_facture'
+            'id',
+            'numero_ts',
+            'designation',
+            'date_creation',
+            'montant_ht',
+            'montant_ttc',
+            'tva_rate',
+            'devis',
+            'chantier',
+            'avenant',
+            
+            'devis_numero'
         ]
-        read_only_fields = ['numero_ts']
+
+class AvenantSerializer(serializers.ModelSerializer):
+    factures_ts = FactureTSSerializer(many=True, read_only=True)
+    nombre_ts = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Avenant
+        fields = [
+            'id', 
+            'numero', 
+            'montant_total',
+            'nombre_ts',
+            'factures_ts'
+        ]
+
+    def get_nombre_ts(self, obj):
+        return obj.factures_ts.count()
 
 class FactureTSCreateSerializer(serializers.Serializer):
     devis_id = serializers.IntegerField()
@@ -527,45 +538,49 @@ class FactureCIECreateSerializer(serializers.Serializer):
 
         return data
 
-class LigneSituationSerializer(serializers.ModelSerializer):
-    ligne_devis_description = serializers.CharField(source='ligne_devis.ligne_detail.description', read_only=True)
-    unite = serializers.CharField(source='ligne_devis.ligne_detail.unite', read_only=True)
-    prix_unitaire = serializers.DecimalField(source='ligne_devis.prix_unitaire', max_digits=10, decimal_places=2, read_only=True)
-    quantite = serializers.DecimalField(source='ligne_devis.quantite', max_digits=10, decimal_places=2, read_only=True)
+class SituationLigneSerializer(serializers.ModelSerializer):
+    # Informations de la ligne de devis si présente
+    ligne_devis_id = serializers.IntegerField(source='ligne_devis.id', read_only=True)
+    designation = serializers.SerializerMethodField()
+    montant_ht = serializers.SerializerMethodField()
+    
+    # Informations du TS si présent
+    facture_ts_id = serializers.IntegerField(source='facture_ts.id', read_only=True)
+    numero_ts = serializers.IntegerField(source='facture_ts.numero_ts', read_only=True)
+    avenant_numero = serializers.IntegerField(source='facture_ts.avenant.numero', read_only=True)
 
     class Meta:
-        model = LigneSituation
+        model = SituationLigne
         fields = [
             'id',
-            'ligne_devis',
-            'ligne_devis_description',
-            'unite',
-            'prix_unitaire',
-            'quantite',
-            'pourcentage_precedent',
-            'pourcentage_actuel',
-            'montant_ht_precedent',
-            'montant_ht_actuel',
-            'montant_ht_cumule'
+            'ligne_devis_id',
+            'facture_ts_id',
+            'designation',
+            'montant_ht',
+            'pourcentage',
+            'numero_ts',
+            'avenant_numero'
         ]
-        read_only_fields = ['montant_ht_precedent', 'montant_ht_actuel', 'montant_ht_cumule']
 
-    def validate(self, data):
-        if data['pourcentage_actuel'] < data.get('pourcentage_precedent', 0):
-            raise serializers.ValidationError(
-                "Le pourcentage actuel ne peut pas être inférieur au pourcentage précédent"
-            )
-        if data['pourcentage_actuel'] > 100:
-            raise serializers.ValidationError(
-                "Le pourcentage ne peut pas dépasser 100%"
-            )
-        return data
+    def get_designation(self, obj):
+        if obj.ligne_devis:
+            return obj.ligne_devis.designation
+        elif obj.facture_ts:
+            return obj.facture_ts.designation
+        return None
+
+    def get_montant_ht(self, obj):
+        if obj.ligne_devis:
+            return obj.ligne_devis.total_ht
+        elif obj.facture_ts:
+            return obj.facture_ts.montant_ht
+        return 0
 
 class SituationSerializer(serializers.ModelSerializer):
-    lignes = LigneSituationSerializer(many=True, read_only=True)
+    lignes = SituationLigneSerializer(many=True, read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
-    validated_by_name = serializers.CharField(source='validated_by.name', read_only=True)
+    montant_total = serializers.SerializerMethodField()
+    pourcentage_global = serializers.SerializerMethodField()
 
     class Meta:
         model = Situation
@@ -574,39 +589,40 @@ class SituationSerializer(serializers.ModelSerializer):
             'numero',
             'chantier',
             'chantier_name',
-            'devis',
+            'date_creation',
             'mois',
             'annee',
-            'date_creation',
-            'date_validation',
-            'statut',
-            'montant_ht_cumule',
-            'montant_precedent',
-            'montant_actuel',
-            'created_by',
-            'created_by_name',
-            'validated_by',
-            'validated_by_name',
             'commentaire',
+            'montant_total',
+            'pourcentage_global',
             'lignes'
         ]
-        read_only_fields = ['numero', 'montant_ht_cumule', 'montant_precedent', 'montant_actuel']
+        read_only_fields = ['numero', 'montant_total', 'pourcentage_global']
+
+    def get_montant_total(self, obj):
+        total = 0
+        for ligne in obj.lignes.all():
+            montant = ligne.ligne_devis.total_ht if ligne.ligne_devis else ligne.facture_ts.montant_ht
+            total += (montant * ligne.pourcentage / 100)
+        return total
+
+    def get_pourcentage_global(self, obj):
+        total_montant = 0
+        total_realise = 0
+        for ligne in obj.lignes.all():
+            montant = ligne.ligne_devis.total_ht if ligne.ligne_devis else ligne.facture_ts.montant_ht
+            total_montant += montant
+            total_realise += (montant * ligne.pourcentage / 100)
+        return (total_realise / total_montant * 100) if total_montant > 0 else 0
 
 class SituationCreateSerializer(serializers.ModelSerializer):
-    lignes = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True
-    )
-
     class Meta:
         model = Situation
         fields = [
             'chantier',
-            'devis',
             'mois',
             'annee',
-            'commentaire',
-            'lignes'
+            'commentaire'
         ]
 
     def validate(self, data):
@@ -619,36 +635,64 @@ class SituationCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f"Une situation existe déjà pour {data['mois']}/{data['annee']}"
             )
-
-        # Vérifier que le devis appartient bien au chantier
-        if data['devis'].chantier != data['chantier']:
-            raise serializers.ValidationError(
-                "Le devis ne correspond pas au chantier sélectionné"
-            )
-
         return data
 
-    def create(self, validated_data):
-        lignes_data = validated_data.pop('lignes')
-        
-        # Générer le numéro de situation
-        numero = f"SIT-{validated_data['annee']}-{validated_data['mois']:02d}-{validated_data['chantier'].id:03d}"
-        
-        # Créer la situation
-        situation = Situation.objects.create(
-            numero=numero,
-            **validated_data
-        )
+class SituationLigneUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SituationLigne
+        fields = ['pourcentage']
 
-        # Créer les lignes de situation
-        for ligne_data in lignes_data:
-            ligne_devis = DevisLigne.objects.get(id=ligne_data['ligne_devis'])
-            LigneSituation.objects.create(
-                situation=situation,
-                ligne_devis=ligne_devis,
-                pourcentage_precedent=ligne_data.get('pourcentage_precedent', 0),
-                pourcentage_actuel=ligne_data['pourcentage_actuel']
+    def validate_pourcentage(self, value):
+        if not isinstance(value, (int, float)):
+            raise serializers.ValidationError("Le pourcentage doit être un nombre")
+        
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("Le pourcentage doit être compris entre 0 et 100")
+            
+        return value
+
+    def update(self, instance, validated_data):
+        # Vérifier si le pourcentage est inférieur au pourcentage de la situation précédente
+        derniere_situation = (
+            Situation.objects
+            .filter(
+                chantier=instance.situation.chantier,
+                numero__lt=instance.situation.numero
             )
+            .order_by('-numero')
+            .first()
+        )
+        
+        if derniere_situation:
+            derniere_ligne = SituationLigne.objects.filter(
+                situation=derniere_situation,
+                ligne_devis=instance.ligne_devis,
+                facture_ts=instance.facture_ts
+            ).first()
+            
+            if derniere_ligne and validated_data['pourcentage'] < derniere_ligne.pourcentage:
+                raise serializers.ValidationError(
+                    "Le nouveau pourcentage ne peut pas être inférieur à celui de la situation précédente"
+                )
 
-        return situation
+        instance.pourcentage = validated_data['pourcentage']
+        instance.save()
+        return instance
 
+class FactureTSListSerializer(serializers.ModelSerializer):
+    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
+    
+    class Meta:
+        model = FactureTS
+        fields = [
+            'id',
+            'devis_numero',
+            'numero_ts',
+            'designation',
+            'montant_ht',
+            'montant_ttc',
+            'date_creation',
+            'avenant_numero',
+            
+        ]

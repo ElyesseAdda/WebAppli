@@ -415,72 +415,35 @@ class DevisLigne(models.Model):
     
 
 class Situation(models.Model):
-    STATUT_CHOICES = [
-        ('brouillon', 'Brouillon'),
-        ('validee', 'Validée'),
-        ('facturee', 'Facturée')
-    ]
-
-    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='situations')
-    devis = models.ForeignKey('Devis', on_delete=models.CASCADE, related_name='situations')
-    numero = models.CharField(max_length=50)  # Format: SIT-YYYY-MM-XXX
-    mois = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
-    annee = models.IntegerField()
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='situations', default='')
+    numero = models.IntegerField(default=1)
     date_creation = models.DateTimeField(auto_now_add=True)
-    date_validation = models.DateTimeField(null=True, blank=True)
-    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    mois = models.IntegerField(default=1)  # Ajout d'une valeur par défaut
+    annee = models.IntegerField(default=2025)  # Ajout d'une valeur par défaut
+    commentaire = models.TextField(blank=True, null=True)
     
-    # Montants calculés
-    montant_ht_cumule = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_actuel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    
-    # Métadonnées
-    created_by = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, related_name='situations_creees')
-    validated_by = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, related_name='situations_validees')
-    commentaire = models.TextField(blank=True)
-
     class Meta:
-        unique_together = ['chantier', 'mois', 'annee']
-        ordering = ['annee', 'mois']
+        unique_together = ('chantier', 'numero')
+        ordering = ['numero']
 
-    def __str__(self):
-        return f"Situation {self.numero} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"
-
-class LigneSituation(models.Model):
+class SituationLigne(models.Model):
     situation = models.ForeignKey(Situation, on_delete=models.CASCADE, related_name='lignes')
-    ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, related_name='situations')
+    # Pour les lignes de devis standard
+    ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, null=True, blank=True)
+    # Pour les TS
+    facture_ts = models.ForeignKey('FactureTS', on_delete=models.CASCADE, null=True, blank=True)
+    pourcentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
-    # Avancements
-    pourcentage_precedent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    
-    # Montants calculés
-    montant_ht_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_ht_actuel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_ht_cumule = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
     class Meta:
-        unique_together = ['situation', 'ligne_devis']
-
-    def clean(self):
-        if self.pourcentage_actuel < self.pourcentage_precedent:
-            raise ValidationError("Le pourcentage actuel ne peut pas être inférieur au pourcentage précédent")
-        if self.pourcentage_actuel > 100:
-            raise ValidationError("Le pourcentage ne peut pas dépasser 100%")
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        # Calculer les montants
-        prix_unitaire = self.ligne_devis.prix_unitaire
-        quantite = self.ligne_devis.quantite
-        montant_total = prix_unitaire * quantite
-        
-        self.montant_ht_precedent = (montant_total * self.pourcentage_precedent) / 100
-        self.montant_ht_actuel = (montant_total * (self.pourcentage_actuel - self.pourcentage_precedent)) / 100
-        self.montant_ht_cumule = (montant_total * self.pourcentage_actuel) / 100
-        
-        super().save(*args, **kwargs)
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(ligne_devis__isnull=False, facture_ts__isnull=True) |
+                    models.Q(ligne_devis__isnull=True, facture_ts__isnull=False)
+                ),
+                name='one_line_type_only'
+            )
+        ]
 
 class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)
@@ -706,7 +669,7 @@ class FactureTS(models.Model):
     @property
     def numero_complet(self):
         """Retourne le numéro complet formaté : DEV-001-25 - TS n°001 - Désignation"""
-        base = f"{self.devis.numero} - TS n°{self.numero_ts:03d}"
+        base = f"{self.devis.numero}"
         if self.designation:
             return f"{base} - {self.designation}"
         return base

@@ -20,7 +20,6 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
   const [selectedAvenant, setSelectedAvenant] = useState("");
   const [createNewAvenant, setCreateNewAvenant] = useState(false);
   const [avenants, setAvenants] = useState([]);
-  const [nextTSNumber, setNextTSNumber] = useState("");
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -28,11 +27,10 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
       setDesignation("");
       setSelectedAvenant("");
       setCreateNewAvenant(false);
-      setNextTSNumber("");
     }
   }, [open]);
 
-  // Charger les avenants existants et le prochain numéro de TS
+  // Charger les avenants existants
   useEffect(() => {
     if (open && chantier?.id) {
       fetchAvenants();
@@ -45,13 +43,16 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
       const response = await axios.get(
         `/api/avenant_chantier/${chantier.id}/avenants/`
       );
-      setAvenants(response.data);
+      if (response.data.success && Array.isArray(response.data.avenants)) {
+        setAvenants(response.data.avenants);
+      } else {
+        setAvenants([]);
+      }
     } catch (error) {
       console.error("Erreur lors de la récupération des avenants:", error);
+      setAvenants([]);
     }
   };
-
-  // Récupérer le prochain numéro de TS pour ce chantier
 
   const handleSubmit = async () => {
     try {
@@ -60,7 +61,7 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
         chantier_id: chantier.id,
         create_new_avenant: createNewAvenant,
         ...(createNewAvenant ? {} : { avenant_id: parseInt(selectedAvenant) }),
-        numero_ts: designation,
+        designation: designation,
       };
 
       console.log("Données envoyées:", tsData);
@@ -68,24 +69,16 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
       const response = await axios.post("/api/create-facture-ts/", tsData);
 
       alert(`La facture TS a été créée avec succès.`);
-
-      if (response.data.preview_url) {
-        window.open(response.data.preview_url, "_blank");
-      }
-
+      fetchAvenants(); // Rafraîchir la liste des avenants
       onClose();
     } catch (error) {
       console.error("Erreur complète:", error);
       console.error("Response data:", error.response?.data);
 
       if (error.response?.data?.error) {
-        // Vérifier si c'est une erreur de contrainte unique
         if (error.response.data.error.includes("UNIQUE constraint failed")) {
-          const numeroFacture = `${devis.numero}${
-            designation ? ` / ${designation}` : ""
-          }`;
           alert(
-            `Une facture avec le numéro "${numeroFacture}" existe déjà. Veuillez choisir une autre désignation.`
+            `Une facture TS avec cette désignation existe déjà. Veuillez choisir une autre désignation.`
           );
         } else {
           alert(`Erreur : ${error.response.data.error}`);
@@ -125,11 +118,6 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
           Transformer en Facture TS
         </Typography>
 
-        <Typography variant="subtitle1" gutterBottom>
-          Numéro de TS: {devis.numero}{" "}
-          {nextTSNumber ? `- TS n°${nextTSNumber}` : ""}
-        </Typography>
-
         <FormControlLabel
           control={
             <Checkbox
@@ -150,7 +138,8 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
             >
               {avenants.map((avenant) => (
                 <MenuItem key={avenant.id} value={avenant.id}>
-                  Avenant n°{avenant.numero}
+                  Avenant n°{avenant.numero}({avenant.nombre_ts} TS - Total:{" "}
+                  {avenant.montant_total}€)
                 </MenuItem>
               ))}
             </Select>

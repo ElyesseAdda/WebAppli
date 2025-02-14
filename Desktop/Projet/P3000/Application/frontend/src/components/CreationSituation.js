@@ -232,6 +232,211 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
   );
 };
 
+// Composant pour une sous-partie Avenant
+const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
+  const [open, setOpen] = useState(false);
+
+  // Calculer le pourcentage moyen et le montant de l'avenant
+  let moyenneSousPartie = 0;
+  let montantSousPartie = 0;
+
+  if (avenant.factures_ts && avenant.factures_ts.length > 0) {
+    moyenneSousPartie =
+      avenant.factures_ts.reduce(
+        (acc, ts) => acc + (ts.pourcentage_actuel || 0),
+        0
+      ) / avenant.factures_ts.length;
+
+    montantSousPartie = avenant.factures_ts.reduce(
+      (acc, ts) => acc + (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100,
+      0
+    );
+  }
+
+  return (
+    <Box>
+      <Table>
+        <TableBody>
+          <TableRow
+            sx={{
+              backgroundColor: "rgb(157, 197, 226)",
+              "& td": { padding: "8px" },
+            }}
+          >
+            <TableCell>
+              <IconButton size="small" onClick={() => setOpen(!open)}>
+                {open ? <FaChevronUp /> : <FaChevronDown />}
+              </IconButton>
+            </TableCell>
+            <TableCell>Avenant n°{avenant.numero}</TableCell>
+            <TableCell align="center"></TableCell>
+            <TableCell align="center"></TableCell>
+            <TableCell align="right">{avenant.montant_total} €</TableCell>
+            <TableCell align="right">{moyenneSousPartie.toFixed(2)}%</TableCell>
+            <TableCell align="right">
+              {montantSousPartie
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+              €
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell style={{ padding: 0 }} colSpan={7}>
+              <Collapse in={open} timeout="auto" unmountOnExit>
+                <Table>
+                  <TableBody>
+                    {avenant.factures_ts.map((ts, index) => (
+                      <TableRow
+                        key={ts.id}
+                        sx={{
+                          backgroundColor:
+                            index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                          "& td": { padding: "8px" },
+                        }}
+                      >
+                        <TableCell></TableCell>
+                        <TableCell>
+                          {ts.devis_numero ||
+                            `TS n°${String(ts.numero_ts).padStart(3, "0")}`}
+                          {ts.designation}
+                        </TableCell>
+                        <TableCell align="center"></TableCell>
+                        <TableCell align="center"></TableCell>
+                        <TableCell align="right">{ts.montant_ht} €</TableCell>
+                        <TableCell align="right">
+                          <TextField
+                            type="number"
+                            value={ts.pourcentage_actuel || 0}
+                            onChange={(e) => {
+                              const newValue = parseFloat(e.target.value);
+                              handlePourcentageChange(
+                                ts.id,
+                                newValue,
+                                "avenant"
+                              );
+                            }}
+                            InputProps={{
+                              inputProps: {
+                                min: 0,
+                                max: 100,
+                                step: "any",
+                              },
+                            }}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            color:
+                              (ts.pourcentage_actuel || 0) > 0
+                                ? "rgb(16, 190, 0)"
+                                : "rgba(27, 120, 188, 1)",
+                            fontWeight: "bold",
+                            transition: "color 0.3s ease",
+                          }}
+                        >
+                          {(
+                            (ts.montant_ht * (ts.pourcentage_actuel || 0)) /
+                            100
+                          )
+                            .toFixed(2)
+                            .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                          €
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Collapse>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </Box>
+  );
+};
+
+// Composant pour la partie Avenants
+const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
+  const [open, setOpen] = useState(false);
+
+  // Calculer le pourcentage moyen et le montant total des avenants
+  let moyennePartie = 0;
+  let montantPartie = 0;
+
+  if (avenants && avenants.length > 0) {
+    let totalPourcentage = 0;
+    avenants.forEach((avenant) => {
+      if (avenant.factures_ts && avenant.factures_ts.length > 0) {
+        const pourcentageAvenant =
+          avenant.factures_ts.reduce(
+            (acc, ts) => acc + (ts.pourcentage_actuel || 0),
+            0
+          ) / avenant.factures_ts.length;
+        totalPourcentage += pourcentageAvenant;
+
+        montantPartie += avenant.factures_ts.reduce(
+          (acc, ts) =>
+            acc + (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100,
+          0
+        );
+      }
+    });
+    moyennePartie = totalPourcentage / avenants.length;
+  }
+
+  return (
+    <>
+      <TableRow
+        sx={{
+          backgroundColor: "rgba(27, 120, 188, 1)",
+          "& td": { color: "white", padding: "8px" },
+        }}
+      >
+        <TableCell>
+          <IconButton
+            size="small"
+            onClick={() => setOpen(!open)}
+            sx={{ color: "white" }}
+          >
+            {open ? <FaChevronUp /> : <FaChevronDown />}
+          </IconButton>
+        </TableCell>
+        <TableCell>Avenants</TableCell>
+        <TableCell align="center"></TableCell>
+        <TableCell align="center"></TableCell>
+        <TableCell align="right">
+          {avenants
+            ?.reduce((acc, av) => acc + parseFloat(av.montant_total), 0)
+            .toFixed(2)
+            .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+          €
+        </TableCell>
+        <TableCell align="right">{moyennePartie.toFixed(2)}%</TableCell>
+        <TableCell align="right">
+          {montantPartie.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell style={{ padding: 0 }} colSpan={7}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box>
+              {avenants?.map((avenant) => (
+                <AvenantSousPartieTable
+                  key={avenant.id}
+                  avenant={avenant}
+                  handlePourcentageChange={handlePourcentageChange}
+                />
+              ))}
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+};
+
 const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const [structure, setStructure] = useState([]);
   const [mois, setMois] = useState(new Date().getMonth() + 1);
@@ -240,6 +445,8 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const [selectedChantier, setSelectedChantier] = useState(null);
   const [totalHT, setTotalHT] = useState(0);
   const [totalAvancement, setTotalAvancement] = useState(0);
+  const [avenants, setAvenants] = useState([]);
+  const [montantTotalAvenants, setMontantTotalAvenants] = useState(0);
 
   useEffect(() => {
     if (devis?.id) {
@@ -270,6 +477,22 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   }, [devis]);
 
+  // Charger les avenants
+  useEffect(() => {
+    if (chantier?.id) {
+      axios
+        .get(`/api/avenant_chantier/${chantier.id}/avenants/`)
+        .then((response) => {
+          if (response.data.success) {
+            setAvenants(response.data.avenants);
+          }
+        })
+        .catch((error) => {
+          console.error("Erreur lors du chargement des avenants:", error);
+        });
+    }
+  }, [chantier]);
+
   // Calculer l'avancement chaque fois que la structure change
   useEffect(() => {
     if (structure.length > 0 && totalHT > 0) {
@@ -288,22 +511,47 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   }, [structure, totalHT]);
 
-  const handlePourcentageChange = (ligneId, value) => {
+  useEffect(() => {
+    if (avenants && Array.isArray(avenants)) {
+      const totalAvenants = avenants.reduce(
+        (acc, av) => acc + parseFloat(av.montant_total || 0),
+        0
+      );
+      setMontantTotalAvenants(totalAvenants);
+    }
+  }, [avenants]);
+
+  const handlePourcentageChange = (ligneId, value, type = "standard") => {
     const newValue = Math.min(Math.max(0, value), 100);
-    const newStructure = [...structure];
 
-    // Parcourir toutes les parties et leurs sous-parties pour trouver la ligne
-    newStructure.forEach((partie) => {
-      partie.sous_parties.forEach((sousPartie) => {
-        const ligne = sousPartie.lignes.find((l) => l.id === ligneId);
-        if (ligne) {
-          ligne.pourcentage_actuel = newValue;
-          ligne.montant = (ligne.total_ht * newValue) / 100;
-        }
-      });
-    });
-
-    setStructure(newStructure);
+    if (type === "avenant") {
+      // Gestion des TS d'avenant
+      const newAvenants = avenants.map((avenant) => ({
+        ...avenant,
+        factures_ts: avenant.factures_ts.map((ts) =>
+          ts.id === ligneId ? { ...ts, pourcentage_actuel: newValue } : ts
+        ),
+      }));
+      setAvenants(newAvenants);
+    } else {
+      // Gestion des lignes standard
+      const newStructure = structure.map((partie) => ({
+        ...partie,
+        sous_parties: partie.sous_parties.map((sousPartie) => ({
+          ...sousPartie,
+          lignes: sousPartie.lignes.map((ligne) =>
+            ligne.id === ligneId
+              ? {
+                  ...ligne,
+                  pourcentage_actuel: newValue,
+                  montant: (ligne.total_ht * newValue) / 100,
+                }
+              : ligne
+          ),
+        })),
+      }));
+      setStructure(newStructure);
+    }
   };
 
   const handleSubmit = async () => {
@@ -314,10 +562,18 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         mois: parseInt(mois),
         annee: parseInt(annee),
         commentaire,
-        lignes: structure.map((partie) => ({
-          ligne_devis: partie.id,
-          pourcentage_actuel: partie.pourcentage_actuel,
-        })),
+        lignes: [
+          ...structure.map((partie) => ({
+            ligne_devis: partie.id,
+            pourcentage_actuel: partie.pourcentage_actuel,
+          })),
+          ...avenants.flatMap((avenant) =>
+            avenant.factures_ts.map((ts) => ({
+              facture_ts: ts.id,
+              pourcentage_actuel: ts.pourcentage_actuel || 0,
+            }))
+          ),
+        ],
       };
 
       await axios.post("/api/situations/", situationData);
@@ -363,7 +619,14 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               {totalHT.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: "bold" }}>
-              Avancement: {totalAvancement.toFixed(2)}%
+              Montant total des travaux HT:{" "}
+              {(totalHT + montantTotalAvenants)
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+              €
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+              %Avancement: {totalAvancement.toFixed(2)}%
             </Typography>
           </Box>
         </Box>
@@ -419,6 +682,10 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                   handlePourcentageChange={handlePourcentageChange}
                 />
               ))}
+              <AvenantsPartieRow
+                avenants={avenants}
+                handlePourcentageChange={handlePourcentageChange}
+              />
             </TableBody>
           </Table>
         </TableContainer>
