@@ -1418,48 +1418,50 @@ def list_devis(request):
 @api_view(['GET'])
 def get_next_devis_number(request):
     try:
-        current_year = datetime.now().year % 100
         chantier_id = request.GET.get('chantier_id')
-        is_devis_chantier = request.GET.get('devis_chantier') == 'true'
+        devis_chantier = request.GET.get('devis_chantier') == 'true'
+        is_ts = request.GET.get('is_ts') == 'true'
         
-        # Obtenir le dernier numéro de devis (séquence globale)
-        last_devis = Devis.objects.filter(
-            numero__regex=f'^DEV-\\d{{3}}-{current_year}'
-        ).order_by('-numero').first()
+        # Obtenir l'année en cours
+        current_year = timezone.now().year
+        year_suffix = str(current_year)[-2:]
         
-        # Générer le prochain numéro de base
+        # Récupérer le dernier devis créé (ordonné par ID décroissant)
+        last_devis = Devis.objects.all().order_by('-id').first()
+        
         if last_devis:
-            match = re.search(r'DEV-(\d{3})-\d{2}', last_devis.numero)
-            next_number = f"{(int(match.group(1)) + 1):03d}" if match else "001"
-        else:
-            next_number = "001"
-            
-        base_number = f"DEV-{next_number}-{current_year}"
-        
-        # Construire le numéro complet selon le type
-        if is_devis_chantier and chantier_id and chantier_id != '-1':
             try:
-                chantier = Chantier.objects.get(id=chantier_id)
-                # Format spécifique pour les devis de chantier
-                full_number = f"{base_number} - {chantier.chantier_name}"
-            except Chantier.DoesNotExist:
-                full_number = base_number
-        elif chantier_id and chantier_id != '-1':
-            next_ts = get_next_ts_number(chantier_id)
-            full_number = f"{base_number} - TS N°{next_ts}"
+                # Extraire le numéro de séquence du dernier devis
+                sequence = int(last_devis.numero.split('-')[1])
+                next_sequence = sequence + 1
+            except (IndexError, ValueError):
+                next_sequence = 1
         else:
-            full_number = base_number
-
+            next_sequence = 1
+            
+        # Formater le nouveau numéro
+        numero = f"DEV-{str(next_sequence).zfill(3)}-{year_suffix}"
+        
+        # Si c'est un TS, calculer le prochain numéro de TS
+        next_ts = None
+        if is_ts and chantier_id:
+            # Trouver le dernier TS pour ce chantier
+            last_ts = Devis.objects.filter(
+                chantier_id=chantier_id,
+                devis_chantier=False
+            ).count()
+            next_ts = str(last_ts + 1).zfill(3)
+        
         return Response({
-            'base_number': base_number,
-            'full_number': full_number,
+            'numero': numero,
+            'next_ts': next_ts
         })
+        
     except Exception as e:
-        logger.error(f"Erreur dans get_next_devis_number: {str(e)}")
-        base_number = f"DEV-001-{current_year}"
+        print(f"Erreur dans get_next_devis_number: {str(e)}")
         return Response({
-            'base_number': base_number,
-            'full_number': base_number,
+            'numero': f"DEV-001-{timezone.now().year % 100}",
+            'next_ts': "001"
         })
 
 @api_view(['GET'])
@@ -2923,7 +2925,7 @@ def create_situation(request):
             ))
 
             # Ajouter les nouvelles lignes de devis
-            for ligne in chantier.devis.lignes.all():
+            for ligne in chantier.devis.filter(devis_chantier=True).first().lignes.all():
                 if (ligne.id, None) not in lignes_existantes:
                     SituationLigne.objects.create(
                         situation=nouvelle_situation,
@@ -3026,5 +3028,22 @@ def get_devis_structure(request, devis_id):
         return Response({'error': 'Devis non trouvé'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
+@api_view(['DELETE'])
+def delete_devis(request, devis_id):
+    try:
+        with transaction.atomic():
+            devis = Devis.objects.get(id=devis_id)
+            # Supprimer directement le devis sans vérifier les situations
+            devis.delete()
+            
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except Devis.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 

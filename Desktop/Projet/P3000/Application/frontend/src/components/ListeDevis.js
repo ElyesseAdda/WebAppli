@@ -357,10 +357,17 @@ const ListeDevis = () => {
         return;
       }
 
-      await axios.delete(`/api/devisa/${selectedDevis.id}/`);
-      // Mettre à jour la liste des devis après la suppression
-      setDevis(devis.filter((d) => d.id !== selectedDevis.id));
-      setFilteredDevis(filteredDevis.filter((d) => d.id !== selectedDevis.id));
+      // Vérifier que l'URL correspond à celle définie dans urls.py
+      await axios.delete(`/api/devis/${selectedDevis.id}/`);
+
+      // Mettre à jour l'état local
+      setDevis((prevDevis) =>
+        prevDevis.filter((d) => d.id !== selectedDevis.id)
+      );
+      setFilteredDevis((prevFiltered) =>
+        prevFiltered.filter((d) => d.id !== selectedDevis.id)
+      );
+
       setDeleteModalOpen(false);
       setSelectedDevis(null);
     } catch (error) {

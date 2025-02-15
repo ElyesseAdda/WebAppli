@@ -472,22 +472,12 @@ const CreationDevis = () => {
   // Gère la soumission finale du devis
   const handleDevisModalSubmit = async () => {
     try {
-      console.log("=== Début de handleDevisModalSubmit ===");
       const totals = calculateEstimatedTotals(); // Calcul des coûts estimés
       const grandTotal = calculateGrandTotal(specialLines);
-      console.log("Totaux calculés:", grandTotal);
 
       const totalHT = grandTotal.totalHT;
       const totalTTC = grandTotal.totalTTC;
       let clientId, societeId, chantierIdToUse;
-
-      // Log des données initiales
-      console.log("Données initiales:", {
-        selectedChantierId,
-        pendingChantierData,
-        societeId,
-        clientId,
-      });
 
       // Vérification des données requises
       if (selectedChantierId === -1) {
@@ -557,7 +547,6 @@ const CreationDevis = () => {
           marge_estimee: totals.marge_estimee,
         };
 
-        console.log("Données chantier à créer:", updatedChantierData);
         const chantierResponse = await axios.post(
           "/api/chantier/",
           updatedChantierData
@@ -642,13 +631,7 @@ const CreationDevis = () => {
         },
       };
 
-      console.log(
-        "Structure des lignes spéciales à envoyer:",
-        devisData.lignes_speciales
-      );
-
       const response = await axios.post("/api/create-devis/", devisData);
-      console.log("Réponse de création du devis:", response.data);
 
       if (response.data) {
         alert("Devis créé avec succès!");
@@ -835,7 +818,6 @@ const CreationDevis = () => {
     let totalHT = 0;
     const sousPartieTotals = {};
 
-    console.log("1. Calcul des lignes détail sélectionnées:");
     selectedLignes.forEach((ligneId) => {
       const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
       if (ligne) {
@@ -910,10 +892,8 @@ const CreationDevis = () => {
 
           if (line.type === "reduction") {
             totalHT -= montant;
-            console.log(`   ${line.description}: -${montant}€`);
           } else {
             totalHT += montant;
-            console.log(`   ${line.description}: +${montant}€`);
           }
         });
         console.groupEnd();
@@ -923,11 +903,6 @@ const CreationDevis = () => {
     // 3. Calcul final avec TVA
     const tva = (totalHT * parseFloat(tvaRate)) / 100;
     const totalTTC = totalHT + tva;
-
-    console.log("\nCalculs finaux:");
-    console.log(`   Total HT: ${totalHT}€`);
-    console.log(`   TVA (${tvaRate}%): ${tva}€`);
-    console.log(`   Total TTC: ${totalTTC}€`);
 
     console.groupEnd();
 

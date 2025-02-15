@@ -40,18 +40,16 @@ const DevisModal = ({
           setChantierName(currentChantierName);
         }
 
-        // Ajouter un timestamp à la requête pour éviter la mise en cache
-        const timestamp = new Date().getTime();
+        // Utiliser la vue get_next_devis_number
         const response = await axios.get("/api/get-next-devis-number/", {
           params: {
             chantier_id: devisData.chantier || "",
             devis_chantier: devisData.devis_chantier || false,
             is_ts: !devisData.devis_chantier && devisData.chantier !== -1,
-            _t: timestamp,
           },
         });
 
-        let newNumero = response.data.base_number;
+        let newNumero = response.data.numero;
 
         // Si c'est un devis de chantier et qu'on a le nom du chantier
         if (devisData.devis_chantier && currentChantierName) {
@@ -63,7 +61,7 @@ const DevisModal = ({
         }
 
         setFullNumero(newNumero);
-        setLastRequestTime(timestamp);
+        setLastRequestTime(new Date().getTime());
 
         // Mettre à jour devisData avec le nouveau numéro
         handleChange({

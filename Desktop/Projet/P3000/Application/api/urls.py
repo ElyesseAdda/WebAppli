@@ -35,6 +35,7 @@ from .views import (
     get_situation_detail,
     update_situation_ligne,
     FactureTSViewSet,
+    delete_devis,
 )
 
 router = DefaultRouter()
@@ -120,4 +121,5 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/situations/', get_situations_chantier, name='chantier-situations'),
     path('situation/<int:situation_id>/', get_situation_detail, name='situation-detail'),
     path('situation-ligne/<int:ligne_id>/update/', update_situation_ligne, name='update-situation-ligne'),
+    path('devis/<int:devis_id>/', delete_devis, name='delete_devis'),
 ]

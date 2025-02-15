@@ -428,9 +428,7 @@ class Situation(models.Model):
 
 class SituationLigne(models.Model):
     situation = models.ForeignKey(Situation, on_delete=models.CASCADE, related_name='lignes')
-    # Pour les lignes de devis standard
     ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, null=True, blank=True)
-    # Pour les TS
     facture_ts = models.ForeignKey('FactureTS', on_delete=models.CASCADE, null=True, blank=True)
     pourcentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
@@ -444,6 +442,15 @@ class SituationLigne(models.Model):
                 name='one_line_type_only'
             )
         ]
+
+    def clean(self):
+        if self.ligne_devis and not self.ligne_devis.devis.devis_chantier:
+            raise ValidationError("Seuls les devis de chantier peuvent être utilisés dans les situations")
+        super().clean()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)
