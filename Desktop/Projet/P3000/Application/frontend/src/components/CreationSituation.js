@@ -20,7 +20,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { FaChevronDown, FaChevronUp } from "react-icons/fa";
+import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
 
 const MOIS = [
   { value: 1, label: "Janvier" },
@@ -439,14 +439,18 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
 
 const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const [structure, setStructure] = useState([]);
-  const [mois, setMois] = useState(new Date().getMonth() + 1);
-  const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [mois, setMois] = useState("");
+  const [annee, setAnnee] = useState("");
   const [commentaire, setCommentaire] = useState("");
   const [selectedChantier, setSelectedChantier] = useState(null);
   const [totalHT, setTotalHT] = useState(0);
   const [totalAvancement, setTotalAvancement] = useState(0);
   const [avenants, setAvenants] = useState([]);
   const [montantTotalAvenants, setMontantTotalAvenants] = useState(0);
+  const [tauxProrata, setTauxProrata] = useState(2.5);
+  const [montantHTMois, setMontantHTMois] = useState(0);
+  const [lastSituation, setLastSituation] = useState(null);
+  const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
 
   useEffect(() => {
     if (devis?.id) {
@@ -521,6 +525,79 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   }, [avenants]);
 
+  useEffect(() => {
+    if (open && chantier?.id) {
+      // Récupérer la dernière situation pour ce chantier
+      const fetchLastSituation = async () => {
+        try {
+          const response = await axios.get(
+            `/api/chantier/${chantier.id}/situations/`
+          );
+          const situations = response.data;
+          if (situations.length > 0) {
+            const lastSituation = situations[0];
+            setTauxProrata(lastSituation.taux_prorata);
+            setLastSituation(lastSituation);
+          }
+        } catch (error) {
+          console.error(
+            "Erreur lors de la récupération de la dernière situation:",
+            error
+          );
+        }
+      };
+      fetchLastSituation();
+    }
+  }, [open, chantier]);
+
+  // Calculer le montant HT du mois à partir des lignes
+  useEffect(() => {
+    let montantActuel = 0;
+
+    // Calculer le montant des lignes standard
+    structure.forEach((partie) => {
+      partie.sous_parties.forEach((sousPartie) => {
+        sousPartie.lignes.forEach((ligne) => {
+          montantActuel +=
+            (ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100;
+        });
+      });
+    });
+
+    // Ajouter le montant des TS
+    avenants?.forEach((avenant) => {
+      avenant.factures_ts?.forEach((ts) => {
+        montantActuel += (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100;
+      });
+    });
+
+    // Calculer la différence avec le montant précédent
+    const montantPrecedent = lastSituation ? lastSituation.montant_total : 0;
+    setMontantHTMois(montantActuel - montantPrecedent);
+  }, [structure, avenants, lastSituation]);
+
+  useEffect(() => {
+    if (open && chantier?.id) {
+      // Charger les lignes supplémentaires par défaut
+      const fetchLignesDefault = async () => {
+        try {
+          const response = await axios.get(
+            `/api/chantier/${chantier.id}/lignes-default/`
+          );
+          if (response.data.lignes.length > 0) {
+            setLignesSupplementaires(response.data.lignes);
+          }
+        } catch (error) {
+          console.error(
+            "Erreur lors du chargement des lignes par défaut:",
+            error
+          );
+        }
+      };
+      fetchLignesDefault();
+    }
+  }, [open, chantier]);
+
   const handlePourcentageChange = (ligneId, value, type = "standard") => {
     const newValue = Math.min(Math.max(0, value), 100);
 
@@ -561,7 +638,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         devis: devis.id,
         mois: parseInt(mois),
         annee: parseInt(annee),
-        commentaire,
+        taux_prorata: parseFloat(tauxProrata),
         lignes: [
           ...structure.map((partie) => ({
             ligne_devis: partie.id,
@@ -574,6 +651,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
             }))
           ),
         ],
+        lignes_supplementaires: lignesSupplementaires,
       };
 
       await axios.post("/api/situations/", situationData);
@@ -586,6 +664,50 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
           "Erreur lors de la création de la situation"
       );
     }
+  };
+
+  const handleAjoutLigne = () => {
+    setLignesSupplementaires([
+      ...lignesSupplementaires,
+      { description: "", montant: 0, type: "deduction" },
+    ]);
+  };
+
+  const handleLigneChange = (index, field, value) => {
+    const newLignes = [...lignesSupplementaires];
+    newLignes[index][field] = value;
+    setLignesSupplementaires(newLignes);
+  };
+
+  const handleSupprimerLigne = (index) => {
+    setLignesSupplementaires(
+      lignesSupplementaires.filter((_, i) => i !== index)
+    );
+  };
+
+  // Calcul du total avec les lignes supplémentaires
+  const calculerTotalNet = () => {
+    // Montant HT du mois de base
+    let total = montantHTMois;
+
+    // Retenue de garantie (5%)
+    const retenueGarantie = total * 0.05;
+    total -= retenueGarantie;
+
+    // Compte prorata
+    const compteProrata = total * (tauxProrata / 100);
+    total -= compteProrata;
+
+    // Lignes supplémentaires
+    lignesSupplementaires.forEach((ligne) => {
+      if (ligne.type === "deduction") {
+        total -= parseFloat(ligne.montant);
+      } else {
+        total += parseFloat(ligne.montant);
+      }
+    });
+
+    return total;
   };
 
   if (!open || !devis || !chantier) return null;
@@ -639,9 +761,9 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               onChange={(e) => setMois(e.target.value)}
               label="Mois"
             >
-              {MOIS.map((mois) => (
-                <MenuItem key={mois.value} value={mois.value}>
-                  {mois.label}
+              {Array.from({ length: 12 }, (_, i) => (
+                <MenuItem key={i + 1} value={i + 1}>
+                  {new Date(0, i).toLocaleString("default", { month: "long" })}
                 </MenuItem>
               ))}
             </Select>
@@ -653,6 +775,16 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
             onChange={(e) => setAnnee(e.target.value)}
           />
         </Box>
+
+        <TextField
+          fullWidth
+          label="Taux compte prorata (%)"
+          type="number"
+          value={tauxProrata}
+          onChange={(e) => setTauxProrata(e.target.value)}
+          inputProps={{ step: "0.01", min: "0", max: "100" }}
+          sx={{ mb: 3, width: "200px" }}
+        />
 
         <TableContainer
           component={Paper}
@@ -690,15 +822,135 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
           </Table>
         </TableContainer>
 
-        <TextField
-          fullWidth
-          multiline
-          rows={4}
-          label="Commentaire"
-          value={commentaire}
-          onChange={(e) => setCommentaire(e.target.value)}
-          sx={{ mb: 3 }}
-        />
+        <TableContainer component={Paper} sx={{ mt: 3 }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Description</TableCell>
+                <TableCell align="right">Montant</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {/* Montant HT du mois */}
+              <TableRow>
+                <TableCell>Montant HT du mois</TableCell>
+                <TableCell align="right">
+                  {montantHTMois
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+
+              {/* Retenue de garantie */}
+              <TableRow>
+                <TableCell>Retenue de garantie (5% HT du mois)</TableCell>
+                <TableCell align="right" sx={{ color: "error.main" }}>
+                  -
+                  {(montantHTMois * 0.05)
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+
+              {/* Compte prorata */}
+              <TableRow>
+                <TableCell>
+                  Compte prorata ({tauxProrata}% HT du mois)
+                </TableCell>
+                <TableCell align="right" sx={{ color: "error.main" }}>
+                  -
+                  {(montantHTMois * (tauxProrata / 100))
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+
+              {/* Lignes supplémentaires */}
+              <TableRow>
+                <TableCell colSpan={2}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleAjoutLigne}
+                    sx={{ mb: 2 }}
+                  >
+                    Ajouter une ligne
+                  </Button>
+                </TableCell>
+              </TableRow>
+
+              {lignesSupplementaires.map((ligne, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      <TextField
+                        size="small"
+                        value={ligne.description}
+                        onChange={(e) =>
+                          handleLigneChange(
+                            index,
+                            "description",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Description"
+                        fullWidth
+                      />
+                      <Select
+                        size="small"
+                        value={ligne.type}
+                        onChange={(e) =>
+                          handleLigneChange(index, "type", e.target.value)
+                        }
+                      >
+                        <MenuItem value="deduction">Déduction</MenuItem>
+                        <MenuItem value="addition">Addition</MenuItem>
+                      </Select>
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={ligne.montant}
+                        onChange={(e) =>
+                          handleLigneChange(
+                            index,
+                            "montant",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        inputProps={{ step: "0.01" }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => handleSupprimerLigne(index)}
+                        sx={{ color: "red" }}
+                      >
+                        <FaTrash />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+
+              {/* Total net à payer */}
+              <TableRow sx={{ "& td": { fontWeight: "bold" } }}>
+                <TableCell>Total net à payer</TableCell>
+                <TableCell align="right">
+                  {calculerTotalNet()
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         <Box sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
           <Button onClick={onClose} variant="outlined">

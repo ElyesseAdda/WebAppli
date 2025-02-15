@@ -415,16 +415,41 @@ class DevisLigne(models.Model):
     
 
 class Situation(models.Model):
-    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='situations', default='')
-    numero = models.IntegerField(default=1)
+    STATUT_CHOICES = [
+        ('brouillon', 'Brouillon'),
+        ('validee', 'Validée'),
+        ('facturee', 'Facturée')
+    ]
+
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE)
+    devis = models.ForeignKey('Devis', on_delete=models.CASCADE)
+    numero = models.CharField(max_length=50)
+    mois = models.IntegerField()
+    annee = models.IntegerField()
     date_creation = models.DateTimeField(auto_now_add=True)
-    mois = models.IntegerField(default=1)  # Ajout d'une valeur par défaut
-    annee = models.IntegerField(default=2025)  # Ajout d'une valeur par défaut
-    commentaire = models.TextField(blank=True, null=True)
-    
+    date_validation = models.DateTimeField(null=True, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_actuel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_ht_cumule = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taux_prorata = models.DecimalField(max_digits=4, decimal_places=2, default=2.50)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='situations_created'
+    )
+    validated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='situations_validated'
+    )
+
     class Meta:
-        unique_together = ('chantier', 'numero')
-        ordering = ['numero']
+        ordering = ['-annee', '-mois']
+        unique_together = ['chantier', 'mois', 'annee']
 
 class SituationLigne(models.Model):
     situation = models.ForeignKey(Situation, on_delete=models.CASCADE, related_name='lignes')
@@ -451,6 +476,15 @@ class SituationLigne(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+class SituationLigneSupplementaire(models.Model):
+    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='lignes_supplementaires')
+    description = models.CharField(max_length=255)
+    montant = models.DecimalField(max_digits=10, decimal_places=2)
+    type = models.CharField(max_length=20, default='deduction')  # 'deduction' ou 'addition'
+
+    class Meta:
+        ordering = ['id']
 
 class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)
@@ -680,6 +714,14 @@ class FactureTS(models.Model):
         if self.designation:
             return f"{base} - {self.designation}"
         return base
+
+class ChantierLigneSupplementaire(models.Model):
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='lignes_supplementaires_default')
+    description = models.CharField(max_length=255)
+    montant = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    class Meta:
+        ordering = ['id']
 
 
 

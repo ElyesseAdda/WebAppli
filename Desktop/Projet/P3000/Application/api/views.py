@@ -22,10 +22,10 @@ from .models import (
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
-from django.db import transaction
+from django.db import transaction, models
 from rest_framework.permissions import IsAdminUser, AllowAny
 from calendar import day_name
 import locale
@@ -2670,9 +2670,11 @@ def update_taux_fixe(request):
 def get_chantier_avenants(request, chantier_id):
     """Récupère tous les avenants d'un chantier avec leurs TS associés"""
     try:
-        # Utilisation de select_related et prefetch_related pour optimiser les requêtes
+        # Récupérer uniquement les avenants qui ont des TS associés
         avenants = (Avenant.objects
                    .filter(chantier_id=chantier_id)
+                   .annotate(ts_count=models.Count('factures_ts'))
+                   .filter(ts_count__gt=0)
                    .prefetch_related('factures_ts')
                    .order_by('numero'))
         
@@ -2886,66 +2888,76 @@ def get_situation_detail(request, situation_id):
         return Response({'error': str(e)}, status=400)
 
 @api_view(['POST'])
-@transaction.atomic
 def create_situation(request):
-    """Crée une nouvelle situation"""
-    serializer = SituationCreateSerializer(data=request.data)
-    if serializer.is_valid():
-        try:
-            chantier = serializer.validated_data['chantier']
-            
-            # Trouver la dernière situation
-            derniere_situation = (Situation.objects
-                                .filter(chantier=chantier)
-                                .order_by('-numero')
-                                .first())
-            
-            # Créer la nouvelle situation
-            nouvelle_situation = Situation.objects.create(
-                chantier=chantier,
-                numero=(derniere_situation.numero + 1) if derniere_situation else 1,
-                mois=serializer.validated_data['mois'],
-                annee=serializer.validated_data['annee'],
-                commentaire=serializer.validated_data.get('commentaire', '')
+    try:
+        chantier_id = request.data.get('chantier')
+        mois = request.data.get('mois')
+        annee = request.data.get('annee')
+        taux_prorata = request.data.get('taux_prorata', 2.50)
+        lignes = request.data.get('lignes', [])
+        lignes_supplementaires = request.data.get('lignes_supplementaires', [])
+
+        # Calculer le montant actuel total
+        montant_actuel = sum(
+            (ligne.get('montant_ht', 0) * ligne.get('pourcentage_actuel', 0) / 100)
+            for ligne in lignes
+        )
+
+        # Récupérer la dernière situation
+        derniere_situation = Situation.objects.filter(
+            chantier_id=chantier_id
+        ).order_by('-annee', '-mois').first()
+
+        montant_precedent = derniere_situation.montant_actuel if derniere_situation else 0
+        
+        # Créer la nouvelle situation
+        situation = Situation.objects.create(
+            chantier_id=chantier_id,
+            mois=mois,
+            annee=annee,
+            taux_prorata=taux_prorata,
+            montant_precedent=montant_precedent,
+            montant_actuel=montant_actuel,
+            montant_ht_cumule=montant_actuel,
+            pourcentage_actuel=0
+        )
+
+        # Créer les lignes standard
+        for ligne in lignes:
+            SituationLigne.objects.create(
+                situation=situation,
+                ligne_devis_id=ligne.get('ligne_devis'),
+                facture_ts_id=ligne.get('facture_ts'),
+                pourcentage=ligne.get('pourcentage_actuel', 0)
             )
 
-            # Copier les lignes de la situation précédente
-            if derniere_situation:
-                for ancienne_ligne in derniere_situation.lignes.all():
-                    SituationLigne.objects.create(
-                        situation=nouvelle_situation,
-                        ligne_devis=ancienne_ligne.ligne_devis,
-                        facture_ts=ancienne_ligne.facture_ts,
-                        pourcentage=ancienne_ligne.pourcentage
-                    )
+        # Créer les lignes supplémentaires
+        for ligne in lignes_supplementaires:
+            SituationLigneSupplementaire.objects.create(
+                situation=situation,
+                description=ligne['description'],
+                montant=ligne['montant'],
+                type=ligne['type']
+            )
 
-            # Ajouter les nouvelles lignes
-            lignes_existantes = set(nouvelle_situation.lignes.values_list(
-                'ligne_devis_id', 'facture_ts_id'
-            ))
+        # Mettre à jour ou créer les lignes par défaut du chantier
+        for ligne in lignes_supplementaires:
+            ChantierLigneSupplementaire.objects.update_or_create(
+                chantier_id=chantier_id,
+                description=ligne['description'],
+                defaults={'montant': ligne['montant']}
+            )
 
-            # Ajouter les nouvelles lignes de devis
-            for ligne in chantier.devis.filter(devis_chantier=True).first().lignes.all():
-                if (ligne.id, None) not in lignes_existantes:
-                    SituationLigne.objects.create(
-                        situation=nouvelle_situation,
-                        ligne_devis=ligne,
-                        pourcentage=0
-                    )
+        return Response({
+            'success': True,
+            'situation_id': situation.id
+        })
 
-            # Ajouter les nouveaux TS
-            for ts in chantier.factures_ts.all():
-                if (None, ts.id) not in lignes_existantes:
-                    SituationLigne.objects.create(
-                        situation=nouvelle_situation,
-                        facture_ts=ts,
-                        pourcentage=0
-                    )
-
-            return Response(SituationSerializer(nouvelle_situation).data)
-        except Exception as e:
-            return Response({'error': str(e)}, status=400)
-    return Response(serializer.errors, status=400)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=400)
 
 @api_view(['PUT'])
 def update_situation_ligne(request, ligne_id):
@@ -3045,5 +3057,36 @@ def delete_devis(request, devis_id):
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['GET'])
+def get_chantier_lignes_default(request, chantier_id):
+    lignes = ChantierLigneSupplementaire.objects.filter(chantier_id=chantier_id)
+    return Response({
+        'lignes': [{
+            'description': ligne.description,
+            'montant': float(ligne.montant),
+            'type': 'deduction'  # type par défaut
+        } for ligne in lignes]
+    })
+
+@api_view(['PUT'])
+def update_chantier_lignes_default(request, chantier_id):
+    try:
+        lignes = request.data.get('lignes', [])
+        
+        # Supprimer les anciennes lignes
+        ChantierLigneSupplementaire.objects.filter(chantier_id=chantier_id).delete()
+        
+        # Créer les nouvelles lignes
+        for ligne in lignes:
+            ChantierLigneSupplementaire.objects.create(
+                chantier_id=chantier_id,
+                description=ligne['description'],
+                montant=ligne['montant']
+            )
+        
+        return Response({'success': True})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=400)
 
 
