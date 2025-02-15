@@ -5,7 +5,7 @@ from .models import (
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
-    ChantierLigneSupplementaire
+    ChantierLigneSupplementaire, SituationLigneAvenant
 )
 from decimal import Decimal
 
@@ -540,89 +540,80 @@ class FactureCIECreateSerializer(serializers.Serializer):
         return data
 
 class SituationLigneSerializer(serializers.ModelSerializer):
-    # Informations de la ligne de devis si présente
-    ligne_devis_id = serializers.IntegerField(source='ligne_devis.id', read_only=True)
-    designation = serializers.SerializerMethodField()
-    montant_ht = serializers.SerializerMethodField()
-    
-    # Informations du TS si présent
-    facture_ts_id = serializers.IntegerField(source='facture_ts.id', read_only=True)
-    numero_ts = serializers.IntegerField(source='facture_ts.numero_ts', read_only=True)
-    avenant_numero = serializers.IntegerField(source='facture_ts.avenant.numero', read_only=True)
-
     class Meta:
         model = SituationLigne
         fields = [
             'id',
-            'ligne_devis_id',
-            'facture_ts_id',
-            'designation',
-            'montant_ht',
-            'pourcentage',
-            'numero_ts',
-            'avenant_numero'
+            'situation',
+            'ligne_devis',
+            'description',
+            'quantite',
+            'prix_unitaire',
+            'total_ht',
+            'pourcentage_precedent',
+            'pourcentage_actuel',
+            'montant'
         ]
 
-    def get_designation(self, obj):
-        if obj.ligne_devis:
-            return obj.ligne_devis.designation
-        elif obj.facture_ts:
-            return obj.facture_ts.designation
-        return None
+class SituationLigneAvenantSerializer(serializers.ModelSerializer):
+    facture_ts_numero = serializers.CharField(source='facture_ts.numero_ts', read_only=True)
+    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
 
-    def get_montant_ht(self, obj):
-        if obj.ligne_devis:
-            return obj.ligne_devis.total_ht
-        elif obj.facture_ts:
-            return obj.facture_ts.montant_ht
-        return 0
+    class Meta:
+        model = SituationLigneAvenant
+        fields = [
+            'id',
+            'situation',
+            'avenant',
+            'avenant_numero',
+            'facture_ts',
+            'facture_ts_numero',
+            'montant_ht',
+            'pourcentage_precedent',
+            'pourcentage_actuel',
+            'montant'
+        ]
 
 class SituationLigneSupplementaireSerializer(serializers.ModelSerializer):
     class Meta:
         model = SituationLigneSupplementaire
-        fields = ['description', 'montant', 'type']
+        fields = ['id', 'situation', 'description', 'montant', 'type']
 
 class SituationSerializer(serializers.ModelSerializer):
-    lignes = SituationLigneSerializer(many=True, read_only=True)
-    lignes_supplementaires = SituationLigneSupplementaireSerializer(many=True, read_only=True)
-    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
-    montant_total = serializers.SerializerMethodField()
-    pourcentage_global = serializers.SerializerMethodField()
-    montant_ht_mois = serializers.SerializerMethodField()
-    retenue_garantie = serializers.SerializerMethodField()
-    compte_prorata = serializers.SerializerMethodField()
+    situation_lignes = SituationLigneSerializer(many=True, read_only=True)
+    situation_lignes_supplementaires = SituationLigneSupplementaireSerializer(many=True, read_only=True)
+    situation_lignes_avenants = SituationLigneAvenantSerializer(many=True, read_only=True)
 
     class Meta:
         model = Situation
         fields = [
             'id',
+            'situation_lignes',
+            'situation_lignes_supplementaires',
+            'situation_lignes_avenants',
             'numero',
-            'chantier',
-            'chantier_name',
-            'date_creation',
             'mois',
             'annee',
-            'montant_total',
-            'pourcentage_global',
+            'date_creation',
+            'date_validation',
+            'statut',
+            'montant_precedent',
             'montant_ht_mois',
+            'montant_total',
+            'pourcentage_avancement',
+            'montant_total_cumul_ht',
+            'cumul_mois_precedent',
+            'montant_total_mois_apres_retenue',
+            'tva',
             'retenue_garantie',
-            'compte_prorata',
             'taux_prorata',
-            'lignes',
-            'lignes_supplementaires'
+            'montant_prorata',
+            'retenue_cie',
+            'chantier',
+            'devis',
+            'created_by',
+            'validated_by'
         ]
-        read_only_fields = ['numero', 'montant_total', 'pourcentage_global', 'montant_ht_mois', 'retenue_garantie', 'compte_prorata']
-
-    def get_montant_ht_mois(self, obj):
-        return obj.montant_actuel - obj.montant_precedent
-
-    def get_retenue_garantie(self, obj):
-        montant_ht_mois = self.get_montant_ht_mois(obj)
-        return montant_ht_mois * Decimal('0.05')  # 5% du montant HT du mois
-
-    def get_compte_prorata(self, obj):
-        montant_ht_mois = self.get_montant_ht_mois(obj)
-        return montant_ht_mois * (obj.taux_prorata / Decimal('100'))
 
 class SituationCreateSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,9 +1,9 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Avg, Count, Min, Sum, F, Max
+from django.db.models import Avg, Count, Min, Sum, F, Max, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -15,14 +15,14 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer
 from .models import (
     Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant  # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction, models
@@ -34,6 +34,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from decimal import Decimal
 from django.db.models import Q
 import re
+
 
 logger = logging.getLogger(__name__)
 
@@ -2842,21 +2843,152 @@ class SituationViewSet(viewsets.ModelViewSet):
     queryset = Situation.objects.all()
     serializer_class = SituationSerializer
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        chantier_id = self.request.query_params.get('chantier')
-        if chantier_id:
-            queryset = queryset.filter(chantier_id=chantier_id)
-        return queryset.prefetch_related('lignes', 'lignes__ligne_devis', 'lignes__facture_ts')
+    def create(self, request, *args, **kwargs):
+        try:
+            data = request.data
+            print("Données reçues:", data)  # Debug
+
+            # Convertir les montants en Decimal
+            montant_ht_mois = Decimal(str(data['montant_ht_mois']))
+            retenue_garantie = Decimal(str(data['retenue_garantie']))
+            montant_prorata = Decimal(str(data['montant_prorata']))
+            retenue_cie = Decimal(str(data['retenue_cie']))
+            montant_total_mois_apres_retenue = Decimal(str(data['montant_total_mois_apres_retenue']))
+            tva = Decimal(str(data['tva']))
+            pourcentage_avancement = Decimal(str(data['pourcentage_avancement']))  # Ajout ici
+
+            # Créer la situation avec les montants du frontend
+            situation = Situation.objects.create(
+                numero=data['numero'],
+                chantier_id=data['chantier'],
+                devis_id=data['devis'],
+                mois=int(data['mois']),
+                annee=int(data['annee']),
+                montant_ht_mois=montant_ht_mois,
+                retenue_garantie=retenue_garantie,
+                taux_prorata=Decimal(str(data['taux_prorata'])),
+                montant_prorata=montant_prorata,
+                retenue_cie=retenue_cie,
+                montant_total_mois_apres_retenue=montant_total_mois_apres_retenue,
+                tva=tva,
+                montant_total=montant_ht_mois,
+                pourcentage_avancement=pourcentage_avancement,  # Ajout ici
+            )
+
+            print(f"""
+            Situation créée avec les montants:
+            - Montant HT du mois: {montant_ht_mois}
+            - Retenue garantie: {retenue_garantie}
+            - Montant prorata: {montant_prorata}
+            - Retenue CIE: {retenue_cie}
+            - Montant total après retenues: {montant_total_mois_apres_retenue}
+            - TVA: {tva}
+            - Pourcentage avancement: {pourcentage_avancement}  # Ajout ici
+            """)
+
+            return Response(SituationSerializer(situation).data)
+
+        except Exception as e:
+            print(f"Erreur lors de la création de la situation: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class SituationLigneViewSet(viewsets.ModelViewSet):
     queryset = SituationLigne.objects.all()
     serializer_class = SituationLigneSerializer
 
-    def get_serializer_class(self):
-        if self.action in ['update', 'partial_update']:
-            return SituationLigneUpdateSerializer
-        return SituationLigneSerializer
+    def create(self, request, *args, **kwargs):
+        try:
+            situation_ligne = super().create(request, *args, **kwargs)
+            
+            # Récupérer la situation
+            situation = Situation.objects.get(id=request.data['situation'])
+            
+            # Mettre à jour les montants avec les valeurs du frontend
+            self.update_situation_from_frontend(situation, request.data)
+            
+            return situation_ligne
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self.update_situation_montants(instance.situation)
+
+    def update_situation_montants(self, situation):
+        try:
+            # 1. Calculer le montant des lignes standard
+            montant_lignes = situation.situation_lignes.aggregate(
+                total=Sum('montant')
+            )['total'] or Decimal('0')
+            print(f"Montant des lignes standard: {montant_lignes}")
+
+            # 2. Calculer le montant HT du mois (avant déductions)
+            situation.montant_ht_mois = montant_lignes
+            print(f"Montant HT du mois: {situation.montant_ht_mois}")
+
+            # 3. Calculer les retenues sur le montant HT
+            situation.retenue_garantie = situation.montant_ht_mois * Decimal('0.05')
+            situation.montant_prorata = situation.montant_ht_mois * (Decimal(str(situation.taux_prorata)) / Decimal('100'))
+            print(f"Retenue garantie: {situation.retenue_garantie}")
+            print(f"Montant prorata: {situation.montant_prorata}")
+
+            # 4. Calculer le montant après retenues (y compris les lignes supplémentaires)
+            montant_apres_retenues = (
+                situation.montant_ht_mois 
+                - situation.retenue_garantie 
+                - situation.montant_prorata 
+                - Decimal(str(situation.retenue_cie))
+            )
+
+            # 5. Appliquer les lignes supplémentaires
+            for ligne_suppl in situation.situation_lignes_supplementaires.all():
+                montant = Decimal(str(ligne_suppl.montant))
+                if ligne_suppl.type == 'deduction':
+                    montant_apres_retenues -= montant
+                else:
+                    montant_apres_retenues += montant
+
+            situation.montant_total_mois_apres_retenue = montant_apres_retenues
+            print(f"Montant après retenues: {montant_apres_retenues}")
+
+            # 6. Calculer les cumuls
+            situation.cumul_mois_precedent = Decimal('0')  # À ajuster pour les situations suivantes
+            situation.montant_total_cumul_ht = situation.montant_ht_mois + situation.cumul_mois_precedent
+            
+            # 7. Calculer le pourcentage d'avancement
+            price_ht = Decimal(str(situation.devis.price_ht or '0'))
+            if price_ht and price_ht != Decimal('0'):
+                situation.pourcentage_avancement = (situation.montant_total_cumul_ht * Decimal('100')) / price_ht
+            
+            # 8. Calculer la TVA
+            tva_rate = Decimal(str(situation.devis.tva_rate or '20'))
+            situation.tva = situation.montant_total_mois_apres_retenue * (tva_rate / Decimal('100'))
+
+            # Sauvegarder tous les montants
+            Situation.objects.filter(id=situation.id).update(
+                montant_ht_mois=situation.montant_ht_mois,
+                montant_total_cumul_ht=situation.montant_total_cumul_ht,
+                cumul_mois_precedent=situation.cumul_mois_precedent,
+                montant_total_mois_apres_retenue=situation.montant_total_mois_apres_retenue,
+                pourcentage_avancement=situation.pourcentage_avancement,
+                tva=situation.tva,
+                retenue_garantie=situation.retenue_garantie,
+                montant_prorata=situation.montant_prorata
+            )
+            
+        except Exception as e:
+            print(f"Erreur dans update_situation_montants: {str(e)}")
+            raise
 
 @api_view(['GET'])
 def get_situations_chantier(request, chantier_id):
@@ -2864,8 +2996,8 @@ def get_situations_chantier(request, chantier_id):
     try:
         situations = (Situation.objects
                      .filter(chantier_id=chantier_id)
-                     .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes__facture_ts')
-                     .order_by('numero'))
+                     .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes_avenant', 'lignes_supplementaires')
+                     .order_by('annee', 'mois'))
         
         serializer = SituationSerializer(situations, many=True)
         return Response(serializer.data)
@@ -2877,105 +3009,286 @@ def get_situation_detail(request, situation_id):
     """Récupère le détail d'une situation spécifique"""
     try:
         situation = (Situation.objects
-                    .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes__facture_ts')
+                    .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes_avenant', 'lignes_supplementaires')
                     .get(id=situation_id))
         
         serializer = SituationSerializer(situation)
-        return Response(serializer.data)
+        data = serializer.data
+        data['net_a_payer'] = SituationService.calculer_net_a_payer(situation)
+        return Response(data)
     except Situation.DoesNotExist:
         return Response({'error': 'Situation non trouvée'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
-@api_view(['POST'])
-def create_situation(request):
-    try:
-        chantier_id = request.data.get('chantier')
-        mois = request.data.get('mois')
-        annee = request.data.get('annee')
-        taux_prorata = request.data.get('taux_prorata', 2.50)
-        lignes = request.data.get('lignes', [])
-        lignes_supplementaires = request.data.get('lignes_supplementaires', [])
-
-        # Calculer le montant actuel total
-        montant_actuel = sum(
-            (ligne.get('montant_ht', 0) * ligne.get('pourcentage_actuel', 0) / 100)
-            for ligne in lignes
-        )
-
-        # Récupérer la dernière situation
-        derniere_situation = Situation.objects.filter(
-            chantier_id=chantier_id
-        ).order_by('-annee', '-mois').first()
-
-        montant_precedent = derniere_situation.montant_actuel if derniere_situation else 0
-        
-        # Créer la nouvelle situation
-        situation = Situation.objects.create(
-            chantier_id=chantier_id,
-            mois=mois,
-            annee=annee,
-            taux_prorata=taux_prorata,
-            montant_precedent=montant_precedent,
-            montant_actuel=montant_actuel,
-            montant_ht_cumule=montant_actuel,
-            pourcentage_actuel=0
-        )
-
-        # Créer les lignes standard
-        for ligne in lignes:
-            SituationLigne.objects.create(
-                situation=situation,
-                ligne_devis_id=ligne.get('ligne_devis'),
-                facture_ts_id=ligne.get('facture_ts'),
-                pourcentage=ligne.get('pourcentage_actuel', 0)
-            )
-
-        # Créer les lignes supplémentaires
-        for ligne in lignes_supplementaires:
-            SituationLigneSupplementaire.objects.create(
-                situation=situation,
-                description=ligne['description'],
-                montant=ligne['montant'],
-                type=ligne['type']
-            )
-
-        # Mettre à jour ou créer les lignes par défaut du chantier
-        for ligne in lignes_supplementaires:
-            ChantierLigneSupplementaire.objects.update_or_create(
-                chantier_id=chantier_id,
-                description=ligne['description'],
-                defaults={'montant': ligne['montant']}
-            )
-
-        return Response({
-            'success': True,
-            'situation_id': situation.id
-        })
-
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=400)
-
 @api_view(['PUT'])
-def update_situation_ligne(request, ligne_id):
-    """Met à jour le pourcentage d'une ligne de situation"""
+def update_situation(request, situation_id):
+    """Met à jour une situation existante"""
     try:
-        ligne = SituationLigne.objects.get(id=ligne_id)
-        serializer = SituationLigneUpdateSerializer(ligne, data=request.data)
+        situation = Situation.objects.get(id=situation_id)
         
-        if serializer.is_valid():
-            serializer.save()
-            # Retourner la situation mise à jour
-            situation_serializer = SituationSerializer(ligne.situation)
-            return Response(situation_serializer.data)
-        return Response(serializer.errors, status=400)
-    except SituationLigne.DoesNotExist:
-        return Response({'error': 'Ligne non trouvée'}, status=404)
+        # Vérifier si la situation peut être modifiée
+        if situation.statut != 'brouillon':
+            return Response(
+                {'error': 'Seules les situations en brouillon peuvent être modifiées'}, 
+                status=400
+            )
+            
+        data = request.data
+        
+        # Mise à jour des lignes
+        if 'lignes' in data:
+            situation.lignes.all().delete()
+            for ligne_data in data['lignes']:
+                SituationLigne.objects.create(
+                    situation=situation,
+                    ligne_devis_id=ligne_data['ligne_devis_id'],
+                    pourcentage_precedent=ligne_data['pourcentage_precedent'],
+                    pourcentage_actuel=ligne_data['pourcentage_actuel'],
+                    montant=ligne_data['montant']
+                )
+                
+        # Mise à jour des lignes supplémentaires
+        if 'lignes_supplementaires' in data:
+            situation.lignes_supplementaires.all().delete()
+            for ligne_data in data['lignes_supplementaires']:
+                SituationLigneSupplementaire.objects.create(
+                    situation=situation,
+                    description=ligne_data['description'],
+                    montant=ligne_data['montant'],
+                    type=ligne_data['type']
+                )
+                
+        # Mise à jour des montants
+        situation.montant_ht_mois = SituationService.calculer_montant_ht_mois(situation)
+        situation.montant_total = situation.montant_precedent + situation.montant_ht_mois
+        situation.pourcentage_avancement = SituationService.calculer_pourcentage_avancement(
+            situation.montant_total, 
+            situation.devis.price_ht
+        )
+        
+        # Mise à jour des autres champs
+        if 'taux_prorata' in data:
+            situation.taux_prorata = data['taux_prorata']
+        if 'retenue_cie' in data:
+            situation.retenue_cie = data['retenue_cie']
+            
+        situation.save()
+        
+        return Response({
+            'id': situation.id,
+            'net_a_payer': SituationService.calculer_net_a_payer(situation)
+        })
+        
+    except Situation.DoesNotExist:
+        return Response({'error': 'Situation non trouvée'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
+@api_view(['DELETE'])
+def delete_situation(request, situation_id):
+    """Supprime une situation"""
+    try:
+        situation = Situation.objects.get(id=situation_id)
+        
+        # Vérifier si la situation peut être supprimée
+        if situation.statut != 'brouillon':
+            return Response(
+                {'error': 'Seules les situations en brouillon peuvent être supprimées'}, 
+                status=400
+            )
+            
+        situation.delete()
+        return Response(status=204)
+    except Situation.DoesNotExist:
+        return Response({'error': 'Situation non trouvée'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+
+class SituationService:
+    @staticmethod
+    def calculer_montant_precedent(chantier, mois, annee):
+        situation_precedente = Situation.objects.filter(
+            chantier=chantier,
+            annee__lt=annee | (Q(annee=annee) & Q(mois__lt=mois))
+        ).order_by('-annee', '-mois').first()
+        
+        return situation_precedente.montant_total if situation_precedente else 0
+
+    @staticmethod
+    def calculer_montant_ht_mois(situation):
+        total = 0
+        # Somme des lignes standard
+        total += situation.lignes.aggregate(
+            sum=Sum(F('montant'))
+        )['sum'] or 0
+        
+        # Somme des lignes d'avenant
+        total += situation.lignes_avenant.aggregate(
+            sum=Sum(F('montant'))
+        )['sum'] or 0
+        
+        return total
+
+    @staticmethod
+    def calculer_pourcentage_avancement(montant_total, devis_ht):
+        if devis_ht:
+            return (montant_total / devis_ht) * 100
+        return 0
+
+    @staticmethod
+    def calculer_net_a_payer(situation):
+        montant = situation.montant_ht_mois
+        montant -= situation.retenue_garantie
+        montant -= situation.montant_prorata
+        montant -= situation.retenue_cie
+        
+        for ligne in situation.lignes_supplementaires.all():
+            if ligne.type == 'deduction':
+                montant -= ligne.montant
+            else:
+                montant += ligne.montant
+                
+        return montant
+
+@api_view(['POST'])
+@transaction.atomic
+def create_situation(request):
+    try:
+        data = request.data.copy()
+        print("Données reçues:", data)
+        
+        serializer = SituationSerializer(data=data)
+        if not serializer.is_valid():
+            print("Erreurs de validation:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        situation = serializer.save()
+        montant_total_mois = 0
+
+        # Créer les lignes de situation
+        for ligne_data in data.get('lignes', []):
+            ligne = SituationLigne.objects.create(
+                situation=situation,
+                ligne_devis_id=ligne_data['ligne_devis'],
+                description=ligne_data['description'],
+                quantite=ligne_data['quantite'],
+                prix_unitaire=ligne_data['prix_unitaire'],
+                total_ht=ligne_data['total_ht'],
+                pourcentage_actuel=ligne_data['pourcentage_actuel'],
+                montant=ligne_data['montant']
+            )
+            montant_total_mois += float(ligne_data['montant'])
+
+        # Créer les lignes supplémentaires
+        for ligne_data in data.get('lignes_supplementaires', []):
+            SituationLigneSupplementaire.objects.create(
+                situation=situation,
+                description=ligne_data['description'],
+                montant=float(ligne_data['montant']),
+                type=ligne_data.get('type', 'deduction')
+            )
+
+        # Mettre à jour les montants
+        situation.montant_ht_mois = montant_total_mois
+        situation.montant_total = situation.montant_precedent + montant_total_mois
+        situation.pourcentage_avancement = (situation.montant_total / float(situation.devis.price_ht)) * 100 if situation.devis.price_ht else 0
+        situation.save()
+
+        # Recharger la situation avec toutes ses relations
+        situation = Situation.objects.select_related('devis').prefetch_related(
+            'situation_lignes',
+            'situation_lignes_supplementaires'
+        ).get(id=situation.id)
+
+        return Response(SituationSerializer(situation).data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        print("Exception:", str(e))
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def get_situation_detail(request, situation_id):
+    try:
+        situation = Situation.objects.get(id=situation_id)
+        serializer = SituationSerializer(situation)
+        return Response(serializer.data)
+    except Situation.DoesNotExist:
+        return Response(
+            {'error': 'Situation non trouvée'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+def get_situations_chantier(request, chantier_id):
+    situations = Situation.objects.filter(chantier_id=chantier_id)
+    serializer = SituationSerializer(situations, many=True)
+    return Response(serializer.data)
+
+@api_view(['PUT'])
+@transaction.atomic
+def update_situation(request, situation_id):
+    try:
+        situation = Situation.objects.get(id=situation_id)
+        
+        if situation.statut != 'brouillon':
+            return Response(
+                {'error': 'Seules les situations en brouillon peuvent être modifiées'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = SituationSerializer(situation, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mise à jour des lignes
+        if 'lignes' in request.data:
+            situation.lignes.all().delete()
+            for ligne_data in request.data['lignes']:
+                ligne_serializer = SituationLigneSerializer(data=ligne_data)
+                if ligne_serializer.is_valid():
+                    ligne_serializer.save(situation=situation)
+
+        # Mise à jour des lignes d'avenant
+        if 'lignes_avenant' in request.data:
+            situation.lignes_avenant.all().delete()
+            for ligne_data in request.data['lignes_avenant']:
+                ligne_serializer = SituationLigneAvenantSerializer(data=ligne_data)
+                if ligne_serializer.is_valid():
+                    ligne_serializer.save(situation=situation)
+
+        # Mise à jour des lignes supplémentaires
+        if 'lignes_supplementaires' in request.data:
+            situation.lignes_supplementaires.all().delete()
+            for ligne_data in request.data['lignes_supplementaires']:
+                ligne_serializer = SituationLigneSupplementaireSerializer(data=ligne_data)
+                if ligne_serializer.is_valid():
+                    ligne_serializer.save(situation=situation)
+
+        # Recalcul des montants
+        situation = serializer.save()
+        situation.montant_ht_mois = SituationService.calculer_montant_ht_mois(situation)
+        situation.montant_total = situation.montant_precedent + situation.montant_ht_mois
+        situation.pourcentage_avancement = SituationService.calculer_pourcentage_avancement(
+            situation.montant_total, 
+            situation.devis.price_ht
+        )
+        situation.save()
+
+        return Response(SituationSerializer(situation).data)
+
+    except Situation.DoesNotExist:
+        return Response(
+            {'error': 'Situation non trouvée'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 @api_view(['DELETE'])
 def delete_situation(request, situation_id):
@@ -3089,4 +3402,231 @@ def update_chantier_lignes_default(request, chantier_id):
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=400)
 
+@api_view(['GET'])
+def get_factures_cie(request, chantier_id):
+    try:
+        mois = int(request.GET.get('mois'))
+        annee = int(request.GET.get('annee'))
+        
+        # Récupérer toutes les factures CIE du mois pour ce chantier
+        factures_cie = Facture.objects.filter(
+            chantier_id=chantier_id,
+            type_facture='cie',
+            date_creation__month=mois,
+            date_creation__year=annee
+        )
+        
+        # Calculer le total
+        total_cie = factures_cie.aggregate(
+            total=models.Sum('price_ht')
+        )['total'] or 0
+        
+        return Response({
+            'total': float(total_cie),
+            'factures': [{
+                'id': f.id,
+                'numero': f.numero,
+                'montant_ht': float(f.price_ht)
+            } for f in factures_cie]
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=400)
 
+class NumeroService:
+    @staticmethod
+    def get_next_facture_number():
+        """Génère le prochain numéro de facture"""
+        current_year = str(datetime.now().year)[-2:]  # Prend les 2 derniers chiffres de l'année
+        
+        # Récupère le dernier numéro de facture de l'année
+        last_facture = Facture.objects.filter(
+            numero__contains=f'-{current_year}'
+        ).order_by('-numero').first()
+        
+        if last_facture:
+            # Extrait le numéro de séquence de FACT-001-25
+            last_num = int(last_facture.numero.split('-')[1])
+            next_num = last_num + 1
+        else:
+            next_num = 1
+            
+        return f"FACT-{next_num:03d}-{current_year}"
+
+    @staticmethod
+    def get_next_situation_number(chantier_id):
+        """Génère le prochain numéro de situation pour un chantier"""
+        last_situation = Situation.objects.filter(
+            chantier_id=chantier_id
+        ).order_by('-numero').first()
+        
+        next_sit_num = 1
+        if last_situation:
+            # Extrait le numéro de situation (après "Situation n°")
+            last_sit_num = int(last_situation.numero.split('°')[-1])
+            next_sit_num = last_sit_num + 1
+            
+        base_numero = NumeroService.get_next_facture_number()
+        return f"{base_numero} - Situation n°{next_sit_num:02d}"
+
+@api_view(['GET'])
+def get_next_numero(request, chantier_id=None):
+    """Récupère le prochain numéro de facture ou situation"""
+    if chantier_id:
+        numero = NumeroService.get_next_situation_number(chantier_id)
+    else:
+        numero = NumeroService.get_next_facture_number()
+    
+    return Response({'numero': numero})
+
+
+class SituationLigneSupplementaireViewSet(viewsets.ModelViewSet):
+    queryset = SituationLigneSupplementaire.objects.all()
+    serializer_class = SituationLigneSupplementaireSerializer
+
+    def create(self, request, *args, **kwargs):
+        try:
+            situation_ligne = super().create(request, *args, **kwargs)
+            
+            # Récupérer la situation
+            situation = Situation.objects.get(id=request.data['situation'])
+            
+            # Mettre à jour les montants avec les valeurs du frontend
+            self.update_situation_from_frontend(situation, request.data)
+            
+            return situation_ligne
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self.update_situation_montants(instance.situation)
+
+    def update_situation_montants(self, situation):
+        # Même méthode que dans SituationLigneViewSet
+        try:
+            montant_total_mois = situation.situation_lignes.aggregate(
+                total=Sum('montant')
+            )['total'] or Decimal('0')
+            
+            lignes_suppl = situation.situation_lignes_supplementaires.all()
+            for ligne_suppl in lignes_suppl:
+                montant = Decimal(str(ligne_suppl.montant))
+                if ligne_suppl.type == 'deduction':
+                    montant_total_mois -= montant
+                else:
+                    montant_total_mois += montant
+            
+            montant_precedent = Decimal(str(situation.montant_precedent or '0'))
+            price_ht = Decimal(str(situation.devis.price_ht or '0'))
+            taux_prorata = Decimal(str(situation.taux_prorata or '0'))
+            
+            situation.montant_ht_mois = montant_total_mois
+            situation.montant_total = montant_precedent + montant_total_mois
+            
+            if price_ht and price_ht != Decimal('0'):
+                situation.pourcentage_avancement = (
+                    (situation.montant_total * Decimal('100')) / price_ht
+                )
+            else:
+                situation.pourcentage_avancement = Decimal('0')
+            
+            situation.retenue_garantie = montant_total_mois * Decimal('0.05')
+            situation.montant_prorata = montant_total_mois * (taux_prorata / Decimal('100'))
+            
+            Situation.objects.filter(id=situation.id).update(
+                montant_ht_mois=montant_total_mois,
+                montant_total=situation.montant_total,
+                pourcentage_avancement=situation.pourcentage_avancement,
+                retenue_garantie=situation.retenue_garantie,
+                montant_prorata=situation.montant_prorata
+            )
+        except Exception as e:
+            print(f"Erreur dans update_situation_montants: {str(e)}")
+            raise
+
+class SituationLigneAvenantViewSet(viewsets.ModelViewSet):
+    queryset = SituationLigneAvenant.objects.all()
+    serializer_class = SituationLigneAvenantSerializer
+
+    def create(self, request, *args, **kwargs):
+        try:
+            situation_ligne = super().create(request, *args, **kwargs)
+            
+            # Récupérer la situation
+            situation = Situation.objects.get(id=request.data['situation'])
+            
+            # Mettre à jour les montants avec les valeurs du frontend
+            self.update_situation_from_frontend(situation, request.data)
+            
+            return situation_ligne
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def update_situation_montants(self, situation):
+        try:
+            # Recalculer les montants (comme dans SituationLigneViewSet)
+            montant_lignes_standard = situation.situation_lignes.aggregate(
+                total=Sum('montant')
+            )['total'] or Decimal('0')
+            
+            montant_lignes_avenants = situation.situation_lignes_avenants.aggregate(
+                total=Sum('montant')
+            )['total'] or Decimal('0')
+            
+            situation.montant_ht_mois = montant_lignes_standard + montant_lignes_avenants
+            
+            # Mettre à jour la situation
+            situation.save()
+            
+        except Exception as e:
+            print(f"Erreur dans update_situation_montants: {str(e)}")
+            raise
+
+# Mixin pour partager la méthode de mise à jour entre les ViewSets
+class SituationUpdateMixin:
+    @staticmethod
+    def update_situation_from_frontend(situation, data):
+        # Liste des champs à mettre à jour
+        fields = [
+            'montant_ht_mois',
+            'retenue_garantie',
+            'montant_prorata',
+            'montant_total_mois_apres_retenue',
+            'tva',
+            'montant_total',
+            'pourcentage_avancement',
+            'montant_total_cumul_ht',
+            'cumul_mois_precedent'
+        ]
+        
+        # Mettre à jour chaque champ s'il est présent dans les données
+        for field in fields:
+            if field in data:
+                setattr(situation, field, Decimal(str(data[field])))
+        
+        # Sauvegarder la situation
+        situation.save()
+
+# ViewSets avec le mixin
+class SituationLigneViewSet(SituationUpdateMixin, viewsets.ModelViewSet):
+    queryset = SituationLigne.objects.all()
+    serializer_class = SituationLigneSerializer
+
+class SituationLigneSupplementaireViewSet(SituationUpdateMixin, viewsets.ModelViewSet):
+    queryset = SituationLigneSupplementaire.objects.all()
+    serializer_class = SituationLigneSupplementaireSerializer
+
+class SituationLigneAvenantViewSet(SituationUpdateMixin, viewsets.ModelViewSet):
+    queryset = SituationLigneAvenant.objects.all()
+    serializer_class = SituationLigneAvenantSerializer

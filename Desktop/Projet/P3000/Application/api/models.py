@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
 from decimal import Decimal
 from django.core.exceptions import ValidationError
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -429,11 +431,26 @@ class Situation(models.Model):
     date_creation = models.DateTimeField(auto_now_add=True)
     date_validation = models.DateTimeField(null=True, blank=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    
+    # Montants calculés
     montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_actuel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_ht_cumule = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    taux_prorata = models.DecimalField(max_digits=4, decimal_places=2, default=2.50)
+    montant_ht_mois = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    pourcentage_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    
+    # Nouveaux champs
+    montant_total_cumul_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cumul_mois_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_total_mois_apres_retenue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tva = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Déductions standard
+    retenue_garantie = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    taux_prorata = models.DecimalField(max_digits=5, decimal_places=2, default=2.50)
+    montant_prorata = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    retenue_cie = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Traçabilité
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -451,38 +468,42 @@ class Situation(models.Model):
         ordering = ['-annee', '-mois']
         unique_together = ['chantier', 'mois', 'annee']
 
+    def __str__(self):
+        return f"Situation {self.numero} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"
+
 class SituationLigne(models.Model):
-    situation = models.ForeignKey(Situation, on_delete=models.CASCADE, related_name='lignes')
+    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='situation_lignes')
     ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, null=True, blank=True)
-    facture_ts = models.ForeignKey('FactureTS', on_delete=models.CASCADE, null=True, blank=True)
-    pourcentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    
-    class Meta:
-        constraints = [
-            models.CheckConstraint(
-                check=(
-                    models.Q(ligne_devis__isnull=False, facture_ts__isnull=True) |
-                    models.Q(ligne_devis__isnull=True, facture_ts__isnull=False)
-                ),
-                name='one_line_type_only'
-            )
-        ]
+    description = models.CharField(max_length=255)
+    quantite = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    total_ht = models.DecimalField(max_digits=10, decimal_places=2)
+    pourcentage_precedent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2)
+    montant = models.DecimalField(max_digits=10, decimal_places=2)
 
     def clean(self):
-        if self.ligne_devis and not self.ligne_devis.devis.devis_chantier:
-            raise ValidationError("Seuls les devis de chantier peuvent être utilisés dans les situations")
-        super().clean()
+        if not self.ligne_devis:
+            raise ValidationError("Une ligne doit être associée à une ligne de devis")
 
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
+class SituationLigneAvenant(models.Model):
+    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='situation_lignes_avenants')
+    avenant = models.ForeignKey('Avenant', on_delete=models.CASCADE)
+    facture_ts = models.ForeignKey('FactureTS', on_delete=models.CASCADE)
+    montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
+    pourcentage_precedent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2)
+    montant = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ['id']
 
 class SituationLigneSupplementaire(models.Model):
-    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='lignes_supplementaires')
+    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='situation_lignes_supplementaires')
     description = models.CharField(max_length=255)
     montant = models.DecimalField(max_digits=10, decimal_places=2)
-    type = models.CharField(max_length=20, default='deduction')  # 'deduction' ou 'addition'
-
+    type = models.CharField(max_length=20, choices=[('deduction', 'Déduction'), ('ajout', 'Ajout')], default='deduction')
+    
     class Meta:
         ordering = ['id']
 
@@ -723,5 +744,8 @@ class ChantierLigneSupplementaire(models.Model):
     class Meta:
         ordering = ['id']
 
-
+class SituationFactureCIE(models.Model):
+    situation = models.ForeignKey('Situation', on_delete=models.CASCADE)
+    facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
+    montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
 

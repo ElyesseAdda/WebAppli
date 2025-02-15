@@ -440,7 +440,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
 const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const [structure, setStructure] = useState([]);
   const [mois, setMois] = useState("");
-  const [annee, setAnnee] = useState("");
+  const [annee, setAnnee] = useState(new Date().getFullYear());
   const [commentaire, setCommentaire] = useState("");
   const [selectedChantier, setSelectedChantier] = useState(null);
   const [totalHT, setTotalHT] = useState(0);
@@ -451,6 +451,8 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
+  const [retenueCIE, setRetenueCIE] = useState(0);
+  const [facturesCIE, setFacturesCIE] = useState([]);
 
   useEffect(() => {
     if (devis?.id) {
@@ -598,6 +600,26 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   }, [open, chantier]);
 
+  useEffect(() => {
+    if (open && chantier?.id && mois && annee) {
+      const fetchCIEFactures = async () => {
+        try {
+          const response = await axios.get(
+            `/api/chantier/${chantier.id}/factures-cie/`,
+            {
+              params: { mois, annee },
+            }
+          );
+          setRetenueCIE(response.data.total);
+          setFacturesCIE(response.data.factures);
+        } catch (error) {
+          console.error("Erreur lors du chargement des factures CIE:", error);
+        }
+      };
+      fetchCIEFactures();
+    }
+  }, [open, chantier, mois, annee]);
+
   const handlePourcentageChange = (ligneId, value, type = "standard") => {
     const newValue = Math.min(Math.max(0, value), 100);
 
@@ -633,32 +655,206 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
   const handleSubmit = async () => {
     try {
+      const numeroResponse = await axios.get(
+        `/api/next-numero/chantier/${chantier.id}/`
+      );
+      const numero = numeroResponse.data.numero;
+
+      // 1. Calculer le montant HT du mois (somme des lignes standard)
+      const montantLignesStandard = structure.reduce((total, partie) => {
+        return (
+          total +
+          partie.sous_parties.reduce((sousTotal, sousPartie) => {
+            return (
+              sousTotal +
+              sousPartie.lignes.reduce((ligneTotal, ligne) => {
+                const montantLigne =
+                  (parseFloat(ligne.total_ht || 0) *
+                    parseFloat(ligne.pourcentage_actuel || 0)) /
+                  100;
+                return ligneTotal + montantLigne;
+              }, 0)
+            );
+          }, 0)
+        );
+      }, 0);
+
+      // 2. Calculer le montant des avenants
+      const montantAvenants = avenants.reduce((total, avenant) => {
+        return (
+          total +
+          (avenant.factures_ts || []).reduce((avenantTotal, ts) => {
+            const montantTS =
+              (parseFloat(ts.montant_ht || 0) *
+                parseFloat(ts.pourcentage_actuel || 0)) /
+              100;
+            return avenantTotal + montantTS;
+          }, 0)
+        );
+      }, 0);
+
+      // Montant HT total du mois
+      const montantHtMois = montantLignesStandard + montantAvenants;
+
+      console.log("Montant lignes standard:", montantLignesStandard);
+      console.log("Montant avenants:", montantAvenants);
+      console.log("Montant HT total du mois:", montantHtMois);
+
+      // Détail des calculs
+      console.log(
+        "Détail des lignes standard:",
+        structure.map((partie) =>
+          partie.sous_parties.map((sousPartie) =>
+            sousPartie.lignes.map((ligne) => ({
+              description: ligne.description,
+              total_ht: ligne.total_ht,
+              pourcentage: ligne.pourcentage_actuel,
+              montant:
+                (parseFloat(ligne.total_ht || 0) *
+                  parseFloat(ligne.pourcentage_actuel || 0)) /
+                100,
+            }))
+          )
+        )
+      );
+
+      console.log(
+        "Détail des avenants:",
+        avenants.map((avenant) =>
+          avenant.factures_ts.map((ts) => ({
+            numero: ts.numero_ts,
+            montant_ht: ts.montant_ht,
+            pourcentage: ts.pourcentage_actuel,
+            montant:
+              (parseFloat(ts.montant_ht || 0) *
+                parseFloat(ts.pourcentage_actuel || 0)) /
+              100,
+          }))
+        )
+      );
+
+      // 3. Calculer les retenues
+      const retenueGarantie = montantHtMois * 0.05;
+      const montantProrata = montantHtMois * (tauxProrata / 100);
+      const retenueCIEValue = parseFloat(retenueCIE || 0);
+
+      console.log("Retenue garantie:", retenueGarantie);
+      console.log("Montant prorata:", montantProrata);
+      console.log("Retenue CIE:", retenueCIEValue);
+
+      // 4. Calculer le montant total après retenues
+      let montantTotalApresRetenue = montantHtMois;
+      montantTotalApresRetenue -= retenueGarantie;
+      montantTotalApresRetenue -= montantProrata;
+      montantTotalApresRetenue -= retenueCIEValue;
+
+      // 5. Appliquer les lignes supplémentaires
+      lignesSupplementaires.forEach((ligne) => {
+        const montantLigne = parseFloat(ligne.montant || 0);
+        if (ligne.type === "deduction") {
+          montantTotalApresRetenue -= montantLigne;
+        } else {
+          montantTotalApresRetenue += montantLigne;
+        }
+      });
+
+      // 6. Calculer la TVA
+      const tva = montantTotalApresRetenue * (devis.tva_rate / 100);
+
       const situationData = {
+        numero: numero,
         chantier: chantier.id,
         devis: devis.id,
         mois: parseInt(mois),
         annee: parseInt(annee),
-        taux_prorata: parseFloat(tauxProrata),
-        lignes: [
-          ...structure.map((partie) => ({
-            ligne_devis: partie.id,
-            pourcentage_actuel: partie.pourcentage_actuel,
-          })),
-          ...avenants.flatMap((avenant) =>
-            avenant.factures_ts.map((ts) => ({
-              facture_ts: ts.id,
-              pourcentage_actuel: ts.pourcentage_actuel || 0,
-            }))
-          ),
-        ],
-        lignes_supplementaires: lignesSupplementaires,
+        montant_ht_mois: montantHtMois.toFixed(2),
+        retenue_garantie: retenueGarantie.toFixed(2),
+        taux_prorata: parseFloat(tauxProrata).toFixed(2),
+        montant_prorata: montantProrata.toFixed(2),
+        retenue_cie: retenueCIEValue.toFixed(2),
+        montant_total_mois_apres_retenue: montantTotalApresRetenue.toFixed(2),
+        tva: tva.toFixed(2),
+        pourcentage_avancement: totalAvancement.toFixed(2),
       };
 
-      await axios.post("/api/situations/", situationData);
-      alert("Situation créée avec succès");
+      console.log("Données à envoyer:", situationData);
+
+      const situationResponse = await axios.post(
+        "/api/situations/",
+        situationData
+      );
+      const situationId = situationResponse.data.id;
+
+      // 7. Créer les lignes de situation standard
+      const lignesPromises = structure.flatMap((partie) =>
+        partie.sous_parties.flatMap((sousPartie) =>
+          sousPartie.lignes.map((ligne) => {
+            const montant =
+              (parseFloat(ligne.total_ht || 0) *
+                parseFloat(ligne.pourcentage_actuel || 0)) /
+              100;
+            return axios.post("/api/situation-lignes/", {
+              situation: situationId,
+              ligne_devis: ligne.id,
+              description: ligne.description,
+              quantite: parseFloat(ligne.quantite || 0).toFixed(2),
+              prix_unitaire: parseFloat(ligne.prix_unitaire || 0).toFixed(2),
+              total_ht: parseFloat(ligne.total_ht || 0).toFixed(2),
+              pourcentage_precedent: parseFloat(
+                ligne.pourcentage_precedent || 0
+              ).toFixed(2),
+              pourcentage_actuel: parseFloat(
+                ligne.pourcentage_actuel || 0
+              ).toFixed(2),
+              montant: montant.toFixed(2),
+            });
+          })
+        )
+      );
+
+      // 8. Créer les lignes d'avenants
+      const lignesAvenantsPromises = avenants.flatMap((avenant) =>
+        (avenant.factures_ts || []).map((ts) => {
+          const montant =
+            (parseFloat(ts.montant_ht || 0) *
+              parseFloat(ts.pourcentage_actuel || 0)) /
+            100;
+          return axios.post("/api/situation-lignes-avenants/", {
+            situation: situationId,
+            avenant: avenant.id,
+            facture_ts: ts.id,
+            montant_ht: parseFloat(ts.montant_ht || 0).toFixed(2),
+            pourcentage_precedent: parseFloat(
+              ts.pourcentage_precedent || 0
+            ).toFixed(2),
+            pourcentage_actuel: parseFloat(ts.pourcentage_actuel || 0).toFixed(
+              2
+            ),
+            montant: montant.toFixed(2),
+          });
+        })
+      );
+
+      // 9. Créer les lignes supplémentaires
+      const lignesSupplPromises = lignesSupplementaires.map((ligne) =>
+        axios.post("/api/situation-lignes-supplementaires/", {
+          situation: situationId,
+          description: ligne.description,
+          montant: parseFloat(ligne.montant || 0).toFixed(2),
+          type: ligne.type,
+        })
+      );
+
+      await Promise.all([
+        ...lignesPromises,
+        ...lignesAvenantsPromises,
+        ...lignesSupplPromises,
+      ]);
+
+      alert("Situation et lignes créées avec succès");
       onClose();
     } catch (error) {
-      console.error("Erreur lors de la création de la situation:", error);
+      console.error("Erreur détaillée:", error.response?.data);
       alert(
         error.response?.data?.error ||
           "Erreur lors de la création de la situation"
@@ -687,7 +883,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
   // Calcul du total avec les lignes supplémentaires
   const calculerTotalNet = () => {
-    // Montant HT du mois de base
     let total = montantHTMois;
 
     // Retenue de garantie (5%)
@@ -697,6 +892,9 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     // Compte prorata
     const compteProrata = total * (tauxProrata / 100);
     total -= compteProrata;
+
+    // Retenue CIE
+    total -= parseFloat(retenueCIE);
 
     // Lignes supplémentaires
     lignesSupplementaires.forEach((ligne) => {
@@ -865,6 +1063,36 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                     .toFixed(2)
                     .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
                   €
+                </TableCell>
+              </TableRow>
+
+              {/* Retenue CIE */}
+              <TableRow>
+                <TableCell>Retenue CIE HT du mois</TableCell>
+                <TableCell align="right">
+                  <Box>
+                    <TextField
+                      type="number"
+                      value={retenueCIE}
+                      onChange={(e) => setRetenueCIE(e.target.value)}
+                      inputProps={{ step: "0.01" }}
+                      size="small"
+                    />
+                    {facturesCIE.length > 0 && (
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ mt: 1, color: "text.secondary" }}
+                      >
+                        Factures incluses :
+                        {facturesCIE.map((f) => (
+                          <div key={f.id}>
+                            {f.numero}: {f.montant_ht.toFixed(2)}€
+                          </div>
+                        ))}
+                      </Typography>
+                    )}
+                  </Box>
                 </TableCell>
               </TableRow>
 

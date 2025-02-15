@@ -26,18 +26,23 @@ from .views import (
     get_chantier_avenants,
     get_next_ts_number,
     create_facture_ts,
-    
     create_facture_cie,
     SituationViewSet,
     SituationLigneViewSet,
+    SituationLigneSupplementaireViewSet,
     get_devis_structure,
     get_situations_chantier,
     get_situation_detail,
-    update_situation_ligne,
     FactureTSViewSet,
     delete_devis,
     get_chantier_lignes_default,
     update_chantier_lignes_default,
+    get_factures_cie,
+    create_situation,
+    delete_situation,
+    update_situation,
+    get_next_numero,
+    SituationLigneAvenantViewSet,
 )
 
 router = DefaultRouter()
@@ -55,8 +60,10 @@ router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
 router.register(r'bons-commande', BonCommandeViewSet)
 router.register(r'situations', SituationViewSet)
-router.register(r'situation-lignes', SituationLigneViewSet)
+router.register(r'situation-lignes', SituationLigneViewSet, basename='situation-lignes')
+router.register(r'situation-lignes-supplementaires', SituationLigneSupplementaireViewSet)
 router.register(r'factures-ts', FactureTSViewSet)
+router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
@@ -117,13 +124,17 @@ urlpatterns = [
     path('avenant_chantier/<int:chantier_id>/avenants/', get_chantier_avenants, name='chantier-avenants'),
     path('next_ts_number_chantier/<int:chantier_id>/next-ts-number/', get_next_ts_number, name='next-ts-number'),
     path('create-facture-ts/', create_facture_ts, name='create-facture-ts'),
-    # path('situation-mensuelle/<int:chantier_id>/<int:mois>/<int:annee>/', get_situation_mensuelle, name='get_situation_mensuelle'),
     path('create-facture-cie/', create_facture_cie, name='create-facture-cie'),
     path('devis-structure/<int:devis_id>/structure/', get_devis_structure, name='devis-structure'),
-    path('chantier/<int:chantier_id>/situations/', get_situations_chantier, name='chantier-situations'),
-    path('situation/<int:situation_id>/', get_situation_detail, name='situation-detail'),
-    path('situation-ligne/<int:ligne_id>/update/', update_situation_ligne, name='update-situation-ligne'),
+    path('chantier/<int:chantier_id>/situations/', get_situations_chantier, name='list-situations'),
+    path('situations/<int:situation_id>/', get_situation_detail, name='situation-detail'),
+    path('situations/<int:situation_id>/update/', update_situation, name='update-situation'),
+    path('situations/<int:situation_id>/delete/', delete_situation, name='delete-situation'),
     path('devis/<int:devis_id>/', delete_devis, name='delete_devis'),
     path('chantier/<int:chantier_id>/lignes-default/', get_chantier_lignes_default, name='get-chantier-lignes-default'),
     path('chantier/<int:chantier_id>/lignes-default/update/', update_chantier_lignes_default, name='update-chantier-lignes-default'),
+    path('chantier/<int:chantier_id>/factures-cie/', get_factures_cie, name='get-factures-cie'),
+    path('situations/', create_situation, name='create-situation'),
+    path('next-numero/', get_next_numero, name='next-numero'),
+    path('next-numero/chantier/<int:chantier_id>/', get_next_numero, name='next-situation-numero'),
 ]
