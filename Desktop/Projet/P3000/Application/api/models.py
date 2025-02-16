@@ -426,6 +426,7 @@ class Situation(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE)
     devis = models.ForeignKey('Devis', on_delete=models.CASCADE)
     numero = models.CharField(max_length=50)
+    numero_situation = models.IntegerField(default=1)
     mois = models.IntegerField()
     annee = models.IntegerField()
     date_creation = models.DateTimeField(auto_now_add=True)

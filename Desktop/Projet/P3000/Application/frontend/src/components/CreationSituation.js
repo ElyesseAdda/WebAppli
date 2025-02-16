@@ -147,6 +147,12 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
     );
   }
 
+  const getComparisonColor = (current, previous) => {
+    if (current < previous) return "error.main"; // Rouge
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    return "text.primary"; // Noir
+  };
+
   return (
     <Box>
       <Table>
@@ -198,24 +204,37 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
                     type="number"
                     value={ligne.pourcentage_actuel || 0}
                     onChange={(e) =>
-                      handlePourcentageChange(
-                        ligne.id,
-                        parseFloat(e.target.value)
-                      )
+                      handlePourcentageChange(ligne.id, e.target.value)
                     }
-                    InputProps={{ inputProps: { min: 0, max: 100 } }}
+                    onFocus={(e) => e.target.select()}
+                    InputProps={{
+                      inputProps: {
+                        min: 0,
+                        max: 100,
+                        step: "any",
+                      },
+                    }}
                     size="small"
+                    sx={{
+                      width: "100px",
+                      "& input": {
+                        textAlign: "right",
+                        color: getComparisonColor(
+                          ligne.pourcentage_actuel || 0,
+                          ligne.pourcentage_precedent || 0
+                        ),
+                      },
+                    }}
                   />
                 </TableCell>
                 <TableCell
                   align="right"
                   sx={{
-                    color:
-                      (ligne.pourcentage_actuel || 0) > 0
-                        ? "rgb(16, 190, 0)"
-                        : "rgba(27, 120, 188, 1)",
+                    color: getComparisonColor(
+                      ligne.pourcentage_actuel || 0,
+                      ligne.pourcentage_precedent || 0
+                    ),
                     fontWeight: "bold",
-                    transition: "color 0.3s ease",
                   }}
                 >
                   {((ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100)
@@ -252,6 +271,12 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
       0
     );
   }
+
+  const getComparisonColor = (current, previous) => {
+    if (current < previous) return "error.main"; // Rouge
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    return "text.primary"; // Noir
+  };
 
   return (
     <Box>
@@ -308,13 +333,14 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                             type="number"
                             value={ts.pourcentage_actuel || 0}
                             onChange={(e) => {
-                              const newValue = parseFloat(e.target.value);
+                              const newValue = e.target.value;
                               handlePourcentageChange(
                                 ts.id,
                                 newValue,
                                 "avenant"
                               );
                             }}
+                            onFocus={(e) => e.target.select()}
                             InputProps={{
                               inputProps: {
                                 min: 0,
@@ -323,17 +349,26 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                               },
                             }}
                             size="small"
+                            sx={{
+                              width: "100px",
+                              "& input": {
+                                textAlign: "right",
+                                color: getComparisonColor(
+                                  ts.pourcentage_actuel || 0,
+                                  ts.pourcentage_precedent || 0
+                                ),
+                              },
+                            }}
                           />
                         </TableCell>
                         <TableCell
                           align="right"
                           sx={{
-                            color:
-                              (ts.pourcentage_actuel || 0) > 0
-                                ? "rgb(16, 190, 0)"
-                                : "rgba(27, 120, 188, 1)",
+                            color: getComparisonColor(
+                              ts.pourcentage_actuel || 0,
+                              ts.pourcentage_precedent || 0
+                            ),
                             fontWeight: "bold",
-                            transition: "color 0.3s ease",
                           }}
                         >
                           {(
@@ -528,77 +563,260 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
   }, [avenants]);
 
   useEffect(() => {
-    if (open && chantier?.id) {
-      // Récupérer la dernière situation pour ce chantier
-      const fetchLastSituation = async () => {
+    if (open && chantier?.id && mois && annee) {
+      const fetchSituationData = async () => {
         try {
+          console.log("=== Chargement des données de situation ===");
+
+          // 1. Vérifier si une situation existe déjà pour ce mois/année
           const response = await axios.get(
-            `/api/chantier/${chantier.id}/situations/`
+            `/api/chantier/${chantier.id}/situations/by-month/`,
+            {
+              params: { mois, annee },
+            }
           );
           const situations = response.data;
+
+          // 2. Charger les lignes supplémentaires par défaut du chantier
+          const lignesDefaultResponse = await axios.get(
+            `/api/chantier/${chantier.id}/lignes-default/`
+          );
+          const lignesDefault = lignesDefaultResponse.data;
+
           if (situations.length > 0) {
-            const lastSituation = situations[0];
-            setTauxProrata(lastSituation.taux_prorata);
-            setLastSituation(lastSituation);
+            console.log("Situation existante trouvée pour ce mois");
+            const currentSituation = situations[0];
+            initializeSituationData(currentSituation);
+          } else {
+            console.log("Création d'une nouvelle situation");
+            // Récupérer la dernière situation du chantier
+            const lastSituationResponse = await axios.get(
+              `/api/chantier/${chantier.id}/last-situation/`
+            );
+
+            if (lastSituationResponse.data) {
+              console.log(
+                `Dernière situation trouvée: n°${lastSituationResponse.data.numero_situation}`
+              );
+              const lastSituation = lastSituationResponse.data;
+
+              // Fusionner les lignes supplémentaires existantes avec les lignes par défaut
+              const mergedLignes = mergeSupplementaryLines(
+                lignesDefault,
+                lastSituation.situation_lignes_supplementaires
+              );
+
+              initializeSituationData(lastSituation, true, mergedLignes);
+            } else {
+              console.log("Première situation du chantier");
+              // Utiliser les lignes par défaut avec montant 0
+              const initialLignes = lignesDefault.map((ligne) => ({
+                ...ligne,
+                montant: "0.00",
+              }));
+              setLignesSupplementaires(initialLignes);
+              resetSituationData();
+            }
           }
         } catch (error) {
-          console.error(
-            "Erreur lors de la récupération de la dernière situation:",
-            error
-          );
+          console.error("Erreur:", error);
+          resetSituationData();
         }
       };
-      fetchLastSituation();
+
+      fetchSituationData();
     }
-  }, [open, chantier]);
+  }, [open, chantier, mois, annee]);
+
+  // Fonction pour fusionner les lignes supplémentaires
+  const mergeSupplementaryLines = (defaultLines, existingLines) => {
+    const mergedLines = [...defaultLines];
+
+    // Ajouter les lignes existantes qui ne sont pas dans les lignes par défaut
+    existingLines.forEach((existingLine) => {
+      const exists = mergedLines.some(
+        (defaultLine) => defaultLine.description === existingLine.description
+      );
+      if (!exists) {
+        mergedLines.push({
+          ...existingLine,
+          montant: "0.00", // Réinitialiser le montant pour la nouvelle situation
+        });
+      }
+    });
+
+    return mergedLines;
+  };
+
+  // Modifier la fonction d'initialisation
+  const initializeSituationData = (
+    situation,
+    isNewSituation = false,
+    mergedLignes = null
+  ) => {
+    setTauxProrata(situation.taux_prorata);
+    setLastSituation(situation);
+
+    // Mettre à jour les pourcentages de la structure
+    const newStructure = structure.map((partie) => ({
+      ...partie,
+      sous_parties: partie.sous_parties.map((sousPartie) => ({
+        ...sousPartie,
+        lignes: sousPartie.lignes.map((ligne) => {
+          const situationLigne = situation.situation_lignes.find(
+            (l) => l.ligne_devis === ligne.id
+          );
+          return {
+            ...ligne,
+            pourcentage_precedent: situationLigne
+              ? parseFloat(situationLigne.pourcentage_actuel)
+              : 0,
+            pourcentage_actuel: isNewSituation
+              ? situationLigne
+                ? parseFloat(situationLigne.pourcentage_actuel)
+                : 0
+              : situationLigne
+              ? parseFloat(situationLigne.pourcentage_actuel)
+              : 0,
+          };
+        }),
+      })),
+    }));
+    setStructure(newStructure);
+
+    // Mettre à jour les pourcentages des avenants
+    if (avenants.length > 0) {
+      const newAvenants = avenants.map((avenant) => ({
+        ...avenant,
+        factures_ts: (avenant.factures_ts || []).map((ts) => {
+          const situationTs = situation.situation_lignes_avenants.find(
+            (l) => l.facture_ts === ts.id
+          );
+          return {
+            ...ts,
+            pourcentage_precedent: situationTs
+              ? parseFloat(situationTs.pourcentage_actuel)
+              : 0,
+            pourcentage_actuel: isNewSituation
+              ? situationTs
+                ? parseFloat(situationTs.pourcentage_actuel)
+                : 0
+              : situationTs
+              ? parseFloat(situationTs.pourcentage_actuel)
+              : 0,
+          };
+        }),
+      }));
+      setAvenants(newAvenants);
+    }
+
+    // Mettre à jour les lignes supplémentaires
+    if (isNewSituation && mergedLignes) {
+      setLignesSupplementaires(mergedLignes);
+    } else if (
+      !isNewSituation &&
+      situation.situation_lignes_supplementaires?.length > 0
+    ) {
+      setLignesSupplementaires(situation.situation_lignes_supplementaires);
+    } else {
+      setLignesSupplementaires([]);
+    }
+
+    // Mettre à jour la retenue CIE
+    if (situation.retenue_cie) {
+      setRetenueCIE(parseFloat(situation.retenue_cie));
+    }
+  };
+
+  // Fonction pour réinitialiser les données
+  const resetSituationData = () => {
+    setTauxProrata(2.5); // Valeur par défaut
+    setLastSituation(null);
+    setLignesSupplementaires([]);
+    setRetenueCIE(0);
+
+    // Réinitialiser la structure avec des pourcentages à 0
+    const newStructure = structure.map((partie) => ({
+      ...partie,
+      sous_parties: partie.sous_parties.map((sousPartie) => ({
+        ...sousPartie,
+        lignes: sousPartie.lignes.map((ligne) => ({
+          ...ligne,
+          pourcentage_precedent: 0,
+          pourcentage_actuel: 0,
+        })),
+      })),
+    }));
+    setStructure(newStructure);
+  };
 
   // Calculer le montant HT du mois à partir des lignes
   useEffect(() => {
+    console.log("=== Calcul du montant HT du mois ===");
     let montantActuel = 0;
 
     // Calculer le montant des lignes standard
+    console.log("1. Calcul des lignes standard:");
     structure.forEach((partie) => {
       partie.sous_parties.forEach((sousPartie) => {
         sousPartie.lignes.forEach((ligne) => {
-          montantActuel +=
-            (ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100;
+          const montantLigne =
+            (parseFloat(ligne.total_ht || 0) *
+              parseFloat(ligne.pourcentage_actuel || 0)) /
+            100;
+          console.log(`   - Ligne: ${ligne.description}`);
+          console.log(`     Montant HT: ${ligne.total_ht} €`);
+          console.log(`     Pourcentage: ${ligne.pourcentage_actuel}%`);
+          console.log(`     Montant calculé: ${montantLigne.toFixed(2)} €`);
+          montantActuel += montantLigne;
         });
       });
     });
+    console.log(`Sous-total lignes standard: ${montantActuel.toFixed(2)} €`);
 
-    // Ajouter le montant des TS
+    // Ajouter le montant des TS (avenants)
+    console.log("\n2. Calcul des avenants:");
     avenants?.forEach((avenant) => {
+      console.log(`   Avenant: ${avenant.numero || "Sans numéro"}`);
       avenant.factures_ts?.forEach((ts) => {
-        montantActuel += (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100;
+        const montantTS =
+          (parseFloat(ts.montant_ht || 0) *
+            parseFloat(ts.pourcentage_actuel || 0)) /
+          100;
+        console.log(`     - TS: ${ts.numero_ts || "Sans numéro"}`);
+        console.log(`       Montant HT: ${ts.montant_ht} €`);
+        console.log(`       Pourcentage: ${ts.pourcentage_actuel}%`);
+        console.log(`       Montant calculé: ${montantTS.toFixed(2)} €`);
+        montantActuel += montantTS;
       });
     });
+    console.log(
+      `Montant total actuel (avec avenants): ${montantActuel.toFixed(2)} €`
+    );
 
-    // Calculer la différence avec le montant précédent
-    const montantPrecedent = lastSituation ? lastSituation.montant_total : 0;
-    setMontantHTMois(montantActuel - montantPrecedent);
-  }, [structure, avenants, lastSituation]);
-
-  useEffect(() => {
-    if (open && chantier?.id) {
-      // Charger les lignes supplémentaires par défaut
-      const fetchLignesDefault = async () => {
-        try {
-          const response = await axios.get(
-            `/api/chantier/${chantier.id}/lignes-default/`
-          );
-          if (response.data.lignes.length > 0) {
-            setLignesSupplementaires(response.data.lignes);
-          }
-        } catch (error) {
-          console.error(
-            "Erreur lors du chargement des lignes par défaut:",
-            error
-          );
-        }
-      };
-      fetchLignesDefault();
+    // Récupération du montant cumulé précédent
+    let montantCumulePrecedent = 0;
+    if (lastSituation) {
+      console.log(
+        `Utilisation de la situation n°${lastSituation.numero_situation}`
+      );
+      montantCumulePrecedent = parseFloat(lastSituation.montant_ht_mois || 0);
+    } else {
+      console.log("Première situation - pas de montant cumulé précédent");
     }
-  }, [open, chantier]);
+
+    // Le montant HT du mois est la différence entre le montant actuel et le cumul précédent
+    const montantHTMois = montantActuel - montantCumulePrecedent;
+
+    console.log({
+      numeroSituation: lastSituation?.numero_situation || "Nouvelle",
+      montantActuel: montantActuel.toFixed(2),
+      montantCumulePrecedent: montantCumulePrecedent.toFixed(2),
+      montantHTMois: montantHTMois.toFixed(2),
+    });
+
+    setMontantHTMois(montantHTMois);
+  }, [structure, avenants, lastSituation]);
 
   useEffect(() => {
     if (open && chantier?.id && mois && annee) {
@@ -620,47 +838,102 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   }, [open, chantier, mois, annee]);
 
+  const getComparisonColor = (current, previous) => {
+    if (current < previous) return "error.main"; // Rouge
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    return "text.primary"; // Noir
+  };
+
   const handlePourcentageChange = (ligneId, value, type = "standard") => {
-    const newValue = Math.min(Math.max(0, value), 100);
+    // Convertir la valeur en nombre
+    let newValue = value === "" ? 0 : parseFloat(value);
+
+    // Si la valeur n'est pas un nombre valide, retourner
+    if (isNaN(newValue)) {
+      return;
+    }
+
+    // Limiter la valeur entre 0 et 100
+    newValue = Math.min(Math.max(newValue, 0), 100);
 
     if (type === "avenant") {
-      // Gestion des TS d'avenant
       const newAvenants = avenants.map((avenant) => ({
         ...avenant,
-        factures_ts: avenant.factures_ts.map((ts) =>
-          ts.id === ligneId ? { ...ts, pourcentage_actuel: newValue } : ts
-        ),
+        factures_ts: avenant.factures_ts.map((ts) => {
+          if (ts.id === ligneId) {
+            return { ...ts, pourcentage_actuel: newValue };
+          }
+          return ts;
+        }),
       }));
       setAvenants(newAvenants);
     } else {
-      // Gestion des lignes standard
       const newStructure = structure.map((partie) => ({
         ...partie,
         sous_parties: partie.sous_parties.map((sousPartie) => ({
           ...sousPartie,
-          lignes: sousPartie.lignes.map((ligne) =>
-            ligne.id === ligneId
-              ? {
-                  ...ligne,
-                  pourcentage_actuel: newValue,
-                  montant: (ligne.total_ht * newValue) / 100,
-                }
-              : ligne
-          ),
+          lignes: sousPartie.lignes.map((ligne) => {
+            if (ligne.id === ligneId) {
+              return {
+                ...ligne,
+                pourcentage_actuel: newValue,
+              };
+            }
+            return ligne;
+          }),
         })),
       }));
       setStructure(newStructure);
     }
   };
 
+  // Ajouter la fonction pour récupérer le prochain numero_situation
+  const getNextNumeroSituation = async (chantierId) => {
+    try {
+      const response = await axios.get(
+        `/api/chantier/${chantierId}/situations/`
+      );
+      const situations = response.data;
+
+      console.log("Situations existantes:", situations);
+
+      // Si aucune situation, commencer à 1
+      if (situations.length === 0) {
+        console.log("Première situation -> numero_situation: 1");
+        return 1;
+      }
+
+      // Trouver le plus grand numero_situation existant
+      const maxNumero = Math.max(...situations.map((s) => s.numero_situation));
+      const nextNumero = maxNumero + 1;
+      console.log(
+        `Dernier numero_situation: ${maxNumero}, prochain: ${nextNumero}`
+      );
+
+      return nextNumero;
+    } catch (error) {
+      console.error(
+        "Erreur lors de la récupération du numero_situation:",
+        error
+      );
+      throw error;
+    }
+  };
+
+  // Modifier handleSubmit pour utiliser getNextNumeroSituation
   const handleSubmit = async () => {
     try {
       const numeroResponse = await axios.get(
         `/api/next-numero/chantier/${chantier.id}/`
       );
       const numero = numeroResponse.data.numero;
+      // Le numero_situation est géré par get_chantier_situations
+      const nextNumeroSituation = await getNextNumeroSituation(chantier.id);
+      console.log("Prochain numero_situation:", nextNumeroSituation);
 
+      // Le numero complet est géré par le backend via get_next_situation_number
       // 1. Calculer le montant HT du mois (somme des lignes standard)
+
       const montantLignesStandard = structure.reduce((total, partie) => {
         return (
           total +
@@ -763,6 +1036,8 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
       const situationData = {
         numero: numero,
+        numero_situation: nextNumeroSituation, // Ajouter uniquement le numero_situation
+
         chantier: chantier.id,
         devis: devis.id,
         mois: parseInt(mois),
@@ -854,7 +1129,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
       alert("Situation et lignes créées avec succès");
       onClose();
     } catch (error) {
-      console.error("Erreur détaillée:", error.response?.data);
+      console.error("Erreur lors de la création de la situation:", error);
       alert(
         error.response?.data?.error ||
           "Erreur lors de la création de la situation"

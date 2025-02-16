@@ -15,14 +15,14 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer
 from .models import (
     Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant  # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire # Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction, models
@@ -3160,7 +3160,7 @@ def create_situation(request):
         data = request.data.copy()
         print("Données reçues:", data)
         
-        serializer = SituationSerializer(data=data)
+        serializer = SituationCreateSerializer(data=data)
         if not serializer.is_valid():
             print("Erreurs de validation:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -3373,34 +3373,32 @@ def delete_devis(request, devis_id):
 
 @api_view(['GET'])
 def get_chantier_lignes_default(request, chantier_id):
-    lignes = ChantierLigneSupplementaire.objects.filter(chantier_id=chantier_id)
-    return Response({
-        'lignes': [{
-            'description': ligne.description,
-            'montant': float(ligne.montant),
-            'type': 'deduction'  # type par défaut
-        } for ligne in lignes]
-    })
+    try:
+        lignes = ChantierLigneSupplementaire.objects.filter(chantier_id=chantier_id)
+        serializer = ChantierLigneSupplementaireSerializer(lignes, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
-@api_view(['PUT'])
+@api_view(['POST'])
 def update_chantier_lignes_default(request, chantier_id):
     try:
-        lignes = request.data.get('lignes', [])
+        chantier = get_object_or_404(Chantier, id=chantier_id)
         
         # Supprimer les anciennes lignes
-        ChantierLigneSupplementaire.objects.filter(chantier_id=chantier_id).delete()
+        ChantierLigneSupplementaire.objects.filter(chantier=chantier).delete()
         
         # Créer les nouvelles lignes
-        for ligne in lignes:
+        for ligne in request.data:
             ChantierLigneSupplementaire.objects.create(
-                chantier_id=chantier_id,
+                chantier=chantier,
                 description=ligne['description'],
                 montant=ligne['montant']
             )
         
-        return Response({'success': True})
+        return Response({'status': 'success'})
     except Exception as e:
-        return Response({'success': False, 'error': str(e)}, status=400)
+        return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
 def get_factures_cie(request, chantier_id):
@@ -3630,3 +3628,41 @@ class SituationLigneSupplementaireViewSet(SituationUpdateMixin, viewsets.ModelVi
 class SituationLigneAvenantViewSet(SituationUpdateMixin, viewsets.ModelViewSet):
     queryset = SituationLigneAvenant.objects.all()
     serializer_class = SituationLigneAvenantSerializer
+
+@api_view(['GET'])
+def get_situations(request, chantier_id):
+    mois = request.GET.get('mois')
+    annee = request.GET.get('annee')
+    
+    situations = Situation.objects.filter(
+        chantier_id=chantier_id,
+        mois=mois,
+        annee=annee
+    ).order_by('-date_creation')
+    
+    return Response(SituationSerializer(situations, many=True).data)
+
+@api_view(['GET'])
+def get_last_situation(request, chantier_id):
+    try:
+        # Récupère la dernière situation basée sur la date de création
+        last_situation = Situation.objects.filter(
+            chantier_id=chantier_id
+        ).order_by('-date_creation').first()
+        
+        if last_situation:
+            return Response(SituationSerializer(last_situation).data)
+        return Response(None)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+def get_chantier_situations(request, chantier_id):
+    try:
+        situations = Situation.objects.filter(
+            chantier_id=chantier_id
+        ).order_by('numero_situation')
+        
+        return Response(SituationSerializer(situations, many=True).data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)

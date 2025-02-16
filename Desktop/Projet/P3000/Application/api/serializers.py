@@ -612,7 +612,8 @@ class SituationSerializer(serializers.ModelSerializer):
             'chantier',
             'devis',
             'created_by',
-            'validated_by'
+            'validated_by',
+            'numero_situation'
         ]
 
 class SituationCreateSerializer(serializers.ModelSerializer):
@@ -625,16 +626,69 @@ class SituationCreateSerializer(serializers.ModelSerializer):
             'commentaire'
         ]
 
+    def create(self, validated_data):
+        chantier = validated_data['chantier']
+        
+        # Récupérer la dernière situation pour ce chantier
+        last_situation = Situation.objects.filter(
+            chantier=chantier
+        ).order_by('-numero_situation').first()
+
+        # Générer le prochain numéro
+        next_numero = 1
+        if last_situation:
+            next_numero = last_situation.numero_situation + 1
+
+        # Créer la situation avec le nouveau numéro
+        situation = Situation.objects.create(
+            **validated_data,
+            numero_situation=next_numero
+        )
+        
+        return situation
+
     def validate(self, data):
-        # Vérifier si une situation existe déjà pour ce mois/année/chantier
+        chantier = data['chantier']
+        mois = data['mois']
+        annee = data['annee']
+
+        # 1. Vérifier si une situation existe déjà pour ce mois/année/chantier
         if Situation.objects.filter(
-            chantier=data['chantier'],
-            mois=data['mois'],
-            annee=data['annee']
+            chantier=chantier,
+            mois=mois,
+            annee=annee
         ).exists():
             raise serializers.ValidationError(
-                f"Une situation existe déjà pour {data['mois']}/{data['annee']}"
+                f"Une situation existe déjà pour {mois}/{annee}"
             )
+
+        # 2. Vérifier et générer le numéro de situation
+        last_situation = Situation.objects.filter(
+            chantier=chantier
+        ).order_by('-numero_situation').first()
+
+        if last_situation:
+            # Vérifier qu'il n'y a pas de doublon
+            if Situation.objects.filter(
+                chantier=chantier,
+                numero_situation=last_situation.numero_situation + 1
+            ).exists():
+                raise serializers.ValidationError(
+                    f"Une situation avec le numéro {last_situation.numero_situation + 1} existe déjà pour ce chantier"
+                )
+            data['numero_situation'] = last_situation.numero_situation + 1
+        else:
+            # Première situation du chantier
+            if Situation.objects.filter(
+                chantier=chantier,
+                numero_situation=1
+            ).exists():
+                raise serializers.ValidationError(
+                    "Une première situation existe déjà pour ce chantier"
+                )
+            data['numero_situation'] = 1
+
+        print(f"Numéro de situation validé: {data['numero_situation']}")
         return data
 
 class SituationLigneUpdateSerializer(serializers.ModelSerializer):
@@ -701,3 +755,4 @@ class ChantierLigneSupplementaireSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChantierLigneSupplementaire
         fields = ['id', 'description', 'montant']
+        
