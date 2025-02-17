@@ -3598,16 +3598,46 @@ class SituationLigneAvenantViewSet(SituationUpdateMixin, viewsets.ModelViewSet):
 
 @api_view(['GET'])
 def get_situations(request, chantier_id):
-    mois = request.GET.get('mois')
-    annee = request.GET.get('annee')
-    
-    situations = Situation.objects.filter(
-        chantier_id=chantier_id,
-        mois=mois,
-        annee=annee
-    ).order_by('-date_creation')
-    
-    return Response(SituationSerializer(situations, many=True).data)
+    try:
+        mois = request.GET.get('mois')
+        annee = request.GET.get('annee')
+        
+        print(f"Recherche des situations - Chantier: {chantier_id}, Mois: {mois}, Année: {annee}")
+        
+        # Validation des paramètres
+        if not all([mois, annee]):
+            return Response(
+                {"error": "Les paramètres mois et année sont requis"}, 
+                status=400
+            )
+
+        # Conversion en entiers pour éviter les problèmes de type
+        mois = int(mois)
+        annee = int(annee)
+
+        # Requête avec prefetch_related pour optimiser les performances
+        situations = Situation.objects.filter(
+            chantier_id=chantier_id,
+            mois=mois,
+            annee=annee
+        ).prefetch_related(
+            'lignes',
+            'lignes_supplementaires',
+            'lignes_avenant'
+        ).order_by('-date_creation')
+
+        print(f"Nombre de situations trouvées: {situations.count()}")
+        
+        return Response(SituationSerializer(situations, many=True).data)
+
+    except ValueError as e:
+        return Response(
+            {"error": "Format invalide pour le mois ou l'année"}, 
+            status=400
+        )
+    except Exception as e:
+        print(f"Erreur lors de la recherche des situations: {str(e)}")
+        return Response({"error": str(e)}, status=400)
 
 @api_view(['GET'])
 def get_last_situation(request, chantier_id):
