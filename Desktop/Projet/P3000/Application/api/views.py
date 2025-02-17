@@ -2904,13 +2904,13 @@ class SituationViewSet(viewsets.ModelViewSet):
                     )
 
             # Création des lignes d'avenants si présentes
-            if 'avenants' in data:
-                for ligne in data['avenants']:
+            if 'lignes_avenant' in data:
+                for ligne in data['lignes_avenant']:
                     SituationLigneAvenant.objects.create(
                         situation=situation,
-                        avenant_id=ligne['avenant'],
                         facture_ts_id=ligne['facture_ts'],
-                        montant_ht=Decimal(str(ligne.get('montant_ht', '0'))),
+                        avenant_id=ligne['avenant_id'],  # Ajout de l'ID de l'avenant
+                        montant_ht=Decimal(str(ligne.get('montant_ht', '0'))),  # Ajout du montant HT
                         pourcentage_actuel=Decimal(str(ligne.get('pourcentage_actuel', '0'))),
                         montant=Decimal(str(ligne.get('montant', '0')))
                     )
@@ -3225,12 +3225,13 @@ def get_situations_chantier(request, chantier_id):
     return Response(serializer.data)
 
 @api_view(['PUT'])
-
 def update_situation(request, pk):
     try:
         situation = Situation.objects.get(pk=pk)
+        data = request.data
+        print("Données reçues pour les avenants:", data.get('lignes_avenant', []))
 
-        serializer = SituationCreateSerializer(situation, data=request.data)
+        serializer = SituationCreateSerializer(situation, data=data)
         if serializer.is_valid():
             # Supprimer les anciennes lignes
             situation.lignes.all().delete()
@@ -3239,27 +3240,28 @@ def update_situation(request, pk):
 
             # Sauvegarder les nouvelles données
             situation = serializer.save()
+
+            # Créer les lignes d'avenant
+            for ligne_avenant in data.get('lignes_avenant', []):
+                SituationLigneAvenant.objects.create(
+                    situation=situation,
+                    facture_ts_id=ligne_avenant['facture_ts'],
+                    pourcentage_actuel=Decimal(str(ligne_avenant['pourcentage_actuel'])),
+                    montant=Decimal(str(ligne_avenant['montant']))
+                )
+
+            # Retourner la situation mise à jour
+            situation_complete = Situation.objects.prefetch_related(
+                'lignes',
+                'lignes_supplementaires',
+                'lignes_avenant'
+            ).get(pk=situation.pk)
             
-            # Enregistrer l'utilisateur qui a fait la modification
-            situation.modified_by = request.user
-            situation.save()
+            return Response(SituationSerializer(situation_complete).data)
             
-            # Retourner la situation avec toutes ses relations
-            return Response(
-                SituationSerializer(
-                    situation.objects.prefetch_related(
-                        'lignes',
-                        'lignes_supplementaires',
-                        'lignes_avenant'
-                    ).get(pk=situation.pk)
-                ).data
-            )
         return Response(serializer.errors, status=400)
-        
-    except Situation.DoesNotExist:
-        return Response({'error': 'Situation non trouvée'}, status=404)
-  
     except Exception as e:
+        print("Erreur lors de la mise à jour:", str(e))
         return Response({'error': str(e)}, status=400)
 
 @api_view(['DELETE'])

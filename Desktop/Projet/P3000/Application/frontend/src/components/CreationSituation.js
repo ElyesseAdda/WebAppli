@@ -620,7 +620,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               const newAvenants = avenants.map((avenant) => ({
                 ...avenant,
                 factures_ts: (avenant.factures_ts || []).map((ts) => {
-                  const situationTs = currentSituation.lignes_avenant.find(
+                  const situationTs = currentSituation?.lignes_avenant?.find(
                     (l) => l.facture_ts === ts.id
                   );
                   return {
@@ -628,13 +628,15 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                     pourcentage_precedent: situationTs
                       ? parseFloat(situationTs.pourcentage_actuel)
                       : 0,
-                    pourcentage_actuel: situationTs
-                      ? parseFloat(situationTs.pourcentage_actuel)
-                      : 0,
+                    pourcentage_actuel: 0,
+                    montant_ht: parseFloat(ts.montant_ht || 0),
                   };
                 }),
               }));
               setAvenants(newAvenants);
+
+              // Ajouter un log pour vérifier
+              console.log("Avenants initialisés:", newAvenants);
             }
 
             // Mettre à jour les lignes supplémentaires
@@ -877,15 +879,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
   };
 
   const handlePourcentageChange = (ligneId, value, type = "standard") => {
-    // Convertir la valeur en nombre
     let newValue = value === "" ? 0 : parseFloat(value);
-
-    // Si la valeur n'est pas un nombre valide, retourner
-    if (isNaN(newValue)) {
-      return;
-    }
-
-    // Limiter la valeur entre 0 et 100
     newValue = Math.min(Math.max(newValue, 0), 100);
 
     if (type === "avenant") {
@@ -893,11 +887,18 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         ...avenant,
         factures_ts: avenant.factures_ts.map((ts) => {
           if (ts.id === ligneId) {
-            return { ...ts, pourcentage_actuel: newValue };
+            const montantCalcule =
+              (parseFloat(ts.montant_ht || 0) * newValue) / 100;
+            return {
+              ...ts,
+              pourcentage_actuel: newValue,
+              montant: montantCalcule,
+            };
           }
           return ts;
         }),
       }));
+      console.log("Mise à jour des avenants:", newAvenants);
       setAvenants(newAvenants);
     } else {
       const newStructure = structure.map((partie) => ({
@@ -1081,6 +1082,17 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
           montant: formatNumber(ligne.montant),
           type: ligne.type,
         })),
+        lignes_avenant: avenants.flatMap((avenant) =>
+          avenant.factures_ts.map((ts) => ({
+            facture_ts: ts.id,
+            avenant_id: avenant.id,
+            montant_ht: formatNumber(ts.montant_ht || 0),
+            pourcentage_actuel: formatNumber(ts.pourcentage_actuel || 0),
+            montant: formatNumber(
+              (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100
+            ),
+          }))
+        ),
       };
 
       console.log("Données envoyées:", situationData); // Pour debug
