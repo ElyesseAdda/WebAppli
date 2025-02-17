@@ -131,8 +131,8 @@ urlpatterns = [
     path('create-facture-cie/', create_facture_cie, name='create-facture-cie'),
     path('devis-structure/<int:devis_id>/structure/', get_devis_structure, name='devis-structure'),
     path('chantier/<int:chantier_id>/situations/', get_situations_chantier, name='list-situations'),
-    path('situations/<int:situation_id>/', get_situation_detail, name='situation-detail'),
-    path('situations/<int:situation_id>/update/', update_situation, name='update-situation'),
+    path('situations/<int:situation_id>/details/', get_situation_detail, name='situation-detail'),
+    path('situations/<int:pk>/update/', update_situation, name='update-situation'),
     path('situations/<int:situation_id>/delete/', delete_situation, name='delete-situation'),
     path('devis/<int:devis_id>/', delete_devis, name='delete_devis'),
     path('chantier/<int:chantier_id>/lignes-default/', get_chantier_lignes_default, name='get-chantier-lignes-default'),
@@ -145,5 +145,4 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/situations/by-month/', get_situations, name='get-situations-by-month'),
     path('chantier/<int:chantier_id>/last-situation/', get_last_situation, name='get-last-situation'),
     path('chantier/<int:chantier_id>/situations/', get_chantier_situations, name='chantier-situations'),
-    path('situations/<int:pk>/', update_situation, name='update-situation'),
 ]

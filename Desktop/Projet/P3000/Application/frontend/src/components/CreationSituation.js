@@ -628,15 +628,16 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                     pourcentage_precedent: situationTs
                       ? parseFloat(situationTs.pourcentage_actuel)
                       : 0,
-                    pourcentage_actuel: 0,
+                    pourcentage_actuel: situationTs
+                      ? parseFloat(situationTs.pourcentage_actuel)
+                      : 0,
                     montant_ht: parseFloat(ts.montant_ht || 0),
                   };
                 }),
               }));
-              setAvenants(newAvenants);
 
-              // Ajouter un log pour vérifier
-              console.log("Avenants initialisés:", newAvenants);
+              console.log("Avenants avec pourcentages existants:", newAvenants);
+              setAvenants(newAvenants);
             }
 
             // Mettre à jour les lignes supplémentaires
@@ -1100,7 +1101,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
       if (existingSituation) {
         // Mise à jour d'une situation existante
         await axios.put(
-          `/api/situations/${existingSituation.id}/`,
+          `/api/situations/${existingSituation.id}/update/`,
           situationData
         );
       } else {
