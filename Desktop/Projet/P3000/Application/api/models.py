@@ -3,7 +3,7 @@ from django.core.validators import RegexValidator, MinValueValidator, MaxValueVa
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP,InvalidOperation
 from django.core.exceptions import ValidationError
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -439,10 +439,12 @@ class Situation(models.Model):
     montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     pourcentage_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
+    # Renommer ces champs pour correspondre au frontend
+    cumul_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # au lieu de cumul_mois_precedent
+    montant_apres_retenues = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # au lieu de montant_total_mois_apres_retenue
+    
     # Nouveaux champs
     montant_total_cumul_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    cumul_mois_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_total_mois_apres_retenue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tva = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     # Déductions standard
@@ -473,7 +475,9 @@ class Situation(models.Model):
         return f"Situation {self.numero} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"
 
 class SituationLigne(models.Model):
-    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='situation_lignes')
+    situation = models.ForeignKey('Situation', 
+                                related_name='lignes',
+                                on_delete=models.CASCADE)
     ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, null=True, blank=True)
     description = models.CharField(max_length=255)
     quantite = models.DecimalField(max_digits=10, decimal_places=2)
@@ -488,7 +492,9 @@ class SituationLigne(models.Model):
             raise ValidationError("Une ligne doit être associée à une ligne de devis")
 
 class SituationLigneAvenant(models.Model):
-    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='situation_lignes_avenants')
+    situation = models.ForeignKey('Situation',
+                                related_name='lignes_avenant',
+                                on_delete=models.CASCADE)
     avenant = models.ForeignKey('Avenant', on_delete=models.CASCADE)
     facture_ts = models.ForeignKey('FactureTS', on_delete=models.CASCADE)
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
@@ -500,7 +506,9 @@ class SituationLigneAvenant(models.Model):
         ordering = ['id']
 
 class SituationLigneSupplementaire(models.Model):
-    situation = models.ForeignKey('Situation', on_delete=models.CASCADE, related_name='situation_lignes_supplementaires')
+    situation = models.ForeignKey('Situation',
+                                related_name='lignes_supplementaires',
+                                on_delete=models.CASCADE)
     description = models.CharField(max_length=255)
     montant = models.DecimalField(max_digits=10, decimal_places=2)
     type = models.CharField(max_length=20, choices=[('deduction', 'Déduction'), ('ajout', 'Ajout')], default='deduction')

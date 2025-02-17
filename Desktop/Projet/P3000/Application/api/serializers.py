@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant
 )
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 class DevisLigneSerializer(serializers.ModelSerializer):
     ligne_detail = serializers.PrimaryKeyRelatedField(queryset=LigneDetail.objects.all())
@@ -542,154 +542,134 @@ class FactureCIECreateSerializer(serializers.Serializer):
 class SituationLigneSerializer(serializers.ModelSerializer):
     class Meta:
         model = SituationLigne
-        fields = [
-            'id',
-            'situation',
-            'ligne_devis',
-            'description',
-            'quantite',
-            'prix_unitaire',
-            'total_ht',
-            'pourcentage_precedent',
-            'pourcentage_actuel',
-            'montant'
-        ]
+        fields = ['id', 'ligne_devis', 'description', 'quantite', 'prix_unitaire', 
+                 'total_ht', 'pourcentage_actuel', 'montant']
 
-class SituationLigneAvenantSerializer(serializers.ModelSerializer):
-    facture_ts_numero = serializers.CharField(source='facture_ts.numero_ts', read_only=True)
-    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
-
-    class Meta:
-        model = SituationLigneAvenant
-        fields = [
-            'id',
-            'situation',
-            'avenant',
-            'avenant_numero',
-            'facture_ts',
-            'facture_ts_numero',
-            'montant_ht',
-            'pourcentage_precedent',
-            'pourcentage_actuel',
-            'montant'
-        ]
+    def to_internal_value(self, data):
+        # Convertir les champs numériques en Decimal
+        numeric_fields = ['quantite', 'prix_unitaire', 'total_ht', 'pourcentage_actuel', 'montant']
+        for field in numeric_fields:
+            if field in data:
+                try:
+                    data[field] = Decimal(str(data[field])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                except:
+                    data[field] = Decimal('0.00')
+        return super().to_internal_value(data)
 
 class SituationLigneSupplementaireSerializer(serializers.ModelSerializer):
     class Meta:
         model = SituationLigneSupplementaire
-        fields = ['id', 'situation', 'description', 'montant', 'type']
+        fields = ['id', 'description', 'montant', 'type']
+
+    def to_internal_value(self, data):
+        if 'montant' in data:
+            try:
+                data['montant'] = Decimal(str(data['montant'])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            except:
+                data['montant'] = Decimal('0.00')
+        return super().to_internal_value(data)
+
+class SituationLigneAvenantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SituationLigneAvenant
+        fields = ['id', 'avenant', 'facture_ts', 'montant_ht', 'pourcentage_actuel', 'montant']
+
+    def to_internal_value(self, data):
+        numeric_fields = ['montant_ht', 'pourcentage_actuel', 'montant']
+        for field in numeric_fields:
+            if field in data:
+                try:
+                    data[field] = Decimal(str(data[field])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                except:
+                    data[field] = Decimal('0.00')
+        return super().to_internal_value(data)
 
 class SituationSerializer(serializers.ModelSerializer):
-    situation_lignes = SituationLigneSerializer(many=True, read_only=True)
-    situation_lignes_supplementaires = SituationLigneSupplementaireSerializer(many=True, read_only=True)
-    situation_lignes_avenants = SituationLigneAvenantSerializer(many=True, read_only=True)
+    lignes = SituationLigneSerializer(many=True, read_only=True)
+    lignes_supplementaires = SituationLigneSupplementaireSerializer(many=True, read_only=True)
+    lignes_avenant = SituationLigneAvenantSerializer(many=True, read_only=True)
 
     class Meta:
         model = Situation
         fields = [
-            'id',
-            'situation_lignes',
-            'situation_lignes_supplementaires',
-            'situation_lignes_avenants',
-            'numero',
-            'mois',
-            'annee',
-            'date_creation',
-            'date_validation',
-            'statut',
-            'montant_precedent',
-            'montant_ht_mois',
-            'montant_total',
-            'pourcentage_avancement',
-            'montant_total_cumul_ht',
-            'cumul_mois_precedent',
-            'montant_total_mois_apres_retenue',
-            'tva',
-            'retenue_garantie',
-            'taux_prorata',
-            'montant_prorata',
-            'retenue_cie',
-            'chantier',
-            'devis',
-            'created_by',
-            'validated_by',
-            'numero_situation'
+            'id', 'chantier', 'devis', 'mois', 'annee',
+            'montant_ht_mois', 'montant_precedent', 'cumul_precedent',
+            'montant_total', 'pourcentage_avancement', 'retenue_garantie',
+            'montant_prorata', 'retenue_cie', 'montant_apres_retenues',
+            'tva', 'taux_prorata', 'lignes', 'lignes_supplementaires',
+            'lignes_avenant'
         ]
+
+    def to_internal_value(self, data):
+        numeric_fields = [
+            'montant_ht_mois', 'montant_precedent', 'cumul_precedent',
+            'montant_total', 'pourcentage_avancement', 'retenue_garantie',
+            'montant_prorata', 'retenue_cie', 'montant_apres_retenues',
+            'tva', 'taux_prorata'
+        ]
+        
+        for field in numeric_fields:
+            if field in data:
+                try:
+                    data[field] = Decimal(str(data[field])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                except:
+                    data[field] = Decimal('0.00')
+        
+        return super().to_internal_value(data)
 
 class SituationCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Situation
-        fields = [
-            'chantier',
-            'mois',
-            'annee',
-            'commentaire'
+    def to_internal_value(self, data):
+        # Fonction helper pour convertir en Decimal
+        def to_decimal(value):
+            if value is None or value == '':
+                return Decimal('0.00')
+            try:
+                return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            except:  # Capture toutes les exceptions possibles
+                return Decimal('0.00')
+
+        print("Données reçues:", data)  # Debug
+        
+        # Copier les données pour éviter de modifier l'original
+        data = data.copy()
+
+        # Convertir les champs numériques principaux
+        numeric_fields = [
+            'montant_ht_mois', 'cumul_precedent', 'montant_total_cumul_ht',
+            'retenue_garantie', 'montant_prorata', 'retenue_cie',
+            'montant_apres_retenues', 'tva', 'montant_total_ttc',
+            'pourcentage_avancement', 'taux_prorata'
         ]
 
+        for field in numeric_fields:
+            if field in data:
+                data[field] = to_decimal(data[field])
+
+        # Traiter les lignes
+        if 'lignes' in data:
+            for ligne in data['lignes']:
+                for field in ['quantite', 'prix_unitaire', 'total_ht', 'pourcentage_actuel', 'montant']:
+                    if field in ligne:
+                        ligne[field] = to_decimal(ligne[field])
+
+        # Traiter les lignes supplémentaires
+        if 'lignes_supplementaires' in data:
+            for ligne in data['lignes_supplementaires']:
+                if 'montant' in ligne:
+                    ligne['montant'] = to_decimal(ligne['montant'])
+
+        return super().to_internal_value(data)
+
+    class Meta:
+        model = Situation
+        fields = '__all__'
+
     def create(self, validated_data):
-        chantier = validated_data['chantier']
-        
-        # Récupérer la dernière situation pour ce chantier
-        last_situation = Situation.objects.filter(
-            chantier=chantier
-        ).order_by('-numero_situation').first()
-
-        # Générer le prochain numéro
-        next_numero = 1
-        if last_situation:
-            next_numero = last_situation.numero_situation + 1
-
-        # Créer la situation avec le nouveau numéro
-        situation = Situation.objects.create(
-            **validated_data,
-            numero_situation=next_numero
-        )
-        
-        return situation
-
-    def validate(self, data):
-        chantier = data['chantier']
-        mois = data['mois']
-        annee = data['annee']
-
-        # 1. Vérifier si une situation existe déjà pour ce mois/année/chantier
-        if Situation.objects.filter(
-            chantier=chantier,
-            mois=mois,
-            annee=annee
-        ).exists():
-            raise serializers.ValidationError(
-                f"Une situation existe déjà pour {mois}/{annee}"
-            )
-
-        # 2. Vérifier et générer le numéro de situation
-        last_situation = Situation.objects.filter(
-            chantier=chantier
-        ).order_by('-numero_situation').first()
-
-        if last_situation:
-            # Vérifier qu'il n'y a pas de doublon
-            if Situation.objects.filter(
-                chantier=chantier,
-                numero_situation=last_situation.numero_situation + 1
-            ).exists():
-                raise serializers.ValidationError(
-                    f"Une situation avec le numéro {last_situation.numero_situation + 1} existe déjà pour ce chantier"
-                )
-            data['numero_situation'] = last_situation.numero_situation + 1
-        else:
-            # Première situation du chantier
-            if Situation.objects.filter(
-                chantier=chantier,
-                numero_situation=1
-            ).exists():
-                raise serializers.ValidationError(
-                    "Une première situation existe déjà pour ce chantier"
-                )
-            data['numero_situation'] = 1
-
-        print(f"Numéro de situation validé: {data['numero_situation']}")
-        return data
+        try:
+            return super().create(validated_data)
+        except Exception as e:
+            print(f"Erreur lors de la création: {str(e)}")
+            raise serializers.ValidationError(str(e))
 
 class SituationLigneUpdateSerializer(serializers.ModelSerializer):
     class Meta:

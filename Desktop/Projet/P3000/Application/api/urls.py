@@ -46,6 +46,7 @@ from .views import (
     get_situations,
     get_last_situation,
     get_chantier_situations,
+    get_situations_list,
 )
 
 router = DefaultRouter()
@@ -137,10 +138,12 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/lignes-default/', get_chantier_lignes_default, name='get-chantier-lignes-default'),
     path('chantier/<int:chantier_id>/lignes-default/update/', update_chantier_lignes_default, name='update-chantier-lignes-default'),
     path('chantier/<int:chantier_id>/factures-cie/', get_factures_cie, name='get-factures-cie'),
-    path('situations/', create_situation, name='create-situation'),
+    path('situations/', get_situations_list, name='situations-list'),
+    path('situations/create/', create_situation, name='create-situation'),
     path('next-numero/', get_next_numero, name='next-numero'),
     path('next-numero/chantier/<int:chantier_id>/', get_next_numero, name='next-situation-numero'),
     path('chantier/<int:chantier_id>/situations/by-month/', get_situations, name='get-situations-by-month'),
     path('chantier/<int:chantier_id>/last-situation/', get_last_situation, name='get-last-situation'),
     path('chantier/<int:chantier_id>/situations/', get_chantier_situations, name='chantier-situations'),
+    path('situations/<int:pk>/', update_situation, name='update-situation'),
 ]

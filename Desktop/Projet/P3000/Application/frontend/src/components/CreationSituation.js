@@ -2,11 +2,15 @@ import {
   Box,
   Button,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
+  Grid,
   IconButton,
   InputLabel,
   MenuItem,
-  Modal,
   Paper,
   Select,
   Table,
@@ -488,6 +492,8 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
   const [retenueCIE, setRetenueCIE] = useState(0);
   const [facturesCIE, setFacturesCIE] = useState([]);
+  const [calculatedValues, setCalculatedValues] = useState(null);
+  const [existingSituation, setExistingSituation] = useState(null);
 
   useEffect(() => {
     if (devis?.id) {
@@ -566,7 +572,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     if (open && chantier?.id && mois && annee) {
       const fetchSituationData = async () => {
         try {
-          console.log("=== Chargement des données de situation ===");
+          console.log("=== Vérification situation existante ===");
 
           // 1. Vérifier si une situation existe déjà pour ce mois/année
           const response = await axios.get(
@@ -577,49 +583,75 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
           );
           const situations = response.data;
 
-          // 2. Charger les lignes supplémentaires par défaut du chantier
-          const lignesDefaultResponse = await axios.get(
-            `/api/chantier/${chantier.id}/lignes-default/`
-          );
-          const lignesDefault = lignesDefaultResponse.data;
-
           if (situations.length > 0) {
             console.log("Situation existante trouvée pour ce mois");
             const currentSituation = situations[0];
-            initializeSituationData(currentSituation);
-          } else {
-            console.log("Création d'une nouvelle situation");
-            // Récupérer la dernière situation du chantier
-            const lastSituationResponse = await axios.get(
-              `/api/chantier/${chantier.id}/last-situation/`
-            );
+            setExistingSituation(currentSituation);
 
-            if (lastSituationResponse.data) {
-              console.log(
-                `Dernière situation trouvée: n°${lastSituationResponse.data.numero_situation}`
-              );
-              const lastSituation = lastSituationResponse.data;
+            // Pré-remplir les champs avec les données existantes
+            setTauxProrata(currentSituation.taux_prorata);
+            setRetenueCIE(currentSituation.retenue_cie);
 
-              // Fusionner les lignes supplémentaires existantes avec les lignes par défaut
-              const mergedLignes = mergeSupplementaryLines(
-                lignesDefault,
-                lastSituation.situation_lignes_supplementaires
-              );
+            // Mettre à jour la structure avec les pourcentages existants
+            const newStructure = structure.map((partie) => ({
+              ...partie,
+              sous_parties: partie.sous_parties.map((sousPartie) => ({
+                ...sousPartie,
+                lignes: sousPartie.lignes.map((ligne) => {
+                  const situationLigne = currentSituation.lignes.find(
+                    (l) => l.ligne_devis === ligne.id
+                  );
+                  return {
+                    ...ligne,
+                    pourcentage_precedent: situationLigne
+                      ? parseFloat(situationLigne.pourcentage_actuel)
+                      : 0,
+                    pourcentage_actuel: situationLigne
+                      ? parseFloat(situationLigne.pourcentage_actuel)
+                      : 0,
+                  };
+                }),
+              })),
+            }));
+            setStructure(newStructure);
 
-              initializeSituationData(lastSituation, true, mergedLignes);
-            } else {
-              console.log("Première situation du chantier");
-              // Utiliser les lignes par défaut avec montant 0
-              const initialLignes = lignesDefault.map((ligne) => ({
-                ...ligne,
-                montant: "0.00",
+            // Mettre à jour les avenants
+            if (avenants.length > 0) {
+              const newAvenants = avenants.map((avenant) => ({
+                ...avenant,
+                factures_ts: (avenant.factures_ts || []).map((ts) => {
+                  const situationTs = currentSituation.lignes_avenant.find(
+                    (l) => l.facture_ts === ts.id
+                  );
+                  return {
+                    ...ts,
+                    pourcentage_precedent: situationTs
+                      ? parseFloat(situationTs.pourcentage_actuel)
+                      : 0,
+                    pourcentage_actuel: situationTs
+                      ? parseFloat(situationTs.pourcentage_actuel)
+                      : 0,
+                  };
+                }),
               }));
-              setLignesSupplementaires(initialLignes);
-              resetSituationData();
+              setAvenants(newAvenants);
             }
+
+            // Mettre à jour les lignes supplémentaires
+            if (currentSituation.lignes_supplementaires?.length > 0) {
+              setLignesSupplementaires(currentSituation.lignes_supplementaires);
+            }
+          } else {
+            console.log("Pas de situation existante pour ce mois");
+            setExistingSituation(null);
+            resetSituationData();
           }
         } catch (error) {
-          console.error("Erreur:", error);
+          console.error(
+            "Erreur lors de la vérification de la situation:",
+            error
+          );
+          setExistingSituation(null);
           resetSituationData();
         }
       };
@@ -920,219 +952,157 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   };
 
-  // Modifier handleSubmit pour utiliser getNextNumeroSituation
+  // Fonction de calcul existante
+  const calculateMontants = () => {
+    if (!structure.length) return;
+
+    // Calcul du montant HT du mois
+    let montantHtMois = 0;
+    structure.forEach((partie) => {
+      partie.sous_parties.forEach((sousPartie) => {
+        sousPartie.lignes.forEach((ligne) => {
+          const montant = parseFloat(ligne.total_ht || 0);
+          const pourcentage = parseFloat(ligne.pourcentage_actuel || 0);
+          montantHtMois += (montant * pourcentage) / 100;
+        });
+      });
+    });
+
+    const cumulPrecedent = lastSituation?.montant_total_cumul_ht || 0;
+    const retenueGarantie = montantHtMois * 0.05;
+    const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
+    const montantApresRetenues =
+      montantHtMois -
+      retenueGarantie -
+      montantProrata -
+      parseFloat(retenueCIE || 0);
+    const tva = montantApresRetenues * 0.2;
+    const montantTotal = montantHtMois + parseFloat(cumulPrecedent);
+    const pourcentageAvancement =
+      totalHT > 0 ? (montantTotal / totalHT) * 100 : 0;
+
+    setCalculatedValues({
+      montant_ht_mois: montantHtMois.toFixed(2),
+      montant_precedent: montantHtMois.toFixed(2),
+      cumul_precedent: cumulPrecedent.toFixed(2),
+      retenue_garantie: retenueGarantie.toFixed(2),
+      montant_prorata: montantProrata.toFixed(2),
+      retenue_cie: retenueCIE || "0.00",
+      montant_apres_retenues: montantApresRetenues.toFixed(2),
+      montant_total: montantTotal.toFixed(2),
+      pourcentage_avancement: pourcentageAvancement.toFixed(2),
+      tva: tva.toFixed(2),
+    });
+  };
+
+  // Utiliser useEffect pour recalculer quand les données changent
+  useEffect(() => {
+    calculateMontants();
+  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+
+  // Ajouter cette fonction de calcul
+  const calculerCumulPrecedent = () => {
+    let montantTotal = 0;
+
+    // Calculer le total de toutes les lignes
+    structure.forEach((partie) => {
+      partie.sous_parties.forEach((sousPartie) => {
+        sousPartie.lignes.forEach((ligne) => {
+          const montantLigne =
+            (ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100;
+          montantTotal += montantLigne;
+        });
+      });
+    });
+
+    // Ajouter le montant des avenants
+    avenants?.forEach((avenant) => {
+      avenant.factures_ts?.forEach((ts) => {
+        const montantTS = (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100;
+        montantTotal += montantTS;
+      });
+    });
+
+    // Soustraire le montant HT du mois actuel
+    const cumulPrecedent = montantTotal - montantHTMois;
+    return cumulPrecedent;
+  };
+
+  // Fonction de soumission avec gestion des erreurs améliorée
   const handleSubmit = async () => {
     try {
-      const numeroResponse = await axios.get(
-        `/api/next-numero/chantier/${chantier.id}/`
-      );
-      const numero = numeroResponse.data.numero;
-      // Le numero_situation est géré par get_chantier_situations
-      const nextNumeroSituation = await getNextNumeroSituation(chantier.id);
-      console.log("Prochain numero_situation:", nextNumeroSituation);
+      if (!calculatedValues) {
+        throw new Error("Les calculs ne sont pas disponibles");
+      }
 
-      // Le numero complet est géré par le backend via get_next_situation_number
-      // 1. Calculer le montant HT du mois (somme des lignes standard)
-
-      const montantLignesStandard = structure.reduce((total, partie) => {
-        return (
-          total +
-          partie.sous_parties.reduce((sousTotal, sousPartie) => {
-            return (
-              sousTotal +
-              sousPartie.lignes.reduce((ligneTotal, ligne) => {
-                const montantLigne =
-                  (parseFloat(ligne.total_ht || 0) *
-                    parseFloat(ligne.pourcentage_actuel || 0)) /
-                  100;
-                return ligneTotal + montantLigne;
-              }, 0)
-            );
-          }, 0)
-        );
-      }, 0);
-
-      // 2. Calculer le montant des avenants
-      const montantAvenants = avenants.reduce((total, avenant) => {
-        return (
-          total +
-          (avenant.factures_ts || []).reduce((avenantTotal, ts) => {
-            const montantTS =
-              (parseFloat(ts.montant_ht || 0) *
-                parseFloat(ts.pourcentage_actuel || 0)) /
-              100;
-            return avenantTotal + montantTS;
-          }, 0)
-        );
-      }, 0);
-
-      // Montant HT total du mois
-      const montantHtMois = montantLignesStandard + montantAvenants;
-
-      console.log("Montant lignes standard:", montantLignesStandard);
-      console.log("Montant avenants:", montantAvenants);
-      console.log("Montant HT total du mois:", montantHtMois);
-
-      // Détail des calculs
-      console.log(
-        "Détail des lignes standard:",
-        structure.map((partie) =>
-          partie.sous_parties.map((sousPartie) =>
-            sousPartie.lignes.map((ligne) => ({
-              description: ligne.description,
-              total_ht: ligne.total_ht,
-              pourcentage: ligne.pourcentage_actuel,
-              montant:
-                (parseFloat(ligne.total_ht || 0) *
-                  parseFloat(ligne.pourcentage_actuel || 0)) /
-                100,
-            }))
-          )
-        )
-      );
-
-      console.log(
-        "Détail des avenants:",
-        avenants.map((avenant) =>
-          avenant.factures_ts.map((ts) => ({
-            numero: ts.numero_ts,
-            montant_ht: ts.montant_ht,
-            pourcentage: ts.pourcentage_actuel,
-            montant:
-              (parseFloat(ts.montant_ht || 0) *
-                parseFloat(ts.pourcentage_actuel || 0)) /
-              100,
-          }))
-        )
-      );
-
-      // 3. Calculer les retenues
-      const retenueGarantie = montantHtMois * 0.05;
-      const montantProrata = montantHtMois * (tauxProrata / 100);
-      const retenueCIEValue = parseFloat(retenueCIE || 0);
-
-      console.log("Retenue garantie:", retenueGarantie);
-      console.log("Montant prorata:", montantProrata);
-      console.log("Retenue CIE:", retenueCIEValue);
-
-      // 4. Calculer le montant total après retenues
-      let montantTotalApresRetenue = montantHtMois;
-      montantTotalApresRetenue -= retenueGarantie;
-      montantTotalApresRetenue -= montantProrata;
-      montantTotalApresRetenue -= retenueCIEValue;
-
-      // 5. Appliquer les lignes supplémentaires
-      lignesSupplementaires.forEach((ligne) => {
-        const montantLigne = parseFloat(ligne.montant || 0);
-        if (ligne.type === "deduction") {
-          montantTotalApresRetenue -= montantLigne;
-        } else {
-          montantTotalApresRetenue += montantLigne;
-        }
-      });
-
-      // 6. Calculer la TVA
-      const tva = montantTotalApresRetenue * (devis.tva_rate / 100);
+      // Fonction helper pour formater les nombres
+      const formatNumber = (num) => {
+        if (num === null || num === undefined) return "0.00";
+        return parseFloat(num).toFixed(2);
+      };
 
       const situationData = {
-        numero: numero,
-        numero_situation: nextNumeroSituation, // Ajouter uniquement le numero_situation
-
         chantier: chantier.id,
         devis: devis.id,
         mois: parseInt(mois),
         annee: parseInt(annee),
-        montant_ht_mois: montantHtMois.toFixed(2),
-        retenue_garantie: retenueGarantie.toFixed(2),
-        taux_prorata: parseFloat(tauxProrata).toFixed(2),
-        montant_prorata: montantProrata.toFixed(2),
-        retenue_cie: retenueCIEValue.toFixed(2),
-        montant_total_mois_apres_retenue: montantTotalApresRetenue.toFixed(2),
-        tva: tva.toFixed(2),
-        pourcentage_avancement: totalAvancement.toFixed(2),
-      };
-
-      console.log("Données à envoyer:", situationData);
-
-      const situationResponse = await axios.post(
-        "/api/situations/",
-        situationData
-      );
-      const situationId = situationResponse.data.id;
-
-      // 7. Créer les lignes de situation standard
-      const lignesPromises = structure.flatMap((partie) =>
-        partie.sous_parties.flatMap((sousPartie) =>
-          sousPartie.lignes.map((ligne) => {
-            const montant =
-              (parseFloat(ligne.total_ht || 0) *
-                parseFloat(ligne.pourcentage_actuel || 0)) /
-              100;
-            return axios.post("/api/situation-lignes/", {
-              situation: situationId,
+        lignes: structure.flatMap((partie) =>
+          partie.sous_parties.flatMap((sousPartie) =>
+            sousPartie.lignes.map((ligne) => ({
               ligne_devis: ligne.id,
               description: ligne.description,
-              quantite: parseFloat(ligne.quantite || 0).toFixed(2),
-              prix_unitaire: parseFloat(ligne.prix_unitaire || 0).toFixed(2),
-              total_ht: parseFloat(ligne.total_ht || 0).toFixed(2),
-              pourcentage_precedent: parseFloat(
-                ligne.pourcentage_precedent || 0
-              ).toFixed(2),
-              pourcentage_actuel: parseFloat(
-                ligne.pourcentage_actuel || 0
-              ).toFixed(2),
-              montant: montant.toFixed(2),
-            });
-          })
-        )
-      );
-
-      // 8. Créer les lignes d'avenants
-      const lignesAvenantsPromises = avenants.flatMap((avenant) =>
-        (avenant.factures_ts || []).map((ts) => {
-          const montant =
-            (parseFloat(ts.montant_ht || 0) *
-              parseFloat(ts.pourcentage_actuel || 0)) /
-            100;
-          return axios.post("/api/situation-lignes-avenants/", {
-            situation: situationId,
-            avenant: avenant.id,
-            facture_ts: ts.id,
-            montant_ht: parseFloat(ts.montant_ht || 0).toFixed(2),
-            pourcentage_precedent: parseFloat(
-              ts.pourcentage_precedent || 0
-            ).toFixed(2),
-            pourcentage_actuel: parseFloat(ts.pourcentage_actuel || 0).toFixed(
-              2
-            ),
-            montant: montant.toFixed(2),
-          });
-        })
-      );
-
-      // 9. Créer les lignes supplémentaires
-      const lignesSupplPromises = lignesSupplementaires.map((ligne) =>
-        axios.post("/api/situation-lignes-supplementaires/", {
-          situation: situationId,
+              quantite: formatNumber(ligne.quantite),
+              prix_unitaire: formatNumber(ligne.prix_unitaire),
+              total_ht: formatNumber(ligne.total_ht),
+              pourcentage_actuel: formatNumber(ligne.pourcentage_actuel),
+              montant: formatNumber(
+                (ligne.total_ht * ligne.pourcentage_actuel) / 100
+              ),
+            }))
+          )
+        ),
+        montant_ht_mois: formatNumber(montantHTMois),
+        cumul_precedent: formatNumber(calculerCumulPrecedent()),
+        montant_total_cumul_ht: formatNumber(
+          calculerCumulPrecedent() + montantHTMois
+        ),
+        retenue_garantie: formatNumber(montantHTMois * 0.05),
+        montant_prorata: formatNumber(montantHTMois * (tauxProrata / 100)),
+        retenue_cie: formatNumber(retenueCIE),
+        montant_apres_retenues: formatNumber(calculerTotalNet()),
+        tva: formatNumber(calculerTotalNet() * 0.2),
+        montant_total_ttc: formatNumber(calculerTotalNet() * 1.2),
+        pourcentage_avancement: formatNumber(
+          ((calculerCumulPrecedent() + montantHTMois) / totalHT) * 100
+        ),
+        taux_prorata: formatNumber(tauxProrata),
+        lignes_supplementaires: lignesSupplementaires.map((ligne) => ({
           description: ligne.description,
-          montant: parseFloat(ligne.montant || 0).toFixed(2),
+          montant: formatNumber(ligne.montant),
           type: ligne.type,
-        })
-      );
+        })),
+      };
 
-      await Promise.all([
-        ...lignesPromises,
-        ...lignesAvenantsPromises,
-        ...lignesSupplPromises,
-      ]);
+      console.log("Données envoyées:", situationData); // Pour debug
 
-      alert("Situation et lignes créées avec succès");
+      if (existingSituation) {
+        // Mise à jour d'une situation existante
+        await axios.put(
+          `/api/situations/${existingSituation.id}/`,
+          situationData
+        );
+      } else {
+        // Création d'une nouvelle situation
+        await axios.post("/api/situations/", situationData);
+      }
+
       onClose();
     } catch (error) {
-      console.error("Erreur lors de la création de la situation:", error);
+      console.error("Erreur lors de la sauvegarde:", error);
       alert(
-        error.response?.data?.error ||
-          "Erreur lors de la création de la situation"
+        `Erreur lors de la ${existingSituation ? "mise à jour" : "création"}: ${
+          error.response?.data?.error || error.message
+        }`
       );
     }
   };
@@ -1183,11 +1153,114 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     return total;
   };
 
+  const updateCalculs = () => {
+    if (!structure.length) return;
+
+    // Calcul du montant total de toutes les lignes
+    let montantTotalLignes = 0;
+    let montantHtMois = 0;
+
+    structure.forEach((partie) => {
+      partie.sous_parties.forEach((sousPartie) => {
+        sousPartie.lignes.forEach((ligne) => {
+          const montant = parseFloat(ligne.montant || 0);
+          const pourcentage = parseFloat(ligne.pourcentage_actuel || 0);
+          const montantLigne = (montant * pourcentage) / 100;
+          montantTotalLignes += montantLigne;
+          montantHtMois += montantLigne;
+        });
+      });
+    });
+
+    // Le cumul des mois précédents est la différence entre le total et le montant du mois
+    const cumulPrecedent = montantTotalLignes - montantHtMois;
+
+    const retenueGarantie = montantHtMois * 0.05;
+    const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
+    const montantApresRetenues =
+      montantHtMois -
+      retenueGarantie -
+      montantProrata -
+      parseFloat(retenueCIE || 0);
+    const tva = montantApresRetenues * 0.2;
+    const montantTotal = montantTotalLignes; // Utiliser le montant total des lignes
+    const pourcentageAvancement =
+      totalHT > 0 ? (montantTotal / totalHT) * 100 : 0;
+
+    setCalculatedValues({
+      montant_ht_mois: montantHtMois.toFixed(2),
+      montant_precedent: montantHtMois.toFixed(2),
+      cumul_precedent: cumulPrecedent.toFixed(2),
+      retenue_garantie: retenueGarantie.toFixed(2),
+      montant_prorata: montantProrata.toFixed(2),
+      retenue_cie: retenueCIE || "0.00",
+      montant_apres_retenues: montantApresRetenues.toFixed(2),
+      montant_total: montantTotal.toFixed(2),
+      pourcentage_avancement: pourcentageAvancement.toFixed(2),
+      tva: tva.toFixed(2),
+    });
+  };
+
+  // Utiliser useEffect pour recalculer quand les données changent
+  useEffect(() => {
+    updateCalculs();
+  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+
+  const renderCalculs = () => {
+    if (!calculatedValues) return null;
+
+    return (
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <Typography variant="h6">Récapitulatif des montants</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography>
+            Montant HT du mois: {calculatedValues.montant_ht_mois} €
+          </Typography>
+          <Typography>
+            Montant précédent: {calculatedValues.montant_precedent} €
+          </Typography>
+          <Typography>
+            Cumul précédent: {calculatedValues.cumul_precedent} €
+          </Typography>
+          <Typography>
+            Retenue de garantie: {calculatedValues.retenue_garantie} €
+          </Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography>
+            Montant prorata: {calculatedValues.montant_prorata} €
+          </Typography>
+          <Typography>Retenue CIE: {calculatedValues.retenue_cie} €</Typography>
+          <Typography>
+            Montant après retenues: {calculatedValues.montant_apres_retenues} €
+          </Typography>
+          <Typography>TVA: {calculatedValues.tva} €</Typography>
+        </Grid>
+        <Grid item xs={12}>
+          <Typography variant="h6">
+            Montant total: {calculatedValues.montant_total} €
+          </Typography>
+          <Typography>
+            Pourcentage d'avancement: {calculatedValues.pourcentage_avancement}{" "}
+            %
+          </Typography>
+        </Grid>
+      </Grid>
+    );
+  };
+
   if (!open || !devis || !chantier) return null;
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <Box sx={style}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>
+        {existingSituation
+          ? "Modification d'une situation"
+          : "Création d'une situation"}
+      </DialogTitle>
+      <DialogContent>
         <Box
           sx={{
             display: "flex",
@@ -1305,6 +1378,33 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
             </TableHead>
             <TableBody>
               {/* Montant HT du mois */}
+
+              {/* Cumul mois précédent */}
+              <TableRow>
+                <TableCell>Cumul mois précédent</TableCell>
+                <TableCell align="right">
+                  {calculerCumulPrecedent()
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+
+              {/* Montant total cumul HT */}
+              <TableRow>
+                <TableCell>Montant total cumul HT</TableCell>
+                <TableCell align="right">
+                  {(() => {
+                    const cumulPrecedent = calculerCumulPrecedent();
+                    const montantTotalCumul = cumulPrecedent + montantHTMois;
+
+                    return montantTotalCumul
+                      .toFixed(2)
+                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                  })()}{" "}
+                  €
+                </TableCell>
+              </TableRow>
               <TableRow>
                 <TableCell>Montant HT du mois</TableCell>
                 <TableCell align="right">
@@ -1372,19 +1472,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               </TableRow>
 
               {/* Lignes supplémentaires */}
-              <TableRow>
-                <TableCell colSpan={2}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={handleAjoutLigne}
-                    sx={{ mb: 2 }}
-                  >
-                    Ajouter une ligne
-                  </Button>
-                </TableCell>
-              </TableRow>
-
               {lignesSupplementaires.map((ligne, index) => (
                 <TableRow key={index}>
                   <TableCell>
@@ -1416,6 +1503,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                   </TableCell>
                   <TableCell align="right">
                     <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      {ligne.type === "deduction" && "-"}
                       <TextField
                         size="small"
                         type="number"
@@ -1441,30 +1529,116 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                 </TableRow>
               ))}
 
-              {/* Total net à payer */}
-              <TableRow sx={{ "& td": { fontWeight: "bold" } }}>
-                <TableCell>Total net à payer</TableCell>
+              {/* Montant total du mois HT après retenues */}
+              <TableRow>
+                <TableCell>Montant total du mois HT après retenues</TableCell>
                 <TableCell align="right">
-                  {calculerTotalNet()
-                    .toFixed(2)
-                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  {(() => {
+                    let montantTotal =
+                      montantHTMois -
+                      montantHTMois * 0.05 -
+                      montantHTMois * (tauxProrata / 100) -
+                      parseFloat(retenueCIE || 0);
+
+                    // Appliquer les lignes supplémentaires
+                    lignesSupplementaires.forEach((ligne) => {
+                      if (ligne.type === "deduction") {
+                        montantTotal -= parseFloat(ligne.montant || 0);
+                      } else {
+                        montantTotal += parseFloat(ligne.montant || 0);
+                      }
+                    });
+
+                    return montantTotal
+                      .toFixed(2)
+                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                  })()}{" "}
                   €
+                </TableCell>
+              </TableRow>
+
+              {/* TVA */}
+              <TableRow>
+                <TableCell>TVA (20%)</TableCell>
+                <TableCell align="right">
+                  {(() => {
+                    let montantBase =
+                      montantHTMois -
+                      montantHTMois * 0.05 -
+                      montantHTMois * (tauxProrata / 100) -
+                      parseFloat(retenueCIE || 0);
+
+                    // Appliquer les lignes supplémentaires
+                    lignesSupplementaires.forEach((ligne) => {
+                      if (ligne.type === "deduction") {
+                        montantBase -= parseFloat(ligne.montant || 0);
+                      } else {
+                        montantBase += parseFloat(ligne.montant || 0);
+                      }
+                    });
+
+                    return (montantBase * 0.2)
+                      .toFixed(2)
+                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                  })()}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+
+              {/* Montant total TTC à payer */}
+              <TableRow sx={{ "& td": { fontWeight: "bold" } }}>
+                <TableCell>Montant total TTC à payer</TableCell>
+                <TableCell align="right">
+                  {(() => {
+                    let montantBase =
+                      montantHTMois -
+                      montantHTMois * 0.05 -
+                      montantHTMois * (tauxProrata / 100) -
+                      parseFloat(retenueCIE || 0);
+
+                    // Appliquer les lignes supplémentaires
+                    lignesSupplementaires.forEach((ligne) => {
+                      if (ligne.type === "deduction") {
+                        montantBase -= parseFloat(ligne.montant || 0);
+                      } else {
+                        montantBase += parseFloat(ligne.montant || 0);
+                      }
+                    });
+
+                    return (montantBase * 1.2)
+                      .toFixed(2)
+                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                  })()}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+
+              {/* Lignes supplémentaires */}
+              <TableRow>
+                <TableCell colSpan={2}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleAjoutLigne}
+                    sx={{ mb: 2 }}
+                  >
+                    Ajouter une ligne
+                  </Button>
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </TableContainer>
-
-        <Box sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
-          <Button onClick={onClose} variant="outlined">
-            Annuler
-          </Button>
-          <Button onClick={handleSubmit} variant="contained" color="primary">
-            Créer la situation
-          </Button>
-        </Box>
-      </Box>
-    </Modal>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSubmit} color="primary">
+          {existingSituation
+            ? "Mettre à jour la situation"
+            : "Créer la situation"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 
