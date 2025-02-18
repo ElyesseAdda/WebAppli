@@ -592,14 +592,36 @@ class SituationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Situation
         fields = [
-            'id', 'chantier', 'devis', 'mois', 'annee',
-            'montant_ht_mois', 'montant_precedent', 'cumul_precedent',
-            'montant_total', 'pourcentage_avancement', 'retenue_garantie',
-            'montant_prorata', 'retenue_cie', 'montant_apres_retenues',
-            'tva', 'taux_prorata', 'lignes', 'lignes_supplementaires',
-            'lignes_avenant', 'montant_total_devis', 'montant_total_travaux',
+            'id', 
+            'chantier',
+            'devis',
+            'mois',
+            'annee',
+            'numero_situation',
+            'montant_ht_mois',
+            'montant_precedent',
+            'montant_total',
+            'pourcentage_avancement',
+            'retenue_garantie',
+            'montant_prorata',
+            'taux_prorata',
+            'retenue_cie',
+            'date_creation',
+            'lignes',
+            'lignes_supplementaires',
+            'lignes_avenant',
+            'montant_total_devis',
+            'montant_total_travaux',
             'total_avancement'
         ]
+
+    def validate_numero_situation(self, value):
+        """
+        Validation simple pour s'assurer que le numéro de situation est une chaîne non vide
+        """
+        if not value:
+            raise serializers.ValidationError("Le numéro de situation ne peut pas être vide")
+        return value
 
     def to_internal_value(self, data):
         numeric_fields = [
@@ -692,9 +714,9 @@ class SituationLigneUpdateSerializer(serializers.ModelSerializer):
             Situation.objects
             .filter(
                 chantier=instance.situation.chantier,
-                numero__lt=instance.situation.numero
+                numero_situation__lt=instance.situation.numero_situation
             )
-            .order_by('-numero')
+            .order_by('-numero_situation')
             .first()
         )
         

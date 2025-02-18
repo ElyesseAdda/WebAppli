@@ -425,8 +425,8 @@ class Situation(models.Model):
 
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE)
     devis = models.ForeignKey('Devis', on_delete=models.CASCADE)
-    numero = models.CharField(max_length=50)
-    numero_situation = models.IntegerField(default=1)
+    numero = models.IntegerField(default=1,null=True,blank=True)
+    numero_situation = models.CharField(max_length=50)
     mois = models.IntegerField()
     annee = models.IntegerField()
     date_creation = models.DateTimeField(auto_now_add=True)
@@ -477,7 +477,7 @@ class Situation(models.Model):
         unique_together = ['chantier', 'mois', 'annee']
 
     def __str__(self):
-        return f"Situation {self.numero} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"
+        return f"Situation {self.numero_situation} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"
 
 class SituationLigne(models.Model):
     situation = models.ForeignKey('Situation', 

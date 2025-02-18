@@ -572,8 +572,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     if (open && chantier?.id && mois && annee) {
       const fetchSituationData = async () => {
         try {
-          console.log("=== Vérification situation existante ===");
-
           const response = await axios.get(
             `/api/chantier/${chantier.id}/situations/by-month/`,
             {
@@ -583,7 +581,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
           const situations = response.data;
 
           if (situations.length > 0) {
-            console.log("Situation existante trouvée pour ce mois");
             const currentSituation = situations[0];
             setExistingSituation(currentSituation);
 
@@ -635,7 +632,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
                 }),
               }));
 
-              console.log("Avenants avec pourcentages existants:", newAvenants);
               setAvenants(newAvenants);
             }
 
@@ -664,7 +660,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
             if (responsePrecedent.data.length > 0) {
               const situationPrecedente = responsePrecedent.data[0];
-              console.log("Situation précédente trouvée:", situationPrecedente);
 
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
@@ -729,7 +724,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               setMontantHTMois(0);
               setExistingSituation(null);
             } else {
-              console.log("Pas de situation précédente trouvée");
               resetSituationData();
             }
           }
@@ -871,11 +865,9 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
   // Calculer le montant HT du mois à partir des lignes
   useEffect(() => {
-    console.log("=== Calcul du montant HT du mois ===");
     let montantActuel = 0;
 
     // Calculer le montant des lignes standard
-    console.log("1. Calcul des lignes standard:");
     structure.forEach((partie) => {
       partie.sous_parties.forEach((sousPartie) => {
         sousPartie.lignes.forEach((ligne) => {
@@ -883,29 +875,18 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
             (parseFloat(ligne.total_ht || 0) *
               parseFloat(ligne.pourcentage_actuel || 0)) /
             100;
-          console.log(`   - Ligne: ${ligne.description}`);
-          console.log(`     Montant HT: ${ligne.total_ht} €`);
-          console.log(`     Pourcentage: ${ligne.pourcentage_actuel}%`);
-          console.log(`     Montant calculé: ${montantLigne.toFixed(2)} €`);
           montantActuel += montantLigne;
         });
       });
     });
-    console.log(`Sous-total lignes standard: ${montantActuel.toFixed(2)} €`);
 
     // Ajouter le montant des TS (avenants)
-    console.log("\n2. Calcul des avenants:");
     avenants?.forEach((avenant) => {
-      console.log(`   Avenant: ${avenant.numero || "Sans numéro"}`);
       avenant.factures_ts?.forEach((ts) => {
         const montantTS =
           (parseFloat(ts.montant_ht || 0) *
             parseFloat(ts.pourcentage_actuel || 0)) /
           100;
-        console.log(`     - TS: ${ts.numero_ts || "Sans numéro"}`);
-        console.log(`       Montant HT: ${ts.montant_ht} €`);
-        console.log(`       Pourcentage: ${ts.pourcentage_actuel}%`);
-        console.log(`       Montant calculé: ${montantTS.toFixed(2)} €`);
         montantActuel += montantTS;
       });
     });
@@ -916,9 +897,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     // Récupération du montant cumulé précédent
     let montantCumulePrecedent = 0;
     if (lastSituation) {
-      console.log(
-        `Utilisation de la situation n°${lastSituation.numero_situation}`
-      );
       montantCumulePrecedent = parseFloat(lastSituation.montant_ht_mois || 0);
     } else {
       console.log("Première situation - pas de montant cumulé précédent");
@@ -926,13 +904,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
     // Le montant HT du mois est la différence entre le montant actuel et le cumul précédent
     const montantHTMois = montantActuel - montantCumulePrecedent;
-
-    console.log({
-      numeroSituation: lastSituation?.numero_situation || "Nouvelle",
-      montantActuel: montantActuel.toFixed(2),
-      montantCumulePrecedent: montantCumulePrecedent.toFixed(2),
-      montantHTMois: montantHTMois.toFixed(2),
-    });
 
     setMontantHTMois(montantHTMois);
   }, [structure, avenants, lastSituation]);
@@ -983,7 +954,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
           return ts;
         }),
       }));
-      console.log("Mise à jour des avenants:", newAvenants);
       setAvenants(newAvenants);
     } else {
       const newStructure = structure.map((partie) => ({
@@ -1005,33 +975,16 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     }
   };
 
-  // Ajouter la fonction pour récupérer le prochain numero_situation
-  const getNextNumeroSituation = async (chantierId) => {
+  // Fonction pour récupérer le prochain numéro de situation
+  const getNextSituationNumber = async () => {
     try {
       const response = await axios.get(
-        `/api/chantier/${chantierId}/situations/`
+        `/api/next-numero/chantier/${chantier.id}/`
       );
-      const situations = response.data;
-
-      console.log("Situations existantes:", situations);
-
-      // Si aucune situation, commencer à 1
-      if (situations.length === 0) {
-        console.log("Première situation -> numero_situation: 1");
-        return 1;
-      }
-
-      // Trouver le plus grand numero_situation existant
-      const maxNumero = Math.max(...situations.map((s) => s.numero_situation));
-      const nextNumero = maxNumero + 1;
-      console.log(
-        `Dernier numero_situation: ${maxNumero}, prochain: ${nextNumero}`
-      );
-
-      return nextNumero;
+      return response.data.numero;
     } catch (error) {
       console.error(
-        "Erreur lors de la récupération du numero_situation:",
+        "Erreur lors de la récupération du numéro de situation:",
         error
       );
       throw error;
@@ -1152,18 +1105,20 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
       if (!calculatedValues) {
         throw new Error("Les calculs ne sont pas disponibles");
       }
-
       // Fonction helper pour formater les nombres
       const formatNumber = (num) => {
         if (num === null || num === undefined) return "0.00";
         return parseFloat(num).toFixed(2);
       };
+      // Récupérer le prochain numéro de situation
+      const situationNumero = await getNextSituationNumber();
 
       const situationData = {
         chantier: chantier.id,
         devis: devis.id,
         mois: parseInt(mois),
         annee: parseInt(annee),
+        numero_situation: situationNumero, // Extrait le numéro de situation
         lignes: structure.flatMap((partie) =>
           partie.sous_parties.flatMap((sousPartie) =>
             sousPartie.lignes.map((ligne) => ({
@@ -1258,7 +1213,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
   // Calcul du total avec les lignes supplémentaires
   const calculerTotalNet = () => {
-    let total = montantHTMois;
+    let total = calculerMontantHTMois();
 
     // Retenue de garantie (5%)
     const retenueGarantie = total * 0.05;

@@ -2876,7 +2876,8 @@ class SituationViewSet(viewsets.ModelViewSet):
                 mois=int(data['mois']),
                 annee=int(data['annee']),
                 **montants,
-                taux_prorata=Decimal(str(data.get('taux_prorata', '2.5')))
+                taux_prorata=Decimal(str(data.get('taux_prorata', '2.5'))),
+                numero_situation=data['numero_situation']
             )
 
             # Création des lignes de situation
@@ -3403,8 +3404,8 @@ def get_factures_cie(request, chantier_id):
 class NumeroService:
     @staticmethod
     def get_next_facture_number():
-        """Génère le prochain numéro de facture"""
-        current_year = str(datetime.now().year)[-2:]  # Prend les 2 derniers chiffres de l'année
+        """Génère le prochain numéro de facture unique pour toute l'application"""
+        current_year = str(datetime.now().year)[-2:]
         
         # Récupère le dernier numéro de facture de l'année
         last_facture = Facture.objects.filter(
@@ -3422,29 +3423,73 @@ class NumeroService:
 
     @staticmethod
     def get_next_situation_number(chantier_id):
-        """Génère le prochain numéro de situation pour un chantier"""
+        """Génère le prochain numéro de situation pour un chantier spécifique"""
+        # Récupérer la dernière situation du chantier
         last_situation = Situation.objects.filter(
             chantier_id=chantier_id
-        ).order_by('-numero').first()
+        ).order_by('-numero_situation').first()
         
-        next_sit_num = 1
-        if last_situation:
-            # Extrait le numéro de situation (après "Situation n°")
-            last_sit_num = int(last_situation.numero.split('°')[-1])
-            next_sit_num = last_sit_num + 1
+        # Déterminer le prochain numéro de situation
+        next_sit_num = 1 if not last_situation else last_situation.numero_situation + 1
             
+        # Générer le numéro de facture de base
         base_numero = NumeroService.get_next_facture_number()
+        
         return f"{base_numero} - Situation n°{next_sit_num:02d}"
 
 @api_view(['GET'])
 def get_next_numero(request, chantier_id=None):
     """Récupère le prochain numéro de facture ou situation"""
-    if chantier_id:
-        numero = NumeroService.get_next_situation_number(chantier_id)
-    else:
-        numero = NumeroService.get_next_facture_number()
-    
-    return Response({'numero': numero})
+    try:
+        current_year = str(datetime.now().year)[-2:]
+        
+        # Récupérer le dernier numéro utilisé (factures ET situations)
+        last_facture_numero = Facture.objects.filter(
+            numero__contains=f'-{current_year}'
+        ).order_by('-numero').first()
+        
+        last_situation_numero = Situation.objects.filter(
+            numero_situation__contains=f'-{current_year}'
+        ).order_by('-numero_situation').first()
+        
+        # Déterminer le dernier numéro utilisé
+        last_num = 0
+        if last_facture_numero:
+            try:
+                last_num = max(last_num, int(last_facture_numero.numero.split('-')[1]))
+            except (IndexError, ValueError):
+                pass
+                
+        if last_situation_numero:
+            try:
+                last_num = max(last_num, int(last_situation_numero.numero_situation.split('-')[1]))
+            except (IndexError, ValueError):
+                pass
+        
+        next_num = last_num + 1
+        base_numero = f"FACT-{next_num:03d}-{current_year}"
+            
+        if chantier_id:
+            # Pour une situation, on ajoute le numéro de situation
+            last_situation = Situation.objects.filter(
+                chantier_id=chantier_id
+            ).order_by('-numero_situation').first()
+            
+            next_sit_num = 1
+            if last_situation and last_situation.numero_situation:
+                try:
+                    current_sit_num = int(last_situation.numero_situation.split('n°')[1])
+                    next_sit_num = current_sit_num + 1
+                except (IndexError, ValueError):
+                    next_sit_num = 1
+                    
+            numero = f"{base_numero} - Situation n°{next_sit_num:02d}"
+        else:
+            numero = base_numero
+        
+        return Response({'numero': numero})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 
 class SituationLigneSupplementaireViewSet(viewsets.ModelViewSet):
