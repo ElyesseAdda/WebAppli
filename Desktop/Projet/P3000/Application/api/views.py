@@ -3719,6 +3719,84 @@ def get_situations_list(request):
     serializer = SituationSerializer(situations, many=True)
     return Response(serializer.data)
 
+def calculer_pourcentage_sous_partie(sous_partie):
+    """
+    Calcule le pourcentage moyen d'avancement d'une sous-partie
+    """
+    lignes_devis = DevisLigne.objects.filter(ligne_detail__sous_partie=sous_partie)
+    if not lignes_devis.exists():
+        return Decimal('0')
+    
+    total_pourcentage = Decimal('0')
+    count = 0
+    for ligne in lignes_devis:
+        # Utiliser SituationLigne au lieu de situation_lignes
+        situation_ligne = SituationLigne.objects.filter(ligne_devis=ligne).last()
+        if situation_ligne:
+            total_pourcentage += situation_ligne.pourcentage_actuel
+            count += 1
+    
+    return total_pourcentage / count if count > 0 else Decimal('0')
+
+def calculer_pourcentage_partie(partie):
+    """
+    Calcule le pourcentage moyen d'avancement d'une partie
+    """
+    sous_parties = SousPartie.objects.filter(partie=partie)
+    if not sous_parties.exists():
+        return Decimal('0')
+    
+    total_pourcentage = Decimal('0')
+    count = 0
+    for sous_partie in sous_parties:
+        pourcentage = calculer_pourcentage_sous_partie(sous_partie)
+        if pourcentage > 0:
+            total_pourcentage += pourcentage
+            count += 1
+    
+    return total_pourcentage / count if count > 0 else Decimal('0')
+
+def calculer_pourcentage_avenant(avenant):
+    """Calcule le pourcentage moyen d'avancement d'un avenant"""
+    factures_ts = avenant.factures_ts.all()
+    if not factures_ts.exists():
+        return Decimal('0')
+    
+    total_pourcentage = sum(
+        ts.pourcentage_actuel or Decimal('0')
+        for ts in factures_ts
+    )
+    return total_pourcentage / factures_ts.count()
+
+def calculer_pourcentage_sous_partie_avenant(facture_ts, situation):
+    """
+    Calcule le pourcentage d'avancement d'une facture TS dans une situation donnée
+    """
+    ligne_avenant = SituationLigneAvenant.objects.filter(
+        situation=situation,
+        facture_ts=facture_ts
+    ).last()
+    
+    return ligne_avenant.pourcentage_actuel if ligne_avenant else Decimal('0')
+
+def calculer_pourcentage_avenant(avenant, situation):
+    """
+    Calcule le pourcentage moyen d'avancement d'un avenant
+    """
+    lignes_avenant = SituationLigneAvenant.objects.filter(
+        situation=situation,
+        avenant=avenant
+    )
+    
+    if not lignes_avenant.exists():
+        return Decimal('0')
+    
+    total_pourcentage = sum(
+        ligne.pourcentage_actuel
+        for ligne in lignes_avenant
+    )
+    return total_pourcentage / lignes_avenant.count()
+
 def preview_situation(request, situation_id):
     try:
         situation = get_object_or_404(Situation, id=situation_id)
@@ -3727,39 +3805,45 @@ def preview_situation(request, situation_id):
         societe = chantier.societe
         client = societe.client_name
 
-        total_ht = Decimal('0')
-        parties_data = []
-
-        # Créer un dictionnaire des lignes de situation pour un accès rapide
+        # Dictionnaires pour un accès rapide aux données de situation
         situation_lignes_dict = {
             ligne.ligne_devis.id: ligne 
             for ligne in situation.lignes.all()
         }
+        
+        total_ht = Decimal('0')
+        parties_data = []
 
-        # Parcourir les parties du devis comme dans preview_saved_devis
-        for partie in Partie.objects.filter(
+        # Obtenir toutes les parties uniques du devis
+        parties = Partie.objects.filter(
             id__in=[ligne.ligne_detail.sous_partie.partie.id 
                    for ligne in devis.lignes.all()]
-        ).distinct():
+        ).distinct()
+
+        # Parcourir les parties
+        for partie in parties:
             sous_parties_data = []
             total_partie = Decimal('0')
+            total_avancement_partie = Decimal('0')
 
             for sous_partie in SousPartie.objects.filter(
-                partie=partie, 
+                partie=partie,
                 id__in=[ligne.ligne_detail.sous_partie.id 
                        for ligne in devis.lignes.all()]
             ).distinct():
                 lignes_details_data = []
                 total_sous_partie = Decimal('0')
+                total_avancement_sous_partie = Decimal('0')
 
-                # Pour chaque ligne du devis, ajouter les infos de situation
                 for ligne_devis in devis.lignes.filter(ligne_detail__sous_partie=sous_partie):
                     situation_ligne = situation_lignes_dict.get(ligne_devis.id)
                     pourcentage = situation_ligne.pourcentage_actuel if situation_ligne else Decimal('0')
                     
-                    total_ligne = Decimal(str(ligne_devis.quantite)) * Decimal(str(ligne_devis.prix_unitaire))
+                    total_ligne = ligne_devis.quantite * ligne_devis.prix_unitaire
                     montant_situation = (total_ligne * pourcentage) / Decimal('100')
-                    
+                    total_sous_partie += total_ligne
+                    total_avancement_sous_partie += montant_situation
+
                     lignes_details_data.append({
                         'description': ligne_devis.ligne_detail.description,
                         'unite': ligne_devis.ligne_detail.unite,
@@ -3769,60 +3853,161 @@ def preview_situation(request, situation_id):
                         'pourcentage': pourcentage,
                         'montant_situation': montant_situation
                     })
-                    total_sous_partie += montant_situation
 
                 if lignes_details_data:
-                    sous_parties_data.append({
+                    pourcentage_sous_partie = (total_avancement_sous_partie / total_sous_partie * 100) if total_sous_partie else Decimal('0')
+                    sous_partie_data = {
                         'description': sous_partie.description,
                         'lignes_details': lignes_details_data,
-                        'total_sous_partie': total_sous_partie
-                    })
+                        'total_sous_partie': total_sous_partie,
+                        'pourcentage': pourcentage_sous_partie,
+                        'montant_avancement': total_avancement_sous_partie
+                    }
+                    sous_parties_data.append(sous_partie_data)
                     total_partie += total_sous_partie
+                    total_avancement_partie += total_avancement_sous_partie
 
             if sous_parties_data:
-                parties_data.append({
+                pourcentage_partie = (total_avancement_partie / total_partie * 100) if total_partie else Decimal('0')
+                partie_data = {
                     'titre': partie.titre,
                     'sous_parties': sous_parties_data,
-                    'total_partie': total_partie
-                })
+                    'total_partie': total_partie,
+                    'pourcentage': pourcentage_partie,
+                    'montant_avancement': total_avancement_partie
+                }
+                parties_data.append(partie_data)
                 total_ht += total_partie
 
-        # Ajouter les lignes supplémentaires et avenants
-        for ligne in situation.lignes_supplementaires.all():
-            if ligne.type == 'deduction':
-                total_ht -= ligne.montant
-            else:
-                total_ht += ligne.montant
+        # Gestion des avenants
+        avenant_data = []
+        current_avenant = None
+        current_avenant_lines = []
+        total_avenant = Decimal('0')
+        pourcentage_avenant = Decimal('0')
+        nb_lignes_avenant = 0
 
-        for ligne in situation.lignes_avenant.all():
-            total_ht += ligne.montant
+        for ligne_avenant in situation.lignes_avenant.all().order_by('facture_ts__avenant__numero'):
+            facture_ts = ligne_avenant.facture_ts
+            avenant = facture_ts.avenant
+
+            if current_avenant != avenant.numero:
+                if current_avenant_lines:
+                    # Calculer le pourcentage moyen pour l'avenant précédent
+                    avg_pourcentage = pourcentage_avenant / nb_lignes_avenant if nb_lignes_avenant > 0 else Decimal('0')
+                    avenant_data.append({
+                        'numero': current_avenant,
+                        'lignes': current_avenant_lines,
+                        'pourcentage_avenant': avg_pourcentage,
+                        'total_avenant': total_avenant,
+                        'montant_avancement': (total_avenant * avg_pourcentage) / Decimal('100')
+                    })
+                
+                current_avenant = avenant.numero
+                current_avenant_lines = []
+                total_avenant = Decimal('0')
+                pourcentage_avenant = Decimal('0')
+                nb_lignes_avenant = 0
+
+            current_avenant_lines.append({
+                'devis_numero': facture_ts.devis.numero,
+                'designation': facture_ts.designation,
+                'montant_ht': ligne_avenant.montant_ht,
+                'pourcentage_actuel': ligne_avenant.pourcentage_actuel,
+                'montant': (ligne_avenant.montant_ht * ligne_avenant.pourcentage_actuel) / Decimal('100')
+            })
+
+            total_avenant += ligne_avenant.montant_ht
+            montant_avancement_avenant = (ligne_avenant.montant_ht * ligne_avenant.pourcentage_actuel) / Decimal('100')
+            pourcentage_avenant += ligne_avenant.pourcentage_actuel
+            nb_lignes_avenant += 1
+
+        # Ajouter le dernier avenant
+        if current_avenant_lines:
+            avg_pourcentage = pourcentage_avenant / nb_lignes_avenant if nb_lignes_avenant > 0 else Decimal('0')
+            avenant_data.append({
+                'numero': current_avenant,
+                'lignes': current_avenant_lines,
+                'pourcentage_avenant': avg_pourcentage,
+                'total_avenant': total_avenant,
+                'montant_avancement': (total_avenant * avg_pourcentage) / Decimal('100')
+            })
+
+        # Gestion des lignes supplémentaires
+        lignes_supplementaires_data = []
+        for ligne in situation.lignes_supplementaires.all():
+            lignes_supplementaires_data.append({
+                'description': ligne.description,
+                'type': ligne.type,
+                'montant': ligne.montant,
+                'isHighlighted': False
+            })
+
+        # Calcul des totaux pour tous les avenants
+        total_avenants = Decimal('0')
+        total_montant_avancement_avenants = Decimal('0')
+        for av in avenant_data:
+            total_avenants += av['total_avenant']
+            total_montant_avancement_avenants += av['montant_avancement']
+
+        pourcentage_total_avenants = (total_montant_avancement_avenants / total_avenants * 100) if total_avenants else Decimal('0')
 
         context = {
-            'situation': situation,
-            'chantier': chantier,
-            'societe': societe,
-            'client': client,
+            'chantier': {
+                'nom': chantier.chantier_name,
+                'ville': chantier.ville,
+                'rue': chantier.rue,
+            },
+            'societe': {
+                'nom': societe.nom_societe,
+                'ville': societe.ville_societe,
+                'rue': societe.rue_societe,
+            },
+            'client': {
+                'nom': client.name,
+                'prenom': client.surname,
+                'client_mail': client.client_mail,
+                'phone_Number': client.phone_Number,
+            },
+            'devis': {
+                'numero': devis.numero,
+                'nature_travaux': devis.nature_travaux,
+            },
+            'situation': {
+                'id': situation.id,
+                'numero': situation.numero,
+                'mois': situation.mois,
+                'annee': situation.annee,
+                'numero_situation': situation.numero_situation,
+                'montant_ht_mois': situation.montant_ht_mois,
+                'montant_precedent': situation.montant_precedent,
+                'montant_total': situation.montant_total,
+                'pourcentage_avancement': situation.pourcentage_avancement,
+                'retenue_garantie': situation.retenue_garantie,
+                'montant_prorata': situation.montant_prorata,
+                'taux_prorata': situation.taux_prorata,
+                'retenue_cie': situation.retenue_cie,
+                'date_creation': situation.date_creation,
+                'montant_total_devis': situation.montant_total_devis,
+                'montant_total_travaux': situation.montant_total_travaux,
+                'total_avancement': situation.total_avancement,
+            },
             'parties': parties_data,
-            'total_ht': total_ht,
-            'retenue_garantie': situation.retenue_garantie,
-            'montant_prorata': situation.montant_prorata,
-            'retenue_cie': situation.retenue_cie,
-            'montant_apres_retenues': situation.montant_apres_retenues,
-            'tva': situation.tva,
-            'montant_ttc': total_ht + situation.tva,
-            'mois': situation.mois,
-            'annee': situation.annee,
-            'pourcentage_avancement': situation.pourcentage_avancement,
-            'lignes_supplementaires': situation.lignes_supplementaires.all(),
-            'lignes_avenant': situation.lignes_avenant.all(),
-            'cumul_precedent': situation.cumul_precedent,  # Ajout de cette ligne
-            'montant_ht_mois': situation.montant_ht_mois,  # Ajout de cette ligne aussi
+            'lignes_avenant': avenant_data,
+            'lignes_supplementaires': lignes_supplementaires_data,
+            'total_ht': str(total_ht),
+            'tva': str(total_ht * Decimal('0.20')),
+            'montant_ttc': str(total_ht * Decimal('1.20')),
+            'total_avenants': total_avenants,
+            'pourcentage_total_avenants': pourcentage_total_avenants,
+            'montant_total_avenants': total_montant_avancement_avenants,
         }
 
         return render(request, 'preview_situation.html', context)
 
+
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return JsonResponse({'error': str(e)}, status=500)
 
 def generate_situation_pdf(request):
     try:

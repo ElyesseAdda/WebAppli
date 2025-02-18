@@ -118,6 +118,7 @@
         margin-right: 2px;
         width: 22px;
         font-size: 0.8rem;
+        padding-right: 6px;
         
       }
       .quantite {
@@ -154,10 +155,10 @@
       }
       .totalHttableau {
         text-align: right;
-        width: 110px;
+        width: 100px;
         font-size: 0.8rem;
         font-weight: 700;
-        transform: translateX(-15px);  /* Décalage de 15px vers la gauche */
+        transform: translateX(-5px);  /* Décalage de 5px vers la gauche */
       }
       .bordertitre {
         border: solid 2px black;
@@ -489,7 +490,7 @@
 
       .pourcentagetableau {
         text-align: right;
-        width: 80px;
+        width: 90px;
         font-size: 0.8rem;
         font-weight: 500;
       }
@@ -521,14 +522,14 @@
     <div class="client-container">
       <div class="client-info">
         <h3>Client:</h3>
-        <h4>{{ societe.nom_societe }}</h4>
-        <p>{{ societe.rue_societe }}</p>
-        <p>{{ societe.codepostal_societe }}, {{ societe.ville_societe }}</p>
+        <h4>{{ societe.nom }}</h4>
+        <p>{{ societe.rue }}</p>
+        <p>{{ societe.ville }}</p>
       </div>
 
       <div class="contact-info">
         <h3>Contact:</h3>
-        <p>{{ client.name }} {{ client.surname }}</p>
+        <p>{{ client.nom }} {{ client.prenom }}</p>
         <p>Mail: {{ client.client_mail }}</p>
         <p>
           Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
@@ -537,21 +538,20 @@
     </div>
 
     <div class="date">
-      <p>A Marseille, le {% now "d/m/Y" %}</p>
+      <p>A Marseille, le {{ situation.date_creation|date:"d/m/Y" }}</p>
     </div>
 
     <div class="header">
-      <h1>{{ devis.numero }}</h1>
+      <h1>{{ situation.numero_situation }}</h1>
     </div>
 
     <div class="chantier-info">
       <h2>ADRESSE DU CHANTIER :</h2>
-      <h3>{{ chantier.chantier_name }}</h3>
+      <h3>{{ chantier.nom }}</h3>
       <p>{{ chantier.rue }}</p>
-      <p>{{ chantier.code_postal }} - {{ chantier.ville }}</p>
+      <p>{{ chantier.ville }}</p>
     </div>
 
-    <!-- Ajout de la nature des travaux -->
     
 
     <!-- Votre tableau existant -->
@@ -599,10 +599,12 @@
           {% for partie in parties %}
           <tr class="partie">
             <td class="partie" colspan="7">
-              {{ partie.titre }}
-              <span style="float: right"
-                >{{ partie.total_partie|floatformat:2 }} €</span
-              >
+                {{ partie.titre }}
+                <span style="float: right">
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ partie.total_partie|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ partie.pourcentage|floatformat:2 }}% </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ partie.montant_avancement|floatformat:2 }} €</span>
+                </span>
             </td>
           </tr>
           {% for special_line in partie.special_lines %}
@@ -624,10 +626,12 @@
           {% for sous_partie in partie.sous_parties %}
           <tr class="sous-partie">
             <td colspan="7">
-              {{ sous_partie.description }}
-              <span style="float: right"
-                >{{ sous_partie.total_sous_partie|floatformat:2 }} €</span
-              >
+                {{ sous_partie.description }}
+                <span style="float: right">
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ sous_partie.total_sous_partie|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ sous_partie.pourcentage|floatformat:2 }} % </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ sous_partie.montant_avancement|floatformat:2 }} €</span>
+                </span>
             </td>
           </tr>
           {% for special_line in sous_partie.special_lines %}
@@ -677,16 +681,29 @@
           {% if lignes_avenant %}
           <!-- Section Avenants -->
           <tr>
-            <td colspan="7" class="partie">AVENANTS</td>
-          </tr>
-          {% for ligne in lignes_avenant %}
-          <tr class="sous-partie">
-            <td colspan="7">
-              DEV-001-{{ devis.numero_devis }} - TS N°{{ ligne.avenant.numero_avenant|stringformat:"03d" }}
+            <td colspan="7" class="partie">
+                Avenants
+                <span style="float: right">
+                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ montant_total_avenants|floatformat:2 }} € </span>
+                    <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ pourcentage_total_avenants|floatformat:2 }} % </span>
+                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ total_avenants|floatformat:2 }} €</span>
+                </span>
             </td>
           </tr>
+          {% for avenant in lignes_avenant %}
+          <tr class="sous-partie">
+            <td colspan="7">
+                Avenant N°{{ avenant.numero }}
+                <span style="float: right">
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ avenant.total_avenant|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ avenant.pourcentage_avenant|floatformat:2 }} % </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|floatformat:2 }} €</span>
+                </span>
+            </td>
+          </tr>
+          {% for ligne in avenant.lignes %}
           <tr>
-            <td class="ligne-details">{{ ligne.avenant.description }}</td>
+            <td class="ligne-details">{{ ligne.devis_numero }}</td>
             <td class="unitetableau" style="font-size: 0.7rem;">Forf</td>
             <td class="quantitetableau">1,00</td>
             <td class="prixtableau">{{ ligne.montant_ht|floatformat:2 }}</td>
@@ -694,6 +711,7 @@
             <td class="pourcentagetableau">{{ ligne.pourcentage_actuel|floatformat:2 }} %</td>
             <td class="montanttableau">{{ ligne.montant|floatformat:2 }} €</td>
           </tr>
+          {% endfor %}
           {% endfor %}
           {% endif %}
 
@@ -724,7 +742,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Cumuls mois précédents HT</span>
-            <span class="montanta">{{ cumul_precedent|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_precedent|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -735,7 +753,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- MONTANT TOTAL CUMUL HT</span>
-            <span class="montanta">{{ cumul_precedent|add:montant_ht_mois|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_total|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -743,7 +761,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant du mois HT</span>
-            <span class="montanta">{{ montant_ht_mois|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_ht_mois|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -752,7 +770,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label" style="color: red;">- RG 5% HT du mois </span>
-            <span class="montanta" style="color: red;">-{{ retenue_garantie|floatformat:2 }} €</span>
+            <span class="montanta" style="color: red;">-{{ situation.retenue_garantie|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -760,8 +778,8 @@
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label" style="color: red;">- Compte prorata {{ taux_prorata }}% HT du mois</span>
-            <span class="montanta" style="color: red;">-{{ montant_prorata|floatformat:2 }} €</span>
+            <span class="label" style="color: red;">- Compte prorata {{ situation.taux_prorata }}% HT du mois</span>
+            <span class="montanta" style="color: red;">-{{ situation.montant_prorata|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -783,7 +801,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label" style="color: red;">- Retenue CIE HT du mois</span>
-            <span class="montanta" style="color: red;">-{{ retenue_cie|floatformat:2 }} €</span>
+            <span class="montanta" style="color: red;">-{{ situation.retenue_cie|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -791,7 +809,7 @@
         <td colspan="2">
           <div class="recap-line" style="background-color: rgba(27, 120, 188, 1); color: white;">
             <span class="label">- Montant total du mois HT après retenues</span>
-            <span class="montanta">{{ montant_apres_retenues|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_apres_retenues|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -821,5 +839,32 @@
         Devis valable 1 mois après réception	
       </span>
     </div>
+    <script>
+    function formatNumber(number) {
+        // Convertit le nombre en string avec 2 décimales
+        let parts = Number(number).toFixed(2).split('.');
+        // Ajoute les espaces pour les milliers
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        // Retourne le nombre formaté
+        return parts.join('.');
+    }
+
+    // Sélectionne tous les éléments qui contiennent des nombres à formater
+    document.addEventListener('DOMContentLoaded', function() {
+        const elements = document.querySelectorAll('.totalHttableau, .montanttableau, .prixtableau, .montanta, .pourcentagetableau, .prixtableau, .quantitetableau, .centaine');
+        elements.forEach(element => {
+            const text = element.textContent;
+            // Extrait le nombre du texte (enlève le symbole €)
+            const number = parseFloat(text.replace(/[^0-9.-]+/g, ''));
+            if (!isNaN(number)) {
+                // Remplace le nombre par sa version formatée
+                element.textContent = element.textContent.replace(
+                    number.toFixed(2), 
+                    formatNumber(number)
+                );
+            }
+        });
+    });
+    </script>
   </body>
 </html>

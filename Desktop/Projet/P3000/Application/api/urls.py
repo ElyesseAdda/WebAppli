@@ -147,6 +147,6 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/situations/by-month/', get_situations, name='get-situations-by-month'),
     path('chantier/<int:chantier_id>/last-situation/', get_last_situation, name='get-last-situation'),
     path('chantier/<int:chantier_id>/situations/', get_chantier_situations, name='chantier-situations'),
-    path('preview-situation/<int:situation_id>/', preview_situation, name='preview_situation'),
+    path('preview-situation/<int:situation_id>/', preview_situation, name='preview-situation'),
     path('generate-situation-pdf/', generate_situation_pdf, name='generate_situation_pdf'),
 ]

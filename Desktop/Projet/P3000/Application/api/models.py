@@ -438,6 +438,11 @@ class Situation(models.Model):
     montant_ht_mois = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     pourcentage_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    montant_total_travaux = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_total_devis = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_total_cumul_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+
     
     # Renommer ces champs pour correspondre au frontend
     cumul_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # au lieu de cumul_mois_precedent
