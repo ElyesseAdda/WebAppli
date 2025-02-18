@@ -597,7 +597,8 @@ class SituationSerializer(serializers.ModelSerializer):
             'montant_total', 'pourcentage_avancement', 'retenue_garantie',
             'montant_prorata', 'retenue_cie', 'montant_apres_retenues',
             'tva', 'taux_prorata', 'lignes', 'lignes_supplementaires',
-            'lignes_avenant'
+            'lignes_avenant', 'montant_total_devis', 'montant_total_travaux',
+            'total_avancement'
         ]
 
     def to_internal_value(self, data):

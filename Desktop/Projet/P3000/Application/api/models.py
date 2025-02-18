@@ -467,6 +467,11 @@ class Situation(models.Model):
         related_name='situations_validated'
     )
 
+    # Ajout des nouveaux champs
+    montant_total_devis = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_total_travaux = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
     class Meta:
         ordering = ['-annee', '-mois']
         unique_together = ['chantier', 'mois', 'annee']

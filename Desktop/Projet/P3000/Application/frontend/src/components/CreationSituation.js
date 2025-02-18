@@ -1208,6 +1208,9 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
             ),
           }))
         ),
+        montant_total_devis: formatNumber(totalHT),
+        montant_total_travaux: formatNumber(totalHT + montantTotalAvenants),
+        total_avancement: formatNumber(totalAvancement),
       };
 
       console.log("Données envoyées:", situationData); // Pour debug
@@ -1286,6 +1289,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     const cumulPrecedent = calculerCumulPrecedent();
     const montantTotalCumul = calculerMontantTotalCumul();
     const montantHtMois = calculerMontantHTMois();
+    const montantTotalTravaux = totalHT + montantTotalAvenants;
 
     const retenueGarantie = montantHtMois * 0.05;
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
@@ -1296,7 +1300,9 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
       parseFloat(retenueCIE || 0);
     const tva = montantApresRetenues * 0.2;
     const pourcentageAvancement =
-      totalHT > 0 ? (montantTotalCumul / totalHT) * 100 : 0;
+      montantTotalTravaux > 0
+        ? (montantTotalCumul / montantTotalTravaux) * 100
+        : 0;
 
     setCalculatedValues({
       montant_ht_mois: montantHtMois.toFixed(2),

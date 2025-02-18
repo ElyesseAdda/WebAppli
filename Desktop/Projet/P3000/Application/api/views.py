@@ -3674,3 +3674,136 @@ def get_situations_list(request):
     serializer = SituationSerializer(situations, many=True)
     return Response(serializer.data)
 
+def preview_situation(request, situation_id):
+    try:
+        situation = get_object_or_404(Situation, id=situation_id)
+        devis = situation.devis
+        chantier = situation.chantier
+        societe = chantier.societe
+        client = societe.client_name
+
+        total_ht = Decimal('0')
+        parties_data = []
+
+        # Créer un dictionnaire des lignes de situation pour un accès rapide
+        situation_lignes_dict = {
+            ligne.ligne_devis.id: ligne 
+            for ligne in situation.lignes.all()
+        }
+
+        # Parcourir les parties du devis comme dans preview_saved_devis
+        for partie in Partie.objects.filter(
+            id__in=[ligne.ligne_detail.sous_partie.partie.id 
+                   for ligne in devis.lignes.all()]
+        ).distinct():
+            sous_parties_data = []
+            total_partie = Decimal('0')
+
+            for sous_partie in SousPartie.objects.filter(
+                partie=partie, 
+                id__in=[ligne.ligne_detail.sous_partie.id 
+                       for ligne in devis.lignes.all()]
+            ).distinct():
+                lignes_details_data = []
+                total_sous_partie = Decimal('0')
+
+                # Pour chaque ligne du devis, ajouter les infos de situation
+                for ligne_devis in devis.lignes.filter(ligne_detail__sous_partie=sous_partie):
+                    situation_ligne = situation_lignes_dict.get(ligne_devis.id)
+                    pourcentage = situation_ligne.pourcentage_actuel if situation_ligne else Decimal('0')
+                    
+                    total_ligne = Decimal(str(ligne_devis.quantite)) * Decimal(str(ligne_devis.prix_unitaire))
+                    montant_situation = (total_ligne * pourcentage) / Decimal('100')
+                    
+                    lignes_details_data.append({
+                        'description': ligne_devis.ligne_detail.description,
+                        'unite': ligne_devis.ligne_detail.unite,
+                        'quantity': ligne_devis.quantite,
+                        'custom_price': ligne_devis.prix_unitaire,
+                        'total_ht': total_ligne,
+                        'pourcentage': pourcentage,
+                        'montant_situation': montant_situation
+                    })
+                    total_sous_partie += montant_situation
+
+                if lignes_details_data:
+                    sous_parties_data.append({
+                        'description': sous_partie.description,
+                        'lignes_details': lignes_details_data,
+                        'total_sous_partie': total_sous_partie
+                    })
+                    total_partie += total_sous_partie
+
+            if sous_parties_data:
+                parties_data.append({
+                    'titre': partie.titre,
+                    'sous_parties': sous_parties_data,
+                    'total_partie': total_partie
+                })
+                total_ht += total_partie
+
+        # Ajouter les lignes supplémentaires et avenants
+        for ligne in situation.lignes_supplementaires.all():
+            if ligne.type == 'deduction':
+                total_ht -= ligne.montant
+            else:
+                total_ht += ligne.montant
+
+        for ligne in situation.lignes_avenant.all():
+            total_ht += ligne.montant
+
+        context = {
+            'situation': situation,
+            'chantier': chantier,
+            'societe': societe,
+            'client': client,
+            'parties': parties_data,
+            'total_ht': total_ht,
+            'retenue_garantie': situation.retenue_garantie,
+            'montant_prorata': situation.montant_prorata,
+            'retenue_cie': situation.retenue_cie,
+            'montant_apres_retenues': situation.montant_apres_retenues,
+            'tva': situation.tva,
+            'montant_ttc': total_ht + situation.tva,
+            'mois': situation.mois,
+            'annee': situation.annee,
+            'pourcentage_avancement': situation.pourcentage_avancement,
+            'lignes_supplementaires': situation.lignes_supplementaires.all(),
+            'lignes_avenant': situation.lignes_avenant.all(),
+            'cumul_precedent': situation.cumul_precedent,  # Ajout de cette ligne
+            'montant_ht_mois': situation.montant_ht_mois,  # Ajout de cette ligne aussi
+        }
+
+        return render(request, 'preview_situation.html', context)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+def generate_situation_pdf(request):
+    try:
+        data = json.loads(request.body)
+        situation_id = data.get('situation_id')
+
+        if not situation_id:
+            return JsonResponse({'error': 'ID de la situation manquant'}, status=400)
+
+        preview_url = request.build_absolute_uri(f"/api/preview-situation/{situation_id}/")
+
+        # Utiliser le même script Puppeteer mais avec un nom de fichier différent
+        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\situation.pdf'
+
+        command = ['node', node_script_path, preview_url]
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+
+        if os.path.exists(pdf_path):
+            with open(pdf_path, 'rb') as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="situation_{situation_id}.pdf"'
+                return response
+        else:
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+

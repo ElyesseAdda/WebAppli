@@ -47,6 +47,8 @@ from .views import (
     get_last_situation,
     get_chantier_situations,
     get_situations_list,
+    preview_situation,
+    generate_situation_pdf,
 )
 
 router = DefaultRouter()
@@ -145,4 +147,6 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/situations/by-month/', get_situations, name='get-situations-by-month'),
     path('chantier/<int:chantier_id>/last-situation/', get_last_situation, name='get-last-situation'),
     path('chantier/<int:chantier_id>/situations/', get_chantier_situations, name='chantier-situations'),
+    path('preview-situation/<int:situation_id>/', preview_situation, name='preview_situation'),
+    path('generate-situation-pdf/', generate_situation_pdf, name='generate_situation_pdf'),
 ]
