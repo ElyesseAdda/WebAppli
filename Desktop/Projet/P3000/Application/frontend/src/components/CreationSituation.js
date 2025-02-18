@@ -542,8 +542,10 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
   // Calculer l'avancement chaque fois que la structure change
   useEffect(() => {
-    if (structure.length > 0 && totalHT > 0) {
+    if (structure.length > 0 && totalHT + montantTotalAvenants > 0) {
       let sommeMontantsLignes = 0;
+
+      // Somme des montants des lignes du devis
       structure.forEach((partie) => {
         partie.sous_parties.forEach((sousPartie) => {
           sousPartie.lignes.forEach((ligne) => {
@@ -553,10 +555,19 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         });
       });
 
-      const pourcentageAvancement = (sommeMontantsLignes / totalHT) * 100;
+      // Ajouter les montants des avenants
+      avenants.forEach((avenant) => {
+        avenant.factures_ts?.forEach((ts) => {
+          sommeMontantsLignes +=
+            (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100;
+        });
+      });
+
+      const pourcentageAvancement =
+        (sommeMontantsLignes / (totalHT + montantTotalAvenants)) * 100;
       setTotalAvancement(pourcentageAvancement);
     }
-  }, [structure, totalHT]);
+  }, [structure, totalHT, avenants, montantTotalAvenants]);
 
   useEffect(() => {
     if (avenants && Array.isArray(avenants)) {
@@ -1144,7 +1155,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         tva: formatNumber(calculerTotalNet() * 0.2),
         montant_total_ttc: formatNumber(calculerTotalNet() * 1.2),
         pourcentage_avancement: formatNumber(
-          ((calculerCumulPrecedent() + montantHTMois) / totalHT) * 100
+          (calculerMontantTotalCumul() / (totalHT + montantTotalAvenants)) * 100
         ),
         taux_prorata: formatNumber(tauxProrata),
         lignes_supplementaires: lignesSupplementaires.map((ligne) => ({
