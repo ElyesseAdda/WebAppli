@@ -3952,6 +3952,9 @@ def preview_situation(request, situation_id):
 
         pourcentage_total_avenants = (total_montant_avancement_avenants / total_avenants * 100) if total_avenants else Decimal('0')
 
+        # Calculer la somme des total_partie
+        total_marche_ht = sum(Decimal(str(partie['total_partie'])) for partie in parties_data)
+
         context = {
             'chantier': {
                 'nom': chantier.chantier_name,
@@ -3991,6 +3994,13 @@ def preview_situation(request, situation_id):
                 'montant_total_devis': situation.montant_total_devis,
                 'montant_total_travaux': situation.montant_total_travaux,
                 'total_avancement': situation.total_avancement,
+                # Ajout des champs manquants
+                'cumul_precedent': situation.cumul_precedent,
+                'montant_apres_retenues': situation.montant_apres_retenues,
+                'montant_total_cumul_ht': situation.montant_total_cumul_ht,
+                'tva': situation.tva,
+                'statut': situation.statut,
+                'date_validation': situation.date_validation,
             },
             'parties': parties_data,
             'lignes_avenant': avenant_data,
@@ -4001,6 +4011,7 @@ def preview_situation(request, situation_id):
             'total_avenants': total_avenants,
             'pourcentage_total_avenants': pourcentage_total_avenants,
             'montant_total_avenants': total_montant_avancement_avenants,
+            'total_marche_ht': total_marche_ht,  # Ajouter cette nouvelle variable au context
         }
 
         return render(request, 'preview_situation.html', context)

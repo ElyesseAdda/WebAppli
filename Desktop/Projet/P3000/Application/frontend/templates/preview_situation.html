@@ -383,6 +383,7 @@
       .footer {
         text-align: center;
         margin-bottom: 10px;
+        
       }
       h2 {
         text-decoration: underline 2px black;
@@ -476,7 +477,7 @@
       .footer {
         font-size: 12px;
         font-weight: 500;
-        width: 400px;
+        width: 792px;
         text-align: left;
         margin-top: 10px;
       }
@@ -545,14 +546,34 @@
       <h1>{{ situation.numero_situation }}</h1>
     </div>
 
-    <div class="chantier-info">
-      <h2>ADRESSE DU CHANTIER :</h2>
-      <h3>{{ chantier.nom }}</h3>
-      <p>{{ chantier.rue }}</p>
-      <p>{{ chantier.ville }}</p>
+    <div class="header-info" style="display: flex; justify-content: space-between;">
+        <div class="adresse-chantier" style="width: 50%;">
+            <div class="chantier-info">
+                <h2>ADRESSE DU CHANTIER :</h2>
+                <h3>{{ chantier.nom }}</h3>
+                <p>{{ chantier.rue }}</p>
+                <p>{{ chantier.ville }}</p>
+            </div>
+        </div>
+        <div style="width: 50%;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <strong style="text-decoration: underline 2px black;">Montant du marché HT:</strong>
+                <span style="font-size: 0.9rem;font-weight: 700;">{{ total_marche_ht|floatformat:2 }} €</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <strong style="text-decoration: underline 2px black;">Avenant HT:</strong>
+                <span style="font-size: 0.9rem;font-weight: 700;">{{ total_avenants|floatformat:2 }} €</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <strong style="text-decoration: underline 2px black;">% Avancement:</strong>
+                <span style="font-size: 0.9rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|floatformat:2 }}%</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; ">
+                <strong style="text-decoration: underline 2px black;">Montant total des travaux HT</strong>
+                <span style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: center;width: 150px;">{{ total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
+            </div>
+        </div>
     </div>
-
-    
 
     <!-- Votre tableau existant -->
     <div class="bordertitre" style="position: relative; z-index: 1 ">
@@ -601,9 +622,9 @@
             <td class="partie" colspan="7">
                 {{ partie.titre }}
                 <span style="float: right">
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ partie.total_partie|floatformat:2 }} € </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ partie.pourcentage|floatformat:2 }}% </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ partie.montant_avancement|floatformat:2 }} €</span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ partie.montant_avancement|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ partie.pourcentage|floatformat:2 }} % </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ partie.total_partie|floatformat:2 }} €</span>
                 </span>
             </td>
           </tr>
@@ -738,22 +759,23 @@
       <!-- Montant après retenues -->
       
       <!-- Cumuls mois précédents -->
-      <tr class="tva-row">
-        <td colspan="2">
-          <div class="recap-line">
-            <span class="label">- Cumuls mois précédents HT</span>
-            <span class="montanta">{{ situation.montant_precedent|floatformat:2 }} €</span>
-          </div>
-        </td>
-      </tr>
+      
       <!-- Montant du mois -->
       
       <!-- Montant total cumul -->
       <tr class="total-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label">- MONTANT TOTAL CUMUL HT</span>
-            <span class="montanta">{{ situation.montant_total|floatformat:2 }} €</span>
+            <span class="label">- Montant total cumul HT</span>
+            <span class="montanta">{{ situation.cumul_precedent|add:situation.montant_ht_mois|floatformat:2 }} €</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line">
+            <span class="label">- Cumuls mois précédents HT</span>
+            <span class="montanta">{{ situation.cumul_precedent|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -818,7 +840,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- TVA (20%)</span>
-            <span class="montanta">{{ tva|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.tva|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -827,17 +849,27 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant total T.T.C. à payer</span>
-            <span class="montanta">{{ montant_ttc|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_apres_retenues|add:situation.tva|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
     </table>
     <div class="footer">
-      <span>Signature suivie de la mention "BON POUR ACCORD"<br>
-        
-      
-        Devis valable 1 mois après réception	
-      </span>
+      <span>Signature suivie de la mention "BON POUR ACCORD"</span>
+      <div class="taux-info" style="margin-top: 10px; font-size: 0.8rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+              <span>Taux d'escompte en cas de paiement anticipé :</span>
+              <span>2%</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+              <span>Taux de pénalité de retard :</span>
+              <span>0,80%</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+              <span>Indemnité forfaitaire de recouvrement</span>
+              <span>40,00 €</span>
+          </div>
+      </div>
     </div>
     <script>
     function formatNumber(number) {

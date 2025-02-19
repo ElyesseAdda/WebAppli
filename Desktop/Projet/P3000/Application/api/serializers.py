@@ -591,29 +591,7 @@ class SituationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Situation
-        fields = [
-            'id', 
-            'chantier',
-            'devis',
-            'mois',
-            'annee',
-            'numero_situation',
-            'montant_ht_mois',
-            'montant_precedent',
-            'montant_total',
-            'pourcentage_avancement',
-            'retenue_garantie',
-            'montant_prorata',
-            'taux_prorata',
-            'retenue_cie',
-            'date_creation',
-            'lignes',
-            'lignes_supplementaires',
-            'lignes_avenant',
-            'montant_total_devis',
-            'montant_total_travaux',
-            'total_avancement'
-        ]
+        fields = '__all__'
 
     def validate_numero_situation(self, value):
         """
