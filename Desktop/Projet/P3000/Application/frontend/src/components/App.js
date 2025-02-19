@@ -4,6 +4,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import "./../../static/css/app.css";
+import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";
 import CalendrierAgentContainer from "./CalendrierAgentContainer";
@@ -20,7 +21,6 @@ import ListePartiesSousParties from "./ListPartiesSousParties";
 import ModificationDevis from "./ModificationDevis";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
-
 // Créer un thème par défaut
 const theme = createTheme({
   palette: {
@@ -55,6 +55,7 @@ function App() {
             <Route path="/AgentCard" element={<AgentCardContainer />} />
             <Route path="/PlanningContainer" element={<PlanningContainer />} />
             <Route path="/ListeFactures" element={<ListeFactures />} />
+            <Route path="/AgencyExpenses" element={<AgencyExpenses />} />
             <Route
               path="/ModificationDevis/:devisId"
               element={<ModificationDevis />}

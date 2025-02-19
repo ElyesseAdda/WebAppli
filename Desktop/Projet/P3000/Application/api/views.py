@@ -15,14 +15,14 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer
+from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
     Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire # Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride# Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction, models
@@ -4047,4 +4047,79 @@ def generate_situation_pdf(request):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+class AgencyExpenseViewSet(viewsets.ModelViewSet):
+    queryset = AgencyExpense.objects.all()
+    serializer_class = AgencyExpenseSerializer
+
+    @action(detail=False, methods=['get'])
+    def monthly_summary(self, request):
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        
+        if not month or not year:
+            return Response({"error": "Month and year are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_date = date(int(year), int(month), 1)
+
+        # Filtrer les dépenses
+        expenses = self.queryset.filter(
+            models.Q(type='fixed', end_date__isnull=True) |
+            models.Q(type='fixed', end_date__gte=target_date) |
+            models.Q(
+                type='punctual',
+                date__month=month,
+                date__year=year
+            )
+        )
+
+        # Récupérer les overrides pour le mois/année
+        for expense in expenses:
+            override = AgencyExpenseOverride.objects.filter(
+                expense=expense,
+                month=month,
+                year=year
+            ).first()
+            if override:
+                expense.current_override = {
+                    'description': override.description,
+                    'amount': override.amount
+                }
+
+        # Calculer les totaux en tenant compte des overrides
+        total = 0
+        totals_by_category = {}
+        
+        for expense in expenses:
+            amount = expense.current_override['amount'] if hasattr(expense, 'current_override') else expense.amount
+            category = expense.category
+            
+            if category not in totals_by_category:
+                totals_by_category[category] = 0
+            totals_by_category[category] += amount
+            total += amount
+
+        return Response({
+            'expenses': self.serializer_class(expenses, many=True, context={'request': request}).data,
+            'totals_by_category': [{'category': k, 'total': v} for k, v in totals_by_category.items()],
+            'total': total
+        })
+
+    @action(detail=True, methods=['post'])
+    def monthly_override(self, request, pk=None):
+        expense = self.get_object()
+        month = request.data.get('month')
+        year = request.data.get('year')
+        
+        override, created = AgencyExpenseOverride.objects.update_or_create(
+            expense=expense,
+            month=month,
+            year=year,
+            defaults={
+                'description': request.data.get('description'),
+                'amount': request.data.get('amount')
+            }
+        )
+        
+        return Response(status=status.HTTP_200_OK)
 

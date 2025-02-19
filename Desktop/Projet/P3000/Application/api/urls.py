@@ -49,6 +49,7 @@ from .views import (
     get_situations_list,
     preview_situation,
     generate_situation_pdf,
+    AgencyExpenseViewSet,
 )
 
 router = DefaultRouter()
@@ -70,6 +71,7 @@ router.register(r'situation-lignes', SituationLigneViewSet, basename='situation-
 router.register(r'situation-lignes-supplementaires', SituationLigneSupplementaireViewSet)
 router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
+router.register(r'agency-expenses', AgencyExpenseViewSet)
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur

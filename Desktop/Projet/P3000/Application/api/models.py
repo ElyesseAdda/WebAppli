@@ -768,3 +768,34 @@ class SituationFactureCIE(models.Model):
     facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
 
+class AgencyExpense(models.Model):
+    EXPENSE_TYPES = [
+        ('fixed', 'Mensuel fixe'),
+        ('punctual', 'Ponctuel')
+    ]
+    
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    type = models.CharField(max_length=10, choices=EXPENSE_TYPES)
+    date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    category = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.description} - {self.amount}€ ({self.get_type_display()})"
+
+class AgencyExpenseOverride(models.Model):
+    expense = models.ForeignKey(AgencyExpense, on_delete=models.CASCADE, related_name='overrides')
+    month = models.IntegerField()
+    year = models.IntegerField()
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        unique_together = ('expense', 'month', 'year')
+

@@ -5,7 +5,7 @@ from .models import (
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
-    ChantierLigneSupplementaire, SituationLigneAvenant
+    ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -736,4 +736,22 @@ class ChantierLigneSupplementaireSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChantierLigneSupplementaire
         fields = ['id', 'description', 'montant']
+
+class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgencyExpenseOverride
+        fields = ['month', 'year', 'description', 'amount']
+
+class AgencyExpenseSerializer(serializers.ModelSerializer):
+    current_override = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AgencyExpense
+        fields = ['id', 'description', 'amount', 'type', 'date', 'end_date', 'category', 'current_override']
+
+    def get_current_override(self, obj):
+        request = self.context.get('request')
+        if request and hasattr(obj, 'current_override'):
+            return obj.current_override
+        return None
         
