@@ -560,15 +560,8 @@ const CreationDevis = () => {
         );
         societeId = chantierResponse.data.societe;
 
-        // Mise à jour des coûts estimés pour le chantier existant
-        await axios.patch(`/api/chantier/${chantierIdToUse}/`, {
-          montant_ht: totalHT,
-          montant_ttc: totalTTC,
-          cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
-          cout_estime_materiel: totals.cout_estime_materiel,
-          cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
-          marge_estimee: totals.marge_estimee,
-        });
+        // On ne met plus à jour les montants du chantier existant
+        // Suppression du patch sur le chantier
       }
 
       // Préparation des données du devis avec les coûts estimés

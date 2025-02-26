@@ -17,10 +17,12 @@ import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
+import ListeSituation from "./ListeSituation";
 import ListePartiesSousParties from "./ListPartiesSousParties";
 import ModificationDevis from "./ModificationDevis";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
+import TableauSuivi from "./TableauSuivi";
 // Créer un thème par défaut
 const theme = createTheme({
   palette: {
@@ -62,6 +64,8 @@ function App() {
             />
             <Route path="/BonCommande" element={<ListeBonCommande />} />
             <Route path="/ModificationBC/:id" element={<BonCommandeModif />} />
+            <Route path="/ListeSituation" element={<ListeSituation />} />
+            <Route path="/TableauSuivi" element={<TableauSuivi />} />
           </Routes>
         </Layout>
       </Router>

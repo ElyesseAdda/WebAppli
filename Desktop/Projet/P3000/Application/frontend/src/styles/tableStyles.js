@@ -8,97 +8,115 @@ import {
 import { blue } from "@mui/material/colors";
 import { styled } from "@mui/material/styles";
 
-// Container Styles
-export const StyledBox = styled(Box)({
-  width: "100%",
-  padding: "0 20px",
-  boxSizing: "border-box",
-  position: "relative",
-});
-
-// Table Container
-export const StyledTableContainer = styled(TableContainer)({
-  margin: "0 auto",
-  width: "100%",
-  "& .MuiTable-root": {
-    minWidth: "100%",
-  },
-});
-
-// Header Cells
-export const FilterCell = styled(TableCell)({
-  backgroundColor: "rgba(27, 120, 188, 1)",
-  "& .MuiTableSortLabel-root": {
-    color: "white",
-  },
-});
-
-export const AlignedCell = styled(FilterCell)({
-  "& .MuiTableSortLabel-root": {
+// Styles communs
+export const commonStyles = {
+  box: {
     width: "100%",
-    justifyContent: "center",
+    padding: "0 20px",
+    boxSizing: "border-box",
+    position: "relative",
   },
-});
 
-// Custom Text Fields
-export const BaseTextField = styled(TextField)({
-  "& .MuiInputBase-input": {
-    color: "white",
+  tableContainer: {
+    margin: "0 auto",
+    width: "100%",
+    "& .MuiTable-root": {
+      minWidth: "100%",
+    },
   },
-  "& .MuiInputLabel-root": {
-    color: "white",
-  },
-  "& .MuiInput-underline:before": {
-    borderBottomColor: "white",
-  },
-});
 
-export const StyledTextField = styled(BaseTextField)({
-  "& .MuiInputBase-input": {
-    textAlign: "left",
+  filterCell: {
+    backgroundColor: "rgba(27, 120, 188, 1)",
+    "& .MuiTableSortLabel-root": {
+      color: "white",
+    },
   },
-  "& .MuiInputLabel-root": {
-    textAlign: "left",
-  },
-});
 
-export const CenteredTextField = styled(BaseTextField)({
-  "& .MuiInputBase-input": {
-    textAlign: "center",
+  alignedCell: {
+    backgroundColor: "rgba(27, 120, 188, 1)",
+    "& .MuiTableSortLabel-root": {
+      width: "100%",
+      justifyContent: "center",
+      color: "white",
+    },
   },
-  "& .MuiInputLabel-root": {
-    textAlign: "center",
-  },
-});
 
-// Specific Field Styles
-export const PriceTextField = styled(CenteredTextField)({
-  "& .MuiInputBase-input": {
+  baseTextField: {
+    "& .MuiInputBase-input": {
+      color: "white",
+    },
+    "& .MuiInputLabel-root": {
+      color: "white",
+    },
+    "& .MuiInput-underline:before": {
+      borderBottomColor: "white",
+    },
+  },
+
+  styledTextField: {
+    "& .MuiInputBase-input": {
+      textAlign: "left",
+    },
+    "& .MuiInputLabel-root": {
+      textAlign: "left",
+    },
+  },
+
+  centeredTextField: {
+    "& .MuiInputBase-input": {
+      textAlign: "center",
+    },
+    "& .MuiInputLabel-root": {
+      textAlign: "center",
+    },
+  },
+
+  priceTextField: {
+    "& .MuiInputBase-input": {
+      fontWeight: 600,
+      textAlign: "center",
+    },
+  },
+
+  devisNumber: {
+    color: "rgba(27, 120, 188, 1)",
+    fontWeight: 700,
+    fontFamily: "Merriweather, serif",
+    "&:hover": {
+      color: blue[700],
+      textDecoration: "underline",
+    },
+  },
+
+  chantierCell: {
     fontWeight: 600,
+    textAlign: "left",
   },
-});
 
-// Body Cells
-export const DevisNumber = styled(TableCell)`
-  color: rgba(27, 120, 188, 1);
-  fontweight: 700;
-  fontfamily: "Merriweather, serif";
-  &:hover {
-    color: ${blue[700]};
-    text-decoration: underline;
-  }
-`;
+  centeredTableCell: {
+    textAlign: "center",
+  },
 
-export const ChantierCell = styled(TableCell)({
-  fontWeight: 600,
-  textAlign: "left",
-});
+  select: {
+    color: "white",
+    marginTop: "3px",
+    "&:before": {
+      borderBottomColor: "white",
+    },
+    "& .MuiSelect-icon": {
+      color: "white",
+    },
+  },
 
-export const CenteredTableCell = styled(TableCell)({
-  textAlign: "center",
-});
+  actionCell: {
+    width: "50px",
+    padding: "8px",
+    textAlign: "center",
+  },
+};
 
-export const StatusCell = styled(TableCell)(({ status }) => ({
+// Fonction pour le style dynamique du statut
+export const getStatusStyle = (status) => ({
   color:
     status === "En attente"
       ? "orange"
@@ -108,20 +126,48 @@ export const StatusCell = styled(TableCell)(({ status }) => ({
       ? "green"
       : "inherit",
   fontWeight: 600,
-}));
-
-export const StyledSelect = styled(Select)({
-  color: "white",
-  marginTop: "3px",
-  "&:before": {
-    borderBottomColor: "white",
-  },
-  "& .MuiSelect-icon": {
-    color: "white",
-  },
 });
 
-export const ActionCell = styled(CenteredTableCell)({
-  width: "50px",
-  padding: "8px",
-});
+// Container Styles
+export const StyledBox = styled(Box)(commonStyles.box);
+
+// Table Container
+export const StyledTableContainer = styled(TableContainer)(
+  commonStyles.tableContainer
+);
+
+// Header Cells
+export const FilterCell = styled(TableCell)(commonStyles.filterCell);
+
+export const AlignedCell = styled(FilterCell)(commonStyles.alignedCell);
+
+// Custom Text Fields
+export const BaseTextField = styled(TextField)(commonStyles.baseTextField);
+
+export const StyledTextField = styled(BaseTextField)(
+  commonStyles.styledTextField
+);
+
+export const CenteredTextField = styled(BaseTextField)(
+  commonStyles.centeredTextField
+);
+
+// Specific Field Styles
+export const PriceTextField = styled(CenteredTextField)(
+  commonStyles.priceTextField
+);
+
+// Body Cells
+export const DevisNumber = styled(TableCell)(commonStyles.devisNumber);
+
+export const ChantierCell = styled(TableCell)(commonStyles.chantierCell);
+
+export const CenteredTableCell = styled(TableCell)(
+  commonStyles.centeredTableCell
+);
+
+export const StatusCell = styled(TableCell)(getStatusStyle);
+
+export const StyledSelect = styled(Select)(commonStyles.select);
+
+export const ActionCell = styled(CenteredTableCell)(commonStyles.actionCell);

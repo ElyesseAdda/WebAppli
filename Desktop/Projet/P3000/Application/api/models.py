@@ -799,3 +799,55 @@ class AgencyExpenseOverride(models.Model):
     class Meta:
         unique_together = ('expense', 'month', 'year')
 
+class SousTraitant(models.Model):
+    entreprise = models.CharField(max_length=255)
+    siege_social = models.CharField(max_length=255)
+    forme_juridique = models.CharField(max_length=100)
+    numero_rcs = models.CharField(max_length=100, unique=True)
+    representant = models.CharField(max_length=255)
+    qualite_representant = models.CharField(max_length=100)
+    email = models.EmailField()
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.entreprise} - {self.numero_rcs}"
+
+class ContratSousTraitance(models.Model):
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='contrats_sous_traitance')
+    sous_traitant = models.ForeignKey(SousTraitant, on_delete=models.CASCADE, related_name='contrats')
+    numero_contrat = models.CharField(max_length=255, unique=True)
+    date_contrat = models.DateField()
+    montant_final = models.DecimalField(max_digits=10, decimal_places=2)
+    montant_avenant = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    designation = models.TextField()
+    type_travaux = models.CharField(max_length=255)
+    numero_avenant = models.IntegerField(null=True, blank=True)
+    
+    class Meta:
+        unique_together = ('chantier', 'sous_traitant', 'numero_avenant')
+        ordering = ['date_contrat', 'numero_avenant']
+
+    def save(self, *args, **kwargs):
+        if not self.numero_contrat:
+            # Format: CONTRAT ST - {nom_entreprise} - {nom_chantier}
+            self.numero_contrat = f"CONTRAT ST - {self.sous_traitant.entreprise} - {self.chantier.chantier_name}"
+            
+        if not self.numero_avenant:
+            # Trouver le dernier numéro d'avenant pour ce sous-traitant et ce chantier
+            dernier_avenant = ContratSousTraitance.objects.filter(
+                chantier=self.chantier,
+                sous_traitant=self.sous_traitant
+            ).order_by('-numero_avenant').first()
+            
+            self.numero_avenant = 1 if not dernier_avenant else dernier_avenant.numero_avenant + 1
+            
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        avenant_str = f" - Avenant n°{self.numero_avenant}" if self.numero_avenant > 1 else ""
+        return f"{self.numero_contrat}{avenant_str}"
+
+class SituationDateEnvoi(models.Model):
+    situation = models.OneToOneField('Situation', on_delete=models.CASCADE)
+    date_envoi = models.DateField(null=True, blank=True)
+

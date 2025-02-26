@@ -126,30 +126,70 @@ class FactureViewSet(viewsets.ModelViewSet):
 
 
 def dashboard_data(request):
-    # Chantiers
-    state_chantier = Chantier.objects.filter(state_chantier='En Cours').count()
-    cout_materiel = Chantier.objects.aggregate(Sum('cout_materiel'))['cout_materiel__sum'] or 0
-    cout_main_oeuvre = Chantier.objects.aggregate(Sum('cout_main_oeuvre'))['cout_main_oeuvre__sum'] or 0
-    cout_sous_traitance = Chantier.objects.aggregate(Sum('cout_sous_traitance'))['cout_sous_traitance__sum'] or 0
-    montant_total = Chantier.objects.aggregate(Sum('montant_ttc'))['montant_ttc__sum'] or 0
+    # Récupérer les paramètres de filtrage
+    month = request.GET.get('month', datetime.now().month)
+    year = request.GET.get('year', datetime.now().year)
+    chantier_id = request.GET.get('chantier_id')
 
-    # Devis - correction de 'state' en 'status'
-    devis_terminer = Devis.objects.filter(status='Terminé').count()
-    devis_en_cour = Devis.objects.filter(status='En Cours').count()
-    devis_facturé = Devis.objects.filter(status='Facturé').count()
+    # Créer le filtre de date
+    date_filter = Q(
+        date_creation__month=month,
+        date_creation__year=year
+    )
+
+    # Ajouter le filtre de chantier si spécifié
+    chantier_filter = Q(id=chantier_id) if chantier_id else Q()
+
+    # Appliquer les filtres aux requêtes
+    chantiers = Chantier.objects.filter(chantier_filter)
+    
+    # Récupérer la dernière situation pour chaque chantier
+    latest_situations = {}
+    for chantier in chantiers:
+        latest_situation = Situation.objects.filter(
+            chantier=chantier
+        ).order_by('-date_creation').first()
+        if latest_situation:
+            latest_situations[chantier.id] = {
+                'montant_apres_retenues': float(latest_situation.montant_apres_retenues),
+                'pourcentage_avancement': float(latest_situation.pourcentage_avancement)
+            }
+
+    if chantier_id:
+        devis = Devis.objects.filter(chantier_id=chantier_id)
+        factures = Facture.objects.filter(chantier_id=chantier_id)
+    else:
+        devis = Devis.objects.all()
+        factures = Facture.objects.all()
+
+    # Appliquer le filtre de date
+    devis = devis.filter(date_filter)
+    factures = factures.filter(date_filter)
+
+    # Chantiers
+    state_chantier = chantiers.filter(state_chantier='En Cours').count()
+    cout_materiel = chantiers.aggregate(Sum('cout_materiel'))['cout_materiel__sum'] or 0
+    cout_main_oeuvre = chantiers.aggregate(Sum('cout_main_oeuvre'))['cout_main_oeuvre__sum'] or 0
+    cout_sous_traitance = chantiers.aggregate(Sum('cout_sous_traitance'))['cout_sous_traitance__sum'] or 0
+    montant_total = chantiers.aggregate(Sum('montant_ttc'))['montant_ttc__sum'] or 0
+
+    # Devis
+    devis_terminer = devis.filter(status='Terminé').count()
+    devis_en_cour = devis.filter(status='En Cours').count()
+    devis_facturé = devis.filter(status='Facturé').count()
     
     # Factures
-    facture_terminer = Facture.objects.filter(state_facture='Terminé').count()
-    facture_en_cour = Facture.objects.filter(state_facture='En Cours').count()
-    facture_facturé = Facture.objects.filter(state_facture='Facturé').count()
+    facture_terminer = factures.filter(state_facture='Terminé').count()
+    facture_en_cour = factures.filter(state_facture='En Cours').count()
+    facture_facturé = factures.filter(state_facture='Facturé').count()
 
-    # Totaux Devis - utilisation de price_ttc au lieu de amount_facturé
-    total_devis_terminer = Devis.objects.filter(status='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
-    total_devis_facturé = Devis.objects.filter(status='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    # Totaux Devis
+    total_devis_terminer = devis.filter(status='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_devis_facturé = devis.filter(status='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
     
-    # Totaux Factures - utilisation de price_ttc au lieu de amount_facturé
-    total_facture_terminer = Facture.objects.filter(state_facture='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
-    total_facture_facturé = Facture.objects.filter(state_facture='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    # Totaux Factures
+    total_facture_terminer = factures.filter(state_facture='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_facture_facturé = factures.filter(state_facture='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
     
     total_devis_combined = total_devis_facturé + total_devis_terminer
     total_facture_combined = total_facture_terminer + total_facture_facturé
@@ -172,6 +212,7 @@ def dashboard_data(request):
         'total_facture_facturé': total_facture_facturé,
         'total_devis_combined': total_devis_combined,
         'total_facture_combined': total_facture_combined,
+        'latest_situations': latest_situations
     }
     return JsonResponse(data)
 
