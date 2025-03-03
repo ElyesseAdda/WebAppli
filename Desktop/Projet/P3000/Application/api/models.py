@@ -432,6 +432,10 @@ class Situation(models.Model):
     date_creation = models.DateTimeField(auto_now_add=True)
     date_validation = models.DateTimeField(null=True, blank=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    date_envoi = models.DateField(null=True, blank=True)
+    delai_paiement = models.IntegerField(default=45,null=True,blank=True)
+    montant_reel_ht = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    date_paiement_reel = models.DateField(null=True, blank=True)
     
     # Montants calculés
     montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)

@@ -4164,3 +4164,23 @@ class AgencyExpenseViewSet(viewsets.ModelViewSet):
         
         return Response(status=status.HTTP_200_OK)
 
+@api_view(['PATCH'])
+def update_situation(request, pk):
+    try:
+        situation = Situation.objects.get(pk=pk)
+        
+        # Mise à jour des champs spécifiques
+        if 'date_envoi' in request.data:
+            situation.date_envoi = request.data['date_envoi']
+        if 'delai_paiement' in request.data:
+            situation.delai_paiement = request.data['delai_paiement']
+        if 'montant_reel_ht' in request.data:
+            situation.montant_reel_ht = request.data['montant_reel_ht']
+        if 'date_paiement_reel' in request.data:
+            situation.date_paiement_reel = request.data['date_paiement_reel']
+            
+        situation.save()
+        return Response(SituationSerializer(situation).data)
+    except Situation.DoesNotExist:
+        return Response({'error': 'Situation non trouvée'}, status=404)
+
