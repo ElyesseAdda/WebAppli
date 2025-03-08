@@ -155,10 +155,21 @@ const TableauSuivi = () => {
     const compare = parseFloat(compareValue) || 0;
     const isDifferent = Math.abs(number - compare) > 0.01;
 
+    let color = "text.primary"; // noir par défaut
+    if (number === 0) {
+      color = "text.primary";
+    } else if (compareValue === undefined || compareValue === null) {
+      color = "rgba(27, 120, 188, 1)"; // bleu si pas de valeur de comparaison
+    } else if (isDifferent) {
+      color = "error.main"; // rouge si différent
+    } else {
+      color = "rgba(27, 120, 188, 1)"; // bleu si égal et non nul
+    }
+
     return (
       <Typography
         sx={{
-          color: isDifferent ? "error.main" : "rgba(27, 120, 188, 1)",
+          color: color,
           fontWeight: 400,
           fontSize: "0.875rem",
           fontFamily: "Roboto, Arial, sans-serif",
@@ -595,10 +606,10 @@ const TableauSuivi = () => {
                       )}
                     </TableCell>
 
-                    <TableCell sx={{ color: "black" }}>
+                    <TableCell sx={{ color: "rgba(27, 120, 188, 1)" }}>
                       {formatNumberWithColor(
                         calculerCumulSituationHT(situationsTriees, index),
-                        cumulHT
+                        calculerCumulSituationHT(situationsTriees, index)
                       )}
                     </TableCell>
                     <TableCell>
@@ -631,7 +642,7 @@ const TableauSuivi = () => {
                         {montantReelHT[situation.id]
                           ? formatNumberWithColor(
                               montantReelHT[situation.id],
-                              cumulHT
+                              situation.montant_apres_retenues
                             )
                           : "Définir paiement"}
                       </Button>
@@ -754,7 +765,7 @@ const TableauSuivi = () => {
                 fontFamily: "Roboto, Arial, sans-serif",
                 fontWeight: 700,
                 fontSize: "1rem",
-                color: "rgba(27, 120, 188, 1)",
+                color: "error.main",
               }}
             >
               Pourcentage d'avancement :{" "}
@@ -986,7 +997,7 @@ const TableauSuivi = () => {
         <Typography
           variant="h5"
           gutterBottom
-          sx={{ fontFamily: "Merriweather, serif" }}
+          sx={{ fontFamily: "Merriweather, serif", color: "white" }}
         >
           Tableau de suivi
         </Typography>
