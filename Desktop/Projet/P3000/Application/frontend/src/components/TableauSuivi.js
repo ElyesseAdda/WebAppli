@@ -12,6 +12,7 @@ import {
   TableBody,
   TableCell,
   TableContainer,
+  TableFooter,
   TableHead,
   TableRow,
   TextField,
@@ -149,12 +150,15 @@ const TableauSuivi = () => {
     verticalAlign: "middle",
   };
 
-  const formatNumber = (value) => {
+  const formatNumberWithColor = (value, compareValue) => {
     const number = parseFloat(value) || 0;
+    const compare = parseFloat(compareValue) || 0;
+    const isDifferent = Math.abs(number - compare) > 0.01;
+
     return (
       <Typography
         sx={{
-          color: number !== 0 ? "rgba(27, 120, 188, 1)" : "inherit",
+          color: isDifferent ? "error.main" : "rgba(27, 120, 188, 1)",
           fontWeight: 400,
           fontSize: "0.875rem",
           fontFamily: "Roboto, Arial, sans-serif",
@@ -337,8 +341,14 @@ const TableauSuivi = () => {
                   sx={{ borderRight: "2px solid rgba(224, 224, 224, 1)" }}
                 >
                   {rowIndex === 0
-                    ? formatNumber(chantier?.montant_ht)
-                    : formatNumber(avenants[rowIndex - 1]?.montant_total)}
+                    ? formatNumberWithColor(
+                        chantier?.montant_ht,
+                        montantReelHT[0]
+                      )
+                    : formatNumberWithColor(
+                        avenants[rowIndex - 1]?.montant_total,
+                        montantReelHT[rowIndex - 1]
+                      )}
                 </TableCell>
                 <TableCell
                   sx={{ borderRight: "1px solid rgba(224, 224, 224, 1)" }}
@@ -348,7 +358,10 @@ const TableauSuivi = () => {
                 <TableCell
                   sx={{ borderRight: "2px solid rgba(224, 224, 224, 1)" }}
                 >
-                  {formatNumber(avenants[rowIndex + 4]?.montant_total)}
+                  {formatNumberWithColor(
+                    avenants[rowIndex + 4]?.montant_total,
+                    montantReelHT[rowIndex + 4]
+                  )}
                 </TableCell>
                 <TableCell
                   sx={{ borderRight: "1px solid rgba(224, 224, 224, 1)" }}
@@ -356,7 +369,10 @@ const TableauSuivi = () => {
                   {`AVENANT ${String(rowIndex + 10).padStart(2, "0")}`}
                 </TableCell>
                 <TableCell>
-                  {formatNumber(avenants[rowIndex + 9]?.montant_total)}
+                  {formatNumberWithColor(
+                    avenants[rowIndex + 9]?.montant_total,
+                    montantReelHT[rowIndex + 9]
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -416,160 +432,368 @@ const TableauSuivi = () => {
       verticalAlign: "middle",
     };
 
+    const calculerEcartMois = (situation) => {
+      const montantHTSituation =
+        parseFloat(situation.montant_apres_retenues) || 0;
+      const montantRecuHT = parseFloat(montantReelHT[situation.id]) || 0;
+      const ecart = montantRecuHT - montantHTSituation;
+
+      if (ecart === 0 || isNaN(ecart)) return "-";
+
+      return formatMontant(ecart);
+    };
+
+    const calculerCumulSituationHT = (situations, indexCourant) => {
+      return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
+        // Utiliser le montant HT situation (montant_apres_retenues)
+        const montantHT = parseFloat(situation.montant_apres_retenues) || 0;
+        return sum + montantHT;
+      }, 0);
+    };
+
+    const calculerCumulMontantRecu = (situations, indexCourant) => {
+      return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
+        const montantRecu = parseFloat(montantReelHT[situation.id]) || 0;
+        return sum + montantRecu;
+      }, 0);
+    };
+
+    const calculerTotaux = () => {
+      return situations.reduce(
+        (totaux, situation) => {
+          return {
+            montantHTSituation:
+              totaux.montantHTSituation +
+              (parseFloat(situation.montant_apres_retenues) || 0),
+            rg: totaux.rg + (parseFloat(situation.retenue_garantie) || 0),
+            netAPayer:
+              totaux.netAPayer +
+              ((parseFloat(situation.montant_apres_retenues) || 0) +
+                (parseFloat(situation.tva) || 0)),
+            montantRecuHT:
+              totaux.montantRecuHT +
+              (parseFloat(montantReelHT[situation.id]) || 0),
+            ecartMois:
+              totaux.ecartMois +
+              (parseFloat(montantReelHT[situation.id] || 0) -
+                parseFloat(situation.montant_apres_retenues || 0)),
+          };
+        },
+        {
+          montantHTSituation: 0,
+          rg: 0,
+          netAPayer: 0,
+          montantRecuHT: 0,
+          ecartMois: 0,
+        }
+      );
+    };
+
+    const calculerResteAPayer = () => {
+      const montantTotalMarche = calculerMontantTotalMarche();
+      const totalMontantRecuHT = calculerTotaux().montantRecuHT;
+      return montantTotalMarche - totalMontantRecuHT;
+    };
+
+    const calculerPourcentageAvancement = () => {
+      const derniereSituation = situationsTriees[situationsTriees.length - 1];
+      if (!derniereSituation) return 0;
+      return parseFloat(derniereSituation.pourcentage_avancement) || 0;
+    };
+
     return (
-      <TableContainer
-        component={Paper}
-        sx={{ maxWidth: "100%", overflowX: "auto" }}
-      >
-        <Table size="small" sx={{ tableLayout: "fixed" }}>
-          <TableHead>
-            <TableRow
-              sx={{ backgroundColor: "rgba(27, 120, 188, 1)", color: "white" }}
-            >
-              <TableCell sx={{ ...commonCellStyle }}>Mois</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>N° Situation</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>
-                Montant HT Situation
-              </TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>RG</TableCell>
-              {situations[0]?.lignes_supplementaires?.map((ligne) => (
-                <TableCell sx={{ ...commonCellStyle }} key={ligne.id}>
-                  {ligne.description.length > 20
-                    ? ligne.description.substring(0, 20) + "..."
-                    : ligne.description}
+      <>
+        <TableContainer
+          component={Paper}
+          sx={{ maxWidth: "100%", overflowX: "auto" }}
+        >
+          <Table size="small" sx={{ tableLayout: "fixed" }}>
+            <TableHead>
+              <TableRow
+                sx={{
+                  backgroundColor: "rgba(27, 120, 188, 1)",
+                  color: "white",
+                }}
+              >
+                <TableCell sx={{ ...commonCellStyle }}>Mois</TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>N° Situation</TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Montant HT Situation
                 </TableCell>
-              ))}
-              <TableCell sx={{ ...commonCellStyle }}>Net à payer</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>
-                Situation Cumul HT
-              </TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>Date d'envoi</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>
-                Date de paiement prévue
-              </TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>Montant reçu HT</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>
-                Date de paiement réelle
-              </TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>Jours de retard</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>Actions</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>
-                Montant cumul HT
-              </TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>Réservé 1</TableCell>
-              <TableCell sx={{ ...commonCellStyle }}>Réservé 2</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {situationsTriees.map((situation, index) => {
-              const cumulHT = situationsTriees
-                .slice(0, index + 1)
-                .reduce(
-                  (sum, s) => sum + (parseFloat(s.montant_total) || 0),
-                  0
-                );
+                <TableCell sx={{ ...commonCellStyle }}>RG</TableCell>
+                {situations[0]?.lignes_supplementaires?.map((ligne) => (
+                  <TableCell sx={{ ...commonCellStyle }} key={ligne.id}>
+                    {ligne.description.length > 20
+                      ? ligne.description.substring(0, 20) + "..."
+                      : ligne.description}
+                  </TableCell>
+                ))}
+                <TableCell sx={{ ...commonCellStyle }}>Net à payer</TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Situation Cumul HT
+                </TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>Date d'envoi</TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Date de paiement prévue
+                </TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Montant reçu HT
+                </TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Date de paiement réelle
+                </TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Jours de retard
+                </TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>Écart Mois</TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>
+                  Montant cumul HT
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {situationsTriees.map((situation, index) => {
+                const cumulHT = situationsTriees
+                  .slice(0, index + 1)
+                  .reduce(
+                    (sum, s) => sum + (parseFloat(s.montant_total) || 0),
+                    0
+                  );
 
-              return (
-                <TableRow
-                  key={situation.id}
-                  sx={{
-                    "&:nth-of-type(odd)": { backgroundColor: "#f5f5f5" },
-                    "&:nth-of-type(even)": { backgroundColor: "#ffffff" },
-                    "&:hover": { backgroundColor: "#f5f5f5" },
-                  }}
-                >
-                  <TableCell
-                    sx={commonBodyCellStyle}
-                  >{`${situation.mois}/${situation.annee}`}</TableCell>
-                  <TableCell>
-                    {extractSituationNumber(situation.numero_situation)}
-                  </TableCell>
-                  <TableCell>
-                    {formatMontant(
-                      parseFloat(situation.montant_apres_retenues) || 0
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {formatMontant(situation.retenue_garantie, true)}
-                  </TableCell>
-                  {situation.lignes_supplementaires?.map((ligne) => (
-                    <TableCell key={ligne.id}>
-                      {formatMontant(ligne.montant, false, ligne.type)}
+                return (
+                  <TableRow
+                    key={situation.id}
+                    sx={{
+                      "&:nth-of-type(odd)": { backgroundColor: "#f5f5f5" },
+                      "&:nth-of-type(even)": { backgroundColor: "#ffffff" },
+                      "&:hover": { backgroundColor: "#f5f5f5" },
+                    }}
+                  >
+                    <TableCell
+                      sx={commonBodyCellStyle}
+                    >{`${situation.mois}/${situation.annee}`}</TableCell>
+                    <TableCell>
+                      {extractSituationNumber(situation.numero_situation)}
                     </TableCell>
-                  ))}
-                  <TableCell>
-                    {formatMontant(
-                      (parseFloat(situation.montant_apres_retenues) || 0) +
-                        (parseFloat(situation.tva) || 0)
-                    )}
-                  </TableCell>
+                    <TableCell>
+                      {formatMontant(
+                        parseFloat(situation.montant_apres_retenues) || 0
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {formatMontant(situation.retenue_garantie, true)}
+                    </TableCell>
+                    {situation.lignes_supplementaires?.map((ligne) => (
+                      <TableCell key={ligne.id}>
+                        {formatMontant(ligne.montant, false, ligne.type)}
+                      </TableCell>
+                    ))}
+                    <TableCell>
+                      {formatMontant(
+                        (parseFloat(situation.montant_apres_retenues) || 0) +
+                          (parseFloat(situation.tva) || 0)
+                      )}
+                    </TableCell>
 
-                  <TableCell>{situation.cumul_precedent || 0}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setSelectedSituation(situation);
-                        setOpenDateModal(true);
-                      }}
-                    >
-                      {dateEnvoi[situation.id]
-                        ? formatNumber(dateEnvoi[situation.id])
-                        : "Définir date"}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    {calculateDatePaiement(
-                      dateEnvoi[situation.id],
-                      delaiPaiement[situation.id]
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setSelectedSituation(situation);
-                        setOpenPaiementModal(true);
-                      }}
-                    >
-                      {montantReelHT[situation.id]
-                        ? formatNumber(montantReelHT[situation.id])
-                        : "Définir paiement"}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    {datePaiementReel[situation.id]
-                      ? formatDate(datePaiementReel[situation.id])
-                      : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {calculateRetard(
-                      calculateDatePaiement(
+                    <TableCell sx={{ color: "black" }}>
+                      {formatNumberWithColor(
+                        calculerCumulSituationHT(situationsTriees, index),
+                        cumulHT
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setSelectedSituation(situation);
+                          setOpenDateModal(true);
+                        }}
+                      >
+                        {dateEnvoi[situation.id]
+                          ? formatDate(dateEnvoi[situation.id])
+                          : "Définir date"}
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      {calculateDatePaiement(
                         dateEnvoi[situation.id],
                         delaiPaiement[situation.id]
-                      ),
-                      datePaiementReel[situation.id]
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setSelectedSituation(situation);
+                          setOpenPaiementModal(true);
+                        }}
+                      >
+                        {montantReelHT[situation.id]
+                          ? formatNumberWithColor(
+                              montantReelHT[situation.id],
+                              cumulHT
+                            )
+                          : "Définir paiement"}
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      {datePaiementReel[situation.id]
+                        ? formatDate(datePaiementReel[situation.id])
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      {calculateRetard(
+                        calculateDatePaiement(
+                          dateEnvoi[situation.id],
+                          delaiPaiement[situation.id]
+                        ),
+                        datePaiementReel[situation.id]
+                      )}
+                    </TableCell>
+                    <TableCell>{calculerEcartMois(situation)}</TableCell>
+                    <TableCell>
+                      {formatNumberWithColor(
+                        calculerCumulMontantRecu(situationsTriees, index),
+                        calculerCumulSituationHT(situationsTriees, index)
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+            <TableFooter>
+              <TableRow
+                sx={{
+                  backgroundColor: "rgba(27, 120, 188, 0.1)",
+                  fontWeight: "bold",
+                  "& td": {
+                    fontWeight: "bold",
+                    color: "rgba(27, 120, 188, 1)",
+                  },
+                }}
+              >
+                <TableCell
+                  sx={{
+                    textAlign: "center",
+                    color: "black",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  Total
+                </TableCell>
+                <TableCell>-</TableCell>
+                <TableCell>
+                  {formatMontant(calculerTotaux().montantHTSituation)}
+                </TableCell>
+                <TableCell>
+                  {formatMontant(calculerTotaux().rg, true)}
+                </TableCell>
+                {situations[0]?.lignes_supplementaires?.map((ligne) => (
+                  <TableCell key={ligne.id}>
+                    {formatMontant(
+                      situations.reduce((sum, s) => {
+                        const ligneSup = s.lignes_supplementaires.find(
+                          (l) => l.description === ligne.description
+                        );
+                        const montant = parseFloat(ligneSup?.montant || 0);
+                        return (
+                          sum +
+                          (ligneSup?.type === "deduction" ? -montant : montant)
+                        );
+                      }, 0),
+                      false,
+                      ligne.type
                     )}
                   </TableCell>
-                  <TableCell>-</TableCell>
-                  <TableCell>{formatNumber(cumulHT)}</TableCell>
-                  <TableCell>-</TableCell>
-                  <TableCell>-</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                ))}
+                <TableCell>
+                  {formatMontant(calculerTotaux().netAPayer)}
+                </TableCell>
+                <TableCell>-</TableCell>
+                <TableCell>-</TableCell>
+                <TableCell>-</TableCell>
+                <TableCell>
+                  {formatMontant(calculerTotaux().montantRecuHT)}
+                </TableCell>
+                <TableCell>-</TableCell>
+                <TableCell>-</TableCell>
+                <TableCell>
+                  {formatMontant(calculerTotaux().ecartMois)}
+                </TableCell>
+                <TableCell>-</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </TableContainer>
+        <Box
+          sx={{
+            mt: 2,
+            p: 2,
+            backgroundColor: "rgba(27, 120, 188, 0.1)",
+            borderRadius: 1,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontFamily: "Roboto, Arial, sans-serif",
+                fontWeight: 700,
+                fontSize: "1rem",
+                color: "rgba(27, 120, 188, 1)",
+                mb: 1,
+              }}
+            >
+              Montant total du marché :{" "}
+              {formatMontant(calculerMontantTotalMarche())}
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: "Roboto, Arial, sans-serif",
+                fontWeight: 700,
+                fontSize: "1rem",
+                color: "rgba(27, 120, 188, 1)",
+              }}
+            >
+              Pourcentage d'avancement :{" "}
+              {calculerPourcentageAvancement().toFixed(2)}%
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Typography
+              sx={{
+                fontFamily: "Roboto, Arial, sans-serif",
+                fontWeight: 700,
+                fontSize: "1rem",
+                color: "rgba(27, 120, 188, 1)",
+                mr: 2,
+              }}
+            >
+              Reste à payer HT :
+            </Typography>
+            {formatMontant(calculerResteAPayer())}
+          </Box>
+        </Box>
+      </>
     );
   };
 
   // Ajout des fonctions utilitaires
   const calculateDatePaiement = (dateEnvoi, delai) => {
     if (!dateEnvoi || !delai) return "-";
-    const date = new Date(dateEnvoi);
-    date.setDate(date.getDate() + parseInt(delai));
-    return formatDate(date);
+
+    try {
+      const date = new Date(dateEnvoi);
+      if (isNaN(date.getTime())) return "-";
+
+      date.setDate(date.getDate() + parseInt(delai));
+      return formatDate(date);
+    } catch (error) {
+      console.error("Erreur dans le calcul de la date de paiement:", error);
+      return "-";
+    }
   };
 
   const calculateRetard = (datePrevue, dateReelle) => {
@@ -741,6 +965,18 @@ const TableauSuivi = () => {
       console.error("Erreur lors de la mise à jour:", error);
       alert("Erreur lors de la mise à jour des données");
     }
+  };
+
+  const calculerMontantTotalMarche = () => {
+    // Montant HT du devis initial (marché)
+    const montantDevis = parseFloat(chantier?.montant_ht) || 0;
+
+    // Somme des montants HT des avenants
+    const montantAvenants = avenants.reduce((sum, avenant) => {
+      return sum + (parseFloat(avenant.montant_total) || 0);
+    }, 0);
+
+    return montantDevis + montantAvenants;
   };
 
   // Ajouter le sélecteur de chantier en haut du composant
