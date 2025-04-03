@@ -650,6 +650,8 @@ class BonCommande(models.Model):
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     date_livraison = models.DateField(null=True, blank=True)
     magasin_retrait = models.CharField(max_length=200, null=True, blank=True)
+    date_commande = models.DateField(default='2025-01-01')  # Ajout du champ de date avec une valeur par défaut
+
     # Nouveaux champs pour le paiement
     statut_paiement = models.CharField(
         max_length=20, 

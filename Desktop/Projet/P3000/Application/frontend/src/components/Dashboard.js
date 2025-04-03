@@ -1,102 +1,200 @@
-import { Box, FormControl, InputLabel, MenuItem, Select } from "@mui/material";
+import {
+  Box,
+  Container,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Typography,
+} from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import "./../../static/css/dashboard.css";
-import ChantierEnCoursCard from "./ChantierEnCoursCard";
+import ChantierDetailStats from "./ChantierDetailStats";
+import ChantierSelect from "./ChantierSelect";
+import ChantierStatsCard from "./ChantierStatsCard";
 
 const Dashboard = () => {
-  // État pour les filtres
-  const [selectedDate, setSelectedDate] = useState({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-  });
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedView, setSelectedView] = useState("year"); // 'year', 'month', 'period'
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedChantier, setSelectedChantier] = useState(null);
-  const [chantiers, setChantiers] = useState([]);
+  const [startMonth, setStartMonth] = useState("");
+  const [endMonth, setEndMonth] = useState("");
 
-  // État pour les données
-  const [dashboardData, setDashboardData] = useState({
-    chantier_en_cours: 0,
-    cout_materiel: 0,
-    cout_main_oeuvre: 0,
-    cout_sous_traitance: 0,
-    montant_total: 0,
-  });
-
-  // Fonction pour charger les chantiers
-  const fetchChantiers = async () => {
-    try {
-      const response = await axios.get("/api/chantier/");
-      setChantiers(response.data);
-    } catch (error) {
-      console.error("Error fetching chantiers:", error);
-    }
-  };
-
-  // Fonction pour charger les données du dashboard avec filtres
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get("/api/dashboard/", {
-        params: {
-          month: selectedDate.month,
-          year: selectedDate.year,
-          chantier_id: selectedChantier,
-        },
-      });
+      const params = {
+        year: selectedYear,
+        chantier_id: selectedChantier,
+      };
+
+      if (selectedView === "month" && selectedMonth) {
+        params.month = selectedMonth;
+      } else if (selectedView === "period" && startMonth && endMonth) {
+        params.period_start = `${selectedYear}-${startMonth}-01`;
+        params.period_end = `${selectedYear}-${endMonth}-01`;
+      }
+
+      const response = await axios.get("/api/dashboard/", { params });
       setDashboardData(response.data);
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      console.error("Erreur lors du chargement des données:", error);
+    } finally {
+      setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchChantiers();
-  }, []);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedDate, selectedChantier]);
+  }, [
+    selectedYear,
+    selectedView,
+    selectedMonth,
+    startMonth,
+    endMonth,
+    selectedChantier,
+  ]);
+
+  const months = [
+    { value: "01", label: "Janvier" },
+    { value: "02", label: "Février" },
+    { value: "03", label: "Mars" },
+    { value: "04", label: "Avril" },
+    { value: "05", label: "Mai" },
+    { value: "06", label: "Juin" },
+    { value: "07", label: "Juillet" },
+    { value: "08", label: "Août" },
+    { value: "09", label: "Septembre" },
+    { value: "10", label: "Octobre" },
+    { value: "11", label: "Novembre" },
+    { value: "12", label: "Décembre" },
+  ];
+
+  const years = Array.from(
+    new Array(10),
+    (val, index) => new Date().getFullYear() - index
+  );
+
+  const handleChantierChange = (event) => {
+    setSelectedChantier(event.target.value);
+  };
 
   return (
-    <div style={{ padding: "20px" }}>
-      {/* Filtres */}
-      <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
-        {/* Sélecteur de date */}
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Période</InputLabel>
-          <Select
-            value={`${selectedDate.month}-${selectedDate.year}`}
-            onChange={(e) => {
-              const [month, year] = e.target.value.split("-");
-              setSelectedDate({ month: parseInt(month), year: parseInt(year) });
-            }}
-          >
-            {/* Générer les options pour les 12 derniers mois */}
-          </Select>
-        </FormControl>
+    <Container maxWidth="xl">
+      <Box>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{
+            color: "white",
+            mb: 3,
+            backgroundColor: "rgba(27, 120, 188, 1)",
+            fontSize: "32px",
+          }}
+        >
+          Accueil
+        </Typography>
 
-        {/* Sélecteur de chantier */}
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Chantier</InputLabel>
-          <Select
-            value={selectedChantier || ""}
-            onChange={(e) => setSelectedChantier(e.target.value)}
-          >
-            <MenuItem value="">Tous les chantiers</MenuItem>
-            {chantiers.map((chantier) => (
-              <MenuItem key={chantier.id} value={chantier.id}>
-                {chantier.chantier_name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
+          <FormControl fullWidth>
+            <InputLabel>Année</InputLabel>
+            <Select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              label="Année"
+            >
+              {years.map((year) => (
+                <MenuItem key={year} value={year}>
+                  {year}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth>
+            <InputLabel>Vue</InputLabel>
+            <Select
+              value={selectedView}
+              onChange={(e) => setSelectedView(e.target.value)}
+              label="Vue"
+            >
+              <MenuItem value="year">Année</MenuItem>
+              <MenuItem value="month">Mois</MenuItem>
+              <MenuItem value="period">Période</MenuItem>
+            </Select>
+          </FormControl>
+
+          {selectedView === "month" && (
+            <FormControl fullWidth>
+              <InputLabel>Mois</InputLabel>
+              <Select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                label="Mois"
+              >
+                {months.map((month) => (
+                  <MenuItem key={month.value} value={month.value}>
+                    {month.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {selectedView === "period" && (
+            <>
+              <FormControl fullWidth>
+                <InputLabel>Mois de début</InputLabel>
+                <Select
+                  value={startMonth}
+                  onChange={(e) => setStartMonth(e.target.value)}
+                  label="Mois de début"
+                >
+                  {months.map((month) => (
+                    <MenuItem key={month.value} value={month.value}>
+                      {month.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel>Mois de fin</InputLabel>
+                <Select
+                  value={endMonth}
+                  onChange={(e) => setEndMonth(e.target.value)}
+                  label="Mois de fin"
+                >
+                  {months.map((month) => (
+                    <MenuItem key={month.value} value={month.value}>
+                      {month.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </>
+          )}
+
+          <ChantierSelect
+            selectedChantier={selectedChantier}
+            onChantierChange={handleChantierChange}
+          />
+        </Box>
+
+        {/* Stats Globales */}
+        <ChantierStatsCard data={dashboardData?.global_stats} />
+
+        {/* Stats par Chantier */}
+        {selectedChantier && dashboardData?.chantiers[selectedChantier] && (
+          <ChantierDetailStats
+            data={dashboardData.chantiers[selectedChantier]}
+            year={selectedYear}
+            month={selectedMonth}
+          />
+        )}
       </Box>
-
-      {/* Contenu du dashboard */}
-      <ChantierEnCoursCard
-        chantierEnCours={dashboardData.chantier_en_cours}
-        montantTotal={dashboardData.montant_total}
-      />
-    </div>
+    </Container>
   );
 };
 

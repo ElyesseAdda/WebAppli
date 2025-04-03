@@ -19,6 +19,7 @@ import {
 import React, { useEffect, useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { bonCommandeService } from "../services/bonCommandeService";
+import { updateChantierMaterialCost } from "../services/chantierService";
 
 function ProduitSelectionTable({
   open,
@@ -89,58 +90,69 @@ function ProduitSelectionTable({
   };
 
   const handleSave = async () => {
-    if (!selectedData.agent) {
-      throw new Error("Veuillez sélectionner un agent");
-    }
+    try {
+      if (!selectedData.agent) {
+        throw new Error("Veuillez sélectionner un agent");
+      }
 
-    if (!products || products.length === 0) {
-      throw new Error("Aucun produit n'est disponible");
-    }
+      if (!products || products.length === 0) {
+        throw new Error("Aucun produit n'est disponible");
+      }
 
-    const selectedItems = products
-      .filter((product) => selectedProducts[product.id])
-      .map((product) => ({
-        produit: product.id,
-        designation: product.designation || product.nom_materiel,
-        quantite: parseInt(quantities[product.id]) || 0,
-        prix_unitaire: parseFloat(product.prix_unitaire),
-        total: parseFloat(
-          (quantities[product.id] || 0) * product.prix_unitaire
+      const selectedItems = products
+        .filter((product) => selectedProducts[product.id])
+        .map((product) => ({
+          produit: product.id,
+          designation: product.designation || product.nom_materiel,
+          quantite: parseInt(quantities[product.id]) || 0,
+          prix_unitaire: parseFloat(product.prix_unitaire),
+          total: parseFloat(
+            (quantities[product.id] || 0) * product.prix_unitaire
+          ),
+        }))
+        .filter((item) => item.quantite > 0);
+
+      if (selectedItems.length === 0) {
+        throw new Error(
+          "Veuillez sélectionner au moins un produit avec une quantité"
+        );
+      }
+
+      const bonCommandeData = {
+        numero: numeroBC,
+        fournisseur: fournisseur,
+        chantier: selectedData.chantier,
+        agent: selectedData.agent,
+        date_commande: selectedData.date_commande, // Assurez-vous que date_commande est ici
+
+        lignes: selectedItems,
+        montant_total: parseFloat(
+          selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)
         ),
-      }))
-      .filter((item) => item.quantite > 0);
+      };
 
-    if (selectedItems.length === 0) {
-      throw new Error(
-        "Veuillez sélectionner au moins un produit avec une quantité"
+      console.log("Données envoyées:", bonCommandeData);
+
+      // Créer le bon de commande
+      const bonCommande = await bonCommandeService.createBonCommande(
+        bonCommandeData
       );
+
+      // Attendre que la création soit terminée avant de mettre à jour le coût
+      await updateChantierMaterialCost(selectedData.chantier);
+
+      onClose();
+
+      if (onValidate && typeof onValidate === "function") {
+        onValidate(bonCommande);
+      }
+
+      // Recharger la page après la création
+      window.location.reload();
+    } catch (error) {
+      console.error("Erreur lors de la création du bon de commande:", error);
+      throw error;
     }
-
-    const bonCommandeData = {
-      numero: numeroBC,
-      fournisseur: fournisseur,
-      chantier: selectedData.chantier,
-      agent: selectedData.agent,
-      lignes: selectedItems,
-      montant_total: parseFloat(
-        selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)
-      ),
-    };
-
-    console.log("Données envoyées:", bonCommandeData);
-    const response = await bonCommandeService.createBonCommande(
-      bonCommandeData
-    );
-    console.log("Réponse:", response);
-
-    onClose();
-
-    if (onValidate && typeof onValidate === "function") {
-      onValidate(response);
-    }
-
-    // Recharger la page après la création
-    window.location.reload();
   };
 
   const calculateTotal = (product) => {

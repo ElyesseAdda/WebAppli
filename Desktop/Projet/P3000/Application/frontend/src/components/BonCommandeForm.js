@@ -32,6 +32,8 @@ function BonCommandeForm({ onBonCommandeCreated }) {
       fournisseur: data.fournisseur,
       chantier: data.chantier,
       agent: data.agent,
+      numero_bon_commande: data.numero_bon_commande,
+      date_commande: data.date_commande,
     });
     setStep(2);
     setIsModalOpen(true);
@@ -47,8 +49,13 @@ function BonCommandeForm({ onBonCommandeCreated }) {
   };
 
   const handlePreviewBonCommande = (products) => {
+    if (!Array.isArray(products)) {
+      console.error("Products is not an array:", products);
+      return;
+    }
+
     const bonCommandeData = {
-      numero: numeroBC,
+      numero: selectedData.numero_bon_commande,
       fournisseur: selectedData.fournisseur,
       chantier: selectedData.chantier,
       agent: selectedData.agent,
@@ -68,6 +75,36 @@ function BonCommandeForm({ onBonCommandeCreated }) {
     const queryString = encodeURIComponent(JSON.stringify(bonCommandeData));
     const previewUrl = `/api/preview-bon-commande/?bon_commande=${queryString}`;
     window.open(previewUrl, "_blank");
+  };
+
+  const handleSaveBonCommande = async () => {
+    const numeroFinal = selectedData.numero_bon_commande || numeroBC;
+    console.log("Numéro de bon de commande utilisé:", numeroFinal);
+
+    const bonCommandeData = {
+      numero: numeroFinal,
+      fournisseur: selectedData.fournisseur,
+      chantier: selectedData.chantier,
+      agent: selectedData.agent,
+      lignes: selectedProducts.map((product) => ({
+        produit: product.produit,
+        designation: product.designation,
+        quantite: product.quantite,
+        prix_unitaire: product.prix_unitaire,
+        total: product.quantite * product.prix_unitaire,
+      })),
+      montant_total: selectedProducts.reduce(
+        (acc, curr) => acc + curr.quantite * curr.prix_unitaire,
+        0
+      ),
+    };
+
+    try {
+      await bonCommandeService.createBonCommande(bonCommandeData);
+      console.log("Bon de commande créé avec succès");
+    } catch (error) {
+      console.error("Erreur lors de la création du bon de commande:", error);
+    }
   };
 
   const handleAgentSelect = (agent) => {
@@ -143,6 +180,7 @@ function BonCommandeForm({ onBonCommandeCreated }) {
         open={openModal}
         onClose={handleCloseModal}
         onSubmit={handleInitialSelection}
+        numeroBC={numeroBC}
       />
     </Box>
   );

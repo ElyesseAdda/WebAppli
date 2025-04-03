@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 class ChantierViewSet(viewsets.ModelViewSet):
     queryset = Chantier.objects.all()
     serializer_class = ChantierSerializer
-    
+
     def create(self, request, *args, **kwargs):
         # Récupérer les données estimées du frontend
         cout_estime_main_oeuvre = request.data.get('cout_estime_main_oeuvre', 0)
@@ -417,11 +417,11 @@ def generate_pdf_from_preview(request):
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
         print("Preview URL:", preview_url)
 
-        # Chemin vers le script Puppeteer
+            # Chemin vers le script Puppeteer
         node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
         print("Node script path:", node_script_path)
 
-        # Commande pour exécuter Puppeteer avec Node.js
+            # Commande pour exécuter Puppeteer avec Node.js
         command = ['node', node_script_path, preview_url]
         print("Commande à exécuter:", command)
 
@@ -435,14 +435,14 @@ def generate_pdf_from_preview(request):
         print("Sortie standard:", result.stdout)
         print("Sortie d'erreur:", result.stderr)
 
-        # Lire le fichier PDF généré
+            # Lire le fichier PDF généré
         pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
         print("Chemin du PDF:", pdf_path)
         print("Le fichier existe ?", os.path.exists(pdf_path))
 
         if os.path.exists(pdf_path):
-            with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                with open(pdf_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
                 response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
                 print("PDF généré avec succès")
                 return response
@@ -2200,7 +2200,8 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     'montant_total': request.data.get('montant_total', 0),
                     'statut': request.data.get('statut', 'en_attente'),
                     'date_livraison': request.data.get('date_livraison'),
-                    'magasin_retrait': request.data.get('magasin_retrait')
+                    'magasin_retrait': request.data.get('magasin_retrait'),
+                    'date_commande': request.data.get('date_commande')
                     
                 }
 
@@ -2248,7 +2249,8 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'statut_paiement': bc.statut_paiement,
                 'montant_paye': float(bc.montant_paye),
                 'date_paiement': bc.date_paiement,
-                'reste_a_payer': float(bc.montant_total - bc.montant_paye)
+                'reste_a_payer': float(bc.montant_total - bc.montant_paye),
+                'date_commande': bc.date_commande,
             })
         return Response(data)
 
@@ -2446,69 +2448,72 @@ def get_bon_commande_detail(request, id):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['PUT'])
+@api_view(['PUT', 'PATCH'])
 def update_bon_commande(request, id):
     try:
         bon_commande = get_object_or_404(BonCommande, id=id)
         data = request.data
         
-        # Mise à jour des champs du bon de commande
-        bon_commande.montant_total = data['montant_total']
-        bon_commande.save()
-        
-        # Supprimer toutes les anciennes lignes
-        bon_commande.lignes.all().delete()
-        
-        # Créer les nouvelles lignes
-        for ligne_data in data['lignes']:
-            LigneBonCommande.objects.create(
-                bon_commande=bon_commande,
-                produit_id=ligne_data['produit'],
-                designation=ligne_data['designation'],
-                quantite=ligne_data['quantite'],
-                prix_unitaire=ligne_data['prix_unitaire'],
-                total=ligne_data['quantite'] * ligne_data['prix_unitaire']
-            )
-        
-        return Response({'message': 'Bon de commande mis à jour avec succès'})
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['PATCH'])
-def update_bon_commande(request, id):
-    try:
-        bon_commande = BonCommande.objects.get(id=id)
+        # Mise à jour du numéro de bon de commande
+        if 'numero' in data:
+            bon_commande.numero = data['numero']
         
         # Mise à jour du statut de livraison
-        if 'statut' in request.data:
-            bon_commande.statut = request.data['statut']
-            if request.data.get('date_livraison'):
-                bon_commande.date_livraison = request.data['date_livraison']
-            if request.data.get('magasin_retrait'):
-                bon_commande.magasin_retrait = request.data['magasin_retrait']
+        if 'statut' in data:
+            bon_commande.statut = data['statut']
+            if data.get('date_livraison'):
+                bon_commande.date_livraison = data['date_livraison']
+            if data.get('magasin_retrait'):
+                bon_commande.magasin_retrait = data['magasin_retrait']
 
         # Mise à jour du paiement
-        if 'montant_paye' in request.data:
-            montant_paye = Decimal(request.data['montant_paye'])
+        if 'montant_paye' in data:
+            montant_paye = Decimal(str(data['montant_paye']))  # Convertir explicitement en string puis en Decimal
             bon_commande.montant_paye = montant_paye
             
             # Mise à jour automatique du statut de paiement
-            if montant_paye >= bon_commande.montant_total:
+            if montant_paye >= Decimal(str(bon_commande.montant_total)):  # Convertir aussi montant_total en Decimal
                 bon_commande.statut_paiement = 'paye'
-            elif montant_paye > 0:
+            elif montant_paye > Decimal('0'):
                 bon_commande.statut_paiement = 'paye_partiel'
             else:
                 bon_commande.statut_paiement = 'non_paye'
 
-            if request.data.get('date_paiement'):
-                bon_commande.date_paiement = request.data['date_paiement']
-
+            if data.get('date_paiement'):
+                bon_commande.date_paiement = data['date_paiement']
+        
+        # Mise à jour des lignes (si présentes dans la requête)
+        if 'lignes' in data:
+            # Mise à jour du montant total
+            if 'montant_total' in data:
+                bon_commande.montant_total = Decimal(str(data['montant_total']))  # Convertir en Decimal
+            
+            # Supprimer toutes les anciennes lignes
+            bon_commande.lignes.all().delete()
+            
+            # Créer les nouvelles lignes
+            for ligne_data in data['lignes']:
+                # Convertir explicitement en Decimal pour éviter les erreurs de type
+                quantite = Decimal(str(ligne_data['quantite']))
+                prix_unitaire = Decimal(str(ligne_data['prix_unitaire']))
+                total = quantite * prix_unitaire
+                
+                LigneBonCommande.objects.create(
+                    bon_commande=bon_commande,
+                    produit_id=ligne_data['produit'],
+                    designation=ligne_data['designation'],
+                    quantite=quantite,
+                    prix_unitaire=prix_unitaire,
+                    total=total
+                )
+        
+        # Sauvegarde du bon de commande après toutes les modifications
         bon_commande.save()
         
         # Sérialiser la réponse
         serializer = BonCommandeSerializer(bon_commande)
         return Response(serializer.data)
-
+        
     except BonCommande.DoesNotExist:
         return Response(
             {"error": "Bon de commande non trouvé"}, 
@@ -4183,4 +4188,245 @@ def update_situation(request, pk):
         return Response(SituationSerializer(situation).data)
     except Situation.DoesNotExist:
         return Response({'error': 'Situation non trouvée'}, status=404)
+
+class DashboardViewSet(viewsets.ViewSet):
+    def list(self, request):
+        # Récupérer les paramètres de filtrage
+        chantier_id = request.query_params.get('chantier_id')
+        year = request.query_params.get('year', datetime.now().year)
+        month = request.query_params.get('month', datetime.now().month)
+        
+        # Base queryset pour les chantiers
+        chantiers_query = Chantier.objects.all()
+        
+        # Statistiques globales
+        global_stats = self.get_global_stats(chantiers_query)
+        
+        # Statistiques par chantier
+        chantiers_stats = self.get_chantiers_stats(chantiers_query, year, month)
+        
+        # Statistiques temporelles
+        stats_temporelles = self.get_stats_temporelles(chantiers_query, year, month)
+        
+        return Response({
+            'global_stats': global_stats,
+            'chantiers': chantiers_stats,
+            'stats_temporelles': stats_temporelles
+        })
+
+    def get_chantiers_stats(self, chantiers_query, year, month):
+        chantiers_stats = {}
+        
+        for chantier in chantiers_query:
+            # Calculer les coûts mensuels pour ce chantier
+            bons_commande = BonCommande.objects.filter(
+                chantier=chantier,
+                date_creation__year=year,
+                date_creation__month=month
+            )
+            
+            cout_materiel_mensuel = float(bons_commande.aggregate(total=Sum('montant_total'))['total'] or 0)
+            cout_estime = float(chantier.cout_estime_materiel or 0)
+            cout_reel = float(chantier.cout_materiel or 0)
+            
+            chantiers_stats[str(chantier.id)] = {
+                'info': {
+                    'nom': chantier.chantier_name
+                },
+                'stats_globales': {
+                    'montant_ht': float(chantier.montant_ht or 0),
+                    'cout_materiel': cout_reel,
+                    'cout_estime_materiel': cout_estime,
+                    'marge_fourniture': cout_estime - cout_reel,
+                    'cout_sous_traitance': 0
+                },
+                'stats_mensuelles': {
+                    str(year): {
+                        str(month): {
+                            'cout_materiel': cout_materiel_mensuel,
+                            'cout_main_oeuvre': float(chantier.cout_main_oeuvre or 0),
+                            'marge_fourniture': cout_estime - cout_materiel_mensuel,
+                            'cout_sous_traitance': 0
+                        }
+                    }
+                }
+            }
+        
+        return chantiers_stats
+
+    def get_global_stats(self, chantiers_query):
+        try:
+            cout_estime = float(chantiers_query.aggregate(total=Sum('cout_estime_materiel'))['total'] or 0)
+            cout_reel = float(chantiers_query.aggregate(total=Sum('cout_materiel'))['total'] or 0)
+            
+            return {
+                'total_chantiers_en_cours': chantiers_query.filter(state_chantier='En Cours').count(),
+                'total_ht': float(chantiers_query.aggregate(total=Sum('montant_ht'))['total'] or 0),
+                'total_cout_materiel': cout_reel,
+                'total_cout_estime_materiel': cout_estime,
+                'total_cout_main_oeuvre': float(chantiers_query.aggregate(total=Sum('cout_main_oeuvre'))['total'] or 0),
+                'total_cout_estime_main_oeuvre': float(chantiers_query.aggregate(total=Sum('cout_estime_main_oeuvre'))['total'] or 0),
+                'total_cout_sous_traitance': float(chantiers_query.aggregate(total=Sum('cout_sous_traitance'))['total'] or 0),
+                'total_marge_fourniture': cout_estime - cout_reel
+            }
+        except Exception as e:
+            print(f"Erreur dans get_global_stats: {str(e)}")
+            return {}
+
+    def get_stats_temporelles(self, chantiers_query, year, month):
+        """
+        Génère des statistiques temporelles pour les chantiers.
+        Utilise les paramètres year et month pour définir la période.
+        """
+        stats = {}
+        
+        # Récupérer les paramètres de période
+        period_start = self.request.query_params.get('period_start')
+        period_end = self.request.query_params.get('period_end')
+        
+        # Si aucune période n'est spécifiée, utiliser les 6 derniers mois par défaut
+        if not period_start or not period_end:
+            current_date = datetime(int(year), int(month), 1)
+            start_date = (current_date - timedelta(days=5*30)).replace(day=1)  # ~5 mois avant
+            end_date = current_date
+        else:
+            # Convertir les dates de la requête
+            try:
+                start_date = datetime.strptime(period_start, '%Y-%m-%d')
+                end_date = datetime.strptime(period_end, '%Y-%m-%d')
+            except ValueError:
+                # En cas d'erreur de format, utiliser les 6 derniers mois
+                current_date = datetime(int(year), int(month), 1)
+                start_date = (current_date - timedelta(days=5*30)).replace(day=1)
+                end_date = current_date
+        
+        # Générer la liste des mois dans la période
+        months = []
+        current = start_date.replace(day=1)
+        
+        while current <= end_date:
+            months.append({
+                'year': current.year,
+                'month': current.month,
+                'label': current.strftime('%b %Y')  # Format: Jan 2023
+            })
+            # Passer au mois suivant
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+        
+        # Initialiser la structure de données
+        for period in months:
+            year_key = str(period['year'])
+            month_key = str(period['month'])
+            
+            if year_key not in stats:
+                stats[year_key] = {}
+            
+            stats[year_key][month_key] = {
+                'label': period['label'],
+                'cout_materiel': 0,
+                'cout_main_oeuvre': 0,
+                'marge_fourniture': 0,
+                'cout_sous_traitance': 0
+            }
+        
+        # Calculer les statistiques pour chaque période
+        for period in months:
+            year_key = str(period['year'])
+            month_key = str(period['month'])
+            
+            # Calculer les coûts pour cette période
+            bons_commande = BonCommande.objects.filter(
+                chantier__in=chantiers_query,
+                date_creation__year=period['year'],
+                date_creation__month=period['month']
+            )
+            
+            # Coût matériel pour cette période
+            cout_materiel = float(bons_commande.aggregate(total=Sum('montant_total'))['total'] or 0)
+            
+            # Coût main d'œuvre pour cette période
+            cout_main_oeuvre = float(chantiers_query.filter(
+                date_debut__lte=datetime(period['year'], period['month'], 28),
+                date_fin__gte=datetime(period['year'], period['month'], 1)
+            ).aggregate(total=Sum('cout_main_oeuvre'))['total'] or 0)
+            
+            # Coût estimé matériel pour cette période
+            cout_estime = float(chantiers_query.filter(
+                date_debut__lte=datetime(period['year'], period['month'], 28),
+                date_fin__gte=datetime(period['year'], period['month'], 1)
+            ).aggregate(total=Sum('cout_estime_materiel'))['total'] or 0)
+            
+            # Coût sous-traitance pour cette période
+            cout_sous_traitance = float(chantiers_query.filter(
+                date_debut__lte=datetime(period['year'], period['month'], 28),
+                date_fin__gte=datetime(period['year'], period['month'], 1)
+            ).aggregate(total=Sum('cout_sous_traitance'))['total'] or 0)
+            
+            # Mettre à jour les statistiques
+            stats[year_key][month_key]['cout_materiel'] = cout_materiel
+            stats[year_key][month_key]['cout_main_oeuvre'] = cout_main_oeuvre
+            stats[year_key][month_key]['marge_fourniture'] = cout_estime - cout_materiel
+            stats[year_key][month_key]['cout_sous_traitance'] = cout_sous_traitance
+        
+        return stats
+
+@api_view(['GET'])
+def get_chantier_bons_commande(request, chantier_id):
+    try:
+        bons_commande = BonCommande.objects.filter(chantier_id=chantier_id)
+        serializer = BonCommandeSerializer(bons_commande, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+def get_chantier_stats(request):
+    try:
+        chantier_id = request.GET.get('chantier_id')
+        
+        if chantier_id:
+            # Stats pour un chantier spécifique
+            chantier = Chantier.objects.get(id=chantier_id)
+            
+            # Calcul de la marge sur fourniture
+            cout_materiel = chantier.cout_materiel or 0
+            cout_estime_materiel = chantier.cout_estime_materiel or 0
+            marge_fourniture = cout_estime_materiel - cout_materiel
+            
+            return Response({
+                'total_ht': chantier.montant_ht,
+                'marge_fourniture': marge_fourniture,
+                'marge_sous_traitance': chantier.marge_sous_traitance or 0,
+                'marge_main_oeuvre': chantier.marge_main_oeuvre or 0,
+                'chantiers_en_cours': 1
+            })
+        else:
+            # Stats pour tous les chantiers
+            chantiers = Chantier.objects.all()
+            
+            # Calcul de la marge totale sur fourniture
+            marge_fourniture_totale = sum(
+                (c.cout_estime_materiel or 0) - (c.cout_materiel or 0)
+                for c in chantiers
+            )
+            
+            return Response({
+                'total_ht': chantiers.aggregate(Sum('montant_ht'))['montant_ht__sum'] or 0,
+                'marge_fourniture': marge_fourniture_totale,
+                'marge_sous_traitance': chantiers.aggregate(Sum('marge_sous_traitance'))['marge_sous_traitance__sum'] or 0,
+                'marge_main_oeuvre': chantiers.aggregate(Sum('marge_main_oeuvre'))['marge_main_oeuvre__sum'] or 0,
+                'chantiers_en_cours': chantiers.count()
+            })
+            
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 

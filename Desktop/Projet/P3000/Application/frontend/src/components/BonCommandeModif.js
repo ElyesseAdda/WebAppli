@@ -26,6 +26,7 @@ const BonCommandeModif = () => {
   const [quantities, setQuantities] = useState({});
   const [isPreviewed, setIsPreviewed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [numeroBonCommande, setNumeroBonCommande] = useState("");
 
   useEffect(() => {
     fetchBonCommande();
@@ -35,6 +36,7 @@ const BonCommandeModif = () => {
     try {
       const response = await axios.get(`/api/detail-bon-commande/${id}/`);
       setBonCommande(response.data);
+      setNumeroBonCommande(response.data.numero);
 
       // Récupérer tous les produits du fournisseur
       const productsResponse = await axios.get(
@@ -105,6 +107,7 @@ const BonCommandeModif = () => {
 
     const bonCommandeData = {
       ...bonCommande,
+      numero: numeroBonCommande,
       lignes: selectedItems,
       montant_total: montantTotal,
     };
@@ -131,6 +134,7 @@ const BonCommandeModif = () => {
 
       const updatedBC = {
         ...bonCommande,
+        numero: numeroBonCommande,
         lignes: selectedItems,
         montant_total: selectedItems.reduce(
           (acc, curr) => acc + curr.quantite * curr.prix_unitaire,
@@ -138,7 +142,10 @@ const BonCommandeModif = () => {
         ),
       };
 
-      await axios.put(`/api/update-bon-commande/${id}/`, updatedBC);
+      console.log("Données envoyées au serveur:", updatedBC);
+
+      await axios.patch(`/api/update-bon-commande/${id}/`, updatedBC);
+      alert("Bon de commande mis à jour avec succès !");
       window.location.href = "/BonCommande";
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
@@ -199,6 +206,14 @@ const BonCommandeModif = () => {
             }}
           />
         </Box>
+
+        <TextField
+          label="Numéro de Bon de Commande"
+          value={numeroBonCommande}
+          onChange={(e) => setNumeroBonCommande(e.target.value)}
+          fullWidth
+          margin="normal"
+        />
 
         <TableContainer component={Paper}>
           <Table>

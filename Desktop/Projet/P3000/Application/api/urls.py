@@ -50,6 +50,9 @@ from .views import (
     preview_situation,
     generate_situation_pdf,
     AgencyExpenseViewSet,
+    DashboardViewSet,
+    get_chantier_bons_commande,
+    get_chantier_stats,
 )
 
 router = DefaultRouter()
@@ -76,7 +79,7 @@ router.register(r'agency-expenses', AgencyExpenseViewSet)
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
-    path('dashboard/', dashboard_data, name='dashboard_data'),
+    path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),
     path('generate-pdf-from-preview/', generate_pdf_from_preview, name='generate_pdf_from_preview'),
     path('preview-devis/', preview_devis, name='preview_devis'),
     path('historique_stock/', historique_stock, name='historique_stock'),
@@ -151,4 +154,6 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/situations/', get_chantier_situations, name='chantier-situations'),
     path('preview-situation/<int:situation_id>/', preview_situation, name='preview-situation'),
     path('generate-situation-pdf/', generate_situation_pdf, name='generate_situation_pdf'),
+    path('chantier/<int:chantier_id>/bons-commande/', get_chantier_bons_commande, name='chantier-bons-commande'),
+    path('chantier-stats/', get_chantier_stats, name='chantier-stats'),
 ]

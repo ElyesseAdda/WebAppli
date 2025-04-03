@@ -95,6 +95,8 @@ class DevisSerializer(serializers.ModelSerializer):
         return instance
 
 class ChantierSerializer(serializers.ModelSerializer):
+    marge_fourniture = serializers.SerializerMethodField()
+
     class Meta:
         model = Chantier
         fields = [
@@ -102,9 +104,14 @@ class ChantierSerializer(serializers.ModelSerializer):
             'montant_ttc', 'montant_ht', 'state_chantier', 'ville', 'rue',
             'code_postal', 'cout_materiel', 'cout_main_oeuvre', 
             'cout_sous_traitance', 'description',
-            # Nouveaux champs
-            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'marge_estimee'
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'marge_estimee',
+            'marge_fourniture'
         ]
+
+    def get_marge_fourniture(self, obj):
+        cout_estime = float(obj.cout_estime_materiel or 0)
+        cout_reel = float(obj.cout_materiel or 0)
+        return cout_estime - cout_reel
 
 
 

@@ -9,10 +9,11 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  TextField,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
 
-function SelectionFournisseurModal({ open, onClose, onSubmit }) {
+function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [chantiers, setChantiers] = useState([]);
   const [selectedData, setSelectedData] = useState({
@@ -20,6 +21,10 @@ function SelectionFournisseurModal({ open, onClose, onSubmit }) {
     chantier: "",
     agent: "",
   });
+  const [dateCommande, setDateCommande] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [numeroBonCommande, setNumeroBonCommande] = useState(numeroBC);
 
   // Liste statique des agents
   const agents = [
@@ -66,6 +71,8 @@ function SelectionFournisseurModal({ open, onClose, onSubmit }) {
       fournisseurName: selectedData.fournisseur,
       chantier: selectedData.chantier,
       agent: selectedData.agent,
+      date_commande: dateCommande,
+      numero_bon_commande: numeroBonCommande,
     });
     onClose();
   };
@@ -77,13 +84,28 @@ function SelectionFournisseurModal({ open, onClose, onSubmit }) {
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Nouveau Bon de Commande</DialogTitle>
       <DialogContent>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
+        <Box
+          component="form"
+          sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+          onSubmit={handleSubmit}
+        >
+          <TextField
+            label="Numéro de Bon de Commande"
+            value={numeroBonCommande}
+            onChange={(e) => setNumeroBonCommande(e.target.value)}
+            required
+          />
           <FormControl fullWidth>
             <InputLabel>Fournisseur</InputLabel>
             <Select
               name="fournisseur"
               value={selectedData.fournisseur}
-              onChange={handleChange}
+              onChange={(e) =>
+                setSelectedData({
+                  ...selectedData,
+                  fournisseur: e.target.value,
+                })
+              }
               label="Fournisseur"
             >
               {fournisseurs.map((fournisseur) => (
@@ -99,7 +121,9 @@ function SelectionFournisseurModal({ open, onClose, onSubmit }) {
             <Select
               name="chantier"
               value={selectedData.chantier}
-              onChange={handleChange}
+              onChange={(e) =>
+                setSelectedData({ ...selectedData, chantier: e.target.value })
+              }
               label="Chantier"
             >
               {chantiers.map((chantier) => (
@@ -115,7 +139,9 @@ function SelectionFournisseurModal({ open, onClose, onSubmit }) {
             <Select
               name="agent"
               value={selectedData.agent}
-              onChange={handleChange}
+              onChange={(e) =>
+                setSelectedData({ ...selectedData, agent: e.target.value })
+              }
               label="Agent"
               renderValue={(selected) => {
                 const agent = agents.find((a) => a.id === selected);
@@ -123,24 +149,23 @@ function SelectionFournisseurModal({ open, onClose, onSubmit }) {
               }}
             >
               {agents.map((agent) => (
-                <MenuItem
-                  key={agent.id}
-                  value={agent.id}
-                  sx={{
-                    "& .MuiTypography-root": {
-                      whiteSpace: "pre-line",
-                    },
-                  }}
-                >
-                  <div>
-                    <div>
-                      {agent.surname} {agent.name}
-                    </div>
-                  </div>
+                <MenuItem key={agent.id} value={agent.id}>
+                  {agent.surname} {agent.name}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
+
+          <TextField
+            label="Date de Commande"
+            type="date"
+            value={dateCommande}
+            onChange={(e) => setDateCommande(e.target.value)}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            required
+          />
         </Box>
       </DialogContent>
       <DialogActions>
