@@ -3,7 +3,7 @@ import { FaFileInvoice, FaMoneyBillWave, FaWarehouse } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
-import { MdContactPhone } from "react-icons/md";
+import { MdContactPhone, MdDashboard } from "react-icons/md";
 import { PiBuildingBold } from "react-icons/pi";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
@@ -28,6 +28,11 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           <li>
             <a href="/">
               <FaHouse /> Accueil{" "}
+            </a>
+          </li>
+          <li>
+            <a href="/ChantiersDashboard">
+              <MdDashboard /> Tableau de Bord Chantiers
             </a>
           </li>
           <li>

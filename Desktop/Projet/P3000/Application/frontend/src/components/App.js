@@ -9,6 +9,7 @@ import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";
 import CalendrierAgentContainer from "./CalendrierAgentContainer";
 import ChantierInfo from "./ChantierInfo";
+import ChantiersDashboard from "./ChantiersDashboard";
 import CreationDevis from "./CreationDevis";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
@@ -48,6 +49,10 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="/chantier/:id" element={<ChantierInfo />} />
             <Route path="/ListeChantier" element={<ListeChantier />} />
+            <Route
+              path="/ChantiersDashboard"
+              element={<ChantiersDashboard />}
+            />
             <Route path="/CreationDevis" element={<CreationDevis />} />
             <Route path="/ListePartie" element={<ListePartiesSousParties />} />
             <Route path="/ListeDevis" element={<ListeDevis />} />
