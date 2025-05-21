@@ -340,6 +340,7 @@ class LigneDetail(models.Model):
 class Facture(models.Model):
     FACTURE_STATUS = [
         ('En cours', 'En cours'),
+        ('En attente', 'En attente'),
         ('Attente paiement', 'Attente paiement'),
         ('Payée', 'Payée')
     ]

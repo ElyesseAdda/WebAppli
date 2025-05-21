@@ -8,8 +8,10 @@ import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";
 import CalendrierAgentContainer from "./CalendrierAgentContainer";
+import ChantierDetail from "./ChantierDetail";
 import ChantierInfo from "./ChantierInfo";
 import ChantiersDashboard from "./ChantiersDashboard";
+import ChantierTabs from "./ChantierTabs";
 import CreationDevis from "./CreationDevis";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
@@ -47,7 +49,9 @@ function App() {
         <Layout>
           <Routes>
             <Route index element={<Dashboard />} />
+
             <Route path="/chantier/:id" element={<ChantierInfo />} />
+            <Route path="/ChantierDetail/:id" element={<ChantierDetail />} />
             <Route path="/ListeChantier" element={<ListeChantier />} />
             <Route
               path="/ChantiersDashboard"
@@ -71,6 +75,7 @@ function App() {
             <Route path="/ModificationBC/:id" element={<BonCommandeModif />} />
             <Route path="/ListeSituation" element={<ListeSituation />} />
             <Route path="/TableauSuivi" element={<TableauSuivi />} />
+            <Route path="/ChantierTabs" element={<ChantierTabs />} />
           </Routes>
         </Layout>
       </Router>

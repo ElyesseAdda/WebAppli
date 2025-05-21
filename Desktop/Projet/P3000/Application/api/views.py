@@ -1948,20 +1948,6 @@ def get_chantier_details(request, chantier_id):
     try:
         chantier = get_object_or_404(Chantier, id=chantier_id)
         
-        # Calculer les statistiques
-        # stats = {
-        #     'nombre_devis': chantier.nombre_devis,
-        #     'nombre_factures': chantier.nombre_facture,
-        #     'cout_main_oeuvre_total': chantier.cout_main_oeuvre_total,
-        #     'montant_total_ttc': chantier.montant_ttc or 0,
-        #     'montant_total_ht': chantier.montant_ht or 0,
-        #     'marge_brute': (chantier.montant_ht or 0) - (
-        #         (chantier.cout_materiel or 0) + 
-        #         (chantier.cout_main_oeuvre or 0) + 
-        #         (chantier.cout_sous_traitance or 0)
-        #     )
-        # }
-        
         # Récupérer les informations détaillées
         details = {
             'id': chantier.id,
@@ -1977,10 +1963,12 @@ def get_chantier_details(request, chantier_id):
                 'code_postal': chantier.code_postal
             },
             'couts': {
-                'materiel': chantier.cout_materiel,
-                'main_oeuvre': chantier.cout_main_oeuvre,
                 'sous_traitance': chantier.cout_sous_traitance
             },
+            'cout_main_oeuvre': chantier.cout_main_oeuvre,
+            'cout_materiel': chantier.cout_materiel,
+            'cout_estime_main_oeuvre': chantier.cout_estime_main_oeuvre,
+            'cout_estime_materiel': chantier.cout_estime_materiel,
             'societe': {
                 'id': chantier.societe.id if chantier.societe else None,
                 'nom': chantier.societe.nom_societe if chantier.societe else None,
@@ -1988,8 +1976,7 @@ def get_chantier_details(request, chantier_id):
                     'nom': f"{chantier.societe.client_name.name} {chantier.societe.client_name.surname}" if chantier.societe and chantier.societe.client_name else None,
                     'email': chantier.societe.client_name.client_mail if chantier.societe and chantier.societe.client_name else None
                 } if chantier.societe else None
-            },
-            # 'statistiques': stats
+            }
         }
         
         return Response(details)
@@ -4192,27 +4179,281 @@ def update_situation(request, pk):
 class DashboardViewSet(viewsets.ViewSet):
     def list(self, request):
         # Récupérer les paramètres de filtrage
-        chantier_id = request.query_params.get('chantier_id')
         year = request.query_params.get('year', datetime.now().year)
-        month = request.query_params.get('month', datetime.now().month)
-        
-        # Base queryset pour les chantiers
+        month = request.query_params.get('month')
+        chantier_id = request.query_params.get('chantier_id')
+
+        # Filtrer les chantiers
         chantiers_query = Chantier.objects.all()
-        
-        # Statistiques globales
-        global_stats = self.get_global_stats(chantiers_query)
-        
-        # Statistiques par chantier
+        if chantier_id:
+            chantiers_query = chantiers_query.filter(id=chantier_id)
+
+        # Récupérer les statistiques des chantiers
         chantiers_stats = self.get_chantiers_stats(chantiers_query, year, month)
-        
-        # Statistiques temporelles
+
+        # Récupérer les statistiques globales
+        global_stats = self.get_global_stats(chantiers_query)
+
+        # Récupérer les statistiques temporelles
         stats_temporelles = self.get_stats_temporelles(chantiers_query, year, month)
-        
+
         return Response({
             'global_stats': global_stats,
             'chantiers': chantiers_stats,
             'stats_temporelles': stats_temporelles
         })
+
+    @action(detail=False, methods=['get'])
+    def resume(self, request):
+        # Récupérer les paramètres de filtrage
+        year = request.query_params.get('year', timezone.now().year)
+        
+        # Récupérer tous les chantiers
+        chantiers = Chantier.objects.all()
+        
+        # Calculer les statistiques globales
+        global_stats = self.get_global_stats(chantiers)
+        payment_stats = self.get_global_payment_stats(chantiers, year)
+        
+        # Préparer les données détaillées pour chaque chantier
+        chantiers_data = []
+        for chantier in chantiers:
+            chantier_data = {
+                'id': chantier.id,
+                'nom': chantier.chantier_name,
+                'state_chantier': chantier.state_chantier,
+                'dates': {
+                    'debut': chantier.date_debut,
+                    'fin': chantier.date_fin
+                },
+                'adresse': {
+                    'rue': chantier.rue,
+                    'ville': chantier.ville,
+                    'code_postal': chantier.code_postal
+                },
+                'montants': {
+                    'ttc': float(chantier.montant_ttc or 0),
+                    'ht': float(chantier.montant_ht or 0)
+                },
+                'rentabilite': self.get_rentabilite_stats(chantier),
+                'ressources': self.get_ressources_stats(chantier, year),
+                'paiements': self.get_paiements_stats(chantier, year)
+            }
+            chantiers_data.append(chantier_data)
+        
+        return Response({
+            'global_stats': {
+                **global_stats,
+                'paiements': payment_stats
+            },
+            'chantiers': chantiers_data
+        })
+
+    def get_global_payment_stats(self, chantiers_query, year):
+        """Calcule les statistiques globales de paiement"""
+        factures_en_attente = Facture.objects.filter(
+            chantier__in=chantiers_query,
+            date_creation__year=year,
+            state_facture__in=['En attente', 'Attente paiement']
+        )
+        factures_retardees = Facture.objects.filter(
+            chantier__in=chantiers_query,
+            date_creation__year=year,
+            state_facture__in=['En attente', 'Attente paiement'],
+            date_echeance__lt=timezone.now()
+        )
+        
+        total_en_attente = factures_en_attente.aggregate(total=Sum('price_ttc'))['total'] or 0
+        total_retardees = factures_retardees.aggregate(total=Sum('price_ttc'))['total'] or 0
+        
+        # Ajouter des logs pour le débogage
+        print(f"Factures en attente: {factures_en_attente.count()}, Total: {total_en_attente}")
+        print(f"Factures en retard: {factures_retardees.count()}, Total: {total_retardees}")
+        
+        return {
+            'total_en_attente': total_en_attente,
+            'total_retardees': total_retardees,
+            'nombre_en_attente': factures_en_attente.count(),
+            'nombre_retardees': factures_retardees.count()
+        }
+
+    def get_rentabilite_stats(self, chantier):
+        try:
+            # Coûts réels
+            cout_materiel = float(chantier.cout_materiel or 0)
+            cout_main_oeuvre = float(chantier.cout_main_oeuvre or 0)
+            cout_sous_traitance = float(chantier.cout_sous_traitance or 0)
+            montant_ht = float(chantier.montant_ht or 0)
+            
+            # Coûts estimés
+            cout_estime_materiel = float(chantier.cout_estime_materiel or 0)
+            cout_estime_main_oeuvre = float(chantier.cout_estime_main_oeuvre or 0)
+            marge_estimee = float(chantier.marge_estimee or 0)
+            
+            # Calculer les marges
+            cout_total_reel = cout_materiel + cout_main_oeuvre + cout_sous_traitance
+            marge_brute = montant_ht - cout_total_reel
+            
+            # Calculer les taux
+            taux_marge_brute = (marge_brute / montant_ht * 100) if montant_ht > 0 else 0
+            taux_marge_estimee = (marge_estimee / montant_ht * 100) if montant_ht > 0 else 0
+            
+            # Calculer les écarts
+            ecart_materiel = cout_estime_materiel - cout_materiel
+            ecart_main_oeuvre = cout_estime_main_oeuvre - cout_main_oeuvre
+            
+            return {
+                'marge_brute': marge_brute,
+                'marge_estimee': marge_estimee,
+                'taux_marge_brute': taux_marge_brute,
+                'taux_marge_estimee': taux_marge_estimee,
+                'ecart_materiel': ecart_materiel,
+                'ecart_main_oeuvre': ecart_main_oeuvre,
+                'cout_total_reel': cout_total_reel,
+                'cout_total_estime': cout_estime_materiel + cout_estime_main_oeuvre,
+                'cout_materiel': cout_materiel,
+                'cout_main_oeuvre': cout_main_oeuvre,
+                'cout_sous_traitance': cout_sous_traitance,
+                'cout_estime_materiel': cout_estime_materiel,
+                'cout_estime_main_oeuvre': cout_estime_main_oeuvre
+            }
+        except Exception as e:
+            print(f"Erreur dans get_rentabilite_stats: {str(e)}")
+            return {
+                'marge_brute': 0,
+                'marge_estimee': 0,
+                'taux_marge_brute': 0,
+                'taux_marge_estimee': 0,
+                'ecart_materiel': 0,
+                'ecart_main_oeuvre': 0,
+                'cout_total_reel': 0,
+                'cout_total_estime': 0,
+                'cout_materiel': 0,
+                'cout_main_oeuvre': 0,
+                'cout_sous_traitance': 0,
+                'cout_estime_materiel': 0,
+                'cout_estime_main_oeuvre': 0
+            }
+
+    def get_ressources_stats(self, chantier, year):
+        # Calculer les statistiques de ressources
+        try:
+            # Récupérer les événements du chantier pour l'année
+            events = Event.objects.filter(
+                chantier=chantier,
+                start_date__year=year
+            )
+
+            # Calculer le taux d'occupation mensuel
+            taux_occupation_mensuel = {}
+            for month in range(1, 13):
+                events_mois = events.filter(start_date__month=month)
+                if events_mois.exists():
+                    # Calculer le taux d'occupation pour ce mois
+                    total_heures = sum(float(e.hours_modified or 0) for e in events_mois)
+                    jours_ouvres = len(set(e.start_date for e in events_mois))
+                    taux_occupation = (total_heures / (jours_ouvres * 8)) * 100 if jours_ouvres > 0 else 0
+                    taux_occupation_mensuel[month] = taux_occupation
+                else:
+                    taux_occupation_mensuel[month] = 0
+
+            # Calculer le taux d'occupation global
+            total_heures_annuel = sum(float(e.hours_modified or 0) for e in events)
+            jours_ouvres_annuel = len(set(e.start_date for e in events))
+            taux_occupation_global = (total_heures_annuel / (jours_ouvres_annuel * 8)) * 100 if jours_ouvres_annuel > 0 else 0
+
+            return {
+                'taux_occupation_mensuel': taux_occupation_mensuel,
+                'taux_occupation_global': taux_occupation_global,
+                'total_heures': total_heures_annuel,
+                'jours_ouvres': jours_ouvres_annuel
+            }
+        except Exception as e:
+            print(f"Erreur dans get_ressources_stats: {str(e)}")
+            return {
+                'taux_occupation_mensuel': {i: 0 for i in range(1, 13)},
+                'taux_occupation_global': 0,
+                'total_heures': 0,
+                'jours_ouvres': 0
+            }
+
+    def get_paiements_stats(self, chantier, year):
+        try:
+            # Récupérer les factures du chantier pour l'année
+            factures = Facture.objects.filter(
+                chantier=chantier,
+                date_creation__year=year
+            )
+            
+            # Calculer les statistiques de paiement
+            # Prendre en compte à la fois 'En attente' et 'Attente paiement'
+            factures_en_attente = factures.filter(
+                models.Q(state_facture='En attente') | 
+                models.Q(state_facture='Attente paiement')
+            )
+            
+            # Factures en retard (avec date d'échéance dépassée)
+            factures_retardees = factures_en_attente.filter(
+                date_echeance__lt=timezone.now()
+            )
+            
+            # Calculer les totaux
+            total_en_attente = factures_en_attente.aggregate(total=Sum('price_ttc'))['total'] or 0
+            total_retardees = factures_retardees.aggregate(total=Sum('price_ttc'))['total'] or 0
+            
+            # Calculer le pourcentage de trésorerie bloquée
+            total_ca = float(chantier.montant_ttc or 0)
+            pourcentage_tresorerie_bloquee = (total_retardees / total_ca * 100) if total_ca > 0 else 0
+            
+            # Calculer les créances par âge
+            creances_age = {
+                'moins_30_jours': 0,
+                '30_60_jours': 0,
+                '60_90_jours': 0,
+                'plus_90_jours': 0
+            }
+            
+            for facture in factures_en_attente:
+                montant = float(facture.price_ttc or 0)
+                jours_retard = (timezone.now().date() - facture.date_creation.date()).days
+                
+                if jours_retard <= 30:
+                    creances_age['moins_30_jours'] += montant
+                elif jours_retard <= 60:
+                    creances_age['30_60_jours'] += montant
+                elif jours_retard <= 90:
+                    creances_age['60_90_jours'] += montant
+                else:
+                    creances_age['plus_90_jours'] += montant
+            
+            # Ajouter des logs pour le débogage
+            print(f"Factures pour le chantier {chantier.chantier_name}: {factures.count()}")
+            print(f"Factures en attente: {factures_en_attente.count()}, Total: {total_en_attente}")
+            print(f"Factures en retard: {factures_retardees.count()}, Total: {total_retardees}")
+            
+            return {
+                'total_en_attente': total_en_attente,
+                'total_retardees': total_retardees,
+                'nombre_en_attente': factures_en_attente.count(),
+                'nombre_retardees': factures_retardees.count(),
+                'pourcentage_tresorerie_bloquee': pourcentage_tresorerie_bloquee,
+                'creances_age': creances_age
+            }
+        except Exception as e:
+            print(f"Erreur dans get_paiements_stats: {str(e)}")
+            return {
+                'total_en_attente': 0,
+                'total_retardees': 0,
+                'nombre_en_attente': 0,
+                'nombre_retardees': 0,
+                'pourcentage_tresorerie_bloquee': 0,
+                'creances_age': {
+                    'moins_30_jours': 0,
+                    '30_60_jours': 0,
+                    '60_90_jours': 0,
+                    'plus_90_jours': 0
+                }
+            }
 
     def get_chantiers_stats(self, chantiers_query, year, month):
         chantiers_stats = {}
@@ -4256,22 +4497,60 @@ class DashboardViewSet(viewsets.ViewSet):
 
     def get_global_stats(self, chantiers_query):
         try:
-            cout_estime = float(chantiers_query.aggregate(total=Sum('cout_estime_materiel'))['total'] or 0)
-            cout_reel = float(chantiers_query.aggregate(total=Sum('cout_materiel'))['total'] or 0)
+            # Calculer les totaux pour tous les chantiers
+            total_montant_ttc = sum(float(c.montant_ttc or 0) for c in chantiers_query)
+            total_montant_ht = sum(float(c.montant_ht or 0) for c in chantiers_query)
+            total_cout_materiel = sum(float(c.cout_materiel or 0) for c in chantiers_query)
+            total_cout_main_oeuvre = sum(float(c.cout_main_oeuvre or 0) for c in chantiers_query)
+            total_cout_sous_traitance = sum(float(c.cout_sous_traitance or 0) for c in chantiers_query)
+            total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
+            total_cout_estime_main_oeuvre = sum(float(c.cout_estime_main_oeuvre or 0) for c in chantiers_query)
+            
+            # Calculer les marges
+            marge_brute = total_montant_ht - (total_cout_materiel + total_cout_main_oeuvre + total_cout_sous_traitance)
+            marge_estimee = total_montant_ht - (total_cout_estime_materiel + total_cout_estime_main_oeuvre)
+            
+            # Calculer les pourcentages
+            taux_marge_brute = (marge_brute / total_montant_ht * 100) if total_montant_ht > 0 else 0
+            taux_marge_estimee = (marge_estimee / total_montant_ht * 100) if total_montant_ht > 0 else 0
+            
+            # Compter les chantiers en cours
+            nombre_chantiers_en_cours = chantiers_query.filter(state_chantier='En Cours').count()
             
             return {
-                'total_chantiers_en_cours': chantiers_query.filter(state_chantier='En Cours').count(),
-                'total_ht': float(chantiers_query.aggregate(total=Sum('montant_ht'))['total'] or 0),
-                'total_cout_materiel': cout_reel,
-                'total_cout_estime_materiel': cout_estime,
-                'total_cout_main_oeuvre': float(chantiers_query.aggregate(total=Sum('cout_main_oeuvre'))['total'] or 0),
-                'total_cout_estime_main_oeuvre': float(chantiers_query.aggregate(total=Sum('cout_estime_main_oeuvre'))['total'] or 0),
-                'total_cout_sous_traitance': float(chantiers_query.aggregate(total=Sum('cout_sous_traitance'))['total'] or 0),
-                'total_marge_fourniture': cout_estime - cout_reel
+                'total_montant_ttc': total_montant_ttc,
+                'total_montant_ht': total_montant_ht,
+                'total_montant_estime_ht': total_montant_ht,
+                'total_cout_materiel': total_cout_materiel,
+                'total_cout_main_oeuvre': total_cout_main_oeuvre,
+                'total_cout_sous_traitance': total_cout_sous_traitance,
+                'total_cout_estime_materiel': total_cout_estime_materiel,
+                'total_cout_estime_main_oeuvre': total_cout_estime_main_oeuvre,
+                'marge_brute': marge_brute,
+                'marge_estimee': marge_estimee,
+                'taux_marge_brute': taux_marge_brute,
+                'taux_marge_estimee': taux_marge_estimee,
+                'nombre_chantiers': chantiers_query.count(),
+                'nombre_chantiers_en_cours': nombre_chantiers_en_cours
             }
         except Exception as e:
             print(f"Erreur dans get_global_stats: {str(e)}")
-            return {}
+            return {
+                'total_montant_ttc': 0,
+                'total_montant_ht': 0,
+                'total_montant_estime_ht': 0,
+                'total_cout_materiel': 0,
+                'total_cout_main_oeuvre': 0,
+                'total_cout_sous_traitance': 0,
+                'total_cout_estime_materiel': 0,
+                'total_cout_estime_main_oeuvre': 0,
+                'marge_brute': 0,
+                'marge_estimee': 0,
+                'taux_marge_brute': 0,
+                'taux_marge_estimee': 0,
+                'nombre_chantiers': 0,
+                'nombre_chantiers_en_cours': 0
+            }
 
     def get_stats_temporelles(self, chantiers_query, year, month):
         """
