@@ -808,51 +808,107 @@ class AgencyExpenseOverride(models.Model):
 
 class SousTraitant(models.Model):
     entreprise = models.CharField(max_length=255)
-    siege_social = models.CharField(max_length=255)
-    forme_juridique = models.CharField(max_length=100)
+    capital = models.DecimalField(max_digits=15, decimal_places=2)
+    adresse = models.CharField(max_length=255)
+    code_postal = models.CharField(max_length=10)
+    ville = models.CharField(max_length=100)
     numero_rcs = models.CharField(max_length=100, unique=True)
     representant = models.CharField(max_length=255)
-    qualite_representant = models.CharField(max_length=100)
-    email = models.EmailField()
     date_creation = models.DateTimeField(auto_now_add=True)
+    date_modification = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.entreprise} - {self.numero_rcs}"
 
 class ContratSousTraitance(models.Model):
+    TYPE_CHOICES = [
+        ('BTP', 'BTP'),
+        ('NETTOYAGE', 'Nettoyage'),
+    ]
+
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='contrats_sous_traitance')
     sous_traitant = models.ForeignKey(SousTraitant, on_delete=models.CASCADE, related_name='contrats')
-    numero_contrat = models.CharField(max_length=255, unique=True)
-    date_contrat = models.DateField()
-    montant_final = models.DecimalField(max_digits=10, decimal_places=2)
-    montant_avenant = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    designation = models.TextField()
-    type_travaux = models.CharField(max_length=255)
-    numero_avenant = models.IntegerField(null=True, blank=True)
-    
-    class Meta:
-        unique_together = ('chantier', 'sous_traitant', 'numero_avenant')
-        ordering = ['date_contrat', 'numero_avenant']
+    type_contrat = models.CharField(max_length=20, choices=TYPE_CHOICES, default='NETTOYAGE')
+    description_prestation = models.TextField()
+    date_debut = models.DateField()
+    duree = models.CharField(max_length=100, default="Jusqu'à livraison du chantier")
+    adresse_prestation = models.CharField(max_length=255)
+    nom_operation = models.CharField(max_length=255)
+    montant_operation = models.DecimalField(max_digits=10, decimal_places=2)
+    date_creation = models.DateField(auto_now_add=True)
+    date_modification = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        if not self.numero_contrat:
-            # Format: CONTRAT ST - {nom_entreprise} - {nom_chantier}
-            self.numero_contrat = f"CONTRAT ST - {self.sous_traitant.entreprise} - {self.chantier.chantier_name}"
-            
-        if not self.numero_avenant:
-            # Trouver le dernier numéro d'avenant pour ce sous-traitant et ce chantier
-            dernier_avenant = ContratSousTraitance.objects.filter(
-                chantier=self.chantier,
-                sous_traitant=self.sous_traitant
-            ).order_by('-numero_avenant').first()
-            
-            self.numero_avenant = 1 if not dernier_avenant else dernier_avenant.numero_avenant + 1
-            
-        super().save(*args, **kwargs)
+    class Meta:
+        unique_together = ('chantier', 'sous_traitant')
+        ordering = ['-date_creation']
 
     def __str__(self):
-        avenant_str = f" - Avenant n°{self.numero_avenant}" if self.numero_avenant > 1 else ""
-        return f"{self.numero_contrat}{avenant_str}"
+        return f"Contrat {self.sous_traitant.entreprise} - {self.chantier.chantier_name}"
+
+    def save(self, *args, **kwargs):
+        # Si c'est une modification, on soustrait l'ancien montant
+        if self.pk:
+            old_instance = ContratSousTraitance.objects.get(pk=self.pk)
+            old_montant = old_instance.montant_operation
+            self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) - old_montant
+            self.chantier.cout_estime_main_oeuvre = (self.chantier.cout_estime_main_oeuvre or 0) + old_montant
+
+        # Ajouter le nouveau montant
+        self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) + self.montant_operation
+        self.chantier.cout_estime_main_oeuvre = (self.chantier.cout_estime_main_oeuvre or 0) - self.montant_operation
+        self.chantier.save()
+
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Soustraire le montant lors de la suppression
+        self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) - self.montant_operation
+        self.chantier.cout_estime_main_oeuvre = (self.chantier.cout_estime_main_oeuvre or 0) + self.montant_operation
+        self.chantier.save()
+
+        super().delete(*args, **kwargs)
+
+class AvenantSousTraitance(models.Model):
+    contrat = models.ForeignKey(ContratSousTraitance, on_delete=models.CASCADE, related_name='avenants')
+    numero = models.IntegerField()  # Numéro séquentiel de l'avenant pour ce contrat
+    description = models.TextField()
+    montant = models.DecimalField(max_digits=10, decimal_places=2)
+    date_creation = models.DateField(auto_now_add=True)
+    date_modification = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date_creation']
+        unique_together = ('contrat', 'numero')  # Garantit l'unicité du numéro d'avenant par contrat
+
+    def __str__(self):
+        return f"Avenant n°{self.numero} - {self.contrat.sous_traitant.entreprise} - {self.contrat.chantier.chantier_name}"
+
+    def save(self, *args, **kwargs):
+        from decimal import Decimal
+        # Si c'est une modification, on soustrait l'ancien montant
+        if self.pk:
+            old_instance = AvenantSousTraitance.objects.get(pk=self.pk)
+            old_montant = Decimal(str(old_instance.montant))
+            self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) - old_montant
+            self.contrat.chantier.cout_estime_main_oeuvre = (self.contrat.chantier.cout_estime_main_oeuvre or Decimal('0')) + old_montant
+
+        # Ajouter le nouveau montant
+        montant_decimal = Decimal(str(self.montant))
+        self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) + montant_decimal
+        self.contrat.chantier.cout_estime_main_oeuvre = (self.contrat.chantier.cout_estime_main_oeuvre or Decimal('0')) - montant_decimal
+        self.contrat.chantier.save()
+
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from decimal import Decimal
+        # Soustraire le montant lors de la suppression
+        montant_decimal = Decimal(str(self.montant))
+        self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) - montant_decimal
+        self.contrat.chantier.cout_estime_main_oeuvre = (self.contrat.chantier.cout_estime_main_oeuvre or Decimal('0')) + montant_decimal
+        self.contrat.chantier.save()
+
+        super().delete(*args, **kwargs)
 
 class SituationDateEnvoi(models.Model):
     situation = models.OneToOneField('Situation', on_delete=models.CASCADE)

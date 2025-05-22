@@ -53,6 +53,9 @@ from .views import (
     DashboardViewSet,
     get_chantier_bons_commande,
     get_chantier_stats,
+    SousTraitantViewSet,
+    ContratSousTraitanceViewSet,
+    AvenantSousTraitanceViewSet,
 )
 
 router = DefaultRouter()
@@ -75,6 +78,9 @@ router.register(r'situation-lignes-supplementaires', SituationLigneSupplementair
 router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
 router.register(r'agency-expenses', AgencyExpenseViewSet)
+router.register(r'sous-traitants', SousTraitantViewSet)
+router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
+router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
@@ -157,5 +163,8 @@ urlpatterns = [
     path('generate-situation-pdf/', generate_situation_pdf, name='generate_situation_pdf'),
     path('chantier/<int:chantier_id>/bons-commande/', get_chantier_bons_commande, name='chantier-bons-commande'),
     path('chantier-stats/', get_chantier_stats, name='chantier-stats'),
-    
+    path('contrats-sous-traitance/<int:contrat_id>/avenants/', AvenantSousTraitanceViewSet.as_view({
+        'get': 'list',
+        'post': 'create'
+    }), name='contrat-avenants'),
 ]

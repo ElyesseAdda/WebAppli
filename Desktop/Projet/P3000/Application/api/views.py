@@ -35,6 +35,12 @@ from decimal import Decimal
 from django.db.models import Q
 import re
 from decimal import Decimal, InvalidOperation
+from .models import SousTraitant, ContratSousTraitance, AvenantSousTraitance
+from .serializers import (
+    SousTraitantSerializer,
+    ContratSousTraitanceSerializer,
+    AvenantSousTraitanceSerializer,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -1962,10 +1968,9 @@ def get_chantier_details(request, chantier_id):
                 'ville': chantier.ville,
                 'code_postal': chantier.code_postal
             },
-            'couts': {
-                'sous_traitance': chantier.cout_sous_traitance
-            },
+            
             'cout_main_oeuvre': chantier.cout_main_oeuvre,
+            'cout_sous_traitance': chantier.cout_sous_traitance,
             'cout_materiel': chantier.cout_materiel,
             'cout_estime_main_oeuvre': chantier.cout_estime_main_oeuvre,
             'cout_estime_materiel': chantier.cout_estime_materiel,
@@ -4708,4 +4713,67 @@ def get_chantier_stats(request):
             {'error': str(e)}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+class SousTraitantViewSet(viewsets.ModelViewSet):
+    queryset = SousTraitant.objects.all()
+    serializer_class = SousTraitantSerializer
+
+    @action(detail=False, methods=['get'])
+    def by_chantier(self, request):
+        chantier_id = request.query_params.get('chantier_id')
+        if not chantier_id:
+            return Response(
+                {'error': 'chantier_id est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        sous_traitants = SousTraitant.objects.filter(
+            contrats__chantier_id=chantier_id
+        ).distinct()
+        serializer = self.get_serializer(sous_traitants, many=True)
+        return Response(serializer.data)
+
+class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
+    queryset = ContratSousTraitance.objects.all()
+    serializer_class = ContratSousTraitanceSerializer
+
+    def get_queryset(self):
+        queryset = ContratSousTraitance.objects.all()
+        chantier_id = self.request.query_params.get('chantier_id')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset
+
+    @action(detail=True, methods=['get', 'post'])
+    def avenants(self, request, pk=None):
+        contrat = self.get_object()
+        if request.method == 'POST':
+            # Calculer le prochain numéro d'avenant
+            dernier_avenant = AvenantSousTraitance.objects.filter(contrat=contrat).order_by('-numero').first()
+            numero = 1 if not dernier_avenant else dernier_avenant.numero + 1
+            
+            # Ajouter le numéro aux données
+            data = request.data.copy()
+            data['numero'] = numero
+            
+            serializer = AvenantSousTraitanceSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(contrat=contrat)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        avenants = AvenantSousTraitance.objects.filter(contrat=contrat)
+        serializer = AvenantSousTraitanceSerializer(avenants, many=True)
+        return Response(serializer.data)
+
+class AvenantSousTraitanceViewSet(viewsets.ModelViewSet):
+    queryset = AvenantSousTraitance.objects.all()
+    serializer_class = AvenantSousTraitanceSerializer
+
+    def get_queryset(self):
+        queryset = AvenantSousTraitance.objects.all()
+        contrat_id = self.request.query_params.get('contrat_id')
+        if contrat_id:
+            queryset = queryset.filter(contrat_id=contrat_id)
+        return queryset
 

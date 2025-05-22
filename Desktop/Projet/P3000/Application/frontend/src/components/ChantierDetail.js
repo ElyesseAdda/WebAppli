@@ -26,32 +26,32 @@ const ChantierDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const fetchChantierData = async () => {
+    if (!id) {
+      setError("ID du chantier manquant");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axios.get(`/api/chantier/${id}/details/`);
+      setChantierData(response.data);
+    } catch (error) {
+      console.error(
+        "Erreur lors du chargement des données du chantier:",
+        error
+      );
+      setError(
+        "Impossible de charger les données du chantier. Veuillez réessayer."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchChantierData = async () => {
-      if (!id) {
-        setError("ID du chantier manquant");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await axios.get(`/api/chantier/${id}/details/`);
-        setChantierData(response.data);
-      } catch (error) {
-        console.error(
-          "Erreur lors du chargement des données du chantier:",
-          error
-        );
-        setError(
-          "Impossible de charger les données du chantier. Veuillez réessayer."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchChantierData();
   }, [id]);
 
@@ -102,18 +102,16 @@ const ChantierDetail = () => {
   }
 
   return (
-    <Container maxWidth="xl">
-      <Box>
-        {/* En-tête avec nom du chantier et onglets */}
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ flexGrow: 1 }}>
         <AppBar
           position="static"
           color="default"
           elevation={0}
           sx={{
-            borderRadius: "10px",
-            overflow: "hidden",
-            mb: 2,
             backgroundColor: "white",
+            borderRadius: "10px",
+            mb: 2,
           }}
         >
           <Box
@@ -181,7 +179,10 @@ const ChantierDetail = () => {
         {/* Contenu des onglets */}
         {selectedTab === 0 ? (
           <TabPanel value={selectedTab} index={0}>
-            <ChantierInfoTab chantierData={chantierData} />
+            <ChantierInfoTab
+              chantierData={chantierData}
+              onUpdate={fetchChantierData}
+            />
           </TabPanel>
         ) : (
           <Paper

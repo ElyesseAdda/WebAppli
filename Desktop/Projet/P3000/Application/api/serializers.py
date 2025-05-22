@@ -5,7 +5,8 @@ from .models import (
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
-    ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride
+    ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
+    SousTraitant, ContratSousTraitance, AvenantSousTraitance
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -761,4 +762,49 @@ class AgencyExpenseSerializer(serializers.ModelSerializer):
         if request and hasattr(obj, 'current_override'):
             return obj.current_override
         return None
+
+class SousTraitantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SousTraitant
+        fields = [
+            'id',
+            'entreprise',
+            'capital',
+            'adresse',
+            'code_postal',
+            'ville',
+            'numero_rcs',
+            'representant',
+            'date_creation',
+            'date_modification'
+        ]
+
+class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AvenantSousTraitance
+        fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero']
+        read_only_fields = ['date_creation', 'date_modification']
+
+class ContratSousTraitanceSerializer(serializers.ModelSerializer):
+    avenants = AvenantSousTraitanceSerializer(many=True, read_only=True)
+    sous_traitant_details = SousTraitantSerializer(source='sous_traitant', read_only=True)
+
+    class Meta:
+        model = ContratSousTraitance
+        fields = [
+            'id',
+            'chantier',
+            'sous_traitant',
+            'sous_traitant_details',
+            'type_contrat',
+            'description_prestation',
+            'date_debut',
+            'duree',
+            'adresse_prestation',
+            'nom_operation',
+            'montant_operation',
+            'date_creation',
+            'date_modification',
+            'avenants'
+        ]
         

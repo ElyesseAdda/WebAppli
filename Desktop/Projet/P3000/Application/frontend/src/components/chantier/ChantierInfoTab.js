@@ -1,15 +1,25 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Grid,
   LinearProgress,
   Typography,
 } from "@mui/material";
+import React, { useState } from "react";
+import { FaHandshake } from "react-icons/fa";
+import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 
-import React from "react";
+const ChantierInfoTab = ({ chantierData, onUpdate }) => {
+  const [openSousTraitance, setOpenSousTraitance] = useState(false);
 
-const ChantierInfoTab = ({ chantierData }) => {
+  const handleSousTraitanceUpdate = () => {
+    if (onUpdate) {
+      onUpdate();
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("fr-FR", {
       year: "numeric",
@@ -196,6 +206,31 @@ const ChantierInfoTab = ({ chantierData }) => {
         </CardContent>
       </Card>
 
+      {/* Bouton Sous-traitance */}
+      <Box sx={{ mb: 3 }}>
+        <Button
+          variant="contained"
+          startIcon={<FaHandshake />}
+          onClick={() => setOpenSousTraitance(true)}
+          sx={{
+            backgroundColor: "#1976d2",
+            "&:hover": {
+              backgroundColor: "#1565c0",
+            },
+          }}
+        >
+          Gérer les sous-traitants
+        </Button>
+      </Box>
+
+      {/* Modal de sous-traitance */}
+      <SousTraitanceModal
+        open={openSousTraitance}
+        onClose={() => setOpenSousTraitance(false)}
+        chantierId={chantierData?.id}
+        onUpdate={handleSousTraitanceUpdate}
+      />
+
       {/* Blocs Réel/Prévisionnel à gauche, Taux de facturation à droite */}
       <Grid container spacing={3}>
         {/* Colonne gauche : Réel & Prévisionnel */}
@@ -221,7 +256,8 @@ const ChantierInfoTab = ({ chantierData }) => {
                     </Typography>
                   </CardContent>
                 </Card>
-                {/* Détails Prévisionnel */}
+
+                {/* Main d'œuvre prévisionnelle */}
                 <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
                   <CardContent sx={{ py: 1 }}>
                     <Box
@@ -273,6 +309,26 @@ const ChantierInfoTab = ({ chantierData }) => {
                           {formatMontant(chantierData?.cout_estime_materiel)}
                         </Typography>
                       </Box>
+                      <Box>
+                        <Typography
+                          sx={{
+                            color: "#1976d2",
+                            fontWeight: 600,
+                            fontSize: "1rem",
+                            fontFamily: "Roboto, Arial, sans-serif",
+                          }}
+                        >
+                          Sous-traitance
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "0.95rem",
+                            fontFamily: "Roboto, Arial, sans-serif",
+                          }}
+                        >
+                          {formatMontant(chantierData?.cout_sous_traitance)}
+                        </Typography>
+                      </Box>
                     </Box>
                   </CardContent>
                 </Card>
@@ -290,7 +346,8 @@ const ChantierInfoTab = ({ chantierData }) => {
                       Total:{" "}
                       {formatMontant(
                         (chantierData?.cout_estime_main_oeuvre || 0) +
-                          (chantierData?.cout_estime_materiel || 0)
+                          (chantierData?.cout_estime_materiel || 0) +
+                          (chantierData?.cout_sous_traitance || 0)
                       )}
                     </Typography>
                   </CardContent>
@@ -317,7 +374,8 @@ const ChantierInfoTab = ({ chantierData }) => {
                     </Typography>
                   </CardContent>
                 </Card>
-                {/* Détails Réel */}
+
+                {/* Main d'œuvre réelle */}
                 <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
                   <CardContent sx={{ py: 1 }}>
                     <Box
@@ -369,6 +427,26 @@ const ChantierInfoTab = ({ chantierData }) => {
                           {formatMontant(chantierData?.cout_materiel)}
                         </Typography>
                       </Box>
+                      <Box>
+                        <Typography
+                          sx={{
+                            color: "#1976d2",
+                            fontWeight: 600,
+                            fontSize: "1rem",
+                            fontFamily: "Roboto, Arial, sans-serif",
+                          }}
+                        >
+                          Sous-traitance
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "0.95rem",
+                            fontFamily: "Roboto, Arial, sans-serif",
+                          }}
+                        >
+                          {formatMontant(chantierData?.cout_sous_traitance)}
+                        </Typography>
+                      </Box>
                     </Box>
                   </CardContent>
                 </Card>
@@ -386,7 +464,8 @@ const ChantierInfoTab = ({ chantierData }) => {
                       Total:{" "}
                       {formatMontant(
                         (chantierData?.cout_main_oeuvre || 0) +
-                          (chantierData?.cout_materiel || 0)
+                          (chantierData?.cout_materiel || 0) +
+                          (chantierData?.cout_sous_traitance || 0)
                       )}
                     </Typography>
                   </CardContent>
@@ -404,9 +483,11 @@ const ChantierInfoTab = ({ chantierData }) => {
                       fontFamily: "Roboto, Arial, sans-serif",
                       color:
                         (chantierData?.cout_estime_main_oeuvre || 0) +
-                          (chantierData?.cout_estime_materiel || 0) -
+                          (chantierData?.cout_estime_materiel || 0) +
+                          (chantierData?.cout_sous_traitance || 0) -
                           ((chantierData?.cout_main_oeuvre || 0) +
-                            (chantierData?.cout_materiel || 0)) >=
+                            (chantierData?.cout_materiel || 0) +
+                            (chantierData?.cout_sous_traitance || 0)) >=
                         0
                           ? "#2e7d32"
                           : "#d32f2f",
@@ -415,9 +496,11 @@ const ChantierInfoTab = ({ chantierData }) => {
                     Marge:{" "}
                     {formatMontant(
                       (chantierData?.cout_estime_main_oeuvre || 0) +
-                        (chantierData?.cout_estime_materiel || 0) -
+                        (chantierData?.cout_estime_materiel || 0) +
+                        (chantierData?.cout_sous_traitance || 0) -
                         ((chantierData?.cout_main_oeuvre || 0) +
-                          (chantierData?.cout_materiel || 0))
+                          (chantierData?.cout_materiel || 0) +
+                          (chantierData?.cout_sous_traitance || 0))
                     )}
                   </Typography>
                 </CardContent>
