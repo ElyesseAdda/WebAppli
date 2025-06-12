@@ -4794,11 +4794,22 @@ def preview_contrat(request, contrat_id):
 def preview_avenant(request, avenant_id):
     try:
         avenant = AvenantSousTraitance.objects.select_related('contrat').get(id=avenant_id)
+        
+        # Récupérer uniquement les avenants antérieurs à celui en cours
+        avenants_precedents = AvenantSousTraitance.objects.filter(
+            contrat=avenant.contrat,
+            numero__lt=avenant.numero
+        ).order_by('numero')
+        
         if avenant.contrat.type_contrat == 'BTP':
             template_name = 'sous_traitance/avenant_btp.html'
         else:
             template_name = 'sous_traitance/avenant_nettoyage.html'
-        return render(request, template_name, {'avenant': avenant})
+            
+        return render(request, template_name, {
+            'avenant': avenant,
+            'avenants_precedents': avenants_precedents
+        })
     except AvenantSousTraitance.DoesNotExist:
         return JsonResponse({'error': 'Avenant non trouvé'}, status=404)
 

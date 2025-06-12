@@ -812,8 +812,10 @@ class SousTraitant(models.Model):
     adresse = models.CharField(max_length=255)
     code_postal = models.CharField(max_length=10)
     ville = models.CharField(max_length=100)
+    forme_juridique = models.CharField(max_length=100, default="SARL")
     numero_rcs = models.CharField(max_length=100, unique=True)
     representant = models.CharField(max_length=255)
+    email = models.EmailField(max_length=254, blank=True, null=True)
     date_creation = models.DateTimeField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
 

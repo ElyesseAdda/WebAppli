@@ -18,6 +18,8 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
     ville: "",
     numero_rcs: "",
     representant: "",
+    forme_juridique: "SARL",
+    email: "",
   });
 
   const [errors, setErrors] = useState({});
@@ -37,6 +39,8 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
         ville: "",
         numero_rcs: "",
         representant: "",
+        forme_juridique: "SARL",
+        email: "",
       });
     }
     setErrors({});
@@ -53,6 +57,8 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
     if (!formData.numero_rcs) newErrors.numero_rcs = "Le numéro RCS est requis";
     if (!formData.representant)
       newErrors.representant = "Le représentant est requis";
+    if (!formData.forme_juridique)
+      newErrors.forme_juridique = "La forme juridique est requise";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -194,6 +200,29 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
               onChange={handleChange}
               error={!!errors.representant}
               helperText={errors.representant}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Forme Juridique"
+              name="forme_juridique"
+              value={formData.forme_juridique}
+              onChange={handleChange}
+              error={!!errors.forme_juridique}
+              helperText={errors.forme_juridique}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Adresse Email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              error={!!errors.email}
+              helperText={errors.email}
             />
           </Grid>
         </Grid>

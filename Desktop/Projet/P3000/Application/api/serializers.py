@@ -776,7 +776,9 @@ class SousTraitantSerializer(serializers.ModelSerializer):
             'numero_rcs',
             'representant',
             'date_creation',
-            'date_modification'
+            'date_modification',
+            'forme_juridique',
+            'email'
         ]
 
 class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
