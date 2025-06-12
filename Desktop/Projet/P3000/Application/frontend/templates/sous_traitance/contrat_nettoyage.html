@@ -2,49 +2,82 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Contrat de Sous-Traitance Nettoyage</title>
+    <title>Contrat de Sous-Traitance BTP</title>
     <style>
       body {
         font-family: Arial, sans-serif;
-        margin: 40px;
-        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+        font-size: 14px;
       }
       .header {
         text-align: center;
         margin-bottom: 30px;
       }
-      .logo {
-        max-width: 200px;
-        margin-bottom: 20px;
+      .logo img {
+        width: 100px;
+        height: auto;
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
       }
       .title {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
         margin-bottom: 20px;
         text-decoration: underline;
+        margin-top: 100px;
+        color: red;
+        text-decoration-color: red;
+        text-underline-offset: 3px;
       }
       .section {
         margin-bottom: 20px;
       }
       .section-title {
         font-weight: bold;
-        margin-bottom: 10px;
+        margin-bottom: 20px;
+        font-size: 18px;
+        color: red;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-align: center;
+      }
+      .section-annexes {
+        font-weight: bold;
+        margin-bottom: 20px;
+        margin-top: 600px;
+        font-size: 18px;
+        color: red;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-align: center;
+      }
+      .titre-article {
+        font-weight: bold;
+        text-decoration: underline;
+        text-decoration-color: black;
+        font-size: 16px;
       }
       .signature-section {
-        margin-top: 50px;
+        margin-top: 10px;
         display: flex;
         justify-content: space-between;
       }
       .signature-box {
         width: 45%;
-        border-top: 1px solid black;
+        {% comment %} border-top: 1px solid black; {% endcomment %}
         padding-top: 10px;
-        margin-top: 50px;
+        margin-top: 10px;
+        font-size: 14px;
       }
       table {
         width: 100%;
         border-collapse: collapse;
         margin: 20px 0;
+        font-size: 14px;
       }
       th,
       td {
@@ -55,123 +88,374 @@
       th {
         background-color: #f2f2f2;
       }
+      .indented-line {
+        margin-left: 40px;
+        display: block;
+      }
+      li {
+        margin-left: 40px;
+        display: block;
+        decoration: none;
+        font-size: 14px;
+      }
+      .print-footer {
+        margin-top: 700px;
+        text-align: left;
+      }
+      .print-footer img {
+        width: 150px;
+        height: auto;
+        display: block;
+      }
+      @media print {
+        @page {
+          margin: 2cm;
+        }
+      }
+      .signature-cases {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 50px;
+        gap: 20px;
+      }
+      .signature-case {
+        width: 100%;
+        height: 200px;
+        border: 1px solid black;
+        padding: 20px;
+        box-sizing: border-box;
+        position: relative;
+      }
+      .signature-case-left {
+        text-align: left;
+      }
+      .signature-case-right {
+        text-align: left;
+      }
+      .signature-label {
+        margin-bottom: 20px;
+      }
+      .signature-approval {
+        margin-bottom: 20px;
+      }
     </style>
   </head>
   <body>
-    <div class="header">
+    <div class="logo">
+      <img src="/static/frontend/src/img/logo.png" alt="Logo P3000" />
+    </div>
+
+    <div class="content-wrapper">
+      <div class="header">
+        <h1 class="title">CONTRAT DE PRESTATION DE SERVICES</h1>
+      </div>
+
+      <div class="section">
+        <p>Entre les soussignés :</p>
+        <p>
+          La société
+          <span style="font-weight: bold; color: rgba(27, 120, 188, 1)"
+            >SARL PEINTURE 3000</span
+          >, au capital de 20 000,00€, dont le siège social est situé au 24,
+          Boulevard Gay Lussac, immeuble énergie, 13014 – Marseille,
+          immatriculée au RCS de Marseille 532 875 317, représentée par Amara
+          MAJRI,
+        </p>
+        <p>Ci-après désignée « le client »</p>
+        <p>d'une part,</p>
+        <p>
+          Et la société
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.entreprise }}</span
+          >, au capital de
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.capital }}€</span
+          >, dont le siège social est situé au
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.adresse }}</span
+          >,
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.code_postal }} -
+          </span>
+
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.ville }}</span
+          >, immatriculée au
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.ville_rcs }}</span
+          >
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.numero_rcs }}</span
+          >, représentée par
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.representant }}</span
+          >,
+        </p>
+        <p>Ci-après désigné « le prestataire »</p>
+      </div>
+
+      <div class="section">
+        <p>D'une part</p>
+        <p>
+          Les parties déclarent et reconnaissent que les négociations ayant
+          précédé la conclusion dela présente convention ont été conduites de
+          bonne foi. Elles reconnaissent avoir bénéficié,pendant la phase
+          précontractuelle de négociations, de toutes les informations
+          nécessaires etutiles pour leur permettre de s'engager en toute
+          connaissance de cause et s'êtremutuellement communiqué toute
+          information susceptible de déterminer leur consentement et qu'elles ne
+          pouvaient légitimement ignorer.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">IL A ÉTÉ CONVENU CE QUI SUIT :</div>
+        <p class="titre-article"><strong>Article 1 - Objet </strong></p>
+        <p>
+          Par les présentes, le sous-traitant s'engage à réaliser pour le compte
+          de l'entrepreneur principal, les travaux suivants :
+        </p>
+        <p style="font-weight: bold; color: black">
+          {{ contrat.description_prestation }}
+        </p>
+        <p style="font-weight: bold; color: black">CCTP en annexes</p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 2 - Durée du contrat et réalisation</strong>
+        </p>
+        <p>
+          La date prévue pour le début des travaux confiés au sous-traitant est
+          fixée au :
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.date_debut|date:"d/m/y" }}</span
+          >
+          <br />La durée prévisible des travaux est estimée à :
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.duree }}</span
+          >
+        </p>
+        <p></p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 3 - Lieu d'exécution</strong>
+        </p>
+        Les travaux seront réalisés à l'endroit suivant :
+        <span style="font-weight: bold; color: black"
+          >{{ contrat.adresse_prestation }}</span
+        ><br />
+        Nom de l'opérations :
+        <span style="font-weight: bold; color: black"
+          >{{ contrat.nom_operation }}</span
+        ><br />
+        Nom du maitre de l'ouvrage :
+        <span style="font-weight: bold; color: black"
+          >{{ contrat.nom_maitre_ouvrage }}</span
+        ><br />
+
+        Nom du maître d'oeuvre :
+        <span style="font-weight: bold; color: black"
+          >{{ contrat.nom_maitre_oeuvre }}</span
+        >
+      </div>
+
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 4 - Prix et modalités de paiement </strong>
+        </p>
+        <p>
+          En contrepartie des prestations assurées par le sous-traitant au
+          bénéfice de l'entrepreneur principal, ce dernier versera au
+          prestataire la rémunération suivante :
+        </p>
+
+        <span class="indented-line"
+          >- Une somme forfaitaire :
+          <span style="font-weight: bold; color: black">
+            {{ contrat.montant_operation }} € HT </span
+          >.</span
+        >
+
+        <p>
+          Les sommes dues au prestataire lui seront réglées par virement ou
+          chèque.
+
+          <br />Les délais de paiement sont les suivants :
+          <span class="indented-line"
+            >- Situation envoyée entre les 20 et 25 de chaque mois sur les
+            travaux réalisés sur le mois ;
+          </span>
+
+          <span class="indented-line"
+            >- Paiement à 45 jours après réception de la facture pour un
+            paiement au 10 du mois + 1
+          </span>
+        </p>
+
+        <p></p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 5 - Obligations du prestataire</strong>
+        </p>
+        <p>
+          Le prestataire s'engage à exécuter sa mission avec diligence et
+          professionnalisme et selon les règles en vigueur dans sa profession.
+          Le prestataire a une obligation de moyens.
+        </p>
+        <p>
+          Le prestataire s'engage au respect d'une obligation de confidentialité
+          en ce qui concerne le contenu de la mission, les informations et les
+          documents communiqués par le client
+        </p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 6 - Obligation du client</strong>
+        </p>
+        <p>
+          Le client s'engage à donner au prestataire toutes les informations
+          nécessaires sur ses besoins et sur les impératifs à respecter. Le
+          client tiendra à la disposition du prestataire toutes les informations
+          pouvant contribuer à la bonne réalisation de l'objet du présent
+          contrat.
+        </p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 7 - Changement de circonstances</strong>
+        </p>
+        <p>
+          Si un changement de circonstances imprévisible lors de la conclusion
+          du contrat rend l'exécution excessivement onéreuse pour une partie qui
+          n'avait pas accepté d'en assumer le risque, celle-ci peut demander une
+          renégociation du contrat à son cocontractant. Cette demande doit être
+          faite par lettre recommandée avec accusé de réception, en précisant la
+          date et la nature du ou des événements à l'origine du changement de
+          circonstances, en chiffrant le montant du préjudice financier actuel
+          ou à venir et en faisant une proposition de dédommagement pour
+          remédier à ce changement. Elle continue à exécuter ses obligations
+          durant la renégociation.
+        </p>
+        <p>
+          En cas de refus ou d'échec de la renégociation, les parties peuvent
+          convenir de la résolution du contrat, à la date et aux conditions
+          qu'elles déterminent, ou demander d'un commun accord au juge de
+          procéder à son adaptation. A défait d'accord dans un délai
+          raisonnable, le juge peut, à la demande d'une partie, réviser le
+          contrat ou y mettre fin, à la date et aux conditions qu'il fixe.
+        </p>
+      </div>
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 8 - Force majeure</strong>
+        </p>
+        <p>
+          Il y a force majeure en matière contractuelle lorsqu'un événement
+          échappant au contrôle du débiteur, qui ne pouvait être raisonnablement
+          prévu lors de la conclusion du contrat et dont les effets ne peuvent
+          être évités par des mesures appropriées, empêche l'exécution de son
+          obligation par le débiteur.
+        </p>
+        <p>
+          Si l'empêchement est temporaire, l'exécution de l'obligation est
+          suspendue à moins que le retard qui en résulterait ne justifie ka
+          résolution du contrat. Si l'empêchement est définitif, le contrat est
+          résolu de plein droit et les parties sont libérées de leurs
+          obligations dans lles conditions prévues aux articles 1351 et 1351-1
+          du Code civil.
+        </p>
+        <p>
+          Aucune des deux parties ne sera tenue responsable du retard constaté
+          en raison des événements de force majeure.
+        </p>
+        <p>
+          En cas de force majeure, constatée par l'une des parties, celle-ci
+          doit en informer l'autre partie par écrit dans les meilleurs délais.
+        </p>
+        <p>
+          Les délais prévus pour la réalisation de la prestation seront décalés
+          en fonction de la durée du retard dû à la force majeure.
+        </p>
+      </div>
+      <div class="section">
+        <p class="titre-article">
+          <strong>Article 9 - Loi applicable</strong>
+        </p>
+        <p>
+          Le présent contrat est régi par la loi française, et tout litige qui
+          en résulterait devra être soumis au tribunal dont dépende le siège
+          social du prestataire.
+        </p>
+      </div>
+
+      <div class="signature-section">
+        <div class="signature-box">
+          <p>
+            Le client <br />
+            La société
+            <span style="color: rgba(27, 120, 188, 1); font-weight: bold"
+              >PEINTURE 3000 </span
+            ><br />
+            Représenté par
+            <span style="color: black; font-weight: bold">Amara MAJRI</span
+            ><br />
+          </p>
+        </div>
+
+        <div class="signature-box">
+          <p>
+            Fait à Marseille, le
+            <span style="color: black; font-weight: bold"
+              >{{ contrat.date_creation|date:"d/m/Y" }}</span
+            >
+          </p>
+          <p>
+            Le prestataire<br />
+            La société
+            <span style="color: black; font-weight: bold"
+              >{{ contrat.sous_traitant.entreprise }}</span
+            ><br />
+            Représenté par
+            <span style="color: black; font-weight: bold"
+              >{{ contrat.sous_traitant.representant }}</span
+            ><br />
+          </p>
+        </div>
+      </div>
+
+      <div class="signature-cases">
+        <div class="signature-case signature-case-left">
+          <div class="signature-label">TAMPON + SIGNATURE :</div>
+        </div>
+        <div class="signature-case signature-case-right">
+          <div class="signature-label">TAMPON + SIGNATURE :</div>
+          <div class="signature-approval">
+            Précédé de la mention "Lu et approuvé"
+          </div>
+        </div>
+      </div>
+
+      <div class="section-annexes">ANNEXES AU PRESENT CONTRAT</div>
+      <li>- Copie assurance décennale {% now "Y" %}</li>
+      <li>- Attestation de vigilance délivrée par l'Urssaf</li>
+      <li>- Attestation fiscale</li>
+      <li>- KBIS</li>
+      <li>- DEVIS</li>
+      <li>- RIB</li>
+    </div>
+
+    <div class="print-footer">
       <img
-        src="/static/frontend/src/img/logo.png"
-        alt="Logo P3000"
-        class="logo"
+        src="/static/frontend/src/img/Info p3000.png"
+        alt="Tampon Info P3000"
       />
-      <h1>CONTRAT DE SOUS-TRAITANCE NETTOYAGE</h1>
-    </div>
-
-    <div class="section">
-      <div class="section-title">ENTRE LES SOUSSIGNÉS :</div>
-      <p>
-        La SARL PEINTURE 3000, située au 24-26 Boulevard Gay Lussac, Immeuble
-        énergie, 13014 Marseille, immatriculée au RCS de Marseille sous le
-        numéro 352 875 317, représentée par [NOM DU REPRÉSENTANT LÉGAL] en
-        qualité de [QUALITÉ],
-      </p>
-      <p>Ci-après dénommée "le Maître d'ouvrage"</p>
-      <p>ET</p>
-      <p>
-        {{ contrat.sous_traitant.entreprise }}, située au {{
-        contrat.sous_traitant.adresse }}, immatriculée au RCS de {{
-        contrat.sous_traitant.ville_rcs }} sous le numéro {{
-        contrat.sous_traitant.numero_rcs }}, représentée par {{
-        contrat.sous_traitant.nom_representant }} en qualité de {{
-        contrat.sous_traitant.qualite_representant }},
-      </p>
-      <p>Ci-après dénommé "le Sous-traitant"</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">IL A ÉTÉ CONVENU CE QUI SUIT :</div>
-      <p><strong>Article 1 - Objet du contrat</strong></p>
-      <p>
-        Le présent contrat a pour objet la réalisation des prestations de
-        nettoyage suivantes :
-      </p>
-      <p>{{ contrat.description_prestation }}</p>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 2 - Lieu d'exécution</strong></p>
-      <p>Les prestations seront réalisées sur le site suivant :</p>
-      <p>Nom du chantier : {{ contrat.chantier.chantier_name }}</p>
-      <p>
-        Adresse : {{ contrat.chantier.rue }}, {{ contrat.chantier.code_postal }}
-        {{ contrat.chantier.ville }}
-      </p>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 3 - Durée et fréquence</strong></p>
-      <p>
-        Le présent contrat prend effet à compter du {{
-        contrat.date_debut|date:"d/m/Y" }} et s'achève le {{ contrat.duree }}.
-      </p>
-      <p>La fréquence des prestations est la suivante :</p>
-      <ul>
-        <li>Nettoyage quotidien</li>
-        <li>Nettoyage hebdomadaire</li>
-        <li>Nettoyage mensuel</li>
-      </ul>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 4 - Prix</strong></p>
-      <p>
-        Le montant total de la prestation s'élève à {{
-        contrat.montant_operation|floatformat:2 }} € HT.
-      </p>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 5 - Conditions de paiement</strong></p>
-      <p>Le paiement s'effectuera selon les modalités suivantes :</p>
-      <ul>
-        <li>Facturation mensuelle</li>
-        <li>Paiement à 30 jours</li>
-      </ul>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 6 - Obligations du Sous-traitant</strong></p>
-      <p>Le Sous-traitant s'engage à :</p>
-      <ul>
-        <li>Fournir un personnel qualifié et formé</li>
-        <li>Respecter les horaires convenus</li>
-        <li>Utiliser des produits respectueux de l'environnement</li>
-        <li>Assurer la sécurité du personnel</li>
-        <li>Respecter les normes d'hygiène en vigueur</li>
-      </ul>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 7 - Obligations du Maître d'ouvrage</strong></p>
-      <p>Le Maître d'ouvrage s'engage à :</p>
-      <ul>
-        <li>Fournir les accès nécessaires</li>
-        <li>Effectuer les paiements selon les modalités convenues</li>
-        <li>Signaler tout problème ou anomalie</li>
-      </ul>
-    </div>
-
-    <div class="signature-section">
-      <div class="signature-box">
-        <p>Pour le Maître d'ouvrage</p>
-        <p>SARL PEINTURE 3000</p>
-        <p>Signature précédée de la mention "Lu et approuvé"</p>
-      </div>
-      <div class="signature-box">
-        <p>Pour le Sous-traitant</p>
-        <p>{{ contrat.sous_traitant.entreprise }}</p>
-        <p>Signature précédée de la mention "Lu et approuvé"</p>
-      </div>
     </div>
   </body>
 </html>
