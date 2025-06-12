@@ -877,6 +877,7 @@ class AvenantSousTraitance(models.Model):
     numero = models.IntegerField()  # Numéro séquentiel de l'avenant pour ce contrat
     description = models.TextField()
     montant = models.DecimalField(max_digits=10, decimal_places=2)
+    type_travaux = models.CharField(max_length=100, default='LOT PEINTURE')
     date_creation = models.DateField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
 

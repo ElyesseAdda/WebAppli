@@ -21,6 +21,7 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
   const [formData, setFormData] = useState({
     description: "",
     montant: "",
+    type_travaux: "LOT PEINTURE",
   });
 
   const [avenants, setAvenants] = useState([]);
@@ -107,6 +108,7 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
                     <TableCell>Date</TableCell>
                     <TableCell>Description</TableCell>
                     <TableCell>Montant</TableCell>
+                    <TableCell>Type de Travaux</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -118,6 +120,7 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
                       </TableCell>
                       <TableCell>{avenant.description}</TableCell>
                       <TableCell>{avenant.montant} €</TableCell>
+                      <TableCell>{avenant.type_travaux}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -147,6 +150,16 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
                 name="montant"
                 type="number"
                 value={formData.montant}
+                onChange={handleChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Type de Travaux"
+                name="type_travaux"
+                value={formData.type_travaux}
                 onChange={handleChange}
                 required
               />

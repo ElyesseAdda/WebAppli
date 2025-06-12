@@ -2,159 +2,491 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Avenant au Contrat de Sous-Traitance BTP</title>
+    <title>Avenant N°{{ avenant.numero }} - Contrat de sous-traitance</title>
+    {% load humanize %}
     <style>
       body {
         font-family: Arial, sans-serif;
         margin: 40px;
-        line-height: 1.6;
+        color: #000;
+        background-color: #fff;
+        font-size: 13px;
       }
-      .header {
-        text-align: center;
+      .header,
+      .section {
         margin-bottom: 30px;
       }
-      .logo {
-        max-width: 200px;
+      .logo img {
+        width: 100px;
+        height: auto;
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .company {
+        border: 1px solid #000;
+        padding: 15px;
         margin-bottom: 20px;
       }
-      .title {
-        font-size: 24px;
+      h1 {
+        text-align: center;
         font-weight: bold;
-        margin-bottom: 20px;
+        font-size: 18px;
+        padding-bottom: 10px;
+        margin-bottom: 40px;
+        margin-top: 100px;
         text-decoration: underline;
       }
-      .section {
-        margin-bottom: 20px;
-      }
-      .section-title {
+      h2 {
+        font-size: 14px;
+        margin-bottom: 0px;
         font-weight: bold;
-        margin-bottom: 10px;
+        color: white;
+        background-color: rgb(56, 117, 179);
+        padding: 5px 10px;
+      }
+      .table-concerned {
+        font-size: 14px;
+        margin-bottom: 0px;
+        font-weight: bold;
+        color: white;
+        background-color: rgb(56, 117, 179);
+        padding: 5px 10px;
+      }
+      .table-like-container {
+        width: 100%;
+        margin-top: 0px;
+        font-weight: normal;
+        font-size: 13px;
+      }
+      .table-like-row {
+        display: flex;
+      }
+      .table-like-cell {
+        padding: 4px 8px;
+        background-color: rgb(166, 190, 218);
+        color: #000;
+        flex: 1;
+      }
+      .table-like-cell.label {
+        flex: 0.5;
+        font-weight: bold;
+      }
+      .table-like-header {
+        padding: 8px;
+        text-align: left;
+        background-color: rgb(96, 146, 196);
+        color: #000;
+      }
+      /* Suppression des styles de tableau existants */
+      table,
+      td {
+        border: none;
+        background-color: transparent; /* Réinitialiser pour éviter les conflits */
+        color: inherit; /* Réinitialiser pour éviter les conflits */
+      }
+      th {
+        background-color: transparent; /* Réinitialiser */
+        color: inherit; /* Réinitialiser */
+      }
+      td strong {
+        font-weight: bold;
+      }
+      p {
+        font-size: 13px;
+        line-height: 1.4;
       }
       .signature-section {
-        margin-top: 50px;
         display: flex;
         justify-content: space-between;
+        margin-top: 50px;
+        gap: 20px;
       }
       .signature-box {
         width: 45%;
-        border-top: 1px solid black;
         padding-top: 10px;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          color-adjust: exact;
+        }
+      }
+      .signature-cases {
+        display: flex;
+        justify-content: space-between;
         margin-top: 50px;
+        gap: 20px;
       }
-      table {
+      .signature-case {
         width: 100%;
-        border-collapse: collapse;
-        margin: 20px 0;
-      }
-      th,
-      td {
+        height: 200px;
         border: 1px solid black;
-        padding: 8px;
+        padding: 20px;
+        box-sizing: border-box;
+        position: relative;
+        font-size: 13px;
+      }
+      .signature-case-left {
         text-align: left;
       }
-      th {
-        background-color: #f2f2f2;
+      .signature-case-right {
+        text-align: left;
+      }
+      .signature-label {
+        margin-bottom: 20px;
+        font-size: 13px;
+      }
+      .signature-approval {
+        margin-bottom: 20px;
+        font-size: 13px;
       }
     </style>
   </head>
   <body>
     <div class="header">
-      <img
-        src="/static/frontend/src/img/logo.png"
-        alt="Logo P3000"
-        class="logo"
-      />
-      <h1>AVENANT N°{{ avenant.numero }} AU CONTRAT DE SOUS-TRAITANCE BTP</h1>
+      <div class="logo">
+        <img src="/static/frontend/src/img/logo.png" alt="Logo P3000" />
+      </div>
+    </div>
+
+    <h1>
+      AVENANT N°{{ avenant.numero }} au CONTRAT DE SOUS-TRAITANCE<br />du
+      {{avenant.date_creation|date:"d/m/Y" }}
+    </h1>
+
+    <div class="section">
+      <h2>Entre l'Entrepreneur Principal (EP) :</h2>
+      <div class="table-like-container">
+        <div class="table-like-row">
+          <div class="table-like-cell label">Entreprise (raison sociale)</div>
+          <div class="table-like-cell">PEINTURE 3000</div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Siège social</div>
+          <div class="table-like-cell">
+            24, Bd Gay Lussac, 13014 – Marseille
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Forme juridique</div>
+          <div class="table-like-cell">SARL au capital de 20 000€</div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">RCS</div>
+          <div class="table-like-cell">MARSEILLE 317 875 532</div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Représentée par</div>
+          <div class="table-like-cell">M MAJRI Amara,</div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">En qualité de</div>
+          <div class="table-like-cell">Gérant</div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Email</div>
+          <div class="table-like-cell">peinture3000@ymail.com</div>
+        </div>
+      </div>
     </div>
 
     <div class="section">
-      <div class="section-title">ENTRE LES SOUSSIGNÉS :</div>
+      <h2>Et le Sous-Traitant (ST)</h2>
+      <div class="table-like-container">
+        <div class="table-like-row">
+          <div class="table-like-cell label">Entreprise (raison sociale)</div>
+          <div class="table-like-cell">
+            {{ avenant.contrat.sous_traitant.entreprise }}
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Adresse</div>
+          <div class="table-like-cell">
+            {{ avenant.contrat.sous_traitant.adresse }},
+            {{avenant.contrat.sous_traitant.code_postal }} -
+            {{avenant.contrat.sous_traitant.ville }}
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Forme juridique</div>
+          <div class="table-like-cell">
+            {{ avenant.contrat.sous_traitant.forme_juridique }}
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">N°RCS</div>
+          <div class="table-like-cell">
+            {{ avenant.contrat.sous_traitant.ville_rcs }}
+            {{avenant.contrat.sous_traitant.numero_rcs }}
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">Représentée par</div>
+          <div class="table-like-cell">
+            {{ avenant.contrat.sous_traitant.representant }}
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div class="table-like-cell label">En qualité de</div>
+          <div class="table-like-cell">Gérant</div>
+        </div>
+        {% if avenant.contrat.sous_traitant.email %}
+        <div class="table-like-row">
+          <div class="table-like-cell label">Adresse électronique</div>
+          <div class="table-like-cell">
+            {{ avenant.contrat.sous_traitant.email}}
+          </div>
+        </div>
+        {% endif %}
+      </div>
       <p>
-        La SARL PEINTURE 3000, située au 24-26 Boulevard Gay Lussac, Immeuble
-        énergie, 13014 Marseille, immatriculée au RCS de Marseille sous le
-        numéro 352 875 317, représentée par [NOM DU REPRÉSENTANT LÉGAL] en
-        qualité de [QUALITÉ],
+        Dans le cadre de l'opération {{ avenant.contrat.nom_operation }}, l'EP a
+        confié au ST de {{avenant.type_travaux}} : pour un montant global de
+        {{avenant.contrat.montant_operation }}€ HT, suivant un contrat de
+        prestation de services en date du 30/08/2024.
       </p>
-      <p>Ci-après dénommée "le Maître d'ouvrage"</p>
-      <p>ET</p>
       <p>
-        {{ avenant.contrat.sous_traitant.entreprise }}, située au {{
-        avenant.contrat.sous_traitant.adresse }}, immatriculée au RCS de {{
-        avenant.contrat.sous_traitant.ville_rcs }} sous le numéro {{
-        avenant.contrat.sous_traitant.numero_rcs }}, représentée par {{
-        avenant.contrat.sous_traitant.nom_representant }} en qualité de {{
-        avenant.contrat.sous_traitant.qualite_representant }},
+        En application de la loi n°75-1334 du 31 décembre 1975 relative à la
+        sous-traitance, le ST a été accepté et ses conditions de paiement
+        agréées par le maître d'ouvrage.
       </p>
-      <p>Ci-après dénommé "le Sous-traitant"</p>
-    </div>
-
-    <div class="section">
-      <div class="section-title">IL A ÉTÉ CONVENU CE QUI SUIT :</div>
-      <p>
-        Les parties ont conclu un contrat de sous-traitance en date du {{
-        avenant.contrat.date_debut|date:"d/m/Y" }} pour la réalisation des
-        prestations suivantes :
-      </p>
-      <p>{{ avenant.contrat.description_prestation }}</p>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 1 - Objet de l'avenant</strong></p>
-      <p>
-        Le présent avenant a pour objet de modifier le contrat initial comme
-        suit :
-      </p>
-      <p>{{ avenant.description }}</p>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 2 - Modifications apportées</strong></p>
-      <table>
-        <tr>
-          <th>Élément</th>
-          <th>Ancienne valeur</th>
-          <th>Nouvelle valeur</th>
-        </tr>
-        <tr>
-          <td>Montant</td>
-          <td>{{ avenant.contrat.montant_operation|floatformat:2 }} € HT</td>
-          <td>{{ avenant.montant|floatformat:2 }} € HT</td>
-        </tr>
-        <tr>
-          <td>Date de modification</td>
-          <td>-</td>
-          <td>{{ avenant.date_creation|date:"d/m/Y" }}</td>
-        </tr>
-      </table>
-    </div>
-
-    <div class="section">
-      <p><strong>Article 3 - Conditions de paiement</strong></p>
-      <p>
-        Les conditions de paiement restent inchangées par rapport au contrat
-        initial.
+      <p style="font-weight: bold; color: black">
+        Il a été convenu ce qui suit :
       </p>
     </div>
 
     <div class="section">
-      <p><strong>Article 4 - Autres dispositions</strong></p>
+      <h2>Article 1 – Objet de l'Avenant</h2>
       <p>
-        Toutes les autres dispositions du contrat initial restent en vigueur et
-        inchangées.
+        Le présent avenant a pour objet d'intégrer au contrat de sous-traitance
+        les travaux supplémentaires et/ou modifications suivants :
+      </p>
+      <p>
+        Ces travaux supplémentaires et/ou modifications sont définis par les
+        documents suivants :
+      </p>
+      <ul>
+        <li style="font-weight: bold; color: black">
+          {{ avenant.description }}
+        </li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>Article 2 – Prix</h2>
+      <p>
+        Le prix fixé aux conditions particulières du contrat de sous-traitance
+        demeure inchangé
+      </p>
+      <p>
+        Le montant du présent avenant est arrêté à
+        <span style="font-weight: bold; color: black">
+          {{ avenant.montant|floatformat:2 }} € HT
+        </span>
+      </p>
+      <p>Le prix du contrat de sous-traitance est donc ainsi modifié ;</p>
+
+      <div
+        class="table-like-container"
+        style="
+          margin-top: 20px;
+          border: 1px solid black;
+          max-width: 90%;
+          margin-left: auto;
+          margin-right: auto;
+        "
+      >
+        <div class="table-like-row" style="border-bottom: 1px solid black">
+          <div
+            class="table-like-cell label"
+            style="
+              border-right: 1px solid black;
+              padding: 8px;
+              background-color: white;
+            "
+          >
+            Libellé
+          </div>
+          <div
+            class="table-like-cell"
+            style="text-align: center; padding: 8px; background-color: white"
+          >
+            Montant HT
+          </div>
+        </div>
+        <div class="table-like-row" style="border-bottom: 1px solid black">
+          <div
+            class="table-like-cell label"
+            style="
+              border-right: 1px solid black;
+              padding: 8px;
+              background-color: white;
+            "
+          >
+            Contrat initial
+          </div>
+          <div
+            class="table-like-cell"
+            style="text-align: right; padding: 8px; background-color: white"
+          >
+            {{ avenant.contrat.montant_operation|floatformat:2|intcomma }} €
+          </div>
+        </div>
+        {% for a in avenants_precedents %}
+        <div class="table-like-row" style="border-bottom: 1px solid black">
+          <div
+            class="table-like-cell label"
+            style="
+              border-right: 1px solid black;
+              padding: 8px;
+              background-color: white;
+            "
+          >
+            Avenant n°{{ a.numero }}
+          </div>
+          <div
+            class="table-like-cell"
+            style="text-align: right; padding: 8px; background-color: white"
+          >
+            {{ a.montant|floatformat:2|intcomma }} €
+          </div>
+        </div>
+        {% endfor %}
+        <div class="table-like-row" style="border-bottom: 1px solid black">
+          <div
+            class="table-like-cell label"
+            style="
+              border-right: 1px solid black;
+              padding: 8px;
+              background-color: white;
+            "
+          >
+            Avenant n°{{ avenant.numero }}
+          </div>
+          <div
+            class="table-like-cell"
+            style="text-align: right; padding: 8px; background-color: white"
+          >
+            {{ avenant.montant|floatformat:2|intcomma }} €
+          </div>
+        </div>
+        <div class="table-like-row">
+          <div
+            class="table-like-cell label"
+            style="
+              border-right: 1px solid black;
+              padding: 8px;
+              font-weight: bold;
+              background-color: white;
+            "
+          >
+            Total
+          </div>
+          <div
+            class="table-like-cell"
+            style="
+              text-align: right;
+              padding: 8px;
+              font-weight: bold;
+              background-color: white;
+            "
+          >
+            {{avenant.contrat.montant_operation|add:avenant.montant|floatformat:2|intcomma}}
+            €
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Article 3 – Délais</h2>
+      <p>
+        Le délai d'exécution stipulé à l'article 7.1 des conditions
+        particulières du contrat sous-traitance demeure inchangé.
       </p>
     </div>
 
+    <div class="section">
+      <h2>Article 4 – Obligations en matière d'insertion</h2>
+      <p>
+        Le nombre d'heures d'insertion dans le cadre de ce contrat demeure
+        inchangé.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>Article 5 – Effets</h2>
+      <p>
+        Le présent avenant annule et remplace les dispositions qu'il vient
+        compléter, préciser ou remplacer, à l'exécution de toute autre clause ou
+        point n'entrant pas dans son objet. En cas de modification d'une seule
+        ou plusieurs parties ou clauses d'un article, les parties ou clauses non
+        modifiées par le présent avenant continuent à s'appliquer dans leur
+        version initiale.
+      </p>
+      <p>
+        Le ST renonce, par la signature des présentes, à tout recours envers
+        l'EP pour tout fait antérieur à la date de signature du présent avenant.
+      </p>
+      <p>
+        Le présent avenant entre en vigueur à compter de sa signature par les
+        deux parties.
+      </p>
+    </div>
     <div class="signature-section">
       <div class="signature-box">
-        <p>Pour le Maître d'ouvrage</p>
-        <p>SARL PEINTURE 3000</p>
-        <p>Signature précédée de la mention "Lu et approuvé"</p>
+        <p>
+          Le client <br />
+          La société
+          <span style="color: rgba(27, 120, 188, 1); font-weight: bold"
+            >PEINTURE 3000 </span
+          ><br />
+          Représenté par
+          <span style="color: black; font-weight: bold">Amara MAJRI</span><br />
+        </p>
       </div>
+
       <div class="signature-box">
-        <p>Pour le Sous-traitant</p>
-        <p>{{ avenant.contrat.sous_traitant.entreprise }}</p>
-        <p>Signature précédée de la mention "Lu et approuvé"</p>
+        <p>
+          Fait à Marseille, le
+          <span style="color: black; font-weight: bold"
+            >{{ avenant.contrat.date_creation|date:"d/m/Y" }}</span
+          >
+        </p>
+        <p>
+          Le prestataire<br />
+          La société
+          <span style="color: black; font-weight: bold"
+            >{{ avenant.contrat.sous_traitant.entreprise }}</span
+          ><br />
+          Représenté par
+          <span style="color: black; font-weight: bold"
+            >{{ avenant.contrat.sous_traitant.representant }}</span
+          ><br />
+        </p>
       </div>
+    </div>
+    <div class="signature-cases">
+      <div class="signature-case signature-case-left">
+        <div class="signature-label">TAMPON + SIGNATURE :</div>
+      </div>
+      <div class="signature-case signature-case-right">
+        <div class="signature-label">TAMPON + SIGNATURE :</div>
+        <div class="signature-approval">
+          Précédé de la mention "Lu et approuvé"
+        </div>
+      </div>
+    </div>
+    <div class="print-footer">
+      <img
+        src="/static/frontend/src/img/Info p3000.png"
+        alt="Tampon Info P3000"
+      />
     </div>
   </body>
 </html>
