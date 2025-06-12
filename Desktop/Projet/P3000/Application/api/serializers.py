@@ -803,6 +803,8 @@ class ContratSousTraitanceSerializer(serializers.ModelSerializer):
             'adresse_prestation',
             'nom_operation',
             'montant_operation',
+            'nom_maitre_ouvrage',
+            'nom_maitre_oeuvre',
             'date_creation',
             'date_modification',
             'avenants'

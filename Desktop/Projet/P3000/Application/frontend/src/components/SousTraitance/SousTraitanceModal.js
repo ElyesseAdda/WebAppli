@@ -176,6 +176,16 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     }
   };
 
+  const handlePreviewContrat = (contratId) => {
+    const previewUrl = `/api/preview-contrat/${contratId}/`;
+    window.open(previewUrl, "_blank");
+  };
+
+  const handlePreviewAvenant = (avenantId) => {
+    const previewUrl = `/api/preview-avenant/${avenantId}/`;
+    window.open(previewUrl, "_blank");
+  };
+
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -275,7 +285,19 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                         </TableHead>
                         <TableBody>
                           <TableRow>
-                            <TableCell sx={{ fontWeight: "bold" }}>
+                            <TableCell
+                              onClick={() =>
+                                handlePreviewContrat(sousTraitant.contrat.id)
+                              }
+                              sx={{
+                                cursor: "pointer",
+                                color: "primary.main",
+                                fontWeight: "bold",
+                                "&:hover": {
+                                  textDecoration: "underline",
+                                },
+                              }}
+                            >
                               Contrat initial
                             </TableCell>
                             <TableCell>
@@ -302,7 +324,18 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           {sousTraitant.contrat.avenants &&
                             sousTraitant.contrat.avenants.map((avenant) => (
                               <TableRow key={avenant.id}>
-                                <TableCell>
+                                <TableCell
+                                  onClick={() =>
+                                    handlePreviewAvenant(avenant.id)
+                                  }
+                                  sx={{
+                                    cursor: "pointer",
+                                    color: "primary.main",
+                                    "&:hover": {
+                                      textDecoration: "underline",
+                                    },
+                                  }}
+                                >
                                   Avenant n°{avenant.numero}
                                 </TableCell>
                                 <TableCell>{avenant.description}</TableCell>

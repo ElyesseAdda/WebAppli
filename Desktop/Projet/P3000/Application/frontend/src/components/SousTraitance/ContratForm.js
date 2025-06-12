@@ -7,6 +7,7 @@ import {
   DialogTitle,
   FormControl,
   Grid,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -27,6 +28,8 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
     nom_operation: chantier?.chantier_name || "",
     montant_operation: "",
     type_contrat: "NETTOYAGE",
+    nom_maitre_ouvrage: "",
+    nom_maitre_oeuvre: "",
   });
 
   useEffect(() => {
@@ -73,6 +76,16 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
       return;
     }
 
+    if (!formData.nom_maitre_ouvrage) {
+      alert("Erreur: Le nom du maître d'ouvrage est requis");
+      return;
+    }
+
+    if (!formData.nom_maitre_oeuvre) {
+      alert("Erreur: Le nom du maître d'œuvre est requis");
+      return;
+    }
+
     try {
       const contratData = {
         ...formData,
@@ -84,6 +97,8 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
         adresse_prestation: formData.adresse_prestation.trim(),
         nom_operation: formData.nom_operation.trim(),
         duree: formData.duree.trim(),
+        nom_maitre_ouvrage: formData.nom_maitre_ouvrage.trim(),
+        nom_maitre_oeuvre: formData.nom_maitre_oeuvre.trim(),
       };
 
       console.log("Données envoyées:", contratData);
@@ -142,6 +157,25 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
               onChange={handleChange}
               fullWidth
             />
+
+            <TextField
+              name="nom_maitre_ouvrage"
+              label="Nom du maître d'ouvrage"
+              value={formData.nom_maitre_ouvrage}
+              onChange={handleChange}
+              fullWidth
+              required
+            />
+
+            <TextField
+              name="nom_maitre_oeuvre"
+              label="Nom du maître d'œuvre"
+              value={formData.nom_maitre_oeuvre}
+              onChange={handleChange}
+              fullWidth
+              required
+            />
+
             <Grid item xs={12} sm={6}>
               <LocalizationProvider
                 dateAdapter={AdapterDateFns}
@@ -167,37 +201,37 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
                 required
               />
             </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Adresse de la prestation"
-                name="adresse_prestation"
-                value={formData.adresse_prestation}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Nom de l'opération"
-                name="nom_operation"
-                value={formData.nom_operation}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Montant de l'opération"
-                name="montant_operation"
-                type="number"
-                value={formData.montant_operation}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
+
+            <TextField
+              fullWidth
+              label="Adresse de la prestation"
+              name="adresse_prestation"
+              value={formData.adresse_prestation}
+              onChange={handleChange}
+              required
+            />
+
+            <TextField
+              fullWidth
+              label="Nom de l'opération"
+              name="nom_operation"
+              value={formData.nom_operation}
+              onChange={handleChange}
+              required
+            />
+
+            <TextField
+              fullWidth
+              label="Montant de l'opération"
+              name="montant_operation"
+              type="number"
+              value={formData.montant_operation}
+              onChange={handleChange}
+              required
+              InputProps={{
+                endAdornment: <InputAdornment position="end">€</InputAdornment>,
+              }}
+            />
           </Box>
         </DialogContent>
         <DialogActions>

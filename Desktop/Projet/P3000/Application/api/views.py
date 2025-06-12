@@ -4777,3 +4777,28 @@ class AvenantSousTraitanceViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(contrat_id=contrat_id)
         return queryset
 
+def preview_contrat(request, contrat_id):
+    try:
+        contrat = ContratSousTraitance.objects.get(id=contrat_id)
+        
+        # Sélectionner le bon template selon le type de contrat
+        if contrat.type_contrat == 'BTP':
+            template_name = 'sous_traitance/contrat_btp.html'
+        else:
+            template_name = 'sous_traitance/contrat_nettoyage.html'
+        
+        return render(request, template_name, {'contrat': contrat})
+    except ContratSousTraitance.DoesNotExist:
+        return HttpResponse("Contrat non trouvé", status=404)
+
+def preview_avenant(request, avenant_id):
+    try:
+        avenant = AvenantSousTraitance.objects.select_related('contrat').get(id=avenant_id)
+        if avenant.contrat.type_contrat == 'BTP':
+            template_name = 'sous_traitance/avenant_btp.html'
+        else:
+            template_name = 'sous_traitance/avenant_nettoyage.html'
+        return render(request, template_name, {'avenant': avenant})
+    except AvenantSousTraitance.DoesNotExist:
+        return JsonResponse({'error': 'Avenant non trouvé'}, status=404)
+

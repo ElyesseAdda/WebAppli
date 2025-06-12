@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Contrat de Sous-Traitance BTP</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        font-size: 14px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .logo img {
+        width: 100px;
+        height: auto;
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .title {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        text-decoration: underline;
+        margin-top: 100px;
+        color: red;
+        text-decoration-color: red;
+        text-underline-offset: 3px;
+      }
+      .section {
+        margin-bottom: 20px;
+      }
+      .section-title {
+        font-weight: bold;
+        margin-bottom: 20px;
+        font-size: 18px;
+        color: red;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-align: center;
+      }
+      .section-annexes {
+        font-weight: bold;
+        margin-bottom: 20px;
+        margin-top: 300px;
+        font-size: 18px;
+        color: red;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-align: center;
+      }
+      .titre-article {
+        font-weight: bold;
+        text-decoration: underline;
+        text-decoration-color: black;
+        font-size: 16px;
+      }
+      .signature-section {
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .signature-box {
+        width: 45%;
+        border-top: 1px solid black;
+        padding-top: 10px;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+      th,
+      td {
+        border: 1px solid black;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+      }
+      .indented-line {
+        margin-left: 40px;
+        display: block;
+      }
+      li {
+        margin-left: 40px;
+        display: block;
+        decoration: none;
+        font-size: 14px;
+      }
+      .print-footer {
+        margin-top: 300px;
+        text-align: left;
+      }
+      .print-footer img {
+        width: 150px;
+        height: auto;
+        display: block;
+      }
+      @media print {
+        @page {
+          margin: 2cm;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo">
+      <img src="/static/frontend/src/img/logo.png" alt="Logo P3000" />
+    </div>
+
+    <div class="content-wrapper">
+      <div class="header">
+        <h1 class="title">CONTRAT DE SOUS-TRAITANCE BTP</h1>
+      </div>
+
+      <div class="section">
+        <p>Entre les soussignés :</p>
+        <p>
+          La société
+          <span style="font-weight: bold; color: rgba(27, 120, 188, 1)"
+            >SARL PEINTURE 3000</span
+          >, au capital de 20 000,00€, dont le siège social est situé au 24,
+          Boulevard Gay Lussac, immeuble énergie, 13014 – Marseille, immatriculée
+          au RCS de Marseille 532 875 317, représentée par Amara MAJRI,
+        </p>
+        <p>Ci-après désignée « l'entreprise principal »</p>
+        <p>d'une part,</p>
+        <p>
+          Et la société
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.entreprise }}</span
+          >, au capital de
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.capital }}€</span
+          >, dont le siège social est situé au
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.adresse }}</span
+          >,
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.code_postal }} -
+          </span>
+
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.ville }}</span
+          >, immatriculée au
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.ville_rcs }}</span
+          >
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.numero_rcs }}</span
+          >, représentée par
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.sous_traitant.representant }}</span
+          >,
+        </p>
+        <p>Ci-après désigné « le sous-traitant »</p>
+      </div>
+
+      <div class="section">
+        <p>D'une part</p>
+        <p>
+          Les parties déclarent et reconnaissent que les négociations ayant
+          précédé la conclusion dela présente convention ont été conduites de
+          bonne foi. Elles reconnaissent avoir bénéficié,pendant la phase
+          précontractuelle de négociations, de toutes les informations nécessaires
+          etutiles pour leur permettre de s'engager en toute connaissance de cause
+          et s'êtremutuellement communiqué toute information susceptible de
+          déterminer leur consentement et qu'elles ne pouvaient légitimement
+          ignorer.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">IL A ÉTÉ CONVENU CE QUI SUIT :</div>
+        <p class="titre-article"><strong>Article 1 - Objet </strong></p>
+        <p>
+          Par les présentes, le sous-traitant s'engage à réaliser pour le compte
+          de l'entrepreneur principal, les travaux suivants :
+        </p>
+        <p>
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.description_prestation }}</span
+          >
+        </p>
+        
+          Les travaux seront réalisés à l'endroit suivant :
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.adresse_prestation }}</span
+          ><br>
+          Nom de l'opérations :
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.nom_operation }}</span
+          ><br>
+          Nom du maitre de l'ouvrage :
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.nom_maitre_ouvrage }}</span
+          ><br>
+        
+          Nom de l'opérations :
+          <span style="font-weight: bold; color: black"
+            >{{ contrat.nom_maitre_oeuvre }}</span
+          >
+        
+        </p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article"><strong>Article 2 - Durée du contrat et réalisation</strong></p>
+        <p>La date prévue pour le début des travaux confiés au sous-traitant est fixée au : <span style="font-weight: bold; color: black">{{ contrat.date_debut|date:"d/m/y" }}</span>
+        <br>La durée prévisible des travaux est estimée à : <span style="font-weight: bold; color: black">{{ contrat.duree }}</span> <p>
+        
+      </div>
+
+      <div class="section">
+        <p class="titre-article"><strong>Article 3 - Conditions financières</strong></p>
+        <p>
+          En contrepartie des prestations assurées par le sous-traitant au bénéfice de l'entrepreneur principal, ce dernier versera au sous-traitant la rémunération suivante : </p>
+
+            <span class="indented-line">- Une somme forfaitaire : <span style="font-weight: bold; color: black"> {{ contrat.montant_operation }} € HT </span>.</span>
+        
+            <span class="indented-line">- Aucune TVA ne doit être facturée par le sous-traitant réélisant des travaux construction, de réparation, de nettoyage, d'entretien, de transformation et de démolition d'un bien immobilier (art. 283, 2 nonies du code général des impôts).</span>
+        <p>
+        <p>
+          Les sommes dues au sous-traitant lui seront réglées par virement ou chèque. 
+
+          <br>Les délais de paiement sont les suivants : 
+            <span class="indented-line">- Situation envoyée entre les 20 et 25 de chaque mois sur les travaux réalisés sur le mois ; </span>
+        
+            <span class="indented-line">- Paiement à 45 jours après réception de la facture pour un paiement au 10 du mois + 1 </span>
+        <p>
+      </div>
+
+      <div class="section">
+        <p class="titre-article"><strong>Article 4 - Calendrier et délais de livraisons</strong></p>
+        <p>
+          Les parties se réservent le droit de mettre en place d'un commun accord un calendrier d'avancement des travaux. Ce calendrier devra être signé par les parties et ne pourra être modifiée que par voie d'avenant. 
+        </p>
+        <p>
+          Ces délais constitueront des délais de rigueur, tout retard dans l'exécution des travaux donnera automatiquement lieu, sans formalité particulière ni mise en demeure préalable, à l'application des pénalités de retard définies dans ce même document « calendrier de réalisation des travaux ».       </p>
+        <p>
+          Ce document précisera les délais de livraison ainsi que les pénalités de retard échéant.      </p>
+        <p>
+          En l'absence d'un tel document et en cas de retard dans la réalisation des travaux, le sous-traitant sera redevable de pénalités de retard dont le taux est fixé comme suit : 40,00€. Ces pénalités ne seront pas dues si le retard est dû au donneur d'ordre ou si les travaux ont di être interrompues pour des raisons indépendantes de la volonté du sous-traitant. 
+
+        </div>
+
+      <div class="section">
+        <p class="titre-article"><strong>Article 5 - Obligations du sous-traitant</strong></p>
+        <p>Le sous-traitant s'engage à apporter tous les soins et toutes les diligences nécessaires à la réalisation des travaux confiés, objet du présent contrat, en respectant les règles de l'art ainsi que les éventuelles prescriptions légales et réglementaires. Il oblige également à suivre scrupuleusement les instructions qui lui seront donnés par l'entrepreneur principal. </p>
+        <p>Le sous-traitant s'engage à signaler sans délai à l'entrepreneur principal, tout défaut ou anomalie qu'il pourrait rencontrer lors l'exécution du présent contrat, en précisant si possible, les moyens à employer ou les adaptions à apporter pour y remédier. </p>
+        <p>Il s'oblige également à formuler toutes observations qui lui paraitraient utiles ou nécessaire à ce titre et à rendre compte de toutes les contraintes ou difficultés liées à l'exécution du présent contrat. </p>
+        <p>Le sous-traitant assumera en sa qualité d'entrepreneur d'indépendant, toutes les charges liées à son activité et relatives à l'exécution du présent contrat, notamment, la fourniture de matériaux et matériel, l'organisation, le paiement des impôts liés, et s'il intervient avec des salariés, le recrutement et la rémunération du personnel et de la main d'œuvre nécessaires. </p>
+        <p>Pour l'exécution du contrat, s'il intervient avec des salariés, le sous-traitant établi ou non sur le territoire national est tenu de faire porter en permanence, sur le chantier, par ses salariés et les intérimaires auxquels il a recours, la carte d'identification professionnelle sécurisée délivrée par l'Union des caisses de France congés intempéries BTP (ou l'attestation provisoire valant carte d'identification professionnelle). À tout moment pendant l'exécution du marché, l'entrepreneur principal pourra procéder à la vérification des cartes détenues par les salariés et intérimaires du sous-traitant auquel il a recours ou par ceux de ses sous-traitants éventuels. A cet effet, le sous-traitant doit informer son personnel de cette possibilité de vérification. En cas de non-présentation ou de refus de présentation de la carte d'identification professionnelle sécurisée, l'entrepreneur principal mettra en demeure le sous-traitant par tout moyen permettant de conférer date certaines ç cette mise en demeure, de régulariser la situation. Dans l'attente de cette régularisation, les salariés ou intérimaires concernés n'ont pas accès au chantier. Le cas échéant, le contrat pourra être résilié. </p>
+        
+      </div>
+
+      <div class="section">
+        <p class="titre-article"><strong>Article 6 - Responsabilité et assurances du sous-traitant</strong></p>
+        <p>Le sous-traitant est responsable de ses prestations et il garantit à l'entrepreneur principal la bonne exécution du présent contrat. </p>
+        <p>Le sous-traitant s'engage à souscrire une police d'assurance garantissant sa responsabilité civile professionnelle pour toutes les activités et obligations découlant du présent contrat. </p>
+        <p>Le sous-traitant s'engage à maintenir cette police pendant toute la durée du présent contrat et en apporter la preuve sur demande à l'entrepreneur principal. Toute modification, suspension ou résiliation de cette police d'assurance, pour quelque case que ce soit, devra être signalée à l'entrepreneur principal dans les plus brefs délais. </p>
+        <p>Le sous-traitant reconnait avoir souscrit une assurance décennale. Une copie de cette assurance devra être annexé au présent contrat. </p>
+        
+      </div>
+
+      <div class="section">
+        <p class="titre-article"><strong>Article 7 - Obligations de l'entrepreneur principal informations et assistance</strong></p>
+        <p>L'entrepreneur principal s'engage à fournir au sous-traitant toutes les informations et documentations, ainsi que toute l'assistance raisonnablement nécessaire pour lui permettre d'exécuter dans les bonnes conditions les prestations objets du présent contrat.  En particulier, l'entrepreneur principal s'engage à transmettre dès réception au sous-traitant les comptes rendus des réunions de chantier qui le concernent. Il oblige à tenir compte de toutes les observations qui pourraient être formulées par le sous-traitant. L'entrepreneur principal s'oblige à informer le sous-traitant de toute nouvelle commande, le cas échant, dans un délai raisonnable en tenant compte des délais de réalisation des nouveaux travaux demandés. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 8 - Exécutions de bonne foi</strong></p>
+        <p>Les parties s'engagent, pendant toute la durée du présent accord, à coopérer afin de réaliser dans les délais impartis l'objet du présent accord tel quez définit à l'article 1. </p>
+        <p>Les parties s'engagent à exécuter le présent accord de bonne foi, à ce titre elle s'engage à informer l'autre Partie lorsque dans le cadre l'exécution du présent du présent accord, l'une ou l'autre d'entre elles se trouve face à une difficulté ou à un différend.  </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 9 - Attestation de vigilance</strong></p>
+        <p>Le sous-traitant communique à son co-contractant une attestation de vigilance, délivrée par l'Urssaf, et justifiant du respect de ses obligations en matière sociale.  </p>
+        <p>S'il intervient avec des salariés, le sous-traitant s'engage formellement envers l'entrepreneur principal au respect des obligations qui lui incombent en tant qu'employeur, notamment au regard des déclarations sociales et fiscales. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 10 -  Santé et sécurité au travail</strong></p>
+        <p>Le chantier est soumis à un Plan Général de Coordination en matière de Sécurité et de Protection de la Santé (PGCSPS). </p>
+        <p>L'entrepreneur principal remet au sous-traitant un exemplaire du PGCSPS.  </p>
+        <p>Le sous-traitant s'engage à remettre, avant le démarrage de ses travaux, au coordonnateur SPS un Plan Particulier de Sécurité et de Protection de la Santé (PPSPS), dans un délai de 30 jours (8 jours pour les travaux de second œuvre) après la réception du contrat de sous-traitance signé par l'entrepreneur principal. Le délai de 30 jours (ou de 8 jours) peut être abrégé si le sous-traitant remet un PPSPS satisfaisant et que le coordonnateur l'accepte et autorise le début des travaux.  </p>
+        <p>S'il fait intervenir des salariés, le sous-traitant veille à la sécurité de ses travailleurs amenés à travailler sur le chantier concerné. Il est tenu de prendre ou de faire prendre toutes dispositions afin d'assurer la sécurité du chantier, l'hygiène, la santé de ses travailleurs et la sécurité publique. </p>
+        <p>Le sous-traitant doit procéder ou faire procéder aux épreuves et vérifications réglementaires du matériel qu'il utilise sur le chantier, en particulier : échafaudages, garde-corps ou filets, engins de levage, installations électriques. </p>
+        <p>Le sous-traitant doit exercer une surveillance continue sur le chantier à l'égard de son personnel et de celui qu'il a sous son autorité pour leur propre sécurité et celle de tiers du fait des travaux. </p>
+        <p>Le sous-traitant est responsable de tous les accidents ou dommages causés à toute personne résultant d'une faute dans l'exécution de ses travaux ou du fait de ses travailleurs. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 11 - Confidentialité  </strong></p>
+        <p>Le sous-traitant évacue et traite ses déchets selon les préconisations de l'entrepreneur principal.  </p>
+        <p>Le coût de l'évacuation et du traitement des déchets du sous-traitant est compris dans les conditions financières telles que déterminées à l'article 3 du présent contrat. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 12 - Obligations de l'entrepreneur principal informations et assistance</strong></p>
+        <p>Les parties garantissent la confidentialité des informations et documents qui leur sont communiqués, par quelque moyen ou support que ce soit, dans le cadre du présent contrat. Les parties garantissent la confidentialité sur les données recueillies auprès des clients à l'égard de tiers non autorisés. </p>
+        <p>Dans l'hypothèse ou l'une des parties serait dans l'obligation de communiquer tout ou partie desdites informations sur demande d'une autorité publique ou administrative, elle s'engage préalablement à toute communication à aviser l'autre Partie dans un délai de 5 jours par lettre recommandée avec accusé de réception suivant la demande formulée par toute autorité publique ou administrative.  </p>
+        <p>Le sous-traitant s'engage à la confidentialité la plus totale, en s'interdisant de divulguer, directement ou indirectement, quelques informations, connaissances ou savoir faire que ce soient concernant son cocontractant et ses modalités de fonctionnement, auxquels il aurait pu avoir accès dans le cadre de l'exécution du présent contrat, à moins que lesdites informations, connaissance ou savoir faire ne soient tombés dans le domaine public ou que leur divulgation soit rendue nécessaire en vertu d'un règlement particulier ou d'une injonction administrative ou judicaire. </p>
+        <p>Il s'engage également à faire respecter cette obligation par tous les membres de son personnel concernés, dont il se porte fort à l'égard de l'entrepreneur principal.  </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 13 - Protection des données </strong></p>
+        <p>Les parties sont respectivement tenues au respect des règles relatives à la protection des données à caractère personnel auxquelles elles sont accès dans le cadre de l'exécution du contrat, conformément aux dispositions légales et règlementaires applicables.  </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 14 - Imprévision</strong></p>
+        <p>En cas de changement de circonstances imprévisibles lors de la conclusion du contrat, conformément aux dispositions de l'article 1195 du Code civil, la Partie qui n'a pas accepté d'assumer un risque d'exécution excessivement onéreuse peut demander une renégociation du contrat à l'autre Partie. </p>
+        <p>Cette demande devra faire état des difficultés rencontrées et devra être notifiée à l'autre Partie par lettre recommandée avec accusé de réception</p>
+        <p>En cas de refus ou d'échec de la renégociation, les parties peuvent convenir de la résolution du contrat, à la date et aux conditions qu'elles déterminent, ou demander d'un commun accord au juge de procéder à son adaptation. A défaut d'accord dans un délai raisonnable, le juge peut, à la demande d'une partie, réviser le contrat ou y mettre fin, à la date et aux conditions qu'il fixe. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 15 - Résolution du contrat</strong></p>
+        <p>En cas de manquement grave de l'une des Parties à ses obligations, constaté par courrier recommandé avec demande d'avis de réception valant mise en demeure d'y remédier sous un délai de préavis de trente (30) jours, l'autre Partie aura la faculté de notifier à l'issue dudit délai si le manquement subsiste, par courrier recommandé avec demande d'avis de réception ; sa décision de résilier le présent contrat sans préjudice des dommages et intérêts auxquels cette dernière pourra prétendre du fait des manquement constatés.  </p>
+        <p>Cette résiliation interviendra alors de plein droit et sans formalité à la date de réception de ladite notification de résiliation. </p>
+        <p>La résiliation de plein droit lorsque l'une des deux parties ne respecte pas ses obligations : </p>
+
+          <p  class="indented-line"> - Le sous-traitant s'engage à réaliser les travaux qui lui sont confiés en respectant le calendrier d'exécution des tâches prévues. Il est également tenu d'informer le donneur d'ordre sur les éventuelles difficultés rencontrées dans le cadre de ses travaux. Enfin, le sous-traitant a une obligation de conseil envers le donneur d'ordre et il peut dans certains cas être tenu d'une obligation de résultat. </p>
+          
+         <p> La résiliation lorsque le contrat de sous-traitance est lié à un autre contrat (dit contrat principal) liant le donneur d'ordre à un maître d'ouvrage et que ce dernier prend fin. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 16 - Force majeure</strong></p>
+        <p>Les parties ne pourront être tenues pour responsables si la non-exécution ou le retard dans l'exécution de l'une de leurs obligations, telles que décrites dans les présentes découles d'un cas de force, au sens de l'article 1218 du code civil. </p>
+        <p>L'entrepreneur principal s'engage à fournir au sous-traitant toutes les informations et documentations, ainsi que toute l'assistance raisonnablement nécessaire pour lui permettre d'exécuter dans les bonnes conditions les prestations objets du présent contrat.  En particulier, l'entrepreneur principal s'engage à transmettre dès réception au sous-traitant les comptes rendus des réunions de chantier qui le concernent. Il oblige à tenir compte de toutes les observations qui pourraient être formulées par le sous-traitant. L'entrepreneur principal s'oblige à informer le sous-traitant de toute nouvelle commande, le cas échant, dans un délai raisonnable en tenant compte des délais de réalisation des nouveaux travaux demandés. </p>
+        <p>Tout évènement échappant au contrôle des Paries, qui ne peuvent être raisonnablement prévue lors de la conclusion du contrat et dont les effets ne peuvent être évité par des mesures appropriées, est considéré comme empêchant l'exécution de son obligation par le débiteur et entraine la suspension du contrat. </p>
+        <p>La partie qui invoque les circonstances visées ci-dessus doit avertir immédiatement l'autre partie de leur survenance, ainsi que de leur disparition. </p>
+        <p>Dans le cas où les circonstances visées ci-dessus se prolongent plus de trois (3) mois, chaque Partie peut demander la résiliation du contrat.  </p>
+        <p>Si l'empêchement est définitif, le contrat est résolu de plein droit et les parties sont libérées de leurs obligations dans les circonstances prévues aux articles 1351 et 1351-1 du Code civil. </p>
+        <p>Aucune des deux parties ne sera tenue responsable du retard constaté en raison des évènements de force majeure. </p>
+        
+      </div>
+      <div class="section">
+        <p class="titre-article"><strong>Article 17 - Règlement des litiges / Loi applicable compétente </strong></p>
+        <p>À tout moment, les entreprises ont la faculté de régler à l'amiable leurs litiges, par la conciliation, la médiation ou l'arbitrage. Par défaut, les tribunaux du lieu d'exécution de la prestation seront compétents pour connaître du différent. Le droit applicable au présent contrat est le droit français et les tribunaux compétents sont les tribunaux français.  </p>
+        
+        
+      </div>
+
+      <div class="signature-section">
+        <div class="signature-box">
+          <p>L'entrepreneur principal <br>
+          La société <span style="color:rgba(27, 120, 188, 1); font-weight: bold">PEINTURE 3000 </span><br>
+          Représenté par <span style="color: black; font-weight: bold">Amara MAJRI</span><br>
+        </div>
+        <div class="signature-box">
+          <p>Fait à Marseille, le <span style="color: black; font-weight: bold">{{ contrat.date_creation|date:"d/m/Y" }}</span></p>
+          <p>Le sous-traitant<br>
+          La société <span style="color:black; font-weight: bold">{{ contrat.sous_traitant.entreprise }}</span><br>
+          Représenté par <span style="color: black; font-weight: bold">{{ contrat.sous_traitant.representant }}</span><br></p>    
+        </div>
+      </div>
+      <div class="section-annexes"> ANNEXES AU PRESENT CONTRAT</div>
+      <li> -    Copie assurance décennale 2024</li>
+      <li> -    Attestation de vigilance délivrée par l'Urssaf</li> 
+      <li> -    Attestation fiscale</li>
+      <li> -    KBIS</li>
+      <li> -    DEVIS</li>
+      <li> -    RIB</li>
+      <li> -    CIBTP</li>
+      
+    </div>
+
+    <div class="print-footer">
+      <img src="/static/frontend/src/img/Info p3000.png" alt="Tampon Info P3000" />
+    </div>
+
+  </body>
+</html>

@@ -835,6 +835,8 @@ class ContratSousTraitance(models.Model):
     adresse_prestation = models.CharField(max_length=255)
     nom_operation = models.CharField(max_length=255)
     montant_operation = models.DecimalField(max_digits=10, decimal_places=2)
+    nom_maitre_ouvrage = models.CharField(max_length=255, verbose_name="Nom du maître d'ouvrage")
+    nom_maitre_oeuvre = models.CharField(max_length=255, verbose_name="Nom du maître d'œuvre")
     date_creation = models.DateField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
 

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Contrat de Sous-Traitance Nettoyage</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        line-height: 1.6;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .logo {
+        max-width: 200px;
+        margin-bottom: 20px;
+      }
+      .title {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        text-decoration: underline;
+      }
+      .section {
+        margin-bottom: 20px;
+      }
+      .section-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      .signature-section {
+        margin-top: 50px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .signature-box {
+        width: 45%;
+        border-top: 1px solid black;
+        padding-top: 10px;
+        margin-top: 50px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      th,
+      td {
+        border: 1px solid black;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <img
+        src="/static/frontend/src/img/logo.png"
+        alt="Logo P3000"
+        class="logo"
+      />
+      <h1>CONTRAT DE SOUS-TRAITANCE NETTOYAGE</h1>
+    </div>
+
+    <div class="section">
+      <div class="section-title">ENTRE LES SOUSSIGNÉS :</div>
+      <p>
+        La SARL PEINTURE 3000, située au 24-26 Boulevard Gay Lussac, Immeuble
+        énergie, 13014 Marseille, immatriculée au RCS de Marseille sous le
+        numéro 352 875 317, représentée par [NOM DU REPRÉSENTANT LÉGAL] en
+        qualité de [QUALITÉ],
+      </p>
+      <p>Ci-après dénommée "le Maître d'ouvrage"</p>
+      <p>ET</p>
+      <p>
+        {{ contrat.sous_traitant.entreprise }}, située au {{
+        contrat.sous_traitant.adresse }}, immatriculée au RCS de {{
+        contrat.sous_traitant.ville_rcs }} sous le numéro {{
+        contrat.sous_traitant.numero_rcs }}, représentée par {{
+        contrat.sous_traitant.nom_representant }} en qualité de {{
+        contrat.sous_traitant.qualite_representant }},
+      </p>
+      <p>Ci-après dénommé "le Sous-traitant"</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">IL A ÉTÉ CONVENU CE QUI SUIT :</div>
+      <p><strong>Article 1 - Objet du contrat</strong></p>
+      <p>
+        Le présent contrat a pour objet la réalisation des prestations de
+        nettoyage suivantes :
+      </p>
+      <p>{{ contrat.description_prestation }}</p>
+    </div>
+
+    <div class="section">
+      <p><strong>Article 2 - Lieu d'exécution</strong></p>
+      <p>Les prestations seront réalisées sur le site suivant :</p>
+      <p>Nom du chantier : {{ contrat.chantier.chantier_name }}</p>
+      <p>
+        Adresse : {{ contrat.chantier.rue }}, {{ contrat.chantier.code_postal }}
+        {{ contrat.chantier.ville }}
+      </p>
+    </div>
+
+    <div class="section">
+      <p><strong>Article 3 - Durée et fréquence</strong></p>
+      <p>
+        Le présent contrat prend effet à compter du {{
+        contrat.date_debut|date:"d/m/Y" }} et s'achève le {{ contrat.duree }}.
+      </p>
+      <p>La fréquence des prestations est la suivante :</p>
+      <ul>
+        <li>Nettoyage quotidien</li>
+        <li>Nettoyage hebdomadaire</li>
+        <li>Nettoyage mensuel</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <p><strong>Article 4 - Prix</strong></p>
+      <p>
+        Le montant total de la prestation s'élève à {{
+        contrat.montant_operation|floatformat:2 }} € HT.
+      </p>
+    </div>
+
+    <div class="section">
+      <p><strong>Article 5 - Conditions de paiement</strong></p>
+      <p>Le paiement s'effectuera selon les modalités suivantes :</p>
+      <ul>
+        <li>Facturation mensuelle</li>
+        <li>Paiement à 30 jours</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <p><strong>Article 6 - Obligations du Sous-traitant</strong></p>
+      <p>Le Sous-traitant s'engage à :</p>
+      <ul>
+        <li>Fournir un personnel qualifié et formé</li>
+        <li>Respecter les horaires convenus</li>
+        <li>Utiliser des produits respectueux de l'environnement</li>
+        <li>Assurer la sécurité du personnel</li>
+        <li>Respecter les normes d'hygiène en vigueur</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <p><strong>Article 7 - Obligations du Maître d'ouvrage</strong></p>
+      <p>Le Maître d'ouvrage s'engage à :</p>
+      <ul>
+        <li>Fournir les accès nécessaires</li>
+        <li>Effectuer les paiements selon les modalités convenues</li>
+        <li>Signaler tout problème ou anomalie</li>
+      </ul>
+    </div>
+
+    <div class="signature-section">
+      <div class="signature-box">
+        <p>Pour le Maître d'ouvrage</p>
+        <p>SARL PEINTURE 3000</p>
+        <p>Signature précédée de la mention "Lu et approuvé"</p>
+      </div>
+      <div class="signature-box">
+        <p>Pour le Sous-traitant</p>
+        <p>{{ contrat.sous_traitant.entreprise }}</p>
+        <p>Signature précédée de la mention "Lu et approuvé"</p>
+      </div>
+    </div>
+  </body>
+</html>

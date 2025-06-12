@@ -56,7 +56,10 @@ from .views import (
     SousTraitantViewSet,
     ContratSousTraitanceViewSet,
     AvenantSousTraitanceViewSet,
+    preview_contrat,
+    preview_avenant,
 )
+
 
 router = DefaultRouter()
 router.register(r'chantier', ChantierViewSet, basename='chantier')
@@ -167,4 +170,7 @@ urlpatterns = [
         'get': 'list',
         'post': 'create'
     }), name='contrat-avenants'),
+    
+    path('preview-contrat/<int:contrat_id>/', preview_contrat, name='preview_contrat'),
+    path('preview-avenant/<int:avenant_id>/', preview_avenant, name='preview_avenant'),
 ]
