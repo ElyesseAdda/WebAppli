@@ -58,6 +58,7 @@ from .views import (
     AvenantSousTraitanceViewSet,
     preview_contrat,
     preview_avenant,
+    get_taux_facturation_data,
 )
 
 
@@ -173,4 +174,5 @@ urlpatterns = [
     
     path('preview-contrat/<int:contrat_id>/', preview_contrat, name='preview_contrat'),
     path('preview-avenant/<int:avenant_id>/', preview_avenant, name='preview_avenant'),
+    path('chantier/<int:chantier_id>/taux-facturation/', get_taux_facturation_data, name='taux-facturation-data'),
 ]

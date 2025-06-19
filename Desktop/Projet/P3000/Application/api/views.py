@@ -4813,3 +4813,82 @@ def preview_avenant(request, avenant_id):
     except AvenantSousTraitance.DoesNotExist:
         return JsonResponse({'error': 'Avenant non trouvé'}, status=404)
 
+@api_view(['GET'])
+def get_taux_facturation_data(request, chantier_id):
+    """
+    Récupère les données nécessaires pour l'affichage du taux de facturation
+    """
+    try:
+        chantier = Chantier.objects.get(id=chantier_id)
+        situations = Situation.objects.filter(chantier=chantier).order_by('-annee', '-mois')
+
+        montant_total = 0
+        montant_non_envoye = 0
+        montant_en_attente = 0
+        montant_retard = 0
+        montant_paye = 0
+
+        situations_data = []
+        today = date.today()
+
+        for situation in situations:
+            montant = float(situation.montant_apres_retenues or 0)
+            montant_total += montant
+
+            # Calcul de la catégorie
+            if not situation.date_envoi:
+                categorie = 'non_envoye'
+                montant_non_envoye += montant
+            elif situation.date_paiement_reel:
+                categorie = 'paye'
+                montant_paye += montant
+            elif situation.date_envoi and situation.delai_paiement:
+                date_limite = situation.date_envoi + timedelta(days=situation.delai_paiement)
+                if today > date_limite:
+                    categorie = 'retard'
+                    montant_retard += montant
+                else:
+                    categorie = 'en_attente'
+                    montant_en_attente += montant
+            else:
+                categorie = 'en_attente'
+                montant_en_attente += montant
+
+            situation_data = {
+                'id': situation.id,
+                'numero_situation': situation.numero_situation,
+                'mois': situation.mois,
+                'annee': situation.annee,
+                'montant_apres_retenues': montant,
+                'date_envoi': situation.date_envoi,
+                'delai_paiement': situation.delai_paiement,
+                'date_paiement_reel': situation.date_paiement_reel,
+                'statut': situation.statut,
+                'categorie': categorie,
+            }
+            situations_data.append(situation_data)
+
+        pourcentages = {
+            'non_envoye': (montant_non_envoye / montant_total * 100) if montant_total > 0 else 0,
+            'en_attente': (montant_en_attente / montant_total * 100) if montant_total > 0 else 0,
+            'retard': (montant_retard / montant_total * 100) if montant_total > 0 else 0,
+            'paye': (montant_paye / montant_total * 100) if montant_total > 0 else 0,
+        }
+
+        return Response({
+            'montant_total': montant_total,
+            'montants': {
+                'non_envoye': montant_non_envoye,
+                'en_attente': montant_en_attente,
+                'retard': montant_retard,
+                'paye': montant_paye,
+            },
+            'pourcentages': pourcentages,
+            'situations': situations_data
+        })
+
+    except Chantier.DoesNotExist:
+        return Response({'error': 'Chantier non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+

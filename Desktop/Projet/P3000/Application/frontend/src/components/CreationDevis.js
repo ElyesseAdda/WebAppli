@@ -25,6 +25,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FaEyeSlash } from "react-icons/fa";
 import { FiPlusCircle } from "react-icons/fi";
 import { RiPencilFill } from "react-icons/ri";
+import { useLocation } from "react-router-dom";
 import ChantierForm from "./ChantierForm";
 import ClientInfoModal from "./ClientInfoModal";
 import ClientTypeModal from "./ClientTypeModal";
@@ -121,10 +122,20 @@ const CreationDevis = () => {
   // Ajouter cet état pour gérer les termes de recherche par sous-partie
   const [searchTerms, setSearchTerms] = useState({});
 
+  const location = useLocation();
+
   // Charger les chantiers
   useEffect(() => {
     fetchChantiers();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const chantierId = params.get("chantier_id");
+    if (chantierId) {
+      setSelectedChantierId(Number(chantierId));
+    }
+  }, [location.search]);
 
   const fetchChantiers = async () => {
     try {

@@ -990,6 +990,9 @@ const TableauSuivi = () => {
     return montantDevis + montantAvenants;
   };
 
+  const params = new URLSearchParams(window.location.search);
+  const chantierId = params.get("chantier_id");
+
   // Ajouter le sélecteur de chantier en haut du composant
   return (
     <Box sx={{ width: "100%", p: 2 }}>

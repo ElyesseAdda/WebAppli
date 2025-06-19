@@ -1,18 +1,55 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   LinearProgress,
+  MenuItem,
+  Select,
+  TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import React, { useState } from "react";
-import { FaHandshake } from "react-icons/fa";
+import axios from "axios";
+import dayjs from "dayjs";
+import React, { useEffect, useState } from "react";
+import {
+  FaCheckCircle,
+  FaChevronDown,
+  FaClipboardList,
+  FaExclamationCircle,
+  FaFileInvoice,
+  FaHandshake,
+  FaHourglassHalf,
+  FaTable,
+} from "react-icons/fa";
+import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 
 const ChantierInfoTab = ({ chantierData, onUpdate }) => {
   const [openSousTraitance, setOpenSousTraitance] = useState(false);
+  const [tauxFacturationData, setTauxFacturationData] = useState(null);
+  const [loadingTaux, setLoadingTaux] = useState(true);
+  const [openModal, setOpenModal] = useState(false);
+  const [selectedSituation, setSelectedSituation] = useState(null);
+  const [dateEnvoi, setDateEnvoi] = useState(null);
+  const [delaiPaiement, setDelaiPaiement] = useState("");
+  const [openSituationModal, setOpenSituationModal] = useState(false);
+  const [devisChantier, setDevisChantier] = useState(null);
+  const [loadingDevis, setLoadingDevis] = useState(true);
+  const [openPaiementModal, setOpenPaiementModal] = useState(false);
+  const [selectedSituationPaiement, setSelectedSituationPaiement] =
+    useState(null);
+  const [montantRecu, setMontantRecu] = useState("");
+  const [datePaiementReel, setDatePaiementReel] = useState("");
 
   const handleSousTraitanceUpdate = () => {
     if (onUpdate) {
@@ -43,6 +80,172 @@ const ChantierInfoTab = ({ chantierData, onUpdate }) => {
     en_cours: 2,
     attente_signature: 3,
     refuses: 1,
+  };
+
+  useEffect(() => {
+    if (chantierData?.id) {
+      setLoadingTaux(true);
+      axios
+        .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
+        .then((res) => setTauxFacturationData(res.data))
+        .finally(() => setLoadingTaux(false));
+    }
+  }, [chantierData?.id]);
+
+  useEffect(() => {
+    if (chantierData?.id) {
+      setLoadingDevis(true);
+      axios
+        .get("/api/devisa/", {
+          params: {
+            chantier: chantierData.id,
+            devis_chantier: true,
+          },
+        })
+        .then((res) => {
+          setDevisChantier(
+            res.data && res.data.length > 0 ? res.data[0] : null
+          );
+        })
+        .catch(() => setDevisChantier(null))
+        .finally(() => setLoadingDevis(false));
+    }
+  }, [chantierData?.id]);
+
+  const MultiColorProgressBar = ({ pourcentages, montants }) => (
+    <Box
+      sx={{
+        display: "flex",
+        height: 16,
+        borderRadius: 8,
+        overflow: "hidden",
+        mb: 1,
+      }}
+    >
+      {/* Non envoyées */}
+      {pourcentages?.non_envoye > 0 && (
+        <Tooltip
+          title={`Non envoyées : ${montants.non_envoye.toLocaleString("fr-FR", {
+            style: "currency",
+            currency: "EUR",
+          })}`}
+        >
+          <Box
+            sx={{ width: `${pourcentages.non_envoye}%`, background: "#ff9800" }}
+          />
+        </Tooltip>
+      )}
+      {/* En attente paiement */}
+      {pourcentages?.en_attente > 0 && (
+        <Tooltip
+          title={`En attente paiement : ${montants.en_attente.toLocaleString(
+            "fr-FR",
+            { style: "currency", currency: "EUR" }
+          )}`}
+        >
+          <Box
+            sx={{ width: `${pourcentages.en_attente}%`, background: "#1976d2" }}
+          />
+        </Tooltip>
+      )}
+      {/* Retard de paiement */}
+      {pourcentages?.retard > 0 && (
+        <Tooltip
+          title={`Retard de paiement : ${montants.retard.toLocaleString(
+            "fr-FR",
+            { style: "currency", currency: "EUR" }
+          )}`}
+        >
+          <Box
+            sx={{ width: `${pourcentages.retard}%`, background: "#d32f2f" }}
+          />
+        </Tooltip>
+      )}
+      {/* Payées */}
+      {pourcentages?.paye > 0 && (
+        <Tooltip
+          title={`Payées : ${montants.paye.toLocaleString("fr-FR", {
+            style: "currency",
+            currency: "EUR",
+          })}`}
+        >
+          <Box sx={{ width: `${pourcentages.paye}%`, background: "#2e7d32" }} />
+        </Tooltip>
+      )}
+    </Box>
+  );
+
+  const handleOpenModal = (situation) => {
+    setSelectedSituation(situation);
+    setDateEnvoi(situation.date_envoi ? dayjs(situation.date_envoi) : null);
+    setDelaiPaiement(situation.delai_paiement || "");
+    setOpenModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setOpenModal(false);
+    setSelectedSituation(null);
+    setDateEnvoi(null);
+    setDelaiPaiement("");
+  };
+
+  const handleSaveDates = async () => {
+    if (!dateEnvoi || !delaiPaiement) return;
+    try {
+      await axios.patch(`/api/situations/${selectedSituation.id}/`, {
+        date_envoi: dateEnvoi,
+        delai_paiement: Number(delaiPaiement),
+      });
+      setOpenModal(false);
+      setSelectedSituation(null);
+      setDateEnvoi(null);
+      setDelaiPaiement("");
+      // Recharge les données
+      axios
+        .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
+        .then((res) => setTauxFacturationData(res.data));
+    } catch (error) {
+      alert("Erreur lors de la mise à jour des dates.");
+    }
+  };
+
+  const isRetardPaiement = (situation) => {
+    if (
+      situation.date_envoi &&
+      !situation.date_paiement_reel &&
+      situation.delai_paiement
+    ) {
+      const dateLimite = new Date(
+        new Date(situation.date_envoi).getTime() +
+          situation.delai_paiement * 24 * 60 * 60 * 1000
+      );
+      return new Date() > dateLimite;
+    }
+    return false;
+  };
+
+  const { montants, pourcentages, situations } = tauxFacturationData || {};
+
+  const getCategorieColor = (categorie) => {
+    switch (categorie) {
+      case "non_envoye":
+        return "#ff9800"; // orange
+      case "en_attente":
+        return "#1976d2"; // bleu
+      case "retard":
+        return "#d32f2f"; // rouge
+      case "paye":
+        return "#2e7d32"; // vert
+      default:
+        return "inherit";
+    }
+  };
+
+  const handleOpenPaiementModal = (situation) => {
+    setSelectedSituationPaiement(situation);
+    setMontantRecu(situation.montant_recu || "");
+    setDatePaiementReel(situation.date_paiement_reel || "");
+    setOpenPaiementModal(true);
   };
 
   return (
@@ -207,7 +410,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate }) => {
       </Card>
 
       {/* Bouton Sous-traitance */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
         <Button
           variant="contained"
           startIcon={<FaHandshake />}
@@ -221,6 +424,58 @@ const ChantierInfoTab = ({ chantierData, onUpdate }) => {
         >
           Gérer les sous-traitants
         </Button>
+        <Button
+          variant="contained"
+          startIcon={<FaClipboardList />}
+          color="success"
+          onClick={() => setOpenSituationModal(true)}
+          sx={{
+            backgroundColor: "#388e3c",
+            "&:hover": {
+              backgroundColor: "#2e7d32",
+            },
+          }}
+        >
+          Gérer les situations
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<FaFileInvoice />}
+          onClick={() => {
+            window.open(
+              `/CreationDevis?chantier_id=${chantierData?.id}`,
+              "_blank"
+            );
+          }}
+          sx={{
+            backgroundColor: "#ff9800",
+            color: "white",
+            "&:hover": {
+              backgroundColor: "#fb8c00",
+            },
+          }}
+        >
+          Créer un nouveau devis
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<FaTable />}
+          onClick={() => {
+            window.open(
+              `/TableauSuivi?chantier_id=${chantierData?.id}`,
+              "_blank"
+            );
+          }}
+          sx={{
+            backgroundColor: "#424242",
+            color: "white",
+            "&:hover": {
+              backgroundColor: "#212121",
+            },
+          }}
+        >
+          Afficher tableau suivi
+        </Button>
       </Box>
 
       {/* Modal de sous-traitance */}
@@ -229,6 +484,19 @@ const ChantierInfoTab = ({ chantierData, onUpdate }) => {
         onClose={() => setOpenSousTraitance(false)}
         chantierId={chantierData?.id}
         onUpdate={handleSousTraitanceUpdate}
+      />
+
+      {/* Situation Creation Modal */}
+      <SituationCreationModal
+        open={openSituationModal}
+        onClose={() => setOpenSituationModal(false)}
+        devis={devisChantier}
+        chantier={chantierData}
+        onCreated={() => {
+          axios
+            .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
+            .then((res) => setTauxFacturationData(res.data));
+        }}
       />
 
       {/* Blocs Réel/Prévisionnel à gauche, Taux de facturation à droite */}
@@ -518,164 +786,342 @@ const ChantierInfoTab = ({ chantierData, onUpdate }) => {
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
+              mt: 3,
             }}
           >
             <CardContent sx={{ pt: 0.5, pb: 0.5 }}>
-              <Typography
-                variant="subtitle1"
-                sx={{
-                  fontWeight: 700,
-                  mb: 2,
-                  fontFamily: "Roboto Slab, serif",
-                }}
-              >
-                Taux facturation :
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={tauxFacturation}
-                  sx={{
-                    flex: 1,
-                    height: 10,
-                    borderRadius: 5,
-                    mr: 2,
-                    backgroundColor: "#e0e0e0",
-                    "& .MuiLinearProgress-bar": { backgroundColor: "#1976d2" },
-                  }}
-                />
-                <Typography
-                  variant="body1"
-                  sx={{
-                    fontWeight: 700,
-                    minWidth: 48,
-                    ml: 1,
-                    fontFamily: "Roboto, Arial, sans-serif",
-                  }}
-                >
-                  {tauxFacturation} %
-                </Typography>
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                <Typography
-                  variant="body2"
-                  sx={{ mr: 1, fontFamily: "Roboto, Arial, sans-serif" }}
-                >
-                  Nombre Devis envoyés :
-                </Typography>
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontWeight: 700,
-                    color: "#1976d2",
-                    ml: 1,
-                    fontFamily: "Roboto, Arial, sans-serif",
-                  }}
-                >
-                  {nombreDevis}
-                </Typography>
-              </Box>
               <Box
                 sx={{
                   display: "flex",
-                  justifyContent: "center",
-                  gap: 8,
-                  mt: 2,
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
                 }}
               >
-                <Box sx={{ textAlign: "center" }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    fontWeight: 700,
+                    fontFamily: "Roboto Slab, serif",
+                  }}
+                >
+                  Taux de facturation :
+                </Typography>
+                <Box sx={{ textAlign: "right" }}>
                   <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      color: "#2e7d32",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                    }}
-                  >
-                    {statsDevis.termines}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#2e7d32",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Terminer
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography
-                    variant="h6"
+                    variant="body1"
                     sx={{
                       fontWeight: 700,
                       color: "#1976d2",
                       fontFamily: "Roboto, Arial, sans-serif",
                     }}
                   >
-                    {statsDevis.en_cours}
+                    Total facturé :{" "}
+                    {formatMontant(tauxFacturationData?.montant_total)}
                   </Typography>
                   <Typography
                     variant="body2"
                     sx={{
-                      color: "#1976d2",
-                      fontFamily: "Roboto, Arial, sans-serif",
                       fontWeight: 700,
-                    }}
-                  >
-                    En cours
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      color: "#ff9800",
+                      color: "#6e6e6e",
                       fontFamily: "Roboto, Arial, sans-serif",
                     }}
                   >
-                    {statsDevis.attente_signature}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#ff9800",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                      fontWeight: 700,
-                    }}
-                  >
-                    En attente signature
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      color: "#d32f2f",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                    }}
-                  >
-                    {statsDevis.refuses}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#d32f2f",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Refusé
+                    Marché :{" "}
+                    {formatMontant(
+                      chantierData?.montant_marche || chantierData?.montant_ht
+                    )}
                   </Typography>
                 </Box>
               </Box>
+              {loadingTaux ? (
+                <LinearProgress />
+              ) : tauxFacturationData ? (
+                <>
+                  <MultiColorProgressBar
+                    pourcentages={pourcentages}
+                    montants={montants}
+                  />
+                  {/* Légende */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 2,
+                      alignItems: "center",
+                      mb: 2,
+                      fontWeight: 400,
+                      fontSize: "0.65rem",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        bgcolor: "#ff9800",
+                        borderRadius: "50%",
+                      }}
+                    />{" "}
+                    <Typography component="span" sx={{ fontSize: "0.85rem" }}>
+                      Non envoyées
+                    </Typography>
+                    <Box
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        bgcolor: "#1976d2",
+                        borderRadius: "50%",
+                      }}
+                    />{" "}
+                    <Typography component="span" sx={{ fontSize: "0.85rem" }}>
+                      En attente paiement
+                    </Typography>
+                    <Box
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        bgcolor: "#2e7d32",
+                        borderRadius: "50%",
+                      }}
+                    />{" "}
+                    <Typography component="span" sx={{ fontSize: "0.85rem" }}>
+                      Payées
+                    </Typography>
+                    <Box
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        bgcolor: "#d32f2f",
+                        borderRadius: "50%",
+                      }}
+                    />{" "}
+                    <Typography component="span" sx={{ fontSize: "0.85rem" }}>
+                      Retard de paiement
+                    </Typography>
+                  </Box>
+                  {/* Accordéon des situations */}
+                  {situations.map((situation) => (
+                    <Accordion key={situation.id}>
+                      <AccordionSummary expandIcon={<FaChevronDown />}>
+                        <Typography sx={{ fontWeight: 700 }}>
+                          {situation.numero_situation} – {situation.mois}/
+                          {situation.annee}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            ml: 2,
+                            fontWeight: 700,
+                            color: getCategorieColor(situation.categorie),
+                          }}
+                        >
+                          {situation.montant_apres_retenues.toLocaleString(
+                            "fr-FR",
+                            { style: "currency", currency: "EUR" }
+                          )}
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {!situation.date_envoi ? (
+                          <>
+                            <Typography color="warning.main">
+                              Date d'envoi et délai de paiement non définis
+                            </Typography>
+                            <Button
+                              variant="outlined"
+                              onClick={() => handleOpenModal(situation)}
+                            >
+                              Définir les dates
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Typography>
+                              Date d'envoi :{" "}
+                              {new Date(
+                                situation.date_envoi
+                              ).toLocaleDateString("fr-FR")}
+                            </Typography>
+                            <Typography>
+                              Délai de paiement : {situation.delai_paiement}{" "}
+                              jours
+                            </Typography>
+                            <Typography>
+                              Date limite de paiement :{" "}
+                              {situation.date_envoi && situation.delai_paiement
+                                ? new Date(
+                                    new Date(situation.date_envoi).getTime() +
+                                      situation.delai_paiement *
+                                        24 *
+                                        60 *
+                                        60 *
+                                        1000
+                                  ).toLocaleDateString("fr-FR")
+                                : "-"}
+                            </Typography>
+                            <Typography>
+                              Statut de paiement :{" "}
+                              {situation.date_paiement_reel ? (
+                                <>
+                                  <FaCheckCircle
+                                    color="#2e7d32"
+                                    style={{ verticalAlign: "middle" }}
+                                  />{" "}
+                                  Payée
+                                </>
+                              ) : isRetardPaiement(situation) ? (
+                                <>
+                                  <FaExclamationCircle
+                                    color="#d32f2f"
+                                    style={{ verticalAlign: "middle" }}
+                                  />{" "}
+                                  Retard de paiement
+                                </>
+                              ) : situation.date_envoi ? (
+                                <>
+                                  <FaHourglassHalf
+                                    color="#1976d2"
+                                    style={{ verticalAlign: "middle" }}
+                                  />{" "}
+                                  En attente
+                                </>
+                              ) : (
+                                <>
+                                  <FaExclamationCircle
+                                    color="#ff9800"
+                                    style={{ verticalAlign: "middle" }}
+                                  />{" "}
+                                  Non envoyée
+                                </>
+                              )}
+                            </Typography>
+                            {!situation.date_paiement_reel && (
+                              <Button
+                                variant="outlined"
+                                color="success"
+                                sx={{ mt: 1, mb: 1 }}
+                                onClick={() =>
+                                  handleOpenPaiementModal(situation)
+                                }
+                              >
+                                Définir paiement
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </>
+              ) : (
+                <Typography color="error">
+                  Aucune donnée de facturation disponible.
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
+      <Dialog open={openModal} onClose={handleCloseModal}>
+        <DialogTitle>Date d'envoi et délai de paiement</DialogTitle>
+        <DialogContent>
+          <Box sx={{ p: 2 }}>
+            <TextField
+              type="date"
+              label="Date d'envoi"
+              value={
+                dateEnvoi
+                  ? typeof dateEnvoi === "string"
+                    ? dateEnvoi
+                    : dayjs(dateEnvoi).format("YYYY-MM-DD")
+                  : ""
+              }
+              onChange={(e) => setDateEnvoi(e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              InputLabelProps={{ shrink: true }}
+            />
+            <Select
+              value={delaiPaiement}
+              onChange={(e) => setDelaiPaiement(e.target.value)}
+              fullWidth
+              displayEmpty
+              sx={{ mb: 2 }}
+            >
+              <MenuItem value="">
+                <em>Choisir un délai</em>
+              </MenuItem>
+              <MenuItem value={45}>45 jours</MenuItem>
+              <MenuItem value={60}>60 jours</MenuItem>
+            </Select>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseModal}>Annuler</Button>
+          <Button
+            onClick={handleSaveDates}
+            disabled={!dateEnvoi || !delaiPaiement}
+            variant="contained"
+          >
+            Sauvegarder
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openPaiementModal}
+        onClose={() => setOpenPaiementModal(false)}
+      >
+        <DialogTitle>Montant reçu et date de paiement</DialogTitle>
+        <DialogContent>
+          <Box sx={{ p: 2 }}>
+            <TextField
+              type="number"
+              label="Montant reçu HT"
+              value={montantRecu}
+              onChange={(e) => setMontantRecu(e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              type="date"
+              label="Date de paiement réelle"
+              value={datePaiementReel}
+              onChange={(e) => setDatePaiementReel(e.target.value)}
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenPaiementModal(false)}>Annuler</Button>
+          <Button
+            onClick={async () => {
+              try {
+                await axios.patch(
+                  `/api/situations/${selectedSituationPaiement.id}/`,
+                  {
+                    montant_recu: montantRecu,
+                    date_paiement_reel: datePaiementReel,
+                  }
+                );
+                setOpenPaiementModal(false);
+                setSelectedSituationPaiement(null);
+                setMontantRecu("");
+                setDatePaiementReel("");
+                // Rafraîchir les données
+                axios
+                  .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
+                  .then((res) => setTauxFacturationData(res.data));
+              } catch (error) {
+                alert("Erreur lors de la mise à jour du paiement.");
+              }
+            }}
+            variant="contained"
+            disabled={!montantRecu || !datePaiementReel}
+          >
+            Valider
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
