@@ -159,20 +159,21 @@ const TableauSuivi = () => {
     if (number === 0) {
       color = "text.primary";
     } else if (compareValue === undefined || compareValue === null) {
-      color = "rgba(27, 120, 188, 1)"; // bleu si pas de valeur de comparaison
+      color = "rgba(27, 120, 188, 1)";
     } else if (isDifferent) {
-      color = "error.main"; // rouge si différent
+      color = "error.main";
     } else {
-      color = "rgba(27, 120, 188, 1)"; // bleu si égal et non nul
+      color = "rgba(27, 120, 188, 1)";
     }
 
     return (
       <Typography
         sx={{
           color: color,
-          fontWeight: 400,
-          fontSize: "0.875rem",
+          fontWeight: 500,
+          fontSize: "0.75rem",
           fontFamily: "Roboto, Arial, sans-serif",
+          whiteSpace: "nowrap",
         }}
       >
         {number.toFixed(2)} €
@@ -183,11 +184,23 @@ const TableauSuivi = () => {
   const formatDate = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
-    return date.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    const year = date.getFullYear().toString().slice(-2); // 2 derniers chiffres
+    return (
+      date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: undefined,
+      }) +
+      "/" +
+      year
+    );
+  };
+
+  // Pour l'affichage mois/année (ex: 04/25)
+  const formatMoisAnnee = (mois, annee) => {
+    const moisStr = mois.toString().padStart(2, "0");
+    const anneeStr = annee.toString().slice(-2);
+    return `${moisStr}/${anneeStr}`;
   };
 
   // Charger la liste des chantiers
@@ -419,8 +432,9 @@ const TableauSuivi = () => {
           sx={{
             color: couleur,
             fontFamily: "Roboto, Arial, sans-serif",
-            fontWeight: 400,
-            fontSize: "0.875rem",
+            fontWeight: 500,
+            fontSize: "0.75rem",
+            whiteSpace: "nowrap",
           }}
         >
           {isNegatif ? "-" : ""}
@@ -580,9 +594,9 @@ const TableauSuivi = () => {
                       "&:hover": { backgroundColor: "#f5f5f5" },
                     }}
                   >
-                    <TableCell
-                      sx={commonBodyCellStyle}
-                    >{`${situation.mois}/${situation.annee}`}</TableCell>
+                    <TableCell sx={commonBodyCellStyle}>
+                      {formatMoisAnnee(situation.mois, situation.annee)}
+                    </TableCell>
                     <TableCell>
                       {extractSituationNumber(situation.numero_situation)}
                     </TableCell>
@@ -821,12 +835,15 @@ const TableauSuivi = () => {
       const dateReelleFormatted = `${jour}/${mois}/${annee}`;
 
       // Convertir les dates du format "DD/MM/YYYY"
-      const [jourPrevue, moisPrevue, anneePrevue] = datePrevue
+      let [jourPrevue, moisPrevue, anneePrevue] = datePrevue
         .split("/")
         .map(Number);
-      const [jourReelle, moisReelle, anneeReelle] = dateReelleFormatted
+      let [jourReelle, moisReelle, anneeReelle] = dateReelleFormatted
         .split("/")
         .map(Number);
+      // Convertir années sur 2 chiffres en 4 chiffres (ex: 25 -> 2025)
+      if (anneePrevue < 100) anneePrevue += 2000;
+      if (anneeReelle < 100) anneeReelle += 2000;
 
       // Vérifier si les conversions sont valides
       if (

@@ -170,8 +170,8 @@ const ChantierDetail = () => {
             >
               <Tab label="Informations" />
               <Tab label="Documents" />
-              <Tab label="Récap Financier" />
               <Tab label="Commandes" />
+              <Tab label="Récap Financier" />
             </Tabs>
           </Box>
         </AppBar>
@@ -183,6 +183,10 @@ const ChantierDetail = () => {
               chantierData={chantierData}
               onUpdate={fetchChantierData}
             />
+          </TabPanel>
+        ) : selectedTab === 1 ? (
+          <TabPanel value={selectedTab} index={1}>
+            <ChantierDocumentsTab chantierData={chantierData} />
           </TabPanel>
         ) : (
           <Paper
@@ -203,14 +207,11 @@ const ChantierDetail = () => {
               },
             }}
           >
-            <TabPanel value={selectedTab} index={1}>
-              <ChantierDocumentsTab chantierData={chantierData} />
-            </TabPanel>
             <TabPanel value={selectedTab} index={2}>
-              <ChantierRecapFinancierTab chantierData={chantierData} />
+              <ChantierCommandesTab chantierData={chantierData} />
             </TabPanel>
             <TabPanel value={selectedTab} index={3}>
-              <ChantierCommandesTab chantierData={chantierData} />
+              <ChantierRecapFinancierTab chantierData={chantierData} />
             </TabPanel>
           </Paper>
         )}

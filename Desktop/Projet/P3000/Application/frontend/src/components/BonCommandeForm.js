@@ -5,7 +5,7 @@ import { bonCommandeService } from "../services/bonCommandeService";
 import ProduitSelectionTable from "./ProduitSelectionTable";
 import SelectionFournisseurModal from "./SelectionFournisseurModal";
 
-function BonCommandeForm({ onBonCommandeCreated }) {
+function BonCommandeForm({ onBonCommandeCreated, modal }) {
   const [step, setStep] = useState(1);
   const [openModal, setOpenModal] = useState(false);
   const [selectedData, setSelectedData] = useState(null);
@@ -14,7 +14,6 @@ function BonCommandeForm({ onBonCommandeCreated }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    // Générer un numéro de bon de commande lors du montage du composant
     bonCommandeService
       .generateBonCommandeNumber()
       .then((data) => setNumeroBC(data.numero))
@@ -43,9 +42,6 @@ function BonCommandeForm({ onBonCommandeCreated }) {
   const handleProductSelection = (products) => {
     setSelectedProducts(products);
     handlePreviewBonCommande(products);
-    if (onBonCommandeCreated) {
-      onBonCommandeCreated();
-    }
   };
 
   const handlePreviewBonCommande = (products) => {
@@ -53,7 +49,6 @@ function BonCommandeForm({ onBonCommandeCreated }) {
       console.error("Products is not an array:", products);
       return;
     }
-
     const bonCommandeData = {
       numero: selectedData.numero_bon_commande,
       fournisseur: selectedData.fournisseur,
@@ -71,7 +66,6 @@ function BonCommandeForm({ onBonCommandeCreated }) {
         0
       ),
     };
-
     const queryString = encodeURIComponent(JSON.stringify(bonCommandeData));
     const previewUrl = `/api/preview-bon-commande/?bon_commande=${queryString}`;
     window.open(previewUrl, "_blank");
@@ -79,8 +73,6 @@ function BonCommandeForm({ onBonCommandeCreated }) {
 
   const handleSaveBonCommande = async () => {
     const numeroFinal = selectedData.numero_bon_commande || numeroBC;
-    console.log("Numéro de bon de commande utilisé:", numeroFinal);
-
     const bonCommandeData = {
       numero: numeroFinal,
       fournisseur: selectedData.fournisseur,
@@ -98,10 +90,11 @@ function BonCommandeForm({ onBonCommandeCreated }) {
         0
       ),
     };
-
     try {
       await bonCommandeService.createBonCommande(bonCommandeData);
-      console.log("Bon de commande créé avec succès");
+      if (onBonCommandeCreated) {
+        onBonCommandeCreated();
+      }
     } catch (error) {
       console.error("Erreur lors de la création du bon de commande:", error);
     }
@@ -120,11 +113,21 @@ function BonCommandeForm({ onBonCommandeCreated }) {
   const handleValidate = (products) => {
     setSelectedProducts(products);
     handlePreviewBonCommande(products);
-    if (onBonCommandeCreated) {
-      onBonCommandeCreated();
-    }
   };
 
+  // --- Affichage spécifique pour la modale ---
+  if (modal) {
+    return (
+      <SelectionFournisseurModal
+        open={true}
+        onClose={onBonCommandeCreated}
+        onSubmit={handleInitialSelection}
+        numeroBC={numeroBC}
+      />
+    );
+  }
+
+  // --- Affichage standard (autonome) ---
   const renderStep = () => {
     switch (step) {
       case 1:
@@ -152,7 +155,7 @@ function BonCommandeForm({ onBonCommandeCreated }) {
               setStep(1);
               setIsModalOpen(false);
             }}
-            fournisseur={selectedData.fournisseur}
+            fournisseur={selectedData?.fournisseur}
             onValidate={handleValidate}
             numeroBC={numeroBC}
             selectedData={selectedData}
@@ -175,7 +178,6 @@ function BonCommandeForm({ onBonCommandeCreated }) {
       }}
     >
       {renderStep()}
-
       <SelectionFournisseurModal
         open={openModal}
         onClose={handleCloseModal}
