@@ -59,6 +59,7 @@ from .views import (
     preview_contrat,
     preview_avenant,
     get_taux_facturation_data,
+    labor_costs_monthly_summary,
 )
 
 
@@ -175,4 +176,5 @@ urlpatterns = [
     path('preview-contrat/<int:contrat_id>/', preview_contrat, name='preview_contrat'),
     path('preview-avenant/<int:avenant_id>/', preview_avenant, name='preview_avenant'),
     path('chantier/<int:chantier_id>/taux-facturation/', get_taux_facturation_data, name='taux-facturation-data'),
+    path('labor_costs/monthly_summary/', labor_costs_monthly_summary, name='labor_costs_monthly_summary'),
 ]

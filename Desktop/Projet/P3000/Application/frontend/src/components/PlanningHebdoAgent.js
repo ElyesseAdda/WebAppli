@@ -378,6 +378,33 @@ const PlanningHebdoAgent = ({
             selectedChantier.chantier_name;
         });
 
+        // Calculer ici à partir de newSchedule !
+        let remainingHours = 0;
+        let chantierName = selectedChantier
+          ? selectedChantier.chantier_name
+          : null;
+        if (newSchedule[selectedAgentId]) {
+          Object.entries(newSchedule[selectedAgentId]).forEach(
+            ([hour, dayData]) => {
+              Object.entries(dayData).forEach(([day, chantier]) => {
+                if (chantier && chantier === chantierName) {
+                  remainingHours += 1;
+                }
+              });
+            }
+          );
+        }
+        if (remainingHours === 0) {
+          onCostsCalculated([]); // Déclenche la suppression côté backend
+        } else {
+          onCostsCalculated([
+            {
+              chantier_name: chantierName,
+              hours: remainingHours,
+            },
+          ]);
+        }
+
         return newSchedule;
       });
 
@@ -430,24 +457,54 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId][cell.hour][cell.day] = ""; // Vider l'assignation
         });
 
+        // Calculer ici à partir de newSchedule !
+        let remainingHours = 0;
+        let chantierName = selectedChantier
+          ? selectedChantier.chantier_name
+          : null;
+        if (newSchedule[selectedAgentId]) {
+          Object.entries(newSchedule[selectedAgentId]).forEach(
+            ([hour, dayData]) => {
+              Object.entries(dayData).forEach(([day, chantier]) => {
+                if (chantier && chantier === chantierName) {
+                  remainingHours += 1;
+                }
+              });
+            }
+          );
+        }
+        if (remainingHours === 0) {
+          onCostsCalculated([]); // Déclenche la suppression côté backend
+        } else {
+          onCostsCalculated([
+            {
+              chantier_name: chantierName,
+              hours: remainingHours,
+            },
+          ]);
+        }
+
         return newSchedule;
       });
+
+      // Vérification explicite après suppression : si tout est vide, onCostsCalculated([])
+      let isAllEmpty = true;
+      if (schedule[selectedAgentId]) {
+        Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
+          Object.entries(dayData).forEach(([day, chantier]) => {
+            if (chantier && chantier.trim() !== "") {
+              isAllEmpty = false;
+            }
+          });
+        });
+      }
+      if (isAllEmpty) {
+        onCostsCalculated([]);
+      }
 
       // Réinitialiser la sélection
       setSelectedCells([]);
       closeChantierModal();
-
-      // Recalculer les heures après suppression
-      const updatedHours = calculateUpdatedHours(selectedChantier.id);
-
-      // Mettre à jour les coûts
-      onCostsCalculated([
-        {
-          chantier_name: selectedChantier.chantier_name,
-          hours: updatedHours,
-          cost: updatedHours * agent.taux_Horaire,
-        },
-      ]);
     } catch (error) {
       console.error("Erreur lors de la suppression des assignations :", error);
       alert(

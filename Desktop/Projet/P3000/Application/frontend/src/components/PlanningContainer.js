@@ -170,6 +170,31 @@ const PlanningContainer = () => {
     }
   };
 
+  useEffect(() => {
+    if (!selectedAgentId || !selectedWeek || !selectedYear) return;
+
+    // Calculer les heures par chantier pour l'agent/semaine/année sélectionnés
+    const hoursPerChantier = {};
+    if (schedule[selectedAgentId]) {
+      Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
+        Object.entries(dayData).forEach(([day, chantier]) => {
+          if (chantier && chantier.trim() !== "") {
+            hoursPerChantier[chantier] = (hoursPerChantier[chantier] || 0) + 1;
+          }
+        });
+      });
+    }
+    const laborCosts = Object.entries(hoursPerChantier).map(
+      ([chantierName, hours]) => ({
+        chantier_name: chantierName,
+        hours: hours,
+      })
+    );
+    // Appeler la sauvegarde (même si laborCosts est vide)
+    handleCostsCalculated(laborCosts);
+    // eslint-disable-next-line
+  }, [schedule, selectedAgentId, selectedWeek, selectedYear]);
+
   return (
     <div className="planning-container">
       <ControlsContainer>

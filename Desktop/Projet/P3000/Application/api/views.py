@@ -602,7 +602,7 @@ class AgentViewSet(viewsets.ModelViewSet):
             'dimanche': 'Sunday'
         }
         
-        jours_travail = agent.jours_travail.split(', ')
+        jours_travail = [j.strip() for j in agent.jours_travail.split(',')]
         jours_travail_indices = [list(calendar.day_name).index(jours_mapping[jour.lower()]) for jour in jours_travail]
 
         num_days = calendar.monthrange(year, month)[1]
@@ -677,7 +677,7 @@ class AgentViewSet(viewsets.ModelViewSet):
                 'Dimanche': 'Sunday'
             }
             
-            jours_travail = agent.jours_travail.split(',') if agent.jours_travail else []
+            jours_travail = [j.strip() for j in agent.jours_travail.split(',')]
             # Obtenir les indices (0 pour Lundi, 1 pour Mardi, etc.)
             jours_travail_indices = [english_days.index(fr_to_en[jour.strip().capitalize()]) for jour in jours_travail]
             
@@ -1111,6 +1111,38 @@ def copy_schedule(request):
                 copied_schedules.append(new_schedule)
             Schedule.objects.bulk_create(copied_schedules)
 
+            # --- Synchronisation LaborCost ---
+            # 1. Supprimer les LaborCost existants pour l'agent cible, semaine/année cible
+            LaborCost.objects.filter(
+                agent_id=target_agent_id,
+                week=target_week,
+                year=target_year
+            ).delete()
+
+            # 2. Recréer les LaborCost à partir des nouveaux Schedule
+            from collections import defaultdict
+            agent = Agent.objects.get(id=target_agent_id)
+            schedules = Schedule.objects.filter(
+                agent_id=target_agent_id,
+                week=target_week,
+                year=target_year
+            )
+            chantier_hours = defaultdict(int)
+            for s in schedules:
+                if s.chantier_id:
+                    chantier_hours[s.chantier_id] += 1  # 1h par créneau
+            labor_costs = []
+            for chantier_id, hours in chantier_hours.items():
+                labor_costs.append(LaborCost(
+                    agent_id=target_agent_id,
+                    chantier_id=chantier_id,
+                    week=target_week,
+                    year=target_year,
+                    hours=hours,
+                    cost=hours * agent.taux_Horaire
+                ))
+            LaborCost.objects.bulk_create(labor_costs)
+
         return Response({'message': 'Planning copié avec succès.'}, status=200)
 
     except Exception as e:
@@ -1199,12 +1231,17 @@ def save_labor_costs(request):
             year = data.get('year')
             costs = data.get('costs', [])
 
+            # Toujours supprimer les anciennes entrées, même si costs est vide
+            LaborCost.objects.filter(
+                agent_id=agent_id,
+                week=week,
+                year=year
+            ).delete()
+
             if not costs or not isinstance(costs, list) or len(costs) == 0:
                 return Response({
-                    'error': 'costs manquant ou vide',
-                    'received_costs': costs,
-                    'received_data': data
-                }, status=status.HTTP_400_BAD_REQUEST)
+                    'message': 'Aucune heure à enregistrer, anciennes entrées supprimées.'
+                }, status=status.HTTP_200_OK)
 
             try:
                 agent = Agent.objects.get(id=agent_id)
@@ -1240,13 +1277,6 @@ def save_labor_costs(request):
                         {'error': 'Format de coût invalide, hours manquant'}, 
                         status=status.HTTP_400_BAD_REQUEST
                     )
-
-            # Suppression des anciennes entrées
-            LaborCost.objects.filter(
-                agent=agent,
-                week=week,
-                year=year
-            ).delete()
 
             # Création des nouvelles entrées
             created_costs = LaborCost.objects.bulk_create(labor_costs)
@@ -4891,4 +4921,62 @@ def get_taux_facturation_data(request, chantier_id):
         return Response({'error': 'Chantier non trouvé'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def labor_costs_monthly_summary(request):
+    """
+    Endpoint : /api/labor_costs/monthly_summary/?month=YYYY-MM
+    Retourne pour chaque chantier :
+      - le total des heures
+      - le total du montant
+      - le détail par agent (heures, montant)
+    pour le mois donné (tous agents confondus).
+    """
+    month_str = request.GET.get('month')  # format attendu : 'YYYY-MM'
+    if not month_str:
+        return Response({'error': 'Paramètre month requis (format YYYY-MM)'}, status=400)
+    try:
+        year, month = map(int, month_str.split('-'))
+    except Exception:
+        return Response({'error': 'Format de mois invalide. Utilisez YYYY-MM.'}, status=400)
+
+    # On récupère toutes les semaines de ce mois/année
+    from calendar import monthrange
+    import datetime
+    first_day = datetime.date(year, month, 1)
+    last_day = datetime.date(year, month, monthrange(year, month)[1])
+    # On récupère les numéros de semaine du mois
+    weeks = set()
+    d = first_day
+    while d <= last_day:
+        weeks.add(d.isocalendar()[1])
+        d += datetime.timedelta(days=1)
+
+    # On récupère tous les LaborCost de ces semaines/année
+    labor_costs = (LaborCost.objects
+        .filter(year=year, week__in=list(weeks))
+        .select_related('chantier', 'agent'))
+
+    # Agrégation par chantier
+    chantier_map = {}
+    for lc in labor_costs:
+        chantier_id = lc.chantier.id
+        chantier_nom = lc.chantier.chantier_name
+        if chantier_id not in chantier_map:
+            chantier_map[chantier_id] = {
+                'chantier_id': chantier_id,
+                'chantier_nom': chantier_nom,
+                'total_heures': 0,
+                'total_montant': 0,
+                'details': []
+            }
+        chantier_map[chantier_id]['total_heures'] += float(lc.hours)
+        chantier_map[chantier_id]['total_montant'] += float(lc.cost)
+        chantier_map[chantier_id]['details'].append({
+            'agent_id': lc.agent.id,
+            'agent_nom': f"{lc.agent.name} {lc.agent.surname}",
+            'heures': float(lc.hours),
+            'montant': float(lc.cost)
+        })
+    return Response(list(chantier_map.values()), status=200)
 

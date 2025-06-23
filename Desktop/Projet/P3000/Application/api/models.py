@@ -5,8 +5,9 @@ from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
 from decimal import Decimal, ROUND_HALF_UP,InvalidOperation
 from django.core.exceptions import ValidationError
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from django.db.models.functions import TruncMonth
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -107,7 +108,28 @@ class Chantier(models.Model):
         # Somme du coût de toutes les présences sur ce chantier
         return sum(presence.cout_main_oeuvre for presence in self.presences.all())
     
-    
+    @property
+    def cout_main_oeuvre_par_mois(self):
+        from django.db.models import Sum
+        qs = (
+            LaborCost.objects
+            .filter(chantier=self)
+            .annotate(mois=TruncMonth('created_at'))
+            .values('mois')
+            .annotate(
+                heures=Sum('hours'),
+                montant=Sum('cost')
+            )
+            .order_by('mois')
+        )
+        return [
+            {
+                'mois': x['mois'].strftime('%Y-%m'),
+                'heures': float(x['heures'] or 0),
+                'montant': float(x['montant'] or 0)
+            }
+            for x in qs
+        ]
 
 class Agent(models.Model):
     name = models.CharField(max_length=25)
@@ -912,4 +934,14 @@ class AvenantSousTraitance(models.Model):
 class SituationDateEnvoi(models.Model):
     situation = models.OneToOneField('Situation', on_delete=models.CASCADE)
     date_envoi = models.DateField(null=True, blank=True)
+
+@receiver([post_save, post_delete], sender=LaborCost)
+def update_chantier_cout_main_oeuvre(sender, instance, **kwargs):
+    chantier = instance.chantier
+    from django.db.models import Sum
+    total = LaborCost.objects.filter(chantier=chantier).aggregate(
+        total=Sum('cost')
+    )['total'] or 0
+    chantier.cout_main_oeuvre = total
+    chantier.save(update_fields=['cout_main_oeuvre'])
 
