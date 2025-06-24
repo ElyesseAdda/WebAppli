@@ -764,9 +764,45 @@ const PlanningHebdoAgent = ({
     }
   };
 
+  // Fonction pour générer le PDF de tous les agents pour la semaine sélectionnée
+  const handleGeneratePDF = async () => {
+    try {
+      const response = await axios.get(
+        `/api/planning_hebdo_pdf/?week=${selectedWeek}&year=${selectedYear}`,
+        { responseType: "blob" }
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" })
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `planning_hebdo_agents_semaine_${selectedWeek}_${selectedYear}.pdf`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      alert("Erreur lors de la génération du PDF.");
+      console.error(error);
+    }
+  };
+
   return (
     <div onMouseUp={handleMouseUp}>
-      <h1>Planning Hebdomadaire des Agents</h1>
+      {/* Ligne titre + bouton */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
+          marginRight: 200,
+        }}
+      >
+        <h1 style={{ margin: 0 }}>Planning Hebdomadaire des Agents</h1>
+      </div>
 
       {showCostsSummary && (
         <LaborCostsSummary
@@ -784,12 +820,30 @@ const PlanningHebdoAgent = ({
       ) : (
         selectedAgentId && (
           <div>
-            {/* Titre Dynamique Ajouté */}
-            <h2>
-              Planning Hebdomadaire de{" "}
-              {agents.find((agent) => agent.id === selectedAgentId)?.name} -
-              Semaine {selectedWeek} {selectedYear}
-            </h2>
+            {/* Ligne h2 + bouton (optionnel) */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 10,
+                marginRight: 200,
+              }}
+            >
+              <h2 style={{ margin: 0 }}>
+                {agents.find((agent) => agent.id === selectedAgentId)?.name} -
+                Semaine {selectedWeek} {selectedYear}
+              </h2>
+              {/* Si tu veux aussi le bouton ici, décommente ci-dessous */}
+
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleGeneratePDF}
+              >
+                Télécharger le planning hebdomadaire
+              </Button>
+            </div>
 
             <table className={`planning-table ${isLoading ? "loading" : ""}`}>
               <thead>

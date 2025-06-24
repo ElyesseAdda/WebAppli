@@ -1,0 +1,73 @@
+<!-- prettier-ignore -->
+{% load dict_access %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Planning hebdomadaire - Semaine {{ week }} / {{ year }}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      h1,
+      h2 {
+        margin-bottom: 0.5em;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 2em;
+      }
+      th,
+      td {
+        border: 1px solid #333;
+        padding: 4px 8px;
+        text-align: center;
+      }
+      th {
+        background: #f0f0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Planning hebdomadaire - Semaine {{ week }} / {{ year }}</h1>
+    {% for agent in agents %}
+    <h2>{{ agent.name }} {{ agent.surname }}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Heure</th>
+          {% for day in days_of_week %}
+          <th>{{ day }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for hour in hours %}
+        <tr>
+          <td>{{ hour }}</td>
+          {% for day in days_of_week %} {% with cell_rendered=False %} {% for chantier, start_hour, span in planning_rowspan|dict_get:agent.id|dict_get:day %} {% if start_hour == hour %}
+          <td
+            rowspan="{{ span }}"
+            style="background-color: {{ chantier_colors|dict_get:chantier }}; color: #222;" >
+            {{ chantier }}
+          </td>
+          {% with cell_rendered=True %}{% endwith %} {% endif %} {% endfor %} {% if not cell_rendered and planning_data|dict_get:agent.id|dict_get:hour|dict_get:day == '' %}
+          <td></td>
+          {% endif %} {% endwith %} {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="margin-bottom: 1em">
+      <strong>Légende chantiers :</strong>
+      {% for chantier, color in chantier_colors.items %}
+      <span
+        style="display:inline-block; background:{{ color }}; color:#222; padding:2px 8px; margin-right:8px; border-radius:4px;"
+        >{{ chantier }}</span
+      >
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </body>
+</html>

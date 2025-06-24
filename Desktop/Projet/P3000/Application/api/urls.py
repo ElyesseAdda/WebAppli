@@ -60,6 +60,8 @@ from .views import (
     preview_avenant,
     get_taux_facturation_data,
     labor_costs_monthly_summary,
+    planning_hebdo_pdf,
+    preview_planning_hebdo,
 )
 
 
@@ -177,4 +179,6 @@ urlpatterns = [
     path('preview-avenant/<int:avenant_id>/', preview_avenant, name='preview_avenant'),
     path('chantier/<int:chantier_id>/taux-facturation/', get_taux_facturation_data, name='taux-facturation-data'),
     path('labor_costs/monthly_summary/', labor_costs_monthly_summary, name='labor_costs_monthly_summary'),
+    path('planning_hebdo_pdf/', planning_hebdo_pdf, name='planning_hebdo_pdf'),
+    path('preview-planning-hebdo/', preview_planning_hebdo, name='preview_planning_hebdo'),
 ]

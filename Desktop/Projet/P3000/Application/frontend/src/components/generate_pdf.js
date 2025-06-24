@@ -4,6 +4,7 @@ const puppeteer = require("puppeteer");
 async function generatePDF() {
   const args = process.argv.slice(2);
   const previewUrl = args[0]; // L'URL de prévisualisation du devis
+  const pdfPath = args[1] || path.resolve(__dirname, "devis.pdf"); // Par défaut devis.pdf
 
   console.log("URL de prévisualisation:", previewUrl); // Ajouter un log pour l'URL
 
@@ -46,7 +47,6 @@ async function generatePDF() {
       await page.waitForSelector("body", { timeout: 5000 });
       console.log("Contenu de la page détecté");
 
-      const pdfPath = path.resolve(__dirname, "devis.pdf");
       console.log("Début de la génération du PDF vers:", pdfPath);
 
       await page.pdf({

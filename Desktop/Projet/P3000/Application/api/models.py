@@ -942,6 +942,7 @@ def update_chantier_cout_main_oeuvre(sender, instance, **kwargs):
     total = LaborCost.objects.filter(chantier=chantier).aggregate(
         total=Sum('cost')
     )['total'] or 0
+    print(f"Recalcul du coût main d'oeuvre pour {chantier}: {total}")
     chantier.cout_main_oeuvre = total
     chantier.save(update_fields=['cout_main_oeuvre'])
 

@@ -41,6 +41,9 @@ from .serializers import (
     ContratSousTraitanceSerializer,
     AvenantSousTraitanceSerializer,
 )
+import tempfile
+from django.views import View
+import random
 
 
 logger = logging.getLogger(__name__)
@@ -4979,4 +4982,103 @@ def labor_costs_monthly_summary(request):
             'montant': float(lc.cost)
         })
     return Response(list(chantier_map.values()), status=200)
+
+
+
+def planning_hebdo_pdf(request):
+    week = int(request.GET.get('week'))
+    year = int(request.GET.get('year'))
+    preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}")
+    node_script_path = r'C:\\Users\\dell xps 9550\\Desktop\\Projet\\P3000\\Application\\frontend\\src\\components\\generate_pdf.js'
+    pdf_path = r'C:\\Users\\dell xps 9550\\Desktop\\Projet\\P3000\\Application\\frontend\\src\\components\\planning_hebdo.pdf'
+    command = ['node', node_script_path, preview_url, pdf_path]
+    subprocess.run(command, check=True)
+    with open(pdf_path, 'rb') as pdf_file:
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename=\"planning_hebdo_agents_semaine_{week}_{year}.pdf\"'
+        return response
+
+def get_color_palette(n):
+    base_colors = [
+        "#FFB347", "#77DD77", "#AEC6CF", "#FF6961", "#F49AC2",
+        "#B39EB5", "#FFD1DC", "#CFCFC4", "#B19CD9", "#03C03C",
+        "#779ECB", "#966FD6", "#FDFD96", "#CB99C9", "#C23B22"
+    ]
+    random.shuffle(base_colors)
+    return base_colors * (n // len(base_colors) + 1)
+
+def get_color_for_chantier(chantier_name, palette):
+    # Utilise un hash du nom pour choisir une couleur de la palette, toujours la même
+    return palette[hash(chantier_name) % len(palette)]
+
+def generate_pastel_palette(n):
+    # Génère n couleurs pastel en HSL
+    palette = []
+    for i in range(n):
+        hue = int(360 * i / n)
+        color = f"hsl({hue}, 70%, 80%)"
+        palette.append(color)
+    return palette
+
+def get_color_for_chantier(chantier_name, palette):
+    return palette[hash(chantier_name) % len(palette)]
+
+def preview_planning_hebdo(request):
+    week = int(request.GET.get('week'))
+    year = int(request.GET.get('year'))
+    agents = Agent.objects.all()
+    days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    hours = [f"{h}:00" for h in range(6, 23)]  # 6h à 22h
+
+    planning_data = {}
+    chantier_names = set()
+    for agent in agents:
+        planning_data[agent.id] = {hour: {day: "" for day in days_of_week} for hour in hours}
+        schedules = Schedule.objects.filter(agent=agent, week=week, year=year)
+        for s in schedules:
+            try:
+                hour = str(int(s.hour.split(':')[0])) + ":00"
+            except Exception:
+                hour = s.hour
+            day = s.day.capitalize()
+            chantier_name = s.chantier.chantier_name if s.chantier else ""
+            if chantier_name:
+                chantier_names.add(chantier_name)
+            if hour in planning_data[agent.id] and day in planning_data[agent.id][hour]:
+                planning_data[agent.id][hour][day] = chantier_name
+
+    chantier_names = sorted(list(chantier_names))
+    palette = generate_pastel_palette(100)  # 100 couleurs pastel
+    chantier_colors = {name: get_color_for_chantier(name, palette) for name in chantier_names}
+
+    # Préparation des rowspans pour fusionner les cellules
+    planning_rowspan = {agent.id: {day: [] for day in days_of_week} for agent in agents}
+    for agent in agents:
+        for day in days_of_week:
+            prev_chantier = None
+            start_hour = None
+            span = 0
+            for hour in hours:
+                chantier = planning_data[agent.id][hour][day]
+                if chantier == prev_chantier:
+                    span += 1
+                else:
+                    if prev_chantier and prev_chantier != '':
+                        planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
+                    prev_chantier = chantier
+                    start_hour = hour
+                    span = 1
+            if prev_chantier and prev_chantier != '':
+                planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
+
+    return render(request, 'DocumentAgent/planning_hebdo_agents.html', {
+        'week': week,
+        'year': year,
+        'agents': agents,
+        'days_of_week': days_of_week,
+        'hours': hours,
+        'planning_data': planning_data,
+        'chantier_colors': chantier_colors,
+        'planning_rowspan': planning_rowspan,
+    })
 
