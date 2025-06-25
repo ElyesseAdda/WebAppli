@@ -88,7 +88,9 @@ const PlanningContainer = () => {
 
   const generateYears = () => {
     const currentYear = dayjs().year();
-    return Array.from({ length: 5 }, (_, i) => currentYear - i);
+    const minYear = 2023;
+    const maxYear = currentYear + 2;
+    return Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i);
   };
 
   const copySchedule = async () => {
@@ -255,9 +257,9 @@ const PlanningContainer = () => {
               }
               label="Année"
             >
-              {Array.from({ length: 5 }, (_, i) => (
-                <MenuItem key={dayjs().year() - i} value={dayjs().year() - i}>
-                  {dayjs().year() - i}
+              {generateYears().map((year) => (
+                <MenuItem key={year} value={year}>
+                  {year}
                 </MenuItem>
               ))}
             </Select>
@@ -304,10 +306,9 @@ const PlanningContainer = () => {
         isLoading={isLoading}
         setIsLoading={setIsLoading}
         setSchedule={setSchedule}
-        onCostsCalculated={setLaborCosts}
         setSelectedAgentId={setSelectedAgentId}
         onCopyClick={() => setIsCopyModalOpen(true)}
-        onScheduleUpdate={handleScheduleUpdate}
+        onSelectionChange={handleSelectionChange}
       />
 
       <LaborCostsSummary

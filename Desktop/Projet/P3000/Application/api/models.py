@@ -8,6 +8,8 @@ from django.core.exceptions import ValidationError
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models.functions import TruncMonth
+from django.db.models import Sum
+
 
 STATE_CHOICES = [
         ('Terminé', 'Terminé'),
@@ -110,7 +112,6 @@ class Chantier(models.Model):
     
     @property
     def cout_main_oeuvre_par_mois(self):
-        from django.db.models import Sum
         qs = (
             LaborCost.objects
             .filter(chantier=self)
@@ -583,16 +584,51 @@ class SousPartie(models.Model):
 class Schedule(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     week = models.IntegerField()
-    year = models.IntegerField(default=timezone.now().year)  # Ajout du champ année
+    year = models.IntegerField(default=timezone.now().year)
     day = models.CharField(max_length=10)  # "Lundi", "Mardi", etc.
     hour = models.CharField(max_length=5)  # "06:00", "07:00", etc.
     chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
-        unique_together = ('agent', 'week', 'year', 'day', 'hour')  # Assurer l'unicité
+        unique_together = ('agent', 'week', 'year', 'day', 'hour')
 
     def __str__(self):
         return f"{self.agent.name} - Semaine {self.week}, {self.year} - {self.day} {self.hour}"
+
+def recalculate_labor_costs_for_period(week=None, year=None, agent_id=None, chantier_id=None):
+    schedules = Schedule.objects.all()
+    if week:
+        schedules = schedules.filter(week=week)
+    if year:
+        schedules = schedules.filter(year=year)
+    if agent_id:
+        schedules = schedules.filter(agent_id=agent_id)
+    if chantier_id:
+        schedules = schedules.filter(chantier_id=chantier_id)
+
+    data = {}
+    for s in schedules:
+        key = (s.agent_id, s.chantier_id, s.week, s.year)
+        data.setdefault(key, 0)
+        data[key] += 1
+
+    from .models import Agent, Chantier, LaborCost  # Import local pour éviter la boucle
+    for (agent_id, chantier_id, week, year), hours in data.items():
+        agent = Agent.objects.get(id=agent_id)
+        chantier = Chantier.objects.get(id=chantier_id)
+        cost = hours * (agent.taux_Horaire or 0)
+        LaborCost.objects.update_or_create(
+            agent=agent, chantier=chantier, week=week, year=year,
+            defaults={'hours': hours, 'cost': cost}
+        )
+
+@receiver([post_save, post_delete], sender=Schedule)
+def recalc_labor_cost_on_schedule_change(sender, instance, **kwargs):
+    week = instance.week
+    year = instance.year
+    agent_id = instance.agent_id
+    chantier_id = instance.chantier_id
+    recalculate_labor_costs_for_period(week, year, agent_id, chantier_id)
 
 class LaborCost(models.Model):
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE, related_name='labor_costs')
@@ -938,11 +974,14 @@ class SituationDateEnvoi(models.Model):
 @receiver([post_save, post_delete], sender=LaborCost)
 def update_chantier_cout_main_oeuvre(sender, instance, **kwargs):
     chantier = instance.chantier
-    from django.db.models import Sum
-    total = LaborCost.objects.filter(chantier=chantier).aggregate(
-        total=Sum('cost')
-    )['total'] or 0
+    total = LaborCost.objects.filter(chantier=chantier).aggregate(Sum('cost'))['cost__sum'] or 0
     print(f"Recalcul du coût main d'oeuvre pour {chantier}: {total}")
+    chantier.cout_main_oeuvre = total
+    chantier.save(update_fields=['cout_main_oeuvre'])
+
+def update_chantier_cout_main_oeuvre(chantier):
+    from .models import LaborCost  # Import local pour éviter les problèmes de circularité
+    total = LaborCost.objects.filter(chantier=chantier).aggregate(Sum('cost'))['cost__sum'] or 0
     chantier.cout_main_oeuvre = total
     chantier.save(update_fields=['cout_main_oeuvre'])
 

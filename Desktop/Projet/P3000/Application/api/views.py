@@ -44,6 +44,8 @@ from .serializers import (
 import tempfile
 from django.views import View
 import random
+from .models import update_chantier_cout_main_oeuvre, Chantier
+
 
 
 logger = logging.getLogger(__name__)
@@ -1031,7 +1033,10 @@ def assign_chantier(request):
                     logger.debug(f"Chantier mis à jour pour Schedule id {schedule.id}.")
 
         logger.info("Chantiers assignés avec succès.")
-        return Response({'message': 'Chantiers assignés avec succès.'}, status=status.HTTP_200_OK)
+        # À la fin, déclenche le recalcul pour la semaine/année concernée
+        week = request.data[0]['week'] if isinstance(request.data, list) else request.data['week']
+        year = request.data[0]['year'] if isinstance(request.data, list) else request.data['year']
+        return Response({"status": "ok"})
 
     except Exception as e:
         logger.exception("Erreur imprévue lors de l'assignation du chantier.")
@@ -1146,6 +1151,11 @@ def copy_schedule(request):
                 ))
             LaborCost.objects.bulk_create(labor_costs)
 
+        # MAJ coût main d'oeuvre pour chaque chantier concerné
+        chantiers_concernes = set([c.chantier for c in copied_schedules])
+        for chantier in chantiers_concernes:
+            update_chantier_cout_main_oeuvre(chantier)
+
         return Response({'message': 'Planning copié avec succès.'}, status=200)
 
     except Exception as e:
@@ -1252,6 +1262,7 @@ def save_labor_costs(request):
                 return Response({'error': f'Agent {agent_id} non trouvé'}, status=status.HTTP_404_NOT_FOUND)
 
             labor_costs = []
+            chantier = None
             for cost_entry in costs:
                 try:
                     chantier = Chantier.objects.get(chantier_name=cost_entry['chantier_name'])
@@ -1283,6 +1294,10 @@ def save_labor_costs(request):
 
             # Création des nouvelles entrées
             created_costs = LaborCost.objects.bulk_create(labor_costs)
+
+            # MAJ coût main d'oeuvre du chantier concerné
+            if chantier:
+                update_chantier_cout_main_oeuvre(chantier)
 
             return Response({
                 'message': 'Coûts sauvegardés avec succès',
@@ -5081,4 +5096,44 @@ def preview_planning_hebdo(request):
         'chantier_colors': chantier_colors,
         'planning_rowspan': planning_rowspan,
     })
+
+@api_view(['POST'])
+def recalculate_labor_costs(request):
+    """
+    Recalcule les coûts de main d'œuvre pour une période donnée.
+    Expects: { "week": 23, "year": 2024 } ou { "month": 5, "year": 2024 }
+    """
+    week = request.data.get('week')
+    year = request.data.get('year')
+    agent_id = request.data.get('agent_id')
+    chantier_id = request.data.get('chantier_id')
+
+    # Filtrer les schedules concernés
+    schedules = Schedule.objects.all()
+    if week:
+        schedules = schedules.filter(week=week)
+    if year:
+        schedules = schedules.filter(year=year)
+    if agent_id:
+        schedules = schedules.filter(agent_id=agent_id)
+    if chantier_id:
+        schedules = schedules.filter(chantier_id=chantier_id)
+
+    # Regrouper par agent/chantier/semaine/année
+    data = {}
+    for s in schedules:
+        key = (s.agent_id, s.chantier_id, s.week, s.year)
+        data.setdefault(key, 0)
+        data[key] += 1  # 1h par créneau
+
+    # Mettre à jour les LaborCost
+    for (agent_id, chantier_id, week, year), hours in data.items():
+        agent = Agent.objects.get(id=agent_id)
+        chantier = Chantier.objects.get(id=chantier_id)
+        cost = hours * (agent.taux_Horaire or 0)
+        obj, _ = LaborCost.objects.update_or_create(
+            agent=agent, chantier=chantier, week=week, year=year,
+            defaults={'hours': hours, 'cost': cost}
+        )
+    return Response({"status": "ok"})
 

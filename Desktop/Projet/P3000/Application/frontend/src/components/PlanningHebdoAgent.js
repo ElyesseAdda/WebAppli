@@ -26,9 +26,9 @@ const PlanningHebdoAgent = ({
   isLoading,
   setIsLoading,
   setSchedule,
-  onCostsCalculated,
-  setSelectedAgentId,
   onCopyClick,
+  setSelectedAgentId,
+  onSelectionChange,
 }) => {
   const [agents, setAgents] = useState([]);
   const hours = Array.from({ length: 17 }, (_, i) => `${i + 6}:00`); // Heures de 6h à 22h
@@ -57,6 +57,12 @@ const PlanningHebdoAgent = ({
 
   const [showCostsSummary, setShowCostsSummary] = useState(false);
 
+  const currentYear = dayjs().year();
+  const currentWeek = dayjs().isoWeek();
+  const minYear = 2023; // adapte cette valeur à ton année de début
+  const isFirstWeek = selectedYear === minYear && selectedWeek === 1;
+  const isLastWeek = selectedWeek === 52; // ou 53 si tu utilises 53 semaines
+
   // Fonction utilitaire pour récupérer le nom du chantier
   const getChantierName = (chantierId) => {
     const chantier = chantiers.find((c) => c.id === chantierId);
@@ -67,7 +73,9 @@ const PlanningHebdoAgent = ({
   const generateYears = () => {
     const currentYear = dayjs().year();
     const years = [];
-    for (let i = currentYear; i >= currentYear - 5; i--) {
+    const minYear = 2023; // adapte à ton année de début
+    const maxYear = currentYear + 2; // autorise 2 ans dans le futur
+    for (let i = maxYear; i >= minYear; i--) {
       years.push(i);
     }
     return years;
@@ -378,33 +386,6 @@ const PlanningHebdoAgent = ({
             selectedChantier.chantier_name;
         });
 
-        // Calculer ici à partir de newSchedule !
-        let remainingHours = 0;
-        let chantierName = selectedChantier
-          ? selectedChantier.chantier_name
-          : null;
-        if (newSchedule[selectedAgentId]) {
-          Object.entries(newSchedule[selectedAgentId]).forEach(
-            ([hour, dayData]) => {
-              Object.entries(dayData).forEach(([day, chantier]) => {
-                if (chantier && chantier === chantierName) {
-                  remainingHours += 1;
-                }
-              });
-            }
-          );
-        }
-        if (remainingHours === 0) {
-          onCostsCalculated([]); // Déclenche la suppression côté backend
-        } else {
-          onCostsCalculated([
-            {
-              chantier_name: chantierName,
-              hours: remainingHours,
-            },
-          ]);
-        }
-
         return newSchedule;
       });
 
@@ -457,50 +438,8 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId][cell.hour][cell.day] = ""; // Vider l'assignation
         });
 
-        // Calculer ici à partir de newSchedule !
-        let remainingHours = 0;
-        let chantierName = selectedChantier
-          ? selectedChantier.chantier_name
-          : null;
-        if (newSchedule[selectedAgentId]) {
-          Object.entries(newSchedule[selectedAgentId]).forEach(
-            ([hour, dayData]) => {
-              Object.entries(dayData).forEach(([day, chantier]) => {
-                if (chantier && chantier === chantierName) {
-                  remainingHours += 1;
-                }
-              });
-            }
-          );
-        }
-        if (remainingHours === 0) {
-          onCostsCalculated([]); // Déclenche la suppression côté backend
-        } else {
-          onCostsCalculated([
-            {
-              chantier_name: chantierName,
-              hours: remainingHours,
-            },
-          ]);
-        }
-
         return newSchedule;
       });
-
-      // Vérification explicite après suppression : si tout est vide, onCostsCalculated([])
-      let isAllEmpty = true;
-      if (schedule[selectedAgentId]) {
-        Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
-          Object.entries(dayData).forEach(([day, chantier]) => {
-            if (chantier && chantier.trim() !== "") {
-              isAllEmpty = false;
-            }
-          });
-        });
-      }
-      if (isAllEmpty) {
-        onCostsCalculated([]);
-      }
 
       // Réinitialiser la sélection
       setSelectedCells([]);
@@ -569,201 +508,6 @@ const PlanningHebdoAgent = ({
       setIsLoading(false);
     }
   };
-
-  const calculateHoursPerChantier = (
-    schedule,
-    selectedAgentId,
-    selectedWeek,
-    selectedYear
-  ) => {
-    const hoursPerChantier = {};
-    const processedCells = new Set();
-
-    // Logique de calcul existante
-    // Référence aux lignes existantes :
-
-    return hoursPerChantier;
-  };
-
-  const calculateLaborCosts = async () => {
-    if (!selectedAgentId || !selectedWeek || !selectedYear) {
-      alert("Veuillez sélectionner un agent, une semaine et une année.");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      const hoursPerChantier = {};
-      const processedCells = new Set();
-
-      console.log("Schedule data:", schedule[selectedAgentId]); // Debug log
-
-      // Parcourir le planning initial pour comptabiliser les heures
-      if (schedule[selectedAgentId]) {
-        Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
-          Object.entries(dayData).forEach(([day, chantierName]) => {
-            const cellKey = `${hour}-${day}-${chantierName}`;
-
-            if (
-              chantierName &&
-              typeof chantierName === "string" &&
-              chantierName.trim() !== "" &&
-              chantierName !== "undefined" &&
-              chantierName !== "null" &&
-              !processedCells.has(cellKey)
-            ) {
-              // Marquer la cellule comme traitée pour éviter le double comptage
-              processedCells.add(cellKey);
-
-              // Incrémenter le compteur d'heures pour le chantier
-              hoursPerChantier[chantierName] =
-                (hoursPerChantier[chantierName] || 0) + 1;
-
-              console.log(`Traitement cellule - ${cellKey}`);
-              console.log(
-                `Total actuel pour ${chantierName}: ${hoursPerChantier[chantierName]}`
-              );
-            } else {
-              if (!chantierName) {
-                console.log(
-                  `Cellule ignorée (chantierName manquant) - ${cellKey}`
-                );
-              }
-              if (processedCells.has(cellKey)) {
-                console.log(`Cellule déjà traitée - ${cellKey}`);
-              }
-            }
-          });
-        });
-      }
-
-      console.log("Cellules traitées:", Array.from(processedCells));
-      console.log(
-        "Résultat final hoursPerChantier après comptage initial:",
-        hoursPerChantier
-      );
-
-      // Vérification avant de continuer
-      if (Object.keys(hoursPerChantier).length === 0) {
-        alert("Aucune heure de travail trouvée dans le planning.");
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Récupérer les événements "M" pour la semaine
-      const startOfWeek = dayjs()
-        .year(selectedYear)
-        .isoWeek(selectedWeek)
-        .startOf("isoWeek");
-      const endOfWeek = startOfWeek.add(6, "day").endOf("day");
-
-      // **Correction des paramètres envoyés à l'API**
-      const modifiedHoursResponse = await axios.get("/api/events/", {
-        params: {
-          agent_id: selectedAgentId, // Changement de 'agent' à 'agent_id'
-          start_date: startOfWeek.format("YYYY-MM-DD"),
-          end_date: endOfWeek.format("YYYY-MM-DD"),
-          status: "M",
-        },
-      });
-
-      console.log("Événements 'M' reçus:", modifiedHoursResponse.data);
-
-      // Ajouter les heures modifiées
-      modifiedHoursResponse.data.forEach((event, index) => {
-        if (event.chantier) {
-          const chantierName =
-            event.chantier_name || `Chantier ${event.chantier}`;
-          const hoursToAdd = parseFloat(event.hours_modified || 0);
-
-          console.log(`Événement ${index + 1}:`);
-          console.log(`  Chantier: ${chantierName}`);
-          console.log(`  Heures Modifiées: ${hoursToAdd}`);
-
-          if (!hoursPerChantier[chantierName]) {
-            hoursPerChantier[chantierName] = 0;
-          }
-          hoursPerChantier[chantierName] += hoursToAdd;
-
-          console.log(
-            `  Total après ajout des heures modifiées: ${hoursPerChantier[chantierName]}`
-          );
-        } else {
-          console.log(`Événement ${index + 1} ignoré (chantier manquant).`);
-        }
-      });
-
-      console.log(
-        "Résultat final hoursPerChantier après ajout des événements 'M':",
-        hoursPerChantier
-      );
-
-      // 3. Récupérer le taux horaire de l'agent
-      const agentResponse = await axios.get(`/api/agent/${selectedAgentId}/`);
-      const hourlyRate = parseFloat(agentResponse.data.taux_Horaire || 0);
-
-      console.log(
-        `Taux horaire pour l'agent ${selectedAgentId}: ${hourlyRate}€`
-      );
-
-      // 4. Calculer le coût pour chaque chantier
-      const laborCosts = Object.entries(hoursPerChantier).map(
-        ([chantierName, hours]) => {
-          const parsedHours = parseFloat(hours);
-          const parsedHourlyRate = parseFloat(hourlyRate || 0);
-          const cost = {
-            chantier_name: chantierName,
-            hours: isNaN(parsedHours) ? 0 : parsedHours,
-            cost:
-              isNaN(parsedHours) || isNaN(parsedHourlyRate)
-                ? 0
-                : parsedHours * parsedHourlyRate,
-          };
-          console.log(`Préparation coût pour ${chantierName}:`, cost);
-          return cost;
-        }
-      );
-
-      console.log("Données envoyées à l'API:", {
-        agent_id: selectedAgentId,
-        week: selectedWeek,
-        year: selectedYear,
-        costs: laborCosts,
-      });
-
-      // Vérifier qu'il y a des coûts à enregistrer
-      if (laborCosts.length === 0) {
-        alert("Aucune heure de travail trouvée pour cette période.");
-        return;
-      }
-
-      // 5. Envoyer les données à l'API
-      const response = await axios.post("/api/save_labor_costs/", {
-        agent_id: selectedAgentId,
-        week: selectedWeek,
-        year: selectedYear,
-        costs: laborCosts,
-      });
-
-      console.log("Réponse de l'API:", response.data);
-
-      // Appeler la fonction du parent pour transmettre les coûts
-      onCostsCalculated(response.data.costs); // Transmettez les coûts au parent
-
-      setShowCostsSummary(true);
-      alert("Coûts de main d'œuvre calculés et enregistrés avec succès!");
-    } catch (error) {
-      console.error("Erreur lors du calcul des coûts de main d'œuvre:", error);
-      alert(
-        `Erreur lors du calcul des coûts: ${
-          error.response?.data?.error || error.message
-        }`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Fonction pour générer le PDF de tous les agents pour la semaine sélectionnée
   const handleGeneratePDF = async () => {
     try {
@@ -786,6 +530,31 @@ const PlanningHebdoAgent = ({
     } catch (error) {
       alert("Erreur lors de la génération du PDF.");
       console.error(error);
+    }
+  };
+
+  // Ajout des fonctions de navigation de semaine
+  const handlePrevWeek = () => {
+    let week = selectedWeek - 1;
+    let year = selectedYear;
+    if (week < 1) {
+      week = 52; // ou 53 selon ton calendrier
+      year = selectedYear - 1;
+    }
+    if (typeof onSelectionChange === "function") {
+      onSelectionChange(selectedAgentId, week, year);
+    }
+  };
+
+  const handleNextWeek = () => {
+    let week = selectedWeek + 1;
+    let year = selectedYear;
+    if (week > 52) {
+      week = 1;
+      year = selectedYear + 1;
+    }
+    if (typeof onSelectionChange === "function") {
+      onSelectionChange(selectedAgentId, week, year);
     }
   };
 
@@ -834,8 +603,33 @@ const PlanningHebdoAgent = ({
                 {agents.find((agent) => agent.id === selectedAgentId)?.name} -
                 Semaine {selectedWeek} {selectedYear}
               </h2>
-              {/* Si tu veux aussi le bouton ici, décommente ci-dessous */}
-
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 10,
+                }}
+              >
+                <Button
+                  onClick={handlePrevWeek}
+                  variant="contained"
+                  color="primary"
+                  disabled={isFirstWeek}
+                  sx={{ minWidth: 180 }}
+                >
+                  {"< Semaine précédente"}
+                </Button>
+                <Button
+                  onClick={handleNextWeek}
+                  variant="contained"
+                  color="primary"
+                  disabled={isLastWeek}
+                  sx={{ minWidth: 180 }}
+                >
+                  {"Semaine suivante >"}
+                </Button>
+              </div>
               <Button
                 variant="contained"
                 color="primary"
