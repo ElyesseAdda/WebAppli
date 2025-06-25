@@ -63,6 +63,7 @@ from .views import (
     planning_hebdo_pdf,
     preview_planning_hebdo,
     recalculate_labor_costs,
+    PaiementSousTraitantViewSet,
 )
 
 
@@ -89,6 +90,7 @@ router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'sous-traitants', SousTraitantViewSet)
 router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
 router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
+router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur

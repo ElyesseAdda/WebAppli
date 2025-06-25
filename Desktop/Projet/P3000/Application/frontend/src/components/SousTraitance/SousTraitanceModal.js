@@ -19,7 +19,14 @@ import {
   Typography,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
-import { FaChevronDown, FaEdit, FaPlus, FaPlusCircle } from "react-icons/fa";
+import {
+  FaChevronDown,
+  FaEdit,
+  FaPlus,
+  FaPlusCircle,
+  FaTable,
+} from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 import AvenantForm from "./AvenantForm";
 import ContratForm from "./ContratForm";
@@ -32,6 +39,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [showContratForm, setShowContratForm] = useState(false);
   const [showAvenantForm, setShowAvenantForm] = useState(false);
   const [chantier, setChantier] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (open) {
@@ -233,6 +241,19 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                       sx={{ mr: 2.5 }}
                     >
                       <FaEdit />
+                    </IconButton>
+                    <IconButton
+                      edge="end"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(
+                          `/paiements-sous-traitant/${chantier.id}/${sousTraitant.id}`,
+                          "_blank"
+                        );
+                      }}
+                      sx={{ mr: 2.5 }}
+                    >
+                      <FaTable />
                     </IconButton>
                     {sousTraitant.contrat ? (
                       <IconButton

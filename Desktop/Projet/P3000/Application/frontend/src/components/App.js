@@ -23,9 +23,11 @@ import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
 import ListePartiesSousParties from "./ListPartiesSousParties";
 import ModificationDevis from "./ModificationDevis";
+import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
+
 // Créer un thème par défaut
 const theme = createTheme({
   palette: {
@@ -49,7 +51,6 @@ function App() {
         <Layout>
           <Routes>
             <Route index element={<Dashboard />} />
-
             <Route path="/chantier/:id" element={<ChantierInfo />} />
             <Route path="/ChantierDetail/:id" element={<ChantierDetail />} />
             <Route path="/ListeChantier" element={<ListeChantier />} />
@@ -76,6 +77,11 @@ function App() {
             <Route path="/ListeSituation" element={<ListeSituation />} />
             <Route path="/TableauSuivi" element={<TableauSuivi />} />
             <Route path="/ChantierTabs" element={<ChantierTabs />} />
+            <Route
+              path="/paiements-sous-traitant/:chantierId/:sousTraitantId"
+              element={<PaiementsSousTraitantPage />}
+            />
+            ;
           </Routes>
         </Layout>
       </Router>

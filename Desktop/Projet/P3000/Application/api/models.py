@@ -985,3 +985,23 @@ def update_chantier_cout_main_oeuvre(chantier):
     chantier.cout_main_oeuvre = total
     chantier.save(update_fields=['cout_main_oeuvre'])
 
+class PaiementSousTraitant(models.Model):
+    sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, related_name='paiements')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_sous_traitant')
+    mois = models.IntegerField()  # 1-12
+    annee = models.IntegerField()
+    montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2)  # Montant facturé par le sous-traitant ce mois
+    date_envoi_facture = models.DateField(null=True, blank=True)
+    delai_paiement = models.IntegerField(default=45)  # 45 ou 60 jours
+    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    date_paiement_reel = models.DateField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Paiement Sous-Traitant"
+        verbose_name_plural = "Paiements Sous-Traitants"
+        ordering = ['chantier', 'sous_traitant', 'annee', 'mois']
+        unique_together = ('chantier', 'sous_traitant', 'mois', 'annee')
+
+    def __str__(self):
+        return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}"
+

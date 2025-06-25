@@ -6,7 +6,7 @@ from .models import (
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
-    SousTraitant, ContratSousTraitance, AvenantSousTraitance
+    SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -810,5 +810,21 @@ class ContratSousTraitanceSerializer(serializers.ModelSerializer):
             'date_creation',
             'date_modification',
             'avenants'
+        ]
+
+class PaiementSousTraitantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaiementSousTraitant
+        fields = [
+            'id',
+            'sous_traitant',
+            'chantier',
+            'mois',
+            'annee',
+            'montant_facture_ht',
+            'date_envoi_facture',
+            'delai_paiement',
+            'montant_paye_ht',
+            'date_paiement_reel',
         ]
         

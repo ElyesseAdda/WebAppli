@@ -45,6 +45,8 @@ import tempfile
 from django.views import View
 import random
 from .models import update_chantier_cout_main_oeuvre, Chantier
+from .models import PaiementSousTraitant
+from .serializers import PaiementSousTraitantSerializer
 
 
 
@@ -5136,4 +5138,18 @@ def recalculate_labor_costs(request):
             defaults={'hours': hours, 'cost': cost}
         )
     return Response({"status": "ok"})
+
+class PaiementSousTraitantViewSet(viewsets.ModelViewSet):
+    queryset = PaiementSousTraitant.objects.all()
+    serializer_class = PaiementSousTraitantSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        sous_traitant_id = self.request.query_params.get('sous_traitant')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        if sous_traitant_id:
+            queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        return queryset
 
