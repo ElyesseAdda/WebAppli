@@ -47,6 +47,11 @@ import random
 from .models import update_chantier_cout_main_oeuvre, Chantier
 from .models import PaiementSousTraitant
 from .serializers import PaiementSousTraitantSerializer
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from datetime import date, timedelta
+from .serializers import RecapFinancierSerializer
+from django.db.models import Sum
 
 
 
@@ -5152,4 +5157,238 @@ class PaiementSousTraitantViewSet(viewsets.ModelViewSet):
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
+
+class RecapFinancierChantierAPIView(APIView):
+    permission_classes = []
+
+    def get(self, request, chantier_id):
+        from datetime import datetime
+        mois = request.GET.get('mois')
+        annee = request.GET.get('annee')
+        chantier = Chantier.objects.get(pk=chantier_id)
+
+        # Définir la période
+        if mois and annee:
+            periode = f"{str(mois).zfill(2)}/{annee}"
+            date_debut = date(int(annee), int(mois), 1)
+            if int(mois) == 12:
+                date_fin = date(int(annee)+1, 1, 1) - timedelta(days=1)
+            else:
+                date_fin = date(int(annee), int(mois)+1, 1) - timedelta(days=1)
+        else:
+            periode = "Global"
+            date_debut = None
+            date_fin = None
+
+        # --- Récupération et filtrage des documents ---
+        # 1. Bon de Commande (Matériel)
+        bc_qs = BonCommande.objects.filter(chantier=chantier)
+        if date_debut and date_fin:
+            bc_qs = bc_qs.filter(date_paiement__range=(date_debut, date_fin))
+        bc_payes = bc_qs.filter(statut_paiement='paye')
+        bc_reste = bc_qs.exclude(statut_paiement='paye')
+
+        # 2. Situation (Entrées) - filtrage sur la date de paiement estimée
+        situations = Situation.objects.filter(chantier=chantier)
+        situations_in_periode = []
+        for s in situations:
+            if s.date_envoi and s.delai_paiement is not None:
+                try:
+                    date_paiement_estimee = s.date_envoi + timedelta(days=s.delai_paiement)
+                except Exception:
+                    continue
+                if date_debut and date_fin:
+                    if not (date_debut <= date_paiement_estimee <= date_fin):
+                        continue
+                # Ajoute la date estimée et le retard pour la réponse
+                s._date_paiement_estimee = date_paiement_estimee
+                if s.date_paiement_reel:
+                    s._retard = (s.date_paiement_reel - date_paiement_estimee).days
+                else:
+                    s._retard = None
+                situations_in_periode.append(s)
+
+        situation_payees = [s for s in situations_in_periode if s.date_paiement_reel]
+        situation_reste = [s for s in situations_in_periode if not s.date_paiement_reel]
+
+        # 3. Facture (Entrées)
+        facture_qs = Facture.objects.filter(chantier=chantier, type_facture='classique')
+        if date_debut and date_fin:
+            facture_qs = facture_qs.filter(date_paiement__range=(date_debut, date_fin))
+        facture_payees = facture_qs.filter(date_paiement__isnull=False)
+        facture_reste = facture_qs.filter(date_paiement__isnull=True)
+
+        # 4. Paiement Sous-Traitant (Sorties)
+        pst_qs = PaiementSousTraitant.objects.filter(chantier=chantier)
+        if date_debut and date_fin:
+            pst_qs = pst_qs.filter(date_envoi_facture__range=(date_debut, date_fin))
+        pst_payes = pst_qs.filter(date_paiement_reel__isnull=False)
+        pst_reste = pst_qs.filter(date_paiement_reel__isnull=True)
+
+        # 5. Main d'œuvre (Sorties)
+        labor_qs = LaborCost.objects.filter(chantier=chantier)
+        from datetime import datetime, date as date_cls, timedelta as timedelta_cls
+        today = date_cls.today()
+        labor_docs = []
+        if date_debut and date_fin:
+            # On ne filtre plus sur created_at mais sur la date calculée à partir de week/year
+            for lc in labor_qs:
+                try:
+                    week = int(lc.week)
+                    year = int(lc.year)
+                    lc_date = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u").date()
+                except Exception:
+                    continue
+                if date_debut <= lc_date <= date_fin:
+                    lc.date_planning = lc_date
+                    labor_docs.append(lc)
+        else:
+            for lc in labor_qs:
+                try:
+                    week = int(lc.week)
+                    year = int(lc.year)
+                    lc_date = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u").date()
+                except Exception:
+                    lc_date = None
+                lc.date_planning = lc_date
+                labor_docs.append(lc)
+
+        labor_payes = [lc for lc in labor_docs if lc.date_planning and lc.date_planning <= today]
+        labor_reste = [lc for lc in labor_docs if lc.date_planning and lc.date_planning > today]
+
+        def labor_to_doc(lc):
+            return {
+                "id": lc.id,
+                "agent": str(lc.agent),
+                "date": lc.date_planning,
+                "heures": float(lc.hours),
+                "montant": float(lc.cost),
+                "statut": "payé" if lc in labor_payes else "à payer",
+            }
+
+        # --- Construction des listes de documents ---
+        def bc_to_doc(bc):
+            return {
+                "id": bc.id,
+                "numero": bc.numero,
+                "date": bc.date_paiement,
+                "montant": float(bc.montant_total),
+                "statut": bc.statut_paiement,
+            }
+
+        def situation_to_doc(sit):
+            montant = float(sit.montant_reel_ht) if sit.date_paiement_reel and sit.montant_reel_ht else float(sit.montant_apres_retenues)
+            doc = {
+                "id": sit.id,
+                "numero": sit.numero_situation,
+                "date": sit.date_envoi,
+                "montant": montant,
+                "statut": "payé" if sit.date_paiement_reel else "à encaisser",
+                "date_paiement_estimee": getattr(sit, '_date_paiement_estimee', None),
+                "retard": getattr(sit, '_retard', None),
+            }
+            return doc
+
+        def facture_to_doc(fac):
+            return {
+                "id": fac.id,
+                "numero": fac.numero,
+                "date": fac.date_paiement,
+                "montant": float(fac.price_ht),
+                "statut": "payé" if fac.date_paiement else "à encaisser",
+            }
+
+        def pst_to_doc(pst):
+            return {
+                "id": pst.id,
+                "numero": f"{getattr(pst.sous_traitant, 'entreprise', str(pst.sous_traitant))}-{pst.mois}/{pst.annee}",
+                "date": pst.date_envoi_facture,
+                "montant": float(pst.montant_facture_ht),
+                "statut": "payé" if pst.date_paiement_reel else "à payer",
+                "sous_traitant": getattr(pst.sous_traitant, 'entreprise', None),
+            }
+
+        def labor_to_doc(lc):
+            # Inclure la date calculée dans la réponse
+            try:
+                week = int(lc.week)
+                year = int(lc.year)
+                lc_date = datetime.strptime(f'{year}-W{week}-1', "%Y-W%W-%w").date()
+            except Exception:
+                lc_date = None
+            return {
+                "id": lc.id,
+                "agent": str(lc.agent),
+                "date": lc_date,
+                "heures": float(lc.hours),
+                "montant": float(lc.cost),
+                "statut": "payé" if lc in labor_payes else "à payer",
+            }
+
+        # --- Agrégation des totaux et des listes ---
+        sorties = {
+            "paye": {
+                "materiel": {
+                    "total": float(bc_payes.aggregate(s=Sum('montant_total'))['s'] or 0),
+                    "documents": [bc_to_doc(bc) for bc in bc_payes]
+                },
+                "main_oeuvre": {
+                    "total": float(sum(lc.cost for lc in labor_payes)),
+                    "documents": [labor_to_doc(lc) for lc in labor_payes]
+                },
+                "sous_traitant": {
+                    "total": float(pst_payes.aggregate(s=Sum('montant_facture_ht'))['s'] or 0),
+                    "documents": [pst_to_doc(pst) for pst in pst_payes]
+                }
+            },
+            "reste_a_payer": {
+                "materiel": {
+                    "total": float(bc_reste.aggregate(s=Sum('montant_total'))['s'] or 0),
+                    "documents": [bc_to_doc(bc) for bc in bc_reste]
+                },
+                "main_oeuvre": {
+                    "total": float(sum(lc.cost for lc in labor_reste)),
+                    "documents": [labor_to_doc(lc) for lc in labor_reste]
+                },
+                "sous_traitant": {
+                    "total": float(pst_reste.aggregate(s=Sum('montant_facture_ht'))['s'] or 0),
+                    "documents": [pst_to_doc(pst) for pst in pst_reste]
+                }
+            }
+        }
+
+        entrees = {
+            "paye": {
+                "situation": {
+                    "total": float(sum(
+                        float(s.montant_reel_ht) if s.date_paiement_reel and s.montant_reel_ht else float(s.montant_apres_retenues)
+                        for s in situation_payees
+                    )),
+                    "documents": [situation_to_doc(sit) for sit in situation_payees]
+                },
+                "facture": {
+                    "total": float(facture_payees.aggregate(s=Sum('price_ht'))['s'] or 0),
+                    "documents": [facture_to_doc(fac) for fac in facture_payees]
+                }
+            },
+            "reste_a_encaisser": {
+                "situation": {
+                    "total": float(sum(s.montant_apres_retenues for s in situation_reste)),
+                    "documents": [situation_to_doc(sit) for sit in situation_reste]
+                },
+                "facture": {
+                    "total": float(facture_reste.aggregate(s=Sum('price_ht'))['s'] or 0),
+                    "documents": [facture_to_doc(fac) for fac in facture_reste]
+                }
+            }
+        }
+
+        data = {
+            "periode": periode,
+            "sorties": sorties,
+            "entrees": entrees,
+        }
+
+        serializer = RecapFinancierSerializer(data)
+        return Response(serializer.data)
 

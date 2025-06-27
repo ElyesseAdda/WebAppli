@@ -64,6 +64,7 @@ from .views import (
     preview_planning_hebdo,
     recalculate_labor_costs,
     PaiementSousTraitantViewSet,
+    RecapFinancierChantierAPIView,
 )
 
 
@@ -185,4 +186,5 @@ urlpatterns = [
     path('planning_hebdo_pdf/', planning_hebdo_pdf, name='planning_hebdo_pdf'),
     path('preview-planning-hebdo/', preview_planning_hebdo, name='preview_planning_hebdo'),
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
+    path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
 ]

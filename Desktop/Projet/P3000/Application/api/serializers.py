@@ -827,4 +827,35 @@ class PaiementSousTraitantSerializer(serializers.ModelSerializer):
             'montant_paye_ht',
             'date_paiement_reel',
         ]
+
+# --- SERIALIZER POUR LE RECAP FINANCIER CHANTIER ---
+from rest_framework import serializers
+
+class RecapDocumentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    numero = serializers.CharField(required=False, allow_null=True)
+    date = serializers.DateField(required=False, allow_null=True)
+    montant = serializers.FloatField()
+    statut = serializers.CharField()
+    agent = serializers.CharField(required=False, allow_null=True)
+    heures = serializers.FloatField(required=False, allow_null=True)
+    sous_traitant = serializers.CharField(required=False, allow_null=True)
+
+class RecapCategorieSerializer(serializers.Serializer):
+    total = serializers.FloatField()
+    documents = RecapDocumentSerializer(many=True)
+
+class RecapSectionSerializer(serializers.Serializer):
+    materiel = RecapCategorieSerializer()
+    main_oeuvre = RecapCategorieSerializer()
+    sous_traitant = RecapCategorieSerializer()
+
+class RecapEntreeSectionSerializer(serializers.Serializer):
+    situation = RecapCategorieSerializer()
+    facture = RecapCategorieSerializer()
+
+class RecapFinancierSerializer(serializers.Serializer):
+    periode = serializers.CharField()
+    sorties = serializers.DictField(child=RecapSectionSerializer())
+    entrees = serializers.DictField(child=RecapEntreeSectionSerializer())
         

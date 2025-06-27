@@ -211,7 +211,7 @@ const ChantierDetail = () => {
               <ChantierCommandesTab chantierData={chantierData} />
             </TabPanel>
             <TabPanel value={selectedTab} index={3}>
-              <ChantierRecapFinancierTab chantierData={chantierData} />
+              <ChantierRecapFinancierTab chantierId={id} />
             </TabPanel>
           </Paper>
         )}

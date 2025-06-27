@@ -27,6 +27,7 @@ import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
+import Test from "./Test";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -81,7 +82,7 @@ function App() {
               path="/paiements-sous-traitant/:chantierId/:sousTraitantId"
               element={<PaiementsSousTraitantPage />}
             />
-            ;
+            <Route path="/Test" element={<Test />} />;
           </Routes>
         </Layout>
       </Router>

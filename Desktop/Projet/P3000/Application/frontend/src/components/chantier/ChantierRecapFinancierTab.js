@@ -1,254 +1,239 @@
 import {
+  Alert,
   Box,
-  Card,
-  CardContent,
+  Button,
+  CircularProgress,
+  FormControl,
   Grid,
-  LinearProgress,
+  InputLabel,
+  MenuItem,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Select,
   Typography,
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { FaSync } from "react-icons/fa";
+import RecapSection from "./RecapSection";
 
-const ChantierRecapFinancierTab = ({ chantierData }) => {
-  const [financialData, setFinancialData] = useState(null);
-  const [loading, setLoading] = useState(true);
+const CATEGORY_COLORS = {
+  materiel: "#0088FE",
+  main_oeuvre: "#00C49F",
+  sous_traitant: "#FFBB28",
+  situation: "#8884d8",
+  facture: "#FF8042",
+};
+
+const ChantierRecapFinancierTab = ({ chantierId }) => {
+  const [periode, setPeriode] = useState({
+    mois: new Date().getMonth() + 1,
+    annee: new Date().getFullYear(),
+  });
+  const [global, setGlobal] = useState(false);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Générer les options de mois/année
+  const moisOptions = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+  ];
+  const anneeCourante = new Date().getFullYear();
+  const anneeOptions = Array.from(
+    { length: 5 },
+    (_, i) => anneeCourante - 2 + i
+  );
+
+  // Récupérer les données API
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let url = `/api/chantier/${chantierId}/recap-financier/`;
+      if (!global) {
+        url += `?mois=${periode.mois}&annee=${periode.annee}`;
+      }
+      const res = await axios.get(url);
+      setData(res.data);
+      console.log(
+        "[ChantierRecapFinancierTab] DATA recu du backend :",
+        res.data
+      );
+    } catch (err) {
+      setError("Erreur lors du chargement des données financières.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchFinancialData = async () => {
-      try {
-        const response = await axios.get(
-          `/api/chantiers/${chantierData?.id}/financial-summary/`
-        );
-        setFinancialData(response.data);
-      } catch (error) {
-        console.error(
-          "Erreur lors du chargement des données financières:",
-          error
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (chantierData?.id) {
-      fetchFinancialData();
+    if (chantierId) {
+      fetchData();
     }
-  }, [chantierData?.id]);
+    // eslint-disable-next-line
+  }, [chantierId, periode, global]);
 
-  const formatMontant = (montant) => {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-    }).format(montant || 0);
+  // Gestion du changement de période
+  const handleMoisChange = (e) => {
+    setPeriode((prev) => ({ ...prev, mois: Number(e.target.value) }));
+    setGlobal(false);
+  };
+  const handleAnneeChange = (e) => {
+    setPeriode((prev) => ({ ...prev, annee: Number(e.target.value) }));
+    setGlobal(false);
+  };
+  const handleGlobal = () => {
+    setGlobal(true);
   };
 
-  const formatPourcentage = (value) => {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "percent",
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(value / 100);
-  };
-
-  if (loading) {
-    return <LinearProgress />;
-  }
+  // Log global à chaque render
+  console.log("[ChantierRecapFinancierTab] data state:", data);
 
   return (
-    <Box>
-      <Grid container spacing={3}>
-        {/* Résumé financier */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Résumé Financier
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Montant Total HT
-                  </Typography>
-                  <Typography variant="h5">
-                    {formatMontant(financialData?.montant_total_ht)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Coûts Totaux
-                  </Typography>
-                  <Typography variant="h5">
-                    {formatMontant(financialData?.couts_totaux)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Marge
-                  </Typography>
-                  <Typography variant="h5" color="primary">
-                    {formatMontant(financialData?.marge)}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
+    <Box sx={{ p: 2 }}>
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Typography variant="h5" sx={{ flex: 1 }}>
+            Récapitulatif Financier du Chantier
+          </Typography>
+          <FormControl sx={{ minWidth: 120 }} size="small">
+            <InputLabel>Mois</InputLabel>
+            <Select
+              value={periode.mois}
+              label="Mois"
+              onChange={handleMoisChange}
+              disabled={global}
+            >
+              {moisOptions.map((mois, idx) => (
+                <MenuItem key={mois} value={idx + 1}>
+                  {mois}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ minWidth: 100 }} size="small">
+            <InputLabel>Année</InputLabel>
+            <Select
+              value={periode.annee}
+              label="Année"
+              onChange={handleAnneeChange}
+              disabled={global}
+            >
+              {anneeOptions.map((annee) => (
+                <MenuItem key={annee} value={annee}>
+                  {annee}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant={global ? "contained" : "outlined"}
+            color="primary"
+            onClick={handleGlobal}
+            sx={{ ml: 2 }}
+          >
+            Tout le chantier
+          </Button>
+          <Button
+            onClick={fetchData}
+            color="primary"
+            sx={{ ml: 1 }}
+            startIcon={<FaSync />}
+          >
+            Actualiser
+          </Button>
+        </Box>
+      </Paper>
+      {loading ? (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight={200}
+        >
+          <CircularProgress />
+        </Box>
+      ) : error ? (
+        <Alert severity="error">{error}</Alert>
+      ) : data ? (
+        <Grid container spacing={3}>
+          {/* Sorties */}
+          <Grid item xs={12} md={6}>
+            <RecapSection
+              title={`Sorties - Payé`}
+              data={
+                data?.sorties?.paye || {
+                  materiel: { total: 0, documents: [] },
+                  main_oeuvre: { total: 0, documents: [] },
+                  sous_traitant: { total: 0, documents: [] },
+                }
+              }
+              colors={CATEGORY_COLORS}
+              {...console.log(
+                "[RecapSection] Sorties - Payé",
+                data?.sorties?.paye
+              )}
+            />
+            <RecapSection
+              title={`Sorties - Reste à payer`}
+              data={
+                data?.sorties?.reste_a_payer || {
+                  materiel: { total: 0, documents: [] },
+                  main_oeuvre: { total: 0, documents: [] },
+                  sous_traitant: { total: 0, documents: [] },
+                }
+              }
+              colors={CATEGORY_COLORS}
+              {...console.log(
+                "[RecapSection] Sorties - Reste à payer",
+                data?.sorties?.reste_a_payer
+              )}
+            />
+          </Grid>
+          {/* Entrées */}
+          <Grid item xs={12} md={6}>
+            <RecapSection
+              title={`Entrées - Payé`}
+              data={
+                data?.entrees?.paye || {
+                  situation: { total: 0, documents: [] },
+                  facture: { total: 0, documents: [] },
+                }
+              }
+              colors={CATEGORY_COLORS}
+              {...console.log(
+                "[RecapSection] Entrées - Payé",
+                data?.entrees?.paye
+              )}
+            />
+            <RecapSection
+              title={`Entrées - Reste à encaisser`}
+              data={
+                data?.entrees?.reste_a_encaisser || {
+                  situation: { total: 0, documents: [] },
+                  facture: { total: 0, documents: [] },
+                }
+              }
+              colors={CATEGORY_COLORS}
+              {...console.log(
+                "[RecapSection] Entrées - Reste à encaisser",
+                data?.entrees?.reste_a_encaisser
+              )}
+            />
+          </Grid>
         </Grid>
-
-        {/* Détail des coûts */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Détail des Coûts
-              </Typography>
-              <TableContainer component={Paper} elevation={0}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Type</TableCell>
-                      <TableCell align="right">Montant</TableCell>
-                      <TableCell align="right">% du total</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>Matériel</TableCell>
-                      <TableCell align="right">
-                        {formatMontant(financialData?.cout_materiel)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatPourcentage(
-                          (financialData?.cout_materiel /
-                            financialData?.couts_totaux) *
-                            100
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Main d'œuvre</TableCell>
-                      <TableCell align="right">
-                        {formatMontant(financialData?.cout_main_oeuvre)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatPourcentage(
-                          (financialData?.cout_main_oeuvre /
-                            financialData?.couts_totaux) *
-                            100
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Sous-traitance</TableCell>
-                      <TableCell align="right">
-                        {formatMontant(financialData?.cout_sous_traitance)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatPourcentage(
-                          (financialData?.cout_sous_traitance /
-                            financialData?.couts_totaux) *
-                            100
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Graphique de répartition */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Répartition des Coûts
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={[
-                      {
-                        name: "Matériel",
-                        montant: financialData?.cout_materiel,
-                      },
-                      {
-                        name: "Main d'œuvre",
-                        montant: financialData?.cout_main_oeuvre,
-                      },
-                      {
-                        name: "Sous-traitance",
-                        montant: financialData?.cout_sous_traitance,
-                      },
-                    ]}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => formatMontant(value)} />
-                    <Legend />
-                    <Bar dataKey="montant" name="Montant" fill="#8884d8" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Suivi des paiements */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Suivi des Paiements
-              </Typography>
-              <TableContainer component={Paper} elevation={0}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Type</TableCell>
-                      <TableCell align="right">Montant</TableCell>
-                      <TableCell align="right">Statut</TableCell>
-                      <TableCell align="right">Date</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {financialData?.paiements?.map((paiement) => (
-                      <TableRow key={paiement.id}>
-                        <TableCell>{paiement.type}</TableCell>
-                        <TableCell align="right">
-                          {formatMontant(paiement.montant)}
-                        </TableCell>
-                        <TableCell align="right">{paiement.statut}</TableCell>
-                        <TableCell align="right">
-                          {new Date(paiement.date).toLocaleDateString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      ) : null}
     </Box>
   );
 };
