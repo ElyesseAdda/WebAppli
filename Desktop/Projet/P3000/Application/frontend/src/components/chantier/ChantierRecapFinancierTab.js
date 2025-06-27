@@ -66,10 +66,6 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
       }
       const res = await axios.get(url);
       setData(res.data);
-      console.log(
-        "[ChantierRecapFinancierTab] DATA recu du backend :",
-        res.data
-      );
     } catch (err) {
       setError("Erreur lors du chargement des données financières.");
     } finally {
@@ -96,9 +92,6 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
   const handleGlobal = () => {
     setGlobal(true);
   };
-
-  // Log global à chaque render
-  console.log("[ChantierRecapFinancierTab] data state:", data);
 
   return (
     <Box sx={{ p: 2 }}>
@@ -172,64 +165,26 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
           <Grid item xs={12} md={6}>
             <RecapSection
               title={`Sorties - Payé`}
-              data={
-                data?.sorties?.paye || {
-                  materiel: { total: 0, documents: [] },
-                  main_oeuvre: { total: 0, documents: [] },
-                  sous_traitant: { total: 0, documents: [] },
-                }
-              }
+              data={data.sorties.paye}
               colors={CATEGORY_COLORS}
-              {...console.log(
-                "[RecapSection] Sorties - Payé",
-                data?.sorties?.paye
-              )}
             />
             <RecapSection
               title={`Sorties - Reste à payer`}
-              data={
-                data?.sorties?.reste_a_payer || {
-                  materiel: { total: 0, documents: [] },
-                  main_oeuvre: { total: 0, documents: [] },
-                  sous_traitant: { total: 0, documents: [] },
-                }
-              }
+              data={data.sorties.reste_a_payer}
               colors={CATEGORY_COLORS}
-              {...console.log(
-                "[RecapSection] Sorties - Reste à payer",
-                data?.sorties?.reste_a_payer
-              )}
             />
           </Grid>
           {/* Entrées */}
           <Grid item xs={12} md={6}>
             <RecapSection
               title={`Entrées - Payé`}
-              data={
-                data?.entrees?.paye || {
-                  situation: { total: 0, documents: [] },
-                  facture: { total: 0, documents: [] },
-                }
-              }
+              data={data.entrees.paye}
               colors={CATEGORY_COLORS}
-              {...console.log(
-                "[RecapSection] Entrées - Payé",
-                data?.entrees?.paye
-              )}
             />
             <RecapSection
               title={`Entrées - Reste à encaisser`}
-              data={
-                data?.entrees?.reste_a_encaisser || {
-                  situation: { total: 0, documents: [] },
-                  facture: { total: 0, documents: [] },
-                }
-              }
+              data={data.entrees.reste_a_encaisser}
               colors={CATEGORY_COLORS}
-              {...console.log(
-                "[RecapSection] Entrées - Reste à encaisser",
-                data?.entrees?.reste_a_encaisser
-              )}
             />
           </Grid>
         </Grid>

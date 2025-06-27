@@ -14,6 +14,19 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 // Composant pour l'affichage du contenu de l'onglet d'un chantier
 function ChantierTabPanel(props) {
@@ -182,7 +195,7 @@ const ResourcesIndicator = ({ data }) => {
           Moyenne: {formatPourcentage(data.moyenne_occupation)}
         </Typography>
         <Box sx={{ height: 300, mt: 2 }}>
-          {/* <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
@@ -192,7 +205,7 @@ const ResourcesIndicator = ({ data }) => {
               />
               <Bar dataKey="taux" fill="#8884d8" name="Taux d'occupation" />
             </BarChart>
-          </ResponsiveContainer> */}
+          </ResponsiveContainer>
         </Box>
       </CardContent>
     </Card>
@@ -232,7 +245,7 @@ const PaiementsSection = ({ data }) => {
               Âge des créances
             </Typography>
             <Box sx={{ height: 300 }}>
-              {/* <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={creancesData}
@@ -258,7 +271,7 @@ const PaiementsSection = ({ data }) => {
                   />
                   <Legend />
                 </PieChart>
-              </ResponsiveContainer> */}
+              </ResponsiveContainer>
             </Box>
           </CardContent>
         </Card>

@@ -7,27 +7,22 @@ import {
   Paper,
   Typography,
 } from "@mui/material";
+import { ResponsivePie } from "@nivo/pie";
 import React, { useState } from "react";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import RecapCategoryDetails from "./RecapCategoryDetails";
 
 const RecapSection = ({ title, data, colors }) => {
-  if (!data) return null;
-  // Log des props reçues
-  console.log("[RecapSection] props:", { title, data, colors });
   const [openDetails, setOpenDetails] = useState({});
 
-  // Préparer les données pour le PieChart
+  // Préparer les données pour Nivo Pie
   const pieData = Object.keys(data).map((cat) => ({
-    name: cat.replace("_", " ").toUpperCase(),
+    id: cat.replace("_", " ").toUpperCase(),
+    label: cat.replace("_", " ").toUpperCase(),
     value: data[cat].total || 0,
+    color: colors[cat] || "#8884d8",
     key: cat,
   }));
-
-  // Log chaque catégorie et ses données
-  Object.keys(data).forEach((cat) => {
-    console.log(`[RecapSection] Catégorie: ${cat}`, data[cat]);
-  });
 
   // Gestion de l'ouverture/fermeture des détails
   const handleToggleDetails = (cat) => {
@@ -45,41 +40,51 @@ const RecapSection = ({ title, data, colors }) => {
         alignItems="flex-start"
         gap={4}
       >
-        {/* PieChart désactivé temporairement pour debug */}
-        {/*
-        <Box sx={{ width: 220, height: 220, minWidth: 220, minHeight: 220 }}>
-          <ResponsiveContainer width="99%" height="99%">
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                label={({ name, percent }) =>
-                  `${name} (${(percent * 100).toFixed(0)}%)`
-                }
-              >
-                {pieData.map((entry, idx) => (
-                  <Cell
-                    key={`cell-${entry.key}`}
-                    fill={colors[entry.key] || "#8884d8"}
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value) =>
-                  `${Number(value).toLocaleString("fr-FR", {
+        {/* PieChart Nivo */}
+        <Box sx={{ width: 220, height: 220 }}>
+          <ResponsivePie
+            data={pieData}
+            margin={{ top: 20, right: 20, bottom: 40, left: 20 }}
+            innerRadius={0.6}
+            padAngle={1}
+            cornerRadius={3}
+            colors={{ datum: "data.color" }}
+            borderWidth={1}
+            borderColor={{ from: "color", modifiers: [["darker", 0.2]] }}
+            enableArcLabels={true}
+            arcLabelsTextColor={{ from: "color", modifiers: [["darker", 2]] }}
+            arcLinkLabelsSkipAngle={10}
+            arcLinkLabelsTextColor="#333333"
+            arcLinkLabelsThickness={2}
+            arcLinkLabelsColor={{ from: "color" }}
+            legends={[
+              {
+                anchor: "bottom",
+                direction: "row",
+                justify: false,
+                translateY: 36,
+                itemWidth: 80,
+                itemHeight: 18,
+                itemsSpacing: 0,
+                symbolSize: 18,
+                symbolShape: "circle",
+              },
+            ]}
+            tooltip={({ datum }) => (
+              <Box sx={{ p: 1 }}>
+                <Typography variant="body2" fontWeight={700}>
+                  {datum.label}
+                </Typography>
+                <Typography variant="body2">
+                  {Number(datum.value).toLocaleString("fr-FR", {
                     minimumFractionDigits: 2,
-                  })} €`
-                }
-              />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+                  })}{" "}
+                  €
+                </Typography>
+              </Box>
+            )}
+          />
         </Box>
-        */}
         {/* Totaux par catégorie + bouton détails */}
         <Box flex={1}>
           <List>
@@ -117,7 +122,7 @@ const RecapSection = ({ title, data, colors }) => {
                 </ListItem>
                 <RecapCategoryDetails
                   open={!!openDetails[cat]}
-                  documents={data[cat]?.documents || []}
+                  documents={data[cat].documents}
                   title={cat.replace("_", " ").toUpperCase()}
                   onClose={() => handleToggleDetails(cat)}
                 />

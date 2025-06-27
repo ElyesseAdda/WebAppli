@@ -15,8 +15,6 @@ import React from "react";
 import { FaTimes } from "react-icons/fa";
 
 const RecapCategoryDetails = ({ open, documents, title, onClose }) => {
-  // Log des props reçues
-  console.log("[RecapCategoryDetails] props:", { open, documents, title });
   return (
     <Collapse in={open} timeout="auto" unmountOnExit>
       <Paper elevation={3} sx={{ mt: 2, p: 2 }}>
