@@ -21,7 +21,7 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import fr from "date-fns/locale/fr";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FiPlusCircle } from "react-icons/fi";
 import { TfiMore } from "react-icons/tfi";
 import {
@@ -35,20 +35,13 @@ import {
 } from "../../styles/tableStyles";
 import BonCommandeForm from "../BonCommandeForm";
 
-const ChantierListeBonCommande = ({ chantierId }) => {
+const ChantierListeBonCommande = ({
+  chantierId,
+  initialFilters = {},
+  onSaveFilters,
+}) => {
   const [bonsCommande, setBonsCommande] = useState([]);
-  const [filteredBonsCommande, setFilteredBonsCommande] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    numero: "",
-    fournisseur: "",
-    date_creation: "",
-    montant_total: "",
-    statut: "",
-    statut_paiement: "",
-    montant_paye: "",
-    reste_a_payer: "",
-  });
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
   const [anchorEl, setAnchorEl] = useState(null);
@@ -64,6 +57,38 @@ const ChantierListeBonCommande = ({ chantierId }) => {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [openForm, setOpenForm] = useState(false);
+  const [filters, setFilters] = useState(initialFilters);
+  const debounceTimeout = useRef(null);
+  const isFirstRender = useRef(true);
+  const prevChantierId = useRef();
+
+  useEffect(() => {
+    // Ne réinitialise les filtres que si le chantier change réellement
+    if (chantierId !== prevChantierId.current) {
+      setFilters(initialFilters);
+      prevChantierId.current = chantierId;
+    }
+    // Sinon, ne rien faire (évite la réinitialisation à chaque réaffichage)
+  }, [chantierId, initialFilters]);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!onSaveFilters) return;
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    debounceTimeout.current = setTimeout(() => {
+      onSaveFilters(filters);
+    }, 500);
+    return () => {
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    };
+  }, [filters, onSaveFilters]);
+
+  const handleChange = (field) => (e) => {
+    setFilters((prev) => ({ ...prev, [field]: e.target.value }));
+  };
 
   const fetchBonsCommande = async () => {
     if (isLoading) return;
@@ -73,7 +98,6 @@ const ChantierListeBonCommande = ({ chantierId }) => {
       // Filtrer côté front sur le chantier courant
       const filtered = response.data.filter((bc) => bc.chantier === chantierId);
       setBonsCommande(filtered);
-      setFilteredBonsCommande(filtered);
     } catch (error) {
       console.error("Erreur lors du chargement des bons de commande:", error);
     } finally {
@@ -90,46 +114,32 @@ const ChantierListeBonCommande = ({ chantierId }) => {
     // eslint-disable-next-line
   }, [chantierId]);
 
-  const handleFilterChange = (field) => (event) => {
-    const newFilters = {
-      ...filters,
-      [field]: event.target.value,
-    };
-    setFilters(newFilters);
-
-    let filtered = bonsCommande.filter((bc) => {
-      return Object.keys(newFilters).every((key) => {
-        if (!newFilters[key]) return true;
-        switch (key) {
-          case "numero":
-            return bc.numero
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          case "fournisseur":
-            return bc.fournisseur
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          case "date_creation":
-            if (!newFilters[key]) return true;
-            const bcDate = new Date(bc.date_creation)
-              .toISOString()
-              .split("T")[0];
-            return bcDate === newFilters[key];
-          case "montant_total":
-            if (!newFilters[key]) return true;
-            return parseFloat(bc.montant_total) === parseFloat(newFilters[key]);
-          case "statut":
-            if (!newFilters[key]) return true;
-            return bc.statut
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          default:
-            return true;
-        }
-      });
+  // Calcul dynamique de la liste filtrée à chaque render
+  const filteredBonsCommande = bonsCommande.filter((bc) => {
+    return Object.keys(filters).every((key) => {
+      if (!filters[key]) return true;
+      switch (key) {
+        case "numero":
+          return bc.numero?.toLowerCase().includes(filters[key].toLowerCase());
+        case "fournisseur":
+          return bc.fournisseur
+            ?.toLowerCase()
+            .includes(filters[key].toLowerCase());
+        case "date_creation":
+          if (!filters[key]) return true;
+          const bcDate = new Date(bc.date_creation).toISOString().split("T")[0];
+          return bcDate === filters[key];
+        case "montant_total":
+          if (!filters[key]) return true;
+          return parseFloat(bc.montant_total) === parseFloat(filters[key]);
+        case "statut":
+          if (!filters[key]) return true;
+          return bc.statut?.toLowerCase().includes(filters[key].toLowerCase());
+        default:
+          return true;
+      }
     });
-    setFilteredBonsCommande(filtered);
-  };
+  });
 
   const handleSort = (property) => {
     const isAsc = orderBy === property && order === "asc";
@@ -143,7 +153,6 @@ const ChantierListeBonCommande = ({ chantierId }) => {
       }
       return (isAsc ? 1 : -1) * (a[property] < b[property] ? -1 : 1);
     });
-    setFilteredBonsCommande(sortedBCs);
   };
 
   const handleMenuOpen = (event, bc) => {
@@ -327,7 +336,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="N° BC"
                   variant="standard"
                   value={filters.numero}
-                  onChange={handleFilterChange("numero")}
+                  onChange={handleChange("numero")}
                 />
               </FilterCell>
               <FilterCell>
@@ -335,7 +344,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="Fournisseur"
                   variant="standard"
                   value={filters.fournisseur}
-                  onChange={handleFilterChange("fournisseur")}
+                  onChange={handleChange("fournisseur")}
                 />
               </FilterCell>
               <FilterCell>
@@ -344,7 +353,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   variant="standard"
                   type="date"
                   value={filters.date_creation}
-                  onChange={handleFilterChange("date_creation")}
+                  onChange={handleChange("date_creation")}
                   InputLabelProps={{ shrink: true }}
                   sx={{ pt: "15px" }}
                 />
@@ -354,7 +363,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="Montant"
                   variant="standard"
                   value={filters.montant_total}
-                  onChange={handleFilterChange("montant_total")}
+                  onChange={handleChange("montant_total")}
                 />
               </FilterCell>
               <FilterCell>
@@ -362,7 +371,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="Statut"
                   variant="standard"
                   value={filters.statut}
-                  onChange={handleFilterChange("statut")}
+                  onChange={handleChange("statut")}
                 />
               </FilterCell>
               <FilterCell>
@@ -370,9 +379,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="Paiement"
                   variant="standard"
                   value={filters.statut_paiement}
-                  onChange={handleFilterChange("statut_paiement")}
-                  disabled
-                  sx={{ opacity: 1 }}
+                  onChange={handleChange("statut_paiement")}
                 />
               </FilterCell>
               <FilterCell>
@@ -380,9 +387,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="Payé"
                   variant="standard"
                   value={filters.montant_paye}
-                  onChange={handleFilterChange("montant_paye")}
-                  disabled
-                  sx={{ opacity: 1 }}
+                  onChange={handleChange("montant_paye")}
                 />
               </FilterCell>
               <FilterCell>
@@ -390,9 +395,7 @@ const ChantierListeBonCommande = ({ chantierId }) => {
                   label="À Payer"
                   variant="standard"
                   value={filters.reste_a_payer}
-                  onChange={handleFilterChange("reste_a_payer")}
-                  disabled
-                  sx={{ opacity: 1 }}
+                  onChange={handleChange("reste_a_payer")}
                 />
               </FilterCell>
               <FilterCell />

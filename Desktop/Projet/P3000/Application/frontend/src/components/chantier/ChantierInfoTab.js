@@ -20,7 +20,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import dayjs from "dayjs";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   FaCheckCircle,
   FaChevronDown,
@@ -34,22 +34,69 @@ import {
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 
-const ChantierInfoTab = ({ chantierData, onUpdate }) => {
-  const [openSousTraitance, setOpenSousTraitance] = useState(false);
-  const [tauxFacturationData, setTauxFacturationData] = useState(null);
-  const [loadingTaux, setLoadingTaux] = useState(true);
-  const [openModal, setOpenModal] = useState(false);
-  const [selectedSituation, setSelectedSituation] = useState(null);
-  const [dateEnvoi, setDateEnvoi] = useState(null);
-  const [delaiPaiement, setDelaiPaiement] = useState("");
-  const [openSituationModal, setOpenSituationModal] = useState(false);
-  const [devisChantier, setDevisChantier] = useState(null);
-  const [loadingDevis, setLoadingDevis] = useState(true);
-  const [openPaiementModal, setOpenPaiementModal] = useState(false);
+const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
+  const {
+    openSousTraitance = false,
+    openSituationModal = false,
+    filters = {},
+    openAccordions = {},
+  } = state;
+  const setOpenSousTraitance = (val) =>
+    setState({ ...state, openSousTraitance: val });
+  const setOpenSituationModal = (val) =>
+    setState({ ...state, openSituationModal: val });
+  const setFilters = (newFilters) =>
+    setState({ ...state, filters: newFilters });
+  const setOpenAccordions = (newOpen) =>
+    setState({ ...state, openAccordions: newOpen });
+
+  // State local pour tout ce qui n'a pas besoin d'être global
+  const [tauxFacturationData, setTauxFacturationData] = React.useState(null);
+  const [loadingTaux, setLoadingTaux] = React.useState(false);
+  const [openModal, setOpenModal] = React.useState(false);
+  const [selectedSituation, setSelectedSituation] = React.useState(null);
+  const [dateEnvoi, setDateEnvoi] = React.useState(null);
+  const [delaiPaiement, setDelaiPaiement] = React.useState("");
+  const [devisChantier, setDevisChantier] = React.useState(null);
+  const [loadingDevis, setLoadingDevis] = React.useState(false);
+  const [openPaiementModal, setOpenPaiementModal] = React.useState(false);
   const [selectedSituationPaiement, setSelectedSituationPaiement] =
-    useState(null);
-  const [montantRecu, setMontantRecu] = useState("");
-  const [datePaiementReel, setDatePaiementReel] = useState("");
+    React.useState(null);
+  const [montantRecu, setMontantRecu] = React.useState("");
+  const [datePaiementReel, setDatePaiementReel] = React.useState("");
+
+  const hasLoadedTaux = useRef(false);
+  useEffect(() => {
+    if (!chantierData?.id) return;
+    if (!hasLoadedTaux.current) {
+      setLoadingTaux(true);
+      axios
+        .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
+        .then((res) => setTauxFacturationData(res.data))
+        .finally(() => setLoadingTaux(false));
+      hasLoadedTaux.current = true;
+    }
+  }, [chantierData?.id]);
+
+  useEffect(() => {
+    if (chantierData?.id) {
+      setLoadingDevis(true);
+      axios
+        .get("/api/devisa/", {
+          params: {
+            chantier: chantierData.id,
+            devis_chantier: true,
+          },
+        })
+        .then((res) => {
+          setDevisChantier(
+            res.data && res.data.length > 0 ? res.data[0] : null
+          );
+        })
+        .catch(() => setDevisChantier(null))
+        .finally(() => setLoadingDevis(false));
+    }
+  }, [chantierData?.id]);
 
   const handleSousTraitanceUpdate = () => {
     if (onUpdate) {
@@ -81,36 +128,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate }) => {
     attente_signature: 3,
     refuses: 1,
   };
-
-  useEffect(() => {
-    if (chantierData?.id) {
-      setLoadingTaux(true);
-      axios
-        .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
-        .then((res) => setTauxFacturationData(res.data))
-        .finally(() => setLoadingTaux(false));
-    }
-  }, [chantierData?.id]);
-
-  useEffect(() => {
-    if (chantierData?.id) {
-      setLoadingDevis(true);
-      axios
-        .get("/api/devisa/", {
-          params: {
-            chantier: chantierData.id,
-            devis_chantier: true,
-          },
-        })
-        .then((res) => {
-          setDevisChantier(
-            res.data && res.data.length > 0 ? res.data[0] : null
-          );
-        })
-        .catch(() => setDevisChantier(null))
-        .finally(() => setLoadingDevis(false));
-    }
-  }, [chantierData?.id]);
 
   const MultiColorProgressBar = ({ pourcentages, montants }) => (
     <Box

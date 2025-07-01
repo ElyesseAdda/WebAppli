@@ -5268,12 +5268,14 @@ class RecapFinancierChantierAPIView(APIView):
 
         # --- Construction des listes de documents ---
         def bc_to_doc(bc):
+            montant = float(bc.reste_a_payer) if getattr(bc, 'statut_paiement', None) == 'paye_partiel' and hasattr(bc, 'reste_a_payer') else float(bc.montant_total)
             return {
                 "id": bc.id,
                 "numero": bc.numero,
                 "date": bc.date_paiement,
-                "montant": float(bc.montant_total),
+                "montant": montant,
                 "statut": bc.statut_paiement,
+                "fournisseur": bc.fournisseur if hasattr(bc, 'fournisseur') else None,
             }
 
         def situation_to_doc(sit):
@@ -5343,7 +5345,11 @@ class RecapFinancierChantierAPIView(APIView):
             },
             "reste_a_payer": {
                 "materiel": {
-                    "total": float(bc_reste.aggregate(s=Sum('montant_total'))['s'] or 0),
+                    "total": float(sum(
+                        bc.reste_a_payer if getattr(bc, 'statut_paiement', None) == 'paye_partiel' and hasattr(bc, 'reste_a_payer')
+                        else bc.montant_total
+                        for bc in bc_reste
+                    )),
                     "documents": [bc_to_doc(bc) for bc in bc_reste]
                 },
                 "main_oeuvre": {

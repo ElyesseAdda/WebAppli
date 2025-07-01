@@ -12,8 +12,9 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { FaSync } from "react-icons/fa";
+import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
 
 const CATEGORY_COLORS = {
@@ -25,14 +26,21 @@ const CATEGORY_COLORS = {
 };
 
 const ChantierRecapFinancierTab = ({ chantierId }) => {
-  const [periode, setPeriode] = useState({
-    mois: new Date().getMonth() + 1,
-    annee: new Date().getFullYear(),
-  });
-  const [global, setGlobal] = useState(false);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const {
+    filters,
+    setFilters,
+    openAccordions,
+    setOpenAccordions,
+    periode,
+    setPeriode,
+    global,
+    setGlobal,
+  } = useRecapFinancier();
+
+  // State local pour la donnée API et le statut
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
 
   // Générer les options de mois/année
   const moisOptions = [
@@ -73,24 +81,26 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
     }
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
+    // Debug temporaire
+    console.log("fetchData recap-financier", chantierId, periode, global);
     if (chantierId) {
       fetchData();
     }
     // eslint-disable-next-line
-  }, [chantierId, periode, global]);
+  }, [chantierId, JSON.stringify(periode), global]);
 
   // Gestion du changement de période
   const handleMoisChange = (e) => {
-    setPeriode((prev) => ({ ...prev, mois: Number(e.target.value) }));
+    setPeriode({ ...periode, mois: Number(e.target.value) });
     setGlobal(false);
   };
   const handleAnneeChange = (e) => {
-    setPeriode((prev) => ({ ...prev, annee: Number(e.target.value) }));
+    setPeriode({ ...periode, annee: Number(e.target.value) });
     setGlobal(false);
   };
   const handleGlobal = () => {
-    setGlobal(true);
+    setGlobal(!global);
   };
 
   return (
@@ -136,7 +146,7 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
             onClick={handleGlobal}
             sx={{ ml: 2 }}
           >
-            Tout le chantier
+            {global ? "Désactiver" : "Global"}
           </Button>
           <Button
             onClick={fetchData}

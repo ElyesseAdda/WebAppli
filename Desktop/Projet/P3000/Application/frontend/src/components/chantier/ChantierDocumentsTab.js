@@ -1,15 +1,30 @@
 import { AppBar, Box, Paper, Tab, Tabs } from "@mui/material";
-import React, { useState } from "react";
+import React, { useEffect, useRef } from "react";
 import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
 import ChantierListeSituation from "./ChantierListeSituation";
 
-const ChantierDocumentsTab = ({ chantierData }) => {
-  const [selectedTab, setSelectedTab] = useState(0);
+const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
+  const { selectedTab = 0, filters = {}, openAccordions = {} } = state;
+  const setSelectedTab = (tab) => setState({ ...state, selectedTab: tab });
+  const setFilters = (newFilters) =>
+    setState({ ...state, filters: newFilters });
+  const setOpenAccordions = (newOpen) =>
+    setState({ ...state, openAccordions: newOpen });
 
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
   };
+
+  const hasLoaded = useRef(false);
+
+  useEffect(() => {
+    if (!chantierData?.id) return;
+    if (!hasLoaded.current) {
+      // fetchData(); // Décommente et adapte si tu as une fonction de chargement
+      hasLoaded.current = true;
+    }
+  }, [chantierData?.id]);
 
   return (
     <>

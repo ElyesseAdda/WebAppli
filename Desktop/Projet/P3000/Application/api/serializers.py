@@ -837,9 +837,20 @@ class RecapDocumentSerializer(serializers.Serializer):
     date = serializers.DateField(required=False, allow_null=True)
     montant = serializers.FloatField()
     statut = serializers.CharField()
+    fournisseur = serializers.CharField(required=False, allow_null=True)
     agent = serializers.CharField(required=False, allow_null=True)
     heures = serializers.FloatField(required=False, allow_null=True)
     sous_traitant = serializers.CharField(required=False, allow_null=True)
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Si c'est un document matériel, ne garder que les champs pertinents
+        if 'fournisseur' in rep and rep.get('fournisseur') is not None:
+            # On retire agent, heures, sous_traitant
+            rep.pop('agent', None)
+            rep.pop('heures', None)
+            rep.pop('sous_traitant', None)
+        return rep
 
 class RecapCategorieSerializer(serializers.Serializer):
     total = serializers.FloatField()
