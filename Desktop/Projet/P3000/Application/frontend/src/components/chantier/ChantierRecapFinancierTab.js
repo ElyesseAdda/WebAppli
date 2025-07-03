@@ -174,27 +174,39 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
           {/* Sorties */}
           <Grid item xs={12} md={6}>
             <RecapSection
-              title={`Sorties - Payé`}
+              title={`Dépenses`}
               data={data.sorties.paye}
               colors={CATEGORY_COLORS}
+              chantierId={chantierId}
+              periode={periode}
+              refreshRecap={fetchData}
             />
             <RecapSection
-              title={`Sorties - Reste à payer`}
+              title={`Dépenses restantes`}
               data={data.sorties.reste_a_payer}
               colors={CATEGORY_COLORS}
+              chantierId={chantierId}
+              periode={periode}
+              refreshRecap={fetchData}
             />
           </Grid>
           {/* Entrées */}
           <Grid item xs={12} md={6}>
             <RecapSection
-              title={`Entrées - Payé`}
+              title={`Paiements reçus`}
               data={data.entrees.paye}
               colors={CATEGORY_COLORS}
+              chantierId={chantierId}
+              periode={periode}
+              refreshRecap={fetchData}
             />
             <RecapSection
-              title={`Entrées - Reste à encaisser`}
+              title={`Paiements en attente`}
               data={data.entrees.reste_a_encaisser}
               colors={CATEGORY_COLORS}
+              chantierId={chantierId}
+              periode={periode}
+              refreshRecap={fetchData}
             />
           </Grid>
         </Grid>

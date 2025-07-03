@@ -38,16 +38,17 @@ import TransformationTSModal from "../TransformationTSModal";
 const formatNumber = (number) =>
   number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
-const ChantierListeDevis = ({ chantierData }) => {
-  const [devis, setDevis] = useState([]);
+const ChantierListeDevis = ({
+  chantierData,
+  devis,
+  setDevis,
+  filters,
+  setFilters,
+  isLoaded,
+  setIsLoaded,
+  onSaveFilters,
+}) => {
   const [filteredDevis, setFilteredDevis] = useState([]);
-  const [filters, setFilters] = useState({
-    numero: "",
-    client_name: "",
-    date_creation: "",
-    price_ttc: "",
-    status: "Tous",
-  });
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
   const [anchorEl, setAnchorEl] = useState(null);
@@ -63,12 +64,17 @@ const ChantierListeDevis = ({ chantierData }) => {
   const [situationModalOpen, setSituationModalOpen] = useState(false);
   const [selectedDevisForSituation, setSelectedDevisForSituation] =
     useState(null);
-
   const statusOptions = ["En attente", "Validé", "Refusé"];
+  const [pendingSave, setPendingSave] = useState(false);
 
   useEffect(() => {
-    fetchDevis();
-  }, [chantierData?.id]);
+    if (!isLoaded && chantierData?.id) {
+      fetchDevis();
+    } else {
+      setFilteredDevis(devis);
+    }
+    // eslint-disable-next-line
+  }, [chantierData?.id, isLoaded, devis]);
 
   const fetchDevis = async () => {
     if (!chantierData?.id) return;
@@ -80,11 +86,57 @@ const ChantierListeDevis = ({ chantierData }) => {
       );
       setDevis(chantierDevis);
       setFilteredDevis(chantierDevis);
+      setIsLoaded(true);
     } catch (error) {
       setDevis([]);
       setFilteredDevis([]);
+      setIsLoaded(true);
     }
   };
+
+  useEffect(() => {
+    if (!pendingSave) return;
+    const handleMouseMove = () => {
+      setPendingSave(false);
+      onSaveFilters(filters);
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => document.removeEventListener("mousemove", handleMouseMove);
+  }, [pendingSave, filters, onSaveFilters]);
+
+  useEffect(() => {
+    // Recalcule la liste filtrée à chaque changement de filters ou de devis
+    let filtered = devis.filter((devis) => {
+      return Object.keys(filters).every((key) => {
+        if (!filters[key] || filters[key] === "Tous") return true;
+        switch (key) {
+          case "numero":
+            return devis.numero
+              ?.toLowerCase()
+              .includes(filters[key].toLowerCase());
+          case "client_name":
+            return devis.client_name
+              ?.toLowerCase()
+              .includes(filters[key].toLowerCase());
+          case "date_creation":
+            if (!filters[key]) return true;
+            const devisDate = new Date(devis.date_creation)
+              .toISOString()
+              .split("T")[0];
+            return devisDate === filters[key];
+          case "price_ttc":
+            const devisPrice = devis.price_ttc?.toString() || "";
+            return devisPrice.includes(filters[key]);
+          case "status":
+            return devis.status === filters[key];
+          default:
+            return true;
+        }
+      });
+    });
+    setFilteredDevis(filtered);
+  }, [filters, devis]);
 
   const handleFilterChange = (field) => (event) => {
     const newFilters = {
@@ -92,11 +144,10 @@ const ChantierListeDevis = ({ chantierData }) => {
       [field]: event.target.value,
     };
     setFilters(newFilters);
-
+    setPendingSave(true);
     let filtered = devis.filter((devis) => {
       return Object.keys(newFilters).every((key) => {
         if (!newFilters[key] || newFilters[key] === "Tous") return true;
-
         switch (key) {
           case "numero":
             return devis.numero
@@ -122,7 +173,6 @@ const ChantierListeDevis = ({ chantierData }) => {
         }
       });
     });
-
     setFilteredDevis(filtered);
   };
 
@@ -298,6 +348,7 @@ const ChantierListeDevis = ({ chantierData }) => {
                     variant="standard"
                     value={filters.numero}
                     onChange={handleFilterChange("numero")}
+                    sx={{ color: "white" }}
                   />
                 </FilterCell>
                 <AlignedCell>
@@ -305,7 +356,7 @@ const ChantierListeDevis = ({ chantierData }) => {
                     active={orderBy === "date_creation"}
                     direction={orderBy === "date_creation" ? order : "asc"}
                     onClick={() => handleSort("date_creation")}
-                    sx={{ textAlign: "center" }}
+                    sx={{ textAlign: "center", color: "white" }}
                   >
                     <CenteredTextField
                       variant="standard"
@@ -313,7 +364,7 @@ const ChantierListeDevis = ({ chantierData }) => {
                       value={filters.date_creation}
                       onChange={handleFilterChange("date_creation")}
                       InputLabelProps={{ shrink: true }}
-                      sx={{ pt: "15px" }}
+                      sx={{ pt: "15px", color: "white" }}
                     />
                   </TableSortLabel>
                 </AlignedCell>
@@ -322,7 +373,7 @@ const ChantierListeDevis = ({ chantierData }) => {
                     active={orderBy === "price_ttc"}
                     direction={orderBy === "price_ttc" ? order : "asc"}
                     onClick={() => handleSort("price_ttc")}
-                    sx={{ textAlign: "center" }}
+                    sx={{ textAlign: "center", color: "white" }}
                   >
                     <PriceTextField
                       label="Prix TTC"
@@ -334,6 +385,7 @@ const ChantierListeDevis = ({ chantierData }) => {
                         minWidth: "40px",
                         "& input": {
                           textAlign: "center",
+                          color: "white",
                         },
                       }}
                     />
@@ -344,7 +396,7 @@ const ChantierListeDevis = ({ chantierData }) => {
                     value={filters.status}
                     onChange={handleFilterChange("status")}
                     variant="standard"
-                    sx={{ pt: "10px" }}
+                    sx={{ pt: "10px", color: "white" }}
                   >
                     <MenuItem value="Tous">Tous</MenuItem>
                     {statusOptions.map((status) => (

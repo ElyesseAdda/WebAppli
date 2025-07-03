@@ -65,6 +65,7 @@ from .views import (
     recalculate_labor_costs,
     PaiementSousTraitantViewSet,
     RecapFinancierChantierAPIView,
+    PaiementFournisseurMaterielAPIView,
 )
 
 
@@ -187,4 +188,5 @@ urlpatterns = [
     path('preview-planning-hebdo/', preview_planning_hebdo, name='preview_planning_hebdo'),
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
+    path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
 ]

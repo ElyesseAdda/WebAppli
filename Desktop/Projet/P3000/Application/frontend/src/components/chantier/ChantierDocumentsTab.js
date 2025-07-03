@@ -1,19 +1,76 @@
 import { AppBar, Box, Paper, Tab, Tabs } from "@mui/material";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
 import ChantierListeSituation from "./ChantierListeSituation";
 
 const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
-  const { selectedTab = 0, filters = {}, openAccordions = {} } = state;
-  const setSelectedTab = (tab) => setState({ ...state, selectedTab: tab });
-  const setFilters = (newFilters) =>
-    setState({ ...state, filters: newFilters });
-  const setOpenAccordions = (newOpen) =>
-    setState({ ...state, openAccordions: newOpen });
+  // Centralisation des états pour chaque sous-liste et filtres
+  const [selectedTab, setSelectedTab] = useState(state.selectedTab || 0);
 
+  // Situations
+  const [situations, setSituations] = useState([]);
+  const [filtersSituations, setFiltersSituations] = useState(
+    state.filtersSituations || {
+      numero_situation: "",
+      mois: "",
+      pourcentage_avancement: "",
+      montant_apres_retenues: "",
+      statut: "Tous",
+    }
+  );
+  const [isLoadedSituations, setIsLoadedSituations] = useState(false);
+
+  // Devis
+  const [devis, setDevis] = useState([]);
+  const [filtersDevis, setFiltersDevis] = useState(
+    state.filtersDevis || {
+      numero: "",
+      client_name: "",
+      date_creation: "",
+      price_ttc: "",
+      status: "Tous",
+    }
+  );
+  const [isLoadedDevis, setIsLoadedDevis] = useState(false);
+
+  // Factures
+  const [factures, setFactures] = useState([]);
+  const [filtersFactures, setFiltersFactures] = useState(
+    state.filtersFactures || {
+      numero_facture: "",
+      date_creation: "",
+      montant: "",
+      state_facture: "Tous",
+      type_facture: "Tous",
+    }
+  );
+  const [isLoadedFactures, setIsLoadedFactures] = useState(false);
+
+  // Gestion du changement d'onglet
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
+    setState({
+      ...state,
+      selectedTab: newValue,
+      filtersSituations,
+      filtersDevis,
+      filtersFactures,
+    });
+  };
+
+  // Callbacks de sauvegarde différée pour chaque filtre
+  const saveFiltersSituations = (filters) => {
+    setFiltersSituations(filters);
+    setState((prev) => ({ ...prev, filtersSituations: filters }));
+  };
+  const saveFiltersDevis = (filters) => {
+    setFiltersDevis(filters);
+    setState((prev) => ({ ...prev, filtersDevis: filters }));
+  };
+  const saveFiltersFactures = (filters) => {
+    setFiltersFactures(filters);
+    setState((prev) => ({ ...prev, filtersFactures: filters }));
   };
 
   const hasLoaded = useRef(false);
@@ -81,13 +138,40 @@ const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
           sx={{ borderRadius: "10px", p: 2, background: "#fff" }}
         >
           {selectedTab === 0 && (
-            <ChantierListeSituation chantierData={chantierData} />
+            <ChantierListeSituation
+              chantierData={chantierData}
+              situations={situations}
+              setSituations={setSituations}
+              filters={filtersSituations}
+              setFilters={setFiltersSituations}
+              isLoaded={isLoadedSituations}
+              setIsLoaded={setIsLoadedSituations}
+              onSaveFilters={saveFiltersSituations}
+            />
           )}
           {selectedTab === 1 && (
-            <ChantierListeDevis chantierData={chantierData} />
+            <ChantierListeDevis
+              chantierData={chantierData}
+              devis={devis}
+              setDevis={setDevis}
+              filters={filtersDevis}
+              setFilters={setFiltersDevis}
+              isLoaded={isLoadedDevis}
+              setIsLoaded={setIsLoadedDevis}
+              onSaveFilters={saveFiltersDevis}
+            />
           )}
           {selectedTab === 2 && (
-            <ChantierListeFactures chantierData={chantierData} />
+            <ChantierListeFactures
+              chantierData={chantierData}
+              factures={factures}
+              setFactures={setFactures}
+              filters={filtersFactures}
+              setFilters={setFiltersFactures}
+              isLoaded={isLoadedFactures}
+              setIsLoaded={setIsLoadedFactures}
+              onSaveFilters={saveFiltersFactures}
+            />
           )}
         </Paper>
       </Box>

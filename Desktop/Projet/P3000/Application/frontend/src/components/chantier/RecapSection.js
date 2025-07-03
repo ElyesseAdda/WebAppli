@@ -17,7 +17,14 @@ import { ResponsivePie } from "@nivo/pie";
 import React, { useState } from "react";
 import RecapCategoryDetails from "./RecapCategoryDetails";
 
-const RecapSection = ({ title, data, colors }) => {
+const RecapSection = ({
+  title,
+  data,
+  colors,
+  chantierId,
+  periode,
+  refreshRecap,
+}) => {
   const [openDetails, setOpenDetails] = useState({});
   const [detailsMode, setDetailsMode] = useState(false);
   const [generalAccordionOpen, setGeneralAccordionOpen] = useState(false);
@@ -199,9 +206,30 @@ const RecapSection = ({ title, data, colors }) => {
                     </Typography>
                   }
                 />
+                <IconButton
+                  size="small"
+                  onClick={() => handleToggleDetails(cat)}
+                  sx={{ ml: 1 }}
+                >
+                  {openDetails[cat] ? <RemoveIcon /> : <AddIcon />}
+                </IconButton>
               </ListItem>
             ))}
           </List>
+          {/* Détails par catégorie (accordéon) */}
+          {Object.keys(data).map((cat) => (
+            <RecapCategoryDetails
+              key={cat}
+              open={!!openDetails[cat]}
+              documents={data[cat].documents}
+              title={cat.replace("_", " ")}
+              onClose={() => handleToggleDetails(cat)}
+              category={cat}
+              chantierId={chantierId}
+              periode={periode}
+              refreshRecap={refreshRecap}
+            />
+          ))}
         </Box>
       </Box>
       {/* Bouton pour activer/désactiver l'accordéon général */}
@@ -299,6 +327,9 @@ const RecapSection = ({ title, data, colors }) => {
                     title={cat.replace("_", " ").toUpperCase()}
                     onClose={() => handleToggleDetails(cat)}
                     category={cat}
+                    chantierId={chantierId}
+                    periode={periode}
+                    refreshRecap={refreshRecap}
                   />
                 </AccordionDetails>
               </Accordion>

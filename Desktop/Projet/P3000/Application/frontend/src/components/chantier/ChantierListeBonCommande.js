@@ -37,10 +37,11 @@ import BonCommandeForm from "../BonCommandeForm";
 
 const ChantierListeBonCommande = ({
   chantierId,
+  bonsCommande = [],
+  setBonsCommande = () => {},
   initialFilters = {},
   onSaveFilters,
 }) => {
-  const [bonsCommande, setBonsCommande] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
@@ -58,36 +59,37 @@ const ChantierListeBonCommande = ({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [openForm, setOpenForm] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
-  const debounceTimeout = useRef(null);
-  const isFirstRender = useRef(true);
-  const prevChantierId = useRef();
+  const [pendingSave, setPendingSave] = useState(false);
+  const firstMount = useRef(true);
+  const prevChantierId = useRef(chantierId);
 
   useEffect(() => {
-    // Ne réinitialise les filtres que si le chantier change réellement
-    if (chantierId !== prevChantierId.current) {
+    if (firstMount.current || chantierId !== prevChantierId.current) {
       setFilters(initialFilters);
+      firstMount.current = false;
       prevChantierId.current = chantierId;
     }
-    // Sinon, ne rien faire (évite la réinitialisation à chaque réaffichage)
-  }, [chantierId, initialFilters]);
+  }, [chantierId]);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    if (!onSaveFilters) return;
-    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
-    debounceTimeout.current = setTimeout(() => {
-      onSaveFilters(filters);
-    }, 500);
-    return () => {
-      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    if (!pendingSave) return;
+
+    const handleMouseMove = () => {
+      if (onSaveFilters) onSaveFilters(filters);
+      setPendingSave(false);
+      document.removeEventListener("mousemove", handleMouseMove);
     };
-  }, [filters, onSaveFilters]);
+
+    document.addEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [pendingSave, filters, onSaveFilters]);
 
   const handleChange = (field) => (e) => {
     setFilters((prev) => ({ ...prev, [field]: e.target.value }));
+    setPendingSave(true);
   };
 
   const fetchBonsCommande = async () => {
@@ -110,7 +112,9 @@ const ChantierListeBonCommande = ({
   }, [chantierId]);
 
   useEffect(() => {
-    fetchBonsCommande();
+    if (!bonsCommande.length) {
+      fetchBonsCommande();
+    }
     // eslint-disable-next-line
   }, [chantierId]);
 

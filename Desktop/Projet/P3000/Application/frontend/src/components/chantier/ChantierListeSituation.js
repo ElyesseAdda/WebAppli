@@ -46,23 +46,30 @@ const getMonthName = (monthNumber) => {
 
 const formatYear = (year) => year.toString().slice(-2);
 
-const ChantierListeSituation = ({ chantierData }) => {
-  const [situations, setSituations] = useState([]);
+const ChantierListeSituation = ({
+  chantierData,
+  situations,
+  setSituations,
+  filters,
+  setFilters,
+  isLoaded,
+  setIsLoaded,
+  onSaveFilters,
+}) => {
   const [filteredSituations, setFilteredSituations] = useState([]);
-  const [filters, setFilters] = useState({
-    numero_situation: "",
-    mois: "",
-    pourcentage_avancement: "",
-    montant_apres_retenues: "",
-    statut: "Tous",
-  });
   const [orderBy, setOrderBy] = useState("date_creation");
   const [order, setOrder] = useState("desc");
   const statusOptions = ["brouillon", "validee", "facturee"];
+  const [pendingSave, setPendingSave] = useState(false);
 
   useEffect(() => {
-    fetchSituations();
-  }, [chantierData?.id]);
+    if (!isLoaded && chantierData?.id) {
+      fetchSituations();
+    } else {
+      setFilteredSituations(situations);
+    }
+    // eslint-disable-next-line
+  }, [chantierData?.id, isLoaded, situations]);
 
   const fetchSituations = async () => {
     if (!chantierData?.id) return;
@@ -72,11 +79,54 @@ const ChantierListeSituation = ({ chantierData }) => {
       );
       setSituations(response.data);
       setFilteredSituations(response.data);
+      setIsLoaded(true);
     } catch (error) {
       setSituations([]);
       setFilteredSituations([]);
+      setIsLoaded(true);
     }
   };
+
+  useEffect(() => {
+    if (!pendingSave) return;
+    const handleMouseMove = () => {
+      setPendingSave(false);
+      onSaveFilters(filters);
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => document.removeEventListener("mousemove", handleMouseMove);
+  }, [pendingSave, filters, onSaveFilters]);
+
+  useEffect(() => {
+    // Recalcule la liste filtrée à chaque changement de filters ou de situations
+    let filtered = situations.filter((situation) => {
+      return Object.keys(filters).every((key) => {
+        if (!filters[key] || filters[key] === "Tous") return true;
+        switch (key) {
+          case "numero_situation":
+            return situation.numero_situation
+              ?.toLowerCase()
+              .includes(filters[key].toLowerCase());
+          case "mois":
+            return situation.mois.toString().includes(filters[key]);
+          case "pourcentage_avancement":
+            return situation.pourcentage_avancement
+              .toString()
+              .includes(filters[key]);
+          case "montant_apres_retenues":
+            return situation.montant_apres_retenues
+              .toString()
+              .includes(filters[key]);
+          case "statut":
+            return situation.statut === filters[key];
+          default:
+            return true;
+        }
+      });
+    });
+    setFilteredSituations(filtered);
+  }, [filters, situations]);
 
   const handleFilterChange = (field) => (event) => {
     const newFilters = {
@@ -84,11 +134,10 @@ const ChantierListeSituation = ({ chantierData }) => {
       [field]: event.target.value,
     };
     setFilters(newFilters);
-
+    setPendingSave(true);
     let filtered = situations.filter((situation) => {
       return Object.keys(newFilters).every((key) => {
         if (!newFilters[key] || newFilters[key] === "Tous") return true;
-
         switch (key) {
           case "numero_situation":
             return situation.numero_situation
@@ -111,7 +160,6 @@ const ChantierListeSituation = ({ chantierData }) => {
         }
       });
     });
-
     setFilteredSituations(filtered);
   };
 
@@ -176,7 +224,7 @@ const ChantierListeSituation = ({ chantierData }) => {
                     onChange={handleFilterChange("numero_situation")}
                     sx={{
                       "& .MuiInputBase-input": {
-                        color: "rgba(27, 120, 188, 1)",
+                        color: "white",
                         fontWeight: "bold",
                       },
                     }}
@@ -188,6 +236,7 @@ const ChantierListeSituation = ({ chantierData }) => {
                     variant="standard"
                     value={filters.mois}
                     onChange={handleFilterChange("mois")}
+                    sx={{ color: "white" }}
                   />
                 </FilterCell>
                 <AlignedCell>
@@ -203,6 +252,7 @@ const ChantierListeSituation = ({ chantierData }) => {
                       variant="standard"
                       value={filters.pourcentage_avancement}
                       onChange={handleFilterChange("pourcentage_avancement")}
+                      sx={{ color: "white" }}
                     />
                   </TableSortLabel>
                 </AlignedCell>
@@ -219,6 +269,7 @@ const ChantierListeSituation = ({ chantierData }) => {
                       variant="standard"
                       value={filters.montant_apres_retenues}
                       onChange={handleFilterChange("montant_apres_retenues")}
+                      sx={{ color: "white" }}
                     />
                   </TableSortLabel>
                 </AlignedCell>

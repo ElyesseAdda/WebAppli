@@ -38,29 +38,35 @@ import StatusChangeModal from "../StatusChangeModal";
 const formatNumber = (number) =>
   number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
-const ChantierListeFactures = ({ chantierData }) => {
-  const [factures, setFactures] = useState([]);
+const ChantierListeFactures = ({
+  chantierData,
+  factures,
+  setFactures,
+  filters,
+  setFilters,
+  isLoaded,
+  setIsLoaded,
+  onSaveFilters,
+}) => {
   const [filteredFactures, setFilteredFactures] = useState([]);
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedFacture, setSelectedFacture] = useState(null);
-  const [filters, setFilters] = useState({
-    numero_facture: "",
-    date_creation: "",
-    montant: "",
-    state_facture: "Tous",
-    type_facture: "Tous",
-  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [factureToUpdate, setFactureToUpdate] = useState(null);
-
   const statusOptions = ["En cours", "Attente paiement", "Payée"];
+  const [pendingSave, setPendingSave] = useState(false);
 
   useEffect(() => {
-    fetchFactures();
-  }, [chantierData?.id]);
+    if (!isLoaded && chantierData?.id) {
+      fetchFactures();
+    } else {
+      setFilteredFactures(factures);
+    }
+    // eslint-disable-next-line
+  }, [chantierData?.id, isLoaded, factures]);
 
   const fetchFactures = async () => {
     try {
@@ -70,11 +76,62 @@ const ChantierListeFactures = ({ chantierData }) => {
       );
       setFactures(facturesData);
       setFilteredFactures(facturesData);
+      setIsLoaded(true);
     } catch (error) {
       setFactures([]);
       setFilteredFactures([]);
+      setIsLoaded(true);
     }
   };
+
+  useEffect(() => {
+    if (!pendingSave) return;
+    const handleMouseMove = () => {
+      setPendingSave(false);
+      onSaveFilters(filters);
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => document.removeEventListener("mousemove", handleMouseMove);
+  }, [pendingSave, filters, onSaveFilters]);
+
+  useEffect(() => {
+    // Recalcule la liste filtrée à chaque changement de filters ou de factures
+    let filtered = factures.filter((facture) => {
+      return Object.keys(filters).every((key) => {
+        if (!filters[key] || filters[key] === "Tous") return true;
+        switch (key) {
+          case "numero_facture":
+            return facture.numero
+              ?.toLowerCase()
+              .includes(filters[key].toLowerCase());
+          case "date_creation":
+            if (!filters[key]) return true;
+            const factureDate = new Date(facture.date_creation)
+              .toISOString()
+              .split("T")[0];
+            return factureDate === filters[key];
+          case "montant":
+            const factureMontant = facture.price_ttc?.toString() || "";
+            return factureMontant.includes(filters[key]);
+          case "state_facture":
+            return facture.state_facture === filters[key];
+          case "type_facture":
+            if (filters[key] === "Tous") return true;
+            if (filters[key] === "ts") {
+              return (
+                facture.type_facture !== "cie" &&
+                facture.type_facture !== "classique"
+              );
+            }
+            return facture.type_facture === filters[key];
+          default:
+            return true;
+        }
+      });
+    });
+    setFilteredFactures(filtered);
+  }, [filters, factures]);
 
   const handleFilterChange = (field) => (event) => {
     const newFilters = {
@@ -82,43 +139,7 @@ const ChantierListeFactures = ({ chantierData }) => {
       [field]: event.target.value,
     };
     setFilters(newFilters);
-
-    let filtered = factures.filter((facture) => {
-      return Object.keys(newFilters).every((key) => {
-        if (!newFilters[key] || newFilters[key] === "Tous") return true;
-
-        switch (key) {
-          case "numero_facture":
-            return facture.numero
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          case "date_creation":
-            if (!newFilters[key]) return true;
-            const factureDate = new Date(facture.date_creation)
-              .toISOString()
-              .split("T")[0];
-            return factureDate === newFilters[key];
-          case "montant":
-            const factureMontant = facture.price_ttc?.toString() || "";
-            return factureMontant.includes(newFilters[key]);
-          case "state_facture":
-            return facture.state_facture === newFilters[key];
-          case "type_facture":
-            if (newFilters[key] === "Tous") return true;
-            if (newFilters[key] === "ts") {
-              return (
-                facture.type_facture !== "cie" &&
-                facture.type_facture !== "classique"
-              );
-            }
-            return facture.type_facture === newFilters[key];
-          default:
-            return true;
-        }
-      });
-    });
-
-    setFilteredFactures(filtered);
+    setPendingSave(true);
   };
 
   const handleSort = (property) => {

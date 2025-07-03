@@ -1005,3 +1005,19 @@ class PaiementSousTraitant(models.Model):
     def __str__(self):
         return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}"
 
+class PaiementFournisseurMateriel(models.Model):
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_materiel')
+    fournisseur = models.CharField(max_length=255)
+    mois = models.IntegerField()
+    annee = models.IntegerField()
+    montant = models.DecimalField(max_digits=12, decimal_places=2)
+    date_saisie = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('chantier', 'fournisseur', 'mois', 'annee')
+        verbose_name = 'Paiement Fournisseur Matériel'
+        verbose_name_plural = 'Paiements Fournisseurs Matériel'
+
+    def __str__(self):
+        return f"{self.chantier} - {self.fournisseur} - {self.mois}/{self.annee}: {self.montant} €"
+

@@ -15,14 +15,15 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
-    Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride# Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
+    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel# Changé BonCommandeLigne en LigneBonCommande
 )
 import logging
 from django.db import transaction, models
@@ -35,23 +36,14 @@ from decimal import Decimal
 from django.db.models import Q
 import re
 from decimal import Decimal, InvalidOperation
-from .models import SousTraitant, ContratSousTraitance, AvenantSousTraitance
-from .serializers import (
-    SousTraitantSerializer,
-    ContratSousTraitanceSerializer,
-    AvenantSousTraitanceSerializer,
-)
 import tempfile
 from django.views import View
 import random
-from .models import update_chantier_cout_main_oeuvre, Chantier
-from .models import PaiementSousTraitant
-from .serializers import PaiementSousTraitantSerializer
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from datetime import date, timedelta
-from .serializers import RecapFinancierSerializer
 from django.db.models import Sum
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 
 
@@ -5328,11 +5320,29 @@ class RecapFinancierChantierAPIView(APIView):
             }
 
         # --- Agrégation des totaux et des listes ---
+        # Remplacement de la logique matériel par PaiementFournisseurMateriel
+        paiements_materiel = PaiementFournisseurMateriel.objects.filter(chantier=chantier)
+        if date_debut and date_fin and mois and annee:
+            paiements_materiel = paiements_materiel.filter(mois=int(mois), annee=int(annee))
+        
+        def paiement_materiel_to_doc(pm):
+            return {
+                "id": pm.id,
+                "numero": None,
+                "date": pm.date_saisie.date() if hasattr(pm.date_saisie, 'date') else pm.date_saisie,
+                "montant": float(pm.montant),
+                "statut": "payé",  # On considère que tout paiement saisi est payé
+                "fournisseur": pm.fournisseur,
+            }
+        
+        total_materiel = float(sum(pm.montant for pm in paiements_materiel))
+        documents_materiel = [paiement_materiel_to_doc(pm) for pm in paiements_materiel]
+
         sorties = {
             "paye": {
                 "materiel": {
-                    "total": float(bc_payes.aggregate(s=Sum('montant_total'))['s'] or 0),
-                    "documents": [bc_to_doc(bc) for bc in bc_payes]
+                    "total": total_materiel,
+                    "documents": documents_materiel
                 },
                 "main_oeuvre": {
                     "total": float(sum(lc.cost for lc in labor_payes)),
@@ -5345,12 +5355,8 @@ class RecapFinancierChantierAPIView(APIView):
             },
             "reste_a_payer": {
                 "materiel": {
-                    "total": float(sum(
-                        bc.reste_a_payer if getattr(bc, 'statut_paiement', None) == 'paye_partiel' and hasattr(bc, 'reste_a_payer')
-                        else bc.montant_total
-                        for bc in bc_reste
-                    )),
-                    "documents": [bc_to_doc(bc) for bc in bc_reste]
+                    "total": 0.0,  # Plus de "reste à payer" pour le matériel, tout est saisi comme payé
+                    "documents": []
                 },
                 "main_oeuvre": {
                     "total": float(sum(lc.cost for lc in labor_reste)),
@@ -5396,5 +5402,40 @@ class RecapFinancierChantierAPIView(APIView):
         }
 
         serializer = RecapFinancierSerializer(data)
+        return Response(serializer.data)
+
+class PaiementFournisseurMaterielAPIView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, chantier_id):
+        mois = request.GET.get('mois')
+        annee = request.GET.get('annee')
+        paiements = PaiementFournisseurMateriel.objects.filter(chantier_id=chantier_id)
+        if mois:
+            paiements = paiements.filter(mois=mois)
+        if annee:
+            paiements = paiements.filter(annee=annee)
+        serializer = PaiementFournisseurMaterielSerializer(paiements, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, chantier_id):
+        # On attend une liste d'objets ou un objet unique
+        data = request.data
+        if isinstance(data, dict):
+            data = [data]
+        results = []
+        for paiement_data in data:
+            paiement_data['chantier'] = chantier_id
+            obj, created = PaiementFournisseurMateriel.objects.update_or_create(
+                chantier_id=chantier_id,
+                fournisseur=paiement_data['fournisseur'],
+                mois=paiement_data['mois'],
+                annee=paiement_data['annee'],
+                defaults={
+                    'montant': paiement_data['montant']
+                }
+            )
+            results.append(obj)
+        serializer = PaiementFournisseurMaterielSerializer(results, many=True)
         return Response(serializer.data)
 

@@ -19,6 +19,19 @@ import ChantierDocumentsTab from "./chantier/ChantierDocumentsTab";
 import ChantierInfoTab from "./chantier/ChantierInfoTab";
 import ChantierRecapFinancierTab from "./chantier/ChantierRecapFinancierTab";
 
+// Déplace TabPanel en dehors du composant ChantierDetail
+const TabPanel = ({ children, value, index }) => (
+  <div
+    role="tabpanel"
+    hidden={value !== index}
+    id={`chantier-tabpanel-${index}`}
+    aria-labelledby={`chantier-tab-${index}`}
+    style={{ display: value === index ? "block" : "none" }}
+  >
+    <Box sx={{ p: 3 }}>{children}</Box>
+  </div>
+);
+
 const ChantierDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -79,19 +92,6 @@ const ChantierDetail = () => {
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
   };
-
-  // Composant pour le contenu des onglets (toujours monté, masqué si non sélectionné)
-  const TabPanel = ({ children, value, index }) => (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`chantier-tabpanel-${index}`}
-      aria-labelledby={`chantier-tab-${index}`}
-      style={{ display: value === index ? "block" : "none" }}
-    >
-      <Box sx={{ p: 3 }}>{children}</Box>
-    </div>
-  );
 
   if (loading) {
     return (
@@ -199,7 +199,7 @@ const ChantierDetail = () => {
             </Box>
           </AppBar>
 
-          {/* Contenu des onglets : tous les TabPanels sont toujours montés */}
+          {/* Contenu des onglets - tous les TabPanel sont toujours montés */}
           <TabPanel value={selectedTab} index={0}>
             <ChantierInfoTab
               chantierData={chantierData}

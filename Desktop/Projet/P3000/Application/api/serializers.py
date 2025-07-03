@@ -6,7 +6,8 @@ from .models import (
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
-    SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant
+    SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
+    PaiementFournisseurMateriel
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -869,4 +870,9 @@ class RecapFinancierSerializer(serializers.Serializer):
     periode = serializers.CharField()
     sorties = serializers.DictField(child=RecapSectionSerializer())
     entrees = serializers.DictField(child=RecapEntreeSectionSerializer())
+
+class PaiementFournisseurMaterielSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaiementFournisseurMateriel
+        fields = ['id', 'chantier', 'fournisseur', 'mois', 'annee', 'montant', 'date_saisie']
         
