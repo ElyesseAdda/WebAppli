@@ -5405,7 +5405,7 @@ class RecapFinancierChantierAPIView(APIView):
         return Response(serializer.data)
 
 class PaiementFournisseurMaterielAPIView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
 
     def get(self, request, chantier_id):
         mois = request.GET.get('mois')

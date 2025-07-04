@@ -102,7 +102,7 @@ const RecapCategoryDetails = ({
       // Récupérer tous les fournisseurs depuis le modèle Fournisseur
       axios.get("/api/fournisseurs/").then((res) => {
         // On suppose que chaque fournisseur a un champ name_fournisseur
-        const fournisseursList = res.data.map((f) => f.name_fournisseur);
+        const fournisseursList = res.data.map((f) => f.name);
         setFournisseurs(fournisseursList);
         // Pré-remplir avec les montants existants
         const paiementsInit = {};

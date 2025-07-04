@@ -1026,3 +1026,12 @@ class PaiementFournisseurMateriel(models.Model):
     def __str__(self):
         return f"{self.chantier} - {self.fournisseur} - {self.mois}/{self.annee}: {self.montant} €"
 
+@receiver([post_save, post_delete], sender=PaiementFournisseurMateriel)
+def update_chantier_cout_materiel(sender, instance, **kwargs):
+    chantier = instance.chantier
+    total = PaiementFournisseurMateriel.objects.filter(chantier=chantier).aggregate(
+        total=Sum('montant')
+    )["total"] or 0
+    chantier.cout_materiel = float(total)
+    chantier.save(update_fields=["cout_materiel"])
+
