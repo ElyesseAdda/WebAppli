@@ -17,7 +17,7 @@ import json
 import calendar
 from .serializers import  FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
-    update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
@@ -1437,7 +1437,8 @@ def create_chantier_from_devis(request):
             state_chantier='En Cours',
             ville=devis.client.first().societe.ville_societe,
             rue=devis.client.first().societe.rue_societe,
-            code_postal=devis.client.first().societe.codepostal_societe
+            code_postal=devis.client.first().societe.codepostal_societe,
+            taux_fixe=TauxFixe.objects.first().valeur
         )
         
         return Response({'message': 'Chantier créé avec succès', 'id': chantier.id})
@@ -5395,10 +5396,18 @@ class RecapFinancierChantierAPIView(APIView):
             }
         }
 
+        montant_ht = chantier.montant_ht or 0
+        taux_fixe = chantier.taux_fixe or 0
+        montant_taux_fixe = montant_ht * taux_fixe / 100
+
         data = {
             "periode": periode,
             "sorties": sorties,
             "entrees": entrees,
+            "montant_ht": montant_ht,
+            "taux_fixe": taux_fixe,
+            "montant_taux_fixe": montant_taux_fixe,
+            # (optionnel) "benefice": benefice,
         }
 
         serializer = RecapFinancierSerializer(data)

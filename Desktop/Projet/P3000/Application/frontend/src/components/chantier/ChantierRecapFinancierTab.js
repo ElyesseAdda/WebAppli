@@ -16,6 +16,7 @@ import React from "react";
 import { FaSync } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
+import RecapSyntheseSection from "./RecapSyntheseSection";
 
 const CATEGORY_COLORS = {
   materiel: "#0088FE",
@@ -105,6 +106,8 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
 
   return (
     <Box sx={{ p: 2 }}>
+      {/* Section de synthèse financière */}
+      <RecapSyntheseSection data={data} />
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box display="flex" alignItems="center" gap={2}>
           <Typography variant="h5" sx={{ flex: 1 }}>

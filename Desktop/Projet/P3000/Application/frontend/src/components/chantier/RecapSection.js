@@ -29,6 +29,7 @@ const RecapSection = ({
   const [detailsMode, setDetailsMode] = useState(false);
   const [generalAccordionOpen, setGeneralAccordionOpen] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState(null);
+  const [hiddenCategories, setHiddenCategories] = useState([]);
 
   // Définir les couleurs fixes pour chaque catégorie
   const fixedColors = {
@@ -37,16 +38,25 @@ const RecapSection = ({
     sous_traitant: "#4CAF50", // vert
   };
 
-  // Préparer les données pour Nivo Pie
-  const pieData = Object.keys(data).map((cat) => ({
-    id: cat.replace("_", " ").toUpperCase(),
-    label: cat.replace("_", " ").toUpperCase(),
-    value: data[cat].total || 0,
-    color: fixedColors[cat] || colors[cat] || "#8884d8",
-    key: cat,
-  }));
+  // Fonction pour masquer/afficher une catégorie
+  const handleToggleCategory = (cat) => {
+    setHiddenCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
 
-  // Calculer la somme totale
+  // Préparer les données pour Nivo Pie (en filtrant les catégories masquées)
+  const pieData = Object.keys(data)
+    .filter((cat) => !hiddenCategories.includes(cat))
+    .map((cat) => ({
+      id: cat.replace("_", " ").toUpperCase(),
+      label: cat.replace("_", " ").toUpperCase(),
+      value: data[cat].total || 0,
+      color: fixedColors[cat] || colors[cat] || "#8884d8",
+      key: cat,
+    }));
+
+  // Calculer la somme totale (uniquement sur les catégories actives)
   const totalSum = pieData.reduce((acc, curr) => acc + (curr.value || 0), 0);
 
   // Déterminer dynamiquement la taille de police en fonction de la longueur du chiffre
@@ -150,18 +160,28 @@ const RecapSection = ({
             </Box>
           </Box>
         </Box>
-        {/* Totaux par catégorie (résumé à droite du cercle, non cliquable) */}
+        {/* Totaux par catégorie (résumé à droite du cercle, cliquable pour masquer/afficher) */}
         <Box flex={1}>
           <List>
             {Object.keys(data).map((cat) => (
               <ListItem
                 key={cat}
                 disableGutters
+                onClick={() => handleToggleCategory(cat)}
                 onMouseEnter={() =>
                   setHoveredCategory(cat.replace("_", " ").toUpperCase())
                 }
                 onMouseLeave={() => setHoveredCategory(null)}
-                sx={{ transition: "background 0.2s", minHeight: 32, py: 0.2 }}
+                sx={{
+                  transition: "background 0.2s",
+                  minHeight: 32,
+                  py: 0.2,
+                  cursor: "pointer",
+                  opacity: hiddenCategories.includes(cat) ? 0.4 : 1,
+                  textDecoration: hiddenCategories.includes(cat)
+                    ? "line-through"
+                    : "none",
+                }}
               >
                 <ListItemText
                   primary={
@@ -208,7 +228,10 @@ const RecapSection = ({
                 />
                 <IconButton
                   size="small"
-                  onClick={() => handleToggleDetails(cat)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleDetails(cat);
+                  }}
                   sx={{ ml: 1 }}
                 >
                   {openDetails[cat] ? <RemoveIcon /> : <AddIcon />}

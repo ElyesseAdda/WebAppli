@@ -92,6 +92,7 @@ class Chantier(models.Model):
     )
     
     description = models.TextField(null=True)
+    taux_fixe = models.FloatField(null=True, blank=True)
 
     #Partie validation des informations
     @property
@@ -131,6 +132,19 @@ class Chantier(models.Model):
             }
             for x in qs
         ]
+
+    def save(self, *args, **kwargs):
+        # Si c'est une création et que le taux fixe n'est pas déjà renseigné
+        if self._state.adding and not self.taux_fixe:
+            annee = self.date_debut.year if self.date_debut else None
+            if annee:
+                try:
+                    taux_fixe_obj = TauxFixe.objects.get(annee=annee)
+                    self.taux_fixe = taux_fixe_obj.valeur
+                except TauxFixe.DoesNotExist:
+                    # Tu peux lever une exception ou mettre une valeur par défaut
+                    self.taux_fixe = 18.65
+        super().save(*args, **kwargs)
 
 class Agent(models.Model):
     name = models.CharField(max_length=25)
@@ -320,6 +334,7 @@ class Devis(models.Model):
 class TauxFixe(models.Model):
     valeur = models.DecimalField(max_digits=5, decimal_places=2, default=19)
     date_modification = models.DateTimeField(auto_now=True)
+    annee = models.PositiveIntegerField(unique=True)
 
     def save(self, *args, **kwargs):
         # Sauvegarder le nouveau taux
@@ -330,9 +345,10 @@ class TauxFixe(models.Model):
         for ligne in LigneDetail.objects.all():
             ligne.calculer_prix()
             ligne.save(update_fields=['prix'])
-
     class Meta:
         get_latest_by = 'date_modification'
+    def __str__(self):
+        return f"{self.annee}: {self.valeur}%"
 
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)

@@ -118,7 +118,7 @@ class ChantierSerializer(serializers.ModelSerializer):
             'code_postal', 'cout_materiel', 'cout_main_oeuvre', 
             'cout_sous_traitance', 'description',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'marge_estimee',
-            'marge_fourniture'
+            'marge_fourniture', 'taux_fixe'
         ]
 
     def get_marge_fourniture(self, obj):
@@ -884,6 +884,9 @@ class RecapFinancierSerializer(serializers.Serializer):
     periode = serializers.CharField()
     sorties = serializers.DictField(child=RecapSectionSerializer())
     entrees = serializers.DictField(child=RecapEntreeSectionSerializer())
+    montant_ht = serializers.FloatField()
+    taux_fixe = serializers.FloatField()
+    montant_taux_fixe = serializers.FloatField()
 
 class PaiementFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:
