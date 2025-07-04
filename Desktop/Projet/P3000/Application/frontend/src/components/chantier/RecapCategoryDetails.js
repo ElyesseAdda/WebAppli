@@ -99,10 +99,11 @@ const RecapCategoryDetails = ({
 
   React.useEffect(() => {
     if (category === "materiel" && open) {
-      // Récupérer tous les sous-traitants (utilisés comme fournisseurs)
-      axios.get("/api/sous-traitants/").then((res) => {
-        const sousTraitants = res.data.map((st) => st.entreprise);
-        setFournisseurs(sousTraitants);
+      // Récupérer tous les fournisseurs depuis le modèle Fournisseur
+      axios.get("/api/fournisseurs/").then((res) => {
+        // On suppose que chaque fournisseur a un champ name_fournisseur
+        const fournisseursList = res.data.map((f) => f.name_fournisseur);
+        setFournisseurs(fournisseursList);
         // Pré-remplir avec les montants existants
         const paiementsInit = {};
         documents.forEach((doc) => {

@@ -16,10 +16,12 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { bonCommandeService } from "../services/bonCommandeService";
 import { updateChantierMaterialCost } from "../services/chantierService";
+import NewProductForm from "./NewProductForm";
 
 function ProduitSelectionTable({
   open,
@@ -34,20 +36,15 @@ function ProduitSelectionTable({
   const [quantities, setQuantities] = useState({});
   const [isPreviewed, setIsPreviewed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [openNewProductModal, setOpenNewProductModal] = useState(false);
+  const [editingCell, setEditingCell] = useState({
+    productId: null,
+    field: null,
+  });
+  const [editedProducts, setEditedProducts] = useState({});
 
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const data = await bonCommandeService.getProductsByFournisseur(
-          fournisseur
-        );
-        setProducts(data);
-      } catch (error) {
-        console.error("Erreur lors du chargement des produits:", error);
-      }
-    };
-    loadProducts();
-  }, [fournisseur]);
+  const handleOpenNewProductModal = () => setOpenNewProductModal(true);
+  const handleCloseNewProductModal = () => setOpenNewProductModal(false);
 
   const handleCheckboxChange = (productId) => {
     setIsPreviewed(false);
@@ -71,6 +68,44 @@ function ProduitSelectionTable({
       ...prev,
       [productId]: quantity,
     }));
+  };
+
+  const handleCellDoubleClick = (productId, field) => {
+    setEditingCell({ productId, field });
+  };
+
+  const handleEditChange = (productId, field, value) => {
+    setEditedProducts((prev) => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        [field]: field === "prix_unitaire" ? parseFloat(value) : value,
+      },
+    }));
+  };
+
+  const handleEditBlur = async (productId, field) => {
+    setEditingCell({ productId: null, field: null });
+    const edited = editedProducts[productId];
+    if (
+      edited &&
+      ["code_produit", "designation", "prix_unitaire"].includes(field)
+    ) {
+      try {
+        await axios.patch(`/api/stock/${productId}/`, {
+          [field]: edited[field],
+        });
+        loadProducts();
+      } catch (error) {
+        console.error("Erreur lors de la mise à jour du produit:", error);
+      }
+    }
+  };
+
+  const handleEditKeyDown = (e, productId, field) => {
+    if (e.key === "Enter") {
+      handleEditBlur(productId, field);
+    }
   };
 
   const handleValidate = () => {
@@ -155,9 +190,13 @@ function ProduitSelectionTable({
     }
   };
 
-  const calculateTotal = (product) => {
-    const quantity = quantities[product.id] || 0;
-    return (quantity * product.prix_unitaire).toFixed(2);
+  const calculateTotal = (product, edited = {}) => {
+    const price = edited.prix_unitaire ?? product.prix_unitaire;
+    const quantity =
+      edited.quantite !== undefined
+        ? parseInt(edited.quantite)
+        : quantities[product.id] || 0;
+    return (quantity * price).toFixed(2);
   };
 
   // Fonction pour calculer le total général
@@ -181,6 +220,22 @@ function ProduitSelectionTable({
     );
   });
 
+  // On extrait la fonction de chargement pour la réutiliser après ajout
+  const loadProducts = async () => {
+    try {
+      const data = await bonCommandeService.getProductsByFournisseur(
+        fournisseur
+      );
+      setProducts(data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des produits:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadProducts();
+  }, [fournisseur]);
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle
@@ -192,21 +247,31 @@ function ProduitSelectionTable({
         }}
       >
         <Typography variant="h6">Sélection des produits</Typography>
-        <TextField
-          size="small"
-          variant="outlined"
-          placeholder="Rechercher..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <FiSearch style={{ fontSize: "1.2rem" }} />
-              </InputAdornment>
-            ),
-            sx: { width: "300px" },
-          }}
-        />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <TextField
+            size="small"
+            variant="outlined"
+            placeholder="Rechercher..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <FiSearch style={{ fontSize: "1.2rem" }} />
+                </InputAdornment>
+              ),
+              sx: { width: "300px" },
+            }}
+          />
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleOpenNewProductModal}
+            sx={{ ml: 2 }}
+          >
+            Nouveau Produit
+          </Button>
+        </Box>
       </DialogTitle>
       <DialogContent>
         <TableContainer sx={{ maxHeight: 440 }}>
@@ -223,39 +288,136 @@ function ProduitSelectionTable({
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredProducts.map((product) => (
-                <TableRow
-                  key={product.id}
-                  hover
-                  selected={selectedProducts[product.id]}
-                >
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={selectedProducts[product.id] || false}
-                      onChange={() => handleCheckboxChange(product.id)}
-                    />
-                  </TableCell>
-                  <TableCell>{product.code_produit}</TableCell>
-                  <TableCell>{product.designation}</TableCell>
-                  <TableCell>{product.prix_unitaire.toFixed(2)} €</TableCell>
-                  <TableCell>{product.unite}</TableCell>
-                  <TableCell>
-                    <TextField
-                      id={`quantity-${product.id}`}
-                      type="number"
-                      size="small"
-                      value={quantities[product.id] || ""}
-                      onChange={(e) =>
-                        handleQuantityChange(product.id, e.target.value)
+              {filteredProducts.map((product, idx) => {
+                const isSelected = selectedProducts[product.id];
+                const edited = editedProducts[product.id] || {};
+                const rowColor = idx % 2 === 0 ? "#fafafa" : "#fff";
+                return (
+                  <TableRow
+                    key={product.id}
+                    hover
+                    selected={isSelected}
+                    sx={{ backgroundColor: rowColor }}
+                  >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={isSelected || false}
+                        onChange={() => handleCheckboxChange(product.id)}
+                      />
+                    </TableCell>
+                    <TableCell
+                      onDoubleClick={() =>
+                        handleCellDoubleClick(product.id, "code_produit")
                       }
-                      disabled={!selectedProducts[product.id]}
-                      InputProps={{ inputProps: { min: 0 } }}
-                      sx={{ width: "100px" }}
-                    />
-                  </TableCell>
-                  <TableCell>{calculateTotal(product)} €</TableCell>
-                </TableRow>
-              ))}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      {editingCell.productId === product.id &&
+                      editingCell.field === "code_produit" ? (
+                        <TextField
+                          value={edited.code_produit ?? product.code_produit}
+                          onChange={(e) =>
+                            handleEditChange(
+                              product.id,
+                              "code_produit",
+                              e.target.value
+                            )
+                          }
+                          onBlur={() =>
+                            handleEditBlur(product.id, "code_produit")
+                          }
+                          onKeyDown={(e) =>
+                            handleEditKeyDown(e, product.id, "code_produit")
+                          }
+                          size="small"
+                          autoFocus
+                        />
+                      ) : (
+                        edited.code_produit ?? product.code_produit
+                      )}
+                    </TableCell>
+                    <TableCell
+                      onDoubleClick={() =>
+                        handleCellDoubleClick(product.id, "designation")
+                      }
+                      sx={{ cursor: "pointer" }}
+                    >
+                      {editingCell.productId === product.id &&
+                      editingCell.field === "designation" ? (
+                        <TextField
+                          value={edited.designation ?? product.designation}
+                          onChange={(e) =>
+                            handleEditChange(
+                              product.id,
+                              "designation",
+                              e.target.value
+                            )
+                          }
+                          onBlur={() =>
+                            handleEditBlur(product.id, "designation")
+                          }
+                          onKeyDown={(e) =>
+                            handleEditKeyDown(e, product.id, "designation")
+                          }
+                          size="small"
+                          autoFocus
+                        />
+                      ) : (
+                        edited.designation ?? product.designation
+                      )}
+                    </TableCell>
+                    <TableCell
+                      onDoubleClick={() =>
+                        handleCellDoubleClick(product.id, "prix_unitaire")
+                      }
+                      sx={{ cursor: "pointer" }}
+                    >
+                      {editingCell.productId === product.id &&
+                      editingCell.field === "prix_unitaire" ? (
+                        <TextField
+                          type="number"
+                          value={edited.prix_unitaire ?? product.prix_unitaire}
+                          onChange={(e) =>
+                            handleEditChange(
+                              product.id,
+                              "prix_unitaire",
+                              e.target.value
+                            )
+                          }
+                          onBlur={() =>
+                            handleEditBlur(product.id, "prix_unitaire")
+                          }
+                          onKeyDown={(e) =>
+                            handleEditKeyDown(e, product.id, "prix_unitaire")
+                          }
+                          size="small"
+                          autoFocus
+                          inputProps={{ min: 0, step: "0.01" }}
+                        />
+                      ) : (
+                        (edited.prix_unitaire ?? product.prix_unitaire).toFixed(
+                          2
+                        ) + " €"
+                      )}
+                    </TableCell>
+                    <TableCell>{product.unite}</TableCell>
+                    <TableCell>
+                      <TextField
+                        id={`quantity-${product.id}`}
+                        type="number"
+                        size="small"
+                        value={quantities[product.id] || ""}
+                        onChange={(e) =>
+                          handleQuantityChange(product.id, e.target.value)
+                        }
+                        disabled={!isSelected}
+                        InputProps={{ inputProps: { min: 0 } }}
+                        sx={{ width: "100px" }}
+                      />
+                    </TableCell>
+                    <TableCell>{calculateTotal(product, edited)} €</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
@@ -293,6 +455,15 @@ function ProduitSelectionTable({
           )}
         </Box>
       </DialogActions>
+      <NewProductForm
+        open={openNewProductModal}
+        handleClose={handleCloseNewProductModal}
+        onAddProduct={() => {
+          handleCloseNewProductModal();
+          loadProducts();
+        }}
+        fournisseur={fournisseur}
+      />
     </Dialog>
   );
 }

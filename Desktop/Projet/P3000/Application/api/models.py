@@ -229,7 +229,11 @@ class Event(models.Model):
 class Stock(models.Model):
     code_produit = models.CharField(max_length=50, unique=True, default='')
     designation = models.CharField(max_length=50)
-    fournisseur = models.CharField(max_length=100, blank=True, null=True)
+    fournisseur = models.ForeignKey(
+        'Fournisseur',
+        on_delete=models.CASCADE,
+        related_name='produits'
+    )
     prix_unitaire = models.FloatField(default=0)
     unite = models.CharField(max_length=50)
     
@@ -274,11 +278,11 @@ class StockMovement(models.Model):
 
         
 class Fournisseur(models.Model):
-    name = models.CharField(max_length=25,)
-    Fournisseur_mail = models.EmailField()
-    phone_Number = models.IntegerField()
-    description_fournisseur = models.CharField(max_length=250,)
-    magasin = models.CharField(max_length=250,)
+    name = models.CharField(max_length=25)
+    Fournisseur_mail = models.EmailField(blank=True, null=True)
+    phone_Number = models.CharField(max_length=15, blank=True, null=True)
+    description_fournisseur = models.CharField(max_length=250, blank=True, null=True)
+    magasin = models.CharField(max_length=250, blank=True, null=True)
 
 
 class Materiel_produit(models.Model):
@@ -735,9 +739,10 @@ class BonCommande(models.Model):
 class LigneBonCommande(models.Model):
     bon_commande = models.ForeignKey(BonCommande, related_name='lignes', on_delete=models.CASCADE)
     produit = models.ForeignKey(Stock, on_delete=models.CASCADE)
-    designation = models.CharField(max_length=255)
-    quantite = models.IntegerField()
-    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    # Ces champs sont personnalisables et peuvent être modifiés à la création du bon de commande
+    designation = models.CharField(max_length=255)  # Peut être modifiée par l'utilisateur
+    quantite = models.IntegerField()  # Peut être modifiée par l'utilisateur
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)  # Peut être modifié par l'utilisateur
     total = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):

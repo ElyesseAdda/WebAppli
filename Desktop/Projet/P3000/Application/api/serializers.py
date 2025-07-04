@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
-    PaiementFournisseurMateriel
+    PaiementFournisseurMateriel, Fournisseur
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -22,6 +22,17 @@ class DevisLigneSerializer(serializers.ModelSerializer):
     def get_total_ht(self, obj):
         return obj.quantite * obj.prix_unitaire
 
+
+class FournisseurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Fournisseur
+        fields = ['id', 'name', 'Fournisseur_mail', 'phone_Number', 'description_fournisseur', 'magasin']
+        extra_kwargs = {
+            'Fournisseur_mail': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'phone_Number': {'required': False, 'allow_null': True},
+            'description_fournisseur': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'magasin': {'required': False, 'allow_blank': True, 'allow_null': True},
+        }
 
 
 class DevisSerializer(serializers.ModelSerializer):
@@ -268,7 +279,10 @@ class EventSerializer(serializers.ModelSerializer):
         fields = ['id', 'agent', 'start_date', 'end_date', 'status', 'hours_modified', 'chantier', 'chantier_name']
 
 class StockSerializer(serializers.ModelSerializer):
-  
+    fournisseur = serializers.PrimaryKeyRelatedField(queryset=Fournisseur.objects.all())
+    # Si tu veux afficher le nom du fournisseur en lecture :
+    # fournisseur_name = serializers.CharField(source='fournisseur.name_fournisseur', read_only=True)
+
     class Meta:
         model = Stock
         fields = '__all__'

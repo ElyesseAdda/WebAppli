@@ -1,5 +1,6 @@
 import {
   Autocomplete,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -22,7 +23,6 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import fr from "date-fns/locale/fr";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { FiPlusCircle } from "react-icons/fi";
 import { TfiMore } from "react-icons/tfi";
 import {
   CenteredTableCell,
@@ -62,6 +62,8 @@ const ChantierListeBonCommande = ({
   const [pendingSave, setPendingSave] = useState(false);
   const firstMount = useRef(true);
   const prevChantierId = useRef(chantierId);
+  const [openFournisseurModal, setOpenFournisseurModal] = useState(false);
+  const [fournisseurMap, setFournisseurMap] = useState({});
 
   useEffect(() => {
     if (firstMount.current || chantierId !== prevChantierId.current) {
@@ -117,6 +119,19 @@ const ChantierListeBonCommande = ({
     }
     // eslint-disable-next-line
   }, [chantierId]);
+
+  // Charger la liste des fournisseurs pour faire le mapping id -> nom
+  useEffect(() => {
+    fetch("/api/fournisseurs/")
+      .then((res) => res.json())
+      .then((data) => {
+        const map = {};
+        data.forEach((f) => {
+          map[f.id] = f.name;
+        });
+        setFournisseurMap(map);
+      });
+  }, []);
 
   // Calcul dynamique de la liste filtrée à chaque render
   const filteredBonsCommande = bonsCommande.filter((bc) => {
@@ -281,6 +296,11 @@ const ChantierListeBonCommande = ({
       alert("Erreur lors de la mise à jour du paiement");
     }
   };
+  const handleOpenFournisseurModal = () => setOpenFournisseurModal(true);
+  const handleCloseFournisseurModal = () => setOpenFournisseurModal(false);
+  const handleAddFournisseur = () => {
+    handleCloseFournisseurModal();
+  };
 
   return (
     <div
@@ -305,31 +325,12 @@ const ChantierListeBonCommande = ({
         }}
       >
         <Typography variant="h5">Bons de Commande du Chantier</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<FiPlusCircle />}
-          onClick={() => setOpenForm(true)}
-        >
-          Nouveau BC
-        </Button>
-        <Dialog
-          open={openForm}
-          onClose={() => setOpenForm(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>Créer un Bon de Commande</DialogTitle>
-          <DialogContent>
-            <BonCommandeForm
-              onBonCommandeCreated={() => {
-                setOpenForm(false);
-                fetchBonsCommande();
-              }}
-              modal={true}
-            />
-          </DialogContent>
-        </Dialog>
+        <Box sx={{ display: "flex", gap: 2 }}>
+          <BonCommandeForm
+            onBonCommandeCreated={handleBonCommandeCreated}
+            chantierId={chantierId}
+          />
+        </Box>
       </StyledBox>
       <StyledTableContainer component={Paper}>
         <Table>
@@ -418,7 +419,13 @@ const ChantierListeBonCommande = ({
                 >
                   {bc.numero}
                 </DevisNumber>
-                <CenteredTableCell>{bc.fournisseur}</CenteredTableCell>
+                <CenteredTableCell>
+                  {typeof bc.fournisseur === "object" && bc.fournisseur !== null
+                    ? bc.fournisseur.name ||
+                      bc.fournisseur.Fournisseur_mail ||
+                      ""
+                    : fournisseurMap[bc.fournisseur] || bc.fournisseur}
+                </CenteredTableCell>
                 <CenteredTableCell>
                   {new Date(bc.date_creation).toLocaleDateString()}
                 </CenteredTableCell>

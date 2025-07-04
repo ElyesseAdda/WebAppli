@@ -37,6 +37,9 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
     setStep(2);
     setIsModalOpen(true);
     handleCloseModal();
+    if (onBonCommandeCreated) {
+      onBonCommandeCreated();
+    }
   };
 
   const handleProductSelection = (products) => {

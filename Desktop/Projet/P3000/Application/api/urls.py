@@ -66,6 +66,8 @@ from .views import (
     PaiementSousTraitantViewSet,
     RecapFinancierChantierAPIView,
     PaiementFournisseurMaterielAPIView,
+    fournisseurs,
+    FournisseurViewSet,
 )
 
 
@@ -93,6 +95,7 @@ router.register(r'sous-traitants', SousTraitantViewSet)
 router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
 router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
 router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
+router.register(r'fournisseurs', FournisseurViewSet)
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
@@ -189,4 +192,5 @@ urlpatterns = [
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
+    path('fournisseurs/', fournisseurs, name='fournisseurs'),
 ]

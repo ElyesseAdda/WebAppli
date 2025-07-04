@@ -28,11 +28,11 @@ const inputStyle = {
   width: "100%",
 };
 
-const NewProductForm = ({ open, handleClose, onAddProduct }) => {
+const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
   const [formData, setFormData] = useState({
     code_produit: "",
     designation: "",
-    fournisseur: "",
+    fournisseur: fournisseur || "",
     prix_unitaire: "",
     unite: "",
   });
@@ -41,29 +41,29 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
   const [fournisseurs, setFournisseurs] = useState([]);
 
   useEffect(() => {
-    const fetchFournisseurs = async () => {
-      try {
-        console.log("Fetching fournisseurs..."); // Pour le debug
-        const response = await axios.get("/api/stockf/fournisseurs/");
-        console.log("Response:", response.data); // Pour le debug
-        const uniqueFournisseurs = [
-          ...new Set(
-            response.data.filter(
-              (fournisseur) => fournisseur && fournisseur.trim()
-            )
-          ),
-        ];
-        setFournisseurs(uniqueFournisseurs);
-      } catch (error) {
-        console.error("Erreur lors du chargement des fournisseurs:", error);
-        console.error("URL appelée:", error.config?.url); // Pour le debug
-      }
-    };
+    setFormData((prev) => ({ ...prev, fournisseur: fournisseur || "" }));
+  }, [fournisseur, open]);
 
-    if (open) {
+  useEffect(() => {
+    if (!fournisseur && open) {
+      const fetchFournisseurs = async () => {
+        try {
+          const response = await axios.get("/api/stockf/fournisseurs/");
+          const uniqueFournisseurs = [
+            ...new Set(
+              response.data.filter(
+                (fournisseur) => fournisseur && fournisseur.trim()
+              )
+            ),
+          ];
+          setFournisseurs(uniqueFournisseurs);
+        } catch (error) {
+          console.error("Erreur lors du chargement des fournisseurs:", error);
+        }
+      };
       fetchFournisseurs();
     }
-  }, [open]);
+  }, [open, fournisseur]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -71,7 +71,6 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
       ...prevState,
       [name]: value,
     }));
-    // Effacer l'erreur quand l'utilisateur commence à taper
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -90,25 +89,24 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
     if (!formData.prix_unitaire || formData.prix_unitaire <= 0) {
       newErrors.prix_unitaire = "Le prix unitaire doit être supérieur à 0";
     }
+    if (!fournisseur && !formData.fournisseur)
+      newErrors.fournisseur = "Le fournisseur est requis";
     return newErrors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
-
     try {
       const response = await axios.post("/api/stock/", {
         ...formData,
-        fournisseur: formData.fournisseur || null,
+        fournisseur: fournisseur || formData.fournisseur || null,
         prix_unitaire: parseFloat(formData.prix_unitaire),
       });
-
       onAddProduct(response.data);
       if (window.refreshStockList) {
         window.refreshStockList();
@@ -117,7 +115,7 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
       setFormData({
         code_produit: "",
         designation: "",
-        fournisseur: "",
+        fournisseur: fournisseur || "",
         prix_unitaire: "",
         unite: "",
       });
@@ -151,7 +149,6 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
             <FiX />
           </IconButton>
         </Box>
-
         <form onSubmit={handleSubmit}>
           <TextField
             name="code_produit"
@@ -162,7 +159,6 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
             helperText={errors.code_produit}
             sx={inputStyle}
           />
-
           <TextField
             name="designation"
             label="Désignation"
@@ -172,35 +168,35 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
             helperText={errors.designation}
             sx={inputStyle}
           />
-
-          <Autocomplete
-            freeSolo
-            options={fournisseurs}
-            value={formData.fournisseur}
-            onChange={(event, newValue) => {
-              setFormData((prev) => ({
-                ...prev,
-                fournisseur: newValue || "",
-              }));
-            }}
-            onInputChange={(event, newInputValue) => {
-              setFormData((prev) => ({
-                ...prev,
-                fournisseur: newInputValue,
-              }));
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                name="fournisseur"
-                label="Fournisseur"
-                error={!!errors.fournisseur}
-                helperText={errors.fournisseur}
-                sx={inputStyle}
-              />
-            )}
-          />
-
+          {!fournisseur && (
+            <Autocomplete
+              freeSolo
+              options={fournisseurs}
+              value={formData.fournisseur}
+              onChange={(event, newValue) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  fournisseur: newValue || "",
+                }));
+              }}
+              onInputChange={(event, newInputValue) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  fournisseur: newInputValue,
+                }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  name="fournisseur"
+                  label="Fournisseur"
+                  error={!!errors.fournisseur}
+                  helperText={errors.fournisseur}
+                  sx={inputStyle}
+                />
+              )}
+            />
+          )}
           <TextField
             name="prix_unitaire"
             label="Prix Unitaire"
@@ -214,7 +210,6 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
             }}
             sx={inputStyle}
           />
-
           <TextField
             name="unite"
             label="Unité"
@@ -224,13 +219,11 @@ const NewProductForm = ({ open, handleClose, onAddProduct }) => {
             helperText={errors.unite}
             sx={inputStyle}
           />
-
           {errors.submit && (
             <Typography color="error" sx={{ mt: 1, mb: 1 }}>
               {errors.submit}
             </Typography>
           )}
-
           <Box
             sx={{ display: "flex", justifyContent: "flex-end", gap: 2, mt: 2 }}
           >

@@ -15,7 +15,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
     update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -2241,15 +2241,15 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     'date_livraison': request.data.get('date_livraison'),
                     'magasin_retrait': request.data.get('magasin_retrait'),
                     'date_commande': request.data.get('date_commande')
-                    
                 }
-
 
                 bon_commande = BonCommande.objects.create(**bon_commande_data)
 
                 # Création des lignes
                 lignes = request.data.get('lignes', [])
                 for ligne in lignes:
+                    # On utilise les valeurs personnalisées envoyées par le front (designation, prix_unitaire, quantite)
+                    # et on ne les écrase pas par celles du produit de référence
                     LigneBonCommande.objects.create(
                         bon_commande=bon_commande,
                         produit_id=ligne['produit'],
@@ -5439,3 +5439,11 @@ class PaiementFournisseurMaterielAPIView(APIView):
         serializer = PaiementFournisseurMaterielSerializer(results, many=True)
         return Response(serializer.data)
 
+@api_view(['GET'])
+def fournisseurs(request):
+    fournisseurs = Fournisseur.objects.all().values('id', 'name_fournisseur', 'Fournisseur_mail', 'description_fournisseur')
+    return Response(list(fournisseurs))
+
+class FournisseurViewSet(viewsets.ModelViewSet):
+    queryset = Fournisseur.objects.all()
+    serializer_class = FournisseurSerializer

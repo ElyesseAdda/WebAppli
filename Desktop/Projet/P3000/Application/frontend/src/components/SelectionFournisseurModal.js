@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
+import NewFournisseurForm from "./Founisseur/NewFournisseurForm";
 
 function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -25,6 +26,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
     new Date().toISOString().split("T")[0]
   );
   const [numeroBonCommande, setNumeroBonCommande] = useState(numeroBC);
+  const [openFournisseurModal, setOpenFournisseurModal] = useState(false);
 
   // Liste statique des agents
   const agents = [
@@ -46,7 +48,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
 
   useEffect(() => {
     // Charger la liste des fournisseurs
-    fetch("/api/get_fournisseurs/")
+    fetch("/api/fournisseurs/")
       .then((response) => response.json())
       .then((data) => setFournisseurs(data))
       .catch((error) => console.error("Erreur:", error));
@@ -80,6 +82,16 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
   const isFormValid =
     selectedData.fournisseur && selectedData.chantier && selectedData.agent;
 
+  const handleOpenFournisseurModal = () => setOpenFournisseurModal(true);
+  const handleCloseFournisseurModal = () => setOpenFournisseurModal(false);
+  const handleAddFournisseur = () => {
+    // Rafraîchir la liste des fournisseurs après création
+    fetch("/api/fournisseurs/")
+      .then((response) => response.json())
+      .then((data) => setFournisseurs(data));
+    handleCloseFournisseurModal();
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Nouveau Bon de Commande</DialogTitle>
@@ -109,8 +121,8 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
               label="Fournisseur"
             >
               {fournisseurs.map((fournisseur) => (
-                <MenuItem key={fournisseur} value={fournisseur}>
-                  {fournisseur}
+                <MenuItem key={fournisseur.id} value={fournisseur.id}>
+                  {fournisseur.name || fournisseur.Fournisseur_mail}
                 </MenuItem>
               ))}
             </Select>
@@ -169,14 +181,38 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Annuler</Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={!isFormValid}
+        <Box
+          sx={{
+            width: "100%",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
         >
-          Suivant
-        </Button>
+          <Button
+            onClick={handleOpenFournisseurModal}
+            color="secondary"
+            variant="outlined"
+          >
+            Nouveau Fournisseur
+          </Button>
+          <Box>
+            <Button onClick={onClose}>Annuler</Button>
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={!isFormValid}
+              sx={{ ml: 1 }}
+            >
+              Suivant
+            </Button>
+          </Box>
+        </Box>
+        <NewFournisseurForm
+          open={openFournisseurModal}
+          handleClose={handleCloseFournisseurModal}
+          onAddFournisseur={handleAddFournisseur}
+        />
       </DialogActions>
     </Dialog>
   );
