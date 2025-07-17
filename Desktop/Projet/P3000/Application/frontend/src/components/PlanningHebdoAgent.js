@@ -185,8 +185,10 @@ const PlanningHebdoAgent = ({
 
           console.log("Données reçues de l'API events:", eventsResponse.data);
 
+          // Remplacer le filtrage des événements par :
           const eventsData = eventsResponse.data.filter(
-            (event) => event.status === "A" || event.status === "C"
+            (event) =>
+              event.event_type === "absence" || event.event_type === "conge"
           );
 
           // Identifier les jours avec événements A ou C
@@ -464,18 +466,36 @@ const PlanningHebdoAgent = ({
       .add(dayIndex - 1, "day")
       .format("YYYY-MM-DD");
 
-    // Vérifier si un événement A ou C existe pour cette date
+    // Vérifier si un événement absence ou congé existe pour cette date
     const hasEvent = events.find((event) => {
       const eventDate = dayjs(event.start_date).format("YYYY-MM-DD");
       return (
         eventDate === currentDate &&
-        (event.status === "A" || event.status === "C") &&
-        event.agent === selectedAgentId // Ajout de la vérification de l'agent
+        (event.event_type === "absence" || event.event_type === "conge") &&
+        event.agent === selectedAgentId
       );
     });
 
     if (hasEvent) {
-      return hasEvent.status === "A" ? "red" : "purple";
+      // Couleur selon le sous-type
+      if (hasEvent.event_type === "absence") {
+        if (hasEvent.subtype === "justifiee") return "#fbc02d"; // jaune
+        if (hasEvent.subtype === "injustifiee") return "#d32f2f"; // rouge foncé
+        if (hasEvent.subtype === "maladie") return "#1976d2"; // bleu
+        if (hasEvent.subtype === "rtt") return "#7b1fa2"; // violet
+        return "red";
+      }
+      if (hasEvent.event_type === "conge") {
+        if (hasEvent.subtype === "paye") return "#388e3c"; // vert foncé
+        if (hasEvent.subtype === "sans_solde") return "#ffa000"; // orange
+        if (hasEvent.subtype === "parental") return "#0288d1"; // bleu clair
+        if (
+          hasEvent.subtype === "maternite" ||
+          hasEvent.subtype === "paternite"
+        )
+          return "#f06292"; // rose
+        return "purple";
+      }
     }
 
     // Style existant pour les cellules sélectionnées et assignées
@@ -488,6 +508,27 @@ const PlanningHebdoAgent = ({
     }
 
     return "white";
+  };
+
+  // Fonction utilitaire pour obtenir les initiales de l'événement
+  const getEventInitials = (event) => {
+    if (!event) return "";
+    if (event.event_type === "absence") {
+      if (event.subtype === "justifiee") return "AJ";
+      if (event.subtype === "injustifiee") return "AI";
+      if (event.subtype === "maladie") return "MA";
+      if (event.subtype === "rtt") return "RTT";
+      return "A";
+    }
+    if (event.event_type === "conge") {
+      if (event.subtype === "paye") return "CP";
+      if (event.subtype === "sans_solde") return "CSS";
+      if (event.subtype === "parental") return "CPR";
+      if (event.subtype === "maternite") return "CM";
+      if (event.subtype === "paternite") return "CPAT";
+      return "C";
+    }
+    return "";
   };
 
   // Ajouter cette fonction après les autres fonctions utilitaires
@@ -656,23 +697,50 @@ const PlanningHebdoAgent = ({
                 {hours.map((hour) => (
                   <tr key={hour}>
                     <td className="hour-cell">{hour}</td>
-                    {daysOfWeek.map((day) => (
-                      <td
-                        key={`${hour}-${day}`}
-                        onMouseDown={() => handleMouseDown(hour, day)}
-                        onMouseEnter={() => handleMouseEnter(hour, day)}
-                        className={`schedule-cell`}
-                        style={{
-                          backgroundColor: getCellStyle(
-                            hour,
-                            day,
-                            schedule[selectedAgentId]
-                          ),
-                        }}
-                      >
-                        {schedule[selectedAgentId]?.[hour]?.[day] || ""}
-                      </td>
-                    ))}
+                    {daysOfWeek.map((day) => {
+                      // Détermination de l'événement pour la cellule
+                      const startOfWeek = dayjs()
+                        .year(selectedYear)
+                        .isoWeek(selectedWeek)
+                        .startOf("isoWeek");
+                      const dayIndex = daysOfWeek.indexOf(day) + 1;
+                      const currentDate = startOfWeek
+                        .add(dayIndex - 1, "day")
+                        .format("YYYY-MM-DD");
+                      const cellEvent = events.find((event) => {
+                        const eventDate = dayjs(event.start_date).format(
+                          "YYYY-MM-DD"
+                        );
+                        return (
+                          eventDate === currentDate &&
+                          (event.event_type === "absence" ||
+                            event.event_type === "conge") &&
+                          event.agent === selectedAgentId
+                        );
+                      });
+                      return (
+                        <td
+                          key={`${hour}-${day}`}
+                          onMouseDown={() => handleMouseDown(hour, day)}
+                          onMouseEnter={() => handleMouseEnter(hour, day)}
+                          className={`schedule-cell`}
+                          style={{
+                            backgroundColor: getCellStyle(
+                              hour,
+                              day,
+                              schedule[selectedAgentId]
+                            ),
+                            fontWeight: cellEvent ? "bold" : "normal",
+                            color: cellEvent ? "#222" : undefined,
+                            textAlign: "center",
+                          }}
+                        >
+                          {cellEvent
+                            ? getEventInitials(cellEvent)
+                            : schedule[selectedAgentId]?.[hour]?.[day] || ""}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

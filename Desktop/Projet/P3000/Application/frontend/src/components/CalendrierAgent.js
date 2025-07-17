@@ -4,7 +4,6 @@ import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import { MenuItem, Select } from "@mui/material";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import { green, orange, red } from "@mui/material/colors";
 import Modal from "@mui/material/Modal";
 import TextField from "@mui/material/TextField";
 import { styled } from "@mui/system";
@@ -80,6 +79,22 @@ const deleteEventsByAgentAndPeriod = async (agentId, startDate, endDate) => {
   }
 };
 
+// Ajout des sous-types d'événements
+const absenceSubtypes = [
+  { value: "justifiee", label: "Justifiée" },
+  { value: "injustifiee", label: "Injustifiée" },
+  { value: "maladie", label: "Maladie" },
+  { value: "rtt", label: "RTT" },
+];
+
+const congeSubtypes = [
+  { value: "paye", label: "Payé" },
+  { value: "sans_solde", label: "Sans solde" },
+  { value: "parental", label: "Parental" },
+  { value: "maternite", label: "Maternité" },
+  { value: "paternite", label: "Paternité" },
+];
+
 const CalendrierAgent = ({ agents }) => {
   const [events, setEvents] = useState([]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
@@ -89,6 +104,8 @@ const CalendrierAgent = ({ agents }) => {
   const [selectedAgentName, setSelectedAgentName] = useState(null);
   const [chantiers, setChantiers] = useState([]);
   const [selectedChantier, setSelectedChantier] = useState(null);
+  const [eventType, setEventType] = useState("");
+  const [subtype, setSubtype] = useState("");
 
   const fetchChantiers = async () => {
     try {
@@ -124,12 +141,12 @@ const CalendrierAgent = ({ agents }) => {
         start: event.start_date,
         end: event.end_date,
         title:
-          event.status === "M"
-            ? `${event.hours_modified}H (${
-                event.chantier_name || "Chantier inconnu"
-              })`
-            : event.status,
-        color: getColorByStatus(event.status),
+          event.event_type === "modification_horaire"
+            ? `${event.hours_modified}H`
+            : `${event.event_type}${
+                event.subtype ? ` (${event.subtype})` : ""
+              }`,
+        color: getColorByStatus(event.event_type, event.subtype),
       }));
     }
 
@@ -210,15 +227,22 @@ const CalendrierAgent = ({ agents }) => {
     setModalIsOpen(false);
   };
 
-  const addEvent = async (status, hours = 0) => {
+  const addEvent = async (hours = 0) => {
     try {
-      if (!selectedDate || !selectedAgent) {
-        console.error("La date ou l'agent sélectionné est manquant");
+      if (!selectedDate || !selectedAgent || !eventType) {
+        console.error("La date, l'agent ou le type d'événement est manquant");
+        return;
+      }
+      if (
+        (eventType === "absence" && !subtype) ||
+        (eventType === "conge" && !subtype)
+      ) {
+        alert("Veuillez sélectionner un sous-type pour l'absence ou le congé.");
         return;
       }
 
       // Vérifier si un chantier est sélectionné pour les événements "M"
-      if (status === "M" && !selectedChantier) {
+      if (eventType === "modification_horaire" && !selectedChantier) {
         console.error(
           "Un chantier doit être sélectionné pour les événements modifiés (M)."
         );
@@ -234,7 +258,7 @@ const CalendrierAgent = ({ agents }) => {
       );
 
       // Si c'est un événement A ou C, supprimer d'abord les schedules
-      if (status === "A" || status === "C") {
+      if (eventType === "absence" || eventType === "conge") {
         let currentDate = dayjs(startDate);
         const finalDate = dayjs(endDate);
 
@@ -289,13 +313,6 @@ const CalendrierAgent = ({ agents }) => {
         )
       );
 
-      const colorMap = {
-        P: "green",
-        A: "red",
-        C: "purple",
-        M: "orange",
-      };
-
       let currentDate = dayjs(startDate);
       const finalDate = dayjs(endDate);
       const newEvents = [];
@@ -310,16 +327,18 @@ const CalendrierAgent = ({ agents }) => {
           agent: selectedAgent,
           start_date: formattedDate,
           end_date: formattedDate,
-          status: status,
-          hours_modified: status === "M" ? hours : 0,
-          chantier: status === "M" ? selectedChantier : null,
+          event_type: eventType,
+          subtype: subtype || null,
+          hours_modified: eventType === "modification_horaire" ? hours : 0,
+          chantier:
+            eventType === "modification_horaire" ? selectedChantier : null,
         };
 
         try {
           const response = await axios.post("/api/events/", newEvent);
           console.log("Événement créé avec succès:", response.data);
 
-          if (status === "P") {
+          if (eventType === "presence") {
             await axios.post("/api/update_days_present/", {
               agent_id: selectedAgent,
               month: formattedDate,
@@ -332,9 +351,12 @@ const CalendrierAgent = ({ agents }) => {
             resourceId: newEvent.agent.toString(),
             start: newEvent.start_date,
             end: newEvent.end_date,
-            title: status === "M" ? `${hours}H` : status,
-            color: colorMap[status],
-            chantier: status === "M" ? selectedChantier : null,
+            title:
+              eventType === "modification_horaire"
+                ? `${hours}H`
+                : `${eventType}${subtype ? ` (${subtype})` : ""}`,
+            color: getColorByStatus(eventType, subtype),
+            chantier: newEvent.chantier,
           });
         } catch (error) {
           console.error("Erreur lors de la création de l'événement:", error);
@@ -357,14 +379,24 @@ const CalendrierAgent = ({ agents }) => {
     }
   };
 
-  const getColorByStatus = (status) => {
-    const colorMap = {
-      P: "green",
-      A: "red",
-      C: "purple",
-      M: "orange",
-    };
-    return colorMap[status] || "grey"; // Par défaut, gris
+  const getColorByStatus = (eventType, subtype) => {
+    if (eventType === "presence") return "green";
+    if (eventType === "absence") {
+      if (subtype === "justifiee") return "#fbc02d"; // jaune
+      if (subtype === "injustifiee") return "#d32f2f"; // rouge foncé
+      if (subtype === "maladie") return "#1976d2"; // bleu
+      if (subtype === "rtt") return "#7b1fa2"; // violet
+      return "red";
+    }
+    if (eventType === "conge") {
+      if (subtype === "paye") return "#388e3c"; // vert foncé
+      if (subtype === "sans_solde") return "#ffa000"; // orange
+      if (subtype === "parental") return "#0288d1"; // bleu clair
+      if (subtype === "maternite" || subtype === "paternite") return "#f06292"; // rose
+      return "purple";
+    }
+    if (eventType === "modification_horaire") return "orange";
+    return "grey";
   };
 
   const style = {
@@ -438,6 +470,60 @@ const CalendrierAgent = ({ agents }) => {
           </LocalizationProvider>
 
           <Select
+            label="Type d'événement"
+            value={eventType}
+            onChange={(e) => {
+              setEventType(e.target.value);
+              setSubtype(""); // reset subtype on type change
+            }}
+            fullWidth
+            style={{ marginBottom: "16px" }}
+            displayEmpty
+          >
+            <MenuItem value="">-- Sélectionner un type --</MenuItem>
+            <MenuItem value="presence">Présence</MenuItem>
+            <MenuItem value="absence">Absence</MenuItem>
+            <MenuItem value="conge">Congé</MenuItem>
+            <MenuItem value="modification_horaire">Horaire Modifié</MenuItem>
+          </Select>
+
+          {eventType === "absence" && (
+            <Select
+              label="Type d'absence"
+              value={subtype}
+              onChange={(e) => setSubtype(e.target.value)}
+              fullWidth
+              style={{ marginBottom: "16px" }}
+              displayEmpty
+            >
+              <MenuItem value="">-- Sélectionner un type d'absence --</MenuItem>
+              {absenceSubtypes.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          )}
+
+          {eventType === "conge" && (
+            <Select
+              label="Type de congé"
+              value={subtype}
+              onChange={(e) => setSubtype(e.target.value)}
+              fullWidth
+              style={{ marginBottom: "16px" }}
+              displayEmpty
+            >
+              <MenuItem value="">-- Sélectionner un type de congé --</MenuItem>
+              {congeSubtypes.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          )}
+
+          <Select
             label="Sélectionner un chantier"
             value={selectedChantier || ""}
             onChange={(e) => setSelectedChantier(e.target.value)}
@@ -457,34 +543,21 @@ const CalendrierAgent = ({ agents }) => {
 
           <Button
             variant="contained"
-            sx={{ bgcolor: green[500] }}
+            sx={{ bgcolor: getColorByStatus(eventType, subtype) }}
             color="primary"
-            onClick={() => addEvent("P")}
-          >
-            Présent
-          </Button>
-          <Button
-            variant="contained"
-            sx={{ bgcolor: red[500] }}
-            onClick={() => addEvent("A")}
-          >
-            Absent
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={() => addEvent("C")}
-          >
-            Congé
-          </Button>
-          <Button
-            variant="contained"
-            sx={{ bgcolor: orange[500] }}
             onClick={() =>
-              addEvent("M", prompt("Combien d'heures à modifier ?"))
+              addEvent(
+                eventType === "modification_horaire"
+                  ? prompt("Combien d'heures à modifier ?")
+                  : 0
+              )
+            }
+            disabled={
+              !eventType ||
+              ((eventType === "absence" || eventType === "conge") && !subtype)
             }
           >
-            Horaire Modifié
+            Ajouter l'événement
           </Button>
           <Button onClick={closeModal}>Fermer</Button>
         </ModalStyle>

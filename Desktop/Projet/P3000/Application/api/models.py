@@ -229,16 +229,43 @@ class Presence(models.Model):
         # Calcul du coût basé sur le taux horaire ajusté
         return self.heures_travail * self.taux_horaire_ajusté
 
+# Ajout des choix pour les types et sous-types d'événements
+EVENT_TYPE_CHOICES = [
+    ('presence', 'Présence'),
+    ('absence', 'Absence'),
+    ('conge', 'Congé'),
+    ('modification_horaire', 'Horaire Modifié'),
+]
+
+EVENT_SUBTYPE_CHOICES = [
+    # Absences
+    ('justifiee', 'Justifiée'),
+    ('injustifiee', 'Injustifiée'),
+    ('maladie', 'Maladie'),
+    ('rtt', 'RTT'),
+    # Congés
+    ('paye', 'Payé'),
+    ('sans_solde', 'Sans solde'),
+    ('parental', 'Parental'),
+    ('maternite', 'Maternité'),
+    ('paternite', 'Paternité'),
+    # Autres
+    (None, 'Aucun'),
+]
+
 class Event(models.Model):
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE)
     start_date = models.DateField()
     end_date = models.DateField()
-    status = models.CharField(max_length=20)
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES,default='absence')
+    subtype = models.CharField(max_length=30, choices=EVENT_SUBTYPE_CHOICES, blank=True, null=True)
     hours_modified = models.IntegerField(default=0)
     chantier = models.ForeignKey('Chantier', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.agent} - {self.status} du {self.start_date} au {self.end_date}"
+        label = dict(EVENT_TYPE_CHOICES).get(self.event_type, self.event_type)
+        sublabel = dict(EVENT_SUBTYPE_CHOICES).get(self.subtype, self.subtype)
+        return f"{self.agent} - {label} ({sublabel}) du {self.start_date} au {self.end_date}"
 
 class Stock(models.Model):
     code_produit = models.CharField(max_length=50, unique=True, default='')

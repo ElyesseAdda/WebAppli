@@ -272,11 +272,9 @@ class PresenceSerializer(serializers.ModelSerializer):
         fields = ['agent', 'chantier', 'date', 'heures_travail', 'agent_name', 'chantier_name', 'cout_main_oeuvre']
 
 class EventSerializer(serializers.ModelSerializer):
-    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
-
     class Meta:
         model = Event
-        fields = ['id', 'agent', 'start_date', 'end_date', 'status', 'hours_modified', 'chantier', 'chantier_name']
+        fields = '__all__'
 
 class StockSerializer(serializers.ModelSerializer):
     fournisseur = serializers.PrimaryKeyRelatedField(queryset=Fournisseur.objects.all())
