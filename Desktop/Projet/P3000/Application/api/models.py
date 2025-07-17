@@ -119,16 +119,28 @@ class Chantier(models.Model):
             .annotate(mois=TruncMonth('created_at'))
             .values('mois')
             .annotate(
-                heures=Sum('hours'),
-                montant=Sum('cost')
+                heures_normal=Sum('hours_normal'),
+                heures_samedi=Sum('hours_samedi'),
+                heures_dimanche=Sum('hours_dimanche'),
+                heures_ferie=Sum('hours_ferie'),
+                montant_normal=Sum('cost_normal'),
+                montant_samedi=Sum('cost_samedi'),
+                montant_dimanche=Sum('cost_dimanche'),
+                montant_ferie=Sum('cost_ferie'),
             )
             .order_by('mois')
         )
         return [
             {
                 'mois': x['mois'].strftime('%Y-%m'),
-                'heures': float(x['heures'] or 0),
-                'montant': float(x['montant'] or 0)
+                'heures_normal': float(x['heures_normal'] or 0),
+                'heures_samedi': float(x['heures_samedi'] or 0),
+                'heures_dimanche': float(x['heures_dimanche'] or 0),
+                'heures_ferie': float(x['heures_ferie'] or 0),
+                'montant_normal': float(x['montant_normal'] or 0),
+                'montant_samedi': float(x['montant_samedi'] or 0),
+                'montant_dimanche': float(x['montant_dimanche'] or 0),
+                'montant_ferie': float(x['montant_ferie'] or 0),
             }
             for x in qs
         ]
@@ -642,6 +654,8 @@ class Schedule(models.Model):
     def __str__(self):
         return f"{self.agent.name} - Semaine {self.week}, {self.year} - {self.day} {self.hour}"
 
+# Adapter recalculate_labor_costs_for_period pour ne plus utiliser 'hours' et 'cost' mais la nouvelle structure
+
 def recalculate_labor_costs_for_period(week=None, year=None, agent_id=None, chantier_id=None):
     schedules = Schedule.objects.all()
     if week:
@@ -663,10 +677,20 @@ def recalculate_labor_costs_for_period(week=None, year=None, agent_id=None, chan
     for (agent_id, chantier_id, week, year), hours in data.items():
         agent = Agent.objects.get(id=agent_id)
         chantier = Chantier.objects.get(id=chantier_id)
-        cost = hours * (agent.taux_Horaire or 0)
+        # Ici, on suppose que toutes les heures sont normales (à adapter si planning détaillé)
         LaborCost.objects.update_or_create(
             agent=agent, chantier=chantier, week=week, year=year,
-            defaults={'hours': hours, 'cost': cost}
+            defaults={
+                'hours_normal': hours,
+                'hours_samedi': 0,
+                'hours_dimanche': 0,
+                'hours_ferie': 0,
+                'cost_normal': hours * (agent.taux_Horaire or 0),
+                'cost_samedi': 0,
+                'cost_dimanche': 0,
+                'cost_ferie': 0,
+                'details_majoration': [],
+            }
         )
 
 @receiver([post_save, post_delete], sender=Schedule)
@@ -682,8 +706,18 @@ class LaborCost(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='labor_costs')
     week = models.IntegerField()
     year = models.IntegerField()
-    hours = models.DecimalField(max_digits=10, decimal_places=2)
-    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    # Heures par type
+    hours_normal = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Heures normales (hors samedi/dimanche/férié)")
+    hours_samedi = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Heures effectuées le samedi")
+    hours_dimanche = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Heures effectuées le dimanche")
+    hours_ferie = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Heures effectuées les jours fériés")
+    # Coûts par type
+    cost_normal = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Coût des heures normales")
+    cost_samedi = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Coût des heures samedi (majoration)")
+    cost_dimanche = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Coût des heures dimanche (majoration)")
+    cost_ferie = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Coût des heures férié (majoration)")
+    # Détail des jours majorés (liste de dicts : date, type, hours, taux)
+    details_majoration = models.JSONField(default=list, blank=True, help_text="Détail des jours avec majoration (samedi, dimanche, férié)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1019,17 +1053,21 @@ class SituationDateEnvoi(models.Model):
     situation = models.OneToOneField('Situation', on_delete=models.CASCADE)
     date_envoi = models.DateField(null=True, blank=True)
 
+# Adapter le signal update_chantier_cout_main_oeuvre
 @receiver([post_save, post_delete], sender=LaborCost)
 def update_chantier_cout_main_oeuvre(sender, instance, **kwargs):
     chantier = instance.chantier
-    total = LaborCost.objects.filter(chantier=chantier).aggregate(Sum('cost'))['cost__sum'] or 0
-    print(f"Recalcul du coût main d'oeuvre pour {chantier}: {total}")
+    total = LaborCost.objects.filter(chantier=chantier).aggregate(
+        total=Sum('cost_normal') + Sum('cost_samedi') + Sum('cost_dimanche') + Sum('cost_ferie')
+    )['total'] or 0
     chantier.cout_main_oeuvre = total
     chantier.save(update_fields=['cout_main_oeuvre'])
 
 def update_chantier_cout_main_oeuvre(chantier):
     from .models import LaborCost  # Import local pour éviter les problèmes de circularité
-    total = LaborCost.objects.filter(chantier=chantier).aggregate(Sum('cost'))['cost__sum'] or 0
+    total = LaborCost.objects.filter(chantier=chantier).aggregate(
+        total=Sum('cost_normal') + Sum('cost_samedi') + Sum('cost_dimanche') + Sum('cost_ferie')
+    )['total'] or 0
     chantier.cout_main_oeuvre = total
     chantier.save(update_fields=['cout_main_oeuvre'])
 

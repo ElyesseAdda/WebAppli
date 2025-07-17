@@ -239,20 +239,6 @@ const RecapSection = ({
               </ListItem>
             ))}
           </List>
-          {/* Détails par catégorie (accordéon) */}
-          {Object.keys(data).map((cat) => (
-            <RecapCategoryDetails
-              key={cat}
-              open={!!openDetails[cat]}
-              documents={data[cat].documents}
-              title={cat.replace("_", " ")}
-              onClose={() => handleToggleDetails(cat)}
-              category={cat}
-              chantierId={chantierId}
-              periode={periode}
-              refreshRecap={refreshRecap}
-            />
-          ))}
         </Box>
       </Box>
       {/* Bouton pour activer/désactiver l'accordéon général */}

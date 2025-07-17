@@ -44,6 +44,8 @@ from rest_framework.permissions import IsAuthenticated
 from datetime import date, timedelta
 from django.db.models import Sum
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
+import holidays
+from datetime import datetime, timedelta
 
 
 
@@ -793,7 +795,11 @@ class EventViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         agent_id = self.request.query_params.get('agent_id', None)
         if agent_id is not None:
-            queryset = queryset.filter(agent_id=agent_id)  # Filtrer par agent_id
+            queryset = queryset.filter(agent_id=agent_id)
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date and end_date:
+            queryset = queryset.filter(start_date__gte=start_date, start_date__lte=end_date)
         return queryset
 
 class StockViewSet(viewsets.ModelViewSet):
@@ -1234,77 +1240,105 @@ def delete_schedule(request):
 
 @api_view(['POST'])
 def save_labor_costs(request):
-    with transaction.atomic():
-        try:
-            data = request.data
-           
-            agent_id = data.get('agent_id')
-            week = data.get('week')
-            year = data.get('year')
-            costs = data.get('costs', [])
+    import logging
+    logger = logging.getLogger("laborcost")
+    try:
+        logger.info(f"save_labor_costs called with data: {request.data}")
+        agent_id = request.data.get('agent_id')
+        week = request.data.get('week')
+        year = request.data.get('year')
+        costs = request.data.get('costs', [])
 
-            # Toujours supprimer les anciennes entrées, même si costs est vide
-            LaborCost.objects.filter(
-                agent_id=agent_id,
+        agent = Agent.objects.get(id=agent_id)
+        taux_horaire = agent.taux_Horaire or 0
+        fr_holidays = holidays.country_holidays('FR', years=[int(year)])
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+
+        for cost_entry in costs:
+            chantier_name = cost_entry['chantier_name']
+            chantier = Chantier.objects.get(chantier_name=chantier_name)
+            schedule = request.data.get('schedule', {})  # On suppose que le planning complet est envoyé
+
+            # Si pas de planning détaillé, utiliser le champ hours
+            if not schedule:
+                hours_normal = cost_entry.get('hours', 0)
+                hours_samedi = 0
+                hours_dimanche = 0
+                hours_ferie = 0
+                details_majoration = []
+            else:
+                # Initialisation des compteurs
+                hours_normal = 0
+                hours_samedi = 0
+                hours_dimanche = 0
+                hours_ferie = 0
+                details_majoration = []
+
+                # Parcours du planning pour ce chantier
+                for hour, day_data in schedule.items():
+                    for day, chantier_nom in day_data.items():
+                        if chantier_nom != chantier_name:
+                            continue
+                        day_index = days_of_week.index(day)
+                        lundi = datetime.strptime(f'{year}-W{int(week):02d}-1', "%Y-W%W-%w")
+                        date_creneau = lundi + timedelta(days=day_index)
+                        date_str = date_creneau.strftime("%Y-%m-%d")
+
+                        if date_creneau in fr_holidays:
+                            hours_ferie += 1
+                            details_majoration.append({
+                                "date": date_str,
+                                "type": "ferie",
+                                "hours": 1,
+                                "taux": 1.5
+                            })
+                        elif day == "Samedi":
+                            hours_samedi += 1
+                            details_majoration.append({
+                                "date": date_str,
+                                "type": "samedi",
+                                "hours": 1,
+                                "taux": 1.25
+                            })
+                        elif day == "Dimanche":
+                            hours_dimanche += 1
+                            details_majoration.append({
+                                "date": date_str,
+                                "type": "dimanche",
+                                "hours": 1,
+                                "taux": 1.5
+                            })
+                        else:
+                            hours_normal += 1
+
+            cost_normal = hours_normal * taux_horaire
+            cost_samedi = hours_samedi * taux_horaire * 1.25
+            cost_dimanche = hours_dimanche * taux_horaire * 1.5
+            cost_ferie = hours_ferie * taux_horaire * 1.5
+
+            obj, created = LaborCost.objects.update_or_create(
+                agent=agent,
+                chantier=chantier,
                 week=week,
-                year=year
-            ).delete()
+                year=year,
+                defaults={
+                    "hours_normal": hours_normal,
+                    "hours_samedi": hours_samedi,
+                    "hours_dimanche": hours_dimanche,
+                    "hours_ferie": hours_ferie,
+                    "cost_normal": cost_normal,
+                    "cost_samedi": cost_samedi,
+                    "cost_dimanche": cost_dimanche,
+                    "cost_ferie": cost_ferie,
+                    "details_majoration": details_majoration,
+                }
+            )
+            logger.info(f"LaborCost {'created' if created else 'updated'}: agent={agent}, chantier={chantier}, week={week}, year={year}, hours_normal={hours_normal}, hours_samedi={hours_samedi}, hours_dimanche={hours_dimanche}, hours_ferie={hours_ferie}")
 
-            if not costs or not isinstance(costs, list) or len(costs) == 0:
-                return Response({
-                    'message': 'Aucune heure à enregistrer, anciennes entrées supprimées.'
-                }, status=status.HTTP_200_OK)
-
-            try:
-                agent = Agent.objects.get(id=agent_id)
-            except Agent.DoesNotExist:
-                return Response({'error': f'Agent {agent_id} non trouvé'}, status=status.HTTP_404_NOT_FOUND)
-
-            labor_costs = []
-            chantier = None
-            for cost_entry in costs:
-                try:
-                    chantier = Chantier.objects.get(chantier_name=cost_entry['chantier_name'])
-                except Chantier.DoesNotExist:
-                    return Response(
-                        {'error': f'Chantier {cost_entry["chantier_name"]} non trouvé'}, 
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-                except KeyError:
-                    return Response(
-                        {'error': 'Format de coût invalide, chantier_name manquant'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                try:
-                    labor_costs.append(LaborCost(
-                        agent=agent,
-                        chantier=chantier,
-                        week=week,
-                        year=year,
-                        hours=cost_entry['hours'],
-                        cost=cost_entry['hours'] * agent.taux_Horaire
-                    ))
-                except KeyError:
-                    return Response(
-                        {'error': 'Format de coût invalide, hours manquant'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            # Création des nouvelles entrées
-            created_costs = LaborCost.objects.bulk_create(labor_costs)
-
-            # MAJ coût main d'oeuvre du chantier concerné
-            if chantier:
-                update_chantier_cout_main_oeuvre(chantier)
-
-            return Response({
-                'message': 'Coûts sauvegardés avec succès',
-                'count': len(created_costs)
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Coûts sauvegardés avec succès"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Erreur dans save_labor_costs: {str(e)}")
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def get_labor_costs(request):
@@ -1334,12 +1368,18 @@ def get_labor_costs(request):
                     'details': []
                 }
             
-            results[chantier_name]['total_hours'] += float(cost.hours)
-            results[chantier_name]['total_cost'] += float(cost.cost)
+            results[chantier_name]['total_hours'] += float(cost.hours_normal) + float(cost.hours_samedi) + float(cost.hours_dimanche) + float(cost.hours_ferie)
+            results[chantier_name]['total_cost'] += float(cost.cost_normal) + float(cost.cost_samedi) + float(cost.cost_dimanche) + float(cost.cost_ferie)
             results[chantier_name]['details'].append({
                 'agent_name': cost.agent.name,
-                'hours': float(cost.hours),
-                'cost': float(cost.cost)
+                'hours_normal': float(cost.hours_normal),
+                'hours_samedi': float(cost.hours_samedi),
+                'hours_dimanche': float(cost.hours_dimanche),
+                'hours_ferie': float(cost.hours_ferie),
+                'cost_normal': float(cost.cost_normal),
+                'cost_samedi': float(cost.cost_samedi),
+                'cost_dimanche': float(cost.cost_dimanche),
+                'cost_ferie': float(cost.cost_ferie),
             })
 
         return Response(results)
@@ -1413,8 +1453,14 @@ def get_labor_costs_summary(request):
 
         # Calcul des totaux
         summary = queryset.aggregate(
-            total_hours=Sum('hours'),
-            total_cost=Sum('cost')
+            total_hours_normal=Sum('hours_normal'),
+            total_hours_samedi=Sum('hours_samedi'),
+            total_hours_dimanche=Sum('hours_dimanche'),
+            total_hours_ferie=Sum('hours_ferie'),
+            total_cost_normal=Sum('cost_normal'),
+            total_cost_samedi=Sum('cost_samedi'),
+            total_cost_dimanche=Sum('cost_dimanche'),
+            total_cost_ferie=Sum('cost_ferie'),
         )
 
         return Response(summary)
@@ -4945,9 +4991,10 @@ def labor_costs_monthly_summary(request):
     """
     Endpoint : /api/labor_costs/monthly_summary/?month=YYYY-MM
     Retourne pour chaque chantier :
-      - le total des heures
-      - le total du montant
-      - le détail par agent (heures, montant)
+      - le total des heures (par type)
+      - le total du montant (par type)
+      - le détail par agent (heures, montant, par type)
+      - le détail des jours majorés
     pour le mois donné (tous agents confondus).
     """
     month_str = request.GET.get('month')  # format attendu : 'YYYY-MM'
@@ -4958,24 +5005,20 @@ def labor_costs_monthly_summary(request):
     except Exception:
         return Response({'error': 'Format de mois invalide. Utilisez YYYY-MM.'}, status=400)
 
-    # On récupère toutes les semaines de ce mois/année
     from calendar import monthrange
     import datetime
     first_day = datetime.date(year, month, 1)
     last_day = datetime.date(year, month, monthrange(year, month)[1])
-    # On récupère les numéros de semaine du mois
     weeks = set()
     d = first_day
     while d <= last_day:
         weeks.add(d.isocalendar()[1])
         d += datetime.timedelta(days=1)
 
-    # On récupère tous les LaborCost de ces semaines/année
     labor_costs = (LaborCost.objects
         .filter(year=year, week__in=list(weeks))
         .select_related('chantier', 'agent'))
 
-    # Agrégation par chantier
     chantier_map = {}
     for lc in labor_costs:
         chantier_id = lc.chantier.id
@@ -4984,18 +5027,39 @@ def labor_costs_monthly_summary(request):
             chantier_map[chantier_id] = {
                 'chantier_id': chantier_id,
                 'chantier_nom': chantier_nom,
-                'total_heures': 0,
-                'total_montant': 0,
-                'details': []
+                'total_heures_normal': 0,
+                'total_heures_samedi': 0,
+                'total_heures_dimanche': 0,
+                'total_heures_ferie': 0,
+                'total_montant_normal': 0,
+                'total_montant_samedi': 0,
+                'total_montant_dimanche': 0,
+                'total_montant_ferie': 0,
+                'details': [],
+                'jours_majoration': []
             }
-        chantier_map[chantier_id]['total_heures'] += float(lc.hours)
-        chantier_map[chantier_id]['total_montant'] += float(lc.cost)
+        chantier_map[chantier_id]['total_heures_normal'] += float(lc.hours_normal)
+        chantier_map[chantier_id]['total_heures_samedi'] += float(lc.hours_samedi)
+        chantier_map[chantier_id]['total_heures_dimanche'] += float(lc.hours_dimanche)
+        chantier_map[chantier_id]['total_heures_ferie'] += float(lc.hours_ferie)
+        chantier_map[chantier_id]['total_montant_normal'] += float(lc.cost_normal)
+        chantier_map[chantier_id]['total_montant_samedi'] += float(lc.cost_samedi)
+        chantier_map[chantier_id]['total_montant_dimanche'] += float(lc.cost_dimanche)
+        chantier_map[chantier_id]['total_montant_ferie'] += float(lc.cost_ferie)
         chantier_map[chantier_id]['details'].append({
             'agent_id': lc.agent.id,
             'agent_nom': f"{lc.agent.name} {lc.agent.surname}",
-            'heures': float(lc.hours),
-            'montant': float(lc.cost)
+            'heures_normal': float(lc.hours_normal),
+            'heures_samedi': float(lc.hours_samedi),
+            'heures_dimanche': float(lc.hours_dimanche),
+            'heures_ferie': float(lc.hours_ferie),
+            'montant_normal': float(lc.cost_normal),
+            'montant_samedi': float(lc.cost_samedi),
+            'montant_dimanche': float(lc.cost_dimanche),
+            'montant_ferie': float(lc.cost_ferie),
+            'jours_majoration': lc.details_majoration or []
         })
+        chantier_map[chantier_id]['jours_majoration'].extend(lc.details_majoration or [])
     return Response(list(chantier_map.values()), status=200)
 
 
@@ -5130,10 +5194,19 @@ def recalculate_labor_costs(request):
     for (agent_id, chantier_id, week, year), hours in data.items():
         agent = Agent.objects.get(id=agent_id)
         chantier = Chantier.objects.get(id=chantier_id)
-        cost = hours * (agent.taux_Horaire or 0)
-        obj, _ = LaborCost.objects.update_or_create(
+        LaborCost.objects.update_or_create(
             agent=agent, chantier=chantier, week=week, year=year,
-            defaults={'hours': hours, 'cost': cost}
+            defaults={
+                'hours_normal': hours,
+                'hours_samedi': 0,
+                'hours_dimanche': 0,
+                'hours_ferie': 0,
+                'cost_normal': hours * (agent.taux_Horaire or 0),
+                'cost_samedi': 0,
+                'cost_dimanche': 0,
+                'cost_ferie': 0,
+                'details_majoration': [],
+            }
         )
     return Response({"status": "ok"})
 
@@ -5250,12 +5323,37 @@ class RecapFinancierChantierAPIView(APIView):
         labor_reste = [lc for lc in labor_docs if lc.date_planning and lc.date_planning > today]
 
         def labor_to_doc(lc):
+            # Inclure la date calculée dans la réponse
+            try:
+                week = int(lc.week)
+                year = int(lc.year)
+                lc_date = datetime.strptime(f'{year}-W{week}-1', "%Y-W%W-%w").date()
+            except Exception:
+                lc_date = None
             return {
                 "id": lc.id,
                 "agent": str(lc.agent),
-                "date": lc.date_planning,
-                "heures": float(lc.hours),
-                "montant": float(lc.cost),
+                "date": lc_date,
+                "heures_normal": float(lc.hours_normal),
+                "heures_samedi": float(lc.hours_samedi),
+                "heures_dimanche": float(lc.hours_dimanche),
+                "heures_ferie": float(lc.hours_ferie),
+                "montant_normal": float(lc.cost_normal),
+                "montant_samedi": float(lc.cost_samedi),
+                "montant_dimanche": float(lc.cost_dimanche),
+                "montant_ferie": float(lc.cost_ferie),
+                "montant": (
+                    float(lc.cost_normal or 0)
+                    + float(lc.cost_samedi or 0)
+                    + float(lc.cost_dimanche or 0)
+                    + float(lc.cost_ferie or 0)
+                ),
+                "heures": (
+                    float(lc.hours_normal or 0)
+                    + float(lc.hours_samedi or 0)
+                    + float(lc.hours_dimanche or 0)
+                    + float(lc.hours_ferie or 0)
+                ),
                 "statut": "payé" if lc in labor_payes else "à payer",
             }
 
@@ -5315,8 +5413,26 @@ class RecapFinancierChantierAPIView(APIView):
                 "id": lc.id,
                 "agent": str(lc.agent),
                 "date": lc_date,
-                "heures": float(lc.hours),
-                "montant": float(lc.cost),
+                "heures_normal": float(lc.hours_normal),
+                "heures_samedi": float(lc.hours_samedi),
+                "heures_dimanche": float(lc.hours_dimanche),
+                "heures_ferie": float(lc.hours_ferie),
+                "montant_normal": float(lc.cost_normal),
+                "montant_samedi": float(lc.cost_samedi),
+                "montant_dimanche": float(lc.cost_dimanche),
+                "montant_ferie": float(lc.cost_ferie),
+                "montant": (
+                    float(lc.cost_normal or 0)
+                    + float(lc.cost_samedi or 0)
+                    + float(lc.cost_dimanche or 0)
+                    + float(lc.cost_ferie or 0)
+                ),
+                "heures": (
+                    float(lc.hours_normal or 0)
+                    + float(lc.hours_samedi or 0)
+                    + float(lc.hours_dimanche or 0)
+                    + float(lc.hours_ferie or 0)
+                ),
                 "statut": "payé" if lc in labor_payes else "à payer",
             }
 
@@ -5346,7 +5462,13 @@ class RecapFinancierChantierAPIView(APIView):
                     "documents": documents_materiel
                 },
                 "main_oeuvre": {
-                    "total": float(sum(lc.cost for lc in labor_payes)),
+                    "total": float(sum(
+                        (getattr(lc, 'cost_normal', 0) or 0)
+                        + (getattr(lc, 'cost_samedi', 0) or 0)
+                        + (getattr(lc, 'cost_dimanche', 0) or 0)
+                        + (getattr(lc, 'cost_ferie', 0) or 0)
+                        for lc in labor_payes
+                    )),
                     "documents": [labor_to_doc(lc) for lc in labor_payes]
                 },
                 "sous_traitant": {
@@ -5360,7 +5482,13 @@ class RecapFinancierChantierAPIView(APIView):
                     "documents": []
                 },
                 "main_oeuvre": {
-                    "total": float(sum(lc.cost for lc in labor_reste)),
+                    "total": float(sum(
+                        (getattr(lc, 'cost_normal', 0) or 0)
+                        + (getattr(lc, 'cost_samedi', 0) or 0)
+                        + (getattr(lc, 'cost_dimanche', 0) or 0)
+                        + (getattr(lc, 'cost_ferie', 0) or 0)
+                        for lc in labor_reste
+                    )),
                     "documents": [labor_to_doc(lc) for lc in labor_reste]
                 },
                 "sous_traitant": {

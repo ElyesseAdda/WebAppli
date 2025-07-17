@@ -315,7 +315,11 @@ class LaborCostSerializer(serializers.ModelSerializer):
         model = LaborCost
         fields = [
             'id', 'agent', 'agent_name', 'chantier', 'chantier_name',
-            'week', 'year', 'hours', 'cost', 'taux_horaire',
+            'week', 'year',
+            'hours_normal', 'hours_samedi', 'hours_dimanche', 'hours_ferie',
+            'cost_normal', 'cost_samedi', 'cost_dimanche', 'cost_ferie',
+            'details_majoration',
+            'taux_horaire',
             'created_at', 'updated_at'
         ]
 

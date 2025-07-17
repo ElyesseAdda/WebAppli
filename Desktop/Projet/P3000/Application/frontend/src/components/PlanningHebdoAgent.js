@@ -454,6 +454,42 @@ const PlanningHebdoAgent = ({
     }
   };
 
+  // Fonction utilitaire pour générer une couleur unique par chantier
+  function getColorForChantier(chantierId) {
+    // Palette de couleurs (ajustable)
+    const palette = [
+      "#1b78bc",
+      "#e57373",
+      "#81c784",
+      "#ffd54f",
+      "#ba68c8",
+      "#4dd0e1",
+      "#ff8a65",
+      "#a1887f",
+      "#90a4ae",
+      "#f06292",
+      "#7986cb",
+      "#dce775",
+      "#9575cd",
+      "#ffb74d",
+      "#aed581",
+      "#64b5f6",
+      "#fff176",
+      "#4db6ac",
+      "#f44336",
+      "#8d6e63",
+    ];
+    if (!chantierId) return "#bdbdbd";
+    // Simple hash pour indexer la palette
+    let hash = 0;
+    const str = chantierId.toString();
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const idx = Math.abs(hash) % palette.length;
+    return palette[idx];
+  }
+
   // Fonction pour déterminer le style des cellules
   const getCellStyle = (hour, day, scheduleData) => {
     // Convertir le format de date pour la comparaison
@@ -503,8 +539,13 @@ const PlanningHebdoAgent = ({
       return "lightblue";
     }
 
+    // Couleur par chantier si assigné
     if (scheduleData && scheduleData[hour] && scheduleData[hour][day]) {
-      return "lightgreen";
+      // On suppose que scheduleData[hour][day] contient le nom du chantier
+      // Il faut retrouver l'id du chantier correspondant au nom
+      const chantierName = scheduleData[hour][day];
+      const chantier = chantiers.find((c) => c.chantier_name === chantierName);
+      return getColorForChantier(chantier ? chantier.id : chantierName);
     }
 
     return "white";

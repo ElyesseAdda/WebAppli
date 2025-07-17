@@ -160,6 +160,7 @@ const PlanningContainer = () => {
         week: selectedWeek,
         year: selectedYear,
         costs: laborCosts,
+        schedule: schedule[selectedAgentId] || {}, // Ajout du planning détaillé pour l'agent
       };
 
       console.log("Données envoyées à l'API:", payload);
