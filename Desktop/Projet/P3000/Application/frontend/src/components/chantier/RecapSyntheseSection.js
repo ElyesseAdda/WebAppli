@@ -12,44 +12,46 @@ const RecapSyntheseSection = ({ data }) => {
   const total_sous_traitant = Number(
     data.sorties?.paye?.sous_traitant?.total || 0
   );
+  // Coût chantier = main d'oeuvre + sous-traitance + matériel
+  const cout_chantier =
+    total_main_oeuvre + total_sous_traitant + total_materiel;
+
+  // Calcul du total des paiements reçus
+  const total_paiements_recus =
+    data.entrees && data.entrees.paye
+      ? Object.values(data.entrees.paye).reduce(
+          (acc, cat) => acc + (cat.total || 0),
+          0
+        )
+      : 0;
+
+  // Nouveau calcul du bénéfice
   const benefice =
-    montant_ht -
+    total_paiements_recus -
     montant_taux_fixe -
     total_materiel -
     total_main_oeuvre -
     total_sous_traitant;
 
-  // Préparer les données pour le PieChart
+  // Préparer les données pour le PieChart (regroupement)
   const pieData = [
     {
       id: "Taux fixe",
       label: "Taux fixe",
       value: montant_taux_fixe,
-      color: "#BDBDBD",
+      color: "#1976d2", // bleu
     },
     {
-      id: "Matériel",
-      label: "Matériel",
-      value: total_materiel,
-      color: "#FF9800",
-    },
-    {
-      id: "Main d'œuvre",
-      label: "Main d'œuvre",
-      value: total_main_oeuvre,
-      color: "#2196F3",
-    },
-    {
-      id: "Sous-traitance",
-      label: "Sous-traitance",
-      value: total_sous_traitant,
-      color: "#4CAF50",
+      id: "Coût chantier",
+      label: "Coût chantier",
+      value: cout_chantier,
+      color: "#FF7043", // orange foncé
     },
     {
       id: "Bénéfice",
       label: "Bénéfice",
       value: benefice,
-      color: benefice >= 0 ? "#43A047" : "#f44336",
+      color: benefice >= 0 ? "#43A047" : "#d32f2f", // vert ou rouge
     },
   ];
 
@@ -69,48 +71,110 @@ const RecapSyntheseSection = ({ data }) => {
       <Typography variant="h6" sx={{ mb: 2 }}>
         Synthèse Financière du Chantier
       </Typography>
-      <Grid container spacing={2} alignItems="center">
-        <Grid item xs={12} md={8}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
-              <Typography color="text.secondary">Montant marché</Typography>
-              <Typography variant="h6">
-                {montant_ht.toLocaleString("fr-FR", {
-                  minimumFractionDigits: 2,
-                })}{" "}
-                €
-              </Typography>
+      <Grid container spacing={0} alignItems="stretch">
+        {/* Section Gauche : Textes */}
+        <Grid item xs={12} md={7}>
+          <Box
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              pl: 2,
+              pr: 2,
+            }}
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Typography color="text.secondary">Montant marché</Typography>
+                <Typography variant="h6">
+                  {montant_ht.toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography color="text.secondary">Taux fixe</Typography>
+                <Typography variant="h6">
+                  {taux_fixe.toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  %
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography color="text.secondary">
+                  Montant taux fixe
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{ color: "#1976d2", fontWeight: 700 }}
+                >
+                  {montant_taux_fixe.toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography color="text.secondary">Paiements reçus</Typography>
+                <Typography
+                  variant="h6"
+                  style={{ color: "#43A047", fontWeight: 700 }}
+                >
+                  {total_paiements_recus.toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography color="text.secondary">Coût chantier</Typography>
+                <Typography
+                  variant="h6"
+                  style={{ color: "#d32f2f", fontWeight: 700 }}
+                >
+                  -{" "}
+                  {cout_chantier.toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography color="text.secondary">Bénéfice</Typography>
+                <Typography
+                  variant="h6"
+                  style={{
+                    color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                    fontWeight: 700,
+                  }}
+                >
+                  {benefice.toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Typography>
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Typography color="text.secondary">Taux fixe</Typography>
-              <Typography variant="h6">
-                {taux_fixe.toLocaleString("fr-FR", {
-                  minimumFractionDigits: 2,
-                })}{" "}
-                %
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Typography color="text.secondary">Montant taux fixe</Typography>
-              <Typography variant="h6">
-                {montant_taux_fixe.toLocaleString("fr-FR", {
-                  minimumFractionDigits: 2,
-                })}{" "}
-                €
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Typography color="text.secondary">Bénéfice</Typography>
-              <Typography
-                variant="h6"
-                color={benefice >= 0 ? "success.main" : "error.main"}
-              >
-                {benefice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}{" "}
-                €
-              </Typography>
-            </Grid>
-          </Grid>
+          </Box>
         </Grid>
+        {/* Ligne de séparation verticale */}
+        <Grid
+          item
+          md={1}
+          sx={{
+            display: { xs: "none", md: "flex" },
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Box
+            sx={{ width: "2px", height: "90%", bgcolor: "#BDBDBD", mx: "auto" }}
+          />
+        </Grid>
+        {/* Section Droite : PieChart */}
         <Grid item xs={12} md={4}>
           <Box
             sx={{ width: 220, height: 220, position: "relative", mx: "auto" }}
@@ -145,7 +209,10 @@ const RecapSyntheseSection = ({ data }) => {
               <Typography
                 variant="h6"
                 fontWeight={700}
-                sx={{ fontSize: getFontSize(benefice) }}
+                sx={{
+                  fontSize: getFontSize(benefice),
+                  color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                }}
               >
                 {Number(benefice).toLocaleString("fr-FR", {
                   minimumFractionDigits: 2,
@@ -154,7 +221,11 @@ const RecapSyntheseSection = ({ data }) => {
               <Typography
                 variant="h6"
                 fontWeight={700}
-                sx={{ fontSize: getFontSize(benefice) * 0.7, ml: 0.5 }}
+                sx={{
+                  fontSize: getFontSize(benefice) * 0.7,
+                  ml: 0.5,
+                  color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                }}
               >
                 €
               </Typography>

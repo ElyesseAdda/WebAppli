@@ -268,7 +268,14 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   return (
     <Box>
       {/* Nouvelle section d'informations principales */}
-      <Card sx={{ mb: 3, borderRadius: "10px", backgroundColor: "white" }}>
+      <Card
+        sx={{
+          mb: 3,
+          borderRadius: "10px",
+          backgroundColor: "white",
+          boxShadow: 4,
+        }}
+      >
         <CardContent>
           <Grid container spacing={4}>
             {/* Nom du chantier */}
@@ -434,8 +441,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           onClick={() => setOpenSousTraitance(true)}
           sx={{
             backgroundColor: "#1976d2",
+            boxShadow: 3,
             "&:hover": {
               backgroundColor: "#1565c0",
+              boxShadow: 5,
             },
           }}
         >
@@ -448,8 +457,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           onClick={() => setOpenSituationModal(true)}
           sx={{
             backgroundColor: "#388e3c",
+            boxShadow: 3,
             "&:hover": {
               backgroundColor: "#2e7d32",
+              boxShadow: 5,
             },
           }}
         >
@@ -467,8 +478,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           sx={{
             backgroundColor: "#ff9800",
             color: "white",
+            boxShadow: 3,
             "&:hover": {
               backgroundColor: "#fb8c00",
+              boxShadow: 5,
             },
           }}
         >
@@ -486,8 +499,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           sx={{
             backgroundColor: "#424242",
             color: "white",
+            boxShadow: 3,
             "&:hover": {
               backgroundColor: "#212121",
+              boxShadow: 5,
             },
           }}
         >
@@ -525,7 +540,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 {/* Titre Prévisionnel */}
-                <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+                <Card
+                  sx={{
+                    borderRadius: "10px",
+                    backgroundColor: "white",
+                    boxShadow: 4,
+                  }}
+                >
                   <CardContent sx={{ pt: 0.5, pb: 0 + " !important" }}>
                     <Typography
                       variant="subtitle2"
@@ -543,7 +564,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 </Card>
 
                 {/* Main d'œuvre prévisionnelle */}
-                <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+                <Card
+                  sx={{
+                    borderRadius: "10px",
+                    backgroundColor: "white",
+                    boxShadow: 4,
+                  }}
+                >
                   <CardContent sx={{ py: 1 }}>
                     <Box
                       sx={{
@@ -618,7 +645,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   </CardContent>
                 </Card>
                 {/* Total Prévisionnel */}
-                <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+                <Card
+                  sx={{
+                    borderRadius: "10px",
+                    backgroundColor: "white",
+                    boxShadow: 4,
+                  }}
+                >
                   <CardContent>
                     <Typography
                       align="center"
@@ -643,7 +676,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 {/* Titre Réel */}
-                <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+                <Card
+                  sx={{
+                    borderRadius: "10px",
+                    backgroundColor: "white",
+                    boxShadow: 4,
+                  }}
+                >
                   <CardContent sx={{ pt: 0.5, pb: 0 + " !important" }}>
                     <Typography
                       variant="subtitle2"
@@ -661,7 +700,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 </Card>
 
                 {/* Main d'œuvre réelle */}
-                <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+                <Card
+                  sx={{
+                    borderRadius: "10px",
+                    backgroundColor: "white",
+                    boxShadow: 4,
+                  }}
+                >
                   <CardContent sx={{ py: 1 }}>
                     <Box
                       sx={{
@@ -736,7 +781,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   </CardContent>
                 </Card>
                 {/* Total Réel */}
-                <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+                <Card
+                  sx={{
+                    borderRadius: "10px",
+                    backgroundColor: "white",
+                    boxShadow: 4,
+                  }}
+                >
                   <CardContent>
                     <Typography
                       align="center"
@@ -759,7 +810,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             </Grid>
             {/* Carte de marge unique */}
             <Grid item xs={12}>
-              <Card sx={{ borderRadius: "10px", backgroundColor: "white" }}>
+              <Card
+                sx={{
+                  borderRadius: "10px",
+                  backgroundColor: "white",
+                  boxShadow: 4,
+                }}
+              >
                 <CardContent>
                   <Typography
                     align="center"
@@ -804,6 +861,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               flexDirection: "column",
               justifyContent: "center",
               mt: 3,
+              boxShadow: 4,
             }}
           >
             <CardContent sx={{ pt: 0.5, pb: 0.5 }}>

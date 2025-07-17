@@ -9,11 +9,13 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { RecapFinancierProvider } from "./chantier/RecapFinancierContext";
 
 // Composants des onglets
+import SearchIcon from "@mui/icons-material/Search";
+import Fuse from "fuse.js";
 import ChantierCommandesTab from "./chantier/ChantierCommandesTab";
 import ChantierDocumentsTab from "./chantier/ChantierDocumentsTab";
 import ChantierInfoTab from "./chantier/ChantierInfoTab";
@@ -59,6 +61,81 @@ const ChantierDetail = () => {
     // ... autres onglets plus tard
   });
   const [infoState, setInfoState] = useState({});
+
+  // --- BARRE DE RECHERCHE CHANTIER ---
+  const [chantiers, setChantiers] = useState([]);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  // Ref pour la barre de recherche et le dropdown
+  const searchBarRef = useRef(null);
+
+  // Charger l'historique depuis localStorage
+  useEffect(() => {
+    const hist = JSON.parse(localStorage.getItem("chantier_history") || "[]");
+    setHistory(hist);
+  }, []);
+
+  // Charger la liste des chantiers (API)
+  useEffect(() => {
+    const fetchChantiers = async () => {
+      try {
+        const res = await axios.get("/api/chantier/");
+        setChantiers(res.data);
+      } catch (e) {
+        // Optionnel: gestion d'erreur
+      }
+    };
+    fetchChantiers();
+  }, []);
+
+  // Recherche fuzzy avec Fuse.js
+  useEffect(() => {
+    if (!searchValue) {
+      setSearchResults([]);
+      return;
+    }
+    const fuse = new Fuse(chantiers, {
+      keys: ["chantier_name"],
+      threshold: 0.4, // tolère les fautes
+    });
+    setSearchResults(fuse.search(searchValue).map((r) => r.item));
+  }, [searchValue, chantiers]);
+
+  // Fermer le dropdown si clic en dehors
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        searchBarRef.current &&
+        !searchBarRef.current.contains(event.target)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Gérer la sélection d'un chantier
+  const handleSelectChantier = (chantier) => {
+    // Mettre à jour l'historique (max 5)
+    let newHistory = [chantier, ...history.filter((c) => c.id !== chantier.id)];
+    if (newHistory.length > 5) newHistory = newHistory.slice(0, 5);
+    setHistory(newHistory);
+    localStorage.setItem("chantier_history", JSON.stringify(newHistory));
+    setShowDropdown(false);
+    setSearchValue("");
+    // Rediriger vers le chantier sélectionné
+    navigate(`/ChantierDetail/${chantier.id}`);
+  };
+
+  // Afficher la liste à afficher (historique ou résultats)
+  const displayList = searchValue ? searchResults : history;
+  // --- FIN BARRE DE RECHERCHE ---
 
   const fetchChantierData = async () => {
     if (!id) {
@@ -127,6 +204,78 @@ const ChantierDetail = () => {
     <RecapFinancierProvider>
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
         <Box sx={{ flexGrow: 1 }}>
+          {/* BARRE DE RECHERCHE CHANTIER */}
+          <Box
+            ref={searchBarRef}
+            sx={{ mb: 3, position: "relative", maxWidth: 500 }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                borderRadius: "24px",
+                background: "#fff",
+                boxShadow: 1,
+                px: 2,
+                py: 1,
+                border: "1px solid #e0e0e0",
+              }}
+            >
+              <SearchIcon sx={{ color: "#757575", mr: 1 }} />
+              <input
+                type="text"
+                placeholder="Rechercher un chantier..."
+                value={searchValue}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: 18,
+                  flex: 1,
+                }}
+              />
+            </Box>
+            {/* Dropdown suggestions */}
+            {showDropdown && displayList.length > 0 && (
+              <Paper
+                sx={{
+                  position: "absolute",
+                  top: 44,
+                  left: 0,
+                  right: 0,
+                  zIndex: 10,
+                  maxHeight: 300,
+                  overflowY: "auto",
+                  borderRadius: 2,
+                }}
+                elevation={4}
+              >
+                {displayList.map((chantier) => (
+                  <Box
+                    key={chantier.id}
+                    sx={{
+                      px: 2,
+                      py: 1.2,
+                      cursor: "pointer",
+                      "&:hover": { background: "#f5f5f5" },
+                      fontWeight: id == chantier.id ? 700 : 400,
+                      color:
+                        id == chantier.id ? "primary.main" : "text.primary",
+                    }}
+                    onClick={() => handleSelectChantier(chantier)}
+                  >
+                    {chantier.chantier_name}
+                  </Box>
+                ))}
+              </Paper>
+            )}
+          </Box>
+          {/* Nom du chantier et Tabs */}
           <AppBar
             position="static"
             color="default"
