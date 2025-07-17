@@ -122,6 +122,9 @@ const CreationDevis = () => {
   // Ajouter cet état pour gérer les termes de recherche par sous-partie
   const [searchTerms, setSearchTerms] = useState({});
 
+  // Ajout de l'état pour le taux fixe
+  const [tauxFixe, setTauxFixe] = useState(null);
+
   const location = useLocation();
 
   // Charger les chantiers
@@ -556,6 +559,8 @@ const CreationDevis = () => {
           cout_estime_materiel: totals.cout_estime_materiel,
           cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
           marge_estimee: totals.marge_estimee,
+          // Ajout du taux fixe récupéré
+          taux_fixe: tauxFixe !== null ? tauxFixe : 20, // Valeur par défaut si non chargé
         };
 
         const chantierResponse = await axios.post(
@@ -1334,6 +1339,19 @@ const CreationDevis = () => {
       [e.target.name]: e.target.value,
     }));
   };
+
+  // Ajout du useEffect pour récupérer le taux fixe au chargement
+  useEffect(() => {
+    const fetchTauxFixe = async () => {
+      try {
+        const response = await axios.get("/api/parametres/taux-fixe/");
+        setTauxFixe(response.data.valeur);
+      } catch (error) {
+        console.error("Erreur lors du chargement du taux fixe :", error);
+      }
+    };
+    fetchTauxFixe();
+  }, []);
 
   return (
     <Container maxWidth="lg">
