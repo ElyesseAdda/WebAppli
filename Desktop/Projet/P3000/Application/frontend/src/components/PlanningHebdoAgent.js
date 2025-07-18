@@ -362,14 +362,25 @@ const PlanningHebdoAgent = ({
     }
 
     try {
-      const updates = selectedCells.map((cell) => ({
-        agentId: selectedAgentId,
-        week: selectedWeek,
-        year: selectedYear,
-        day: cell.day,
-        hour: cell.hour,
-        chantierId: selectedChantier.id,
-      }));
+      const updates = selectedCells.map((cell) => {
+        // Calculer la date réelle du créneau
+        const startOfWeek = dayjs()
+          .year(selectedYear)
+          .isoWeek(selectedWeek)
+          .startOf("isoWeek");
+        const dayIndex = daysOfWeek.indexOf(cell.day);
+        const date = startOfWeek.add(dayIndex, "day");
+        const weekISO = date.isoWeek();
+        const yearISO = date.isoWeekYear();
+        return {
+          agentId: selectedAgentId,
+          week: weekISO,
+          year: yearISO,
+          day: cell.day,
+          hour: cell.hour,
+          chantierId: selectedChantier.id,
+        };
+      });
 
       await axios.post("/api/assign_chantier/", updates);
 
@@ -394,6 +405,13 @@ const PlanningHebdoAgent = ({
       // Réinitialiser la sélection
       setSelectedCells([]);
       closeChantierModal();
+
+      // Recalculer les coûts de main d'œuvre pour tout le mois (nouveau endpoint)
+      const { month, year } = getCurrentMonthYear();
+      await axios.post("/api/recalculate_labor_costs_month/", {
+        year,
+        month,
+      });
     } catch (error) {
       console.error("Erreur lors de l'assignation du chantier :", error);
       alert(
@@ -415,16 +433,34 @@ const PlanningHebdoAgent = ({
     if (!confirmation) return;
 
     // Préparer les données à envoyer
-    const deletions = selectedCells.map((cell) => ({
-      agentId: selectedAgentId,
-      week: selectedWeek,
-      year: selectedYear,
-      day: cell.day,
-      hour: cell.hour,
-    }));
+    const deletions = selectedCells.map((cell) => {
+      // Calculer la date réelle du créneau
+      const startOfWeek = dayjs()
+        .year(selectedYear)
+        .isoWeek(selectedWeek)
+        .startOf("isoWeek");
+      const dayIndex = daysOfWeek.indexOf(cell.day);
+      const date = startOfWeek.add(dayIndex, "day");
+      const weekISO = date.isoWeek();
+      const yearISO = date.isoWeekYear();
+      return {
+        agentId: selectedAgentId,
+        week: weekISO,
+        year: yearISO,
+        day: cell.day,
+        hour: cell.hour,
+      };
+    });
 
     try {
       await axios.post("/api/delete_schedule/", deletions);
+
+      // Recalculer les coûts de main d'œuvre pour tout le mois (nouveau endpoint)
+      const { month, year } = getCurrentMonthYear();
+      await axios.post("/api/recalculate_labor_costs_month/", {
+        year,
+        month,
+      });
 
       // Mettre à jour le state schedule localement
       setSchedule((prevSchedule) => {
@@ -638,6 +674,15 @@ const PlanningHebdoAgent = ({
     if (typeof onSelectionChange === "function") {
       onSelectionChange(selectedAgentId, week, year);
     }
+  };
+
+  const getCurrentMonthYear = () => {
+    // Trouve le mois et l'année correspondant à la semaine sélectionnée
+    const startOfWeek = dayjs()
+      .year(selectedYear)
+      .isoWeek(selectedWeek)
+      .startOf("isoWeek");
+    return { month: startOfWeek.month() + 1, year: startOfWeek.year() };
   };
 
   return (

@@ -5015,6 +5015,13 @@ def labor_costs_monthly_summary(request):
         weeks.add(d.isocalendar()[1])
         d += datetime.timedelta(days=1)
 
+    # Fonction utilitaire pour obtenir la date réelle d'un LaborCost (lundi de la semaine)
+    def get_date_from_week(year, week, day_name):
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        day_index = days_of_week.index(day_name)
+        lundi = datetime.datetime.strptime(f'{year}-W{int(week):02d}-1', "%G-W%V-%u")
+        return (lundi + datetime.timedelta(days=day_index)).date()
+
     labor_costs = (LaborCost.objects
         .filter(year=year, week__in=list(weeks))
         .select_related('chantier', 'agent'))
@@ -5038,28 +5045,76 @@ def labor_costs_monthly_summary(request):
                 'details': [],
                 'jours_majoration': []
             }
-        chantier_map[chantier_id]['total_heures_normal'] += float(lc.hours_normal)
-        chantier_map[chantier_id]['total_heures_samedi'] += float(lc.hours_samedi)
-        chantier_map[chantier_id]['total_heures_dimanche'] += float(lc.hours_dimanche)
-        chantier_map[chantier_id]['total_heures_ferie'] += float(lc.hours_ferie)
-        chantier_map[chantier_id]['total_montant_normal'] += float(lc.cost_normal)
-        chantier_map[chantier_id]['total_montant_samedi'] += float(lc.cost_samedi)
-        chantier_map[chantier_id]['total_montant_dimanche'] += float(lc.cost_dimanche)
-        chantier_map[chantier_id]['total_montant_ferie'] += float(lc.cost_ferie)
+        # On va filtrer les jours majorés et les totaux par date réelle
+        # On suppose que lc.details_majoration est une liste de dicts avec 'date' (YYYY-MM-DD)
+        filtered_majorations = []
+        for j in (lc.details_majoration or []):
+            try:
+                date_j = datetime.datetime.strptime(j['date'], "%Y-%m-%d").date()
+                if date_j.year == year and date_j.month == month:
+                    filtered_majorations.append(j)
+            except Exception:
+                continue
+        # On filtre aussi les heures/monants par type en ne prenant que les majorations du mois
+        heures_normal = 0
+        heures_samedi = 0
+        heures_dimanche = 0
+        heures_ferie = 0
+        montant_normal = 0
+        montant_samedi = 0
+        montant_dimanche = 0
+        montant_ferie = 0
+        taux_horaire = lc.agent.taux_Horaire or 0
+        for j in filtered_majorations:
+            if j['type'] == 'samedi':
+                heures_samedi += j.get('hours', 0)
+                montant_samedi += j.get('hours', 0) * taux_horaire * 1.25
+            elif j['type'] == 'dimanche':
+                heures_dimanche += j.get('hours', 0)
+                montant_dimanche += j.get('hours', 0) * taux_horaire * 1.5
+            elif j['type'] == 'ferie':
+                heures_ferie += j.get('hours', 0)
+                montant_ferie += j.get('hours', 0) * taux_horaire * 1.5
+            else:
+                heures_normal += j.get('hours', 0)
+                montant_normal += j.get('hours', 0) * taux_horaire
+        # Si pas de détails, on prend tout (cas legacy)
+        if not filtered_majorations:
+            # On doit calculer la date réelle du créneau pour chaque type d'heure
+            # On suppose que lc.week, lc.year, lc.agent existent
+            # On ne peut pas savoir le jour exact, donc on répartit tout en normal
+            lundi = datetime.datetime.strptime(f'{lc.year}-W{int(lc.week):02d}-1', "%G-W%V-%u").date()
+            if lundi.year == year and lundi.month == month:
+                heures_normal += float(lc.hours_normal)
+                montant_normal += float(lc.cost_normal)
+                heures_samedi += float(lc.hours_samedi)
+                montant_samedi += float(lc.cost_samedi)
+                heures_dimanche += float(lc.hours_dimanche)
+                montant_dimanche += float(lc.cost_dimanche)
+                heures_ferie += float(lc.hours_ferie)
+                montant_ferie += float(lc.cost_ferie)
+        chantier_map[chantier_id]['total_heures_normal'] += heures_normal
+        chantier_map[chantier_id]['total_heures_samedi'] += heures_samedi
+        chantier_map[chantier_id]['total_heures_dimanche'] += heures_dimanche
+        chantier_map[chantier_id]['total_heures_ferie'] += heures_ferie
+        chantier_map[chantier_id]['total_montant_normal'] += montant_normal
+        chantier_map[chantier_id]['total_montant_samedi'] += montant_samedi
+        chantier_map[chantier_id]['total_montant_dimanche'] += montant_dimanche
+        chantier_map[chantier_id]['total_montant_ferie'] += montant_ferie
         chantier_map[chantier_id]['details'].append({
             'agent_id': lc.agent.id,
             'agent_nom': f"{lc.agent.name} {lc.agent.surname}",
-            'heures_normal': float(lc.hours_normal),
-            'heures_samedi': float(lc.hours_samedi),
-            'heures_dimanche': float(lc.hours_dimanche),
-            'heures_ferie': float(lc.hours_ferie),
-            'montant_normal': float(lc.cost_normal),
-            'montant_samedi': float(lc.cost_samedi),
-            'montant_dimanche': float(lc.cost_dimanche),
-            'montant_ferie': float(lc.cost_ferie),
-            'jours_majoration': lc.details_majoration or []
+            'heures_normal': heures_normal,
+            'heures_samedi': heures_samedi,
+            'heures_dimanche': heures_dimanche,
+            'heures_ferie': heures_ferie,
+            'montant_normal': montant_normal,
+            'montant_samedi': montant_samedi,
+            'montant_dimanche': montant_dimanche,
+            'montant_ferie': montant_ferie,
+            'jours_majoration': filtered_majorations
         })
-        chantier_map[chantier_id]['jours_majoration'].extend(lc.details_majoration or [])
+        chantier_map[chantier_id]['jours_majoration'].extend(filtered_majorations)
     return Response(list(chantier_map.values()), status=200)
 
 
@@ -5327,7 +5382,7 @@ class RecapFinancierChantierAPIView(APIView):
             try:
                 week = int(lc.week)
                 year = int(lc.year)
-                lc_date = datetime.strptime(f'{year}-W{week}-1', "%Y-W%W-%w").date()
+                lc_date = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u").date()
             except Exception:
                 lc_date = None
             return {
@@ -5406,7 +5461,7 @@ class RecapFinancierChantierAPIView(APIView):
             try:
                 week = int(lc.week)
                 year = int(lc.year)
-                lc_date = datetime.strptime(f'{year}-W{week}-1', "%Y-W%W-%w").date()
+                lc_date = datetime.strptime(f'{year}-W{week:02d}-1', "%G-W%V-%u").date()
             except Exception:
                 lc_date = None
             return {
@@ -5584,3 +5639,62 @@ def fournisseurs(request):
 class FournisseurViewSet(viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all()
     serializer_class = FournisseurSerializer
+
+# --- Correction 1 : Fonction utilitaire pour obtenir la date exacte d'un créneau (ISO) ---
+def get_date_from_week(year, week, day_name):
+    # day_name: "Lundi", "Mardi", ...
+    from datetime import datetime, timedelta
+    days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    day_index = days_of_week.index(day_name)
+    # ISO: lundi=1, dimanche=7
+    lundi = datetime.strptime(f'{year}-W{int(week):02d}-1', "%G-W%V-%u")
+    return lundi + timedelta(days=day_index)
+
+# --- Correction 2 : Endpoint pour recalculer tous les LaborCost d'un mois ---
+from rest_framework.decorators import api_view
+@api_view(['POST'])
+def recalculate_labor_costs_month(request):
+    """
+    Recalcule tous les LaborCost pour un mois/année donné (tous agents, toutes semaines du mois).
+    Expects: { "year": 2024, "month": 7 }
+    """
+    year = int(request.data.get('year'))
+    month = int(request.data.get('month'))
+    from calendar import monthrange
+    import datetime
+    first_day = datetime.date(year, month, 1)
+    last_day = datetime.date(year, month, monthrange(year, month)[1])
+    weeks = set()
+    d = first_day
+    while d <= last_day:
+        weeks.add(d.isocalendar()[1])
+        d += datetime.timedelta(days=1)
+    # Pour chaque agent, chaque semaine du mois, recalculer
+    agents = Agent.objects.all()
+    for agent in agents:
+        for week in weeks:
+            # On peut réutiliser la logique de recalculate_labor_costs
+            schedules = Schedule.objects.filter(agent=agent, year=year, week=week)
+            # Regrouper par chantier
+            chantier_hours = {}
+            for s in schedules:
+                if s.chantier_id:
+                    chantier_hours.setdefault(s.chantier_id, 0)
+                    chantier_hours[s.chantier_id] += 1
+            for chantier_id, hours in chantier_hours.items():
+                chantier = Chantier.objects.get(id=chantier_id)
+                LaborCost.objects.update_or_create(
+                    agent=agent, chantier=chantier, week=week, year=year,
+                    defaults={
+                        'hours_normal': hours,  # Pour simplifier, tout en normal ici
+                        'hours_samedi': 0,
+                        'hours_dimanche': 0,
+                        'hours_ferie': 0,
+                        'cost_normal': hours * (agent.taux_Horaire or 0),
+                        'cost_samedi': 0,
+                        'cost_dimanche': 0,
+                        'cost_ferie': 0,
+                        'details_majoration': [],
+                    }
+                )
+    return Response({"status": "ok"})

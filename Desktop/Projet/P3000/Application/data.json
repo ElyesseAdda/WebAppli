@@ -1,0 +1,3046 @@
+[
+  {
+    "model": "api.client",
+    "pk": 1,
+    "fields": {
+      "name": "Elyesse",
+      "surname": "Adda Attou",
+      "client_mail": "Elyesseadda@hotmail.com",
+      "phone_Number": 656773227
+    }
+  },
+  {
+    "model": "api.client",
+    "pk": 2,
+    "fields": {
+      "name": "Majri",
+      "surname": "Adel",
+      "client_mail": "AdelMajri@peinture3000.fr",
+      "phone_Number": 656773227
+    }
+  },
+  {
+    "model": "api.client",
+    "pk": 3,
+    "fields": {
+      "name": "Majri",
+      "surname": "Adel",
+      "client_mail": "AdelMajri@peinture3000.fr",
+      "phone_Number": 656773227
+    }
+  },
+  {
+    "model": "api.client",
+    "pk": 4,
+    "fields": {
+      "name": "Elyesse",
+      "surname": "Adda Attou",
+      "client_mail": "Elyesseadda@hotmail.com",
+      "phone_Number": 656773227
+    }
+  },
+  {
+    "model": "api.client",
+    "pk": 5,
+    "fields": {
+      "name": "Elyesse",
+      "surname": "Adda Attou",
+      "client_mail": "Elyesseadda@hotmail.com",
+      "phone_Number": 656773227
+    }
+  },
+  {
+    "model": "api.societe",
+    "pk": 1,
+    "fields": {
+      "nom_societe": "PROMOGIM",
+      "ville_societe": "Marseille",
+      "rue_societe": "ACTIPARC II. BAT E2 CHEMIN DE ST LAMBERT",
+      "codepostal_societe": "13014",
+      "client_name": 1
+    }
+  },
+  {
+    "model": "api.societe",
+    "pk": 2,
+    "fields": {
+      "nom_societe": "LeBlanc",
+      "ville_societe": "Marseille",
+      "rue_societe": "32 rue roger wea",
+      "codepostal_societe": "13014",
+      "client_name": 2
+    }
+  },
+  {
+    "model": "api.chantier",
+    "pk": 1,
+    "fields": {
+      "chantier_name": "TestSitaution",
+      "societe": 1,
+      "date_debut": "2025-02-16",
+      "date_fin": null,
+      "montant_ttc": 1137.6,
+      "montant_ht": 948.0,
+      "state_chantier": "En Cours",
+      "ville": "Marseille",
+      "rue": "Traverse Abondance",
+      "code_postal": "13014",
+      "cout_materiel": 250.0,
+      "cout_main_oeuvre": 954.56,
+      "cout_sous_traitance": 10400.0,
+      "cout_estime_main_oeuvre": "-9800.00",
+      "cout_estime_materiel": "158.00",
+      "marge_estimee": "158.40",
+      "description": null,
+      "taux_fixe": 20.5
+    }
+  },
+  {
+    "model": "api.chantier",
+    "pk": 2,
+    "fields": {
+      "chantier_name": "LAMARSEILLAISE",
+      "societe": 2,
+      "date_debut": "2025-07-17",
+      "date_fin": null,
+      "montant_ttc": 8073.6,
+      "montant_ht": 6728.0,
+      "state_chantier": "En Cours",
+      "ville": "Marseille",
+      "rue": "Traverse Abondance",
+      "code_postal": "13014",
+      "cout_materiel": null,
+      "cout_main_oeuvre": 527.52,
+      "cout_sous_traitance": null,
+      "cout_estime_main_oeuvre": "3500.00",
+      "cout_estime_materiel": "1170.00",
+      "marge_estimee": "1124.00",
+      "description": null,
+      "taux_fixe": null
+    }
+  },
+  {
+    "model": "api.chantier",
+    "pk": 3,
+    "fields": {
+      "chantier_name": "CLOS LISA",
+      "societe": 2,
+      "date_debut": "2025-07-17",
+      "date_fin": null,
+      "montant_ttc": 4660.8,
+      "montant_ht": 3884.0,
+      "state_chantier": "En Cours",
+      "ville": "Martigue",
+      "rue": "32 rue jean bouin",
+      "code_postal": "13650",
+      "cout_materiel": null,
+      "cout_main_oeuvre": 87.92,
+      "cout_sous_traitance": null,
+      "cout_estime_main_oeuvre": "2000.00",
+      "cout_estime_materiel": "696.00",
+      "marge_estimee": "648.80",
+      "description": null,
+      "taux_fixe": 18.65
+    }
+  },
+  {
+    "model": "api.chantier",
+    "pk": 4,
+    "fields": {
+      "chantier_name": "ARTIFACT",
+      "societe": 1,
+      "date_debut": "2025-07-17",
+      "date_fin": null,
+      "montant_ttc": 119280.0,
+      "montant_ht": 99400.0,
+      "state_chantier": "En Cours",
+      "ville": "STETIENNE",
+      "rue": "30 avenue du mai 1998",
+      "code_postal": "13014",
+      "cout_materiel": null,
+      "cout_main_oeuvre": 37.68,
+      "cout_sous_traitance": null,
+      "cout_estime_main_oeuvre": "50000.00",
+      "cout_estime_materiel": "19000.00",
+      "marge_estimee": "16600.00",
+      "description": null,
+      "taux_fixe": 18.65
+    }
+  },
+  {
+    "model": "api.chantier",
+    "pk": 5,
+    "fields": {
+      "chantier_name": "TESTtf",
+      "societe": 1,
+      "date_debut": "2025-07-17",
+      "date_fin": null,
+      "montant_ttc": 2275.2,
+      "montant_ht": 1896.0,
+      "state_chantier": "En Cours",
+      "ville": "Marseille",
+      "rue": "Traverse Abondance",
+      "code_postal": "13014",
+      "cout_materiel": null,
+      "cout_main_oeuvre": 75.36,
+      "cout_sous_traitance": null,
+      "cout_estime_main_oeuvre": "1000.00",
+      "cout_estime_materiel": "316.00",
+      "marge_estimee": "316.80",
+      "description": null,
+      "taux_fixe": 20.0
+    }
+  },
+  {
+    "model": "api.agent",
+    "pk": 1,
+    "fields": {
+      "name": "Adel",
+      "surname": "Majri",
+      "address": "24-26 boulevard guy lussac",
+      "phone_Number": 656773227,
+      "taux_Horaire": 12.56,
+      "conge": null,
+      "primes": null,
+      "heure_debut": null,
+      "heure_fin": null,
+      "heure_pause_debut": null,
+      "heure_pause_fin": null,
+      "jours_travail": "lundi,mardi,mercredi,jeudi,vendredi"
+    }
+  },
+  {
+    "model": "api.agent",
+    "pk": 2,
+    "fields": {
+      "name": "Amine",
+      "surname": "Belaoued",
+      "address": "24-26 boulevard guy lussac",
+      "phone_Number": 656773227,
+      "taux_Horaire": 12.56,
+      "conge": 25.0,
+      "primes": null,
+      "heure_debut": "08:00:00",
+      "heure_fin": "17:00:00",
+      "heure_pause_debut": "12:00:00",
+      "heure_pause_fin": "13:00:00",
+      "jours_travail": "lundi,mardi,mercredi,jeudi,vendredi"
+    }
+  },
+  {
+    "model": "api.monthlypresence",
+    "pk": 1,
+    "fields": {
+      "agent": 1,
+      "month": "2025-06-01",
+      "days_present": 0
+    }
+  },
+  {
+    "model": "api.monthlyhours",
+    "pk": 1,
+    "fields": {
+      "agent": 2,
+      "month": "2025-06-01",
+      "hours": "168.00"
+    }
+  },
+  {
+    "model": "api.monthlyhours",
+    "pk": 2,
+    "fields": {
+      "agent": 1,
+      "month": "2025-06-01",
+      "hours": "0.00"
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 8,
+    "fields": {
+      "agent": 1,
+      "start_date": "2025-06-24",
+      "end_date": "2025-06-24",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 10,
+    "fields": {
+      "agent": 1,
+      "start_date": "2025-06-23",
+      "end_date": "2025-06-23",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 11,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-09",
+      "end_date": "2025-06-09",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 12,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-10",
+      "end_date": "2025-06-10",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 13,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-11",
+      "end_date": "2025-06-11",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 14,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-12",
+      "end_date": "2025-06-12",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 15,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-13",
+      "end_date": "2025-06-13",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 16,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-14",
+      "end_date": "2025-06-14",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 17,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-06-15",
+      "end_date": "2025-06-15",
+      "event_type": "absence",
+      "subtype": null,
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 18,
+    "fields": {
+      "agent": 1,
+      "start_date": "2025-07-17",
+      "end_date": "2025-07-17",
+      "event_type": "conge",
+      "subtype": "paye",
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 19,
+    "fields": {
+      "agent": 1,
+      "start_date": "2025-07-18",
+      "end_date": "2025-07-18",
+      "event_type": "conge",
+      "subtype": "paye",
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 20,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-07-01",
+      "end_date": "2025-07-01",
+      "event_type": "absence",
+      "subtype": "justifiee",
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.event",
+    "pk": 21,
+    "fields": {
+      "agent": 2,
+      "start_date": "2025-07-02",
+      "end_date": "2025-07-02",
+      "event_type": "absence",
+      "subtype": "justifiee",
+      "hours_modified": 0,
+      "chantier": null
+    }
+  },
+  {
+    "model": "api.stock",
+    "pk": 1,
+    "fields": {
+      "code_produit": "001",
+      "designation": "Peinture m�te blanche 5L",
+      "fournisseur": 5,
+      "prix_unitaire": 10.63,
+      "unite": "u"
+    }
+  },
+  {
+    "model": "api.stock",
+    "pk": 2,
+    "fields": {
+      "code_produit": "002",
+      "designation": "Peinture mate blanche 10L",
+      "fournisseur": 5,
+      "prix_unitaire": 15.6,
+      "unite": "u"
+    }
+  },
+  {
+    "model": "api.fournisseur",
+    "pk": 5,
+    "fields": {
+      "name": "UNIKALO",
+      "Fournisseur_mail": "",
+      "phone_Number": null,
+      "description_fournisseur": "",
+      "magasin": ""
+    }
+  },
+  {
+    "model": "api.fournisseur",
+    "pk": 6,
+    "fields": {
+      "name": "CAPPEINTURE",
+      "Fournisseur_mail": "",
+      "phone_Number": null,
+      "description_fournisseur": "",
+      "magasin": ""
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 1,
+    "fields": {
+      "numero": "DEV-001-25 - TestSitaution",
+      "date_creation": "2025-02-16T15:22:52.733Z",
+      "price_ht": 19420.0,
+      "price_ttc": 23304.0,
+      "tva_rate": 20.0,
+      "nature_travaux": "Peinture test",
+      "description": "",
+      "status": "Valid�",
+      "chantier": 1,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": true,
+      "client": [1]
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 2,
+    "fields": {
+      "numero": "DEV-002-25 - TS N�001",
+      "date_creation": "2025-02-16T15:23:34.817Z",
+      "price_ht": 994.0,
+      "price_ttc": 1192.8,
+      "tva_rate": 20.0,
+      "nature_travaux": "Test CIE fevrier",
+      "description": "",
+      "status": "En attente",
+      "chantier": 1,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": false,
+      "client": []
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 3,
+    "fields": {
+      "numero": "DEV-003-25 - TS N�002",
+      "date_creation": "2025-02-16T15:24:04.116Z",
+      "price_ht": 948.0,
+      "price_ttc": 1137.6,
+      "tva_rate": 20.0,
+      "nature_travaux": "Test CIE mars ",
+      "description": "",
+      "status": "En attente",
+      "chantier": 1,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": false,
+      "client": []
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 4,
+    "fields": {
+      "numero": "DEV-004-25 - TS N�003",
+      "date_creation": "2025-02-16T15:25:25.867Z",
+      "price_ht": 994.0,
+      "price_ttc": 1192.8,
+      "tva_rate": 20.0,
+      "nature_travaux": "TS",
+      "description": "",
+      "status": "En attente",
+      "chantier": 1,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": false,
+      "client": []
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 5,
+    "fields": {
+      "numero": "DEV-005-25 - TS N�004",
+      "date_creation": "2025-02-16T15:25:55.099Z",
+      "price_ht": 948.0,
+      "price_ttc": 1137.6,
+      "tva_rate": 20.0,
+      "nature_travaux": "TS 2 ",
+      "description": "",
+      "status": "En attente",
+      "chantier": 1,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": false,
+      "client": []
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 6,
+    "fields": {
+      "numero": "DEV-006-25 - TS N�005",
+      "date_creation": "2025-02-26T14:27:27.106Z",
+      "price_ht": 9.94,
+      "price_ttc": 11.93,
+      "tva_rate": 20.0,
+      "nature_travaux": "Travaux de peinture",
+      "description": "",
+      "status": "En attente",
+      "chantier": 1,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": false,
+      "client": []
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 7,
+    "fields": {
+      "numero": "DEV-007-25 - LAMARSEILLAISE",
+      "date_creation": "2025-07-17T09:48:19.150Z",
+      "price_ht": 6728.0,
+      "price_ttc": 8073.6,
+      "tva_rate": 20.0,
+      "nature_travaux": "LOT FACADE",
+      "description": "",
+      "status": "En attente",
+      "chantier": 2,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": true,
+      "client": [2]
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 8,
+    "fields": {
+      "numero": "DEV-008-25 - TS N�001",
+      "date_creation": "2025-07-17T13:44:29.314Z",
+      "price_ht": 2890.0,
+      "price_ttc": 3468.0,
+      "tva_rate": 20.0,
+      "nature_travaux": "Lot de peinture ",
+      "description": "",
+      "status": "En attente",
+      "chantier": 2,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": false,
+      "client": []
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 9,
+    "fields": {
+      "numero": "DEV-009-25 - CLOS LISA",
+      "date_creation": "2025-07-17T13:45:56.541Z",
+      "price_ht": 3884.0,
+      "price_ttc": 4660.8,
+      "tva_rate": 20.0,
+      "nature_travaux": "LOT N�50 - PEINTURES INTERIEURES",
+      "description": "",
+      "status": "En attente",
+      "chantier": 3,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": true,
+      "client": [3]
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 10,
+    "fields": {
+      "numero": "DEV-010-25 - ARTIFACT",
+      "date_creation": "2025-07-17T13:47:43.012Z",
+      "price_ht": 99400.0,
+      "price_ttc": 119280.0,
+      "tva_rate": 20.0,
+      "nature_travaux": "Peinture test",
+      "description": "",
+      "status": "En attente",
+      "chantier": 4,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": true,
+      "client": [4]
+    }
+  },
+  {
+    "model": "api.devis",
+    "pk": 11,
+    "fields": {
+      "numero": "DEV-011-25 - TESTtf",
+      "date_creation": "2025-07-17T13:48:49.519Z",
+      "price_ht": 1896.0,
+      "price_ttc": 2275.2,
+      "tva_rate": 20.0,
+      "nature_travaux": "Peinture test",
+      "description": "",
+      "status": "En attente",
+      "chantier": 5,
+      "lignes_speciales": {
+        "global": [],
+        "parties": {},
+        "sousParties": {}
+      },
+      "devis_chantier": true,
+      "client": [5]
+    }
+  },
+  {
+    "model": "api.lignedetail",
+    "pk": 1,
+    "fields": {
+      "sous_partie": 1,
+      "partie": null,
+      "description": "Peinture m�te des pi�ces s�ches",
+      "unite": "m�",
+      "cout_main_oeuvre": "5.00",
+      "cout_materiel": "1.58",
+      "taux_fixe": "20.00",
+      "marge": "20.00",
+      "prix": "9.48"
+    }
+  },
+  {
+    "model": "api.lignedetail",
+    "pk": 2,
+    "fields": {
+      "sous_partie": 1,
+      "partie": null,
+      "description": "Peinture m�te des pi�ces humides",
+      "unite": "m�",
+      "cout_main_oeuvre": "5.00",
+      "cout_materiel": "1.90",
+      "taux_fixe": "20.00",
+      "marge": "20.00",
+      "prix": "9.94"
+    }
+  },
+  {
+    "model": "api.facture",
+    "pk": 1,
+    "fields": {
+      "numero": "DEV-002-25 - TS N�001 / Fevrier",
+      "date_creation": "2025-02-16T15:24:33.427Z",
+      "devis": 2,
+      "chantier": 1,
+      "state_facture": "Attente paiement",
+      "type_facture": "cie",
+      "designation": "Fevrier",
+      "date_echeance": null,
+      "date_paiement": null,
+      "mode_paiement": "virement",
+      "price_ht": 994.0,
+      "price_ttc": 1192.8,
+      "avenant": null,
+      "mois_situation": 2,
+      "annee_situation": 2025
+    }
+  },
+  {
+    "model": "api.facture",
+    "pk": 2,
+    "fields": {
+      "numero": "DEV-003-25 - TS N�002 / Mars",
+      "date_creation": "2025-02-16T15:24:44.142Z",
+      "devis": 3,
+      "chantier": 1,
+      "state_facture": "En attente",
+      "type_facture": "cie",
+      "designation": "Mars",
+      "date_echeance": null,
+      "date_paiement": null,
+      "mode_paiement": "virement",
+      "price_ht": 948.0,
+      "price_ttc": 1137.6,
+      "avenant": null,
+      "mois_situation": 3,
+      "annee_situation": 2025
+    }
+  },
+  {
+    "model": "api.facture",
+    "pk": 3,
+    "fields": {
+      "numero": "DEV-004-25 - TS N�003 / TS001",
+      "date_creation": "2025-02-16T15:26:08.462Z",
+      "devis": 4,
+      "chantier": 1,
+      "state_facture": "Pay�e",
+      "type_facture": "ts",
+      "designation": "",
+      "date_echeance": null,
+      "date_paiement": null,
+      "mode_paiement": "virement",
+      "price_ht": 994.0,
+      "price_ttc": 1192.8,
+      "avenant": 1,
+      "mois_situation": null,
+      "annee_situation": null
+    }
+  },
+  {
+    "model": "api.facture",
+    "pk": 4,
+    "fields": {
+      "numero": "DEV-005-25 - TS N�004 / TS002",
+      "date_creation": "2025-02-16T15:26:23.345Z",
+      "devis": 5,
+      "chantier": 1,
+      "state_facture": "En attente",
+      "type_facture": "ts",
+      "designation": "",
+      "date_echeance": null,
+      "date_paiement": null,
+      "mode_paiement": "virement",
+      "price_ht": 948.0,
+      "price_ttc": 1137.6,
+      "avenant": 2,
+      "mois_situation": null,
+      "annee_situation": null
+    }
+  },
+  {
+    "model": "api.facture",
+    "pk": 5,
+    "fields": {
+      "numero": "FACT-006-25 - TS N�005",
+      "date_creation": "2025-03-08T13:38:41.723Z",
+      "devis": 6,
+      "chantier": 1,
+      "state_facture": "Pay�e",
+      "type_facture": "classique",
+      "designation": "",
+      "date_echeance": null,
+      "date_paiement": null,
+      "mode_paiement": "virement",
+      "price_ht": 9.94,
+      "price_ttc": 11.93,
+      "avenant": null,
+      "mois_situation": null,
+      "annee_situation": null
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 1,
+    "fields": {
+      "devis": 1,
+      "ligne_detail": 2,
+      "quantite": "1000.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 2,
+    "fields": {
+      "devis": 1,
+      "ligne_detail": 1,
+      "quantite": "1000.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 3,
+    "fields": {
+      "devis": 2,
+      "ligne_detail": 2,
+      "quantite": "100.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 4,
+    "fields": {
+      "devis": 3,
+      "ligne_detail": 1,
+      "quantite": "100.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 5,
+    "fields": {
+      "devis": 4,
+      "ligne_detail": 2,
+      "quantite": "100.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 6,
+    "fields": {
+      "devis": 4,
+      "ligne_detail": 1,
+      "quantite": "0.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 7,
+    "fields": {
+      "devis": 5,
+      "ligne_detail": 1,
+      "quantite": "100.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 8,
+    "fields": {
+      "devis": 6,
+      "ligne_detail": 2,
+      "quantite": "1.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 9,
+    "fields": {
+      "devis": 7,
+      "ligne_detail": 2,
+      "quantite": "200.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 10,
+    "fields": {
+      "devis": 7,
+      "ligne_detail": 1,
+      "quantite": "500.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 11,
+    "fields": {
+      "devis": 8,
+      "ligne_detail": 2,
+      "quantite": "100.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 12,
+    "fields": {
+      "devis": 8,
+      "ligne_detail": 1,
+      "quantite": "200.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 13,
+    "fields": {
+      "devis": 9,
+      "ligne_detail": 2,
+      "quantite": "200.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 14,
+    "fields": {
+      "devis": 9,
+      "ligne_detail": 1,
+      "quantite": "200.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 15,
+    "fields": {
+      "devis": 10,
+      "ligne_detail": 2,
+      "quantite": "10000.00",
+      "prix_unitaire": "9.94"
+    }
+  },
+  {
+    "model": "api.devisligne",
+    "pk": 16,
+    "fields": {
+      "devis": 11,
+      "ligne_detail": 1,
+      "quantite": "200.00",
+      "prix_unitaire": "9.48"
+    }
+  },
+  {
+    "model": "api.situation",
+    "pk": 8,
+    "fields": {
+      "chantier": 1,
+      "devis": 1,
+      "numero": 1,
+      "numero_situation": "FACT-006-25 - Situation n�01",
+      "mois": 2,
+      "annee": 2025,
+      "date_creation": "2025-02-18T22:55:19.624Z",
+      "date_validation": null,
+      "statut": "brouillon",
+      "date_envoi": "2025-03-04",
+      "delai_paiement": 45,
+      "montant_reel_ht": "2624.43",
+      "date_paiement_reel": "2025-04-18",
+      "montant_precedent": "0.00",
+      "montant_ht_mois": "3373.20",
+      "montant_total": "0.00",
+      "pourcentage_avancement": "15.79",
+      "cumul_precedent": "0.00",
+      "montant_apres_retenues": "2624.43",
+      "montant_total_cumul_ht": "0.00",
+      "tva": "524.89",
+      "retenue_garantie": "168.66",
+      "taux_prorata": "2.50",
+      "montant_prorata": "84.33",
+      "retenue_cie": "200.00",
+      "created_by": null,
+      "validated_by": null,
+      "montant_total_devis": "0.00",
+      "montant_total_travaux": "0.00",
+      "total_avancement": "0.00"
+    }
+  },
+  {
+    "model": "api.situation",
+    "pk": 9,
+    "fields": {
+      "chantier": 1,
+      "devis": 1,
+      "numero": 1,
+      "numero_situation": "FACT-007-25 - Situation n�02",
+      "mois": 3,
+      "annee": 2025,
+      "date_creation": "2025-02-18T22:55:41.005Z",
+      "date_validation": null,
+      "statut": "brouillon",
+      "date_envoi": "2025-03-03",
+      "delai_paiement": 60,
+      "montant_reel_ht": "2293.21",
+      "date_paiement_reel": "2025-05-04",
+      "montant_precedent": "0.00",
+      "montant_ht_mois": "2475.80",
+      "montant_total": "0.00",
+      "pourcentage_avancement": "27.38",
+      "cumul_precedent": "3373.20",
+      "montant_apres_retenues": "2293.21",
+      "montant_total_cumul_ht": "0.00",
+      "tva": "458.64",
+      "retenue_garantie": "292.45",
+      "taux_prorata": "2.50",
+      "montant_prorata": "146.22",
+      "retenue_cie": "0.00",
+      "created_by": null,
+      "validated_by": null,
+      "montant_total_devis": "0.00",
+      "montant_total_travaux": "0.00",
+      "total_avancement": "0.00"
+    }
+  },
+  {
+    "model": "api.situation",
+    "pk": 10,
+    "fields": {
+      "chantier": 1,
+      "devis": 1,
+      "numero": 1,
+      "numero_situation": "FACT-008-25 - Situation n�03",
+      "mois": 4,
+      "annee": 2025,
+      "date_creation": "2025-02-26T16:10:08.580Z",
+      "date_validation": null,
+      "statut": "brouillon",
+      "date_envoi": "2025-02-26",
+      "delai_paiement": 60,
+      "montant_reel_ht": "190.00",
+      "date_paiement_reel": "2026-03-03",
+      "montant_precedent": "0.00",
+      "montant_ht_mois": "2087.40",
+      "montant_total": "0.00",
+      "pourcentage_avancement": "37.15",
+      "cumul_precedent": "5849.00",
+      "montant_apres_retenues": "1933.45",
+      "montant_total_cumul_ht": "0.00",
+      "tva": "386.69",
+      "retenue_garantie": "396.82",
+      "taux_prorata": "2.50",
+      "montant_prorata": "198.41",
+      "retenue_cie": "0.00",
+      "created_by": null,
+      "validated_by": null,
+      "montant_total_devis": "0.00",
+      "montant_total_travaux": "0.00",
+      "total_avancement": "0.00"
+    }
+  },
+  {
+    "model": "api.situation",
+    "pk": 11,
+    "fields": {
+      "chantier": 1,
+      "devis": 1,
+      "numero": 1,
+      "numero_situation": "FACT-009-25 - Situation n�04",
+      "mois": 5,
+      "annee": 2025,
+      "date_creation": "2025-03-08T13:42:38.201Z",
+      "date_validation": null,
+      "statut": "brouillon",
+      "date_envoi": "2025-01-06",
+      "delai_paiement": 45,
+      "montant_reel_ht": "12435.46",
+      "date_paiement_reel": "2025-06-19",
+      "montant_precedent": "0.00",
+      "montant_ht_mois": "13425.60",
+      "montant_total": "0.00",
+      "pourcentage_avancement": "100.00",
+      "cumul_precedent": "7936.40",
+      "montant_apres_retenues": "12435.46",
+      "montant_total_cumul_ht": "0.00",
+      "tva": "2487.09",
+      "retenue_garantie": "1068.10",
+      "taux_prorata": "2.50",
+      "montant_prorata": "534.05",
+      "retenue_cie": "0.00",
+      "created_by": null,
+      "validated_by": null,
+      "montant_total_devis": "0.00",
+      "montant_total_travaux": "0.00",
+      "total_avancement": "0.00"
+    }
+  },
+  {
+    "model": "api.situation",
+    "pk": 12,
+    "fields": {
+      "chantier": 1,
+      "devis": 1,
+      "numero": 1,
+      "numero_situation": "FACT-010-25 - Situation n�05",
+      "mois": 6,
+      "annee": 2025,
+      "date_creation": "2025-06-19T13:42:25.154Z",
+      "date_validation": null,
+      "statut": "brouillon",
+      "date_envoi": "2025-05-01",
+      "delai_paiement": 45,
+      "montant_reel_ht": null,
+      "date_paiement_reel": "2025-06-20",
+      "montant_precedent": "0.00",
+      "montant_ht_mois": "0.00",
+      "montant_total": "0.00",
+      "pourcentage_avancement": "100.00",
+      "cumul_precedent": "21362.00",
+      "montant_apres_retenues": "0.00",
+      "montant_total_cumul_ht": "0.00",
+      "tva": "0.00",
+      "retenue_garantie": "1068.10",
+      "taux_prorata": "2.50",
+      "montant_prorata": "534.05",
+      "retenue_cie": "0.00",
+      "created_by": null,
+      "validated_by": null,
+      "montant_total_devis": "0.00",
+      "montant_total_travaux": "0.00",
+      "total_avancement": "0.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 65,
+    "fields": {
+      "situation": 8,
+      "ligne_devis": 1,
+      "description": "Peinture m�te des pi�ces humides",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.94",
+      "total_ht": "9940.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "10.00",
+      "montant": "994.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 66,
+    "fields": {
+      "situation": 8,
+      "ligne_devis": 2,
+      "description": "Peinture m�te des pi�ces s�ches",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.48",
+      "total_ht": "9480.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "20.00",
+      "montant": "1896.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 67,
+    "fields": {
+      "situation": 9,
+      "ligne_devis": 1,
+      "description": "Peinture m�te des pi�ces humides",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.94",
+      "total_ht": "9940.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "30.00",
+      "montant": "2982.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 68,
+    "fields": {
+      "situation": 9,
+      "ligne_devis": 2,
+      "description": "Peinture m�te des pi�ces s�ches",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.48",
+      "total_ht": "9480.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "20.00",
+      "montant": "1896.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 69,
+    "fields": {
+      "situation": 10,
+      "ligne_devis": 1,
+      "description": "Peinture m�te des pi�ces humides",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.94",
+      "total_ht": "9940.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "50.00",
+      "montant": "4970.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 70,
+    "fields": {
+      "situation": 10,
+      "ligne_devis": 2,
+      "description": "Peinture m�te des pi�ces s�ches",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.48",
+      "total_ht": "9480.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "20.00",
+      "montant": "1896.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 71,
+    "fields": {
+      "situation": 11,
+      "ligne_devis": 1,
+      "description": "Peinture m�te des pi�ces humides",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.94",
+      "total_ht": "9940.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "9940.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 72,
+    "fields": {
+      "situation": 11,
+      "ligne_devis": 2,
+      "description": "Peinture m�te des pi�ces s�ches",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.48",
+      "total_ht": "9480.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "9480.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 73,
+    "fields": {
+      "situation": 12,
+      "ligne_devis": 1,
+      "description": "Peinture m�te des pi�ces humides",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.94",
+      "total_ht": "9940.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "9940.00"
+    }
+  },
+  {
+    "model": "api.situationligne",
+    "pk": 74,
+    "fields": {
+      "situation": 12,
+      "ligne_devis": 2,
+      "description": "Peinture m�te des pi�ces s�ches",
+      "quantite": "1000.00",
+      "prix_unitaire": "9.48",
+      "total_ht": "9480.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "9480.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 39,
+    "fields": {
+      "situation": 8,
+      "avenant": 1,
+      "facture_ts": 1,
+      "montant_ht": "994.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "20.00",
+      "montant": "198.80"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 40,
+    "fields": {
+      "situation": 8,
+      "avenant": 2,
+      "facture_ts": 2,
+      "montant_ht": "948.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "30.00",
+      "montant": "284.40"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 41,
+    "fields": {
+      "situation": 9,
+      "avenant": 1,
+      "facture_ts": 1,
+      "montant_ht": "994.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "50.00",
+      "montant": "497.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 42,
+    "fields": {
+      "situation": 9,
+      "avenant": 2,
+      "facture_ts": 2,
+      "montant_ht": "948.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "50.00",
+      "montant": "474.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 43,
+    "fields": {
+      "situation": 10,
+      "avenant": 1,
+      "facture_ts": 1,
+      "montant_ht": "994.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "60.00",
+      "montant": "596.40"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 44,
+    "fields": {
+      "situation": 10,
+      "avenant": 2,
+      "facture_ts": 2,
+      "montant_ht": "948.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "50.00",
+      "montant": "474.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 45,
+    "fields": {
+      "situation": 11,
+      "avenant": 1,
+      "facture_ts": 1,
+      "montant_ht": "994.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "994.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 46,
+    "fields": {
+      "situation": 11,
+      "avenant": 2,
+      "facture_ts": 2,
+      "montant_ht": "948.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "948.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 47,
+    "fields": {
+      "situation": 12,
+      "avenant": 1,
+      "facture_ts": 1,
+      "montant_ht": "994.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "994.00"
+    }
+  },
+  {
+    "model": "api.situationligneavenant",
+    "pk": 48,
+    "fields": {
+      "situation": 12,
+      "avenant": 2,
+      "facture_ts": 2,
+      "montant_ht": "948.00",
+      "pourcentage_precedent": "0.00",
+      "pourcentage_actuel": "100.00",
+      "montant": "948.00"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 29,
+    "fields": {
+      "situation": 8,
+      "description": "TestLigne2",
+      "montant": "100.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 30,
+    "fields": {
+      "situation": 8,
+      "description": "TestLigne",
+      "montant": "200.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 31,
+    "fields": {
+      "situation": 9,
+      "description": "TestLigne2",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 32,
+    "fields": {
+      "situation": 9,
+      "description": "TestLigne",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 33,
+    "fields": {
+      "situation": 10,
+      "description": "TestLigne2",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 34,
+    "fields": {
+      "situation": 10,
+      "description": "TestLigne",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 35,
+    "fields": {
+      "situation": 11,
+      "description": "TestLigne2",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 36,
+    "fields": {
+      "situation": 11,
+      "description": "TestLigne",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 37,
+    "fields": {
+      "situation": 12,
+      "description": "TestLigne2",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.situationlignesupplementaire",
+    "pk": 38,
+    "fields": {
+      "situation": 12,
+      "description": "TestLigne",
+      "montant": "0.00",
+      "type": "deduction"
+    }
+  },
+  {
+    "model": "api.partie",
+    "pk": 1,
+    "fields": {
+      "titre": "1- Rev�tements murs et plafonds"
+    }
+  },
+  {
+    "model": "api.souspartie",
+    "pk": 1,
+    "fields": {
+      "partie": 1,
+      "description": "1.1 Peinture acrylique sur murs des logements"
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 101,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 102,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 103,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 104,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 105,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 109,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 110,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 111,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 112,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 141,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 142,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 143,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 144,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 145,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 180,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 192,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 193,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 194,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 195,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 212,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 213,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 214,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 215,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 216,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Jeudi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 217,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 218,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 219,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 220,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 221,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 222,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 223,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 224,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 225,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 226,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 227,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 228,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 229,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 230,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 231,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 233,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 234,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 235,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 236,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 237,
+    "fields": {
+      "agent": 2,
+      "week": 26,
+      "year": 2025,
+      "day": "Vendredi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 246,
+    "fields": {
+      "agent": 1,
+      "week": 27,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "07:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 247,
+    "fields": {
+      "agent": 1,
+      "week": 27,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 248,
+    "fields": {
+      "agent": 1,
+      "week": 27,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 249,
+    "fields": {
+      "agent": 1,
+      "week": 27,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 250,
+    "fields": {
+      "agent": 1,
+      "week": 25,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "07:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 251,
+    "fields": {
+      "agent": 1,
+      "week": 25,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 252,
+    "fields": {
+      "agent": 1,
+      "week": 25,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 253,
+    "fields": {
+      "agent": 1,
+      "week": 26,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 260,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "06:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 261,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "07:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 262,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "08:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 263,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "09:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 264,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "10:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 265,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "11:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 266,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "12:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 267,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "13:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 268,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 269,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 270,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "10:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 271,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "11:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 272,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 273,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "13:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 274,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "06:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 275,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "06:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 276,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "07:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 277,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "08:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 278,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "09:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 279,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "07:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 280,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "08:00:00",
+      "chantier": 3
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 281,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "09:00:00",
+      "chantier": 3
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 282,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "10:00:00",
+      "chantier": 4
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 286,
+    "fields": {
+      "agent": 2,
+      "week": 29,
+      "year": 2025,
+      "day": "Samedi",
+      "hour": "06:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 287,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "11:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 296,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mardi",
+      "hour": "12:00:00",
+      "chantier": 1
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 313,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "10:00:00",
+      "chantier": 5
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 314,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Mercredi",
+      "hour": "11:00:00",
+      "chantier": 5
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 390,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "06:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 391,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "07:00:00",
+      "chantier": 2
+    }
+  },
+  {
+    "model": "api.schedule",
+    "pk": 392,
+    "fields": {
+      "agent": 1,
+      "week": 29,
+      "year": 2025,
+      "day": "Lundi",
+      "hour": "08:00:00",
+      "chantier": 2
+    }
+  },
+
+  {
+    "model": "api.boncommande",
+    "pk": 2,
+    "fields": {
+      "numero": "BC-0001",
+      "fournisseur": "5",
+      "chantier": 1,
+      "agent": 1,
+      "montant_total": "418.30",
+      "date_creation": "2025-07-04T14:42:14.152Z",
+      "statut": "en_attente",
+      "date_livraison": null,
+      "magasin_retrait": null,
+      "date_commande": "2025-07-04",
+      "statut_paiement": "non_paye",
+      "montant_paye": "0.00",
+      "date_paiement": null,
+      "mode_paiement": null
+    }
+  },
+  {
+    "model": "api.boncommande",
+    "pk": 3,
+    "fields": {
+      "numero": "BC-0002",
+      "fournisseur": "5",
+      "chantier": 1,
+      "agent": 1,
+      "montant_total": "106.30",
+      "date_creation": "2025-07-04T14:44:16.431Z",
+      "statut": "en_attente",
+      "date_livraison": null,
+      "magasin_retrait": null,
+      "date_commande": "2025-07-04",
+      "statut_paiement": "non_paye",
+      "montant_paye": "0.00",
+      "date_paiement": null,
+      "mode_paiement": null
+    }
+  },
+  {
+    "model": "api.boncommande",
+    "pk": 4,
+    "fields": {
+      "numero": "BC-0003",
+      "fournisseur": "5",
+      "chantier": 1,
+      "agent": 1,
+      "montant_total": "524.60",
+      "date_creation": "2025-07-04T15:08:40.021Z",
+      "statut": "en_attente",
+      "date_livraison": null,
+      "magasin_retrait": null,
+      "date_commande": "2025-07-04",
+      "statut_paiement": "non_paye",
+      "montant_paye": "0.00",
+      "date_paiement": null,
+      "mode_paiement": null
+    }
+  },
+  {
+    "model": "api.ligneboncommande",
+    "pk": 30,
+    "fields": {
+      "bon_commande": 2,
+      "produit": 1,
+      "designation": "Peinture mal blanche 5L",
+      "quantite": 10,
+      "prix_unitaire": "10.63",
+      "total": "106.30"
+    }
+  },
+  {
+    "model": "api.ligneboncommande",
+    "pk": 31,
+    "fields": {
+      "bon_commande": 2,
+      "produit": 2,
+      "designation": "Peinture mate blanche 10L",
+      "quantite": 20,
+      "prix_unitaire": "15.60",
+      "total": "312.00"
+    }
+  },
+  {
+    "model": "api.ligneboncommande",
+    "pk": 32,
+    "fields": {
+      "bon_commande": 3,
+      "produit": 1,
+      "designation": "Peinture mal blanche 5L",
+      "quantite": 10,
+      "prix_unitaire": "10.63",
+      "total": "106.30"
+    }
+  },
+  {
+    "model": "api.ligneboncommande",
+    "pk": 33,
+    "fields": {
+      "bon_commande": 4,
+      "produit": 1,
+      "designation": "Peinture m�te blanche 5L",
+      "quantite": 20,
+      "prix_unitaire": "10.63",
+      "total": "212.60"
+    }
+  },
+  {
+    "model": "api.ligneboncommande",
+    "pk": 34,
+    "fields": {
+      "bon_commande": 4,
+      "produit": 2,
+      "designation": "Peinture mate blanche 10L",
+      "quantite": 20,
+      "prix_unitaire": "15.60",
+      "total": "312.00"
+    }
+  },
+  {
+    "model": "api.parametres",
+    "pk": 1,
+    "fields": {
+      "code": "TAUX_FIXE",
+      "valeur": "20.00",
+      "description": "Taux fixe par d�faut",
+      "date_modification": "2025-07-17T13:47:21.155Z"
+    }
+  },
+  {
+    "model": "api.avenant",
+    "pk": 1,
+    "fields": {
+      "chantier": 1,
+      "numero": 1,
+      "date_creation": "2025-02-16T15:26:08.446Z",
+      "montant_total": "994.00"
+    }
+  },
+  {
+    "model": "api.avenant",
+    "pk": 2,
+    "fields": {
+      "chantier": 1,
+      "numero": 2,
+      "date_creation": "2025-02-16T15:26:23.330Z",
+      "montant_total": "948.00"
+    }
+  },
+  {
+    "model": "api.facturets",
+    "pk": 1,
+    "fields": {
+      "devis": 4,
+      "chantier": 1,
+      "avenant": 1,
+      "numero_ts": 1,
+      "designation": "",
+      "date_creation": "2025-02-16T15:26:08.458Z",
+      "montant_ht": "994.00",
+      "montant_ttc": "1192.80",
+      "tva_rate": "20.00"
+    }
+  },
+  {
+    "model": "api.facturets",
+    "pk": 2,
+    "fields": {
+      "devis": 5,
+      "chantier": 1,
+      "avenant": 2,
+      "numero_ts": 2,
+      "designation": "",
+      "date_creation": "2025-02-16T15:26:23.341Z",
+      "montant_ht": "948.00",
+      "montant_ttc": "1137.60",
+      "tva_rate": "20.00"
+    }
+  },
+  {
+    "model": "api.agencyexpense",
+    "pk": 2,
+    "fields": {
+      "description": "Amine Salaire",
+      "amount": "1800.00",
+      "type": "fixed",
+      "date": "2025-01-01",
+      "end_date": null,
+      "category": "salaire",
+      "created_at": "2025-02-19T20:25:28.435Z",
+      "updated_at": "2025-02-19T20:25:28.435Z"
+    }
+  },
+  {
+    "model": "api.agencyexpense",
+    "pk": 3,
+    "fields": {
+      "description": "Internet",
+      "amount": "50.00",
+      "type": "fixed",
+      "date": "2025-03-20",
+      "end_date": null,
+      "category": "loyer",
+      "created_at": "2025-02-19T20:27:52.095Z",
+      "updated_at": "2025-02-19T20:27:52.095Z"
+    }
+  },
+  {
+    "model": "api.agencyexpenseoverride",
+    "pk": 1,
+    "fields": {
+      "expense": 2,
+      "month": 2,
+      "year": 2025,
+      "description": "Amine Salaire + prime",
+      "amount": "2200.00"
+    }
+  },
+  {
+    "model": "api.soustraitant",
+    "pk": 1,
+    "fields": {
+      "entreprise": "STAR CLEAN",
+      "capital": "1000.00",
+      "adresse": "2 RUE DE BEAUSSET",
+      "code_postal": "13001",
+      "ville": "Marseille",
+      "forme_juridique": "SARL",
+      "numero_rcs": "RCS de MARSEILLE 849 338 082",
+      "representant": "Lefkir Smail",
+      "email": "Star.clean13009@gmail.com",
+      "date_creation": "2025-05-21T13:54:15.265Z",
+      "date_modification": "2025-06-12T14:19:51.027Z"
+    }
+  },
+  {
+    "model": "api.soustraitant",
+    "pk": 2,
+    "fields": {
+      "entreprise": "ABCONDUITE",
+      "capital": "1500.00",
+      "adresse": "24-26 boulevard guy lussac",
+      "code_postal": "13014",
+      "ville": "Marseille",
+      "forme_juridique": "SARL",
+      "numero_rcs": "RCS de MARSEILLE 849 338 085",
+      "representant": "ADDA ATTOU Dounia",
+      "email": null,
+      "date_creation": "2025-05-22T12:15:28.388Z",
+      "date_modification": "2025-05-22T12:15:28.388Z"
+    }
+  },
+  {
+    "model": "api.soustraitant",
+    "pk": 3,
+    "fields": {
+      "entreprise": "HDFVJHS",
+      "capital": "10.00",
+      "adresse": "20 traverse du moulin � vent",
+      "code_postal": "13015",
+      "ville": "Marseille",
+      "forme_juridique": "SARL",
+      "numero_rcs": "RCS de MARSEILLE 849 338 500",
+      "representant": "Amine Belaoued",
+      "email": null,
+      "date_creation": "2025-05-22T12:25:03.721Z",
+      "date_modification": "2025-05-22T12:25:03.721Z"
+    }
+  },
+  {
+    "model": "api.soustraitant",
+    "pk": 4,
+    "fields": {
+      "entreprise": "TEST",
+      "capital": "10000.00",
+      "adresse": "24-26 boulevard guy lussac",
+      "code_postal": "13014",
+      "ville": "Marseille",
+      "forme_juridique": "SARL",
+      "numero_rcs": "RCS de MARSEILLE 849 338 560",
+      "representant": "MOI",
+      "email": null,
+      "date_creation": "2025-05-27T13:59:00.746Z",
+      "date_modification": "2025-06-12T12:33:38.599Z"
+    }
+  },
+  {
+    "model": "api.soustraitant",
+    "pk": 5,
+    "fields": {
+      "entreprise": "REDA",
+      "capital": "22500.00",
+      "adresse": "24-26 boulevard guy lussac",
+      "code_postal": "13014",
+      "ville": "Marseille",
+      "forme_juridique": "SARL",
+      "numero_rcs": "RCS de MARSEILLE 849 338 100",
+      "representant": "MOI",
+      "email": null,
+      "date_creation": "2025-06-12T13:26:51.406Z",
+      "date_modification": "2025-06-12T13:26:51.406Z"
+    }
+  },
+  {
+    "model": "api.contratsoustraitance",
+    "pk": 1,
+    "fields": {
+      "chantier": 1,
+      "sous_traitant": 1,
+      "type_contrat": "NETTOYAGE",
+      "description_prestation": "Nettoyage de 81 logements en phase OPR, Pr�-livraison, Livraison des b�timents A, B, C, D, E, y compris les parties communes et parking.\n\nCCTP en annexe.",
+      "date_debut": "2025-05-21",
+      "duree": "Jusqu'� livraison du chantier",
+      "adresse_prestation": "Avenue F�lix Gouin et avenue Aristide Briand � 13800 Istres",
+      "nom_operation": "TestSitaution",
+      "montant_operation": "18630.00",
+      "nom_maitre_ouvrage": "IN SIDE",
+      "nom_maitre_oeuvre": "SSCV TPLD",
+      "date_creation": "2025-05-21",
+      "date_modification": "2025-05-21T14:11:46.988Z"
+    }
+  },
+  {
+    "model": "api.contratsoustraitance",
+    "pk": 2,
+    "fields": {
+      "chantier": 1,
+      "sous_traitant": 2,
+      "type_contrat": "BTP",
+      "description_prestation": "Test BTP",
+      "date_debut": "2025-05-22",
+      "duree": "Jusqu'� livraison du chantier",
+      "adresse_prestation": "Avenue F�lix Gouin et avenue Aristide Briand � 13800 Istres",
+      "nom_operation": "TestSitaution",
+      "montant_operation": "1000.00",
+      "nom_maitre_ouvrage": "IN SIDE",
+      "nom_maitre_oeuvre": "SSCV TPLD",
+      "date_creation": "2025-05-22",
+      "date_modification": "2025-05-22T12:15:55.437Z"
+    }
+  },
+  {
+    "model": "api.contratsoustraitance",
+    "pk": 3,
+    "fields": {
+      "chantier": 1,
+      "sous_traitant": 3,
+      "type_contrat": "NETTOYAGE",
+      "description_prestation": "Test cout sous traitance",
+      "date_debut": "2025-05-22",
+      "duree": "Jusqu'� livraison du chantier",
+      "adresse_prestation": "Avenue F�lix Gouin et avenue Aristide Briand � 13800 Istres",
+      "nom_operation": "TestSitaution",
+      "montant_operation": "200.00",
+      "nom_maitre_ouvrage": "IN SIDE",
+      "nom_maitre_oeuvre": "SSCV TPLD",
+      "date_creation": "2025-05-22",
+      "date_modification": "2025-05-22T12:27:08.159Z"
+    }
+  },
+  {
+    "model": "api.avenantsoustraitance",
+    "pk": 1,
+    "fields": {
+      "contrat": 1,
+      "numero": 1,
+      "description": "Nettoyage compl�mentaire avant livraison",
+      "montant": "2500.00",
+      "type_travaux": "LOT PEINTURE",
+      "date_creation": "2025-05-21",
+      "date_modification": "2025-05-21T15:14:53.509Z"
+    }
+  },
+  {
+    "model": "api.avenantsoustraitance",
+    "pk": 2,
+    "fields": {
+      "contrat": 3,
+      "numero": 1,
+      "description": "Test avenant",
+      "montant": "100.00",
+      "type_travaux": "LOT PEINTURE",
+      "date_creation": "2025-05-22",
+      "date_modification": "2025-05-22T13:01:42.479Z"
+    }
+  },
+  {
+    "model": "api.avenantsoustraitance",
+    "pk": 3,
+    "fields": {
+      "contrat": 2,
+      "numero": 1,
+      "description": "Test avenant",
+      "montant": "10000.00",
+      "type_travaux": "LOT PEINTURE",
+      "date_creation": "2025-06-12",
+      "date_modification": "2025-06-12T15:35:51.717Z"
+    }
+  },
+  {
+    "model": "api.avenantsoustraitance",
+    "pk": 4,
+    "fields": {
+      "contrat": 2,
+      "numero": 2,
+      "description": "Test cout main d'oeuvre",
+      "montant": "100.00",
+      "type_travaux": "LOT PEINTURE",
+      "date_creation": "2025-06-13",
+      "date_modification": "2025-06-13T14:57:27.123Z"
+    }
+  },
+  {
+    "model": "api.paiementsoustraitant",
+    "pk": 1,
+    "fields": {
+      "sous_traitant": 2,
+      "chantier": 1,
+      "mois": 5,
+      "annee": 2025,
+      "montant_facture_ht": "1000.00",
+      "date_envoi_facture": "2025-06-25",
+      "delai_paiement": 45,
+      "montant_paye_ht": "500.00",
+      "date_paiement_reel": "2025-06-25"
+    }
+  },
+  {
+    "model": "api.paiementsoustraitant",
+    "pk": 2,
+    "fields": {
+      "sous_traitant": 2,
+      "chantier": 1,
+      "mois": 6,
+      "annee": 2025,
+      "montant_facture_ht": "2000.00",
+      "date_envoi_facture": "2025-06-25",
+      "delai_paiement": 45,
+      "montant_paye_ht": "2500.00",
+      "date_paiement_reel": "2025-06-25"
+    }
+  },
+  {
+    "model": "api.paiementfournisseurmateriel",
+    "pk": 1,
+    "fields": {
+      "chantier": 1,
+      "fournisseur": "UNIKALO",
+      "mois": 6,
+      "annee": 2025,
+      "montant": "150.00",
+      "date_saisie": "2025-07-04T15:50:04.794Z"
+    }
+  },
+  {
+    "model": "api.paiementfournisseurmateriel",
+    "pk": 2,
+    "fields": {
+      "chantier": 1,
+      "fournisseur": "UNIKALO",
+      "mois": 7,
+      "annee": 2025,
+      "montant": "100.00",
+      "date_saisie": "2025-07-17T16:56:15.279Z"
+    }
+  }
+]

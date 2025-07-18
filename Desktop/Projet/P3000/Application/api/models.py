@@ -645,7 +645,7 @@ class Schedule(models.Model):
     week = models.IntegerField()
     year = models.IntegerField(default=timezone.now().year)
     day = models.CharField(max_length=10)  # "Lundi", "Mardi", etc.
-    hour = models.CharField(max_length=5)  # "06:00", "07:00", etc.
+    hour = models.CharField(max_length=10)  # "06:00", "07:00", etc.
     chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:

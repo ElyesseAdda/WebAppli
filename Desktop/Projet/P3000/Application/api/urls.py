@@ -68,6 +68,7 @@ from .views import (
     PaiementFournisseurMaterielAPIView,
     fournisseurs,
     FournisseurViewSet,
+    recalculate_labor_costs_month,
 )
 
 
@@ -193,4 +194,8 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
     path('fournisseurs/', fournisseurs, name='fournisseurs'),
+]
+
+urlpatterns += [
+    path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
 ]
