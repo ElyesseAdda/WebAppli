@@ -3,6 +3,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  AppBar,
   Box,
   Dialog,
   DialogContent,
@@ -11,11 +12,14 @@ import {
   IconButton,
   MenuItem,
   Select,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
+  Toolbar,
   Typography,
 } from "@mui/material";
 import axios from "axios";
@@ -24,53 +28,24 @@ import React, { useEffect, useState } from "react";
 import { FaTimes } from "react-icons/fa";
 import "./../../static/css/laborCostSummary.css";
 
-const LaborCostsSummary = ({ isOpen, onClose }) => {
+const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
   const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
-  const [monthlySummary, setMonthlySummary] = useState([]);
+  const [summary, setSummary] = useState([]); // Résumé planning réel
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [eventsByAgent, setEventsByAgent] = useState({});
+  const [mode, setMode] = useState("chantier"); // "chantier" ou "agent"
 
-  // Récupère le résumé mensuel et les événements pour chaque agent
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
       setError("");
+      let url = `/api/schedule/monthly_summary/?month=${selectedMonth}`;
+      if (agentId) url += `&agent_id=${agentId}`;
+      if (chantierId) url += `&chantier_id=${chantierId}`;
       axios
-        .get(`/api/labor_costs/monthly_summary/?month=${selectedMonth}`)
-        .then(async (res) => {
-          setMonthlySummary(res.data);
-          // Pour chaque agent, récupérer les événements du mois
-          const allAgents = new Set();
-          res.data.forEach((chantier) => {
-            chantier.details.forEach((detail) => {
-              allAgents.add(detail.agent_id);
-            });
-          });
-          const eventsObj = {};
-          const monthStart = dayjs(selectedMonth + "-01")
-            .startOf("month")
-            .format("YYYY-MM-DD");
-          const monthEnd = dayjs(selectedMonth + "-01")
-            .endOf("month")
-            .format("YYYY-MM-DD");
-          await Promise.all(
-            Array.from(allAgents).map(async (agentId) => {
-              try {
-                const resp = await axios.get(`/api/events/`, {
-                  params: {
-                    agent_id: agentId,
-                    start_date: monthStart,
-                    end_date: monthEnd,
-                  },
-                });
-                eventsObj[agentId] = resp.data;
-              } catch (e) {
-                eventsObj[agentId] = [];
-              }
-            })
-          );
-          setEventsByAgent(eventsObj);
+        .get(url)
+        .then((res) => {
+          setSummary(res.data);
         })
         .catch((err) => {
           setError(
@@ -79,7 +54,7 @@ const LaborCostsSummary = ({ isOpen, onClose }) => {
         })
         .finally(() => setLoading(false));
     }
-  }, [selectedMonth, isOpen]);
+  }, [selectedMonth, isOpen, agentId, chantierId]);
 
   if (!isOpen) return null;
 
@@ -97,10 +72,10 @@ const LaborCostsSummary = ({ isOpen, onClose }) => {
     return months;
   };
 
-  // Agrège les infos par agent sur tous les chantiers
+  // Agrégation par agent côté frontend
   const aggregateByAgent = () => {
     const agentMap = {};
-    monthlySummary.forEach((chantier) => {
+    summary.forEach((chantier) => {
       chantier.details.forEach((detail) => {
         if (!agentMap[detail.agent_id]) {
           agentMap[detail.agent_id] = {
@@ -138,8 +113,6 @@ const LaborCostsSummary = ({ isOpen, onClose }) => {
     return agentMap;
   };
 
-  const agentMap = aggregateByAgent();
-
   // Regroupe les jours majorés par date/type/taux et somme les heures
   const groupMajorations = (jours_majoration) => {
     const grouped = {};
@@ -157,178 +130,21 @@ const LaborCostsSummary = ({ isOpen, onClose }) => {
     );
   };
 
-  // Fonction utilitaire pour regrouper les événements consécutifs de même type/sous-type
-  const groupEventsByConsecutiveDays = (events) => {
-    if (!events || events.length === 0) return [];
-    // Trier par date croissante
-    const sorted = [...events].sort((a, b) =>
-      dayjs(a.start_date).diff(dayjs(b.start_date))
-    );
-    const grouped = [];
-    let current = null;
-    for (let i = 0; i < sorted.length; i++) {
-      const ev = sorted[i];
-      if (
-        current &&
-        ev.event_type === current.event_type &&
-        (ev.subtype || "") === (current.subtype || "") &&
-        dayjs(ev.start_date).diff(dayjs(current.end_date), "day") === 1
-      ) {
-        // Étendre la période
-        current.end_date = ev.end_date;
-      } else {
-        // Nouveau groupe
-        if (current) grouped.push(current);
-        current = { ...ev };
-      }
-    }
-    if (current) grouped.push(current);
-    // Trie par date de début croissante
-    return grouped.sort((a, b) =>
-      dayjs(a.start_date).diff(dayjs(b.start_date))
-    );
-  };
-
-  const renderAgentSummary = (agentId, agent) => (
-    <Accordion key={agentId}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Box width="100%">
-          <Typography
-            variant="h6"
-            style={{ color: "rgba(27, 120, 188, 1)", fontWeight: 700 }}
-          >
-            {agent.agent_nom}
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Chantiers : {agent.chantiers.join(", ")}
-          </Typography>
-          <Box display="flex" gap={3} mt={1} alignItems="center">
-            <Box>
-              <Typography fontWeight="bold">Heures normales</Typography>
-              <Typography>{agent.heures_normal}h</Typography>
-              <Typography color="textSecondary">
-                Montant : {agent.montant_normal.toFixed(2)} €
-              </Typography>
-            </Box>
-            <Box>
-              <Typography fontWeight="bold">Majorées(125%)</Typography>
-              <Typography>{agent.heures_samedi}h</Typography>
-              <Typography color="textSecondary">
-                Montant : {agent.montant_samedi.toFixed(2)} €
-              </Typography>
-            </Box>
-            <Box>
-              <Typography fontWeight="bold">Majorées(150%)</Typography>
-              <Typography>
-                {agent.heures_dimanche + agent.heures_ferie}h
-              </Typography>
-              <Typography color="textSecondary">
-                Montant :{" "}
-                {(agent.montant_dimanche + agent.montant_ferie).toFixed(2)} €
-              </Typography>
-            </Box>
-            <Box>
-              <Typography
-                fontWeight="bold"
-                style={{ color: "rgba(27, 120, 188, 1)" }}
-              >
-                Total
-              </Typography>
-              <Typography
-                style={{ color: "rgba(27, 120, 188, 1)", fontWeight: 700 }}
-              >
-                {agent.heures_normal +
-                  agent.heures_samedi +
-                  agent.heures_dimanche +
-                  agent.heures_ferie}
-                h
-              </Typography>
-              <Typography
-                color="textSecondary"
-                style={{ color: "rgba(27, 120, 188, 1)", fontWeight: 700 }}
-              >
-                Montant :{" "}
-                {(
-                  agent.montant_normal +
-                  agent.montant_samedi +
-                  agent.montant_dimanche +
-                  agent.montant_ferie
-                ).toFixed(2)}{" "}
-                €
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails>
-        <Divider sx={{ mb: 2 }} />
-        <Typography fontWeight="bold" mb={1}>
-          Jours majorés
-        </Typography>
-        {groupMajorations(agent.jours_majoration).length === 0 ? (
-          <Typography>Aucun jour majoré ce mois.</Typography>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Heures</TableCell>
-                <TableCell>Taux</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {groupMajorations(agent.jours_majoration).map((j, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{dayjs(j.date).format("DD/MM/YY")}</TableCell>
-                  <TableCell>{j.type}</TableCell>
-                  <TableCell>{j.hours}</TableCell>
-                  <TableCell>{j.taux}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        <Divider sx={{ my: 2 }} />
-        <Typography fontWeight="bold" mb={1}>
-          Événements du mois
-        </Typography>
-        {eventsByAgent[agentId] && eventsByAgent[agentId].length > 0 ? (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Sous-type</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {groupEventsByConsecutiveDays(eventsByAgent[agentId]).map(
-                (ev, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>
-                      {ev.start_date === ev.end_date
-                        ? dayjs(ev.start_date).format("DD/MM/YY")
-                        : `${dayjs(ev.start_date).format("DD/MM/YY")} - ${dayjs(
-                            ev.end_date
-                          ).format("DD/MM/YY")}`}
-                    </TableCell>
-                    <TableCell>{ev.event_type}</TableCell>
-                    <TableCell>{ev.subtype || "-"}</TableCell>
-                  </TableRow>
-                )
-              )}
-            </TableBody>
-          </Table>
-        ) : (
-          <Typography>Aucun événement ce mois.</Typography>
-        )}
-      </AccordionDetails>
-    </Accordion>
-  );
-
   return (
     <Dialog open={isOpen} onClose={handleClose} maxWidth="md" fullWidth>
+      <AppBar position="static" color="default" sx={{ mb: 2 }}>
+        <Toolbar>
+          <Tabs
+            value={mode}
+            onChange={(_, v) => setMode(v)}
+            textColor="primary"
+            indicatorColor="primary"
+          >
+            <Tab label="Par chantier" value="chantier" />
+            <Tab label="Par agent" value="agent" />
+          </Tabs>
+        </Toolbar>
+      </AppBar>
       <DialogTitle
         sx={{
           display: "flex",
@@ -336,7 +152,11 @@ const LaborCostsSummary = ({ isOpen, onClose }) => {
           justifyContent: "space-between",
         }}
       >
-        <span>Résumé des Heures et Coûts</span>
+        <span>
+          {mode === "chantier"
+            ? "Résumé des Heures et Coûts par chantier"
+            : "Résumé des Heures et Coûts par agent"}
+        </span>
         <IconButton onClick={handleClose}>
           <FaTimes />
         </IconButton>
@@ -361,12 +181,317 @@ const LaborCostsSummary = ({ isOpen, onClose }) => {
             <div>Chargement...</div>
           ) : error ? (
             <div style={{ color: "red" }}>{error}</div>
-          ) : Object.keys(agentMap).length === 0 ? (
+          ) : mode === "chantier" ? (
+            summary.length === 0 ? (
+              <div>Aucune donnée pour ce mois.</div>
+            ) : (
+              summary.map((chantier) => (
+                <Accordion key={chantier.chantier_id}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box width="100%">
+                      <Typography
+                        variant="h6"
+                        style={{
+                          color: "rgba(27, 120, 188, 1)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {chantier.chantier_nom}
+                      </Typography>
+                      <Box display="flex" gap={3} mt={1} alignItems="center">
+                        <Box>
+                          <Typography fontWeight="bold">
+                            Heures normales
+                          </Typography>
+                          <Typography>
+                            {chantier.total_heures_normal}h
+                          </Typography>
+                          <Typography color="textSecondary">
+                            Montant : {chantier.total_montant_normal.toFixed(2)}{" "}
+                            €
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography fontWeight="bold">
+                            Samedi (125%)
+                          </Typography>
+                          <Typography>
+                            {chantier.total_heures_samedi}h
+                          </Typography>
+                          <Typography color="textSecondary">
+                            Montant : {chantier.total_montant_samedi.toFixed(2)}{" "}
+                            €
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography fontWeight="bold">
+                            Dimanche (150%)
+                          </Typography>
+                          <Typography>
+                            {chantier.total_heures_dimanche}h
+                          </Typography>
+                          <Typography color="textSecondary">
+                            Montant :{" "}
+                            {chantier.total_montant_dimanche.toFixed(2)} €
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography fontWeight="bold">
+                            Férié (150%)
+                          </Typography>
+                          <Typography>
+                            {chantier.total_heures_ferie}h
+                          </Typography>
+                          <Typography color="textSecondary">
+                            Montant : {chantier.total_montant_ferie.toFixed(2)}{" "}
+                            €
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            fontWeight="bold"
+                            style={{ color: "rgba(27, 120, 188, 1)" }}
+                          >
+                            Total
+                          </Typography>
+                          <Typography
+                            style={{
+                              color: "rgba(27, 120, 188, 1)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {chantier.total_heures_normal +
+                              chantier.total_heures_samedi +
+                              chantier.total_heures_dimanche +
+                              chantier.total_heures_ferie}
+                            h
+                          </Typography>
+                          <Typography
+                            color="textSecondary"
+                            style={{
+                              color: "rgba(27, 120, 188, 1)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            Montant :
+                            {(
+                              chantier.total_montant_normal +
+                              chantier.total_montant_samedi +
+                              chantier.total_montant_dimanche +
+                              chantier.total_montant_ferie
+                            ).toFixed(2)}{" "}
+                            €
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Divider sx={{ mb: 2 }} />
+                    <Typography fontWeight="bold" mb={1}>
+                      Détail par agent
+                    </Typography>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Agent</TableCell>
+                          <TableCell>Normal</TableCell>
+                          <TableCell>Samedi</TableCell>
+                          <TableCell>Dimanche</TableCell>
+                          <TableCell>Férié</TableCell>
+                          <TableCell>Total</TableCell>
+                          <TableCell>Montant</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {chantier.details.map((agent, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{agent.agent_nom}</TableCell>
+                            <TableCell>{agent.heures_normal}</TableCell>
+                            <TableCell>{agent.heures_samedi}</TableCell>
+                            <TableCell>{agent.heures_dimanche}</TableCell>
+                            <TableCell>{agent.heures_ferie}</TableCell>
+                            <TableCell>
+                              {agent.heures_normal +
+                                agent.heures_samedi +
+                                agent.heures_dimanche +
+                                agent.heures_ferie}
+                            </TableCell>
+                            <TableCell>
+                              {(
+                                agent.montant_normal +
+                                agent.montant_samedi +
+                                agent.montant_dimanche +
+                                agent.montant_ferie
+                              ).toFixed(2)}{" "}
+                              €
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography fontWeight="bold" mb={1}>
+                      Jours majorés
+                    </Typography>
+                    {chantier.jours_majoration.length === 0 ? (
+                      <Typography>Aucun jour majoré ce mois.</Typography>
+                    ) : (
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Type</TableCell>
+                            <TableCell>Heures</TableCell>
+                            <TableCell>Taux</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {chantier.jours_majoration.map((j, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                {dayjs(j.date).format("DD/MM/YY")}
+                              </TableCell>
+                              <TableCell>{j.type}</TableCell>
+                              <TableCell>{j.hours}</TableCell>
+                              <TableCell>{j.taux}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              ))
+            )
+          ) : // Mode agent
+          Object.keys(aggregateByAgent()).length === 0 ? (
             <div>Aucune donnée pour ce mois.</div>
           ) : (
-            Object.entries(agentMap).map(([agentId, agent]) =>
-              renderAgentSummary(agentId, agent)
-            )
+            Object.entries(aggregateByAgent()).map(([agentId, agent]) => (
+              <Accordion key={agentId}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box width="100%">
+                    <Typography
+                      variant="h6"
+                      style={{
+                        color: "rgba(27, 120, 188, 1)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {agent.agent_nom}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Chantiers : {agent.chantiers.join(", ")}
+                    </Typography>
+                    <Box display="flex" gap={3} mt={1} alignItems="center">
+                      <Box>
+                        <Typography fontWeight="bold">
+                          Heures normales
+                        </Typography>
+                        <Typography>{agent.heures_normal}h</Typography>
+                        <Typography color="textSecondary">
+                          Montant : {agent.montant_normal.toFixed(2)} €
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography fontWeight="bold">Samedi (125%)</Typography>
+                        <Typography>{agent.heures_samedi}h</Typography>
+                        <Typography color="textSecondary">
+                          Montant : {agent.montant_samedi.toFixed(2)} €
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography fontWeight="bold">
+                          Dimanche (150%)
+                        </Typography>
+                        <Typography>{agent.heures_dimanche}h</Typography>
+                        <Typography color="textSecondary">
+                          Montant : {agent.montant_dimanche.toFixed(2)} €
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography fontWeight="bold">Férié (150%)</Typography>
+                        <Typography>{agent.heures_ferie}h</Typography>
+                        <Typography color="textSecondary">
+                          Montant : {agent.montant_ferie.toFixed(2)} €
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography
+                          fontWeight="bold"
+                          style={{ color: "rgba(27, 120, 188, 1)" }}
+                        >
+                          Total
+                        </Typography>
+                        <Typography
+                          style={{
+                            color: "rgba(27, 120, 188, 1)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {agent.heures_normal +
+                            agent.heures_samedi +
+                            agent.heures_dimanche +
+                            agent.heures_ferie}
+                          h
+                        </Typography>
+                        <Typography
+                          color="textSecondary"
+                          style={{
+                            color: "rgba(27, 120, 188, 1)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Montant :
+                          {(
+                            agent.montant_normal +
+                            agent.montant_samedi +
+                            agent.montant_dimanche +
+                            agent.montant_ferie
+                          ).toFixed(2)}{" "}
+                          €
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography fontWeight="bold" mb={1}>
+                    Jours majorés
+                  </Typography>
+                  {groupMajorations(agent.jours_majoration).length === 0 ? (
+                    <Typography>Aucun jour majoré ce mois.</Typography>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Heures</TableCell>
+                          <TableCell>Taux</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {groupMajorations(agent.jours_majoration).map(
+                          (j, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>
+                                {dayjs(j.date).format("DD/MM/YY")}
+                              </TableCell>
+                              <TableCell>{j.type}</TableCell>
+                              <TableCell>{j.hours}</TableCell>
+                              <TableCell>{j.taux}</TableCell>
+                            </TableRow>
+                          )
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))
           )}
         </Box>
       </DialogContent>

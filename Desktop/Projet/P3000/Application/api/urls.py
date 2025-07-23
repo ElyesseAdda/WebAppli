@@ -69,6 +69,7 @@ from .views import (
     fournisseurs,
     FournisseurViewSet,
     recalculate_labor_costs_month,
+    schedule_monthly_summary,
 )
 
 
@@ -198,4 +199,5 @@ urlpatterns = [
 
 urlpatterns += [
     path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
+    path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
 ]

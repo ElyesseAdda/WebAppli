@@ -64,6 +64,8 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     React.useState(null);
   const [montantRecu, setMontantRecu] = React.useState("");
   const [datePaiementReel, setDatePaiementReel] = React.useState("");
+  const [mainOeuvreReelle, setMainOeuvreReelle] = React.useState(0);
+  const [loadingMainOeuvre, setLoadingMainOeuvre] = React.useState(false);
 
   const hasLoadedTaux = useRef(false);
   useEffect(() => {
@@ -96,6 +98,38 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         .catch(() => setDevisChantier(null))
         .finally(() => setLoadingDevis(false));
     }
+  }, [chantierData?.id]);
+
+  // Récupérer la main d'œuvre réelle depuis l'API recap-financier
+  useEffect(() => {
+    const fetchMainOeuvreReelle = async () => {
+      if (!chantierData?.id) {
+        setMainOeuvreReelle(0);
+        return;
+      }
+
+      setLoadingMainOeuvre(true);
+      try {
+        // Récupérer les données depuis l'API recap-financier (global)
+        const res = await axios.get(
+          `/api/chantier/${chantierData.id}/recap-financier/`
+        );
+
+        // Extraire la main d'œuvre des données recap-financier
+        const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || { total: 0 };
+        setMainOeuvreReelle(mainOeuvre.total || 0);
+      } catch (error) {
+        console.error(
+          "Erreur lors du chargement de la main d'œuvre réelle:",
+          error
+        );
+        setMainOeuvreReelle(0);
+      } finally {
+        setLoadingMainOeuvre(false);
+      }
+    };
+
+    fetchMainOeuvreReelle();
   }, [chantierData?.id]);
 
   const handleSousTraitanceUpdate = () => {
@@ -734,7 +768,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                             fontFamily: "Roboto, Arial, sans-serif",
                           }}
                         >
-                          {formatMontant(chantierData?.cout_main_oeuvre)}
+                          {loadingMainOeuvre ? (
+                            <span style={{ color: "#1976d2" }}>
+                              Chargement...
+                            </span>
+                          ) : (
+                            formatMontant(mainOeuvreReelle)
+                          )}
                         </Typography>
                       </Box>
                       <Box>
@@ -799,7 +839,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                     >
                       Total:{" "}
                       {formatMontant(
-                        (chantierData?.cout_main_oeuvre || 0) +
+                        (mainOeuvreReelle || 0) +
                           (chantierData?.cout_materiel || 0) +
                           (chantierData?.cout_sous_traitance || 0)
                       )}
@@ -840,7 +880,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       (chantierData?.cout_estime_main_oeuvre || 0) +
                         (chantierData?.cout_estime_materiel || 0) +
                         (chantierData?.cout_sous_traitance || 0) -
-                        ((chantierData?.cout_main_oeuvre || 0) +
+                        ((mainOeuvreReelle || 0) +
                           (chantierData?.cout_materiel || 0) +
                           (chantierData?.cout_sous_traitance || 0))
                     )}

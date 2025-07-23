@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FaSync } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
@@ -39,9 +39,15 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
   } = useRecapFinancier();
 
   // State local pour la donnée API et le statut
-  const [data, setData] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(null);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Main d'oeuvre Schedule
+  const [mainOeuvreData, setMainOeuvreData] = useState({
+    total: 0,
+    documents: [],
+  });
 
   // Générer les options de mois/année
   const moisOptions = [
@@ -64,7 +70,7 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
     (_, i) => anneeCourante - 2 + i
   );
 
-  // Récupérer les données API
+  // Récupérer les données API (autres catégories)
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -82,9 +88,38 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
     }
   };
 
-  React.useEffect(() => {
-    // Debug temporaire
-    console.log("fetchData recap-financier", chantierId, periode, global);
+  // Récupérer la main d'oeuvre depuis l'API recap-financier
+  useEffect(() => {
+    const fetchMainOeuvre = async () => {
+      if (!chantierId) {
+        setMainOeuvreData({ total: 0, documents: [] });
+        return;
+      }
+
+      try {
+        let url = `/api/chantier/${chantierId}/recap-financier/`;
+        if (!global && periode?.mois && periode?.annee) {
+          url += `?mois=${periode.mois}&annee=${periode.annee}`;
+        }
+
+        const res = await axios.get(url);
+
+        // Extraire la main d'œuvre des données recap-financier
+        const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || {
+          total: 0,
+          documents: [],
+        };
+
+        setMainOeuvreData(mainOeuvre);
+      } catch (e) {
+        console.error("Erreur lors du chargement de la main d'oeuvre:", e);
+        setMainOeuvreData({ total: 0, documents: [] });
+      }
+    };
+    fetchMainOeuvre();
+  }, [chantierId, periode.mois, periode.annee, global]);
+
+  useEffect(() => {
     if (chantierId) {
       fetchData();
     }
@@ -102,6 +137,14 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
   };
   const handleGlobal = () => {
     setGlobal(!global);
+  };
+
+  // Fusionner la main d'oeuvre Schedule avec les autres catégories
+  const getDepensesData = () => {
+    // On part de la structure existante, mais on remplace main_oeuvre par la version Schedule
+    const depenses = data?.sorties?.paye ? { ...data.sorties.paye } : {};
+    depenses.main_oeuvre = mainOeuvreData;
+    return depenses;
   };
 
   return (
@@ -178,7 +221,7 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
           <Grid item xs={12} md={6}>
             <RecapSection
               title={`Dépenses`}
-              data={data.sorties.paye}
+              data={getDepensesData()}
               colors={CATEGORY_COLORS}
               chantierId={chantierId}
               periode={periode}

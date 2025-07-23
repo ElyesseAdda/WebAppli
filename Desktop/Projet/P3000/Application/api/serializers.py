@@ -654,7 +654,7 @@ class SituationCreateSerializer(serializers.ModelSerializer):
             except:  # Capture toutes les exceptions possibles
                 return Decimal('0.00')
 
-        print("Données reçues:", data)  # Debug
+
         
         # Copier les données pour éviter de modifier l'original
         data = data.copy()
@@ -849,7 +849,7 @@ class PaiementSousTraitantSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 
 class RecapDocumentSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.IntegerField(required=False, allow_null=True)
     numero = serializers.CharField(required=False, allow_null=True)
     date = serializers.DateField(required=False, allow_null=True)
     montant = serializers.FloatField()
