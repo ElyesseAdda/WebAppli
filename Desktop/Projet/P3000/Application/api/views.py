@@ -1150,8 +1150,8 @@ def copy_schedule(request):
                     chantier_id=chantier_id,
                     week=target_week,
                     year=target_year,
-                    hours=hours,
-                    cost=hours * agent.taux_Horaire
+                    hours_normal=hours,  # Toutes les heures sont considérées comme normales par défaut
+                    cost_normal=hours * agent.taux_Horaire
                 ))
             LaborCost.objects.bulk_create(labor_costs)
 
