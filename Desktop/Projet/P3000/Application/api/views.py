@@ -5325,21 +5325,40 @@ class RecapFinancierChantierAPIView(APIView):
         situations = Situation.objects.filter(chantier=chantier)
         situations_in_periode = []
         for s in situations:
-            if s.date_envoi and s.delai_paiement is not None:
+            # Si on a une date de paiement réelle, on l'utilise pour le filtrage
+            if s.date_paiement_reel:
+                date_paiement_filtre = s.date_paiement_reel
+            # Sinon, on utilise la date de paiement estimée
+            elif s.date_envoi and s.delai_paiement is not None:
                 try:
-                    date_paiement_estimee = s.date_envoi + timedelta(days=s.delai_paiement)
+                    date_paiement_filtre = s.date_envoi + timedelta(days=s.delai_paiement)
                 except Exception:
                     continue
-                if date_debut and date_fin:
-                    if not (date_debut <= date_paiement_estimee <= date_fin):
-                        continue
-                # Ajoute la date estimée et le retard pour la réponse
-                s._date_paiement_estimee = date_paiement_estimee
-                if s.date_paiement_reel:
-                    s._retard = (s.date_paiement_reel - date_paiement_estimee).days
-                else:
-                    s._retard = None
-                situations_in_periode.append(s)
+            else:
+                # Si aucune date n'est disponible, on inclut la situation
+                date_paiement_filtre = None
+            
+            # Filtrage par période si spécifiée
+            if date_debut and date_fin and date_paiement_filtre:
+                if not (date_debut <= date_paiement_filtre <= date_fin):
+                    continue
+            
+            # Calculer la date de paiement estimée pour l'affichage
+            if s.date_envoi and s.delai_paiement is not None:
+                try:
+                    s._date_paiement_estimee = s.date_envoi + timedelta(days=s.delai_paiement)
+                except Exception:
+                    s._date_paiement_estimee = None
+            else:
+                s._date_paiement_estimee = None
+            
+            # Calculer le retard
+            if s.date_paiement_reel and s._date_paiement_estimee:
+                s._retard = (s.date_paiement_reel - s._date_paiement_estimee).days
+            else:
+                s._retard = None
+            
+            situations_in_periode.append(s)
 
         situation_payees = [s for s in situations_in_periode if s.date_paiement_reel]
         situation_reste = [s for s in situations_in_periode if not s.date_paiement_reel]

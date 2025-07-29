@@ -425,8 +425,20 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           });
         }
 
-        // Trier par date (mois/année)
+        // Trier par type puis par date (mois/année)
         moisTotal.sort((a, b) => {
+          // D'abord trier par type : CONTRAT en premier, puis avenants par numéro
+          if (a.type === "CONTRAT" && b.type !== "CONTRAT") return -1;
+          if (a.type !== "CONTRAT" && b.type === "CONTRAT") return 1;
+
+          // Si les deux sont des avenants, trier par numéro d'avenant
+          if (a.type !== "CONTRAT" && b.type !== "CONTRAT") {
+            const numA = parseInt(a.type.split(" ")[1]);
+            const numB = parseInt(b.type.split(" ")[1]);
+            if (numA !== numB) return numA - numB;
+          }
+
+          // Enfin, trier par date (mois/année)
           if (a.annee !== b.annee) return a.annee - b.annee;
           return a.mois - b.mois;
         });

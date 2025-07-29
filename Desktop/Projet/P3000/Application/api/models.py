@@ -995,9 +995,13 @@ class ContratSousTraitance(models.Model):
             old_instance = ContratSousTraitance.objects.get(pk=self.pk)
             old_montant = old_instance.montant_operation
             self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) - old_montant
+            # Restaurer l'ancien montant dans le coût estimé main d'œuvre
+            self.chantier.cout_estime_main_oeuvre = (self.chantier.cout_estime_main_oeuvre or 0) + old_montant
 
         # Ajouter le nouveau montant
         self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) + self.montant_operation
+        # Déduire le montant du coût estimé main d'œuvre
+        self.chantier.cout_estime_main_oeuvre = (self.chantier.cout_estime_main_oeuvre or 0) - self.montant_operation
         self.chantier.save()
 
         super().save(*args, **kwargs)
@@ -1005,6 +1009,8 @@ class ContratSousTraitance(models.Model):
     def delete(self, *args, **kwargs):
         # Soustraire le montant lors de la suppression
         self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) - self.montant_operation
+        # Restaurer le montant dans le coût estimé main d'œuvre
+        self.chantier.cout_estime_main_oeuvre = (self.chantier.cout_estime_main_oeuvre or 0) + self.montant_operation
         self.chantier.save()
 
         super().delete(*args, **kwargs)
@@ -1032,10 +1038,14 @@ class AvenantSousTraitance(models.Model):
             old_instance = AvenantSousTraitance.objects.get(pk=self.pk)
             old_montant = Decimal(str(old_instance.montant))
             self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) - old_montant
+            # Restaurer l'ancien montant dans le coût estimé main d'œuvre
+            self.contrat.chantier.cout_estime_main_oeuvre = Decimal(str(self.contrat.chantier.cout_estime_main_oeuvre or 0)) + old_montant
 
         # Ajouter le nouveau montant
         montant_decimal = Decimal(str(self.montant))
         self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) + montant_decimal
+        # Déduire le montant du coût estimé main d'œuvre
+        self.contrat.chantier.cout_estime_main_oeuvre = Decimal(str(self.contrat.chantier.cout_estime_main_oeuvre or 0)) - montant_decimal
         self.contrat.chantier.save()
 
         super().save(*args, **kwargs)
@@ -1045,6 +1055,8 @@ class AvenantSousTraitance(models.Model):
         # Soustraire le montant lors de la suppression
         montant_decimal = Decimal(str(self.montant))
         self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) - montant_decimal
+        # Restaurer le montant dans le coût estimé main d'œuvre
+        self.contrat.chantier.cout_estime_main_oeuvre = Decimal(str(self.contrat.chantier.cout_estime_main_oeuvre or 0)) + montant_decimal
         self.contrat.chantier.save()
 
         super().delete(*args, **kwargs)
