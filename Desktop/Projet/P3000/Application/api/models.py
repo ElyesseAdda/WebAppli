@@ -1074,6 +1074,8 @@ def update_chantier_cout_main_oeuvre(chantier):
 class PaiementSousTraitant(models.Model):
     sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, related_name='paiements')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_sous_traitant')
+    contrat = models.ForeignKey('ContratSousTraitance', on_delete=models.CASCADE, related_name='paiements', null=True, blank=True)
+    avenant = models.ForeignKey('AvenantSousTraitance', on_delete=models.CASCADE, related_name='paiements', null=True, blank=True)
     mois = models.IntegerField()  # 1-12
     annee = models.IntegerField()
     montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2)  # Montant facturé par le sous-traitant ce mois
@@ -1086,10 +1088,11 @@ class PaiementSousTraitant(models.Model):
         verbose_name = "Paiement Sous-Traitant"
         verbose_name_plural = "Paiements Sous-Traitants"
         ordering = ['chantier', 'sous_traitant', 'annee', 'mois']
-        unique_together = ('chantier', 'sous_traitant', 'mois', 'annee')
+        unique_together = ('chantier', 'sous_traitant', 'mois', 'annee', 'avenant')
 
     def __str__(self):
-        return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}"
+        avenant_info = f" - Avenant {self.avenant.numero}" if self.avenant else ""
+        return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}{avenant_info}"
 
 class PaiementFournisseurMateriel(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_materiel')

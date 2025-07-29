@@ -836,6 +836,8 @@ class PaiementSousTraitantSerializer(serializers.ModelSerializer):
             'id',
             'sous_traitant',
             'chantier',
+            'contrat',
+            'avenant',
             'mois',
             'annee',
             'montant_facture_ht',

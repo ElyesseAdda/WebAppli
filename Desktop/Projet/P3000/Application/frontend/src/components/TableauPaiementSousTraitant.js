@@ -164,6 +164,8 @@ const AjouterPaiementModal = ({
   contratId,
   chantierId,
   sousTraitantId,
+  avenantId,
+  type,
   onSubmit,
 }) => {
   const [montantFacture, setMontantFacture] = useState("");
@@ -177,6 +179,7 @@ const AjouterPaiementModal = ({
       contrat: contratId,
       chantier: chantierId,
       sous_traitant: sousTraitantId,
+      avenantId: avenantId,
       montant_facture_ht: montantFacture,
       date_envoi_facture: dateEnvoi,
       delai_paiement: delaiPaiement,
@@ -187,7 +190,8 @@ const AjouterPaiementModal = ({
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogTitle>
-        Ajouter paiement pour {String(mois).padStart(2, "0")}/{annee}
+        Ajouter paiement pour {type || "CONTRAT"} -{" "}
+        {String(mois).padStart(2, "0")}/{annee}
       </DialogTitle>
       <DialogContent>
         <Box sx={{ p: 2 }}>
@@ -364,7 +368,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
       setLoading(true);
       Promise.all([
         axios.get(
-          `/api/contrats-sous-traitance/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
+          `/api/contrats-sous-traitance/?chantier_id=${chantierId}&sous_traitant=${sousTraitantId}`
         ),
         axios.get(
           `/api/paiements-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
@@ -386,41 +390,64 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   // Générer la grille des mois unique (de la date de début la plus ancienne à aujourd'hui)
   useEffect(() => {
     if (contrats.length > 0) {
-      const minDate = new Date(
-        Math.min(...contrats.map((c) => new Date(c.date_debut).getTime()))
+      const contratsFiltres = contrats.filter(
+        (c) =>
+          String(c.chantier) === String(chantierId) &&
+          String(c.sous_traitant) === String(sousTraitantId)
       );
-      const end = new Date();
-      let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-      let moisTotal = [];
-      while (
-        current.getFullYear() < end.getFullYear() ||
-        (current.getFullYear() === end.getFullYear() &&
-          current.getMonth() <= end.getMonth())
-      ) {
-        // Trouver le contrat actif pour ce mois (le plus récent dont la date_debut <= current)
-        const contratActif = contrats
-          .filter((c) => new Date(c.date_debut) <= current)
-          .sort((a, b) => new Date(b.date_debut) - new Date(a.date_debut))[0];
+
+      if (contratsFiltres.length > 0) {
+        const contrat = contratsFiltres[0];
+        let moisTotal = [];
+
+        // Ajouter le contrat initial
+        const dateContrat = new Date(contrat.date_debut);
         moisTotal.push({
-          mois: current.getMonth() + 1,
-          annee: current.getFullYear(),
-          contratId: contratActif ? contratActif.id : null,
+          mois: dateContrat.getMonth() + 1,
+          annee: dateContrat.getFullYear(),
+          contratId: contrat.id,
+          type: "CONTRAT",
+          montant: contrat.montant_operation,
         });
-        // Passer au mois suivant
-        current.setMonth(current.getMonth() + 1);
+
+        // Ajouter les avenants s'ils existent
+        if (contrat.avenants && contrat.avenants.length > 0) {
+          contrat.avenants.forEach((avenant) => {
+            const dateAvenant = new Date(avenant.date_creation);
+            moisTotal.push({
+              mois: dateAvenant.getMonth() + 1,
+              annee: dateAvenant.getFullYear(),
+              contratId: contrat.id,
+              avenantId: avenant.id,
+              type: `AVENANT ${String(avenant.numero).padStart(2, "0")}`,
+              montant: avenant.montant,
+            });
+          });
+        }
+
+        // Trier par date (mois/année)
+        moisTotal.sort((a, b) => {
+          if (a.annee !== b.annee) return a.annee - b.annee;
+          return a.mois - b.mois;
+        });
+
+        setMoisGrille(moisTotal);
+      } else {
+        setMoisGrille([]);
       }
-      setMoisGrille(moisTotal);
     } else {
       setMoisGrille([]);
     }
-  }, [contrats]);
+  }, [contrats, chantierId, sousTraitantId]);
 
   // Fusion grille et paiements existants
   const grilleComplete = moisGrille.map((ligne) => {
     const paiement = paiements.find(
       (p) =>
         Number(p.mois) === Number(ligne.mois) &&
-        Number(p.annee) === Number(ligne.annee)
+        Number(p.annee) === Number(ligne.annee) &&
+        // Ajouter la vérification pour l'avenant
+        (ligne.avenantId ? p.avenant === ligne.avenantId : !p.avenant)
     );
     return { ...ligne, paiement };
   });
@@ -429,7 +456,14 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   const handleAjouterPaiement = async (data) => {
     console.log("Payload envoyé pour création paiement :", data);
     try {
-      const res = await axios.post(`/api/paiements-sous-traitant/`, data);
+      // Ajouter l'avenantId si c'est un avenant
+      const payload = {
+        ...data,
+        contrat: data.contratId,
+        avenant: data.avenantId || null,
+      };
+
+      const res = await axios.post(`/api/paiements-sous-traitant/`, payload);
       setPaiements((prev) => [...prev, res.data]);
     } catch (error) {
       alert("Erreur lors de la création du paiement.");
@@ -649,6 +683,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
             <TableHead>
               <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 1)" }}>
                 <TableCell sx={{ color: "white" }}>Mois</TableCell>
+                <TableCell sx={{ color: "white" }}>Type</TableCell>
                 <TableCell sx={{ color: "white" }}>
                   Montant facture du mois
                 </TableCell>
@@ -668,10 +703,28 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
             </TableHead>
             <TableBody>
               {grilleComplete.map((ligne, idx) => (
-                <TableRow key={`${ligne.annee}-${ligne.mois}`}>
+                <TableRow
+                  key={`${ligne.annee}-${ligne.mois}-${
+                    ligne.type || "contrat"
+                  }`}
+                >
                   <TableCell>{`${String(ligne.mois).padStart(2, "0")}/${
                     ligne.annee
                   }`}</TableCell>
+                  <TableCell>
+                    <Typography
+                      sx={{
+                        color:
+                          ligne.type === "CONTRAT"
+                            ? "rgba(27, 120, 188, 1)"
+                            : "rgb(0, 168, 42)",
+                        fontWeight: 600,
+                        fontSize: "0.8rem",
+                      }}
+                    >
+                      {ligne.type || "CONTRAT"}
+                    </Typography>
+                  </TableCell>
                   {ligne.paiement ? (
                     <>
                       <TableCell>
@@ -809,7 +862,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                     </>
                   ) : (
                     <>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={8} align="center">
                         <Button
                           variant="outlined"
                           size="small"
@@ -819,6 +872,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                               mois: ligne.mois,
                               annee: ligne.annee,
                               contratId: ligne.contratId,
+                              avenantId: ligne.avenantId || null,
+                              type: ligne.type,
                             });
                             setOpenAjouterPaiementModal(true);
                           }}
@@ -833,7 +888,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
               {/* Ligne de total des écarts du mois */}
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   align="right"
                   sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)" }}
                 >
@@ -920,6 +975,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         contratId={moisAnneeAjouter.contratId}
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
+        avenantId={moisAnneeAjouter.avenantId}
+        type={moisAnneeAjouter.type}
         onSubmit={handleAjouterPaiement}
       />
       <DateEnvoiModal

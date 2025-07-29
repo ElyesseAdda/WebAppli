@@ -4833,8 +4833,12 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = ContratSousTraitance.objects.all()
         chantier_id = self.request.query_params.get('chantier_id')
+        sous_traitant_id = self.request.query_params.get('sous_traitant')
+        
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
+        if sous_traitant_id:
+            queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
 
     @action(detail=True, methods=['get', 'post'])
@@ -5272,10 +5276,16 @@ class PaiementSousTraitantViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         chantier_id = self.request.query_params.get('chantier')
         sous_traitant_id = self.request.query_params.get('sous_traitant')
+        contrat_id = self.request.query_params.get('contrat')
+        avenant_id = self.request.query_params.get('avenant')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        if contrat_id:
+            queryset = queryset.filter(contrat_id=contrat_id)
+        if avenant_id:
+            queryset = queryset.filter(avenant_id=avenant_id)
         return queryset
 
 class RecapFinancierChantierAPIView(APIView):
