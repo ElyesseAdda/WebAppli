@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport Mensuel des Agents - {{ month_name }} {{ year }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            font-size: 12px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+        
+        .header p {
+            margin: 5px 0;
+            color: #666;
+        }
+        
+        .agent-section {
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+        
+        .agent-title {
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #1976d2;
+        }
+        
+        .agent-title h2 {
+            margin: 0;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .agent-info {
+            margin-bottom: 10px;
+            font-size: 11px;
+            color: #666;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .hours-table th, .hours-table td {
+            text-align: center;
+        }
+        
+        .events-table th, .events-table td {
+            text-align: left;
+        }
+        
+        .total-row {
+            background-color: #e3f2fd;
+            font-weight: bold;
+        }
+        
+        .event-absence {
+            background-color: #ffebee;
+        }
+        
+        .event-conge {
+            background-color: #e8f5e8;
+        }
+        
+        .no-data {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        .overtime-details {
+            font-size: 10px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        @media print {
+            .agent-section {
+                page-break-inside: avoid;
+            }
+            
+            .header {
+                position: running(header);
+            }
+            
+            @page {
+                margin: 2cm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Rapport Mensuel des Agents</h1>
+        <p><strong>{{ month_name }} {{ year }}</strong></p>
+        <p>Période : {{ start_date|date:"d/m/Y" }} au {{ end_date|date:"d/m/Y" }}</p>
+        <p>Généré le : {{ "now"|date:"d/m/Y à H:i" }}</p>
+    </div>
+
+    {% for agent_data in agents_data %}
+    <div class="agent-section">
+        <div class="agent-title">
+            <h2>{{ agent_data.agent.name }} {{ agent_data.agent.surname }}</h2>
+        </div>
+
+        <!-- Tableau des heures -->
+        <h3>Résumé des heures</h3>
+        <table class="hours-table">
+            <thead>
+                <tr>
+                    <th>Type d'heures</th>
+                    <th>Nombre d'heures</th>
+                    <th>Détails</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Heures normales</td>
+                    <td>{{ agent_data.monthly_hours.normal_hours|floatformat:2 }} h</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Heures majorées</td>
+                    <td>{{ agent_data.monthly_hours.overtime_hours|floatformat:2 }} h</td>
+                    <td>
+                        {% if agent_data.overtime_details %}
+                            {% for detail in agent_data.overtime_details %}
+                                {% if detail.type == 'samedi' %}
+                                    Samedi {{ detail.date|date:"d/m/Y" }} {{ detail.hours|floatformat:2 }}h<br>
+                                {% elif detail.type == 'dimanche' %}
+                                    Dimanche {{ detail.date|date:"d/m/Y" }} {{ detail.hours|floatformat:2 }}h<br>
+                                {% elif detail.type == 'ferie' %}
+                                    {{ detail.date|date:"d/m/Y" }} (férié) {{ detail.hours|floatformat:2 }}h<br>
+                                {% else %}
+                                    {{ detail.date|date:"d/m/Y" }} ({{ detail.type }}) {{ detail.hours|floatformat:2 }}h<br>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr class="total-row">
+                    <td><strong>Total</strong></td>
+                    <td><strong>{{ agent_data.monthly_hours.total_hours|floatformat:2 }} h</strong></td>
+                    <td>-</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Tableau des événements -->
+        <h3>Événements du mois</h3>
+        {% if agent_data.events %}
+        <table class="events-table">
+            <thead>
+                <tr>
+                    <th>Période</th>
+                    <th>Type</th>
+                    <th>Sous-type</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in agent_data.events %}
+                <tr class="{% if event.type == 'absence' %}event-absence{% elif event.type == 'conge' %}event-conge{% endif %}">
+                    <td>
+                        {% if event.start_date == event.end_date %}
+                            {{ event.start_date|date:"d/m/Y" }}
+                        {% else %}
+                            Du {{ event.start_date|date:"d/m/Y" }} au {{ event.end_date|date:"d/m/Y" }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if event.type == 'absence' %}
+                            Absence
+                        {% elif event.type == 'conge' %}
+                            Congé
+                        {% else %}
+                            {{ event.type|title }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if event.subtype == 'justifiee' %}
+                            Justifiée
+                        {% elif event.subtype == 'injustifiee' %}
+                            Injustifiée
+                        {% elif event.subtype == 'maladie' %}
+                            Maladie
+                        {% elif event.subtype == 'rtt' %}
+                            RTT
+                        {% elif event.subtype == 'paye' %}
+                            Payé
+                        {% elif event.subtype == 'sans_solde' %}
+                            Sans solde
+                        {% elif event.subtype == 'parental' %}
+                            Parental
+                        {% elif event.subtype == 'maternite' %}
+                            Maternité
+                        {% elif event.subtype == 'paternite' %}
+                            Paternité
+                        {% else %}
+                            {{ event.subtype|title }}
+                        {% endif %}
+                    </td>
+                    <td>{{ event.description }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">Aucun événement enregistré pour ce mois</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</body>
+</html> 

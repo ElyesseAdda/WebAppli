@@ -5806,3 +5806,225 @@ def schedule_monthly_summary(request):
         chantier_map[chantier_id]['jours_majoration'].extend(data['jours_majoration'])
 
     return Response(list(chantier_map.values()), status=200)
+
+def preview_monthly_agents_report(request):
+    """
+    Vue pour prévisualiser le rapport mensuel des agents
+    Utilise exactement les mêmes données que LaborCostsSummary.js
+    """
+    from calendar import monthrange
+    from datetime import date, timedelta as td
+    import holidays
+    
+    month = int(request.GET.get('month'))
+    year = int(request.GET.get('year'))
+    
+    # Calculer les dates de début et fin du mois
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+    
+    # Utiliser l'endpoint schedule_monthly_summary pour récupérer les données
+    month_str = f"{year}-{month:02d}"
+    
+    # Simuler l'appel à l'endpoint schedule_monthly_summary
+    from django.test import RequestFactory
+    
+    # Créer une requête simulée
+    factory = RequestFactory()
+    mock_request = factory.get(f'/api/schedule/monthly_summary/?month={month_str}')
+    
+    # Appeler la fonction schedule_monthly_summary
+    response = schedule_monthly_summary(mock_request)
+    schedule_data = response.data
+    
+    # Récupérer tous les agents
+    agents = Agent.objects.all()
+    
+    # Récupérer les événements du mois
+    events = Event.objects.filter(
+        start_date__gte=start_date,
+        start_date__lte=end_date
+    ).order_by('start_date')
+    
+    # Agrégation par agent (même logique que LaborCostsSummary.js)
+    agent_map = {}
+    
+    # Traiter les données de schedule_monthly_summary
+    for chantier_data in schedule_data:
+        for detail in chantier_data['details']:
+            agent_id = detail['agent_id']
+            
+            if agent_id not in agent_map:
+                agent_map[agent_id] = {
+                    'agent_id': agent_id,
+                    'agent_nom': detail['agent_nom'],
+                    'heures_normal': 0,
+                    'heures_samedi': 0,
+                    'heures_dimanche': 0,
+                    'heures_ferie': 0,
+                    'montant_normal': 0,
+                    'montant_samedi': 0,
+                    'montant_dimanche': 0,
+                    'montant_ferie': 0,
+                    'jours_majoration': [],
+                    'chantiers': set()
+                }
+            
+            agent_map[agent_id]['heures_normal'] += detail['heures_normal']
+            agent_map[agent_id]['heures_samedi'] += detail['heures_samedi']
+            agent_map[agent_id]['heures_dimanche'] += detail['heures_dimanche']
+            agent_map[agent_id]['heures_ferie'] += detail['heures_ferie']
+            agent_map[agent_id]['montant_normal'] += detail['montant_normal']
+            agent_map[agent_id]['montant_samedi'] += detail['montant_samedi']
+            agent_map[agent_id]['montant_dimanche'] += detail['montant_dimanche']
+            agent_map[agent_id]['montant_ferie'] += detail['montant_ferie']
+            agent_map[agent_id]['jours_majoration'].extend(detail['jours_majoration'])
+            agent_map[agent_id]['chantiers'].add(detail['chantier_nom'])
+    
+    agents_data = []
+    
+    for agent in agents:
+        agent_data = agent_map.get(agent.id, {
+            'heures_normal': 0,
+            'heures_samedi': 0,
+            'heures_dimanche': 0,
+            'heures_ferie': 0,
+            'montant_normal': 0,
+            'montant_samedi': 0,
+            'montant_dimanche': 0,
+            'montant_ferie': 0,
+            'jours_majoration': [],
+            'chantiers': set()
+        })
+        
+        # Regrouper les jours majorés par date et type
+        overtime_grouped = {}
+        for jour in agent_data['jours_majoration']:
+            key = (jour['date'], jour['type'])
+            if key not in overtime_grouped:
+                overtime_grouped[key] = {
+                    'date': jour['date'],
+                    'type': jour['type'],
+                    'hours': 0,
+                    'taux': jour['taux']
+                }
+            overtime_grouped[key]['hours'] += jour['hours']
+        
+        # Convertir en liste et trier par date
+        overtime_details = []
+        for key, value in overtime_grouped.items():
+            # S'assurer que la date est bien un objet date pour le template
+            try:
+                if isinstance(value['date'], str):
+                    value['date'] = date.fromisoformat(value['date'])
+                overtime_details.append(value)
+            except:
+                pass
+        
+        overtime_details.sort(key=lambda x: x['date'])
+        
+        # Récupérer les événements pour cet agent
+        agent_events = events.filter(agent=agent)
+        
+        # Regrouper les événements consécutifs
+        events_data = []
+        if agent_events:
+            current_event = None
+            for event in agent_events:
+                if current_event is None:
+                    current_event = {
+                        'start_date': event.start_date,
+                        'end_date': event.end_date,
+                        'type': event.event_type,
+                        'subtype': event.subtype or '',
+                        'hours_modified': event.hours_modified,
+                        'description': f"{event.event_type} - {event.subtype or 'N/A'}"
+                    }
+                elif (event.event_type == current_event['type'] and 
+                      event.subtype == current_event['subtype'] and
+                      event.start_date == current_event['end_date'] + timedelta(days=1)):
+                    # Événement consécutif, étendre la période
+                    current_event['end_date'] = event.end_date
+                else:
+                    # Nouvel événement, sauvegarder le précédent
+                    events_data.append(current_event)
+                    current_event = {
+                        'start_date': event.start_date,
+                        'end_date': event.end_date,
+                        'type': event.event_type,
+                        'subtype': event.subtype or '',
+                        'hours_modified': event.hours_modified,
+                        'description': f"{event.event_type} - {event.subtype or 'N/A'}"
+                    }
+            
+            # Ajouter le dernier événement
+            if current_event:
+                events_data.append(current_event)
+        
+        # Calculer les totaux
+        total_normal_hours = agent_data['heures_normal']
+        total_overtime_hours = agent_data['heures_samedi'] + agent_data['heures_dimanche'] + agent_data['heures_ferie']
+        total_hours = total_normal_hours + total_overtime_hours
+        
+        # Préparer les données pour le template
+        agents_data.append({
+            'agent': agent,
+            'monthly_hours': {
+                'normal_hours': total_normal_hours,
+                'overtime_hours': total_overtime_hours,
+                'total_hours': total_hours
+            },
+            'overtime_details': overtime_details,
+            'events': events_data
+        })
+    
+    # Préparer le contexte pour le template
+    month_names = [
+        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ]
+    
+    context = {
+        'month_name': month_names[month - 1],
+        'year': year,
+        'start_date': start_date,
+        'end_date': end_date,
+        'agents_data': agents_data
+    }
+    
+    return render(request, 'DocumentAgent/monthly_agents_report.html', context)
+
+
+def generate_monthly_agents_pdf(request):
+    """
+    Vue pour générer le PDF du rapport mensuel des agents
+    """
+    month = int(request.GET.get('month'))
+    year = int(request.GET.get('year'))
+    
+    # URL de prévisualisation
+    preview_url = request.build_absolute_uri(f"/api/preview-monthly-agents-report/?month={month}&year={year}")
+    
+    # Chemin vers le script Puppeteer
+    node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_monthly_agents_pdf.js'
+    pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\monthly_agents_report.pdf'
+    
+    command = ['node', node_script_path, preview_url, pdf_path]
+    
+    try:
+        subprocess.run(command, check=True)
+        
+        with open(pdf_path, 'rb') as pdf_file:
+            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="rapport_mensuel_agents_{month}_{year}.pdf"'
+            return response
+            
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        return JsonResponse({'error': error_msg}, status=500)

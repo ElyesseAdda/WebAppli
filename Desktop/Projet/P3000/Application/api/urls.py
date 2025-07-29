@@ -70,6 +70,8 @@ from .views import (
     FournisseurViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
+    preview_monthly_agents_report,
+    generate_monthly_agents_pdf,
 )
 
 
@@ -200,4 +202,6 @@ urlpatterns = [
 urlpatterns += [
     path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
+    path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
+    path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
 ]
