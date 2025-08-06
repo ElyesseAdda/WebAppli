@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
-    PaiementFournisseurMateriel, Fournisseur
+    PaiementFournisseurMateriel, Fournisseur, Banque
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -22,6 +22,11 @@ class DevisLigneSerializer(serializers.ModelSerializer):
     def get_total_ht(self, obj):
         return obj.quantite * obj.prix_unitaire
 
+
+class BanqueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Banque
+        fields = ['id', 'nom_banque']
 
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:

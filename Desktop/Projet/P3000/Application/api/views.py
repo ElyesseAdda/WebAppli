@@ -15,7 +15,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
     TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -23,7 +23,8 @@ from .models import (
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
-    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel# Changé BonCommandeLigne en LigneBonCommande
+    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel,
+    Banque,
 )
 import logging
 from django.db import transaction, models
@@ -2052,6 +2053,8 @@ def get_chantier_details(request, chantier_id):
             'id': chantier.id,
             'nom': chantier.chantier_name,
             'statut': chantier.state_chantier,
+            'montant_ht': chantier.montant_ht,
+            'montant_ttc': chantier.montant_ttc,
             'dates': {
                 'debut': chantier.date_debut,
                 'fin': chantier.date_fin
@@ -4268,6 +4271,10 @@ def update_situation(request, pk):
             situation.montant_reel_ht = request.data['montant_reel_ht']
         if 'date_paiement_reel' in request.data:
             situation.date_paiement_reel = request.data['date_paiement_reel']
+        if 'numero_cp' in request.data:
+            situation.numero_cp = request.data['numero_cp']
+        if 'banque' in request.data:
+            situation.banque_id = request.data['banque']
             
         situation.save()
         return Response(SituationSerializer(situation).data)
@@ -5632,6 +5639,10 @@ class PaiementFournisseurMaterielAPIView(APIView):
 def fournisseurs(request):
     fournisseurs = Fournisseur.objects.all().values('id', 'name_fournisseur', 'Fournisseur_mail', 'description_fournisseur')
     return Response(list(fournisseurs))
+
+class BanqueViewSet(viewsets.ModelViewSet):
+    queryset = Banque.objects.all()
+    serializer_class = BanqueSerializer
 
 class FournisseurViewSet(viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all()

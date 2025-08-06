@@ -499,6 +499,17 @@ class DevisLigne(models.Model):
 
     
 
+class Banque(models.Model):
+    nom_banque = models.CharField(max_length=100, unique=True, verbose_name="Nom de la banque")
+    
+    class Meta:
+        verbose_name = "Banque"
+        verbose_name_plural = "Banques"
+        ordering = ['nom_banque']
+    
+    def __str__(self):
+        return self.nom_banque
+
 class Situation(models.Model):
     STATUT_CHOICES = [
         ('brouillon', 'Brouillon'),
@@ -510,6 +521,8 @@ class Situation(models.Model):
     devis = models.ForeignKey('Devis', on_delete=models.CASCADE)
     numero = models.IntegerField(default=1,null=True,blank=True)
     numero_situation = models.CharField(max_length=50)
+    numero_cp = models.CharField(max_length=50, blank=True, null=True, verbose_name="Numéro CP")
+    banque = models.ForeignKey('Banque', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Banque de paiement")
     mois = models.IntegerField()
     annee = models.IntegerField()
     date_creation = models.DateTimeField(auto_now_add=True)

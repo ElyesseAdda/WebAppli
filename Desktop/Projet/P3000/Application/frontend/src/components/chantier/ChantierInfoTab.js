@@ -22,6 +22,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import React, { useEffect, useRef } from "react";
 import {
+  FaChartBar,
   FaCheckCircle,
   FaChevronDown,
   FaClipboardList,
@@ -562,6 +563,24 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         >
           Afficher tableau suivi
         </Button>
+        <Button
+          variant="contained"
+          startIcon={<FaChartBar />}
+          onClick={() => {
+            window.open(`/TableauFacturation`, "_blank");
+          }}
+          sx={{
+            backgroundColor: "#9c27b0",
+            color: "white",
+            boxShadow: 3,
+            "&:hover": {
+              backgroundColor: "#7b1fa2",
+              boxShadow: 5,
+            },
+          }}
+        >
+          Tableau facturation
+        </Button>
       </Box>
 
       {/* Modal de sous-traitance */}
@@ -962,10 +981,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       fontFamily: "Roboto, Arial, sans-serif",
                     }}
                   >
-                    Marché :{" "}
-                    {formatMontant(
-                      chantierData?.montant_marche || chantierData?.montant_ht
-                    )}
+                    Marché : {formatMontant(chantierData?.montant_ht)}
                   </Typography>
                 </Box>
               </Box>

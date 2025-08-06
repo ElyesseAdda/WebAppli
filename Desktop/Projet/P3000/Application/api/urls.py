@@ -68,6 +68,7 @@ from .views import (
     PaiementFournisseurMaterielAPIView,
     fournisseurs,
     FournisseurViewSet,
+    BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
     preview_monthly_agents_report,
@@ -98,6 +99,7 @@ router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'sous-traitants', SousTraitantViewSet)
 router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
 router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
+router.register(r'banques', BanqueViewSet)
 router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
 router.register(r'fournisseurs', FournisseurViewSet)
 

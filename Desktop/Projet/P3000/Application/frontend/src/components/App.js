@@ -8,6 +8,7 @@ import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";
 import CalendrierAgentContainer from "./CalendrierAgentContainer";
+import TableauFacturation from "./chantier/TableauFacturation";
 import ChantierDetail from "./ChantierDetail";
 import ChantierInfo from "./ChantierInfo";
 import ChantiersDashboard from "./ChantiersDashboard";
@@ -77,6 +78,10 @@ function App() {
             <Route path="/ModificationBC/:id" element={<BonCommandeModif />} />
             <Route path="/ListeSituation" element={<ListeSituation />} />
             <Route path="/TableauSuivi" element={<TableauSuivi />} />
+            <Route
+              path="/TableauFacturation"
+              element={<TableauFacturation />}
+            />
             <Route path="/ChantierTabs" element={<ChantierTabs />} />
             <Route
               path="/paiements-sous-traitant/:chantierId/:sousTraitantId"
