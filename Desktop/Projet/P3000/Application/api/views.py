@@ -4818,6 +4818,24 @@ class SousTraitantViewSet(viewsets.ModelViewSet):
     queryset = SousTraitant.objects.all()
     serializer_class = SousTraitantSerializer
 
+    def get_queryset(self):
+        queryset = SousTraitant.objects.all()
+        chantier_id = self.request.query_params.get('chantier')
+        
+        if chantier_id:
+            # Récupérer tous les sous-traitants qui ont des contrats avec ce chantier
+            sous_traitants_avec_contrats = SousTraitant.objects.filter(
+                contrats__chantier_id=chantier_id
+            ).distinct()
+            
+            # Récupérer tous les sous-traitants existants
+            tous_sous_traitants = SousTraitant.objects.all()
+            
+            # Combiner les deux listes sans doublons
+            queryset = (sous_traitants_avec_contrats | tous_sous_traitants).distinct()
+        
+        return queryset
+
     @action(detail=False, methods=['get'])
     def by_chantier(self, request):
         chantier_id = request.query_params.get('chantier_id')
@@ -4827,9 +4845,8 @@ class SousTraitantViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        sous_traitants = SousTraitant.objects.filter(
-            contrats__chantier_id=chantier_id
-        ).distinct()
+        # Récupérer tous les sous-traitants
+        sous_traitants = SousTraitant.objects.all()
         serializer = self.get_serializer(sous_traitants, many=True)
         return Response(serializer.data)
 
