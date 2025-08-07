@@ -233,9 +233,7 @@ const RecapSection = ({
                     handleToggleDetails(cat);
                   }}
                   sx={{ ml: 1 }}
-                >
-                  {openDetails[cat] ? <RemoveIcon /> : <AddIcon />}
-                </IconButton>
+                ></IconButton>
               </ListItem>
             ))}
           </List>

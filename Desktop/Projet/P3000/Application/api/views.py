@@ -538,18 +538,19 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
             instance = self.get_object()
             data = request.data.copy()
             
-            # Conversion des valeurs en décimal
-            cout_main_oeuvre = Decimal(str(data.get('cout_main_oeuvre', 0)))
-            cout_materiel = Decimal(str(data.get('cout_materiel', 0)))
-            taux_fixe = Decimal(str(data.get('taux_fixe', 0)))
-            marge = Decimal(str(data.get('marge', 0)))
+            # Conversion des valeurs en décimal avec quantize pour 2 décimales
+            TWOPLACES = Decimal('0.01')
+            cout_main_oeuvre = Decimal(str(data.get('cout_main_oeuvre', 0))).quantize(TWOPLACES)
+            cout_materiel = Decimal(str(data.get('cout_materiel', 0))).quantize(TWOPLACES)
+            taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
+            marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
 
-            # Calcul du prix
-            base = cout_main_oeuvre + cout_materiel
-            montant_taux_fixe = base * (taux_fixe / Decimal('100'))
-            sous_total = base + montant_taux_fixe
-            montant_marge = sous_total * (marge / Decimal('100'))
-            prix = sous_total + montant_marge
+            # Calcul du prix avec arrondis intermédiaires
+            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+            prix = (sous_total + montant_marge).quantize(TWOPLACES)
 
             # Ajout du prix calculé aux données
             data['prix'] = prix
@@ -2788,17 +2789,60 @@ def update_taux_fixe(request):
         nouveau_taux = request.data.get('taux_fixe')
         if nouveau_taux is None:
             return Response({'error': 'Taux fixe manquant'}, status=400)
+        
+        # Convertir en Decimal avec 2 décimales
+        TWOPLACES = Decimal('0.01')
+        nouveau_taux_decimal = Decimal(str(nouveau_taux)).quantize(TWOPLACES)
             
+        # Mettre à jour le paramètre global
         taux_fixe, created = Parametres.objects.get_or_create(
             code='TAUX_FIXE',
-            defaults={'valeur': nouveau_taux, 'description': 'Taux fixe par défaut'}
+            defaults={'valeur': nouveau_taux_decimal, 'description': 'Taux fixe par défaut'}
         )
         
         if not created:
-            taux_fixe.valeur = nouveau_taux
+            taux_fixe.valeur = nouveau_taux_decimal
             taux_fixe.save()
+        
+        # Mettre à jour toutes les lignes de détail existantes
+        lignes_details = LigneDetail.objects.all()
+        lignes_mises_a_jour = []
+        
+        for ligne in lignes_details:
+            # Mettre à jour le taux fixe
+            ligne.taux_fixe = nouveau_taux_decimal
             
-        return Response({'valeur': taux_fixe.valeur})
+            # Recalculer le prix avec le nouveau taux fixe
+            cout_main_oeuvre = Decimal(str(ligne.cout_main_oeuvre)).quantize(TWOPLACES)
+            cout_materiel = Decimal(str(ligne.cout_materiel)).quantize(TWOPLACES)
+            marge = Decimal(str(ligne.marge)).quantize(TWOPLACES)
+            
+            # Calcul du prix avec arrondis intermédiaires
+            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+            montant_taux_fixe = (base * (nouveau_taux_decimal / Decimal('100'))).quantize(TWOPLACES)
+            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+            prix = (sous_total + montant_marge).quantize(TWOPLACES)
+            
+            ligne.prix = prix
+            ligne.save()
+            
+            # Ajouter à la liste des lignes mises à jour
+            lignes_mises_a_jour.append({
+                'id': ligne.id,
+                'description': ligne.description,
+                'taux_fixe': float(ligne.taux_fixe),
+                'prix': float(ligne.prix),
+                'cout_main_oeuvre': float(ligne.cout_main_oeuvre),
+                'cout_materiel': float(ligne.cout_materiel),
+                'marge': float(ligne.marge)
+            })
+            
+        return Response({
+            'valeur': float(taux_fixe.valeur),
+            'lignes_mises_a_jour': lignes_mises_a_jour,
+            'nombre_lignes_mises_a_jour': len(lignes_mises_a_jour)
+        })
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 

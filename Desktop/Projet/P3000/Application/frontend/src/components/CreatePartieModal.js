@@ -19,7 +19,12 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import UpdateTauxFixeModal from "./UpdateTauxFixeModal";
 
-const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
+const CreatePartieModal = ({
+  open,
+  handleClose,
+  onPartieCreated,
+  onTauxFixeUpdated,
+}) => {
   const [creationType, setCreationType] = useState("partie"); // "partie", "sousPartie", "ligne"
   const [partieTitle, setPartieTitle] = useState("");
   const [selectedPartieId, setSelectedPartieId] = useState("");
@@ -371,8 +376,8 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
     ]);
   };
 
-  const handleTauxFixeUpdated = (nouveauTaux) => {
-    // Mettre à jour le taux fixe dans toutes les lignes existantes
+  const handleTauxFixeUpdated = (nouveauTaux, lignesMisesAJour) => {
+    // Mettre à jour le taux fixe dans toutes les lignes existantes du modal
     const newSousParties = sousParties.map((sousPartie) => ({
       ...sousPartie,
       lignes: sousPartie.lignes.map((ligne) => ({
@@ -381,6 +386,11 @@ const CreatePartieModal = ({ open, handleClose, onPartieCreated }) => {
       })),
     }));
     setSousParties(newSousParties);
+
+    // Informer le composant parent (CreationDevis) de la mise à jour
+    if (onTauxFixeUpdated) {
+      onTauxFixeUpdated(nouveauTaux, lignesMisesAJour);
+    }
   };
 
   return (

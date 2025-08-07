@@ -38,6 +38,17 @@ import SpecialLineModal from "./SpecialLineModal";
 import SpecialLinesOverview from "./SpecialLinesOverview";
 
 const CreationDevis = () => {
+  // Fonction utilitaire pour formater les prix avec gestion des valeurs null/undefined
+  const formatPrice = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return "0.00";
+    }
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) {
+      return "0.00";
+    }
+    return numValue.toFixed(2);
+  };
   const [pendingChantierData, setPendingChantierData] = useState({
     client: {
       name: "",
@@ -75,6 +86,9 @@ const CreationDevis = () => {
   const [filteredLignesDetails, setFilteredLignesDetails] = useState([]);
   const [quantities, setQuantities] = useState({});
   const [customPrices, setCustomPrices] = useState({});
+  const [customCouts, setCustomCouts] = useState({});
+  const [customTauxFixes, setCustomTauxFixes] = useState({});
+  const [customMarges, setCustomMarges] = useState({});
   const [showCreationPartie, setShowCreationPartie] = useState(false); // État pour afficher ou masquer CreationPartie.js
   const [isPreviewed, setIsPreviewed] = useState(false); // Nouvel état pour savoir si le devis a été prévisualisé
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
@@ -256,6 +270,136 @@ const CreationDevis = () => {
     setCustomPrices({ ...customPrices, [ligneId]: price });
   };
 
+  // Nouvelles fonctions pour gérer les coûts détaillés
+  const handleCoutMainOeuvreChange = (ligneId, cout) => {
+    setIsPreviewed(false);
+    setCustomCouts({
+      ...customCouts,
+      [ligneId]: { ...customCouts[ligneId], main_oeuvre: cout },
+    });
+  };
+
+  const handleCoutMaterielChange = (ligneId, cout) => {
+    setIsPreviewed(false);
+    setCustomCouts({
+      ...customCouts,
+      [ligneId]: { ...customCouts[ligneId], materiel: cout },
+    });
+  };
+
+  const handleTauxFixeChange = (ligneId, taux) => {
+    setIsPreviewed(false);
+    setCustomTauxFixes({ ...customTauxFixes, [ligneId]: taux });
+  };
+
+  const handleMargeChange = (ligneId, marge) => {
+    setIsPreviewed(false);
+    setCustomMarges({ ...customMarges, [ligneId]: marge });
+  };
+
+  // Fonction pour réinitialiser les coûts personnalisés d'une ligne
+  const resetCustomCosts = (ligneId) => {
+    setIsPreviewed(false);
+    setCustomCouts((prev) => {
+      const newCouts = { ...prev };
+      delete newCouts[ligneId];
+      return newCouts;
+    });
+    setCustomTauxFixes((prev) => {
+      const newTaux = { ...prev };
+      delete newTaux[ligneId];
+      return newTaux;
+    });
+    setCustomMarges((prev) => {
+      const newMarges = { ...prev };
+      delete newMarges[ligneId];
+      return newMarges;
+    });
+    setCustomPrices((prev) => {
+      const newPrices = { ...prev };
+      delete newPrices[ligneId];
+      return newPrices;
+    });
+  };
+
+  // Fonction pour sauvegarder les modifications des coûts dans la base de données
+  const saveCustomCostsToDatabase = async (ligneId) => {
+    try {
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      if (!ligne) {
+        console.error("Ligne non trouvée:", ligneId);
+        return;
+      }
+
+      // S'assurer que tous les nombres sont bien formatés avec 2 décimales
+      const coutMainOeuvre = parseFloat(
+        customCouts[ligneId]?.main_oeuvre || ligne.cout_main_oeuvre || 0
+      ).toFixed(2);
+      const coutMateriel = parseFloat(
+        customCouts[ligneId]?.materiel || ligne.cout_materiel || 0
+      ).toFixed(2);
+      const tauxFixe = parseFloat(
+        customTauxFixes[ligneId] || ligne.taux_fixe || 0
+      ).toFixed(2);
+      const marge = parseFloat(
+        customMarges[ligneId] || ligne.marge || 0
+      ).toFixed(2);
+
+      const updateData = {
+        cout_main_oeuvre: coutMainOeuvre,
+        cout_materiel: coutMateriel,
+        taux_fixe: tauxFixe,
+        marge: marge,
+        sous_partie: ligne.sous_partie,
+      };
+
+      console.log("Mise à jour de la ligne:", ligneId, updateData);
+
+      const response = await axios.put(
+        `/api/ligne-details/${ligneId}/`,
+        updateData
+      );
+
+      // Mettre à jour les données locales avec les nouvelles valeurs
+      setAllLignesDetails((prev) =>
+        prev.map((l) => (l.id === ligneId ? response.data : l))
+      );
+      setFilteredLignesDetails((prev) =>
+        prev.map((l) => (l.id === ligneId ? response.data : l))
+      );
+
+      // Nettoyer les coûts personnalisés après sauvegarde
+      resetCustomCosts(ligneId);
+
+      console.log("Ligne mise à jour avec succès:", response.data);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde des coûts:", error);
+      alert("Erreur lors de la sauvegarde des coûts dans la base de données");
+    }
+  };
+
+  // Fonction pour calculer le prix automatiquement basé sur les coûts
+  const calculatePriceFromCosts = (ligne) => {
+    const coutMainOeuvre = parseFloat(
+      customCouts[ligne.id]?.main_oeuvre || ligne.cout_main_oeuvre || 0
+    );
+    const coutMateriel = parseFloat(
+      customCouts[ligne.id]?.materiel || ligne.cout_materiel || 0
+    );
+    const tauxFixe = parseFloat(
+      customTauxFixes[ligne.id] || ligne.taux_fixe || 0
+    );
+    const marge = parseFloat(customMarges[ligne.id] || ligne.marge || 0);
+
+    const base = parseFloat((coutMainOeuvre + coutMateriel).toFixed(2));
+    const montantTauxFixe = parseFloat((base * (tauxFixe / 100)).toFixed(2));
+    const sousTotal = parseFloat((base + montantTauxFixe).toFixed(2));
+    const montantMarge = parseFloat((sousTotal * (marge / 100)).toFixed(2));
+    const prixCalcule = parseFloat((sousTotal + montantMarge).toFixed(2));
+
+    return prixCalcule.toFixed(2);
+  };
+
   // Fonction pour prévisualiser le devis
   const handlePreviewDevis = () => {
     const devisData = {
@@ -388,9 +532,17 @@ const CreationDevis = () => {
       const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
       if (ligne) {
         const quantity = quantities[ligneId] || 0;
+        // Utiliser les coûts personnalisés s'ils existent, sinon les coûts par défaut
         const cout_main_oeuvre =
-          quantity * parseFloat(ligne.cout_main_oeuvre || 0);
-        const cout_materiel = quantity * parseFloat(ligne.cout_materiel || 0);
+          quantity *
+          parseFloat(
+            customCouts[ligneId]?.main_oeuvre || ligne.cout_main_oeuvre || 0
+          );
+        const cout_materiel =
+          quantity *
+          parseFloat(
+            customCouts[ligneId]?.materiel || ligne.cout_materiel || 0
+          );
 
         totals.cout_estime_main_oeuvre += cout_main_oeuvre;
         totals.cout_estime_materiel += cout_materiel;
@@ -401,16 +553,33 @@ const CreationDevis = () => {
     const coutsDirects =
       totals.cout_estime_main_oeuvre + totals.cout_estime_materiel;
 
-    // 3. Calculer le montant du taux fixe (20% des coûts directs)
-    const tauxFixe = 20;
-    const montantTauxFixe = coutsDirects * (tauxFixe / 100);
+    // 3. Calculer le montant du taux fixe (utiliser le taux fixe global ou la moyenne des taux personnalisés)
+    let tauxFixeGlobal = tauxFixe || 20;
+
+    // Si des taux personnalisés existent, calculer la moyenne pondérée
+    let totalTauxFixe = 0;
+    let totalQuantite = 0;
+    selectedLignes.forEach((ligneId) => {
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      if (ligne) {
+        const quantity = quantities[ligneId] || 0;
+        const tauxPersonnalise =
+          customTauxFixes[ligneId] || ligne.taux_fixe || tauxFixeGlobal;
+        totalTauxFixe += tauxPersonnalise * quantity;
+        totalQuantite += quantity;
+      }
+    });
+
+    const tauxFixeMoyen =
+      totalQuantite > 0 ? totalTauxFixe / totalQuantite : tauxFixeGlobal;
+    const montantTauxFixe = coutsDirects * (tauxFixeMoyen / 100);
     totals.cout_avec_taux_fixe = coutsDirects + montantTauxFixe;
 
     // 4. Obtenir le total HT
     const grandTotal = calculateGrandTotal(specialLines);
     const totalHT = parseFloat(grandTotal.totalHT);
 
-    // 5. Calculer la marge (20% du coût avec taux fixe)
+    // 5. Calculer la marge
     totals.marge_estimee = totalHT - totals.cout_avec_taux_fixe;
 
     // 6. Arrondir tous les résultats à 2 décimales
@@ -773,7 +942,13 @@ const CreationDevis = () => {
   // Ajoutez cette fonction de calcul du prix total
   const calculateTotalPrice = (ligne) => {
     const quantity = quantities[ligne.id] || 0;
-    const price = customPrices[ligne.id] || ligne.prix;
+    // Utiliser le prix calculé automatiquement si les coûts ont été modifiés
+    const price =
+      customCouts[ligne.id] ||
+      customTauxFixes[ligne.id] ||
+      customMarges[ligne.id]
+        ? calculatePriceFromCosts(ligne)
+        : customPrices[ligne.id] || ligne.prix;
     let total = quantity * price;
 
     // Ajouter les lignes spéciales pour cette ligne
@@ -787,7 +962,7 @@ const CreationDevis = () => {
       });
     }
 
-    return total;
+    return parseFloat(formatPrice(total));
   };
 
   const calculateTotalWithSpecialLines = (baseTotal, specialLines) => {
@@ -1353,6 +1528,61 @@ const CreationDevis = () => {
     fetchTauxFixe();
   }, []);
 
+  // Fonction pour gérer la mise à jour du taux fixe
+  const handleTauxFixeUpdated = (nouveauTaux, lignesMisesAJour) => {
+    // Mettre à jour le taux fixe local
+    setTauxFixe(nouveauTaux);
+
+    // Mettre à jour les lignes de détail avec les nouvelles données
+    if (lignesMisesAJour && lignesMisesAJour.length > 0) {
+      setAllLignesDetails((prev) =>
+        prev.map((ligne) => {
+          const ligneMiseAJour = lignesMisesAJour.find(
+            (l) => l.id === ligne.id
+          );
+          if (ligneMiseAJour) {
+            return {
+              ...ligne,
+              taux_fixe: ligneMiseAJour.taux_fixe,
+              prix: ligneMiseAJour.prix,
+              cout_main_oeuvre: ligneMiseAJour.cout_main_oeuvre,
+              cout_materiel: ligneMiseAJour.cout_materiel,
+              marge: ligneMiseAJour.marge,
+            };
+          }
+          return ligne;
+        })
+      );
+
+      setFilteredLignesDetails((prev) =>
+        prev.map((ligne) => {
+          const ligneMiseAJour = lignesMisesAJour.find(
+            (l) => l.id === ligne.id
+          );
+          if (ligneMiseAJour) {
+            return {
+              ...ligne,
+              taux_fixe: ligneMiseAJour.taux_fixe,
+              prix: ligneMiseAJour.prix,
+              cout_main_oeuvre: ligneMiseAJour.cout_main_oeuvre,
+              cout_materiel: ligneMiseAJour.cout_materiel,
+              marge: ligneMiseAJour.marge,
+            };
+          }
+          return ligne;
+        })
+      );
+
+      // Nettoyer les coûts personnalisés car ils sont maintenant obsolètes
+      setCustomCouts({});
+      setCustomTauxFixes({});
+      setCustomMarges({});
+
+      console.log(`✅ Taux fixe mis à jour : ${nouveauTaux}%`);
+      console.log(`📊 ${lignesMisesAJour.length} lignes mises à jour`);
+    }
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -1624,7 +1854,7 @@ const CreationDevis = () => {
                     </span>
                   }
                   onClick={(e) => {
-                    // Empêcher la sélection/désélection si on clique sur les contrôles
+                    // Empêcher la sélection/déséselection si on clique sur les contrôles
                     if (
                       e.target.closest("button") ||
                       e.target.closest(".MuiCheckbox-root")
@@ -1632,11 +1862,13 @@ const CreationDevis = () => {
                       e.stopPropagation();
                       return;
                     }
-                    // Si on clique sur le titre ou la zone générale, gérer la sélection
+                    // Si on clique sur le titre ou la zone générale (pas sur l'icône d'expansion)
+                    // et que la sous-partie n'est pas déjà sélectionnée, la cocher automatiquement
                     if (
                       !e.target.closest(
                         ".MuiAccordionSummary-expandIconWrapper"
-                      )
+                      ) &&
+                      !selectedSousParties.includes(sousPartie.id)
                     ) {
                       handleSousPartiesChange(sousPartie.id);
                     }
@@ -1887,40 +2119,386 @@ const CreationDevis = () => {
                               <Typography>{ligne.description}</Typography>
                             </Box>
                           </Box>
-                          <Typography
-                            variant="subtitle1"
+                          <Box
                             sx={{
-                              minWidth: "80px",
-                              textAlign: "right",
-                              fontWeight: "bold",
-                              color: "primary.main",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "flex-end",
                             }}
                           >
-                            {calculateTotalPrice(ligne)} €
-                          </Typography>
+                            <Typography
+                              variant="subtitle1"
+                              sx={{
+                                fontWeight: "bold",
+                                color: "primary.main",
+                              }}
+                            >
+                              {formatPrice(calculateTotalPrice(ligne))} €
+                            </Typography>
+                            {selectedLignes.includes(ligne.id) &&
+                              quantities[ligne.id] > 0 && (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: "0.7rem",
+                                  }}
+                                >
+                                  {quantities[ligne.id]} ×{" "}
+                                  {formatPrice(
+                                    customCouts[ligne.id] ||
+                                      customTauxFixes[ligne.id] ||
+                                      customMarges[ligne.id]
+                                      ? calculatePriceFromCosts(ligne)
+                                      : customPrices[ligne.id] || ligne.prix
+                                  )}
+                                  €
+                                </Typography>
+                              )}
+                          </Box>
                         </Box>
                         {selectedLignes.includes(ligne.id) && (
-                          <Box sx={{ display: "flex", gap: 2, ml: 4 }}>
-                            <TextField
-                              id={`quantity-${ligne.id}`}
-                              label="Quantité"
-                              type="number"
-                              value={quantities[ligne.id] || ""}
-                              onChange={(e) =>
-                                handleQuantityChange(ligne.id, e.target.value)
-                              }
-                              size="small"
-                            />
-                            <TextField
-                              label="Prix Unitaire"
-                              type="number"
-                              step="0.10"
-                              value={customPrices[ligne.id] || ligne.prix}
-                              onChange={(e) =>
-                                handlePriceChange(ligne.id, e.target.value)
-                              }
-                              size="small"
-                            />
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 2,
+                              ml: 4,
+                            }}
+                          >
+                            {/* Ligne 1: Quantité et Prix */}
+                            <Box sx={{ display: "flex", gap: 2 }}>
+                              <TextField
+                                id={`quantity-${ligne.id}`}
+                                label="Quantité"
+                                type="number"
+                                value={quantities[ligne.id] || ""}
+                                onChange={(e) =>
+                                  handleQuantityChange(ligne.id, e.target.value)
+                                }
+                                size="small"
+                              />
+                              <TextField
+                                label="Prix Unitaire"
+                                type="number"
+                                step="0.10"
+                                value={formatPrice(
+                                  customCouts[ligne.id] ||
+                                    customTauxFixes[ligne.id] ||
+                                    customMarges[ligne.id]
+                                    ? calculatePriceFromCosts(ligne)
+                                    : customPrices[ligne.id] || ligne.prix
+                                )}
+                                onChange={(e) =>
+                                  handlePriceChange(ligne.id, e.target.value)
+                                }
+                                size="small"
+                                InputProps={{
+                                  readOnly:
+                                    customCouts[ligne.id] ||
+                                    customTauxFixes[ligne.id] ||
+                                    customMarges[ligne.id],
+                                  style: {
+                                    backgroundColor:
+                                      customCouts[ligne.id] ||
+                                      customTauxFixes[ligne.id] ||
+                                      customMarges[ligne.id]
+                                        ? "#f5f5f5"
+                                        : "white",
+                                  },
+                                }}
+                                helperText={
+                                  customCouts[ligne.id] ||
+                                  customTauxFixes[ligne.id] ||
+                                  customMarges[ligne.id]
+                                    ? "Prix calculé automatiquement"
+                                    : ""
+                                }
+                              />
+                            </Box>
+
+                            {/* Ligne 2: Coûts détaillés */}
+                            <Box
+                              sx={{
+                                display: "flex",
+                                gap: 2,
+                                alignItems: "center",
+                              }}
+                            >
+                              <Box sx={{ display: "flex", gap: 2, flex: 1 }}>
+                                <TextField
+                                  label="Main d'œuvre"
+                                  type="number"
+                                  step="0.01"
+                                  value={
+                                    customCouts[ligne.id]?.main_oeuvre ||
+                                    ligne.cout_main_oeuvre ||
+                                    ""
+                                  }
+                                  onChange={(e) =>
+                                    handleCoutMainOeuvreChange(
+                                      ligne.id,
+                                      e.target.value
+                                    )
+                                  }
+                                  size="small"
+                                  InputProps={{
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        €
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                                <TextField
+                                  label="Matériel"
+                                  type="number"
+                                  step="0.01"
+                                  value={
+                                    customCouts[ligne.id]?.materiel ||
+                                    ligne.cout_materiel ||
+                                    ""
+                                  }
+                                  onChange={(e) =>
+                                    handleCoutMaterielChange(
+                                      ligne.id,
+                                      e.target.value
+                                    )
+                                  }
+                                  size="small"
+                                  InputProps={{
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        €
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                                <TextField
+                                  label="Taux fixe"
+                                  type="number"
+                                  step="0.01"
+                                  value={
+                                    customTauxFixes[ligne.id] ||
+                                    ligne.taux_fixe ||
+                                    ""
+                                  }
+                                  onChange={(e) =>
+                                    handleTauxFixeChange(
+                                      ligne.id,
+                                      e.target.value
+                                    )
+                                  }
+                                  size="small"
+                                  InputProps={{
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        %
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                                <TextField
+                                  label="Marge"
+                                  type="number"
+                                  step="0.01"
+                                  value={
+                                    customMarges[ligne.id] || ligne.marge || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleMargeChange(ligne.id, e.target.value)
+                                  }
+                                  size="small"
+                                  InputProps={{
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        %
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                />
+                              </Box>
+
+                              {/* Indicateur de modification non sauvegardée */}
+                              {(customCouts[ligne.id] ||
+                                customTauxFixes[ligne.id] ||
+                                customMarges[ligne.id]) && (
+                                <Box
+                                  sx={{
+                                    backgroundColor: "warning.main",
+                                    color: "white",
+                                    px: 1,
+                                    py: 0.5,
+                                    borderRadius: 1,
+                                    fontSize: "0.7rem",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  Modifié
+                                </Box>
+                              )}
+                            </Box>
+
+                            {/* Affichage du détail du calcul */}
+                            {(customCouts[ligne.id] ||
+                              customTauxFixes[ligne.id] ||
+                              customMarges[ligne.id]) && (
+                              <Box
+                                sx={{
+                                  backgroundColor: "#f8f9fa",
+                                  p: 1,
+                                  borderRadius: 1,
+                                  fontSize: "0.8rem",
+                                  color: "text.secondary",
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    mb: 1,
+                                  }}
+                                >
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ fontWeight: "bold" }}
+                                  >
+                                    Détail du calcul automatique
+                                  </Typography>
+                                  <Box sx={{ display: "flex", gap: 1 }}>
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      color="primary"
+                                      onClick={() =>
+                                        saveCustomCostsToDatabase(ligne.id)
+                                      }
+                                      sx={{
+                                        fontSize: "0.7rem",
+                                        py: 0.5,
+                                        px: 1,
+                                        minWidth: "auto",
+                                      }}
+                                    >
+                                      Sauvegarder
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => resetCustomCosts(ligne.id)}
+                                      sx={{
+                                        fontSize: "0.7rem",
+                                        py: 0.5,
+                                        px: 1,
+                                        minWidth: "auto",
+                                      }}
+                                    >
+                                      Réinitialiser
+                                    </Button>
+                                  </Box>
+                                </Box>
+                                <Typography variant="caption" display="block">
+                                  Détail du calcul:
+                                  {parseFloat(
+                                    customCouts[ligne.id]?.main_oeuvre ||
+                                      ligne.cout_main_oeuvre ||
+                                      0
+                                  ).toFixed(2)}
+                                  € (MO) +
+                                  {parseFloat(
+                                    customCouts[ligne.id]?.materiel ||
+                                      ligne.cout_materiel ||
+                                      0
+                                  ).toFixed(2)}
+                                  € (Mat) =
+                                  {parseFloat(
+                                    (
+                                      parseFloat(
+                                        customCouts[ligne.id]?.main_oeuvre ||
+                                          ligne.cout_main_oeuvre ||
+                                          0
+                                      ) +
+                                      parseFloat(
+                                        customCouts[ligne.id]?.materiel ||
+                                          ligne.cout_materiel ||
+                                          0
+                                      )
+                                    ).toFixed(2)
+                                  ).toFixed(2)}
+                                  € (Base)
+                                </Typography>
+                                <Typography variant="caption" display="block">
+                                  +{" "}
+                                  {(
+                                    (parseFloat(
+                                      customTauxFixes[ligne.id] ||
+                                        ligne.taux_fixe ||
+                                        0
+                                    ) *
+                                      (parseFloat(
+                                        customCouts[ligne.id]?.main_oeuvre ||
+                                          ligne.cout_main_oeuvre ||
+                                          0
+                                      ) +
+                                        parseFloat(
+                                          customCouts[ligne.id]?.materiel ||
+                                            ligne.cout_materiel ||
+                                            0
+                                        ))) /
+                                    100
+                                  ).toFixed(2)}
+                                  € (Taux fixe{" "}
+                                  {parseFloat(
+                                    customTauxFixes[ligne.id] ||
+                                      ligne.taux_fixe ||
+                                      0
+                                  ).toFixed(2)}
+                                  %)
+                                </Typography>
+                                <Typography variant="caption" display="block">
+                                  +{" "}
+                                  {(
+                                    (parseFloat(
+                                      customMarges[ligne.id] || ligne.marge || 0
+                                    ) *
+                                      (parseFloat(
+                                        customCouts[ligne.id]?.main_oeuvre ||
+                                          ligne.cout_main_oeuvre ||
+                                          0
+                                      ) +
+                                        parseFloat(
+                                          customCouts[ligne.id]?.materiel ||
+                                            ligne.cout_materiel ||
+                                            0
+                                        ) +
+                                        (parseFloat(
+                                          customTauxFixes[ligne.id] ||
+                                            ligne.taux_fixe ||
+                                            0
+                                        ) *
+                                          (parseFloat(
+                                            customCouts[ligne.id]
+                                              ?.main_oeuvre ||
+                                              ligne.cout_main_oeuvre ||
+                                              0
+                                          ) +
+                                            parseFloat(
+                                              customCouts[ligne.id]?.materiel ||
+                                                ligne.cout_materiel ||
+                                                0
+                                            ))) /
+                                          100)) /
+                                    100
+                                  ).toFixed(2)}
+                                  € (Marge{" "}
+                                  {parseFloat(
+                                    customMarges[ligne.id] || ligne.marge || 0
+                                  ).toFixed(2)}
+                                  %)
+                                </Typography>
+                              </Box>
+                            )}
                           </Box>
                         )}
                       </CardContent>
@@ -2042,6 +2620,55 @@ const CreationDevis = () => {
                 );
               })()}
             </Box>
+
+            {/* Informations sur les prix */}
+            <Box
+              sx={{
+                borderTop: "1px solid",
+                borderColor: "primary.main",
+                pt: 1,
+                mt: 1,
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block",
+                  mb: 0.5,
+                }}
+              >
+                Prix calculés automatiquement:{" "}
+                {
+                  selectedLignes.filter(
+                    (ligneId) =>
+                      customCouts[ligneId] ||
+                      customTauxFixes[ligneId] ||
+                      customMarges[ligneId]
+                  ).length
+                }{" "}
+                ligne(s)
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block",
+                }}
+              >
+                Prix manuels:{" "}
+                {
+                  selectedLignes.filter(
+                    (ligneId) =>
+                      customPrices[ligneId] &&
+                      !customCouts[ligneId] &&
+                      !customTauxFixes[ligneId] &&
+                      !customMarges[ligneId]
+                  ).length
+                }{" "}
+                ligne(s)
+              </Typography>
+            </Box>
           </Box>
 
           <DevisModal
@@ -2060,6 +2687,7 @@ const CreationDevis = () => {
               setEditData(null);
             }}
             onPartieCreated={handlePartieCreated}
+            onTauxFixeUpdated={handleTauxFixeUpdated}
             editData={editData}
           />
         </Paper>
