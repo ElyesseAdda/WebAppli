@@ -115,7 +115,7 @@ const ListeDevis = () => {
 
   const fetchDevis = async () => {
     try {
-      const response = await axios.get("/api/list-devis/");
+      const response = await axios.get("/api/devisa/");
       setDevis(response.data);
       setFilteredDevis(response.data);
     } catch (error) {

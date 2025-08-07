@@ -73,6 +73,7 @@ from .views import (
     schedule_monthly_summary,
     preview_monthly_agents_report,
     generate_monthly_agents_pdf,
+    AppelOffresViewSet,
 )
 
 
@@ -102,6 +103,7 @@ router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
 router.register(r'banques', BanqueViewSet)
 router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
 router.register(r'fournisseurs', FournisseurViewSet)
+router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur

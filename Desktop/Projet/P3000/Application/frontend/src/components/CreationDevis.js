@@ -662,9 +662,11 @@ const CreationDevis = () => {
       const totalTTC = grandTotal.totalTTC;
       let clientId, societeId, chantierIdToUse;
 
-      // Vérification des données requises
-      if (selectedChantierId === -1) {
-        console.log("Nouveau chantier détecté, vérification des données...");
+      // Gestion du client et de la société (pour nouveaux chantiers ET devis de chantier)
+      if (selectedChantierId === -1 || devisType === "chantier") {
+        console.log(
+          "Nouveau chantier ou devis de chantier détecté, vérification des données..."
+        );
         if (
           !pendingChantierData.client ||
           !pendingChantierData.societe ||
@@ -713,30 +715,32 @@ const CreationDevis = () => {
           societeId = societeResponse.data.id;
         }
 
-        // 3. Créer le chantier avec les coûts estimés
-        const updatedChantierData = {
-          chantier_name: pendingChantierData.chantier.chantier_name.trim(),
-          ville: pendingChantierData.chantier.ville,
-          rue: pendingChantierData.chantier.rue,
-          code_postal: pendingChantierData.chantier.code_postal.toString(),
-          montant_ht: totalHT,
-          montant_ttc: totalTTC,
-          societe: societeId,
-          client: clientId,
-          // Ajout des coûts estimés
-          cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
-          cout_estime_materiel: totals.cout_estime_materiel,
-          cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
-          marge_estimee: totals.marge_estimee,
-          // Ajout du taux fixe récupéré
-          taux_fixe: tauxFixe !== null ? tauxFixe : 20, // Valeur par défaut si non chargé
-        };
+        // 3. Créer le chantier seulement si ce n'est PAS un devis de chantier
+        if (devisType !== "chantier") {
+          const updatedChantierData = {
+            chantier_name: pendingChantierData.chantier.chantier_name.trim(),
+            ville: pendingChantierData.chantier.ville,
+            rue: pendingChantierData.chantier.rue,
+            code_postal: pendingChantierData.chantier.code_postal.toString(),
+            montant_ht: totalHT,
+            montant_ttc: totalTTC,
+            societe: societeId,
+            client: clientId,
+            // Ajout des coûts estimés
+            cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
+            cout_estime_materiel: totals.cout_estime_materiel,
+            cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
+            marge_estimee: totals.marge_estimee,
+            // Ajout du taux fixe récupéré
+            taux_fixe: tauxFixe !== null ? tauxFixe : 20, // Valeur par défaut si non chargé
+          };
 
-        const chantierResponse = await axios.post(
-          "/api/chantier/",
-          updatedChantierData
-        );
-        chantierIdToUse = chantierResponse.data.id;
+          const chantierResponse = await axios.post(
+            "/api/chantier/",
+            updatedChantierData
+          );
+          chantierIdToUse = chantierResponse.data.id;
+        }
       } else {
         console.log("Utilisation d'un chantier existant:", selectedChantierId);
         chantierIdToUse = selectedChantierId;
@@ -744,15 +748,12 @@ const CreationDevis = () => {
           `/api/chantier/${selectedChantierId}/`
         );
         societeId = chantierResponse.data.societe;
-
-        // On ne met plus à jour les montants du chantier existant
-        // Suppression du patch sur le chantier
       }
 
       // Préparation des données du devis avec les coûts estimés
       const devisData = {
         numero: devisModalData.numero,
-        chantier: chantierIdToUse,
+        chantier: devisType !== "chantier" ? chantierIdToUse : null,
         client: [clientId],
         price_ht: parseFloat(totalHT.toFixed(2)),
         price_ttc: parseFloat(totalTTC.toFixed(2)),
@@ -765,6 +766,15 @@ const CreationDevis = () => {
         cout_estime_materiel: totals.cout_estime_materiel,
         cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
         marge_estimee: totals.marge_estimee,
+        // Données pour l'appel d'offres si c'est un devis de chantier
+        ...(devisType === "chantier" && {
+          chantier_name: pendingChantierData.chantier.chantier_name.trim(),
+          societe_id: societeId,
+          ville: pendingChantierData.chantier.ville,
+          rue: pendingChantierData.chantier.rue,
+          code_postal: pendingChantierData.chantier.code_postal.toString(),
+          taux_fixe: tauxFixe !== null ? tauxFixe : 20,
+        }),
         lignes: selectedLignes.map((ligneId) => {
           const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
           return {

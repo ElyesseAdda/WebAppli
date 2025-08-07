@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
-    PaiementFournisseurMateriel, Fournisseur, Banque
+    PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -901,4 +901,17 @@ class PaiementFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaiementFournisseurMateriel
         fields = ['id', 'chantier', 'fournisseur', 'mois', 'annee', 'montant', 'date_saisie']
+
+class AppelOffresSerializer(serializers.ModelSerializer):
+    societe = SocieteSerializer(read_only=True)
+    societe_id = serializers.PrimaryKeyRelatedField(
+        queryset=Societe.objects.all(),
+        source='societe',
+        write_only=True
+    )
+    
+    class Meta:
+        model = AppelOffres
+        fields = '__all__'
+        read_only_fields = ('date_debut', 'date_validation') 
         

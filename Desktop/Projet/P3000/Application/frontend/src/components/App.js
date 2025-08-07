@@ -16,6 +16,7 @@ import ChantierTabs from "./ChantierTabs";
 import CreationDevis from "./CreationDevis";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
+import GestionAppelsOffres from "./GestionAppelsOffres";
 import Layout from "./Layout";
 import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
@@ -61,6 +62,10 @@ function App() {
               element={<ChantiersDashboard />}
             />
             <Route path="/CreationDevis" element={<CreationDevis />} />
+            <Route
+              path="/GestionAppelsOffres"
+              element={<GestionAppelsOffres />}
+            />
             <Route path="/ListePartie" element={<ListePartiesSousParties />} />
             <Route path="/ListeDevis" element={<ListeDevis />} />
             <Route path="/CreationPartie" element={<CreationPartie />} />

@@ -147,16 +147,119 @@ class Chantier(models.Model):
 
     def save(self, *args, **kwargs):
         # Si c'est une création et que le taux fixe n'est pas déjà renseigné
-        if self._state.adding and not self.taux_fixe:
-            annee = self.date_debut.year if self.date_debut else None
-            if annee:
-                try:
-                    taux_fixe_obj = TauxFixe.objects.get(annee=annee)
+        if not self.pk and self.taux_fixe is None:
+            try:
+                taux_fixe_obj = TauxFixe.objects.first()
+                if taux_fixe_obj:
                     self.taux_fixe = taux_fixe_obj.valeur
-                except TauxFixe.DoesNotExist:
-                    # Tu peux lever une exception ou mettre une valeur par défaut
-                    self.taux_fixe = 18.65
+            except:
+                self.taux_fixe = 20  # Valeur par défaut
         super().save(*args, **kwargs)
+
+
+class AppelOffres(models.Model):
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente validation'),
+        ('refuse', 'Refusé'),
+        ('valide', 'Validé'),
+    ]
+    
+    # Champs identiques au modèle Chantier
+    chantier_name = models.CharField(max_length=255, unique=True)
+    societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='appels_offres', null=True)
+    date_debut = models.DateField(auto_now_add=True)
+    date_fin = models.DateField(auto_now_add=False, null=True)
+    montant_ttc = models.FloatField(null=True)
+    montant_ht = models.FloatField(null=True)
+    state_chantier = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
+    ville = models.CharField(max_length=100)
+    rue = models.CharField(max_length=100)
+    code_postal = models.CharField(
+        max_length=10,
+        validators=[RegexValidator(
+            regex=r'^\d{5}$',
+            message='Le code postal doit être exactement 5 chiffres.',
+            code='invalid_codepostal'
+        )],
+        blank=True,
+        null=True
+    )
+    
+    # Champs pour les coûts réels
+    cout_materiel = models.FloatField(null=True)
+    cout_main_oeuvre = models.FloatField(null=True)
+    cout_sous_traitance = models.FloatField(null=True)
+    
+    # Champs pour les coûts estimés
+    cout_estime_main_oeuvre = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Coût estimé main d'œuvre"
+    )
+    cout_estime_materiel = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Coût estimé matériel"
+    )
+    marge_estimee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Marge estimée"
+    )
+    
+    description = models.TextField(null=True)
+    taux_fixe = models.FloatField(null=True, blank=True)
+    
+    # Champs spécifiques aux appels d'offres
+    statut = models.CharField(
+        max_length=20, 
+        choices=STATUT_CHOICES, 
+        default='en_attente',
+        verbose_name="Statut de l'appel d'offres"
+    )
+    
+    date_validation = models.DateField(null=True, blank=True)
+    raison_refus = models.TextField(blank=True, null=True)
+    
+    def __str__(self):
+        return f"Appel d'offres {self.id} - {self.chantier_name}"
+    
+    def transformer_en_chantier(self):
+        """Transforme l'appel d'offres en chantier"""
+        if self.statut != 'valide':
+            raise ValueError("Seuls les appels d'offres validés peuvent être transformés en chantier")
+        
+        # Créer le chantier avec tous les champs de l'appel d'offres
+        chantier = Chantier.objects.create(
+            chantier_name=self.chantier_name,
+            societe=self.societe,
+            date_debut=self.date_debut,
+            date_fin=self.date_fin,
+            montant_ttc=self.montant_ttc,
+            montant_ht=self.montant_ht,
+            state_chantier='En Cours',
+            ville=self.ville,
+            rue=self.rue,
+            code_postal=self.code_postal,
+            cout_materiel=self.cout_materiel,
+            cout_main_oeuvre=self.cout_main_oeuvre,
+            cout_sous_traitance=self.cout_sous_traitance,
+            cout_estime_main_oeuvre=self.cout_estime_main_oeuvre,
+            cout_estime_materiel=self.cout_estime_materiel,
+            marge_estimee=self.marge_estimee,
+            description=self.description,
+            taux_fixe=self.taux_fixe,
+        )
+        
+        # Mettre à jour le statut de l'appel d'offres
+        self.statut = 'valide'
+        self.date_validation = timezone.now().date()
+        self.save()
+        
+        return chantier
 
 class Agent(models.Model):
     name = models.CharField(max_length=25)
@@ -354,7 +457,8 @@ class Devis(models.Model):
     nature_travaux = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
+    appel_offres = models.ForeignKey(AppelOffres, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     client = models.ManyToManyField(Client, related_name='devis', blank=True)
     lignes_speciales = models.JSONField(default=dict, blank=True)
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ

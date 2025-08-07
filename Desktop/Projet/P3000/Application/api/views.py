@@ -15,9 +15,9 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
-    TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
@@ -1495,20 +1495,70 @@ def create_chantier_from_devis(request):
 @api_view(['POST'])
 def create_devis(request):
     try:
+        # Log pour déboguer les données reçues
+        print("Données reçues du frontend:", request.data)
+        
         with transaction.atomic():
-            # Création du devis de base
-            devis_data = {
-                'numero': request.data['numero'],
-                'chantier_id': request.data['chantier'],
-                'price_ht': Decimal(str(request.data['price_ht'])),
-                'price_ttc': Decimal(str(request.data['price_ttc'])),
-                'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
-                'nature_travaux': request.data.get('nature_travaux', ''),
-                'description': request.data.get('description', ''),
-                'status': 'En attente',
-                'devis_chantier': request.data.get('devis_chantier', False),
-                'lignes_speciales': request.data.get('lignes_speciales', {})
-            }
+            devis_chantier = request.data.get('devis_chantier', False)
+            
+            # Si c'est un devis de chantier, créer un appel d'offres au lieu d'un chantier
+            if devis_chantier:
+                # Récupérer l'instance de la société
+                societe_id = request.data.get('societe_id')
+                try:
+                    societe = Societe.objects.get(id=societe_id)
+                except Societe.DoesNotExist:
+                    return Response({'error': f'Société avec ID {societe_id} non trouvée'}, status=400)
+                
+                # Créer l'appel d'offres
+                appel_offres_data = {
+                    'chantier_name': request.data.get('chantier_name', ''),
+                    'societe': societe,
+                    'montant_ht': Decimal(str(request.data['price_ht'])),
+                    'montant_ttc': Decimal(str(request.data['price_ttc'])),
+                    'ville': request.data.get('ville', ''),
+                    'rue': request.data.get('rue', ''),
+                    'code_postal': request.data.get('code_postal', ''),
+                    'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
+                    'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0'))),
+                    'marge_estimee': Decimal(str(request.data.get('marge_estimee', '0'))),
+                    'taux_fixe': Decimal(str(request.data.get('taux_fixe', '20'))),
+                    'description': request.data.get('description', ''),
+                    'statut': 'en_attente'
+                }
+                
+                # Log pour déboguer les données de l'appel d'offres
+                print("Données de l'appel d'offres:", appel_offres_data)
+                
+                appel_offres = AppelOffres.objects.create(**appel_offres_data)
+                
+                # Création du devis lié à l'appel d'offres
+                devis_data = {
+                    'numero': request.data['numero'],
+                    'appel_offres': appel_offres,
+                    'price_ht': Decimal(str(request.data['price_ht'])),
+                    'price_ttc': Decimal(str(request.data['price_ttc'])),
+                    'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
+                    'nature_travaux': request.data.get('nature_travaux', ''),
+                    'description': request.data.get('description', ''),
+                    'status': 'En attente',
+                    'devis_chantier': True,
+                    'lignes_speciales': request.data.get('lignes_speciales', {})
+                }
+            else:
+                # Création du devis de base (comme avant)
+                devis_data = {
+                    'numero': request.data['numero'],
+                    'chantier_id': request.data['chantier'],
+                    'price_ht': Decimal(str(request.data['price_ht'])),
+                    'price_ttc': Decimal(str(request.data['price_ttc'])),
+                    'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
+                    'nature_travaux': request.data.get('nature_travaux', ''),
+                    'description': request.data.get('description', ''),
+                    'status': 'En attente',
+                    'devis_chantier': False,
+                    'lignes_speciales': request.data.get('lignes_speciales', {})
+                }
             
             devis = Devis.objects.create(**devis_data)
             
@@ -1664,9 +1714,18 @@ def get_chantier_relations(request):
 def preview_saved_devis(request, devis_id):
     try:
         devis = get_object_or_404(Devis, id=devis_id)
-        chantier = devis.chantier
-        societe = chantier.societe
-        client = societe.client_name
+        
+        # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
+        if devis.devis_chantier and devis.appel_offres:
+            # Cas d'un devis de chantier (appel d'offres)
+            chantier = devis.appel_offres
+            societe = devis.appel_offres.societe
+            client = societe.client_name if societe else None
+        else:
+            # Cas d'un devis normal
+            chantier = devis.chantier
+            societe = chantier.societe if chantier else None
+            client = societe.client_name if societe else None
 
         total_ht = Decimal('0')
         parties_data = []
@@ -6129,3 +6188,73 @@ def generate_monthly_agents_pdf(request):
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
         return JsonResponse({'error': error_msg}, status=500)
+
+
+class AppelOffresViewSet(viewsets.ModelViewSet):
+    queryset = AppelOffres.objects.all()
+    serializer_class = AppelOffresSerializer
+    
+    def get_queryset(self):
+        """Filtrer selon les paramètres"""
+        queryset = AppelOffres.objects.all()
+        
+        # Filtre par statut
+        statut = self.request.query_params.get('statut', None)
+        if statut:
+            queryset = queryset.filter(statut=statut)
+        
+        return queryset.order_by('-date_debut')
+    
+    @action(detail=True, methods=['post'])
+    def transformer_en_chantier(self, request, pk=None):
+        """Transforme un appel d'offres validé en chantier"""
+        try:
+            appel_offres = self.get_object()
+            
+            if appel_offres.statut != 'valide':
+                return Response({
+                    'error': 'Seuls les appels d\'offres validés peuvent être transformés en chantier'
+                }, status=400)
+            
+            chantier = appel_offres.transformer_en_chantier()
+            
+            # Mettre à jour le devis pour qu'il pointe vers le nouveau chantier
+            devis = appel_offres.devis.first()
+            if devis:
+                devis.chantier = chantier
+                devis.appel_offres = None
+                devis.save()
+            
+            return Response({
+                'message': 'Appel d\'offres transformé en chantier avec succès',
+                'chantier_id': chantier.id,
+                'chantier_name': chantier.chantier_name
+            })
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+    
+    @action(detail=True, methods=['post'])
+    def mettre_a_jour_statut(self, request, pk=None):
+        """Met à jour le statut d'un appel d'offres"""
+        try:
+            appel_offres = self.get_object()
+            nouveau_statut = request.data.get('statut')
+            raison_refus = request.data.get('raison_refus', '')
+            
+            if nouveau_statut not in dict(AppelOffres.STATUT_CHOICES):
+                return Response({'error': 'Statut invalide'}, status=400)
+            
+            appel_offres.statut = nouveau_statut
+            
+            if nouveau_statut == 'refuse':
+                appel_offres.raison_refus = raison_refus
+            elif nouveau_statut == 'valide':
+                appel_offres.date_validation = timezone.now().date()
+            
+            appel_offres.save()
+            
+            return Response({'message': 'Statut mis à jour avec succès'})
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
