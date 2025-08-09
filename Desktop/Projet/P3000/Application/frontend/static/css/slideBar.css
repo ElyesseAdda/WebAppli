@@ -1,98 +1,310 @@
+/* Palette et variables utiles */
+:root {
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #1f2937; /* gray-800 */
+  --sidebar-muted: #6b7280; /* gray-500 */
+  --sidebar-border: #e5e7eb; /* gray-200 */
+  --sidebar-hover: #f3f4f6; /* gray-100 */
+  --sidebar-active-bg: #eaf2ff; /* primary tint */
+  --primary: #1976d2; /* MUI primary */
+}
+
+/* Reset minimal pour éviter les styles globaux parasites */
 body {
-  margin: 0.5px;
+  margin: 0;
 }
 html {
-  margin: 0px;
+  margin: 0;
 }
+
 .slide-bar {
-  height: 100%;
   position: fixed;
   left: 0;
   top: 0;
-  max-width: 250px;
-  padding: 20px;
-  border: solid 2px rgb(46, 46, 46);
-  border-radius: 10px;
-  background-color: white;
-  box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
-  transition: transform 0.5s ease;
+  height: 100vh;
+  width: 280px;
+  padding: 16px 14px;
+  background: var(--sidebar-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-right: 1px solid var(--sidebar-border);
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
   transform: translateX(0);
-}
-
-.slide-bar.visible {
-  transform: translateX(
-    0
-  ); /* Visible quand la classe 'visible' est appliquée */
+  transition: transform 0.35s ease;
+  z-index: 900;
+  overflow-y: auto;
 }
 
 .slide-bar.hidden {
-  transform: translateX(
-    -100%
-  ); /* Caché quand la classe 'hidden' est appliquée */
+  transform: translateX(-100%);
 }
 
-ul {
+.slide-bar .logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 20px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.slide-bar .logo {
+  width: 140px;
+  height: auto;
+  object-fit: contain;
+}
+
+.slide-bar .link-container {
+  padding-top: 12px;
+  min-height: 400px;
+}
+
+.slide-bar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* S'assure que chaque item occupe toute la largeur disponible */
+.slide-bar .link-container > ul > li {
   display: block;
-  list-style-type: disc;
-  margin-block-start: 0em;
-  margin-block-end: 1em;
-  margin-inline-start: 0px;
-  margin-inline-end: 0px;
-  padding-inline-start: 0px;
-  list-style-position: outside;
+  width: 100%;
 }
-.logo {
-  height: 100px;
-  width: 150px;
+/* Séparateur horizontal entre sections (items de premier niveau) */
+.slide-bar .link-container > ul > li:not(:last-child)::after {
+  content: "";
+  display: block;
+  height: 1px;
+  background: var(--sidebar-border);
+  margin: 8px 0 10px 0;
 }
-.logo-container {
-  margin-bottom: 80px;
-  padding-left: 15px;
-}
-
-.link-container a {
-  color: black;
-  font-family: "Roboto", sans-serif;
-  padding-left: 15px;
-  line-height: 2.5;
+/* S'assure que le li n'impose pas une largeur intrinsèque à son premier enfant */
+.slide-bar .link-container > ul > li > * {
+  display: flex;
+  width: 100%;
 }
 
-.link-container svg {
-  color: rgba(27, 120, 188, 1);
-  width: 70px;
-  height: 50px;
-  position: relative;
-  top: 15px;
-  right: 15px;
-}
-.link-container {
-  min-height: 500px;
+/* Lien simple (Accueil, Drive) */
+.slide-bar .link-container > ul > li > a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px; /* aligné sur les catégories */
+  min-height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  border-radius: 10px;
+  font-family: "Roboto", Arial, sans-serif;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
-.burger-button {
-  background-color: transparent;
+.slide-bar .link-container > ul > li > a:hover {
+  background: var(--sidebar-hover);
+}
+
+.slide-bar .link-container > ul > li > a.active {
+  background: var(--sidebar-active-bg);
+  color: var(--primary);
+}
+
+/* Icônes */
+.slide-bar .link-container svg {
+  width: 24px;
+  height: 24px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Boutons catégorie (accordéon) */
+.slide-bar .category-button {
+  min-width: 251px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: 44px;
+  margin: 4px 0;
+  background: transparent;
   border: none;
-  font-size: 24px;
+  border-radius: 10px;
+  color: var(--sidebar-text);
+  font-family: "Roboto", Arial, sans-serif;
+  font-weight: 600;
   cursor: pointer;
-  position: absolute;
-  top: 0px;
-  left: 250px;
-  z-index: 1000;
-  color: white;
+  transition: background 0.2s ease;
+  box-sizing: border-box;
 }
 
+/* Spécificité accrue: garantit 100% de largeur sur le bouton catégorie */
+.slide-bar .link-container > ul > li > .category-button {
+  display: flex;
+  width: 100%;
+}
+
+.slide-bar .category-button:hover {
+  background: var(--sidebar-hover);
+}
+
+.slide-bar .category-button.active {
+  background: var(--sidebar-active-bg);
+  color: var(--primary);
+}
+
+.slide-bar .category-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1; /* Laisse le texte prendre plus de place */
+  min-width: 0; /* permet l'ellipse */
+}
+
+.slide-bar .category-right {
+  color: var(--sidebar-muted);
+  display: flex;
+  align-items: center;
+  display: none; /* icône accordéon supprimée */
+}
+
+/* Forcer le libellé sur une seule ligne avec ellipse si trop long */
+.slide-bar .category-left {
+  white-space: nowrap;
+}
+.slide-bar .category-left span,
+.slide-bar .category-left .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sous-menu */
+.slide-bar .submenu {
+  margin: 4px 0 8px 0;
+  padding-left: 0;
+  border-left: none; /* pleine largeur sans recul visuel */
+}
+
+/* Sous-groupes dans Document */
+.slide-bar .submenu-group {
+  margin: 8px 0 10px 0;
+}
+.slide-bar .submenu-group-label {
+  color: var(--sidebar-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 8px 0 4px 0;
+}
+.slide-bar .submenu-group-links {
+  margin: 0;
+  padding: 0; /* aligné avec pleine largeur */
+  list-style: none;
+}
+
+.slide-bar .submenu li a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  min-height: 40px;
+  margin: 2px 0;
+  color: #374151; /* gray-700 */
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Indicateur gauche (petit rectangle horizontal arrondi) */
+.slide-bar .submenu li a::before {
+  content: "";
+  width: 4px; /* vertical */
+  height: 18px; /* barre plus haute */
+  background: var(--sidebar-border);
+  border-radius: 9999px;
+  flex-shrink: 0;
+  transition: background 0.2s ease, height 0.2s ease;
+}
+
+.slide-bar .submenu li a.active::before {
+  background: var(--primary);
+}
+
+.slide-bar .submenu li a:hover {
+  background: var(--sidebar-hover);
+  color: var(--primary);
+}
+
+.slide-bar .submenu li a.active {
+  background: var(--sidebar-active-bg);
+  color: var(--primary);
+}
+
+/* Animation (optionnelle si on supprime display:none en JS) */
+.slide-bar .submenu.collapsed {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+.slide-bar .submenu.expanded {
+  max-height: 600px; /* suffisamment grand pour contenir les items */
+  transition: max-height 0.3s ease;
+}
+
+/* Boutons d’ouverture/fermeture */
+.burger-button,
 .close-button {
-  background-color: transparent;
-  border: none;
-  font-size: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--sidebar-border);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
   cursor: pointer;
-  position: absolute;
-  top: 0px;
-  left: 180px;
+  position: fixed;
+  top: 14px;
+  left: 14px;
   z-index: 1000;
-  color: black;
+  color: var(--sidebar-text);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
-.burger-button:focus {
-  outline: none;
+/* S'assure que le bouton burger reste visible quand la sidebar est masquée */
+.slide-bar.hidden + .burger-button,
+body .burger-button {
+  display: inline-flex;
+}
+
+/* Agrandir l'icône des catégories aussi */
+.slide-bar .category-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.burger-button:focus,
+.close-button:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .slide-bar {
+    width: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .slide-bar {
+    width: 88vw;
+  }
 }

@@ -53,6 +53,26 @@ const AgencyExpenses = () => {
     amount: "",
   });
   const [originalExpenses, setOriginalExpenses] = useState([]);
+  const [allExpenses, setAllExpenses] = useState([]);
+
+  // Utilitaires de calcul: inclusion d'une dépense dans un mois/année
+  const toYearMonth = (dateObj) =>
+    dateObj.getFullYear() * 12 + dateObj.getMonth();
+  const isExpenseActiveInMonth = (expense, month, year) => {
+    const targetYM = year * 12 + month;
+    const expenseStart = new Date(expense.date);
+    const startYM = toYearMonth(expenseStart);
+
+    if (expense.type === ExpenseTypes.FIXED) {
+      const endYM = expense.end_date
+        ? toYearMonth(new Date(expense.end_date))
+        : Infinity;
+      return startYM <= targetYM && targetYM <= endYM;
+    }
+
+    // Ponctuel: strictement le même mois/année
+    return startYM === targetYM;
+  };
 
   // Catégories de dépenses
   const categories = [
@@ -73,17 +93,33 @@ const AgencyExpenses = () => {
   const fetchExpenses = async () => {
     try {
       setLoading(true);
+      // Récupère la liste complète puis filtre côté client selon mois/année
+      const response = await axios.get(`/api/agency-expenses/`);
+      const fetchedExpenses = response.data || [];
+      setOriginalExpenses(fetchedExpenses);
+      setAllExpenses(fetchedExpenses);
+      setExpenses(fetchedExpenses);
+    } catch (error) {
+      console.error("Erreur lors du chargement des dépenses:", error);
+      alert("Erreur lors du chargement des dépenses");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMonthlySummary = async () => {
+    try {
+      setLoading(true);
       const response = await axios.get(
         `/api/agency-expenses/monthly_summary/?month=${
           selectedMonth + 1
         }&year=${selectedYear}`
       );
-      const fetchedExpenses = response.data.expenses || [];
-      setOriginalExpenses(fetchedExpenses); // Stockez les dépenses originales
-      setExpenses(fetchedExpenses);
+      const fetched = response.data?.expenses || [];
+      setOriginalExpenses(fetched);
+      setExpenses(fetched);
     } catch (error) {
-      console.error("Erreur lors du chargement des dépenses:", error);
-      alert("Erreur lors du chargement des dépenses");
+      console.error("Erreur lors du chargement du résumé mensuel:", error);
     } finally {
       setLoading(false);
     }
@@ -116,7 +152,7 @@ const AgencyExpenses = () => {
         type: ExpenseTypes.FIXED,
         date: new Date(),
         end_date: null,
-        category: "salaire",
+        category: "Salaire",
       });
     } catch (error) {
       console.error("Erreur lors de l'ajout de la dépense:", error);
@@ -177,7 +213,8 @@ const AgencyExpenses = () => {
           overrideData
         );
         setOpenDialog(false);
-        fetchExpenses();
+        // Recharger depuis le résumé mensuel pour refléter l'override appliqué
+        await fetchMonthlySummary();
         setIsEditing(false);
         setEditingExpense(null);
       } catch (error) {
@@ -193,30 +230,46 @@ const AgencyExpenses = () => {
 
   const calculateMonthlyTotal = () => {
     return expenses
-      .filter((expense) => {
-        const expenseDate = new Date(expense.date);
-        const targetDate = new Date(selectedYear, selectedMonth);
-
-        // Pour les dépenses fixes, vérifier si la date de début est avant ou égale au mois sélectionné
-        if (expense.type === ExpenseTypes.FIXED) {
-          const startDate = new Date(expense.date);
-          const endDate = expense.end_date ? new Date(expense.end_date) : null;
-
-          return startDate <= targetDate && (!endDate || endDate >= targetDate);
-        }
-
-        // Pour les dépenses ponctuelles, vérifier le mois exact
-        return (
-          expenseDate.getMonth() === selectedMonth &&
-          expenseDate.getFullYear() === selectedYear
-        );
-      })
+      .filter((expense) =>
+        isExpenseActiveInMonth(expense, selectedMonth, selectedYear)
+      )
       .reduce((total, expense) => {
         const amount = expense.current_override
           ? expense.current_override.amount
           : expense.amount;
         return total + parseFloat(amount);
       }, 0);
+  };
+
+  const countActiveMonthsInYear = (expense, year) => {
+    const firstYM = year * 12 + 0;
+    const lastYM = year * 12 + 11;
+    const startYM = toYearMonth(new Date(expense.date));
+    const endYM = expense.end_date
+      ? toYearMonth(new Date(expense.end_date))
+      : Infinity;
+    const activeStart = Math.max(startYM, firstYM);
+    const activeEnd = Math.min(endYM, lastYM);
+    if (activeEnd < activeStart) return 0;
+    return activeEnd - activeStart + 1;
+  };
+
+  const calculateYearlyTotal = () => {
+    if (!Array.isArray(allExpenses) || allExpenses.length === 0) return 0;
+    return allExpenses.reduce((sum, expense) => {
+      const baseAmount = parseFloat(
+        expense.current_override
+          ? expense.current_override.amount
+          : expense.amount
+      );
+      if (Number.isNaN(baseAmount)) return sum;
+      if (expense.type === ExpenseTypes.FIXED) {
+        const months = countActiveMonthsInYear(expense, selectedYear);
+        return sum + baseAmount * months;
+      }
+      const d = new Date(expense.date);
+      return d.getFullYear() === selectedYear ? sum + baseAmount : sum;
+    }, 0);
   };
 
   const handleFilterChange = (field) => (event) => {
@@ -303,7 +356,7 @@ const AgencyExpenses = () => {
       <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
         <Select
           value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
+          onChange={(e) => setSelectedMonth(Number(e.target.value))}
           sx={{
             minWidth: 150,
             backgroundColor: "rgba(27, 120, 188, 1)",
@@ -327,7 +380,7 @@ const AgencyExpenses = () => {
         </Select>
         <Select
           value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
           sx={{
             minWidth: 100,
             backgroundColor: "rgba(27, 120, 188, 1)",
@@ -469,29 +522,9 @@ const AgencyExpenses = () => {
           </TableHead>
           <TableBody>
             {expenses
-              .filter((expense) => {
-                const expenseDate = new Date(expense.date);
-                const targetDate = new Date(selectedYear, selectedMonth);
-
-                // Pour les dépenses fixes, vérifier si la date de début est avant ou égale au mois sélectionné
-                if (expense.type === ExpenseTypes.FIXED) {
-                  const startDate = new Date(expense.date);
-                  const endDate = expense.end_date
-                    ? new Date(expense.end_date)
-                    : null;
-
-                  return (
-                    startDate <= targetDate &&
-                    (!endDate || endDate >= targetDate)
-                  );
-                }
-
-                // Pour les dépenses ponctuelles, vérifier le mois exact
-                return (
-                  expenseDate.getMonth() === selectedMonth &&
-                  expenseDate.getFullYear() === selectedYear
-                );
-              })
+              .filter((expense) =>
+                isExpenseActiveInMonth(expense, selectedMonth, selectedYear)
+              )
               .map((expense, index) => (
                 <TableRow
                   key={expense.id}
@@ -575,6 +608,19 @@ const AgencyExpenses = () => {
         </Table>
       </TableContainer>
 
+      {/* Résumé annuel */}
+      <Paper sx={{ mt: 3, p: 2 }} elevation={0}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+          Total annuel ({selectedYear})
+        </Typography>
+        <Typography
+          variant="body1"
+          sx={{ fontWeight: 600, color: "primary.main" }}
+        >
+          {calculateYearlyTotal().toFixed(2)} €
+        </Typography>
+      </Paper>
+
       {/* Dialog pour ajouter/modifier une dépense */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>
@@ -650,9 +696,7 @@ const AgencyExpenses = () => {
                   : setNewExpense({ ...newExpense, amount: e.target.value })
               }
               fullWidth
-              InputProps={{
-                startAdornment: "€",
-              }}
+              inputProps={{ step: "0.01", min: "0" }}
             />
             {/* Les autres champs sont désactivés en mode édition car on ne modifie que pour le mois en cours */}
             {!isEditing && (

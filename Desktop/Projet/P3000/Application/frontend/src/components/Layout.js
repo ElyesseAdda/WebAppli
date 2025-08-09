@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "./../../static/css/layout.css";
+import BreadcrumbHeader from "./BreadcrumbHeader";
 import Header from "./Header";
 import SlideBar from "./SlideBar";
 
@@ -21,7 +22,10 @@ const Layout = ({ children }) => {
         toggleSidebar={toggleSidebar}
         isSidebarVisible={isSidebarVisible}
       />
-      <div className="main-content">{children}</div>
+      <div className="main-content">
+        <BreadcrumbHeader />
+        {children}
+      </div>
     </div>
   );
 };

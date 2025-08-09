@@ -142,7 +142,14 @@ const GestionAppelsOffres = () => {
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{
+            color: "white",
+            backgroundColor: "transparent",
+          }}
+        >
           Gestion des Appels d'Offres
         </Typography>
 
@@ -156,13 +163,25 @@ const GestionAppelsOffres = () => {
           <TableContainer>
             <Table>
               <TableHead>
-                <TableRow>
-                  <TableCell>Nom du projet</TableCell>
-                  <TableCell>Société</TableCell>
-                  <TableCell>Montant estimé</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>Date création</TableCell>
-                  <TableCell>Actions</TableCell>
+                <TableRow sx={{ backgroundColor: "#1976d2" }}>
+                  <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                    Nom du projet
+                  </TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                    Société
+                  </TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                    Montant estimé
+                  </TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                    Statut
+                  </TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                    Date création
+                  </TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold" }}>
+                    Actions
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
