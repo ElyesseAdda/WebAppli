@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
-    PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres
+    PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -784,6 +784,11 @@ class AgencyExpenseSerializer(serializers.ModelSerializer):
         if request and hasattr(obj, 'current_override'):
             return obj.current_override
         return None
+
+class AgencyExpenseAggregateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgencyExpenseAggregate
+        fields = '__all__'
 
 class SousTraitantSerializer(serializers.ModelSerializer):
     class Meta:

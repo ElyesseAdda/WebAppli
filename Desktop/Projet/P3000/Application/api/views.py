@@ -25,7 +25,9 @@ from .models import (
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel,
     Banque,
+    AgencyExpenseAggregate,
 )
+from .models import compute_agency_expense_aggregate_for_month
 import logging
 from django.db import transaction, models
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -4341,6 +4343,29 @@ class AgencyExpenseViewSet(viewsets.ModelViewSet):
             'totals_by_category': [{'category': k, 'total': v} for k, v in totals_by_category.items()],
             'total': total
         })
+
+    @action(detail=False, methods=['get'])
+    def yearly_summary(self, request):
+        year = int(request.query_params.get('year', timezone.now().year))
+        agg = AgencyExpenseAggregate.objects.filter(year=year).order_by('month')
+        monthly = [
+            {
+                'month': x.month,
+                'total_amount': float(x.total_amount),
+                'totals_by_category': x.totals_by_category,
+                'updated_at': x.updated_at,
+            }
+            for x in agg
+        ]
+        total_year = float(sum([x.total_amount for x in agg]) if agg else 0)
+        return Response({'year': year, 'monthly': monthly, 'total_year': total_year})
+
+    @action(detail=False, methods=['post'])
+    def recompute_month(self, request):
+        month = int(request.data.get('month'))
+        year = int(request.data.get('year'))
+        obj = compute_agency_expense_aggregate_for_month(year, month)
+        return Response({'year': obj.year, 'month': obj.month, 'total_amount': float(obj.total_amount), 'totals_by_category': obj.totals_by_category})
 
     @action(detail=True, methods=['post'])
     def monthly_override(self, request, pk=None):

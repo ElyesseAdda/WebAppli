@@ -209,3 +209,7 @@ urlpatterns += [
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
 ]
+
+# Agency expense aggregates endpoints (via ViewSet actions)
+# GET /api/agency-expenses/yearly_summary/?year=YYYY
+# POST /api/agency-expenses/recompute_month/ {"year":YYYY, "month":M}

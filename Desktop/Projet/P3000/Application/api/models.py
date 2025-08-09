@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models.functions import TruncMonth
+from datetime import date
 from django.db.models import Sum
 
 
@@ -1062,6 +1063,115 @@ class AgencyExpenseOverride(models.Model):
 
     class Meta:
         unique_together = ('expense', 'month', 'year')
+
+
+class AgencyExpenseAggregate(models.Model):
+    year = models.IntegerField()
+    month = models.IntegerField()  # 1-12
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    totals_by_category = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('year', 'month')
+        ordering = ['year', 'month']
+        indexes = [
+            models.Index(fields=['year', 'month'])
+        ]
+
+    def __str__(self):
+        return f"{self.year}-{self.month:02d}: {self.total_amount} €"
+
+
+def compute_agency_expense_aggregate_for_month(year: int, month: int):
+    """Compute and persist AgencyExpenseAggregate for a given year/month."""
+    from calendar import monthrange
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    # Fixed expenses active in the month
+    fixed_qs = AgencyExpense.objects.filter(
+        type='fixed',
+        date__lte=last_day
+    ).filter(models.Q(end_date__isnull=True) | models.Q(end_date__gte=first_day))
+
+    # Punctual expenses in the month
+    punctual_qs = AgencyExpense.objects.filter(
+        type='punctual',
+        date__year=year,
+        date__month=month
+    )
+
+    expenses = list(fixed_qs) + list(punctual_qs)
+
+    totals_by_category = {}
+    total_amount = Decimal('0.00')
+
+    for exp in expenses:
+        override = AgencyExpenseOverride.objects.filter(expense=exp, month=month, year=year).first()
+        amount = Decimal(str(override.amount)) if override else Decimal(str(exp.amount))
+        cat = exp.category or 'Autres'
+        totals_by_category.setdefault(cat, Decimal('0.00'))
+        totals_by_category[cat] += amount
+        total_amount += amount
+
+    totals_list = [
+        {
+            'category': cat,
+            'total': float(val)
+        } for cat, val in totals_by_category.items()
+    ]
+
+    obj, _ = AgencyExpenseAggregate.objects.update_or_create(
+        year=year,
+        month=month,
+        defaults={
+            'total_amount': total_amount,
+            'totals_by_category': totals_list,
+        }
+    )
+    return obj
+
+
+def _iter_months(start_date: date, end_date: date):
+    y, m = start_date.year, start_date.month
+    while (y < end_date.year) or (y == end_date.year and m <= end_date.month):
+        yield y, m
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+
+@receiver([post_save, post_delete], sender=AgencyExpense)
+def recalc_aggregates_on_expense_change(sender, instance: AgencyExpense, **kwargs):
+    """Recompute impacted months when a base expense changes."""
+    try:
+        if instance.type == 'fixed':
+            start = instance.date
+            # Cap the recompute horizon to 24 months ahead if no end_date to avoid infinite span
+            horizon_end = instance.end_date or (start.replace(year=start.year + 2))
+            from calendar import monthrange
+            # Ensure horizon_end is not before start
+            if horizon_end < start:
+                horizon_end = start
+            # Iterate months and recompute
+            for y, m in _iter_months(start, horizon_end):
+                compute_agency_expense_aggregate_for_month(y, m)
+        else:
+            # punctual: only its month
+            compute_agency_expense_aggregate_for_month(instance.date.year, instance.date.month)
+    except Exception:
+        # Avoid breaking save path on aggregate errors
+        pass
+
+
+@receiver([post_save, post_delete], sender=AgencyExpenseOverride)
+def recalc_aggregates_on_override_change(sender, instance: AgencyExpenseOverride, **kwargs):
+    try:
+        compute_agency_expense_aggregate_for_month(instance.year, instance.month)
+    except Exception:
+        pass
 
 class SousTraitant(models.Model):
     entreprise = models.CharField(max_length=255)
