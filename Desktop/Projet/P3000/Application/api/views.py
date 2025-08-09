@@ -1563,10 +1563,28 @@ def create_devis(request):
                 }
             
             devis = Devis.objects.create(**devis_data)
-            
-            # Associer le client
-            if request.data.get('client'):
-                devis.client.set(request.data['client'])
+
+            # Associer le(s) client(s) de manière robuste
+            # 1) Nettoyer la liste reçue du frontend pour retirer None/valeurs falsy
+            client_values = request.data.get('client') or []
+            if isinstance(client_values, (list, tuple)):
+                client_ids = [c for c in client_values if c]
+            else:
+                client_ids = [client_values] if client_values else []
+
+            # 2) Si aucun client valide fourni, déduire depuis le chantier/société
+            if not client_ids:
+                try:
+                    if devis.devis_chantier and devis.appel_offres and devis.appel_offres.societe and devis.appel_offres.societe.client_name:
+                        client_ids = [devis.appel_offres.societe.client_name.id]
+                    elif devis.chantier and devis.chantier.societe and devis.chantier.societe.client_name:
+                        client_ids = [devis.chantier.societe.client_name.id]
+                except Exception:
+                    client_ids = []
+
+            # 3) Associer si on a au moins un id valide
+            if client_ids:
+                devis.client.set(client_ids)
             
             # Création des lignes de devis
             for ligne in request.data.get('lignes', []):

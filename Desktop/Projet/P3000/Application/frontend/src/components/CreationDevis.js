@@ -754,7 +754,8 @@ const CreationDevis = () => {
       const devisData = {
         numero: devisModalData.numero,
         chantier: devisType !== "chantier" ? chantierIdToUse : null,
-        client: [clientId],
+        // Envoyer le client uniquement si disponible (évite [null])
+        ...(clientId ? { client: [clientId] } : {}),
         price_ht: parseFloat(totalHT.toFixed(2)),
         price_ttc: parseFloat(totalTTC.toFixed(2)),
         tva_rate: parseFloat(tvaRate),
