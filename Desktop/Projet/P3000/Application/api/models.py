@@ -1384,3 +1384,63 @@ def update_chantier_cout_materiel(sender, instance, **kwargs):
     chantier.cout_materiel = float(total)
     chantier.save(update_fields=["cout_materiel"])
 
+
+class Document(models.Model):
+    """
+    Modèle pour gérer les documents du drive
+    """
+    CATEGORY_CHOICES = [
+        ('devis', 'Devis'),
+        ('factures', 'Factures'),
+        ('photos', 'Photos'),
+        ('documents', 'Documents'),
+        ('contrats', 'Contrats'),
+        ('autres', 'Autres'),
+    ]
+    
+    # Relations
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
+    societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='documents', null=True, blank=True)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='documents', null=True, blank=True)
+    
+    # Métadonnées du fichier
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='documents')
+    s3_key = models.CharField(max_length=500, unique=True)  # Clé S3 complète
+    filename = models.CharField(max_length=255)  # Nom original du fichier
+    content_type = models.CharField(max_length=100)  # Type MIME
+    size = models.BigIntegerField()  # Taille en octets
+    
+    # Métadonnées système
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_documents')
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)  # Pour la corbeille
+    
+    class Meta:
+        verbose_name = "Document"
+        verbose_name_plural = "Documents"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['societe', 'chantier', 'category']),
+            models.Index(fields=['owner']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_deleted']),
+        ]
+    
+    def __str__(self):
+        return f"{self.filename} ({self.get_category_display()})"
+    
+    @property
+    def size_mb(self):
+        """Retourne la taille en MB"""
+        return round(self.size / (1024 * 1024), 2)
+    
+    @property
+    def extension(self):
+        """Retourne l'extension du fichier"""
+        return self.filename.split('.')[-1].lower() if '.' in self.filename else ''
+    
+    def get_download_url(self):
+        """Retourne l'URL de téléchargement (sera implémentée avec les URLs présignées)"""
+        return f"/api/drive/download/{self.id}/"
+
