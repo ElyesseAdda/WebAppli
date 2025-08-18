@@ -11,9 +11,25 @@ https://docs.djangoproject.com/en/dev/ref/settings/
 """
 
 from pathlib import Path
+import os
+
+# Charger les variables d'environnement depuis le fichier .env
+def load_env_file():
+    """Charge les variables d'environnement depuis le fichier .env"""
+    env_file = BASE_DIR / '.env'
+    if env_file.exists():
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip().strip('"').strip("'")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Charger le fichier .env
+load_env_file()
 
 
 # Quick-start development settings - unsuitable for production

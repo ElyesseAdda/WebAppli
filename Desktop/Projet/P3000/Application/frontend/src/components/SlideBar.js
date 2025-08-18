@@ -68,7 +68,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         key: "drive",
         label: "Drive",
         icon: SiGoogledrive,
-        href: "https://drive.google.com",
+        href: "http://127.0.0.1:8000/drive",
         external: true,
       },
     ],

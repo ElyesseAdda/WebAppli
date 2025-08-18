@@ -7,7 +7,8 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
-    PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate
+    PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
+    Document
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -919,4 +920,100 @@ class AppelOffresSerializer(serializers.ModelSerializer):
         model = AppelOffres
         fields = '__all__'
         read_only_fields = ('date_debut', 'date_validation') 
+
+
+# --- SERIALIZERS POUR LE DRIVE ---
+
+class DocumentSerializer(serializers.ModelSerializer):
+    """
+    Sérialiseur pour les documents du drive
+    """
+    owner_name = serializers.CharField(source='owner.get_full_name', read_only=True)
+    societe_name = serializers.CharField(source='societe.nom_societe', read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    size_mb = serializers.FloatField(read_only=True)
+    extension = serializers.CharField(read_only=True)
+    download_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Document
+        fields = [
+            'id', 'owner', 'owner_name', 'societe', 'societe_name', 
+            'chantier', 'chantier_name', 'category', 'category_display',
+            'filename', 'content_type', 'size', 'size_mb', 'extension',
+            'created_at', 'created_by', 'updated_at', 'is_deleted',
+            'download_url'
+        ]
+        read_only_fields = ['owner', 'created_by', 'created_at', 'updated_at', 'is_deleted']
+    
+    def get_download_url(self, obj):
+        """Génère l'URL de téléchargement présignée"""
+        from .utils import generate_presigned_url
+        try:
+            return generate_presigned_url('get_object', obj.s3_key, expires_in=3600)
+        except Exception:
+            return None
+    
+    def create(self, validated_data):
+        """Assigne automatiquement l'utilisateur connecté comme propriétaire"""
+        validated_data['owner'] = self.context['request'].user
+        validated_data['created_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class DocumentUploadSerializer(serializers.Serializer):
+    """
+    Sérialiseur pour la demande d'upload (génération d'URL présignée)
+    """
+    societe_id = serializers.IntegerField(required=False, allow_null=True)
+    chantier_id = serializers.IntegerField(required=False, allow_null=True)
+    category = serializers.ChoiceField(choices=Document.CATEGORY_CHOICES)
+    filename = serializers.CharField(max_length=255)
+    
+    def validate(self, data):
+        """Validation personnalisée"""
+        # Vérifier que l'utilisateur a accès à la société/chantier
+        user = self.context['request'].user
+        
+        if data.get('societe_id'):
+            try:
+                societe = Societe.objects.get(id=data['societe_id'])
+                # Ici vous pouvez ajouter une logique de permissions si nécessaire
+            except Societe.DoesNotExist:
+                raise serializers.ValidationError("Société introuvable")
+        
+        if data.get('chantier_id'):
+            try:
+                chantier = Chantier.objects.get(id=data['chantier_id'])
+                # Ici vous pouvez ajouter une logique de permissions si nécessaire
+            except Chantier.DoesNotExist:
+                raise serializers.ValidationError("Chantier introuvable")
+        
+        return data
+
+
+class DocumentListSerializer(serializers.Serializer):
+    """
+    Sérialiseur pour la liste des documents avec filtres
+    """
+    societe_id = serializers.IntegerField(required=False, allow_null=True)
+    chantier_id = serializers.IntegerField(required=False, allow_null=True)
+    category = serializers.ChoiceField(choices=Document.CATEGORY_CHOICES, required=False)
+    search = serializers.CharField(required=False, allow_blank=True)
+    page = serializers.IntegerField(required=False, default=1)
+    page_size = serializers.IntegerField(required=False, default=20)
+
+
+class FolderItemSerializer(serializers.Serializer):
+    """
+    Sérialiseur pour les éléments de dossier (fichiers et sous-dossiers)
+    """
+    name = serializers.CharField()
+    type = serializers.CharField()  # 'file' ou 'folder'
+    size = serializers.IntegerField(required=False)
+    size_mb = serializers.FloatField(required=False)
+    modified_at = serializers.DateTimeField(required=False)
+    extension = serializers.CharField(required=False)
+    document_id = serializers.IntegerField(required=False) 
         

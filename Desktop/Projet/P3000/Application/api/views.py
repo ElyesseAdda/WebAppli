@@ -1,5 +1,22 @@
 from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils.text import slugify
+import os
+
+from .models import Document, Societe, Chantier
+from .serializers import (
+    DocumentSerializer, 
+    DocumentUploadSerializer, 
+    DocumentListSerializer, 
+    FolderItemSerializer
+)
+from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -15,7 +32,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -99,6 +116,467 @@ class ChantierViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         
         return Response(serializer.data)
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        societe_id = self.request.query_params.get('societe_id')
+        if societe_id:
+            queryset = queryset.filter(societe_id=societe_id)
+        return queryset
+
+
+
+class SocieteViewSet(viewsets.ModelViewSet):
+    queryset = Societe.objects.all()
+    serializer_class = SocieteSerializer
+    permission_classes = [AllowAny]
+
+class FactureTSViewSet(viewsets.ModelViewSet):
+    queryset = FactureTS.objects.all()
+    serializer_class = FactureTSListSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset.select_related('devis', 'avenant')
+class DevisViewSet(viewsets.ModelViewSet):
+    queryset = Devis.objects.all().prefetch_related('lignes')
+    serializer_class = DevisSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset
+    
+    @action(detail=True, methods=['get'])
+    def format_lignes(self, request, pk=None):
+        devis = self.get_object()
+        serializer = self.get_serializer(devis)
+        return Response(serializer.data)
+    
+class FactureViewSet(viewsets.ModelViewSet):
+    queryset = Facture.objects.all()
+    serializer_class = FactureSerializer
+
+
+def dashboard_data(request):
+    # Récupérer les paramètres de filtrage
+    month = request.GET.get('month', datetime.now().month)
+    year = request.GET.get('year', datetime.now().year)
+    chantier_id = request.GET.get('chantier_id')
+
+    # Créer le filtre de date
+    date_filter = Q(
+        date_creation__month=month,
+        date_creation__year=year
+    )
+
+    # Ajouter le filtre de chantier si spécifié
+    chantier_filter = Q(id=chantier_id) if chantier_id else Q()
+
+    # Appliquer les filtres aux requêtes
+    chantiers = Chantier.objects.filter(chantier_filter)
+    
+    # Récupérer la dernière situation pour chaque chantier
+    latest_situations = {}
+    for chantier in chantiers:
+        latest_situation = Situation.objects.filter(
+            chantier=chantier
+        ).order_by('-date_creation').first()
+        if latest_situation:
+            latest_situations[chantier.id] = {
+                'montant_apres_retenues': float(latest_situation.montant_apres_retenues),
+                'pourcentage_avancement': float(latest_situation.pourcentage_avancement)
+            }
+
+    if chantier_id:
+        devis = Devis.objects.filter(chantier_id=chantier_id)
+        factures = Facture.objects.filter(chantier_id=chantier_id)
+    else:
+        devis = Devis.objects.all()
+        factures = Facture.objects.all()
+
+    # Appliquer le filtre de date
+    devis = devis.filter(date_filter)
+    factures = factures.filter(date_filter)
+
+    # Chantiers
+    state_chantier = chantiers.filter(state_chantier='En Cours').count()
+    cout_materiel = chantiers.aggregate(Sum('cout_materiel'))['cout_materiel__sum'] or 0
+    cout_main_oeuvre = chantiers.aggregate(Sum('cout_main_oeuvre'))['cout_main_oeuvre__sum'] or 0
+    cout_sous_traitance = chantiers.aggregate(Sum('cout_sous_traitance'))['cout_sous_traitance__sum'] or 0
+    montant_total = chantiers.aggregate(Sum('montant_ttc'))['montant_ttc__sum'] or 0
+
+    # Devis
+    devis_terminer = devis.filter(status='Terminé').count()
+    devis_en_cour = devis.filter(status='En Cours').count()
+    devis_facturé = devis.filter(status='Facturé').count()
+    
+    # Factures
+    facture_terminer = factures.filter(state_facture='Terminé').count()
+    facture_en_cour = factures.filter(state_facture='En Cours').count()
+    facture_facturé = factures.filter(state_facture='Facturé').count()
+
+    # Totaux Devis
+    total_devis_terminer = devis.filter(status='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_devis_facturé = devis.filter(status='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    
+    # Totaux Factures
+    total_facture_terminer = factures.filter(state_facture='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_facture_facturé = factures.filter(state_facture='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    
+    total_devis_combined = total_devis_facturé + total_devis_terminer
+    total_facture_combined = total_facture_terminer + total_facture_facturé
+
+    data = {
+        'chantier_en_cours': state_chantier,
+        'cout_materiel': cout_materiel,
+        'cout_main_oeuvre': cout_main_oeuvre,
+        'cout_sous_traitance': cout_sous_traitance,
+        'montant_total': montant_total,
+        'devis_terminer': devis_terminer,
+        'facture_terminer': facture_terminer,
+        'devis_en_cour': devis_en_cour,
+        'facture_en_cour': facture_en_cour,
+        'devis_facturé': devis_facturé,
+        'facture_facturé': facture_facturé,
+        'total_devis_terminer': total_devis_terminer,
+        'total_devis_facturé': total_devis_facturé,
+        'total_facture_terminer': total_facture_terminer,
+        'total_facture_facturé': total_facture_facturé,
+        'total_devis_combined': total_devis_combined,
+        'total_facture_combined': total_facture_combined,
+        'latest_situations': latest_situations
+    }
+    return JsonResponse(data)
+
+
+def preview_devis(request):
+    devis_data_encoded = request.GET.get('devis')
+
+    if devis_data_encoded:
+        try:
+            devis_data = json.loads(devis_data_encoded)
+            chantier_id = devis_data['chantier']
+
+            if chantier_id == -1:
+                # Utiliser les données temporaires
+                temp_data = devis_data.get('tempData', {})
+                chantier = temp_data.get('chantier', {})
+                client = temp_data.get('client', {})
+                societe = temp_data.get('societe', {})
+
+                
+
+                # S'assurer que tous les champs ont une valeur par défaut
+                for field in ['name', 'surname', 'phone_Number', 'client_mail']:
+                    if not client.get(field):
+                        client[field] = 'Non renseigné'
+
+                for field in ['nom_societe', 'ville_societe', 'rue_societe', 'codepostal_societe']:
+                    if not societe.get(field):
+                        societe[field] = 'Non renseigné'
+                    
+                for field in ['chantier_name', 'ville', 'rue', 'code_postal']:
+                    if not chantier.get(field):
+                        chantier[field] = 'Non renseigné'
+
+            else:
+                # Utiliser les données existantes
+                chantier = get_object_or_404(Chantier, id=chantier_id)
+                societe = chantier.societe
+                client = societe.client_name
+
+            total_ht = 0
+            parties_data = []
+            
+            for partie_id in devis_data['parties']:
+                partie = get_object_or_404(Partie, id=partie_id)
+                sous_parties_data = []
+                total_partie = 0
+                
+                # Récupérer les lignes spéciales pour cette partie
+                special_lines_partie = devis_data.get('specialLines', {}).get('parties', {}).get(str(partie_id), [])
+                
+                for sous_partie in SousPartie.objects.filter(partie=partie, id__in=devis_data.get('sous_parties', [])):
+                    lignes_details_data = []
+                    total_sous_partie = 0
+                    
+                    # Calculer le total des lignes de détail
+                    for ligne in devis_data['lignes_details']:
+                        if (LigneDetail.objects.get(id=ligne['id']).sous_partie_id == sous_partie.id 
+                            and float(ligne['quantity']) > 0):
+                            ligne_db = get_object_or_404(LigneDetail, id=ligne['id'])
+                            quantity = Decimal(str(ligne['quantity']))
+                            custom_price = Decimal(str(ligne['custom_price']))
+                            total_ligne = quantity * custom_price
+                            
+                            lignes_details_data.append({
+                                'description': ligne_db.description,
+                                'unite': ligne_db.unite,
+                                'quantity': quantity,
+                                'custom_price': custom_price,
+                                'total': total_ligne
+                            })
+                            total_sous_partie += total_ligne
+                    
+                    if lignes_details_data:
+                        # Appliquer les lignes spéciales de la sous-partie
+                        special_lines_sous_partie = devis_data.get('specialLines', {}).get('sousParties', {}).get(str(sous_partie.id), [])
+                        sous_partie_data = {
+                            'description': sous_partie.description,
+                            'lignes_details': lignes_details_data,
+                            'total_sous_partie': total_sous_partie,
+                            'special_lines': []
+                        }
+                        
+                        # Calculer et ajouter chaque ligne spéciale
+                        for special_line in special_lines_sous_partie:
+                            if special_line['valueType'] == 'percentage':
+                                montant = (total_sous_partie * Decimal(str(special_line['value']))) / Decimal('100')
+                            else:
+                                montant = Decimal(str(special_line['value']))
+                            
+                            # Ajouter le montant au total selon le type (reduction ou addition)
+                            if special_line['type'] == 'reduction':
+                                total_sous_partie -= montant
+                            else:
+                                total_sous_partie += montant
+                            
+                            # Stocker le montant tel quel pour l'affichage
+                            sous_partie_data['special_lines'].append({
+                                'description': special_line['description'],
+                                'value': special_line['value'],
+                                'valueType': special_line['valueType'],
+                                'type': special_line['type'],
+                                'montant': montant,  # Montant toujours positif pour l'affichage
+                                'isHighlighted': special_line['isHighlighted']
+                            })
+                        
+                        sous_partie_data['total_sous_partie'] = total_sous_partie
+                        sous_parties_data.append(sous_partie_data)
+                        total_partie += total_sous_partie
+                    
+                if sous_parties_data:
+                    partie_data = {
+                        'titre': partie.titre,
+                        'sous_parties': sous_parties_data,
+                        'total_partie': total_partie,
+                        'special_lines': []
+                    }
+                    
+                    # Calculer et ajouter les lignes spéciales de la partie
+                    for special_line in special_lines_partie:
+                        if special_line['valueType'] == 'percentage':
+                            montant = (total_partie * Decimal(str(special_line['value']))) / Decimal('100')
+                        else:
+                            montant = Decimal(str(special_line['value']))
+                        
+                        # Ajouter le montant au total selon le type
+                        if special_line['type'] == 'reduction':
+                            total_partie -= montant
+                        else:
+                            total_partie += montant
+                        
+                        partie_data['special_lines'].append({
+                            'description': special_line['description'],
+                            'value': special_line['value'],
+                            'valueType': special_line['valueType'],
+                            'type': special_line['type'],
+                            'montant': montant,  # Montant toujours positif pour l'affichage
+                            'isHighlighted': special_line['isHighlighted']
+                        })
+                    
+                    partie_data['total_partie'] = total_partie
+                    parties_data.append(partie_data)
+                    total_ht += total_partie
+            
+            # Appliquer les lignes spéciales globales
+            special_lines_global = devis_data.get('specialLines', {}).get('global', [])
+            for special_line in special_lines_global:
+                if special_line['valueType'] == 'percentage':
+                    montant = (total_ht * Decimal(str(special_line['value']))) / Decimal('100')
+                else:
+                    montant = Decimal(str(special_line['value']))
+                
+                special_line['montant'] = montant  # Montant toujours positif pour l'affichage
+                
+                # Ajouter le montant au total selon le type
+                if special_line['type'] == 'reduction':
+                    total_ht -= montant
+                else:
+                    total_ht += montant
+
+            # Calculer TVA et TTC
+            tva_rate = Decimal(str(devis_data.get('tva_rate', 20.0)))
+            tva = total_ht * (tva_rate / Decimal('100'))
+            montant_ttc = total_ht + tva
+
+            context = {
+                'chantier': chantier,
+                'societe': societe,
+                'client': client,
+                'parties': parties_data,
+                'total_ht': total_ht,  # Utiliser le nouveau total_ht calculé
+                'tva': tva,
+                'montant_ttc': montant_ttc,
+                'special_lines_global': special_lines_global,  # Ajouter les lignes spéciales globales au contexte
+                'devis': {
+                    'tva_rate': tva_rate,
+                    'nature_travaux': devis_data.get('nature_travaux', '')
+                }
+            }
+
+            return render(request, 'preview_devis.html', context)
+
+        except json.JSONDecodeError as e:
+            return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
+    else:
+        return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
+
+def generate_pdf_from_preview(request):
+    try:
+        # Ajout de logs
+        print("Début de generate_pdf_from_preview")
+        print("Request body:", request.body)
+        
+        data = json.loads(request.body)
+        devis_id = data.get('devis_id')
+        print("Devis ID:", devis_id)
+
+        if not devis_id:
+            return JsonResponse({'error': 'ID du devis manquant'}, status=400)
+
+        # URL de la page de prévisualisation pour un devis sauvegardé
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        print("Preview URL:", preview_url)
+
+            # Chemin vers le script Puppeteer
+        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        print("Node script path:", node_script_path)
+
+            # Commande pour exécuter Puppeteer avec Node.js
+        command = ['node', node_script_path, preview_url]
+        print("Commande à exécuter:", command)
+
+        # Exécuter Puppeteer avec capture de la sortie
+        result = subprocess.run(
+            command, 
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print("Sortie standard:", result.stdout)
+        print("Sortie d'erreur:", result.stderr)
+
+            # Lire le fichier PDF généré
+        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+        print("Chemin du PDF:", pdf_path)
+        print("Le fichier existe ?", os.path.exists(pdf_path))
+
+        if os.path.exists(pdf_path):
+                with open(pdf_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+                print("PDF généré avec succès")
+                return response
+        else:
+            error_msg = 'Le fichier PDF n\'a pas été généré.'
+            print(error_msg)
+            return JsonResponse({'error': error_msg}, status=500)
+
+    except json.JSONDecodeError as e:
+        error_msg = f'Données JSON invalides: {str(e)}'
+        print(error_msg)
+        return JsonResponse({'error': error_msg}, status=400)
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.output}'
+        print(error_msg)
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(error_msg)
+        print("Type d'erreur:", type(e))
+        print("Traceback:", traceback.format_exc())
+        return JsonResponse({'error': error_msg}, status=500)
+
+
+def check_nom_devis_existe(request):
+    nom_devis = request.GET.get('nom_devis', None)
+    
+    if nom_devis:
+        exists = Devis.objects.filter(nom_devis=nom_devis).exists()
+        return JsonResponse({'exists': exists})
+    return JsonResponse({'error': 'Nom de devis non fourni'}, status=400)
+
+
+class PartieViewSet(viewsets.ModelViewSet):
+    queryset = Partie.objects.all()
+    serializer_class = PartieSerializer
+
+class SousPartieViewSet(viewsets.ModelViewSet):
+    queryset = SousPartie.objects.all()
+    serializer_class = SousPartieSerializer
+
+from rest_framework import viewsets, status, serializers, status
+from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.decorators import action, api_view, permission_classes
+from django.http import JsonResponse, HttpResponse
+from django.db.models import Avg, Count, Min, Sum, F, Max, Q
+from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.utils import timezone
+from django.utils.timezone import now
+from django.db.models.functions import TruncMonth
+from datetime import timedelta, date, datetime
+import subprocess
+import os
+import json
+import calendar
+from .serializers import  AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .models import (
+    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
+    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
+    LaborCost, DevisLigne, FactureLigne, FacturePartie, 
+    FactureSousPartie, FactureLigneDetail, BonCommande, 
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
+    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel,
+    Banque,
+    AgencyExpenseAggregate,
+)
+from .models import compute_agency_expense_aggregate_for_month
+import logging
+from django.db import transaction, models
+from rest_framework.permissions import IsAdminUser, AllowAny
+from calendar import day_name
+import locale
+import traceback
+from django.views.decorators.csrf import ensure_csrf_cookie
+from decimal import Decimal
+from django.db.models import Q
+import re
+from decimal import Decimal, InvalidOperation
+import tempfile
+from django.views import View
+import random
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from datetime import date, timedelta
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+import holidays
+from datetime import datetime, timedelta
+
+
+
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -6301,3 +6779,363 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             return Response({'error': str(e)}, status=500)
+
+
+
+
+
+class DriveViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les documents du drive
+    """
+    serializer_class = DocumentSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        """Filtrer les documents selon l'utilisateur et les paramètres"""
+        queryset = Document.objects.filter(is_deleted=False)
+        
+        # Filtrer par propriétaire (l'utilisateur connecté) - temporairement désactivé pour le développement
+        # queryset = queryset.filter(owner=self.request.user)
+        
+        # Filtres optionnels
+        societe_id = self.request.query_params.get('societe_id')
+        if societe_id:
+            queryset = queryset.filter(societe_id=societe_id)
+        
+        chantier_id = self.request.query_params.get('chantier_id')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(filename__icontains=search) |
+                Q(societe__nom_societe__icontains=search) |
+                Q(chantier__chantier_name__icontains=search)
+            )
+        
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['post'])
+    def presign_upload(self, request):
+        """
+        Génère une URL présignée pour upload direct vers S3
+        """
+        serializer = DocumentUploadSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Récupérer les objets
+            societe = None
+            chantier = None
+            
+            if serializer.validated_data.get('societe_id'):
+                societe = Societe.objects.get(id=serializer.validated_data['societe_id'])
+            
+            if serializer.validated_data.get('chantier_id'):
+                chantier = Chantier.objects.get(id=serializer.validated_data['chantier_id'])
+            
+            # Générer la clé S3
+            key = build_document_key(
+                societe=societe,
+                chantier=chantier,
+                category=serializer.validated_data['category'],
+                filename=serializer.validated_data['filename']
+            )
+            
+            # Générer l'URL présignée POST
+            presigned_data = generate_presigned_post(key)
+            
+            return Response({
+                'upload_url': presigned_data['url'],
+                'fields': presigned_data['fields'],
+                'key': key,
+                'societe_id': societe.id if societe else None,
+                'chantier_id': chantier.id if chantier else None,
+                'category': serializer.validated_data['category'],
+                'filename': serializer.validated_data['filename']
+            })
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def confirm_upload(self, request):
+        """
+        Confirme l'upload d'un fichier et crée l'entrée en base
+        """
+        try:
+            # Récupérer les données de l'upload
+            key = request.data.get('key')
+            filename = request.data.get('filename')
+            content_type = request.data.get('content_type')
+            size = request.data.get('size')
+            societe_id = request.data.get('societe_id')
+            chantier_id = request.data.get('chantier_id')
+            category = request.data.get('category')
+            
+            if not all([key, filename, content_type, size]):
+                return Response({'error': 'Données manquantes'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Créer l'entrée Document
+            document_data = {
+                's3_key': key,
+                'filename': filename,
+                'content_type': content_type,
+                'size': int(size),
+                'category': category,
+                # Temporairement désactivé pour le développement
+                # 'owner': request.user,
+                # 'created_by': request.user
+            }
+            
+            if societe_id:
+                document_data['societe_id'] = societe_id
+            
+            if chantier_id:
+                document_data['chantier_id'] = chantier_id
+            
+            document = Document.objects.create(**document_data)
+            
+            # Retourner le document sérialisé
+            serializer = DocumentSerializer(document, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """
+        Génère une URL présignée pour télécharger un document
+        """
+        try:
+            document = self.get_object()
+            download_url = generate_presigned_url('get_object', document.s3_key, expires_in=3600)
+            
+            return Response({
+                'download_url': download_url,
+                'filename': document.filename
+            })
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def list_folders(self, request):
+        """
+        Liste les dossiers et fichiers selon l'arborescence
+        """
+        try:
+            societe_id = request.query_params.get('societe_id')
+            chantier_id = request.query_params.get('chantier_id')
+            category = request.query_params.get('category')
+            
+            # Construire le préfixe S3
+            prefix = ""
+            if societe_id:
+                societe = Societe.objects.get(id=societe_id)
+                societe_part = f"{societe.id}_{slugify(societe.nom_societe)}"
+                prefix = f"companies/{societe_part}/"
+                
+                if chantier_id:
+                    chantier = Chantier.objects.get(id=chantier_id)
+                    chantier_part = f"{chantier.id}_{slugify(chantier.chantier_name)}"
+                    prefix += f"chantiers/{chantier_part}/"
+                    
+                    if category:
+                        prefix += f"{slugify(category)}/"
+            
+            # Lister les documents depuis la base
+            queryset = self.get_queryset()
+            
+            if societe_id:
+                queryset = queryset.filter(societe_id=societe_id)
+            
+            if chantier_id:
+                queryset = queryset.filter(chantier_id=chantier_id)
+            
+            if category:
+                queryset = queryset.filter(category=category)
+            
+            # Pagination
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+            
+            paginator = Paginator(queryset, page_size)
+            documents_page = paginator.get_page(page)
+            
+            # Sérialiser les résultats
+            documents_serializer = DocumentSerializer(
+                documents_page.object_list, 
+                many=True, 
+                context={'request': request}
+            )
+            
+            # Construire la réponse
+            response_data = {
+                'documents': documents_serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_pages': paginator.num_pages,
+                    'total_count': paginator.count,
+                    'has_next': documents_page.has_next(),
+                    'has_previous': documents_page.has_previous()
+                }
+            }
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        Supprime un document (soft delete)
+        """
+        try:
+            document = self.get_object()
+            
+            # Soft delete
+            document.is_deleted = True
+            document.save()
+            
+            # Optionnel : supprimer aussi de S3
+            # from .utils import get_s3_client
+            # s3_client = get_s3_client()
+            # s3_client.delete_object(Bucket=os.getenv('S3_BUCKET_NAME'), Key=document.s3_key)
+            
+            return Response({'message': 'Document supprimé avec succès'})
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def create_folder(self, request):
+        """
+        Crée un dossier personnalisé dans S3
+        """
+        try:
+            folder_name = request.data.get('folder_name')
+            societe_id = request.data.get('societe_id')
+            chantier_id = request.data.get('chantier_id')
+            category = request.data.get('category')
+            level = request.data.get('level', 'category')  # root, societe, chantier, category
+
+            if not folder_name:
+                return Response({'error': 'Nom de dossier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Construire le chemin du dossier selon le niveau
+            folder_path = ""
+            
+            if level == 'root':
+                folder_path = f"custom_folders/{custom_slugify(folder_name)}"
+            elif level == 'societe':
+                societe = Societe.objects.get(id=societe_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                folder_path = f"companies/{societe_part}/custom_folders/{custom_slugify(folder_name)}"
+            elif level == 'chantier':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                folder_path = f"companies/{societe_part}/chantiers/{chantier_part}/custom_folders/{custom_slugify(folder_name)}"
+            elif level == 'category':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                category_part = custom_slugify(category)
+                folder_path = f"companies/{societe_part}/chantiers/{chantier_part}/{category_part}/custom_folders/{custom_slugify(folder_name)}"
+
+            # Créer le dossier dans S3
+            from .utils import create_s3_folder
+            success = create_s3_folder(folder_path)
+
+            if success:
+                return Response({
+                    'message': 'Dossier créé avec succès',
+                    'folder_path': folder_path,
+                    'folder_name': folder_name
+                })
+            else:
+                return Response({'error': 'Erreur lors de la création du dossier'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def list_custom_folders(self, request):
+        """
+        Liste les dossiers personnalisés selon le niveau
+        """
+        try:
+            societe_id = request.query_params.get('societe_id')
+            chantier_id = request.query_params.get('chantier_id')
+            category = request.query_params.get('category')
+            level = request.query_params.get('level', 'category')
+
+            # Construire le préfixe selon le niveau
+            prefix = ""
+            
+            if level == 'root':
+                prefix = "custom_folders/"
+            elif level == 'societe':
+                societe = Societe.objects.get(id=societe_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                prefix = f"companies/{societe_part}/custom_folders/"
+            elif level == 'chantier':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                prefix = f"companies/{societe_part}/chantiers/{chantier_part}/custom_folders/"
+            elif level == 'category':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                category_part = custom_slugify(category)
+                prefix = f"companies/{societe_part}/chantiers/{chantier_part}/{category_part}/custom_folders/"
+
+            # Lister les dossiers dans S3
+            from .utils import list_s3_folders
+            folders = list_s3_folders(prefix)
+
+            return Response({
+                'folders': folders,
+                'level': level
+            })
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['delete'])
+    def delete_folder(self, request):
+        """
+        Supprime un dossier personnalisé et son contenu
+        """
+        try:
+            folder_path = request.data.get('folder_path')
+            
+            if not folder_path:
+                return Response({'error': 'Chemin du dossier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Supprimer le dossier dans S3
+            from .utils import delete_s3_folder
+            success = delete_s3_folder(folder_path)
+
+            if success:
+                return Response({'message': 'Dossier supprimé avec succès'})
+            else:
+                return Response({'error': 'Erreur lors de la suppression du dossier'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

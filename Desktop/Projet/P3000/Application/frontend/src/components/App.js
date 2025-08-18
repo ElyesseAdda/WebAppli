@@ -16,6 +16,7 @@ import ChantierTabs from "./ChantierTabs";
 import CreationDevis from "./CreationDevis";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
+import Drive from "./Drive";
 import GestionAppelsOffres from "./GestionAppelsOffres";
 import Layout from "./Layout";
 import ListeBonCommande from "./ListeBonCommande";
@@ -81,7 +82,7 @@ function App() {
             />
             <Route path="/BonCommande" element={<ListeBonCommande />} />
             <Route path="/ModificationBC/:id" element={<BonCommandeModif />} />
-            <Route path="/ListeSituation" element={<ListeSituation />} />
+            <Route path="/ListeDevis" element={<ListeSituation />} />
             <Route path="/TableauSuivi" element={<TableauSuivi />} />
             <Route
               path="/TableauFacturation"
@@ -92,6 +93,7 @@ function App() {
               path="/paiements-sous-traitant/:chantierId/:sousTraitantId"
               element={<PaiementsSousTraitantPage />}
             />
+            <Route path="/drive" element={<Drive />} />
             <Route path="/Test" element={<Test />} />;
           </Routes>
         </Layout>
