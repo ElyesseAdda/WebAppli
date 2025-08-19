@@ -69,6 +69,7 @@ from datetime import datetime, timedelta
 
 
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -588,10 +589,6 @@ from datetime import date, timedelta
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 import holidays
 from datetime import datetime, timedelta
-
-
-
-logger = logging.getLogger(__name__)
 
 
 

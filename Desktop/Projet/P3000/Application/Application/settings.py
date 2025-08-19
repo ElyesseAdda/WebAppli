@@ -66,8 +66,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',  # Middleware CSRF activé
-    'api.middleware.CSRFMiddleware',  # Notre middleware personnalisé
+    'django.middleware.csrf.CsrfViewMiddleware',  # Middleware CSRF standard uniquement
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -92,6 +91,16 @@ else:
 CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com,http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["https://myp3000app.com", "http://localhost:3000"]
 CSRF_USE_SESSIONS = False
+
+# Désactiver CSRF pour toutes les URLs API
+CSRF_EXEMPT_URLS = [
+    r'^/api/.*$',  # Toutes les URLs commençant par /api/
+]
+
+# Configuration pour exempter les APIs de CSRF
+CSRF_EXEMPT_PATTERNS = [
+    r'^/api/.*$',
+]
 
 # Configuration des cookies de session (forcée pour la production)
 # SESSION_COOKIE_SECURE = True  # Forcé à True pour la production # This line is now handled by the DEBUG conditional block above
