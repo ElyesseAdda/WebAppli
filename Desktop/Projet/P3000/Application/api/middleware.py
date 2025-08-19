@@ -1,11 +1,25 @@
 from django.utils.deprecation import MiddlewareMixin
 from django.middleware.csrf import get_token
+import re
 
 class CSRFMiddleware(MiddlewareMixin):
     """
     Middleware personnalisé pour gérer CSRF avec les API
     """
     def process_request(self, request):
-        # Forcer la génération du token CSRF pour toutes les requêtes
+        # URLs à exclure de la vérification CSRF (toutes les API)
+        csrf_exempt_urls = [
+            r'^/api/.*$',  # Toutes les URLs commençant par /api/
+        ]
+        
+        # Vérifier si l'URL actuelle doit être exemptée de CSRF
+        path = request.path_info.lstrip('/')
+        for pattern in csrf_exempt_urls:
+            if re.match(pattern, path):
+                # Marquer la requête comme exemptée de CSRF
+                request._dont_enforce_csrf_checks = True
+                break
+        
+        # Forcer la génération du token CSRF pour toutes les requêtes (même si on ne l'utilise pas)
         get_token(request)
         return None

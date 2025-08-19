@@ -20,12 +20,12 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
 import { FaEyeSlash } from "react-icons/fa";
 import { FiPlusCircle } from "react-icons/fi";
 import { RiPencilFill } from "react-icons/ri";
 import { useLocation } from "react-router-dom";
+import axiosInstance from "../utils/axios";
 import ChantierForm from "./ChantierForm";
 import ClientInfoModal from "./ClientInfoModal";
 import ClientTypeModal from "./ClientTypeModal";
@@ -156,7 +156,7 @@ const CreationDevis = () => {
 
   const fetchChantiers = async () => {
     try {
-      const response = await axios.get("/api/chantier/");
+      const response = await axiosInstance.get("chantier/");
       setChantiers(response.data);
     } catch (error) {
       console.error("Erreur lors du chargement des chantiers:", error);
