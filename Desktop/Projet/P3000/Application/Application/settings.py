@@ -38,7 +38,7 @@ load_env_file()
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# Configuration conditionnelle pour développement vs production
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
@@ -78,9 +78,23 @@ CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000'
 
 CORS_ALLOW_CREDENTIALS = True
 
-# Configuration des cookies de session
-SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() == 'true'  # False en développement
+# Configuration CSRF pour les API REST
+CSRF_COOKIE_SAMESITE = 'Lax'
+if DEBUG:
+    # Configuration pour le développement
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = False
+else:
+    # Configuration pour la production
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+
+CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com,http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["https://myp3000app.com", "http://localhost:3000"]
+CSRF_USE_SESSIONS = False
+
+# Configuration des cookies de session (forcée pour la production)
+# SESSION_COOKIE_SECURE = True  # Forcé à True pour la production # This line is now handled by the DEBUG conditional block above
 
 ROOT_URLCONF = 'Application.urls'
 
@@ -190,7 +204,7 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = os.getenv('SECURE_CONTENT_TYPE_NOSNIFF', 'True').lower() == 'true'
     
     # Cookies sécurisés
-    SESSION_COOKIE_SECURE = True
+    # SESSION_COOKIE_SECURE = True # This line is now handled by the DEBUG conditional block above
     
     # Logs
     LOGGING = {
