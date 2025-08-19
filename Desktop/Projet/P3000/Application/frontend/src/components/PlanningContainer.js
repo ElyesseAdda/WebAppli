@@ -55,6 +55,8 @@ const PlanningContainer = () => {
   const [targetWeek, setTargetWeek] = useState(dayjs().isoWeek());
   const [targetYear, setTargetYear] = useState(dayjs().year());
   const [isCopying, setIsCopying] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
+  const [selectedReportYear, setSelectedReportYear] = useState(dayjs().year());
 
   useEffect(() => {
     const fetchAgents = async () => {
@@ -91,6 +93,47 @@ const PlanningContainer = () => {
     const minYear = 2023;
     const maxYear = currentYear + 2;
     return Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i);
+  };
+
+  const generateMonths = () => {
+    return [
+      { value: 1, label: "Janvier" },
+      { value: 2, label: "Février" },
+      { value: 3, label: "Mars" },
+      { value: 4, label: "Avril" },
+      { value: 5, label: "Mai" },
+      { value: 6, label: "Juin" },
+      { value: 7, label: "Juillet" },
+      { value: 8, label: "Août" },
+      { value: 9, label: "Septembre" },
+      { value: 10, label: "Octobre" },
+      { value: 11, label: "Novembre" },
+      { value: 12, label: "Décembre" },
+    ];
+  };
+
+  const handleGenerateMonthlyReport = async () => {
+    try {
+      const response = await axios.get(
+        `/api/generate-monthly-agents-pdf/?month=${selectedMonth}&year=${selectedReportYear}`,
+        { responseType: "blob" }
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" })
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `rapport_mensuel_agents_${selectedMonth}_${selectedReportYear}.pdf`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      alert("Erreur lors de la génération du rapport mensuel.");
+      console.error(error);
+    }
   };
 
   const copySchedule = async () => {
@@ -295,6 +338,56 @@ const PlanningContainer = () => {
             }}
           >
             Copier le Planning
+          </Button>
+        </ButtonGroup>
+      </ControlsContainer>
+
+      {/* Section pour le rapport mensuel */}
+      <ControlsContainer>
+        <SelectGroup>
+          <StyledFormControl>
+            <InputLabel>Mois</InputLabel>
+            <Select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              label="Mois"
+            >
+              {generateMonths().map((month) => (
+                <MenuItem key={month.value} value={month.value}>
+                  {month.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </StyledFormControl>
+
+          <StyledFormControl>
+            <InputLabel>Année</InputLabel>
+            <Select
+              value={selectedReportYear}
+              onChange={(e) => setSelectedReportYear(Number(e.target.value))}
+              label="Année"
+            >
+              {generateYears().map((year) => (
+                <MenuItem key={year} value={year}>
+                  {year}
+                </MenuItem>
+              ))}
+            </Select>
+          </StyledFormControl>
+        </SelectGroup>
+
+        <ButtonGroup>
+          <Button
+            variant="contained"
+            onClick={handleGenerateMonthlyReport}
+            sx={{
+              backgroundColor: "#4caf50",
+              "&:hover": {
+                backgroundColor: "#45a049",
+              },
+            }}
+          >
+            Générer Rapport Mensuel PDF
           </Button>
         </ButtonGroup>
       </ControlsContainer>

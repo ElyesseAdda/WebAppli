@@ -53,6 +53,28 @@ const AgencyExpenses = () => {
     amount: "",
   });
   const [originalExpenses, setOriginalExpenses] = useState([]);
+  const [allExpenses, setAllExpenses] = useState([]);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+
+  // Utilitaires de calcul: inclusion d'une dépense dans un mois/année
+  const toYearMonth = (dateObj) =>
+    dateObj.getFullYear() * 12 + dateObj.getMonth();
+  const isExpenseActiveInMonth = (expense, month, year) => {
+    const targetYM = year * 12 + month;
+    const expenseStart = new Date(expense.date);
+    const startYM = toYearMonth(expenseStart);
+
+    if (expense.type === ExpenseTypes.FIXED) {
+      const endYM = expense.end_date
+        ? toYearMonth(new Date(expense.end_date))
+        : Infinity;
+      return startYM <= targetYM && targetYM <= endYM;
+    }
+
+    // Ponctuel: strictement le même mois/année
+    return startYM === targetYM;
+  };
 
   // Catégories de dépenses
   const categories = [
@@ -65,12 +87,30 @@ const AgencyExpenses = () => {
     "Autres",
   ];
 
-  // Charger les dépenses au montage du composant
+  // Charger les données à chaque changement de mois/année
   useEffect(() => {
+    // 1) Vue mensuelle (inclut les overrides) pour le tableau
+    fetchMonthlySummary();
+    // 2) Vue globale (sans overrides) pour le calcul annuel
     fetchExpenses();
   }, [selectedMonth, selectedYear]);
 
   const fetchExpenses = async () => {
+    try {
+      setLoading(true);
+      // Récupère la liste complète puis filtre côté client selon mois/année
+      const response = await axios.get(`/api/agency-expenses/`);
+      const fetchedExpenses = response.data || [];
+      setAllExpenses(fetchedExpenses);
+    } catch (error) {
+      console.error("Erreur lors du chargement des dépenses:", error);
+      alert("Erreur lors du chargement des dépenses");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMonthlySummary = async () => {
     try {
       setLoading(true);
       const response = await axios.get(
@@ -78,12 +118,11 @@ const AgencyExpenses = () => {
           selectedMonth + 1
         }&year=${selectedYear}`
       );
-      const fetchedExpenses = response.data.expenses || [];
-      setOriginalExpenses(fetchedExpenses); // Stockez les dépenses originales
-      setExpenses(fetchedExpenses);
+      const fetched = response.data?.expenses || [];
+      setOriginalExpenses(fetched);
+      setExpenses(fetched);
     } catch (error) {
-      console.error("Erreur lors du chargement des dépenses:", error);
-      alert("Erreur lors du chargement des dépenses");
+      console.error("Erreur lors du chargement du résumé mensuel:", error);
     } finally {
       setLoading(false);
     }
@@ -108,7 +147,9 @@ const AgencyExpenses = () => {
 
       await axios.post("/api/agency-expenses/", expenseData);
       setOpenDialog(false);
-      fetchExpenses();
+      // Recharger la vue mensuelle (overrides) et la base annuelle
+      await fetchMonthlySummary();
+      await fetchExpenses();
 
       setNewExpense({
         description: "",
@@ -116,7 +157,7 @@ const AgencyExpenses = () => {
         type: ExpenseTypes.FIXED,
         date: new Date(),
         end_date: null,
-        category: "salaire",
+        category: "Salaire",
       });
     } catch (error) {
       console.error("Erreur lors de l'ajout de la dépense:", error);
@@ -130,13 +171,27 @@ const AgencyExpenses = () => {
     try {
       setLoading(true);
       await axios.delete(`/api/agency-expenses/${id}/`);
-      fetchExpenses(); // Recharger les dépenses
+      // Recharger la vue mensuelle et la base annuelle
+      await fetchMonthlySummary();
+      await fetchExpenses();
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
       alert("Erreur lors de la suppression de la dépense");
     } finally {
       setLoading(false);
     }
+  };
+
+  const openDeleteConfirm = (expense) => {
+    setExpenseToDelete(expense);
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!expenseToDelete) return;
+    await handleDeleteExpense(expenseToDelete.id);
+    setConfirmDeleteOpen(false);
+    setExpenseToDelete(null);
   };
 
   const handleEditExpense = (expense) => {
@@ -177,7 +232,8 @@ const AgencyExpenses = () => {
           overrideData
         );
         setOpenDialog(false);
-        fetchExpenses();
+        // Recharger depuis le résumé mensuel pour refléter l'override appliqué
+        await fetchMonthlySummary();
         setIsEditing(false);
         setEditingExpense(null);
       } catch (error) {
@@ -191,32 +247,76 @@ const AgencyExpenses = () => {
     }
   };
 
+  // Clôturer une dépense fixe à partir du mois sélectionné (sans supprimer l'historique)
+  const handleCloseFromSelectedMonth = async () => {
+    if (!isEditing || !editingExpense) return;
+    try {
+      setLoading(true);
+      // Calculer le dernier jour du mois précédent
+      const prevMonth = selectedMonth === 0 ? 11 : selectedMonth - 1;
+      const prevYear = selectedMonth === 0 ? selectedYear - 1 : selectedYear;
+      const lastDayPrevMonth = new Date(prevYear, prevMonth + 1, 0); // jour 0 du mois suivant = dernier jour du mois courant
+      const iso = lastDayPrevMonth.toISOString().split("T")[0];
+
+      await axios.patch(`/api/agency-expenses/${editingExpense.id}/`, {
+        end_date: iso,
+      });
+
+      setOpenDialog(false);
+      await fetchExpenses();
+      await fetchMonthlySummary();
+      setIsEditing(false);
+      setEditingExpense(null);
+    } catch (error) {
+      console.error("Erreur lors de la clôture de la dépense:", error);
+      alert("Impossible de clôturer la dépense à partir de ce mois");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculateMonthlyTotal = () => {
     return expenses
-      .filter((expense) => {
-        const expenseDate = new Date(expense.date);
-        const targetDate = new Date(selectedYear, selectedMonth);
-
-        // Pour les dépenses fixes, vérifier si la date de début est avant ou égale au mois sélectionné
-        if (expense.type === ExpenseTypes.FIXED) {
-          const startDate = new Date(expense.date);
-          const endDate = expense.end_date ? new Date(expense.end_date) : null;
-
-          return startDate <= targetDate && (!endDate || endDate >= targetDate);
-        }
-
-        // Pour les dépenses ponctuelles, vérifier le mois exact
-        return (
-          expenseDate.getMonth() === selectedMonth &&
-          expenseDate.getFullYear() === selectedYear
-        );
-      })
+      .filter((expense) =>
+        isExpenseActiveInMonth(expense, selectedMonth, selectedYear)
+      )
       .reduce((total, expense) => {
         const amount = expense.current_override
           ? expense.current_override.amount
           : expense.amount;
         return total + parseFloat(amount);
       }, 0);
+  };
+
+  const countActiveMonthsInYear = (expense, year) => {
+    const firstYM = year * 12 + 0;
+    const lastYM = year * 12 + 11;
+    const startYM = toYearMonth(new Date(expense.date));
+    const endYM = expense.end_date
+      ? toYearMonth(new Date(expense.end_date))
+      : Infinity;
+    const activeStart = Math.max(startYM, firstYM);
+    const activeEnd = Math.min(endYM, lastYM);
+    if (activeEnd < activeStart) return 0;
+    return activeEnd - activeStart + 1;
+  };
+
+  const calculateYearlyTotal = () => {
+    if (!Array.isArray(allExpenses) || allExpenses.length === 0) return 0;
+    return allExpenses.reduce((sum, expense) => {
+      const baseAmount = parseFloat(
+        expense.current_override
+          ? expense.current_override.amount
+          : expense.amount
+      );
+      if (Number.isNaN(baseAmount)) return sum;
+      if (expense.type === ExpenseTypes.FIXED) {
+        const months = countActiveMonthsInYear(expense, selectedYear);
+        return sum + baseAmount * months;
+      }
+      const d = new Date(expense.date);
+      return d.getFullYear() === selectedYear ? sum + baseAmount : sum;
+    }, 0);
   };
 
   const handleFilterChange = (field) => (event) => {
@@ -303,7 +403,7 @@ const AgencyExpenses = () => {
       <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
         <Select
           value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
+          onChange={(e) => setSelectedMonth(Number(e.target.value))}
           sx={{
             minWidth: 150,
             backgroundColor: "rgba(27, 120, 188, 1)",
@@ -327,7 +427,7 @@ const AgencyExpenses = () => {
         </Select>
         <Select
           value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
           sx={{
             minWidth: 100,
             backgroundColor: "rgba(27, 120, 188, 1)",
@@ -469,29 +569,9 @@ const AgencyExpenses = () => {
           </TableHead>
           <TableBody>
             {expenses
-              .filter((expense) => {
-                const expenseDate = new Date(expense.date);
-                const targetDate = new Date(selectedYear, selectedMonth);
-
-                // Pour les dépenses fixes, vérifier si la date de début est avant ou égale au mois sélectionné
-                if (expense.type === ExpenseTypes.FIXED) {
-                  const startDate = new Date(expense.date);
-                  const endDate = expense.end_date
-                    ? new Date(expense.end_date)
-                    : null;
-
-                  return (
-                    startDate <= targetDate &&
-                    (!endDate || endDate >= targetDate)
-                  );
-                }
-
-                // Pour les dépenses ponctuelles, vérifier le mois exact
-                return (
-                  expenseDate.getMonth() === selectedMonth &&
-                  expenseDate.getFullYear() === selectedYear
-                );
-              })
+              .filter((expense) =>
+                isExpenseActiveInMonth(expense, selectedMonth, selectedYear)
+              )
               .map((expense, index) => (
                 <TableRow
                   key={expense.id}
@@ -550,7 +630,7 @@ const AgencyExpenses = () => {
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => handleDeleteExpense(expense.id)}
+                        onClick={() => openDeleteConfirm(expense)}
                         disabled={loading}
                       >
                         <FaTrash />
@@ -574,6 +654,19 @@ const AgencyExpenses = () => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Résumé annuel */}
+      <Paper sx={{ mt: 3, p: 2 }} elevation={0}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+          Total annuel ({selectedYear})
+        </Typography>
+        <Typography
+          variant="body1"
+          sx={{ fontWeight: 600, color: "primary.main" }}
+        >
+          {calculateYearlyTotal().toFixed(2)} €
+        </Typography>
+      </Paper>
 
       {/* Dialog pour ajouter/modifier une dépense */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
@@ -650,9 +743,7 @@ const AgencyExpenses = () => {
                   : setNewExpense({ ...newExpense, amount: e.target.value })
               }
               fullWidth
-              InputProps={{
-                startAdornment: "€",
-              }}
+              inputProps={{ step: "0.01", min: "0" }}
             />
             {/* Les autres champs sont désactivés en mode édition car on ne modifie que pour le mois en cours */}
             {!isEditing && (
@@ -726,8 +817,45 @@ const AgencyExpenses = () => {
           >
             Annuler
           </Button>
+          {isEditing && (
+            <Button
+              color="warning"
+              onClick={handleCloseFromSelectedMonth}
+              disabled={loading}
+            >
+              Clôturer à partir de ce mois
+            </Button>
+          )}
           <Button onClick={handleSaveExpense} variant="contained">
             {isEditing ? "Modifier" : "Ajouter"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de confirmation de suppression */}
+      <Dialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+      >
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Cette action supprimera définitivement la dépense et tout son
+            historique. Pour une modification ou suppression ponctuelle d'un
+            mois, utilisez plutôt « Modifier » pour ajuster le montant du mois
+            ou « Clôturer à partir de ce mois » pour arrêter la dépense sans
+            supprimer l'historique antérieur.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)}>Annuler</Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            disabled={loading}
+          >
+            Supprimer définitivement
           </Button>
         </DialogActions>
       </Dialog>

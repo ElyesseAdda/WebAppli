@@ -1,5 +1,22 @@
 from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils.text import slugify
+import os
+
+from .models import Document, Societe, Chantier
+from .serializers import (
+    DocumentSerializer, 
+    DocumentUploadSerializer, 
+    DocumentListSerializer, 
+    FolderItemSerializer
+)
+from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -15,16 +32,20 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
 from .models import (
-    TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
-    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel# Changé BonCommandeLigne en LigneBonCommande
+    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel,
+    Banque,
+    AgencyExpenseAggregate,
 )
+from .drive_automation import drive_automation
+from .models import compute_agency_expense_aggregate_for_month
 import logging
 from django.db import transaction, models
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -71,7 +92,18 @@ class ChantierViewSet(viewsets.ModelViewSet):
         })
         
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        chantier = self.perform_create(serializer)
+        
+        # Créer automatiquement la structure de dossiers dans le drive
+        try:
+            societe = chantier.societe
+            if societe and chantier.nom:
+                drive_automation.create_chantier_structure(
+                    societe_name=societe.nom,
+                    chantier_name=chantier.nom
+                )
+        except Exception as e:
+            print(f"Erreur lors de la création automatique des dossiers: {str(e)}")
         
         headers = self.get_success_headers(serializer.data)
         return Response(
@@ -96,6 +128,467 @@ class ChantierViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         
         return Response(serializer.data)
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        societe_id = self.request.query_params.get('societe_id')
+        if societe_id:
+            queryset = queryset.filter(societe_id=societe_id)
+        return queryset
+
+
+
+class SocieteViewSet(viewsets.ModelViewSet):
+    queryset = Societe.objects.all()
+    serializer_class = SocieteSerializer
+    permission_classes = [AllowAny]
+
+class FactureTSViewSet(viewsets.ModelViewSet):
+    queryset = FactureTS.objects.all()
+    serializer_class = FactureTSListSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset.select_related('devis', 'avenant')
+class DevisViewSet(viewsets.ModelViewSet):
+    queryset = Devis.objects.all().prefetch_related('lignes')
+    serializer_class = DevisSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        return queryset
+    
+    @action(detail=True, methods=['get'])
+    def format_lignes(self, request, pk=None):
+        devis = self.get_object()
+        serializer = self.get_serializer(devis)
+        return Response(serializer.data)
+    
+class FactureViewSet(viewsets.ModelViewSet):
+    queryset = Facture.objects.all()
+    serializer_class = FactureSerializer
+
+
+def dashboard_data(request):
+    # Récupérer les paramètres de filtrage
+    month = request.GET.get('month', datetime.now().month)
+    year = request.GET.get('year', datetime.now().year)
+    chantier_id = request.GET.get('chantier_id')
+
+    # Créer le filtre de date
+    date_filter = Q(
+        date_creation__month=month,
+        date_creation__year=year
+    )
+
+    # Ajouter le filtre de chantier si spécifié
+    chantier_filter = Q(id=chantier_id) if chantier_id else Q()
+
+    # Appliquer les filtres aux requêtes
+    chantiers = Chantier.objects.filter(chantier_filter)
+    
+    # Récupérer la dernière situation pour chaque chantier
+    latest_situations = {}
+    for chantier in chantiers:
+        latest_situation = Situation.objects.filter(
+            chantier=chantier
+        ).order_by('-date_creation').first()
+        if latest_situation:
+            latest_situations[chantier.id] = {
+                'montant_apres_retenues': float(latest_situation.montant_apres_retenues),
+                'pourcentage_avancement': float(latest_situation.pourcentage_avancement)
+            }
+
+    if chantier_id:
+        devis = Devis.objects.filter(chantier_id=chantier_id)
+        factures = Facture.objects.filter(chantier_id=chantier_id)
+    else:
+        devis = Devis.objects.all()
+        factures = Facture.objects.all()
+
+    # Appliquer le filtre de date
+    devis = devis.filter(date_filter)
+    factures = factures.filter(date_filter)
+
+    # Chantiers
+    state_chantier = chantiers.filter(state_chantier='En Cours').count()
+    cout_materiel = chantiers.aggregate(Sum('cout_materiel'))['cout_materiel__sum'] or 0
+    cout_main_oeuvre = chantiers.aggregate(Sum('cout_main_oeuvre'))['cout_main_oeuvre__sum'] or 0
+    cout_sous_traitance = chantiers.aggregate(Sum('cout_sous_traitance'))['cout_sous_traitance__sum'] or 0
+    montant_total = chantiers.aggregate(Sum('montant_ttc'))['montant_ttc__sum'] or 0
+
+    # Devis
+    devis_terminer = devis.filter(status='Terminé').count()
+    devis_en_cour = devis.filter(status='En Cours').count()
+    devis_facturé = devis.filter(status='Facturé').count()
+    
+    # Factures
+    facture_terminer = factures.filter(state_facture='Terminé').count()
+    facture_en_cour = factures.filter(state_facture='En Cours').count()
+    facture_facturé = factures.filter(state_facture='Facturé').count()
+
+    # Totaux Devis
+    total_devis_terminer = devis.filter(status='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_devis_facturé = devis.filter(status='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    
+    # Totaux Factures
+    total_facture_terminer = factures.filter(state_facture='Terminé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    total_facture_facturé = factures.filter(state_facture='Facturé').aggregate(total=Sum('price_ttc'))['total'] or 0
+    
+    total_devis_combined = total_devis_facturé + total_devis_terminer
+    total_facture_combined = total_facture_terminer + total_facture_facturé
+
+    data = {
+        'chantier_en_cours': state_chantier,
+        'cout_materiel': cout_materiel,
+        'cout_main_oeuvre': cout_main_oeuvre,
+        'cout_sous_traitance': cout_sous_traitance,
+        'montant_total': montant_total,
+        'devis_terminer': devis_terminer,
+        'facture_terminer': facture_terminer,
+        'devis_en_cour': devis_en_cour,
+        'facture_en_cour': facture_en_cour,
+        'devis_facturé': devis_facturé,
+        'facture_facturé': facture_facturé,
+        'total_devis_terminer': total_devis_terminer,
+        'total_devis_facturé': total_devis_facturé,
+        'total_facture_terminer': total_facture_terminer,
+        'total_facture_facturé': total_facture_facturé,
+        'total_devis_combined': total_devis_combined,
+        'total_facture_combined': total_facture_combined,
+        'latest_situations': latest_situations
+    }
+    return JsonResponse(data)
+
+
+def preview_devis(request):
+    devis_data_encoded = request.GET.get('devis')
+
+    if devis_data_encoded:
+        try:
+            devis_data = json.loads(devis_data_encoded)
+            chantier_id = devis_data['chantier']
+
+            if chantier_id == -1:
+                # Utiliser les données temporaires
+                temp_data = devis_data.get('tempData', {})
+                chantier = temp_data.get('chantier', {})
+                client = temp_data.get('client', {})
+                societe = temp_data.get('societe', {})
+
+                
+
+                # S'assurer que tous les champs ont une valeur par défaut
+                for field in ['name', 'surname', 'phone_Number', 'client_mail']:
+                    if not client.get(field):
+                        client[field] = 'Non renseigné'
+
+                for field in ['nom_societe', 'ville_societe', 'rue_societe', 'codepostal_societe']:
+                    if not societe.get(field):
+                        societe[field] = 'Non renseigné'
+                    
+                for field in ['chantier_name', 'ville', 'rue', 'code_postal']:
+                    if not chantier.get(field):
+                        chantier[field] = 'Non renseigné'
+
+            else:
+                # Utiliser les données existantes
+                chantier = get_object_or_404(Chantier, id=chantier_id)
+                societe = chantier.societe
+                client = societe.client_name
+
+            total_ht = 0
+            parties_data = []
+            
+            for partie_id in devis_data['parties']:
+                partie = get_object_or_404(Partie, id=partie_id)
+                sous_parties_data = []
+                total_partie = 0
+                
+                # Récupérer les lignes spéciales pour cette partie
+                special_lines_partie = devis_data.get('specialLines', {}).get('parties', {}).get(str(partie_id), [])
+                
+                for sous_partie in SousPartie.objects.filter(partie=partie, id__in=devis_data.get('sous_parties', [])):
+                    lignes_details_data = []
+                    total_sous_partie = 0
+                    
+                    # Calculer le total des lignes de détail
+                    for ligne in devis_data['lignes_details']:
+                        if (LigneDetail.objects.get(id=ligne['id']).sous_partie_id == sous_partie.id 
+                            and float(ligne['quantity']) > 0):
+                            ligne_db = get_object_or_404(LigneDetail, id=ligne['id'])
+                            quantity = Decimal(str(ligne['quantity']))
+                            custom_price = Decimal(str(ligne['custom_price']))
+                            total_ligne = quantity * custom_price
+                            
+                            lignes_details_data.append({
+                                'description': ligne_db.description,
+                                'unite': ligne_db.unite,
+                                'quantity': quantity,
+                                'custom_price': custom_price,
+                                'total': total_ligne
+                            })
+                            total_sous_partie += total_ligne
+                    
+                    if lignes_details_data:
+                        # Appliquer les lignes spéciales de la sous-partie
+                        special_lines_sous_partie = devis_data.get('specialLines', {}).get('sousParties', {}).get(str(sous_partie.id), [])
+                        sous_partie_data = {
+                            'description': sous_partie.description,
+                            'lignes_details': lignes_details_data,
+                            'total_sous_partie': total_sous_partie,
+                            'special_lines': []
+                        }
+                        
+                        # Calculer et ajouter chaque ligne spéciale
+                        for special_line in special_lines_sous_partie:
+                            if special_line['valueType'] == 'percentage':
+                                montant = (total_sous_partie * Decimal(str(special_line['value']))) / Decimal('100')
+                            else:
+                                montant = Decimal(str(special_line['value']))
+                            
+                            # Ajouter le montant au total selon le type (reduction ou addition)
+                            if special_line['type'] == 'reduction':
+                                total_sous_partie -= montant
+                            else:
+                                total_sous_partie += montant
+                            
+                            # Stocker le montant tel quel pour l'affichage
+                            sous_partie_data['special_lines'].append({
+                                'description': special_line['description'],
+                                'value': special_line['value'],
+                                'valueType': special_line['valueType'],
+                                'type': special_line['type'],
+                                'montant': montant,  # Montant toujours positif pour l'affichage
+                                'isHighlighted': special_line['isHighlighted']
+                            })
+                        
+                        sous_partie_data['total_sous_partie'] = total_sous_partie
+                        sous_parties_data.append(sous_partie_data)
+                        total_partie += total_sous_partie
+                    
+                if sous_parties_data:
+                    partie_data = {
+                        'titre': partie.titre,
+                        'sous_parties': sous_parties_data,
+                        'total_partie': total_partie,
+                        'special_lines': []
+                    }
+                    
+                    # Calculer et ajouter les lignes spéciales de la partie
+                    for special_line in special_lines_partie:
+                        if special_line['valueType'] == 'percentage':
+                            montant = (total_partie * Decimal(str(special_line['value']))) / Decimal('100')
+                        else:
+                            montant = Decimal(str(special_line['value']))
+                        
+                        # Ajouter le montant au total selon le type
+                        if special_line['type'] == 'reduction':
+                            total_partie -= montant
+                        else:
+                            total_partie += montant
+                        
+                        partie_data['special_lines'].append({
+                            'description': special_line['description'],
+                            'value': special_line['value'],
+                            'valueType': special_line['valueType'],
+                            'type': special_line['type'],
+                            'montant': montant,  # Montant toujours positif pour l'affichage
+                            'isHighlighted': special_line['isHighlighted']
+                        })
+                    
+                    partie_data['total_partie'] = total_partie
+                    parties_data.append(partie_data)
+                    total_ht += total_partie
+            
+            # Appliquer les lignes spéciales globales
+            special_lines_global = devis_data.get('specialLines', {}).get('global', [])
+            for special_line in special_lines_global:
+                if special_line['valueType'] == 'percentage':
+                    montant = (total_ht * Decimal(str(special_line['value']))) / Decimal('100')
+                else:
+                    montant = Decimal(str(special_line['value']))
+                
+                special_line['montant'] = montant  # Montant toujours positif pour l'affichage
+                
+                # Ajouter le montant au total selon le type
+                if special_line['type'] == 'reduction':
+                    total_ht -= montant
+                else:
+                    total_ht += montant
+
+            # Calculer TVA et TTC
+            tva_rate = Decimal(str(devis_data.get('tva_rate', 20.0)))
+            tva = total_ht * (tva_rate / Decimal('100'))
+            montant_ttc = total_ht + tva
+
+            context = {
+                'chantier': chantier,
+                'societe': societe,
+                'client': client,
+                'parties': parties_data,
+                'total_ht': total_ht,  # Utiliser le nouveau total_ht calculé
+                'tva': tva,
+                'montant_ttc': montant_ttc,
+                'special_lines_global': special_lines_global,  # Ajouter les lignes spéciales globales au contexte
+                'devis': {
+                    'tva_rate': tva_rate,
+                    'nature_travaux': devis_data.get('nature_travaux', '')
+                }
+            }
+
+            return render(request, 'preview_devis.html', context)
+
+        except json.JSONDecodeError as e:
+            return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
+    else:
+        return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
+
+def generate_pdf_from_preview(request):
+    try:
+        # Ajout de logs
+        print("Début de generate_pdf_from_preview")
+        print("Request body:", request.body)
+        
+        data = json.loads(request.body)
+        devis_id = data.get('devis_id')
+        print("Devis ID:", devis_id)
+
+        if not devis_id:
+            return JsonResponse({'error': 'ID du devis manquant'}, status=400)
+
+        # URL de la page de prévisualisation pour un devis sauvegardé
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        print("Preview URL:", preview_url)
+
+            # Chemin vers le script Puppeteer
+        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        print("Node script path:", node_script_path)
+
+            # Commande pour exécuter Puppeteer avec Node.js
+        command = ['node', node_script_path, preview_url]
+        print("Commande à exécuter:", command)
+
+        # Exécuter Puppeteer avec capture de la sortie
+        result = subprocess.run(
+            command, 
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print("Sortie standard:", result.stdout)
+        print("Sortie d'erreur:", result.stderr)
+
+            # Lire le fichier PDF généré
+        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+        print("Chemin du PDF:", pdf_path)
+        print("Le fichier existe ?", os.path.exists(pdf_path))
+
+        if os.path.exists(pdf_path):
+                with open(pdf_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+                print("PDF généré avec succès")
+                return response
+        else:
+            error_msg = 'Le fichier PDF n\'a pas été généré.'
+            print(error_msg)
+            return JsonResponse({'error': error_msg}, status=500)
+
+    except json.JSONDecodeError as e:
+        error_msg = f'Données JSON invalides: {str(e)}'
+        print(error_msg)
+        return JsonResponse({'error': error_msg}, status=400)
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.output}'
+        print(error_msg)
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(error_msg)
+        print("Type d'erreur:", type(e))
+        print("Traceback:", traceback.format_exc())
+        return JsonResponse({'error': error_msg}, status=500)
+
+
+def check_nom_devis_existe(request):
+    nom_devis = request.GET.get('nom_devis', None)
+    
+    if nom_devis:
+        exists = Devis.objects.filter(nom_devis=nom_devis).exists()
+        return JsonResponse({'exists': exists})
+    return JsonResponse({'error': 'Nom de devis non fourni'}, status=400)
+
+
+class PartieViewSet(viewsets.ModelViewSet):
+    queryset = Partie.objects.all()
+    serializer_class = PartieSerializer
+
+class SousPartieViewSet(viewsets.ModelViewSet):
+    queryset = SousPartie.objects.all()
+    serializer_class = SousPartieSerializer
+
+from rest_framework import viewsets, status, serializers, status
+from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.decorators import action, api_view, permission_classes
+from django.http import JsonResponse, HttpResponse
+from django.db.models import Avg, Count, Min, Sum, F, Max, Q
+from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.utils import timezone
+from django.utils.timezone import now
+from django.db.models.functions import TruncMonth
+from datetime import timedelta, date, datetime
+import subprocess
+import os
+import json
+import calendar
+from .serializers import  AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .models import (
+    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
+    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
+    LaborCost, DevisLigne, FactureLigne, FacturePartie, 
+    FactureSousPartie, FactureLigneDetail, BonCommande, 
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
+    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel,
+    Banque,
+    AgencyExpenseAggregate,
+)
+from .models import compute_agency_expense_aggregate_for_month
+import logging
+from django.db import transaction, models
+from rest_framework.permissions import IsAdminUser, AllowAny
+from calendar import day_name
+import locale
+import traceback
+from django.views.decorators.csrf import ensure_csrf_cookie
+from decimal import Decimal
+from django.db.models import Q
+import re
+from decimal import Decimal, InvalidOperation
+import tempfile
+from django.views import View
+import random
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from datetime import date, timedelta
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+import holidays
+from datetime import datetime, timedelta
+
+
+
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -537,18 +1030,19 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
             instance = self.get_object()
             data = request.data.copy()
             
-            # Conversion des valeurs en décimal
-            cout_main_oeuvre = Decimal(str(data.get('cout_main_oeuvre', 0)))
-            cout_materiel = Decimal(str(data.get('cout_materiel', 0)))
-            taux_fixe = Decimal(str(data.get('taux_fixe', 0)))
-            marge = Decimal(str(data.get('marge', 0)))
+            # Conversion des valeurs en décimal avec quantize pour 2 décimales
+            TWOPLACES = Decimal('0.01')
+            cout_main_oeuvre = Decimal(str(data.get('cout_main_oeuvre', 0))).quantize(TWOPLACES)
+            cout_materiel = Decimal(str(data.get('cout_materiel', 0))).quantize(TWOPLACES)
+            taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
+            marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
 
-            # Calcul du prix
-            base = cout_main_oeuvre + cout_materiel
-            montant_taux_fixe = base * (taux_fixe / Decimal('100'))
-            sous_total = base + montant_taux_fixe
-            montant_marge = sous_total * (marge / Decimal('100'))
-            prix = sous_total + montant_marge
+            # Calcul du prix avec arrondis intermédiaires
+            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+            prix = (sous_total + montant_marge).quantize(TWOPLACES)
 
             # Ajout du prix calculé aux données
             data['prix'] = prix
@@ -1150,8 +1644,8 @@ def copy_schedule(request):
                     chantier_id=chantier_id,
                     week=target_week,
                     year=target_year,
-                    hours=hours,
-                    cost=hours * agent.taux_Horaire
+                    hours_normal=hours,  # Toutes les heures sont considérées comme normales par défaut
+                    cost_normal=hours * agent.taux_Horaire
                 ))
             LaborCost.objects.bulk_create(labor_costs)
 
@@ -1493,26 +1987,94 @@ def create_chantier_from_devis(request):
 @api_view(['POST'])
 def create_devis(request):
     try:
+        # Log pour déboguer les données reçues
+        print("Données reçues du frontend:", request.data)
+        
         with transaction.atomic():
-            # Création du devis de base
-            devis_data = {
-                'numero': request.data['numero'],
-                'chantier_id': request.data['chantier'],
-                'price_ht': Decimal(str(request.data['price_ht'])),
-                'price_ttc': Decimal(str(request.data['price_ttc'])),
-                'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
-                'nature_travaux': request.data.get('nature_travaux', ''),
-                'description': request.data.get('description', ''),
-                'status': 'En attente',
-                'devis_chantier': request.data.get('devis_chantier', False),
-                'lignes_speciales': request.data.get('lignes_speciales', {})
-            }
+            devis_chantier = request.data.get('devis_chantier', False)
+            
+            # Si c'est un devis de chantier, créer un appel d'offres au lieu d'un chantier
+            if devis_chantier:
+                # Récupérer l'instance de la société
+                societe_id = request.data.get('societe_id')
+                try:
+                    societe = Societe.objects.get(id=societe_id)
+                except Societe.DoesNotExist:
+                    return Response({'error': f'Société avec ID {societe_id} non trouvée'}, status=400)
+                
+                # Créer l'appel d'offres
+                appel_offres_data = {
+                    'chantier_name': request.data.get('chantier_name', ''),
+                    'societe': societe,
+                    'montant_ht': Decimal(str(request.data['price_ht'])),
+                    'montant_ttc': Decimal(str(request.data['price_ttc'])),
+                    'ville': request.data.get('ville', ''),
+                    'rue': request.data.get('rue', ''),
+                    'code_postal': request.data.get('code_postal', ''),
+                    'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
+                    'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0'))),
+                    'marge_estimee': Decimal(str(request.data.get('marge_estimee', '0'))),
+                    'taux_fixe': Decimal(str(request.data.get('taux_fixe', '20'))),
+                    'description': request.data.get('description', ''),
+                    'statut': 'en_attente'
+                }
+                
+                # Log pour déboguer les données de l'appel d'offres
+                print("Données de l'appel d'offres:", appel_offres_data)
+                
+                appel_offres = AppelOffres.objects.create(**appel_offres_data)
+                
+                # Création du devis lié à l'appel d'offres
+                devis_data = {
+                    'numero': request.data['numero'],
+                    'appel_offres': appel_offres,
+                    'price_ht': Decimal(str(request.data['price_ht'])),
+                    'price_ttc': Decimal(str(request.data['price_ttc'])),
+                    'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
+                    'nature_travaux': request.data.get('nature_travaux', ''),
+                    'description': request.data.get('description', ''),
+                    'status': 'En attente',
+                    'devis_chantier': True,
+                    'lignes_speciales': request.data.get('lignes_speciales', {})
+                }
+            else:
+                # Création du devis de base (comme avant)
+                devis_data = {
+                    'numero': request.data['numero'],
+                    'chantier_id': request.data['chantier'],
+                    'price_ht': Decimal(str(request.data['price_ht'])),
+                    'price_ttc': Decimal(str(request.data['price_ttc'])),
+                    'tva_rate': Decimal(str(request.data.get('tva_rate', '20.00'))),
+                    'nature_travaux': request.data.get('nature_travaux', ''),
+                    'description': request.data.get('description', ''),
+                    'status': 'En attente',
+                    'devis_chantier': False,
+                    'lignes_speciales': request.data.get('lignes_speciales', {})
+                }
             
             devis = Devis.objects.create(**devis_data)
-            
-            # Associer le client
-            if request.data.get('client'):
-                devis.client.set(request.data['client'])
+
+            # Associer le(s) client(s) de manière robuste
+            # 1) Nettoyer la liste reçue du frontend pour retirer None/valeurs falsy
+            client_values = request.data.get('client') or []
+            if isinstance(client_values, (list, tuple)):
+                client_ids = [c for c in client_values if c]
+            else:
+                client_ids = [client_values] if client_values else []
+
+            # 2) Si aucun client valide fourni, déduire depuis le chantier/société
+            if not client_ids:
+                try:
+                    if devis.devis_chantier and devis.appel_offres and devis.appel_offres.societe and devis.appel_offres.societe.client_name:
+                        client_ids = [devis.appel_offres.societe.client_name.id]
+                    elif devis.chantier and devis.chantier.societe and devis.chantier.societe.client_name:
+                        client_ids = [devis.chantier.societe.client_name.id]
+                except Exception:
+                    client_ids = []
+
+            # 3) Associer si on a au moins un id valide
+            if client_ids:
+                devis.client.set(client_ids)
             
             # Création des lignes de devis
             for ligne in request.data.get('lignes', []):
@@ -1662,9 +2224,18 @@ def get_chantier_relations(request):
 def preview_saved_devis(request, devis_id):
     try:
         devis = get_object_or_404(Devis, id=devis_id)
-        chantier = devis.chantier
-        societe = chantier.societe
-        client = societe.client_name
+        
+        # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
+        if devis.devis_chantier and devis.appel_offres:
+            # Cas d'un devis de chantier (appel d'offres)
+            chantier = devis.appel_offres
+            societe = devis.appel_offres.societe
+            client = societe.client_name if societe else None
+        else:
+            # Cas d'un devis normal
+            chantier = devis.chantier
+            societe = chantier.societe if chantier else None
+            client = societe.client_name if societe else None
 
         total_ht = Decimal('0')
         parties_data = []
@@ -2052,6 +2623,8 @@ def get_chantier_details(request, chantier_id):
             'id': chantier.id,
             'nom': chantier.chantier_name,
             'statut': chantier.state_chantier,
+            'montant_ht': chantier.montant_ht,
+            'montant_ttc': chantier.montant_ttc,
             'dates': {
                 'debut': chantier.date_debut,
                 'fin': chantier.date_fin
@@ -2785,17 +3358,60 @@ def update_taux_fixe(request):
         nouveau_taux = request.data.get('taux_fixe')
         if nouveau_taux is None:
             return Response({'error': 'Taux fixe manquant'}, status=400)
+        
+        # Convertir en Decimal avec 2 décimales
+        TWOPLACES = Decimal('0.01')
+        nouveau_taux_decimal = Decimal(str(nouveau_taux)).quantize(TWOPLACES)
             
+        # Mettre à jour le paramètre global
         taux_fixe, created = Parametres.objects.get_or_create(
             code='TAUX_FIXE',
-            defaults={'valeur': nouveau_taux, 'description': 'Taux fixe par défaut'}
+            defaults={'valeur': nouveau_taux_decimal, 'description': 'Taux fixe par défaut'}
         )
         
         if not created:
-            taux_fixe.valeur = nouveau_taux
+            taux_fixe.valeur = nouveau_taux_decimal
             taux_fixe.save()
+        
+        # Mettre à jour toutes les lignes de détail existantes
+        lignes_details = LigneDetail.objects.all()
+        lignes_mises_a_jour = []
+        
+        for ligne in lignes_details:
+            # Mettre à jour le taux fixe
+            ligne.taux_fixe = nouveau_taux_decimal
             
-        return Response({'valeur': taux_fixe.valeur})
+            # Recalculer le prix avec le nouveau taux fixe
+            cout_main_oeuvre = Decimal(str(ligne.cout_main_oeuvre)).quantize(TWOPLACES)
+            cout_materiel = Decimal(str(ligne.cout_materiel)).quantize(TWOPLACES)
+            marge = Decimal(str(ligne.marge)).quantize(TWOPLACES)
+            
+            # Calcul du prix avec arrondis intermédiaires
+            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+            montant_taux_fixe = (base * (nouveau_taux_decimal / Decimal('100'))).quantize(TWOPLACES)
+            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+            prix = (sous_total + montant_marge).quantize(TWOPLACES)
+            
+            ligne.prix = prix
+            ligne.save()
+            
+            # Ajouter à la liste des lignes mises à jour
+            lignes_mises_a_jour.append({
+                'id': ligne.id,
+                'description': ligne.description,
+                'taux_fixe': float(ligne.taux_fixe),
+                'prix': float(ligne.prix),
+                'cout_main_oeuvre': float(ligne.cout_main_oeuvre),
+                'cout_materiel': float(ligne.cout_materiel),
+                'marge': float(ligne.marge)
+            })
+            
+        return Response({
+            'valeur': float(taux_fixe.valeur),
+            'lignes_mises_a_jour': lignes_mises_a_jour,
+            'nombre_lignes_mises_a_jour': len(lignes_mises_a_jour)
+        })
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
@@ -4236,6 +4852,29 @@ class AgencyExpenseViewSet(viewsets.ModelViewSet):
             'total': total
         })
 
+    @action(detail=False, methods=['get'])
+    def yearly_summary(self, request):
+        year = int(request.query_params.get('year', timezone.now().year))
+        agg = AgencyExpenseAggregate.objects.filter(year=year).order_by('month')
+        monthly = [
+            {
+                'month': x.month,
+                'total_amount': float(x.total_amount),
+                'totals_by_category': x.totals_by_category,
+                'updated_at': x.updated_at,
+            }
+            for x in agg
+        ]
+        total_year = float(sum([x.total_amount for x in agg]) if agg else 0)
+        return Response({'year': year, 'monthly': monthly, 'total_year': total_year})
+
+    @action(detail=False, methods=['post'])
+    def recompute_month(self, request):
+        month = int(request.data.get('month'))
+        year = int(request.data.get('year'))
+        obj = compute_agency_expense_aggregate_for_month(year, month)
+        return Response({'year': obj.year, 'month': obj.month, 'total_amount': float(obj.total_amount), 'totals_by_category': obj.totals_by_category})
+
     @action(detail=True, methods=['post'])
     def monthly_override(self, request, pk=None):
         expense = self.get_object()
@@ -4268,6 +4907,10 @@ def update_situation(request, pk):
             situation.montant_reel_ht = request.data['montant_reel_ht']
         if 'date_paiement_reel' in request.data:
             situation.date_paiement_reel = request.data['date_paiement_reel']
+        if 'numero_cp' in request.data:
+            situation.numero_cp = request.data['numero_cp']
+        if 'banque' in request.data:
+            situation.banque_id = request.data['banque']
             
         situation.save()
         return Response(SituationSerializer(situation).data)
@@ -4811,6 +5454,24 @@ class SousTraitantViewSet(viewsets.ModelViewSet):
     queryset = SousTraitant.objects.all()
     serializer_class = SousTraitantSerializer
 
+    def get_queryset(self):
+        queryset = SousTraitant.objects.all()
+        chantier_id = self.request.query_params.get('chantier')
+        
+        if chantier_id:
+            # Récupérer tous les sous-traitants qui ont des contrats avec ce chantier
+            sous_traitants_avec_contrats = SousTraitant.objects.filter(
+                contrats__chantier_id=chantier_id
+            ).distinct()
+            
+            # Récupérer tous les sous-traitants existants
+            tous_sous_traitants = SousTraitant.objects.all()
+            
+            # Combiner les deux listes sans doublons
+            queryset = (sous_traitants_avec_contrats | tous_sous_traitants).distinct()
+        
+        return queryset
+
     @action(detail=False, methods=['get'])
     def by_chantier(self, request):
         chantier_id = request.query_params.get('chantier_id')
@@ -4820,9 +5481,8 @@ class SousTraitantViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        sous_traitants = SousTraitant.objects.filter(
-            contrats__chantier_id=chantier_id
-        ).distinct()
+        # Récupérer tous les sous-traitants
+        sous_traitants = SousTraitant.objects.all()
         serializer = self.get_serializer(sous_traitants, many=True)
         return Response(serializer.data)
 
@@ -4833,8 +5493,12 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = ContratSousTraitance.objects.all()
         chantier_id = self.request.query_params.get('chantier_id')
+        sous_traitant_id = self.request.query_params.get('sous_traitant')
+        
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
+        if sous_traitant_id:
+            queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
 
     @action(detail=True, methods=['get', 'post'])
@@ -5272,10 +5936,16 @@ class PaiementSousTraitantViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         chantier_id = self.request.query_params.get('chantier')
         sous_traitant_id = self.request.query_params.get('sous_traitant')
+        contrat_id = self.request.query_params.get('contrat')
+        avenant_id = self.request.query_params.get('avenant')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        if contrat_id:
+            queryset = queryset.filter(contrat_id=contrat_id)
+        if avenant_id:
+            queryset = queryset.filter(avenant_id=avenant_id)
         return queryset
 
 class RecapFinancierChantierAPIView(APIView):
@@ -5315,21 +5985,40 @@ class RecapFinancierChantierAPIView(APIView):
         situations = Situation.objects.filter(chantier=chantier)
         situations_in_periode = []
         for s in situations:
-            if s.date_envoi and s.delai_paiement is not None:
+            # Si on a une date de paiement réelle, on l'utilise pour le filtrage
+            if s.date_paiement_reel:
+                date_paiement_filtre = s.date_paiement_reel
+            # Sinon, on utilise la date de paiement estimée
+            elif s.date_envoi and s.delai_paiement is not None:
                 try:
-                    date_paiement_estimee = s.date_envoi + timedelta(days=s.delai_paiement)
+                    date_paiement_filtre = s.date_envoi + timedelta(days=s.delai_paiement)
                 except Exception:
                     continue
-                if date_debut and date_fin:
-                    if not (date_debut <= date_paiement_estimee <= date_fin):
-                        continue
-                # Ajoute la date estimée et le retard pour la réponse
-                s._date_paiement_estimee = date_paiement_estimee
-                if s.date_paiement_reel:
-                    s._retard = (s.date_paiement_reel - date_paiement_estimee).days
-                else:
-                    s._retard = None
-                situations_in_periode.append(s)
+            else:
+                # Si aucune date n'est disponible, on inclut la situation
+                date_paiement_filtre = None
+            
+            # Filtrage par période si spécifiée
+            if date_debut and date_fin and date_paiement_filtre:
+                if not (date_debut <= date_paiement_filtre <= date_fin):
+                    continue
+            
+            # Calculer la date de paiement estimée pour l'affichage
+            if s.date_envoi and s.delai_paiement is not None:
+                try:
+                    s._date_paiement_estimee = s.date_envoi + timedelta(days=s.delai_paiement)
+                except Exception:
+                    s._date_paiement_estimee = None
+            else:
+                s._date_paiement_estimee = None
+            
+            # Calculer le retard
+            if s.date_paiement_reel and s._date_paiement_estimee:
+                s._retard = (s.date_paiement_reel - s._date_paiement_estimee).days
+            else:
+                s._retard = None
+            
+            situations_in_periode.append(s)
 
         situation_payees = [s for s in situations_in_periode if s.date_paiement_reel]
         situation_reste = [s for s in situations_in_periode if not s.date_paiement_reel]
@@ -5604,6 +6293,10 @@ def fournisseurs(request):
     fournisseurs = Fournisseur.objects.all().values('id', 'name_fournisseur', 'Fournisseur_mail', 'description_fournisseur')
     return Response(list(fournisseurs))
 
+class BanqueViewSet(viewsets.ModelViewSet):
+    queryset = Banque.objects.all()
+    serializer_class = BanqueSerializer
+
 class FournisseurViewSet(viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all()
     serializer_class = FournisseurSerializer
@@ -5806,3 +6499,698 @@ def schedule_monthly_summary(request):
         chantier_map[chantier_id]['jours_majoration'].extend(data['jours_majoration'])
 
     return Response(list(chantier_map.values()), status=200)
+
+def preview_monthly_agents_report(request):
+    """
+    Vue pour prévisualiser le rapport mensuel des agents
+    Utilise exactement les mêmes données que LaborCostsSummary.js
+    """
+    from calendar import monthrange
+    from datetime import date, timedelta as td
+    import holidays
+    
+    month = int(request.GET.get('month'))
+    year = int(request.GET.get('year'))
+    
+    # Calculer les dates de début et fin du mois
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+    
+    # Utiliser l'endpoint schedule_monthly_summary pour récupérer les données
+    month_str = f"{year}-{month:02d}"
+    
+    # Simuler l'appel à l'endpoint schedule_monthly_summary
+    from django.test import RequestFactory
+    
+    # Créer une requête simulée
+    factory = RequestFactory()
+    mock_request = factory.get(f'/api/schedule/monthly_summary/?month={month_str}')
+    
+    # Appeler la fonction schedule_monthly_summary
+    response = schedule_monthly_summary(mock_request)
+    schedule_data = response.data
+    
+    # Récupérer tous les agents
+    agents = Agent.objects.all()
+    
+    # Récupérer les événements du mois
+    events = Event.objects.filter(
+        start_date__gte=start_date,
+        start_date__lte=end_date
+    ).order_by('start_date')
+    
+    # Agrégation par agent (même logique que LaborCostsSummary.js)
+    agent_map = {}
+    
+    # Traiter les données de schedule_monthly_summary
+    for chantier_data in schedule_data:
+        for detail in chantier_data['details']:
+            agent_id = detail['agent_id']
+            
+            if agent_id not in agent_map:
+                agent_map[agent_id] = {
+                    'agent_id': agent_id,
+                    'agent_nom': detail['agent_nom'],
+                    'heures_normal': 0,
+                    'heures_samedi': 0,
+                    'heures_dimanche': 0,
+                    'heures_ferie': 0,
+                    'montant_normal': 0,
+                    'montant_samedi': 0,
+                    'montant_dimanche': 0,
+                    'montant_ferie': 0,
+                    'jours_majoration': [],
+                    'chantiers': set()
+                }
+            
+            agent_map[agent_id]['heures_normal'] += detail['heures_normal']
+            agent_map[agent_id]['heures_samedi'] += detail['heures_samedi']
+            agent_map[agent_id]['heures_dimanche'] += detail['heures_dimanche']
+            agent_map[agent_id]['heures_ferie'] += detail['heures_ferie']
+            agent_map[agent_id]['montant_normal'] += detail['montant_normal']
+            agent_map[agent_id]['montant_samedi'] += detail['montant_samedi']
+            agent_map[agent_id]['montant_dimanche'] += detail['montant_dimanche']
+            agent_map[agent_id]['montant_ferie'] += detail['montant_ferie']
+            agent_map[agent_id]['jours_majoration'].extend(detail['jours_majoration'])
+            agent_map[agent_id]['chantiers'].add(detail['chantier_nom'])
+    
+    agents_data = []
+    
+    for agent in agents:
+        agent_data = agent_map.get(agent.id, {
+            'heures_normal': 0,
+            'heures_samedi': 0,
+            'heures_dimanche': 0,
+            'heures_ferie': 0,
+            'montant_normal': 0,
+            'montant_samedi': 0,
+            'montant_dimanche': 0,
+            'montant_ferie': 0,
+            'jours_majoration': [],
+            'chantiers': set()
+        })
+        
+        # Regrouper les jours majorés par date et type
+        overtime_grouped = {}
+        for jour in agent_data['jours_majoration']:
+            key = (jour['date'], jour['type'])
+            if key not in overtime_grouped:
+                overtime_grouped[key] = {
+                    'date': jour['date'],
+                    'type': jour['type'],
+                    'hours': 0,
+                    'taux': jour['taux']
+                }
+            overtime_grouped[key]['hours'] += jour['hours']
+        
+        # Convertir en liste et trier par date
+        overtime_details = []
+        for key, value in overtime_grouped.items():
+            # S'assurer que la date est bien un objet date pour le template
+            try:
+                if isinstance(value['date'], str):
+                    value['date'] = date.fromisoformat(value['date'])
+                overtime_details.append(value)
+            except:
+                pass
+        
+        overtime_details.sort(key=lambda x: x['date'])
+        
+        # Récupérer les événements pour cet agent
+        agent_events = events.filter(agent=agent)
+        
+        # Regrouper les événements consécutifs
+        events_data = []
+        if agent_events:
+            current_event = None
+            for event in agent_events:
+                if current_event is None:
+                    current_event = {
+                        'start_date': event.start_date,
+                        'end_date': event.end_date,
+                        'type': event.event_type,
+                        'subtype': event.subtype or '',
+                        'hours_modified': event.hours_modified,
+                        'description': f"{event.event_type} - {event.subtype or 'N/A'}"
+                    }
+                elif (event.event_type == current_event['type'] and 
+                      event.subtype == current_event['subtype'] and
+                      event.start_date == current_event['end_date'] + timedelta(days=1)):
+                    # Événement consécutif, étendre la période
+                    current_event['end_date'] = event.end_date
+                else:
+                    # Nouvel événement, sauvegarder le précédent
+                    events_data.append(current_event)
+                    current_event = {
+                        'start_date': event.start_date,
+                        'end_date': event.end_date,
+                        'type': event.event_type,
+                        'subtype': event.subtype or '',
+                        'hours_modified': event.hours_modified,
+                        'description': f"{event.event_type} - {event.subtype or 'N/A'}"
+                    }
+            
+            # Ajouter le dernier événement
+            if current_event:
+                events_data.append(current_event)
+        
+        # Calculer les totaux
+        total_normal_hours = agent_data['heures_normal']
+        total_overtime_hours = agent_data['heures_samedi'] + agent_data['heures_dimanche'] + agent_data['heures_ferie']
+        total_hours = total_normal_hours + total_overtime_hours
+        
+        # Préparer les données pour le template
+        agents_data.append({
+            'agent': agent,
+            'monthly_hours': {
+                'normal_hours': total_normal_hours,
+                'overtime_hours': total_overtime_hours,
+                'total_hours': total_hours
+            },
+            'overtime_details': overtime_details,
+            'events': events_data
+        })
+    
+    # Préparer le contexte pour le template
+    month_names = [
+        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ]
+    
+    context = {
+        'month_name': month_names[month - 1],
+        'year': year,
+        'start_date': start_date,
+        'end_date': end_date,
+        'agents_data': agents_data
+    }
+    
+    return render(request, 'DocumentAgent/monthly_agents_report.html', context)
+
+
+def generate_monthly_agents_pdf(request):
+    """
+    Vue pour générer le PDF du rapport mensuel des agents
+    """
+    month = int(request.GET.get('month'))
+    year = int(request.GET.get('year'))
+    
+    # URL de prévisualisation
+    preview_url = request.build_absolute_uri(f"/api/preview-monthly-agents-report/?month={month}&year={year}")
+    
+    # Chemin vers le script Puppeteer
+    node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_monthly_agents_pdf.js'
+    pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\monthly_agents_report.pdf'
+    
+    command = ['node', node_script_path, preview_url, pdf_path]
+    
+    try:
+        subprocess.run(command, check=True)
+        
+        with open(pdf_path, 'rb') as pdf_file:
+            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="rapport_mensuel_agents_{month}_{year}.pdf"'
+            return response
+            
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        return JsonResponse({'error': error_msg}, status=500)
+
+
+class AppelOffresViewSet(viewsets.ModelViewSet):
+    queryset = AppelOffres.objects.all()
+    serializer_class = AppelOffresSerializer
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        appel_offres = self.perform_create(serializer)
+        
+        # Créer automatiquement la structure de dossiers dans le drive
+        try:
+            if appel_offres.nom:
+                # Utiliser la société du devis associé ou une société par défaut
+                societe_name = "Société par défaut"  # À adapter selon votre logique
+                if hasattr(appel_offres, 'devis') and appel_offres.devis.first():
+                    devis = appel_offres.devis.first()
+                    if devis.societe:
+                        societe_name = devis.societe.nom
+                
+                drive_automation.create_appel_offres_structure(
+                    societe_name=societe_name,
+                    appel_offres_name=appel_offres.nom
+                )
+        except Exception as e:
+            print(f"Erreur lors de la création automatique des dossiers: {str(e)}")
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    def get_queryset(self):
+        """Filtrer selon les paramètres"""
+        queryset = AppelOffres.objects.all()
+        
+        # Filtre par statut
+        statut = self.request.query_params.get('statut', None)
+        if statut:
+            queryset = queryset.filter(statut=statut)
+        
+        return queryset.order_by('-date_debut')
+    
+    @action(detail=True, methods=['post'])
+    def transformer_en_chantier(self, request, pk=None):
+        """Transforme un appel d'offres validé en chantier"""
+        try:
+            appel_offres = self.get_object()
+            
+            if appel_offres.statut != 'valide':
+                return Response({
+                    'error': 'Seuls les appels d\'offres validés peuvent être transformés en chantier'
+                }, status=400)
+            
+            chantier = appel_offres.transformer_en_chantier()
+            
+            # Mettre à jour le devis pour qu'il pointe vers le nouveau chantier
+            devis = appel_offres.devis.first()
+            if devis:
+                devis.chantier = chantier
+                devis.appel_offres = None
+                devis.save()
+            
+            # Transférer automatiquement les dossiers du drive
+            try:
+                societe_name = "Société par défaut"
+                if hasattr(appel_offres, 'devis') and appel_offres.devis.first():
+                    devis = appel_offres.devis.first()
+                    if devis.societe:
+                        societe_name = devis.societe.nom
+                
+                if appel_offres.nom:
+                    success = drive_automation.transfer_project_to_chantier(
+                        societe_name=societe_name,
+                        project_name=appel_offres.nom
+                    )
+                    if not success:
+                        print("Erreur lors du transfert des dossiers du drive")
+            except Exception as e:
+                print(f"Erreur lors du transfert automatique des dossiers: {str(e)}")
+            
+            return Response({
+                'message': 'Appel d\'offres transformé en chantier avec succès',
+                'chantier_id': chantier.id,
+                'chantier_name': chantier.chantier_name
+            })
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+    
+    @action(detail=True, methods=['post'])
+    def mettre_a_jour_statut(self, request, pk=None):
+        """Met à jour le statut d'un appel d'offres"""
+        try:
+            appel_offres = self.get_object()
+            nouveau_statut = request.data.get('statut')
+            raison_refus = request.data.get('raison_refus', '')
+            
+            if nouveau_statut not in dict(AppelOffres.STATUT_CHOICES):
+                return Response({'error': 'Statut invalide'}, status=400)
+            
+            appel_offres.statut = nouveau_statut
+            
+            if nouveau_statut == 'refuse':
+                appel_offres.raison_refus = raison_refus
+            elif nouveau_statut == 'valide':
+                appel_offres.date_validation = timezone.now().date()
+            
+            appel_offres.save()
+            
+            return Response({'message': 'Statut mis à jour avec succès'})
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+
+
+
+class DriveViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les documents du drive
+    """
+    serializer_class = DocumentSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        """Filtrer les documents selon l'utilisateur et les paramètres"""
+        queryset = Document.objects.filter(is_deleted=False)
+        
+        # Filtrer par propriétaire (l'utilisateur connecté) - temporairement désactivé pour le développement
+        # queryset = queryset.filter(owner=self.request.user)
+        
+        # Filtres optionnels
+        societe_id = self.request.query_params.get('societe_id')
+        if societe_id:
+            queryset = queryset.filter(societe_id=societe_id)
+        
+        chantier_id = self.request.query_params.get('chantier_id')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(filename__icontains=search) |
+                Q(societe__nom_societe__icontains=search) |
+                Q(chantier__chantier_name__icontains=search)
+            )
+        
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['post'])
+    def presign_upload(self, request):
+        """
+        Génère une URL présignée pour upload direct vers S3
+        """
+        serializer = DocumentUploadSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Récupérer les objets
+            societe = None
+            chantier = None
+            
+            if serializer.validated_data.get('societe_id'):
+                societe = Societe.objects.get(id=serializer.validated_data['societe_id'])
+            
+            if serializer.validated_data.get('chantier_id'):
+                chantier = Chantier.objects.get(id=serializer.validated_data['chantier_id'])
+            
+            # Générer la clé S3
+            key = build_document_key(
+                societe=societe,
+                chantier=chantier,
+                category=serializer.validated_data['category'],
+                filename=serializer.validated_data['filename']
+            )
+            
+            # Générer l'URL présignée POST
+            presigned_data = generate_presigned_post(key)
+            
+            return Response({
+                'upload_url': presigned_data['url'],
+                'fields': presigned_data['fields'],
+                'key': key,
+                'societe_id': societe.id if societe else None,
+                'chantier_id': chantier.id if chantier else None,
+                'category': serializer.validated_data['category'],
+                'filename': serializer.validated_data['filename']
+            })
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def confirm_upload(self, request):
+        """
+        Confirme l'upload d'un fichier et crée l'entrée en base
+        """
+        try:
+            # Récupérer les données de l'upload
+            key = request.data.get('key')
+            filename = request.data.get('filename')
+            content_type = request.data.get('content_type')
+            size = request.data.get('size')
+            societe_id = request.data.get('societe_id')
+            chantier_id = request.data.get('chantier_id')
+            category = request.data.get('category')
+            
+            if not all([key, filename, content_type, size]):
+                return Response({'error': 'Données manquantes'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Créer l'entrée Document
+            document_data = {
+                's3_key': key,
+                'filename': filename,
+                'content_type': content_type,
+                'size': int(size),
+                'category': category,
+                # Temporairement désactivé pour le développement
+                # 'owner': request.user,
+                # 'created_by': request.user
+            }
+            
+            if societe_id:
+                document_data['societe_id'] = societe_id
+            
+            if chantier_id:
+                document_data['chantier_id'] = chantier_id
+            
+            document = Document.objects.create(**document_data)
+            
+            # Retourner le document sérialisé
+            serializer = DocumentSerializer(document, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """
+        Génère une URL présignée pour télécharger un document
+        """
+        try:
+            document = self.get_object()
+            download_url = generate_presigned_url('get_object', document.s3_key, expires_in=3600)
+            
+            return Response({
+                'download_url': download_url,
+                'filename': document.filename
+            })
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def list_folders(self, request):
+        """
+        Liste les dossiers et fichiers selon l'arborescence
+        """
+        try:
+            societe_id = request.query_params.get('societe_id')
+            chantier_id = request.query_params.get('chantier_id')
+            category = request.query_params.get('category')
+            
+            # Construire le préfixe S3
+            prefix = ""
+            if societe_id:
+                societe = Societe.objects.get(id=societe_id)
+                societe_part = f"{societe.id}_{slugify(societe.nom_societe)}"
+                prefix = f"companies/{societe_part}/"
+                
+                if chantier_id:
+                    chantier = Chantier.objects.get(id=chantier_id)
+                    chantier_part = f"{chantier.id}_{slugify(chantier.chantier_name)}"
+                    prefix += f"chantiers/{chantier_part}/"
+                    
+                    if category:
+                        prefix += f"{slugify(category)}/"
+            
+            # Lister les documents depuis la base
+            queryset = self.get_queryset()
+            
+            if societe_id:
+                queryset = queryset.filter(societe_id=societe_id)
+            
+            if chantier_id:
+                queryset = queryset.filter(chantier_id=chantier_id)
+            
+            if category:
+                queryset = queryset.filter(category=category)
+            
+            # Pagination
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+            
+            paginator = Paginator(queryset, page_size)
+            documents_page = paginator.get_page(page)
+            
+            # Sérialiser les résultats
+            documents_serializer = DocumentSerializer(
+                documents_page.object_list, 
+                many=True, 
+                context={'request': request}
+            )
+            
+            # Construire la réponse
+            response_data = {
+                'documents': documents_serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_pages': paginator.num_pages,
+                    'total_count': paginator.count,
+                    'has_next': documents_page.has_next(),
+                    'has_previous': documents_page.has_previous()
+                }
+            }
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        Supprime un document (soft delete)
+        """
+        try:
+            document = self.get_object()
+            
+            # Soft delete
+            document.is_deleted = True
+            document.save()
+            
+            # Optionnel : supprimer aussi de S3
+            # from .utils import get_s3_client
+            # s3_client = get_s3_client()
+            # s3_client.delete_object(Bucket=os.getenv('S3_BUCKET_NAME'), Key=document.s3_key)
+            
+            return Response({'message': 'Document supprimé avec succès'})
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def create_folder(self, request):
+        """
+        Crée un dossier personnalisé dans S3
+        """
+        try:
+            folder_name = request.data.get('folder_name')
+            societe_id = request.data.get('societe_id')
+            chantier_id = request.data.get('chantier_id')
+            category = request.data.get('category')
+            level = request.data.get('level', 'category')  # root, societe, chantier, category
+
+            if not folder_name:
+                return Response({'error': 'Nom de dossier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Construire le chemin du dossier selon le niveau
+            folder_path = ""
+            
+            if level == 'root':
+                folder_path = f"custom_folders/{custom_slugify(folder_name)}"
+            elif level == 'societe':
+                societe = Societe.objects.get(id=societe_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                folder_path = f"companies/{societe_part}/custom_folders/{custom_slugify(folder_name)}"
+            elif level == 'chantier':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                folder_path = f"companies/{societe_part}/chantiers/{chantier_part}/custom_folders/{custom_slugify(folder_name)}"
+            elif level == 'category':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                category_part = custom_slugify(category)
+                folder_path = f"companies/{societe_part}/chantiers/{chantier_part}/{category_part}/custom_folders/{custom_slugify(folder_name)}"
+
+            # Créer le dossier dans S3
+            from .utils import create_s3_folder
+            success = create_s3_folder(folder_path)
+
+            if success:
+                return Response({
+                    'message': 'Dossier créé avec succès',
+                    'folder_path': folder_path,
+                    'folder_name': folder_name
+                })
+            else:
+                return Response({'error': 'Erreur lors de la création du dossier'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def list_custom_folders(self, request):
+        """
+        Liste les dossiers personnalisés selon le niveau
+        """
+        try:
+            societe_id = request.query_params.get('societe_id')
+            chantier_id = request.query_params.get('chantier_id')
+            category = request.query_params.get('category')
+            level = request.query_params.get('level', 'category')
+
+            # Construire le préfixe selon le niveau
+            prefix = ""
+            
+            if level == 'root':
+                prefix = "custom_folders/"
+            elif level == 'societe':
+                societe = Societe.objects.get(id=societe_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                prefix = f"companies/{societe_part}/custom_folders/"
+            elif level == 'chantier':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                prefix = f"companies/{societe_part}/chantiers/{chantier_part}/custom_folders/"
+            elif level == 'category':
+                societe = Societe.objects.get(id=societe_id)
+                chantier = Chantier.objects.get(id=chantier_id)
+                societe_part = f"{societe.id}_{custom_slugify(societe.nom_societe)}"
+                chantier_part = f"{chantier.id}_{custom_slugify(chantier.chantier_name)}"
+                category_part = custom_slugify(category)
+                prefix = f"companies/{societe_part}/chantiers/{chantier_part}/{category_part}/custom_folders/"
+
+            # Lister les dossiers dans S3
+            from .utils import list_s3_folders
+            folders = list_s3_folders(prefix)
+
+            return Response({
+                'folders': folders,
+                'level': level
+            })
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['delete'])
+    def delete_folder(self, request):
+        """
+        Supprime un dossier personnalisé et son contenu
+        """
+        try:
+            folder_path = request.data.get('folder_path')
+            
+            if not folder_path:
+                return Response({'error': 'Chemin du dossier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Supprimer le dossier dans S3
+            from .utils import delete_s3_folder
+            success = delete_s3_folder(folder_path)
+
+            if success:
+                return Response({'message': 'Dossier supprimé avec succès'})
+            else:
+                return Response({'error': 'Erreur lors de la suppression du dossier'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

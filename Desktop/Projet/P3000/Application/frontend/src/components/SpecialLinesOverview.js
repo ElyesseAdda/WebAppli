@@ -11,10 +11,18 @@ import { MdDelete } from "react-icons/md";
 
 const SpecialLinesOverview = ({ specialLines, onDelete }) => {
   const formatValue = (line) => {
-    if (line.valueType === "percentage") {
-      return `${line.value}%`;
+    const value = line.value;
+    if (value === null || value === undefined || value === "") {
+      return line.valueType === "percentage" ? "0.00%" : "0.00€";
     }
-    return `${line.value}€`;
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) {
+      return line.valueType === "percentage" ? "0.00%" : "0.00€";
+    }
+    if (line.valueType === "percentage") {
+      return `${numValue.toFixed(2)}%`;
+    }
+    return `${numValue.toFixed(2)}€`;
   };
 
   const renderSpecialLineGroup = (lines, title, groupId = null) => {

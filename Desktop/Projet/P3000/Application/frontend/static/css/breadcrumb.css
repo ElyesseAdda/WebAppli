@@ -1,0 +1,39 @@
+.breadcrumb-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: transparent; /* pas de fond, le layout est déjà bleu */
+  border-bottom: none;
+}
+
+.breadcrumb-icon svg {
+  width: 22px;
+  height: 22px;
+  color: #ffffff; /* icône blanche sur fond bleu du layout */
+}
+
+.breadcrumb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Roboto", Arial, sans-serif;
+  font-size: 14px;
+  color: #ffffff; /* texte lisible sur fond bleu */
+}
+
+.breadcrumb-section {
+  font-weight: 700;
+  color: #ffffff;
+}
+.breadcrumb-page {
+  font-weight: 500;
+  color: #f3f4f6;
+}
+.breadcrumb-context {
+  font-weight: 500;
+  color: #e5e7eb;
+}
+.breadcrumb-sep {
+  color: #d1d5db;
+}

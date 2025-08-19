@@ -25,6 +25,7 @@ import {
   FaPlus,
   FaPlusCircle,
   FaTable,
+  FaTrash,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
@@ -63,25 +64,23 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
   const fetchSousTraitants = async () => {
     try {
-      // Récupérer les sous-traitants
-      const response = await fetch(
-        `/api/sous-traitants/?chantier=${chantierId}`
-      );
+      // Récupérer tous les sous-traitants
+      const response = await fetch(`/api/sous-traitants/`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const sousTraitantsData = await response.json();
 
-      // Récupérer les contrats
+      // Récupérer uniquement les contrats du chantier sélectionné
       const contratsResponse = await fetch(
-        `/api/contrats-sous-traitance/?chantier=${chantierId}`
+        `/api/contrats-sous-traitance/?chantier_id=${chantierId}`
       );
       if (!contratsResponse.ok) {
         throw new Error(`HTTP error! status: ${contratsResponse.status}`);
       }
       const contratsData = await contratsResponse.json();
 
-      // Associer les contrats aux sous-traitants
+      // Associer uniquement les contrats spécifiques au chantier
       const sousTraitantsWithContrats = sousTraitantsData.map(
         (sousTraitant) => {
           const contrat = contratsData.find(
@@ -130,57 +129,107 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
   const handleContratSave = async (contratData) => {
     try {
-      // ... existing save logic ...
+      const response = await fetch("/api/contrats-sous-traitance/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(contratData),
+      });
+
       if (response.ok) {
-        // ... existing success handling ...
+        setShowContratForm(false);
+        fetchSousTraitants(); // Rafraîchir la liste
         if (onUpdate) {
           onUpdate();
         }
+      } else {
+        console.error("Erreur lors de la sauvegarde du contrat");
       }
     } catch (error) {
-      // ... existing error handling ...
+      console.error("Erreur lors de la sauvegarde du contrat:", error);
     }
   };
 
   const handleAvenantSave = async (avenantData) => {
     try {
-      // ... existing save logic ...
+      const response = await fetch("/api/avenants-sous-traitance/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(avenantData),
+      });
+
       if (response.ok) {
-        // ... existing success handling ...
+        setShowAvenantForm(false);
+        fetchSousTraitants(); // Rafraîchir la liste
         if (onUpdate) {
           onUpdate();
         }
+      } else {
+        console.error("Erreur lors de la sauvegarde de l'avenant");
       }
     } catch (error) {
-      // ... existing error handling ...
+      console.error("Erreur lors de la sauvegarde de l'avenant:", error);
     }
   };
 
   const handleDeleteContrat = async (contratId) => {
     try {
-      // ... existing delete logic ...
+      // Confirmation avant suppression
+      if (
+        !window.confirm(
+          "Êtes-vous sûr de vouloir supprimer ce contrat ? Tous les avenants associés seront également supprimés."
+        )
+      ) {
+        return;
+      }
+
+      const response = await fetch(
+        `/api/contrats-sous-traitance/${contratId}/`,
+        {
+          method: "DELETE",
+        }
+      );
+
       if (response.ok) {
-        // ... existing success handling ...
+        fetchSousTraitants(); // Rafraîchir la liste
         if (onUpdate) {
           onUpdate();
         }
+      } else {
+        console.error("Erreur lors de la suppression du contrat");
       }
     } catch (error) {
-      // ... existing error handling ...
+      console.error("Erreur lors de la suppression du contrat:", error);
     }
   };
 
   const handleDeleteAvenant = async (avenantId) => {
     try {
-      // ... existing delete logic ...
+      // Confirmation avant suppression
+      if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet avenant ?")) {
+        return;
+      }
+
+      const response = await fetch(
+        `/api/avenants-sous-traitance/${avenantId}/`,
+        {
+          method: "DELETE",
+        }
+      );
+
       if (response.ok) {
-        // ... existing success handling ...
+        fetchSousTraitants(); // Rafraîchir la liste
         if (onUpdate) {
           onUpdate();
         }
+      } else {
+        console.error("Erreur lors de la suppression de l'avenant");
       }
     } catch (error) {
-      // ... existing error handling ...
+      console.error("Erreur lors de la suppression de l'avenant:", error);
     }
   };
 
@@ -292,15 +341,18 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                         <TableHead>
                           <TableRow>
                             <TableCell width="15%">Type</TableCell>
-                            <TableCell width="35%">Description</TableCell>
+                            <TableCell width="30%">Description</TableCell>
                             <TableCell width="15%">Catégorie</TableCell>
                             <TableCell width="15%">Date</TableCell>
                             <TableCell
-                              width="20%"
+                              width="15%"
                               align="right"
                               sx={{ whiteSpace: "nowrap" }}
                             >
                               Montant
+                            </TableCell>
+                            <TableCell width="10%" align="center">
+                              Actions
                             </TableCell>
                           </TableRow>
                         </TableHead>
@@ -341,6 +393,18 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                               )}{" "}
                               €
                             </TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() =>
+                                  handleDeleteContrat(sousTraitant.contrat.id)
+                                }
+                                title="Supprimer le contrat et tous ses avenants"
+                              >
+                                <FaTrash />
+                              </IconButton>
+                            </TableCell>
                           </TableRow>
                           {sousTraitant.contrat.avenants &&
                             sousTraitant.contrat.avenants.map((avenant) => (
@@ -373,6 +437,18 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   sx={{ whiteSpace: "nowrap" }}
                                 >
                                   {avenant.montant.toLocaleString("fr-FR")} €
+                                </TableCell>
+                                <TableCell align="center">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() =>
+                                      handleDeleteAvenant(avenant.id)
+                                    }
+                                    title="Supprimer l'avenant"
+                                  >
+                                    <FaTrash />
+                                  </IconButton>
                                 </TableCell>
                               </TableRow>
                             ))}

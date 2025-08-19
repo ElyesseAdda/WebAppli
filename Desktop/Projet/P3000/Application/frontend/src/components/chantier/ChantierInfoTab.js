@@ -22,6 +22,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import React, { useEffect, useRef } from "react";
 import {
+  FaChartBar,
   FaCheckCircle,
   FaChevronDown,
   FaClipboardList,
@@ -31,6 +32,7 @@ import {
   FaHourglassHalf,
   FaTable,
 } from "react-icons/fa";
+import { useSituationsManager } from "../../hooks/useSituationsManager";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 
@@ -49,6 +51,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     setState({ ...state, filters: newFilters });
   const setOpenAccordions = (newOpen) =>
     setState({ ...state, openAccordions: newOpen });
+
+  // Utiliser le hook pour gérer les situations
+  const { situations, updateDateEnvoi, updatePaiement } = useSituationsManager(
+    chantierData?.id
+  );
 
   // State local pour tout ce qui n'a pas besoin d'être global
   const [tauxFacturationData, setTauxFacturationData] = React.useState(null);
@@ -243,10 +250,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const handleSaveDates = async () => {
     if (!dateEnvoi || !delaiPaiement) return;
     try {
-      await axios.patch(`/api/situations/${selectedSituation.id}/`, {
-        date_envoi: dateEnvoi,
-        delai_paiement: Number(delaiPaiement),
-      });
+      await updateDateEnvoi(
+        selectedSituation.id,
+        dateEnvoi,
+        Number(delaiPaiement)
+      );
       setOpenModal(false);
       setSelectedSituation(null);
       setDateEnvoi(null);
@@ -275,7 +283,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     return false;
   };
 
-  const { montants, pourcentages, situations } = tauxFacturationData || {};
+  const { montants, pourcentages } = tauxFacturationData || {};
 
   const getCategorieColor = (categorie) => {
     switch (categorie) {
@@ -289,6 +297,19 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         return "#2e7d32"; // vert
       default:
         return "inherit";
+    }
+  };
+
+  // Fonction pour déterminer la catégorie d'une situation
+  const getSituationCategorie = (situation) => {
+    if (situation.date_paiement_reel) {
+      return "paye"; // Payée
+    } else if (!situation.date_envoi) {
+      return "non_envoye"; // Non envoyée
+    } else if (isRetardPaiement(situation)) {
+      return "retard"; // Retard de paiement
+    } else {
+      return "en_attente"; // En attente de paiement
     }
   };
 
@@ -541,6 +562,24 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           }}
         >
           Afficher tableau suivi
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<FaChartBar />}
+          onClick={() => {
+            window.open(`/TableauFacturation`, "_blank");
+          }}
+          sx={{
+            backgroundColor: "#9c27b0",
+            color: "white",
+            boxShadow: 3,
+            "&:hover": {
+              backgroundColor: "#7b1fa2",
+              boxShadow: 5,
+            },
+          }}
+        >
+          Tableau facturation
         </Button>
       </Box>
 
@@ -942,10 +981,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       fontFamily: "Roboto, Arial, sans-serif",
                     }}
                   >
-                    Marché :{" "}
-                    {formatMontant(
-                      chantierData?.montant_marche || chantierData?.montant_ht
-                    )}
+                    Marché : {formatMontant(chantierData?.montant_ht)}
                   </Typography>
                 </Box>
               </Box>
@@ -1025,13 +1061,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                           sx={{
                             ml: 2,
                             fontWeight: 700,
-                            color: getCategorieColor(situation.categorie),
+                            color: getCategorieColor(
+                              getSituationCategorie(situation)
+                            ),
                           }}
                         >
-                          {situation.montant_apres_retenues.toLocaleString(
-                            "fr-FR",
-                            { style: "currency", currency: "EUR" }
-                          )}
+                          {formatMontant(situation.montant_apres_retenues)}
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails>
@@ -1211,12 +1246,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           <Button
             onClick={async () => {
               try {
-                await axios.patch(
-                  `/api/situations/${selectedSituationPaiement.id}/`,
-                  {
-                    montant_recu: montantRecu,
-                    date_paiement_reel: datePaiementReel,
-                  }
+                await updatePaiement(
+                  selectedSituationPaiement.id,
+                  montantRecu,
+                  datePaiementReel
                 );
                 setOpenPaiementModal(false);
                 setSelectedSituationPaiement(null);

@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models.functions import TruncMonth
+from datetime import date
 from django.db.models import Sum
 
 
@@ -147,16 +148,119 @@ class Chantier(models.Model):
 
     def save(self, *args, **kwargs):
         # Si c'est une création et que le taux fixe n'est pas déjà renseigné
-        if self._state.adding and not self.taux_fixe:
-            annee = self.date_debut.year if self.date_debut else None
-            if annee:
-                try:
-                    taux_fixe_obj = TauxFixe.objects.get(annee=annee)
+        if not self.pk and self.taux_fixe is None:
+            try:
+                taux_fixe_obj = TauxFixe.objects.first()
+                if taux_fixe_obj:
                     self.taux_fixe = taux_fixe_obj.valeur
-                except TauxFixe.DoesNotExist:
-                    # Tu peux lever une exception ou mettre une valeur par défaut
-                    self.taux_fixe = 18.65
+            except:
+                self.taux_fixe = 20  # Valeur par défaut
         super().save(*args, **kwargs)
+
+
+class AppelOffres(models.Model):
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente validation'),
+        ('refuse', 'Refusé'),
+        ('valide', 'Validé'),
+    ]
+    
+    # Champs identiques au modèle Chantier
+    chantier_name = models.CharField(max_length=255, unique=True)
+    societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='appels_offres', null=True)
+    date_debut = models.DateField(auto_now_add=True)
+    date_fin = models.DateField(auto_now_add=False, null=True)
+    montant_ttc = models.FloatField(null=True)
+    montant_ht = models.FloatField(null=True)
+    state_chantier = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
+    ville = models.CharField(max_length=100)
+    rue = models.CharField(max_length=100)
+    code_postal = models.CharField(
+        max_length=10,
+        validators=[RegexValidator(
+            regex=r'^\d{5}$',
+            message='Le code postal doit être exactement 5 chiffres.',
+            code='invalid_codepostal'
+        )],
+        blank=True,
+        null=True
+    )
+    
+    # Champs pour les coûts réels
+    cout_materiel = models.FloatField(null=True)
+    cout_main_oeuvre = models.FloatField(null=True)
+    cout_sous_traitance = models.FloatField(null=True)
+    
+    # Champs pour les coûts estimés
+    cout_estime_main_oeuvre = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Coût estimé main d'œuvre"
+    )
+    cout_estime_materiel = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Coût estimé matériel"
+    )
+    marge_estimee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Marge estimée"
+    )
+    
+    description = models.TextField(null=True)
+    taux_fixe = models.FloatField(null=True, blank=True)
+    
+    # Champs spécifiques aux appels d'offres
+    statut = models.CharField(
+        max_length=20, 
+        choices=STATUT_CHOICES, 
+        default='en_attente',
+        verbose_name="Statut de l'appel d'offres"
+    )
+    
+    date_validation = models.DateField(null=True, blank=True)
+    raison_refus = models.TextField(blank=True, null=True)
+    
+    def __str__(self):
+        return f"Appel d'offres {self.id} - {self.chantier_name}"
+    
+    def transformer_en_chantier(self):
+        """Transforme l'appel d'offres en chantier"""
+        if self.statut != 'valide':
+            raise ValueError("Seuls les appels d'offres validés peuvent être transformés en chantier")
+        
+        # Créer le chantier avec tous les champs de l'appel d'offres
+        chantier = Chantier.objects.create(
+            chantier_name=self.chantier_name,
+            societe=self.societe,
+            date_debut=self.date_debut,
+            date_fin=self.date_fin,
+            montant_ttc=self.montant_ttc,
+            montant_ht=self.montant_ht,
+            state_chantier='En Cours',
+            ville=self.ville,
+            rue=self.rue,
+            code_postal=self.code_postal,
+            cout_materiel=self.cout_materiel,
+            cout_main_oeuvre=self.cout_main_oeuvre,
+            cout_sous_traitance=self.cout_sous_traitance,
+            cout_estime_main_oeuvre=self.cout_estime_main_oeuvre,
+            cout_estime_materiel=self.cout_estime_materiel,
+            marge_estimee=self.marge_estimee,
+            description=self.description,
+            taux_fixe=self.taux_fixe,
+        )
+        
+        # Mettre à jour le statut de l'appel d'offres
+        self.statut = 'valide'
+        self.date_validation = timezone.now().date()
+        self.save()
+        
+        return chantier
 
 class Agent(models.Model):
     name = models.CharField(max_length=25)
@@ -354,7 +458,8 @@ class Devis(models.Model):
     nature_travaux = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
+    appel_offres = models.ForeignKey(AppelOffres, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     client = models.ManyToManyField(Client, related_name='devis', blank=True)
     lignes_speciales = models.JSONField(default=dict, blank=True)
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
@@ -499,6 +604,17 @@ class DevisLigne(models.Model):
 
     
 
+class Banque(models.Model):
+    nom_banque = models.CharField(max_length=100, unique=True, verbose_name="Nom de la banque")
+    
+    class Meta:
+        verbose_name = "Banque"
+        verbose_name_plural = "Banques"
+        ordering = ['nom_banque']
+    
+    def __str__(self):
+        return self.nom_banque
+
 class Situation(models.Model):
     STATUT_CHOICES = [
         ('brouillon', 'Brouillon'),
@@ -510,6 +626,8 @@ class Situation(models.Model):
     devis = models.ForeignKey('Devis', on_delete=models.CASCADE)
     numero = models.IntegerField(default=1,null=True,blank=True)
     numero_situation = models.CharField(max_length=50)
+    numero_cp = models.CharField(max_length=50, blank=True, null=True, verbose_name="Numéro CP")
+    banque = models.ForeignKey('Banque', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Banque de paiement")
     mois = models.IntegerField()
     annee = models.IntegerField()
     date_creation = models.DateTimeField(auto_now_add=True)
@@ -946,6 +1064,115 @@ class AgencyExpenseOverride(models.Model):
     class Meta:
         unique_together = ('expense', 'month', 'year')
 
+
+class AgencyExpenseAggregate(models.Model):
+    year = models.IntegerField()
+    month = models.IntegerField()  # 1-12
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    totals_by_category = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('year', 'month')
+        ordering = ['year', 'month']
+        indexes = [
+            models.Index(fields=['year', 'month'])
+        ]
+
+    def __str__(self):
+        return f"{self.year}-{self.month:02d}: {self.total_amount} €"
+
+
+def compute_agency_expense_aggregate_for_month(year: int, month: int):
+    """Compute and persist AgencyExpenseAggregate for a given year/month."""
+    from calendar import monthrange
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    # Fixed expenses active in the month
+    fixed_qs = AgencyExpense.objects.filter(
+        type='fixed',
+        date__lte=last_day
+    ).filter(models.Q(end_date__isnull=True) | models.Q(end_date__gte=first_day))
+
+    # Punctual expenses in the month
+    punctual_qs = AgencyExpense.objects.filter(
+        type='punctual',
+        date__year=year,
+        date__month=month
+    )
+
+    expenses = list(fixed_qs) + list(punctual_qs)
+
+    totals_by_category = {}
+    total_amount = Decimal('0.00')
+
+    for exp in expenses:
+        override = AgencyExpenseOverride.objects.filter(expense=exp, month=month, year=year).first()
+        amount = Decimal(str(override.amount)) if override else Decimal(str(exp.amount))
+        cat = exp.category or 'Autres'
+        totals_by_category.setdefault(cat, Decimal('0.00'))
+        totals_by_category[cat] += amount
+        total_amount += amount
+
+    totals_list = [
+        {
+            'category': cat,
+            'total': float(val)
+        } for cat, val in totals_by_category.items()
+    ]
+
+    obj, _ = AgencyExpenseAggregate.objects.update_or_create(
+        year=year,
+        month=month,
+        defaults={
+            'total_amount': total_amount,
+            'totals_by_category': totals_list,
+        }
+    )
+    return obj
+
+
+def _iter_months(start_date: date, end_date: date):
+    y, m = start_date.year, start_date.month
+    while (y < end_date.year) or (y == end_date.year and m <= end_date.month):
+        yield y, m
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+
+@receiver([post_save, post_delete], sender=AgencyExpense)
+def recalc_aggregates_on_expense_change(sender, instance: AgencyExpense, **kwargs):
+    """Recompute impacted months when a base expense changes."""
+    try:
+        if instance.type == 'fixed':
+            start = instance.date
+            # Cap the recompute horizon to 24 months ahead if no end_date to avoid infinite span
+            horizon_end = instance.end_date or (start.replace(year=start.year + 2))
+            from calendar import monthrange
+            # Ensure horizon_end is not before start
+            if horizon_end < start:
+                horizon_end = start
+            # Iterate months and recompute
+            for y, m in _iter_months(start, horizon_end):
+                compute_agency_expense_aggregate_for_month(y, m)
+        else:
+            # punctual: only its month
+            compute_agency_expense_aggregate_for_month(instance.date.year, instance.date.month)
+    except Exception:
+        # Avoid breaking save path on aggregate errors
+        pass
+
+
+@receiver([post_save, post_delete], sender=AgencyExpenseOverride)
+def recalc_aggregates_on_override_change(sender, instance: AgencyExpenseOverride, **kwargs):
+    try:
+        compute_agency_expense_aggregate_for_month(instance.year, instance.month)
+    except Exception:
+        pass
+
 class SousTraitant(models.Model):
     entreprise = models.CharField(max_length=255)
     capital = models.DecimalField(max_digits=15, decimal_places=2)
@@ -990,21 +1217,44 @@ class ContratSousTraitance(models.Model):
         return f"Contrat {self.sous_traitant.entreprise} - {self.chantier.chantier_name}"
 
     def save(self, *args, **kwargs):
+        from decimal import Decimal
         # Si c'est une modification, on soustrait l'ancien montant
         if self.pk:
             old_instance = ContratSousTraitance.objects.get(pk=self.pk)
-            old_montant = old_instance.montant_operation
-            self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) - old_montant
+            old_montant = Decimal(str(old_instance.montant_operation))
+            cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
+            cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
+            
+            self.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal - old_montant)
+            # Restaurer l'ancien montant dans le coût estimé main d'œuvre
+            self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal + old_montant
 
         # Ajouter le nouveau montant
-        self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) + self.montant_operation
+        montant_decimal = Decimal(str(self.montant_operation))
+        cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
+        cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
+        
+        self.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal + montant_decimal)
+        # Déduire le montant du coût estimé main d'œuvre
+        self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal - montant_decimal
         self.chantier.save()
 
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
+        from decimal import Decimal
+        # Supprimer explicitement tous les avenants associés pour déclencher leurs méthodes delete()
+        for avenant in self.avenants.all():
+            avenant.delete()
+        
         # Soustraire le montant lors de la suppression
-        self.chantier.cout_sous_traitance = (self.chantier.cout_sous_traitance or 0) - self.montant_operation
+        montant_decimal = Decimal(str(self.montant_operation))
+        cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
+        cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
+        
+        self.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal - montant_decimal)
+        # Restaurer le montant dans le coût estimé main d'œuvre
+        self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal + montant_decimal
         self.chantier.save()
 
         super().delete(*args, **kwargs)
@@ -1031,11 +1281,21 @@ class AvenantSousTraitance(models.Model):
         if self.pk:
             old_instance = AvenantSousTraitance.objects.get(pk=self.pk)
             old_montant = Decimal(str(old_instance.montant))
-            self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) - old_montant
+            cout_sous_traitance_decimal = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0))
+            cout_estime_main_oeuvre_decimal = Decimal(str(self.contrat.chantier.cout_estime_main_oeuvre or 0))
+            
+            self.contrat.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal - old_montant)
+            # Restaurer l'ancien montant dans le coût estimé main d'œuvre
+            self.contrat.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal + old_montant
 
         # Ajouter le nouveau montant
         montant_decimal = Decimal(str(self.montant))
-        self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) + montant_decimal
+        cout_sous_traitance_decimal = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0))
+        cout_estime_main_oeuvre_decimal = Decimal(str(self.contrat.chantier.cout_estime_main_oeuvre or 0))
+        
+        self.contrat.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal + montant_decimal)
+        # Déduire le montant du coût estimé main d'œuvre
+        self.contrat.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal - montant_decimal
         self.contrat.chantier.save()
 
         super().save(*args, **kwargs)
@@ -1044,7 +1304,12 @@ class AvenantSousTraitance(models.Model):
         from decimal import Decimal
         # Soustraire le montant lors de la suppression
         montant_decimal = Decimal(str(self.montant))
-        self.contrat.chantier.cout_sous_traitance = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0)) - montant_decimal
+        cout_sous_traitance_decimal = Decimal(str(self.contrat.chantier.cout_sous_traitance or 0))
+        cout_estime_main_oeuvre_decimal = Decimal(str(self.contrat.chantier.cout_estime_main_oeuvre or 0))
+        
+        self.contrat.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal - montant_decimal)
+        # Restaurer le montant dans le coût estimé main d'œuvre
+        self.contrat.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal + montant_decimal
         self.contrat.chantier.save()
 
         super().delete(*args, **kwargs)
@@ -1074,6 +1339,8 @@ def update_chantier_cout_main_oeuvre(chantier):
 class PaiementSousTraitant(models.Model):
     sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, related_name='paiements')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_sous_traitant')
+    contrat = models.ForeignKey('ContratSousTraitance', on_delete=models.CASCADE, related_name='paiements', null=True, blank=True)
+    avenant = models.ForeignKey('AvenantSousTraitance', on_delete=models.CASCADE, related_name='paiements', null=True, blank=True)
     mois = models.IntegerField()  # 1-12
     annee = models.IntegerField()
     montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2)  # Montant facturé par le sous-traitant ce mois
@@ -1086,10 +1353,11 @@ class PaiementSousTraitant(models.Model):
         verbose_name = "Paiement Sous-Traitant"
         verbose_name_plural = "Paiements Sous-Traitants"
         ordering = ['chantier', 'sous_traitant', 'annee', 'mois']
-        unique_together = ('chantier', 'sous_traitant', 'mois', 'annee')
+        unique_together = ('chantier', 'sous_traitant', 'mois', 'annee', 'avenant')
 
     def __str__(self):
-        return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}"
+        avenant_info = f" - Avenant {self.avenant.numero}" if self.avenant else ""
+        return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}{avenant_info}"
 
 class PaiementFournisseurMateriel(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_materiel')
@@ -1115,4 +1383,64 @@ def update_chantier_cout_materiel(sender, instance, **kwargs):
     )["total"] or 0
     chantier.cout_materiel = float(total)
     chantier.save(update_fields=["cout_materiel"])
+
+
+class Document(models.Model):
+    """
+    Modèle pour gérer les documents du drive
+    """
+    CATEGORY_CHOICES = [
+        ('devis', 'Devis'),
+        ('factures', 'Factures'),
+        ('photos', 'Photos'),
+        ('documents', 'Documents'),
+        ('contrats', 'Contrats'),
+        ('autres', 'Autres'),
+    ]
+    
+    # Relations
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
+    societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='documents', null=True, blank=True)
+    chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='documents', null=True, blank=True)
+    
+    # Métadonnées du fichier
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='documents')
+    s3_key = models.CharField(max_length=500, unique=True)  # Clé S3 complète
+    filename = models.CharField(max_length=255)  # Nom original du fichier
+    content_type = models.CharField(max_length=100)  # Type MIME
+    size = models.BigIntegerField()  # Taille en octets
+    
+    # Métadonnées système
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_documents')
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)  # Pour la corbeille
+    
+    class Meta:
+        verbose_name = "Document"
+        verbose_name_plural = "Documents"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['societe', 'chantier', 'category']),
+            models.Index(fields=['owner']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_deleted']),
+        ]
+    
+    def __str__(self):
+        return f"{self.filename} ({self.get_category_display()})"
+    
+    @property
+    def size_mb(self):
+        """Retourne la taille en MB"""
+        return round(self.size / (1024 * 1024), 2)
+    
+    @property
+    def extension(self):
+        """Retourne l'extension du fichier"""
+        return self.filename.split('.')[-1].lower() if '.' in self.filename else ''
+    
+    def get_download_url(self):
+        """Retourne l'URL de téléchargement (sera implémentée avec les URLs présignées)"""
+        return f"/api/drive/download/{self.id}/"
 

@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { useSituationsManager } from "../hooks/useSituationsManager";
 
 const DateEnvoiModal = ({ open, onClose, situation, onSubmit }) => {
   const [dateEnvoi, setDateEnvoi] = useState("");
@@ -80,7 +81,7 @@ const PaiementModal = ({ open, onClose, situation, onSubmit }) => {
 
   useEffect(() => {
     if (situation) {
-      setMontantRecu(situation.montant_recu || "");
+      setMontantRecu(situation.montant_reel_ht || "");
       setDatePaiementReel(situation.date_paiement_reel || "");
     }
   }, [situation]);
@@ -129,17 +130,16 @@ const TableauSuivi = () => {
   const [chantiers, setChantiers] = useState([]);
   const [selectedChantierId, setSelectedChantierId] = useState("");
   const [chantier, setChantier] = useState(null);
-  const [situations, setSituations] = useState([]);
   const [devis, setDevis] = useState(null);
   const [avenants, setAvenants] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dateEnvoi, setDateEnvoi] = useState({});
-  const [delaiPaiement, setDelaiPaiement] = useState({});
-  const [montantReelHT, setMontantReelHT] = useState({});
-  const [datePaiementReel, setDatePaiementReel] = useState({});
   const [openDateModal, setOpenDateModal] = useState(false);
   const [selectedSituation, setSelectedSituation] = useState(null);
   const [openPaiementModal, setOpenPaiementModal] = useState(false);
+
+  // Utiliser le hook pour gérer les situations
+  const { situations, updateDateEnvoi, updatePaiement } =
+    useSituationsManager(selectedChantierId);
 
   const commonBodyCellStyle = {
     maxWidth: "100px",
@@ -225,33 +225,11 @@ const TableauSuivi = () => {
       setLoading(true);
       Promise.all([
         axios.get(`/api/chantier/${selectedChantierId}/`),
-        axios.get(`/api/chantier/${selectedChantierId}/situations/`),
         axios.get(`/api/devis-structure/${selectedChantierId}/structure/`),
         axios.get(`/api/avenant_chantier/${selectedChantierId}/avenants/`),
       ])
-        .then(([chantierRes, situationsRes, devisRes, avenantsRes]) => {
+        .then(([chantierRes, devisRes, avenantsRes]) => {
           setChantier(chantierRes.data);
-          setSituations(situationsRes.data);
-
-          // Initialiser les dates, délais et montants
-          const dateEnvoiInit = {};
-          const delaiPaiementInit = {};
-          const montantReelHTInit = {};
-          const datePaiementReelInit = {};
-
-          situationsRes.data.forEach((situation) => {
-            dateEnvoiInit[situation.id] = situation.date_envoi || "";
-            delaiPaiementInit[situation.id] = situation.delai_paiement || 45;
-            montantReelHTInit[situation.id] = situation.montant_reel_ht || "";
-            datePaiementReelInit[situation.id] =
-              situation.date_paiement_reel || "";
-          });
-
-          setDateEnvoi(dateEnvoiInit);
-          setDelaiPaiement(delaiPaiementInit);
-          setMontantReelHT(montantReelHTInit);
-          setDatePaiementReel(datePaiementReelInit);
-
           setDevis(devisRes.data);
           if (avenantsRes.data.success) {
             setAvenants(avenantsRes.data.avenants);
@@ -367,11 +345,11 @@ const TableauSuivi = () => {
                   {rowIndex === 0
                     ? formatNumberWithColor(
                         chantier?.montant_ht,
-                        montantReelHT[0]
+                        situations[0]?.montant_reel_ht
                       )
                     : formatNumberWithColor(
                         avenants[rowIndex - 1]?.montant_total,
-                        montantReelHT[rowIndex - 1]
+                        situations[rowIndex - 1]?.montant_reel_ht
                       )}
                 </TableCell>
                 <TableCell
@@ -384,7 +362,7 @@ const TableauSuivi = () => {
                 >
                   {formatNumberWithColor(
                     avenants[rowIndex + 4]?.montant_total,
-                    montantReelHT[rowIndex + 4]
+                    situations[rowIndex + 4]?.montant_reel_ht
                   )}
                 </TableCell>
                 <TableCell
@@ -395,7 +373,7 @@ const TableauSuivi = () => {
                 <TableCell>
                   {formatNumberWithColor(
                     avenants[rowIndex + 9]?.montant_total,
-                    montantReelHT[rowIndex + 9]
+                    situations[rowIndex + 9]?.montant_reel_ht
                   )}
                 </TableCell>
               </TableRow>
@@ -460,7 +438,7 @@ const TableauSuivi = () => {
     const calculerEcartMois = (situation) => {
       const montantHTSituation =
         parseFloat(situation.montant_apres_retenues) || 0;
-      const montantRecuHT = parseFloat(montantReelHT[situation.id]) || 0;
+      const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
       const ecart = montantRecuHT - montantHTSituation;
 
       if (ecart === 0 || isNaN(ecart)) return "-";
@@ -478,7 +456,7 @@ const TableauSuivi = () => {
 
     const calculerCumulMontantRecu = (situations, indexCourant) => {
       return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
-        const montantRecu = parseFloat(montantReelHT[situation.id]) || 0;
+        const montantRecu = parseFloat(situation.montant_reel_ht) || 0;
         return sum + montantRecu;
       }, 0);
     };
@@ -497,10 +475,10 @@ const TableauSuivi = () => {
                 (parseFloat(situation.tva) || 0)),
             montantRecuHT:
               totaux.montantRecuHT +
-              (parseFloat(montantReelHT[situation.id]) || 0),
+              (parseFloat(situation.montant_reel_ht) || 0),
             ecartMois:
               totaux.ecartMois +
-              (parseFloat(montantReelHT[situation.id] || 0) -
+              (parseFloat(situation.montant_reel_ht || 0) -
                 parseFloat(situation.montant_apres_retenues || 0)),
           };
         },
@@ -634,15 +612,15 @@ const TableauSuivi = () => {
                           setOpenDateModal(true);
                         }}
                       >
-                        {dateEnvoi[situation.id]
-                          ? formatDate(dateEnvoi[situation.id])
+                        {situation.date_envoi
+                          ? formatDate(situation.date_envoi)
                           : "Définir date"}
                       </Button>
                     </TableCell>
                     <TableCell>
                       {calculateDatePaiement(
-                        dateEnvoi[situation.id],
-                        delaiPaiement[situation.id]
+                        situation.date_envoi,
+                        situation.delai_paiement
                       )}
                     </TableCell>
                     <TableCell>
@@ -653,26 +631,26 @@ const TableauSuivi = () => {
                           setOpenPaiementModal(true);
                         }}
                       >
-                        {montantReelHT[situation.id]
+                        {situation.montant_reel_ht
                           ? formatNumberWithColor(
-                              montantReelHT[situation.id],
+                              situation.montant_reel_ht,
                               situation.montant_apres_retenues
                             )
                           : "Définir paiement"}
                       </Button>
                     </TableCell>
                     <TableCell>
-                      {datePaiementReel[situation.id]
-                        ? formatDate(datePaiementReel[situation.id])
+                      {situation.date_paiement_reel
+                        ? formatDate(situation.date_paiement_reel)
                         : "-"}
                     </TableCell>
                     <TableCell>
                       {calculateRetard(
                         calculateDatePaiement(
-                          dateEnvoi[situation.id],
-                          delaiPaiement[situation.id]
+                          situation.date_envoi,
+                          situation.delai_paiement
                         ),
-                        datePaiementReel[situation.id]
+                        situation.date_paiement_reel
                       )}
                     </TableCell>
                     <TableCell>{calculerEcartMois(situation)}</TableCell>
@@ -822,73 +800,46 @@ const TableauSuivi = () => {
   };
 
   const calculateRetard = (datePrevue, dateReelle) => {
-    console.log("Dates reçues:", { datePrevue, dateReelle });
-
     if (!datePrevue || !dateReelle || datePrevue === "-") {
-      console.log("Une des dates est invalide ou manquante");
       return "-";
     }
 
     try {
-      // Convertir la date réelle du format YYYY-MM-DD vers DD/MM/YYYY
-      const [annee, mois, jour] = dateReelle.split("-");
-      const dateReelleFormatted = `${jour}/${mois}/${annee}`;
+      // Convertir les dates en objets Date
+      let datePrevueObj, dateReelleObj;
 
-      // Convertir les dates du format "DD/MM/YYYY"
-      let [jourPrevue, moisPrevue, anneePrevue] = datePrevue
-        .split("/")
-        .map(Number);
-      let [jourReelle, moisReelle, anneeReelle] = dateReelleFormatted
-        .split("/")
-        .map(Number);
-      // Convertir années sur 2 chiffres en 4 chiffres (ex: 25 -> 2025)
-      if (anneePrevue < 100) anneePrevue += 2000;
-      if (anneeReelle < 100) anneeReelle += 2000;
+      // Traiter la date prévue (format DD/MM/YY)
+      if (datePrevue.includes("/")) {
+        const [jour, mois, annee] = datePrevue.split("/");
+        const anneeComplete = annee.length === 2 ? `20${annee}` : annee;
+        datePrevueObj = new Date(anneeComplete, mois - 1, jour);
+      } else {
+        datePrevueObj = new Date(datePrevue);
+      }
 
-      // Vérifier si les conversions sont valides
-      if (
-        isNaN(jourPrevue) ||
-        isNaN(moisPrevue) ||
-        isNaN(anneePrevue) ||
-        isNaN(jourReelle) ||
-        isNaN(moisReelle) ||
-        isNaN(anneeReelle)
-      ) {
-        console.log("Conversion en nombres échouée");
+      // Traiter la date réelle (format YYYY-MM-DD)
+      dateReelleObj = new Date(dateReelle);
+
+      // Vérifier que les dates sont valides
+      if (isNaN(datePrevueObj.getTime()) || isNaN(dateReelleObj.getTime())) {
         return "-";
       }
 
-      const joursParMois = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-      let totalJours = 0;
+      // Calculer la différence en millisecondes
+      const differenceMs = dateReelleObj.getTime() - datePrevueObj.getTime();
 
-      // Différence en années
-      const joursAnnees = (anneeReelle - anneePrevue) * 365;
-      totalJours += joursAnnees;
+      // Convertir en jours
+      const differenceJours = Math.ceil(differenceMs / (1000 * 60 * 60 * 24));
 
-      // Différence en mois
-      let joursMois = 0;
-      if (moisReelle !== moisPrevue) {
-        if (moisReelle > moisPrevue) {
-          for (let m = moisPrevue; m < moisReelle; m++) {
-            joursMois += joursParMois[m - 1];
-          }
-        }
-      }
-      totalJours += joursMois;
-
-      // Différence en jours
-      const joursJours = jourReelle - jourPrevue;
-      totalJours += joursJours;
-
-      if (totalJours > 0) {
-        return `${totalJours} jours de retard`;
-      } else if (totalJours < 0) {
-        return `${Math.abs(totalJours)} jours d'avance`;
+      if (differenceJours > 0) {
+        return `${differenceJours} jours de retard`;
+      } else if (differenceJours < 0) {
+        return `${Math.abs(differenceJours)} jours d'avance`;
       } else {
-        return `${totalJours} jours`;
+        return "À jour";
       }
     } catch (error) {
-      console.error("Erreur détaillée dans le calcul du retard:", error);
+      console.error("Erreur dans le calcul du retard:", error);
       return "-";
     }
   };
@@ -896,10 +847,7 @@ const TableauSuivi = () => {
   // Handlers pour les mises à jour
   const handleDateEnvoiChange = async (situationId, value) => {
     try {
-      setDateEnvoi((prev) => ({ ...prev, [situationId]: value }));
-      await axios.patch(`/api/situations/${situationId}/`, {
-        date_envoi: value,
-      });
+      await updateDateEnvoi(situationId, value, undefined);
     } catch (error) {
       console.error("Erreur lors de la mise à jour de la date d'envoi:", error);
     }
@@ -907,10 +855,7 @@ const TableauSuivi = () => {
 
   const handleDelaiPaiementChange = async (situationId, value) => {
     try {
-      setDelaiPaiement((prev) => ({ ...prev, [situationId]: value }));
-      await axios.patch(`/api/situations/${situationId}/`, {
-        delai_paiement: value,
-      });
+      await updateDateEnvoi(situationId, undefined, value);
     } catch (error) {
       console.error(
         "Erreur lors de la mise à jour du délai de paiement:",
@@ -921,10 +866,7 @@ const TableauSuivi = () => {
 
   const handleMontantReelChange = async (situationId, value) => {
     try {
-      setMontantReelHT((prev) => ({ ...prev, [situationId]: value }));
-      await axios.patch(`/api/situations/${situationId}/`, {
-        montant_reel_ht: value,
-      });
+      await updatePaiement(situationId, value, undefined);
     } catch (error) {
       console.error("Erreur lors de la mise à jour du montant réel:", error);
     }
@@ -932,10 +874,7 @@ const TableauSuivi = () => {
 
   const handleDatePaiementReelChange = async (situationId, value) => {
     try {
-      setDatePaiementReel((prev) => ({ ...prev, [situationId]: value }));
-      await axios.patch(`/api/situations/${situationId}/`, {
-        date_paiement_reel: value,
-      });
+      await updatePaiement(situationId, undefined, value);
     } catch (error) {
       console.error(
         "Erreur lors de la mise à jour de la date de paiement réelle:",
@@ -960,14 +899,7 @@ const TableauSuivi = () => {
     { dateEnvoi, delaiPaiement }
   ) => {
     try {
-      await axios.patch(`/api/situations/${situationId}/`, {
-        date_envoi: dateEnvoi,
-        delai_paiement: delaiPaiement,
-      });
-
-      // Mettre à jour les états locaux
-      setDateEnvoi((prev) => ({ ...prev, [situationId]: dateEnvoi }));
-      setDelaiPaiement((prev) => ({ ...prev, [situationId]: delaiPaiement }));
+      await updateDateEnvoi(situationId, dateEnvoi, delaiPaiement);
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error);
       alert("Erreur lors de la mise à jour des données");
@@ -979,16 +911,7 @@ const TableauSuivi = () => {
     { montantRecu, datePaiementReel }
   ) => {
     try {
-      await axios.patch(`/api/situations/${situationId}/`, {
-        montant_reel_ht: montantRecu,
-        date_paiement_reel: datePaiementReel,
-      });
-
-      setMontantReelHT((prev) => ({ ...prev, [situationId]: montantRecu }));
-      setDatePaiementReel((prev) => ({
-        ...prev,
-        [situationId]: datePaiementReel,
-      }));
+      await updatePaiement(situationId, montantRecu, datePaiementReel);
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error);
       alert("Erreur lors de la mise à jour des données");

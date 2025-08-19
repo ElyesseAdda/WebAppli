@@ -68,8 +68,13 @@ from .views import (
     PaiementFournisseurMaterielAPIView,
     fournisseurs,
     FournisseurViewSet,
+    BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
+    preview_monthly_agents_report,
+    generate_monthly_agents_pdf,
+    AppelOffresViewSet,
+    DriveViewSet,
 )
 
 
@@ -96,8 +101,10 @@ router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'sous-traitants', SousTraitantViewSet)
 router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
 router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
+router.register(r'banques', BanqueViewSet)
 router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
 router.register(r'fournisseurs', FournisseurViewSet)
+router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
@@ -200,4 +207,92 @@ urlpatterns = [
 urlpatterns += [
     path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
+    path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
+    path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
+]
+
+# Agency expense aggregates endpoints (via ViewSet actions)
+# GET /api/agency-expenses/yearly_summary/?year=YYYY
+# POST /api/agency-expenses/recompute_month/ {"year":YYYY, "month":M}
+
+# --- URLs POUR LE DRIVE ---
+urlpatterns += [
+    path('drive/', DriveViewSet.as_view({
+        'get': 'list',
+        'post': 'create'
+    }), name='drive-list'),
+    path('drive/<int:pk>/', DriveViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy'
+    }), name='drive-detail'),
+    path('drive/presign-upload/', DriveViewSet.as_view({
+        'post': 'presign_upload'
+    }), name='drive-presign-upload'),
+    path('drive/confirm-upload/', DriveViewSet.as_view({
+        'post': 'confirm_upload'
+    }), name='drive-confirm-upload'),
+    path('drive/<int:pk>/download/', DriveViewSet.as_view({
+        'get': 'download'
+    }), name='drive-download'),
+    path('drive/list-folders/', DriveViewSet.as_view({
+        'get': 'list_folders'
+    }), name='drive-list-folders'),
+    # Nouveaux endpoints pour les dossiers personnalisés
+    path('drive/create-folder/', DriveViewSet.as_view({
+        'post': 'create_folder'
+    }), name='drive-create-folder'),
+    path('drive/list-custom-folders/', DriveViewSet.as_view({
+        'get': 'list_custom_folders'
+    }), name='drive-list-custom-folders'),
+    path('drive/delete-folder/', DriveViewSet.as_view({
+        'delete': 'delete_folder'
+    }), name='drive-delete-folder'),
+]
+
+# --- URLs POUR LE DRIVE COMPLET ---
+from .drive_views import DriveCompleteViewSet
+
+urlpatterns += [
+    # Navigation et contenu
+    path('drive-complete/list-content/', DriveCompleteViewSet.as_view({
+        'get': 'list_folder_content'
+    }), name='drive-complete-list-content'),
+    
+    # Gestion des dossiers
+    path('drive-complete/create-folder/', DriveCompleteViewSet.as_view({
+        'post': 'create_folder_anywhere'
+    }), name='drive-complete-create-folder'),
+    path('drive-complete/delete-folder/', DriveCompleteViewSet.as_view({
+        'delete': 'delete_folder_anywhere'
+    }), name='drive-complete-delete-folder'),
+    
+    # Gestion des fichiers
+    path('drive-complete/download-url/', DriveCompleteViewSet.as_view({
+        'get': 'get_file_download_url'
+    }), name='drive-complete-download-url'),
+    path('drive-complete/display-url/', DriveCompleteViewSet.as_view({
+        'get': 'get_file_display_url'
+    }), name='drive-complete-display-url'),
+    path('drive-complete/preview-file/', DriveCompleteViewSet.as_view({
+        'get': 'preview_file'
+    }), name='drive-complete-preview-file'),
+    path('drive-complete/upload-url/', DriveCompleteViewSet.as_view({
+        'post': 'get_upload_url'
+    }), name='drive-complete-upload-url'),
+    path('drive-complete/delete-file/', DriveCompleteViewSet.as_view({
+        'delete': 'delete_file'
+    }), name='drive-complete-delete-file'),
+    
+    # Recherche et manipulation
+    path('drive-complete/search/', DriveCompleteViewSet.as_view({
+        'get': 'search_files'
+    }), name='drive-complete-search'),
+    path('drive-complete/move-file/', DriveCompleteViewSet.as_view({
+        'post': 'move_file'
+    }), name='drive-complete-move-file'),
+    path('drive-complete/rename-item/', DriveCompleteViewSet.as_view({
+        'post': 'rename_item'
+    }), name='drive-complete-rename-item'),
 ]
