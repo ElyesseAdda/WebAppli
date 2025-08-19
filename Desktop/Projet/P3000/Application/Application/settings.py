@@ -66,7 +66,6 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -77,14 +76,8 @@ CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000'
 
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
-
-# Configuration CSRF pour les API REST
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["http://localhost:3000"]
-CSRF_USE_SESSIONS = False
-CSRF_COOKIE_SECURE = True  # True en production avec HTTPS
+SESSION_COOKIE_SECURE = True  # True en production avec HTTPS
 
 ROOT_URLCONF = 'Application.urls'
 
@@ -180,10 +173,7 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = os.getenv('SECURE_BROWSER_XSS_FILTER', 'True').lower() == 'true'
     SECURE_CONTENT_TYPE_NOSNIFF = os.getenv('SECURE_CONTENT_TYPE_NOSNIFF', 'True').lower() == 'true'
     
-    # CSRF
-    CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else []
-    CSRF_COOKIE_SECURE = True
-    CSRF_COOKIE_SAMESITE = 'Lax'
+    # Cookies sécurisés
     SESSION_COOKIE_SECURE = True
     
     # Logs

@@ -12,7 +12,6 @@ import json
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
 def login_view(request):
     """
     Vue de connexion
@@ -61,7 +60,6 @@ def login_view(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@csrf_exempt
 def logout_view(request):
     """
     Vue de déconnexion
@@ -102,7 +100,6 @@ def check_auth_view(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
 def create_user_view(request):
     """
     Créer un nouvel utilisateur (pour l'administration)
