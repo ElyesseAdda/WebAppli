@@ -80,6 +80,9 @@ from .views import (
 # Import des vues d'authentification
 from .auth_views import login_view, logout_view, check_auth_view, create_user_view
 
+# Import de la vue CSRF
+from .csrf_views import csrf_token_view
+
 router = DefaultRouter()
 router.register(r'chantier', ChantierViewSet, basename='chantier')
 router.register(r'societe', SocieteViewSet, basename='societe')
@@ -118,6 +121,7 @@ auth_urlpatterns = [
 ]
 
 urlpatterns = [
+    path('csrf-token/', csrf_token_view, name='csrf-token'),
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
     path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),

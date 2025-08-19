@@ -1070,6 +1070,8 @@ class ClientViewSet(viewsets.ModelViewSet):
 class AgentViewSet(viewsets.ModelViewSet):
     queryset = Agent.objects.all()
     serializer_class = AgentSerializer
+    permission_classes = [AllowAny]
+
 
     def create(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -7198,3 +7200,15 @@ class DriveViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@ensure_csrf_cookie
+def csrf_token_view(request):
+    """
+    Vue pour générer et retourner un token CSRF
+    """
+    from django.middleware.csrf import get_token
+    get_token(request)
+    return Response({'detail': 'CSRF token generated'})

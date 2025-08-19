@@ -17,6 +17,18 @@ function getCSRFToken() {
   return cookieValue;
 }
 
+// Fonction pour récupérer le token CSRF depuis le serveur
+async function fetchCSRFToken() {
+  try {
+    // Faire une requête GET vers une URL qui génère un token CSRF
+    await axios.get("/api/csrf-token/", { withCredentials: true });
+    return getCSRFToken();
+  } catch (error) {
+    console.warn("Impossible de récupérer le token CSRF:", error);
+    return null;
+  }
+}
+
 // Créer une instance Axios avec configuration par défaut
 const axiosInstance = axios.create({
   baseURL: "/api/",
@@ -28,11 +40,18 @@ const axiosInstance = axios.create({
 
 // Intercepteur pour ajouter automatiquement le token CSRF
 axiosInstance.interceptors.request.use(
-  (config) => {
-    const csrfToken = getCSRFToken();
+  async (config) => {
+    let csrfToken = getCSRFToken();
+
+    // Si pas de token CSRF, essayer de le récupérer
+    if (!csrfToken) {
+      csrfToken = await fetchCSRFToken();
+    }
+
     if (csrfToken) {
       config.headers["X-CSRFToken"] = csrfToken;
     }
+
     return config;
   },
   (error) => {
@@ -45,7 +64,31 @@ axiosInstance.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
+    // Si erreur 403 CSRF, essayer de récupérer un nouveau token et refaire la requête
+    if (
+      error.response &&
+      error.response.status === 403 &&
+      error.response.data &&
+      error.response.data.detail &&
+      error.response.data.detail.includes("CSRF")
+    ) {
+      console.log(
+        "Erreur CSRF détectée, tentative de récupération du token..."
+      );
+
+      try {
+        const newToken = await fetchCSRFToken();
+        if (newToken) {
+          // Refaire la requête avec le nouveau token
+          error.config.headers["X-CSRFToken"] = newToken;
+          return axiosInstance.request(error.config);
+        }
+      } catch (retryError) {
+        console.error("Échec de la récupération du token CSRF:", retryError);
+      }
+    }
+
     console.error("Axios error:", error);
     return Promise.reject(error);
   }

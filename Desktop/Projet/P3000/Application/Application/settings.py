@@ -66,8 +66,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'api.middleware.CSRFMiddleware',
+    # CSRF désactivé pour les API
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -78,15 +77,9 @@ CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000'
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Configuration des cookies de session
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = True  # True en production avec HTTPS
-
-# Configuration CSRF pour les API REST
-CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SECURE = True  # True en production avec HTTPS
-CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["https://myp3000app.com"]
-CSRF_USE_SESSIONS = False
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() == 'true'  # False en développement
 
 ROOT_URLCONF = 'Application.urls'
 
