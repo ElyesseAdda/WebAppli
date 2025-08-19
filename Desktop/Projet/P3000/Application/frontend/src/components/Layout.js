@@ -4,7 +4,7 @@ import BreadcrumbHeader from "./BreadcrumbHeader";
 import Header from "./Header";
 import SlideBar from "./SlideBar";
 
-const Layout = ({ children }) => {
+const Layout = ({ children, user, onLogout }) => {
   const [isSidebarVisible, setSidebarVisible] = useState(true);
 
   const toggleSidebar = () => {
@@ -17,7 +17,7 @@ const Layout = ({ children }) => {
         isSidebarVisible ? "sidebar-visible" : "sidebar-hidden"
       }`}
     >
-      <Header />
+      <Header user={user} onLogout={onLogout} />
       <SlideBar
         toggleSidebar={toggleSidebar}
         isSidebarVisible={isSidebarVisible}

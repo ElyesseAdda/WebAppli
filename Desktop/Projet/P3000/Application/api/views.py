@@ -76,6 +76,7 @@ logger = logging.getLogger(__name__)
 class ChantierViewSet(viewsets.ModelViewSet):
     queryset = Chantier.objects.all()
     serializer_class = ChantierSerializer
+    permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
     def create(self, request, *args, **kwargs):
         # Récupérer les données estimées du frontend
@@ -156,6 +157,7 @@ class FactureTSViewSet(viewsets.ModelViewSet):
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = Devis.objects.all().prefetch_related('lignes')
     serializer_class = DevisSerializer
+    permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -173,6 +175,7 @@ class DevisViewSet(viewsets.ModelViewSet):
 class FactureViewSet(viewsets.ModelViewSet):
     queryset = Facture.objects.all()
     serializer_class = FactureSerializer
+    permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
 
 def dashboard_data(request):
@@ -529,6 +532,7 @@ def check_nom_devis_existe(request):
 class PartieViewSet(viewsets.ModelViewSet):
     queryset = Partie.objects.all()
     serializer_class = PartieSerializer
+    permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()

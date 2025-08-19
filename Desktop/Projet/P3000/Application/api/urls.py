@@ -77,6 +77,8 @@ from .views import (
     DriveViewSet,
 )
 
+# Import des vues d'authentification
+from .auth_views import login_view, logout_view, check_auth_view, create_user_view
 
 router = DefaultRouter()
 router.register(r'chantier', ChantierViewSet, basename='chantier')
@@ -105,6 +107,15 @@ router.register(r'banques', BanqueViewSet)
 router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
 router.register(r'fournisseurs', FournisseurViewSet)
 router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
+router.register(r'drive', DriveViewSet, basename='drive')
+
+# URLs d'authentification
+auth_urlpatterns = [
+    path('auth/login/', login_view, name='login'),
+    path('auth/logout/', logout_view, name='logout'),
+    path('auth/check/', check_auth_view, name='check_auth'),
+    path('auth/create-user/', create_user_view, name='create_user'),
+]
 
 urlpatterns = [
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
@@ -209,7 +220,7 @@ urlpatterns += [
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
-]
+] + auth_urlpatterns
 
 # Agency expense aggregates endpoints (via ViewSet actions)
 # GET /api/agency-expenses/yearly_summary/?year=YYYY
