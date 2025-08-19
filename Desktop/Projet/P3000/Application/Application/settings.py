@@ -81,6 +81,11 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
 
+# Configuration CSRF pour les API REST
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["http://localhost:3000"]
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SECURE = False  # Mettre True en production avec HTTPS
+
 ROOT_URLCONF = 'Application.urls'
 
 TEMPLATES = [
