@@ -3,19 +3,23 @@ import {
   Archive as ArchiveIcon,
   AudioFile as AudioIcon,
   Code as CodeIcon,
+  Computer as ComputerIcon,
   Delete as DeleteIcon,
   Description as DescriptionIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
+  Email as EmailIcon,
   InsertDriveFile as FileIcon,
   Folder as FolderIcon,
   Home as HomeIcon,
   Image as ImageIcon,
+  Language as LanguageIcon,
   NavigateNext as NavigateNextIcon,
   PictureAsPdf as PdfIcon,
   Search as SearchIcon,
   CloudUpload as UploadIcon,
   VideoFile as VideoIcon,
+  Visibility as VisibilityIcon,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -47,6 +51,7 @@ import {
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import React, { useCallback, useEffect, useState } from "react";
+import FileViewer from "./FileViewer";
 
 // Styles personnalisés
 const DriveContainer = styled(Box)(({ theme }) => ({
@@ -135,6 +140,18 @@ const Drive = () => {
     message: "",
     severity: "info",
   });
+  const [officeDialogOpen, setOfficeDialogOpen] = useState(false);
+  const [officeFileData, setOfficeFileData] = useState({
+    fileName: "",
+    fileUrl: "",
+    filePath: "",
+  });
+  const [fileViewerOpen, setFileViewerOpen] = useState(false);
+  const [fileViewerData, setFileViewerData] = useState({
+    filePath: "",
+    fileName: "",
+    contentType: "",
+  });
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -195,6 +212,92 @@ const Drive = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // Vérifier si un fichier peut être ouvert dans le navigateur
+  const canOpenInBrowser = (contentType, fileName) => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+
+    // Types de fichiers qui peuvent être ouverts dans le navigateur
+    const browserSupportedTypes = [
+      "pdf",
+      "txt",
+      "html",
+      "htm",
+      "css",
+      "js",
+      "json",
+      "xml",
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "bmp",
+      "svg",
+      "webp",
+      "mp4",
+      "webm",
+      "ogg",
+      "mp3",
+      "wav",
+      "flac",
+    ];
+
+    // Types MIME supportés
+    const browserSupportedMimeTypes = [
+      "text/",
+      "image/",
+      "video/",
+      "audio/",
+      "application/pdf",
+      "application/json",
+      "application/xml",
+    ];
+
+    return (
+      browserSupportedTypes.includes(extension) ||
+      browserSupportedMimeTypes.some((type) => contentType?.startsWith(type))
+    );
+  };
+
+  // Vérifier si un fichier peut être ouvert avec Office Online
+  const canOpenWithOfficeOnline = (fileName) => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+
+    const officeExtensions = [
+      "doc",
+      "docx",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "odt",
+      "ods",
+      "odp", // OpenDocument formats
+    ];
+
+    return officeExtensions.includes(extension);
+  };
+
+  // Vérifier si un fichier peut être ouvert avec l'application locale
+  const canOpenWithLocalApp = (fileName) => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+
+    const localAppExtensions = [
+      "doc",
+      "docx",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "odt",
+      "ods",
+      "odp",
+      "rtf",
+      "csv",
+    ];
+
+    return localAppExtensions.includes(extension);
   };
 
   // Charger le contenu du dossier actuel
@@ -442,6 +545,112 @@ const Drive = () => {
     }
   };
 
+  // Ouvrir un fichier dans le navigateur
+  const openFile = async (filePath, fileName, contentType) => {
+    try {
+      // Vérifier si le fichier peut être ouvert dans le navigateur
+      if (!canOpenInBrowser(contentType, fileName)) {
+        showSnackbar(
+          "Ce type de fichier ne peut pas être ouvert dans le navigateur",
+          "warning"
+        );
+        return;
+      }
+
+      // Pour les PDFs, utiliser Puppeteer pour la prévisualisation
+      if (fileName.toLowerCase().endsWith(".pdf")) {
+        const previewUrl = `/api/drive-complete/preview-file/?file_path=${encodeURIComponent(
+          filePath
+        )}`;
+
+        // Ouvrir dans un nouvel onglet avec gestion d'erreur
+        const newWindow = window.open(previewUrl, "_blank");
+
+        // Vérifier si la fenêtre s'est ouverte
+        if (newWindow) {
+          showSnackbar("Prévisualisation PDF générée", "success");
+        } else {
+          showSnackbar(
+            "Erreur lors de l'ouverture de la prévisualisation",
+            "error"
+          );
+        }
+      } else {
+        // Pour les autres fichiers, utiliser la page dédiée
+        setFileViewerData({
+          filePath: filePath,
+          fileName: fileName,
+          contentType: contentType,
+        });
+        setFileViewerOpen(true);
+        showSnackbar("Fichier ouvert en prévisualisation", "success");
+      }
+    } catch (error) {
+      console.error("Erreur ouverture fichier:", error);
+      showSnackbar("Erreur lors de l'ouverture du fichier", "error");
+    }
+  };
+
+  // Ouvrir un fichier Office avec différentes options
+  const openOfficeFile = async (filePath, fileName) => {
+    try {
+      const response = await fetch(
+        `/api/drive-complete/download-url/?file_path=${encodeURIComponent(
+          filePath
+        )}`
+      );
+      if (!response.ok) {
+        throw new Error(
+          "Erreur lors de la génération du lien de téléchargement"
+        );
+      }
+
+      const data = await response.json();
+      const fileUrl = data.download_url;
+
+      // Créer un modal pour choisir l'option d'ouverture
+      setOfficeDialogOpen(true);
+      setOfficeFileData({
+        fileName: fileName,
+        fileUrl: fileUrl,
+        filePath: filePath,
+      });
+    } catch (error) {
+      console.error("Erreur ouverture fichier Office:", error);
+      showSnackbar("Erreur lors de l'ouverture du fichier", "error");
+    }
+  };
+
+  // Ouvrir avec Office Online
+  const openWithOfficeOnline = (fileUrl, fileName) => {
+    // Encoder l'URL du fichier pour Office Online
+    const encodedUrl = encodeURIComponent(fileUrl);
+    const officeOnlineUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`;
+
+    window.open(officeOnlineUrl, "_blank");
+    setOfficeDialogOpen(false);
+    showSnackbar("Fichier ouvert avec Office Online", "success");
+  };
+
+  // Ouvrir avec l'application locale
+  const openWithLocalApp = (fileUrl, fileName) => {
+    // Créer un lien temporaire pour ouvrir avec l'application par défaut
+    const link = document.createElement("a");
+    link.href = fileUrl;
+    link.download = fileName; // Force le téléchargement
+    link.target = "_blank";
+
+    // Ajouter un attribut pour ouvrir avec l'application locale
+    link.setAttribute("data-action", "open-local");
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setOfficeDialogOpen(false);
+    showSnackbar("Fichier ouvert avec l'application locale", "success");
+  };
+
   // Télécharger un fichier
   const downloadFile = async (filePath, fileName) => {
     try {
@@ -470,6 +679,47 @@ const Drive = () => {
     } catch (error) {
       console.error("Erreur téléchargement:", error);
       showSnackbar("Erreur lors du téléchargement", "error");
+    }
+  };
+
+  // Envoyer un fichier par email
+  const sendFileByEmail = async (filePath, fileName) => {
+    try {
+      // Obtenir l'URL de téléchargement du fichier
+      const response = await fetch(
+        `/api/drive-complete/download-url/?file_path=${encodeURIComponent(
+          filePath
+        )}`
+      );
+      if (!response.ok) {
+        throw new Error(
+          "Erreur lors de la génération du lien de téléchargement"
+        );
+      }
+
+      const data = await response.json();
+      const fileUrl = data.download_url;
+
+      // Créer le lien mailto avec le fichier en pièce jointe
+      const subject = encodeURIComponent(`Fichier: ${fileName}`);
+      const body = encodeURIComponent(
+        `Bonjour,\n\nVeuillez trouver ci-joint le fichier "${fileName}".\n\nCordialement`
+      );
+
+      // Note: Les pièces jointes directes ne sont pas supportées par mailto
+      // On utilise une approche alternative avec le lien de téléchargement
+      const mailtoLink = `mailto:?subject=${subject}&body=${body}\n\nLien vers le fichier: ${fileUrl}`;
+
+      // Ouvrir l'application de mail par défaut
+      window.open(mailtoLink, "_blank");
+
+      showSnackbar("Application de mail ouverte", "success");
+    } catch (error) {
+      console.error("Erreur envoi email:", error);
+      showSnackbar(
+        "Erreur lors de l'ouverture de l'application de mail",
+        "error"
+      );
     }
   };
 
@@ -839,7 +1089,7 @@ const Drive = () => {
                   <Box
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 100px 150px 120px 80px",
+                      gridTemplateColumns: "1fr 80px 140px 100px 100px",
                       gap: 2,
                       p: 2,
                       borderBottom: "1px solid",
@@ -887,7 +1137,7 @@ const Drive = () => {
                       <Box
                         sx={{
                           display: "grid",
-                          gridTemplateColumns: "1fr 100px 150px 120px 80px",
+                          gridTemplateColumns: "1fr 80px 140px 100px 100px",
                           gap: 2,
                           alignItems: "center",
                           width: "100%",
@@ -946,7 +1196,19 @@ const Drive = () => {
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        downloadFile(file.path, file.name);
+                        // Vérifier si c'est un fichier Office
+                        if (canOpenWithOfficeOnline(file.name)) {
+                          openOfficeFile(file.path, file.name);
+                        } else if (
+                          canOpenInBrowser(file.content_type, file.name)
+                        ) {
+                          openFile(file.path, file.name, file.content_type);
+                        } else {
+                          showSnackbar(
+                            "Ce type de fichier ne peut pas être ouvert directement",
+                            "warning"
+                          );
+                        }
                       }}
                       onContextMenu={(e) =>
                         handleContextMenu(e, { ...file, isFolder: false })
@@ -955,7 +1217,7 @@ const Drive = () => {
                       <Box
                         sx={{
                           display: "grid",
-                          gridTemplateColumns: "1fr 100px 150px 120px 80px",
+                          gridTemplateColumns: "1fr 80px 140px 100px 100px",
                           gap: 2,
                           alignItems: "center",
                           width: "100%",
@@ -984,6 +1246,34 @@ const Drive = () => {
                             "Fichier"}
                         </Typography>
                         <Box sx={{ display: "flex", gap: 0.5 }}>
+                          {(canOpenInBrowser(file.content_type, file.name) ||
+                            canOpenWithOfficeOnline(file.name)) && (
+                            <Tooltip title="Ouvrir">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Vérifier si c'est un fichier Office
+                                  if (canOpenWithOfficeOnline(file.name)) {
+                                    openOfficeFile(file.path, file.name);
+                                  } else if (
+                                    canOpenInBrowser(
+                                      file.content_type,
+                                      file.name
+                                    )
+                                  ) {
+                                    openFile(
+                                      file.path,
+                                      file.name,
+                                      file.content_type
+                                    );
+                                  }
+                                }}
+                              >
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <Tooltip title="Télécharger">
                             <IconButton
                               size="small"
@@ -993,6 +1283,18 @@ const Drive = () => {
                               }}
                             >
                               <DownloadIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Envoyer par email">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                sendFileByEmail(file.path, file.name);
+                              }}
+                              sx={{ color: "primary.main" }}
+                            >
+                              <EmailIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Supprimer">
@@ -1209,17 +1511,55 @@ const Drive = () => {
         {selectedItem && (
           <>
             {!selectedItem.isFolder && (
-              <MenuItemMUI
-                onClick={() => {
-                  downloadFile(selectedItem.path, selectedItem.name);
-                  handleContextMenuClose();
-                }}
-              >
-                <ListItemIcon>
-                  <DownloadIcon fontSize="small" />
-                </ListItemIcon>
-                Télécharger
-              </MenuItemMUI>
+              <>
+                {(canOpenInBrowser(
+                  selectedItem.content_type,
+                  selectedItem.name
+                ) ||
+                  canOpenWithOfficeOnline(selectedItem.name)) && (
+                  <MenuItemMUI
+                    onClick={() => {
+                      if (canOpenWithOfficeOnline(selectedItem.name)) {
+                        openOfficeFile(selectedItem.path, selectedItem.name);
+                      } else {
+                        openFile(
+                          selectedItem.path,
+                          selectedItem.name,
+                          selectedItem.content_type
+                        );
+                      }
+                      handleContextMenuClose();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <VisibilityIcon fontSize="small" />
+                    </ListItemIcon>
+                    Ouvrir
+                  </MenuItemMUI>
+                )}
+                <MenuItemMUI
+                  onClick={() => {
+                    downloadFile(selectedItem.path, selectedItem.name);
+                    handleContextMenuClose();
+                  }}
+                >
+                  <ListItemIcon>
+                    <DownloadIcon fontSize="small" />
+                  </ListItemIcon>
+                  Télécharger
+                </MenuItemMUI>
+                <MenuItemMUI
+                  onClick={() => {
+                    sendFileByEmail(selectedItem.path, selectedItem.name);
+                    handleContextMenuClose();
+                  }}
+                >
+                  <ListItemIcon>
+                    <EmailIcon fontSize="small" />
+                  </ListItemIcon>
+                  Envoyer par email
+                </MenuItemMUI>
+              </>
             )}
             <MenuItemMUI
               onClick={() => {
@@ -1246,6 +1586,73 @@ const Drive = () => {
           </>
         )}
       </Menu>
+
+      {/* Dialog pour les fichiers Office */}
+      <Dialog
+        open={officeDialogOpen}
+        onClose={() => setOfficeDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Ouvrir le fichier Office</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Comment souhaitez-vous ouvrir "{officeFileData.fileName}" ?
+          </Typography>
+
+          <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<LanguageIcon />}
+              onClick={() =>
+                openWithOfficeOnline(
+                  officeFileData.fileUrl,
+                  officeFileData.fileName
+                )
+              }
+              sx={{ justifyContent: "flex-start", p: 2 }}
+            >
+              <Box sx={{ textAlign: "left" }}>
+                <Typography variant="subtitle1">Office Online</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Ouvrir dans le navigateur avec Office Online (lecture seule)
+                </Typography>
+              </Box>
+            </Button>
+
+            <Button
+              variant="outlined"
+              startIcon={<ComputerIcon />}
+              onClick={() =>
+                openWithLocalApp(
+                  officeFileData.fileUrl,
+                  officeFileData.fileName
+                )
+              }
+              sx={{ justifyContent: "flex-start", p: 2 }}
+            >
+              <Box sx={{ textAlign: "left" }}>
+                <Typography variant="subtitle1">Application locale</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Télécharger et ouvrir avec l'application par défaut
+                </Typography>
+              </Box>
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOfficeDialogOpen(false)}>Annuler</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal FileViewer */}
+      {fileViewerOpen && (
+        <FileViewer
+          filePath={fileViewerData.filePath}
+          fileName={fileViewerData.fileName}
+          onClose={() => setFileViewerOpen(false)}
+        />
+      )}
 
       {/* Snackbar */}
       <Snackbar

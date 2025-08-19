@@ -272,6 +272,12 @@ urlpatterns += [
     path('drive-complete/download-url/', DriveCompleteViewSet.as_view({
         'get': 'get_file_download_url'
     }), name='drive-complete-download-url'),
+    path('drive-complete/display-url/', DriveCompleteViewSet.as_view({
+        'get': 'get_file_display_url'
+    }), name='drive-complete-display-url'),
+    path('drive-complete/preview-file/', DriveCompleteViewSet.as_view({
+        'get': 'preview_file'
+    }), name='drive-complete-preview-file'),
     path('drive-complete/upload-url/', DriveCompleteViewSet.as_view({
         'post': 'get_upload_url'
     }), name='drive-complete-upload-url'),

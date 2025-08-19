@@ -299,6 +299,33 @@ def generate_presigned_url(operation, key, expires_in=3600):
         ExpiresIn=expires_in
     )
 
+def generate_presigned_url_for_display(key, expires_in=3600):
+    """
+    Génère une URL présignée pour l'affichage inline dans le navigateur
+
+    Args:
+        key: clé S3
+        expires_in: durée de validité en secondes
+
+    Returns:
+        str: URL présignée pour l'affichage
+    """
+    if not is_s3_available():
+        raise ValueError("S3 non configuré")
+    
+    s3_client = get_s3_client()
+    bucket_name = get_s3_bucket_name()
+
+    return s3_client.generate_presigned_url(
+        'get_object',
+        Params={
+            'Bucket': bucket_name,
+            'Key': key,
+            'ResponseContentDisposition': 'inline',  # Force l'affichage au lieu du téléchargement
+        },
+        ExpiresIn=expires_in
+    )
+
 
 def generate_presigned_post(key, fields=None, conditions=None, expires_in=3600):
     """
@@ -487,6 +514,9 @@ def list_s3_folder_content(folder_path=""):
         if 'Contents' in response:
             for obj in response['Contents']:
                 # Ignorer les objets qui se terminent par '/' (dossiers)
+                # ET ignorer les fichiers .keep
+                if obj['Key'].endswith('/') or obj['Key'].endswith('/.keep'):
+                    continue
                 if not obj['Key'].endswith('/') and obj['Key'] != folder_path:
                     file_name = obj['Key'].split('/')[-1]
                     files.append({

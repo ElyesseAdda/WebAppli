@@ -115,6 +115,28 @@ class DriveCompleteViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['get'])
+    def get_file_display_url(self, request):
+        """
+        Génère une URL d'affichage pour un fichier (inline)
+        """
+        try:
+            file_path = request.query_params.get('file_path')
+            
+            if not file_path:
+                return Response({'error': 'Chemin du fichier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            from .utils import generate_presigned_url_for_display
+            display_url = generate_presigned_url_for_display(file_path, expires_in=3600)
+
+            return Response({
+                'display_url': display_url,
+                'file_path': file_path
+            })
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['post'])
     def get_upload_url(self, request):
         """
@@ -263,3 +285,73 @@ class DriveCompleteViewSet(viewsets.ViewSet):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def preview_file(self, request):
+        """
+        Génère une prévisualisation PDF d'un fichier du drive
+        """
+        try:
+            file_path = request.query_params.get('file_path')
+            
+            if not file_path:
+                return Response({'error': 'Chemin du fichier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Vérifier que c'est un fichier PDF
+            if not file_path.lower().endswith('.pdf'):
+                return Response({'error': 'Seuls les fichiers PDF sont supportés'}, status=status.HTTP_400_BAD_REQUEST)
+
+            from .utils import generate_presigned_url
+            from django.http import HttpResponse
+            import os
+            import requests
+            from io import BytesIO
+            from PIL import Image
+            import fitz  # PyMuPDF
+
+            # Obtenir l'URL du fichier
+            file_url = generate_presigned_url('get_object', file_path, expires_in=3600)
+
+            try:
+                # Télécharger le PDF depuis S3
+                response = requests.get(file_url, timeout=30)
+                response.raise_for_status()
+                
+                # Ouvrir le PDF avec PyMuPDF
+                pdf_document = fitz.open(stream=response.content, filetype="pdf")
+                
+                # Prendre la première page
+                page = pdf_document[0]
+                
+                # Convertir en image avec une résolution élevée
+                mat = fitz.Matrix(2.0, 2.0)  # Zoom 2x pour une meilleure qualité
+                pix = page.get_pixmap(matrix=mat)
+                
+                # Convertir en PIL Image
+                img_data = pix.tobytes("png")
+                img = Image.open(BytesIO(img_data))
+                
+                # Convertir en bytes pour la réponse
+                img_buffer = BytesIO()
+                img.save(img_buffer, format='PNG', quality=95)
+                img_buffer.seek(0)
+                
+                # Fermer le document
+                pdf_document.close()
+                
+                # Retourner l'image
+                response = HttpResponse(img_buffer.getvalue(), content_type='image/png')
+                response['Content-Disposition'] = f'inline; filename="preview_{os.path.basename(file_path)}.png"'
+                response['Cache-Control'] = 'public, max-age=3600'  # Cache pendant 1 heure
+                return response
+
+            except Exception as e:
+                # En cas d'erreur, retourner l'URL directe du PDF
+                return Response({
+                    'error': f'Erreur lors de la génération de la prévisualisation: {str(e)}',
+                    'fallback_url': file_url,
+                    'message': 'Utilisez le lien de fallback pour voir le PDF directement'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'error': f'Erreur lors de la prévisualisation: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

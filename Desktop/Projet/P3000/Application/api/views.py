@@ -44,6 +44,7 @@ from .models import (
     Banque,
     AgencyExpenseAggregate,
 )
+from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
 import logging
 from django.db import transaction, models
@@ -91,7 +92,18 @@ class ChantierViewSet(viewsets.ModelViewSet):
         })
         
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        chantier = self.perform_create(serializer)
+        
+        # Créer automatiquement la structure de dossiers dans le drive
+        try:
+            societe = chantier.societe
+            if societe and chantier.nom:
+                drive_automation.create_chantier_structure(
+                    societe_name=societe.nom,
+                    chantier_name=chantier.nom
+                )
+        except Exception as e:
+            print(f"Erreur lors de la création automatique des dossiers: {str(e)}")
         
         headers = self.get_success_headers(serializer.data)
         return Response(
@@ -6715,6 +6727,31 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
     queryset = AppelOffres.objects.all()
     serializer_class = AppelOffresSerializer
     
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        appel_offres = self.perform_create(serializer)
+        
+        # Créer automatiquement la structure de dossiers dans le drive
+        try:
+            if appel_offres.nom:
+                # Utiliser la société du devis associé ou une société par défaut
+                societe_name = "Société par défaut"  # À adapter selon votre logique
+                if hasattr(appel_offres, 'devis') and appel_offres.devis.first():
+                    devis = appel_offres.devis.first()
+                    if devis.societe:
+                        societe_name = devis.societe.nom
+                
+                drive_automation.create_appel_offres_structure(
+                    societe_name=societe_name,
+                    appel_offres_name=appel_offres.nom
+                )
+        except Exception as e:
+            print(f"Erreur lors de la création automatique des dossiers: {str(e)}")
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
     def get_queryset(self):
         """Filtrer selon les paramètres"""
         queryset = AppelOffres.objects.all()
@@ -6745,6 +6782,24 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 devis.chantier = chantier
                 devis.appel_offres = None
                 devis.save()
+            
+            # Transférer automatiquement les dossiers du drive
+            try:
+                societe_name = "Société par défaut"
+                if hasattr(appel_offres, 'devis') and appel_offres.devis.first():
+                    devis = appel_offres.devis.first()
+                    if devis.societe:
+                        societe_name = devis.societe.nom
+                
+                if appel_offres.nom:
+                    success = drive_automation.transfer_project_to_chantier(
+                        societe_name=societe_name,
+                        project_name=appel_offres.nom
+                    )
+                    if not success:
+                        print("Erreur lors du transfert des dossiers du drive")
+            except Exception as e:
+                print(f"Erreur lors du transfert automatique des dossiers: {str(e)}")
             
             return Response({
                 'message': 'Appel d\'offres transformé en chantier avec succès',
