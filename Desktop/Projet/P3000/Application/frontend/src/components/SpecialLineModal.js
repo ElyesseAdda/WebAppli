@@ -103,6 +103,11 @@ const SpecialLineModal = ({ open, onClose, onSave }) => {
               control={<Radio />}
               label="Addition"
             />
+            <FormControlLabel
+              value="display"
+              control={<Radio />}
+              label="Affichage uniquement"
+            />
           </RadioGroup>
         </FormControl>
 

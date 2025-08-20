@@ -924,6 +924,11 @@ const ModificationDevis = () => {
           ([sousPartieId, lines]) => {
             const sousPartieTotal = sousPartieTotals[sousPartieId] || 0;
             lines.forEach((line) => {
+              // Les lignes de type 'display' ne participent pas au calcul
+              if (line.type === "display") {
+                return; // Skip this line
+              }
+
               let montant = 0;
               if (line.valueType === "percentage") {
                 montant = (sousPartieTotal * parseFloat(line.value)) / 100;
@@ -945,6 +950,11 @@ const ModificationDevis = () => {
       if (specialLines.parties) {
         Object.entries(specialLines.parties).forEach(([partieId, lines]) => {
           lines.forEach((line) => {
+            // Les lignes de type 'display' ne participent pas au calcul
+            if (line.type === "display") {
+              return; // Skip this line
+            }
+
             let montant = 0;
             if (line.valueType === "percentage") {
               montant = (totalHT * parseFloat(line.value)) / 100;
@@ -965,6 +975,11 @@ const ModificationDevis = () => {
       if (specialLines.global && specialLines.global.length > 0) {
         console.group("Lignes spéciales globales:");
         specialLines.global.forEach((line) => {
+          // Les lignes de type 'display' ne participent pas au calcul
+          if (line.type === "display") {
+            return; // Skip this line
+          }
+
           let montant = 0;
           if (line.valueType === "percentage") {
             montant = (totalHT * parseFloat(line.value)) / 100;
@@ -1120,10 +1135,11 @@ const ModificationDevis = () => {
   };
 
   const handleSaveEdit = async (editedData) => {
+    let endpoint = "";
+    let dataToSend = {};
+
     try {
       setError(null);
-      let endpoint = "";
-      let dataToSend = {};
 
       if (editedData.type === "partie") {
         endpoint = `/api/parties/${editedData.id}/`;
@@ -1138,12 +1154,38 @@ const ModificationDevis = () => {
         };
       } else if (editedData.type === "ligne") {
         endpoint = `/api/ligne-details/${editedData.id}/`;
-        dataToSend = {
-          description: editedData.description,
-          unite: editedData.unite,
-          prix: editedData.prix,
-          sous_partie: editedData.sous_partie,
-        };
+
+        // Trouver la ligne originale pour comparer
+        const originalLigne = allLignesDetails.find(
+          (l) => l.id === editedData.id
+        );
+
+        // Ne envoyer que les champs qui ont changé
+        dataToSend = {};
+
+        if (originalLigne) {
+          if (originalLigne.description !== editedData.description) {
+            dataToSend.description = editedData.description;
+          }
+          if (originalLigne.unite !== editedData.unite) {
+            dataToSend.unite = editedData.unite;
+          }
+          if (originalLigne.prix !== editedData.prix) {
+            dataToSend.prix = editedData.prix;
+          }
+          // Ne pas envoyer sous_partie sauf si elle a vraiment changé
+          if (originalLigne.sous_partie !== editedData.sous_partie) {
+            dataToSend.sous_partie = editedData.sous_partie;
+          }
+        } else {
+          // Si on ne trouve pas la ligne originale, envoyer tous les champs
+          dataToSend = {
+            description: editedData.description,
+            unite: editedData.unite,
+            prix: editedData.prix,
+            sous_partie: editedData.sous_partie,
+          };
+        }
       }
 
       const response = await axios.put(endpoint, dataToSend);
@@ -1168,10 +1210,45 @@ const ModificationDevis = () => {
       }
     } catch (error) {
       console.error("Erreur lors de la modification:", error);
-      setError("Impossible de modifier l'élément");
+
+      // Extraire le message d'erreur du backend
+      let errorMessage = "Impossible de modifier l'élément";
+      let errorDetails = error.response?.data?.detail || error.message;
+
+      // Si c'est une erreur de validation du backend
+      if (error.response?.data?.error) {
+        try {
+          const backendError = JSON.parse(error.response.data.error);
+          if (backendError.description) {
+            errorMessage =
+              "Erreur de validation : " + backendError.description[0];
+            errorDetails = backendError.description[0];
+          }
+        } catch (parseError) {
+          // Si le parsing échoue, utiliser le message brut
+          errorMessage = "Erreur de validation du backend";
+          errorDetails = error.response.data.error;
+        }
+      } else if (error.response?.data?.detail) {
+        // Si l'erreur est dans le champ detail
+        errorMessage = "Erreur de validation : " + error.response.data.detail;
+        errorDetails = error.response.data.detail;
+      } else if (typeof error.response?.data === "object") {
+        // Si l'erreur est directement dans response.data
+        const errorData = error.response.data;
+        if (errorData.description && Array.isArray(errorData.description)) {
+          errorMessage = "Erreur de validation : " + errorData.description[0];
+          errorDetails = errorData.description[0];
+        } else if (errorData.description) {
+          errorMessage = "Erreur de validation : " + errorData.description;
+          errorDetails = errorData.description;
+        }
+      }
+
+      setError(errorMessage);
       setErrorDetails({
         message: "Erreur lors de la modification",
-        details: error.response?.data?.detail || error.message,
+        details: errorDetails,
         code: error.response?.status,
         editedData: {
           type: editedData.type,

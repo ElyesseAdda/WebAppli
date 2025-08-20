@@ -462,6 +462,7 @@ class Devis(models.Model):
     appel_offres = models.ForeignKey(AppelOffres, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     client = models.ManyToManyField(Client, related_name='devis', blank=True)
     lignes_speciales = models.JSONField(default=dict, blank=True)
+    lignes_display = models.JSONField(default=dict, blank=True)  # Lignes spéciales de type 'display' uniquement
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
 
     def save_special_lines(self, special_lines_data):

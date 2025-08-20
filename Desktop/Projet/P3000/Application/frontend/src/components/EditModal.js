@@ -49,14 +49,32 @@ const EditModal = ({
         return false;
       }
     } else if (editedData.type === "ligne") {
-      const exists = allLignesDetails?.some(
-        (l) =>
-          l.description.toLowerCase() ===
-            editedData.description.toLowerCase() && l.id !== editedData.id
+      // Pour les lignes, vérifier si on modifie seulement l'unité ou le prix
+      const originalLigne = allLignesDetails?.find(
+        (l) => l.id === editedData.id
       );
-      if (exists) {
-        setError("Une ligne de détail avec cette description existe déjà");
-        return false;
+
+      if (originalLigne) {
+        // Si on modifie seulement l'unité ou le prix (pas la description), pas de conflit
+        const descriptionChanged =
+          originalLigne.description !== editedData.description;
+
+        if (descriptionChanged) {
+          // Seulement vérifier les conflits si la description a changé
+          const exists = allLignesDetails?.some(
+            (l) =>
+              l.description.toLowerCase() ===
+                editedData.description.toLowerCase() &&
+              l.sous_partie === editedData.sous_partie &&
+              l.id !== editedData.id
+          );
+          if (exists) {
+            setError(
+              "Une ligne de détail avec cette description existe déjà dans cette sous-partie"
+            );
+            return false;
+          }
+        }
       }
     }
     setError("");

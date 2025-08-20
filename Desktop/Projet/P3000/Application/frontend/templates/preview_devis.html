@@ -86,10 +86,11 @@
       }
       .ligne-details {
         text-align: left;
-        width: 502px;
+        width: 490px;
         font-size: 0.9rem;
-        text-indent: 22px;
+        padding-left: 22px;
         height: 20px;
+        transform: translateX(-10px);
       }
       .designation {
         text-align: center; /* Alignement à gauche pour la désignation */
@@ -113,7 +114,7 @@
       }
       .unitetableau {
         
-        text-align: center;
+        {% comment %} text-align: center; {% endcomment %}
         font-size: 12px;
         margin-right: 2px;
         width: 22px;
@@ -265,17 +266,26 @@
           margin-top: 12px;
         }
       }
-      .contact-info {
-        line-height: 7px;
-        grid-area: 1 / 2 / 2 / 3;
-        padding-left: 50px;
-        h3 {
-          margin-bottom: 8px;
-        }
-        h4 {
-          margin-top: 14px;
-        }
-      }
+             .contact-info {
+         line-height: 7px;
+         grid-area: 1 / 2 / 2 / 3;
+         padding-left: 50px;
+         h3 {
+           margin-bottom: 8px;
+         }
+         h4 {
+           margin-top: 14px;
+         }
+       }
+       
+       .client-mail {
+         word-break: break-all;
+         overflow-wrap: break-word;
+         max-width: 100%;
+         white-space: nowrap;
+         overflow: hidden;
+         text-overflow: ellipsis;
+       }
 
       .client-info,
       .contact-info {
@@ -450,11 +460,61 @@
       .special-line {
         font-size: 14px;
         font-weight: 700;
+        padding-left: 22px;
+      }
+      
+      /* Espacement avant les lignes spéciales */
+      tr:has(.special-line) {
+        margin-top: 8px;
+      }
+      
+      /* Alternative pour les navigateurs qui ne supportent pas :has() */
+      .special-line-spacer {
+        height: 8px;
+        background: transparent;
       }
 
       .highlighted {
         background-color: yellow;
         color: #dc3545;
+      }
+      
+      .display-only {
+        background-color: #f8f9fa !important;
+        border-left: 3px solid #6c757d;
+        margin-top: 8px;
+        padding-top: 8px;
+      }
+      
+      .display-line {
+        font-style: italic;
+        color: #6c757d;
+      }
+      
+      /* Lignes d'affichage mises en évidence */
+      .display-only.highlighted {
+        background-color: yellow !important;
+        color: #dc3545 !important;
+        font-weight: bold;
+        border-left: 3px solid #dc3545;
+      }
+      
+      /* Lignes d'affichage mises en évidence - texte */
+      .display-only.highlighted .display-line {
+        font-style: normal;
+        color: #dc3545 !important;
+      }
+
+      .special-line {
+        font-size: 14px;
+        font-weight: 700;
+        padding-left: 22px;
+      }
+      
+      /* CSS pour l'espacement */
+      tr.special-line-spacer {
+        height: 8px;
+        background: transparent;
       }
 
       .footer {
@@ -494,7 +554,7 @@
       <div class="contact-info">
         <h3>Contact:</h3>
         <p>{{ client.name }} {{ client.surname }}</p>
-        <p>Mail: {{ client.client_mail }}</p>
+        <p class="client-mail">Mail: {{ client.client_mail }}</p>
         <p>
           Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
         </p>
@@ -567,18 +627,25 @@
             </td>
           </tr>
           {% for special_line in partie.special_lines %}
-          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %}">
-              <td colspan="4" class="special-line">
+           <tr class="special-line-spacer"><td colspan="5"></td></tr>
+           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+              <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
                   {{ special_line.description }}
+                  {% if special_line.type != 'display' %}
                   {% if special_line.valueType == 'percentage' %}
                       ({{ special_line.value }}%)
                   {% else %}
                       ({{ special_line.value }}€)
+                      {% endif %}
                   {% endif %}
               </td>
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
+                  {% if special_line.type != 'display' %}
                   {{ special_line.montant|floatformat:2 }} €
+                  {% else %}
+                      {{ special_line.value|floatformat:2 }} €
+                  {% endif %}
               </td>
           </tr>
           {% endfor %}
@@ -592,18 +659,25 @@
             </td>
           </tr>
           {% for special_line in sous_partie.special_lines %}
-          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %}">
-              <td colspan="4" class="special-line">
+           <tr class="special-line-spacer"><td colspan="5"></td></tr>
+           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+              <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
                   {{ special_line.description }}
+                  {% if special_line.type != 'display' %}
                   {% if special_line.valueType == 'percentage' %}
                       ({{ special_line.value }}%)
                   {% else %}
                       ({{ special_line.value }}€)
+                      {% endif %}
                   {% endif %}
               </td>
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
+                  {% if special_line.type != 'display' %}
                   {{ special_line.montant|floatformat:2 }} €
+                  {% else %}
+                      {{ special_line.value|floatformat:2 }} €
+                  {% endif %}
               </td>
           </tr>
           {% endfor %}
@@ -617,18 +691,25 @@
           </tr>
           {% endfor %} {% endfor %} {% endfor %}
           {% for special_line in special_lines_global %}
-          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %}">
-              <td colspan="4" class="special-line">
+           <tr class="special-line-spacer"><td colspan="5"></td></tr>
+           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+              <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
                   {{ special_line.description }}
+                  {% if special_line.type != 'display' %}
                   {% if special_line.valueType == 'percentage' %}
                       ({{ special_line.value }}%)
                   {% else %}
                       ({{ special_line.value }}€)
+                      {% endif %}
                   {% endif %}
               </td>
               <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}{% endif %}
+                  {% if special_line.type == 'reduction' %}-{% endif %}
+                  {% if special_line.type != 'display' %}
                   {{ special_line.montant|floatformat:2 }} €
+                  {% else %}
+                      {{ special_line.value|floatformat:2 }} €
+                  {% endif %}
               </td>
           </tr>
           {% endfor %}
