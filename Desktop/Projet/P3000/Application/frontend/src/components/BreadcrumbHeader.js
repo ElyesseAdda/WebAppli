@@ -68,7 +68,7 @@ const pageLabelByPrefix = [
   { prefix: "/paiements-sous-traitant", label: "Paiements sous-traitant" },
 ];
 
-const BreadcrumbHeader = () => {
+const BreadcrumbHeader = ({ user, onLogout }) => {
   const location = useLocation();
   const params = useParams();
   const { pathname } = location;
@@ -128,24 +128,64 @@ const BreadcrumbHeader = () => {
     };
   }, [id]);
 
+  const handleLogout = () => {
+    if (onLogout) {
+      onLogout();
+    }
+  };
+
   return (
     <div className="breadcrumb-header">
-      <div className="breadcrumb-icon">
-        <SectionIcon />
-      </div>
-      <div className="breadcrumb-text">
-        <div className="breadcrumb-line">
-          <span className="breadcrumb-section">{section?.label || ""}</span>
-          <span className="breadcrumb-sep">›</span>
-          <span className="breadcrumb-page">{pageLabel}</span>
-          {id && chantierName && (
-            <>
-              <span className="breadcrumb-sep">›</span>
-              <span className="breadcrumb-context">{chantierName}</span>
-            </>
-          )}
+      <div className="breadcrumb-left">
+        <div className="breadcrumb-icon">
+          <SectionIcon />
+        </div>
+        <div className="breadcrumb-text">
+          <div className="breadcrumb-line">
+            <span className="breadcrumb-section">{section?.label || ""}</span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-page">{pageLabel}</span>
+            {id && chantierName && (
+              <>
+                <span className="breadcrumb-sep">›</span>
+                <span className="breadcrumb-context">{chantierName}</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Bouton de déconnexion intégré dans le breadcrumb */}
+      {user && (
+        <div className="breadcrumb-right">
+          <div className="user-section">
+            <span className="user-name">
+              {user.first_name || user.username || "Utilisateur"}
+            </span>
+            <button
+              className="logout-button"
+              onClick={handleLogout}
+              title="Se déconnecter"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16,17 21,12 16,7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Déconnexion
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

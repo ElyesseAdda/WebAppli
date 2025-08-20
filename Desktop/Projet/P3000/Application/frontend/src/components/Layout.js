@@ -17,13 +17,13 @@ const Layout = ({ children, user, onLogout }) => {
         isSidebarVisible ? "sidebar-visible" : "sidebar-hidden"
       }`}
     >
-      <Header user={user} onLogout={onLogout} />
+      <Header />
       <SlideBar
         toggleSidebar={toggleSidebar}
         isSidebarVisible={isSidebarVisible}
       />
       <div className="main-content">
-        <BreadcrumbHeader />
+        <BreadcrumbHeader user={user} onLogout={onLogout} />
         {children}
       </div>
     </div>
