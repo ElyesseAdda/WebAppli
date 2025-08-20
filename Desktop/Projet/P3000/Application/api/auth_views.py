@@ -76,6 +76,7 @@ def logout_view(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def check_auth_view(request):
     """
     Vérifier si l'utilisateur est connecté
