@@ -209,7 +209,22 @@ const TableauSuivi = () => {
       try {
         const response = await axios.get("/api/chantier/");
         setChantiers(response.data);
-        if (response.data.length > 0) {
+
+        // Vérifier s'il y a un chantier_id dans l'URL
+        const params = new URLSearchParams(window.location.search);
+        const chantierIdFromUrl = params.get("chantier_id");
+
+        if (chantierIdFromUrl && response.data.length > 0) {
+          // Vérifier si le chantier existe dans la liste
+          const chantierExists = response.data.find(
+            (c) => c.id.toString() === chantierIdFromUrl
+          );
+          if (chantierExists) {
+            setSelectedChantierId(parseInt(chantierIdFromUrl));
+          } else {
+            setSelectedChantierId(response.data[0].id); // Fallback au premier chantier
+          }
+        } else if (response.data.length > 0) {
           setSelectedChantierId(response.data[0].id); // Sélectionner le premier chantier par défaut
         }
       } catch (error) {
@@ -929,9 +944,6 @@ const TableauSuivi = () => {
 
     return montantDevis + montantAvenants;
   };
-
-  const params = new URLSearchParams(window.location.search);
-  const chantierId = params.get("chantier_id");
 
   // Ajouter le sélecteur de chantier en haut du composant
   return (

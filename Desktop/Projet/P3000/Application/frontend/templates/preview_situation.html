@@ -759,7 +759,7 @@
                   {% if special_line.type == 'display' %}
                       {{ special_line.montant|floatformat:2 }} €
                   {% else %}
-                      {% if special_line.type == 'reduction' %}-{% endif %}
+                      {% if special_line.type == 'reduction' %}{% endif %}
                       {{ special_line.montant|floatformat:2 }} €
                   {% endif %}
               </td>

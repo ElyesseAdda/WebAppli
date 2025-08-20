@@ -56,7 +56,7 @@ const style = {
 };
 
 // Composant pour une ligne de partie
-const PartieRow = ({ partie, handlePourcentageChange }) => {
+const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
   const [open, setOpen] = useState(false);
 
   // Calculer le pourcentage moyen et le montant de la partie directement
@@ -84,6 +84,12 @@ const PartieRow = ({ partie, handlePourcentageChange }) => {
     moyennePartie = totalPourcentage / partie.sous_parties.length;
   }
 
+  // Filtrer les lignes spéciales de cette partie
+  const lignesSpecialesPartie = lignesSpeciales.filter(
+    (ligne) =>
+      ligne.niveau === "partie" && ligne.partie_id === partie.id.toString()
+  );
+
   return (
     <>
       <TableRow
@@ -92,7 +98,7 @@ const PartieRow = ({ partie, handlePourcentageChange }) => {
           "& td": { color: "white", padding: "8px" },
         }}
       >
-        <TableCell>
+        <TableCell sx={{ width: "50px", padding: "8px" }}>
           <IconButton
             size="small"
             onClick={() => setOpen(!open)}
@@ -101,12 +107,25 @@ const PartieRow = ({ partie, handlePourcentageChange }) => {
             {open ? <FaChevronUp /> : <FaChevronDown />}
           </IconButton>
         </TableCell>
-        <TableCell>{partie.titre}</TableCell>
-        <TableCell align="center"></TableCell>
-        <TableCell align="center"></TableCell>
-        <TableCell align="center"></TableCell>
-        <TableCell align="right">{moyennePartie.toFixed(2)}%</TableCell>
-        <TableCell align="right">
+        <TableCell sx={{ width: "300px", padding: "8px" }}>
+          {partie.titre}
+        </TableCell>
+        <TableCell
+          sx={{ width: "100px", padding: "8px" }}
+          align="right"
+        ></TableCell>
+        <TableCell
+          sx={{ width: "120px", padding: "8px" }}
+          align="right"
+        ></TableCell>
+        <TableCell
+          sx={{ width: "120px", padding: "8px" }}
+          align="right"
+        ></TableCell>
+        <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+          {moyennePartie.toFixed(2)}%
+        </TableCell>
+        <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
           {montantPartie.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €
         </TableCell>
       </TableRow>
@@ -119,7 +138,93 @@ const PartieRow = ({ partie, handlePourcentageChange }) => {
                   key={sousPartie.id}
                   sousPartie={sousPartie}
                   handlePourcentageChange={handlePourcentageChange}
+                  lignesSpeciales={lignesSpeciales}
                 />
+              ))}
+              {/* Lignes spéciales de la partie */}
+              {lignesSpecialesPartie.map((ligne, index) => (
+                <TableRow
+                  key={ligne.id}
+                  sx={{
+                    backgroundColor:
+                      index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                    "& td": { padding: "8px" },
+                  }}
+                >
+                  <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
+                  <TableCell sx={{ width: "300px", padding: "8px" }}>
+                    {ligne.description}
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{ color: "text.secondary" }}
+                    >
+                      Ligne spéciale partie
+                    </Typography>
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: "100px", padding: "8px" }}
+                    align="right"
+                  ></TableCell>
+                  <TableCell
+                    sx={{ width: "120px", padding: "8px" }}
+                    align="right"
+                  ></TableCell>
+                  <TableCell
+                    sx={{ width: "120px", padding: "8px" }}
+                    align="right"
+                  >
+                    {ligne.type === "reduction" ? "-" : ""}
+                    {parseFloat(ligne.montant_ht)
+                      .toFixed(2)
+                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                    €
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: "120px", padding: "8px" }}
+                    align="right"
+                  >
+                    <TextField
+                      type="number"
+                      value={ligne.pourcentage_actuel || 0}
+                      onChange={(e) =>
+                        handlePourcentageChange(
+                          ligne.id,
+                          e.target.value,
+                          "special"
+                        )
+                      }
+                      onFocus={(e) => e.target.select()}
+                      InputProps={{
+                        inputProps: {
+                          min: 0,
+                          max: 100,
+                          step: "any",
+                        },
+                      }}
+                      size="small"
+                      sx={{
+                        width: "100px",
+                        "& input": {
+                          textAlign: "right",
+                        },
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell
+                    sx={{ width: "120px", padding: "8px" }}
+                    align="right"
+                  >
+                    {ligne.type === "reduction" ? "-" : ""}
+                    {(
+                      (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) /
+                      100
+                    )
+                      .toFixed(2)
+                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                    €
+                  </TableCell>
+                </TableRow>
               ))}
             </Box>
           </Collapse>
@@ -130,7 +235,11 @@ const PartieRow = ({ partie, handlePourcentageChange }) => {
 };
 
 // Composant pour une sous-partie
-const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
+const SousPartieTable = ({
+  sousPartie,
+  handlePourcentageChange,
+  lignesSpeciales,
+}) => {
   const [open, setOpen] = useState(false);
 
   // Calculer le pourcentage moyen et le montant de la sous-partie directement
@@ -151,6 +260,13 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
     );
   }
 
+  // Filtrer les lignes spéciales de cette sous-partie
+  const lignesSpecialesSousPartie = lignesSpeciales.filter(
+    (ligne) =>
+      ligne.niveau === "sous_partie" &&
+      ligne.sous_partie_id === sousPartie.id.toString()
+  );
+
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
     if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
@@ -167,17 +283,30 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
               "& td": { padding: "8px" },
             }}
           >
-            <TableCell>
+            <TableCell sx={{ width: "50px", padding: "8px" }}>
               <IconButton size="small" onClick={() => setOpen(!open)}>
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
-            <TableCell>{sousPartie.description}</TableCell>
-            <TableCell align="right"></TableCell>
-            <TableCell align="right"></TableCell>
-            <TableCell align="right"></TableCell>
-            <TableCell align="right">{moyenneSousPartie.toFixed(2)}%</TableCell>
-            <TableCell align="right">
+            <TableCell sx={{ width: "300px", padding: "8px" }}>
+              {sousPartie.description}
+            </TableCell>
+            <TableCell
+              sx={{ width: "100px", padding: "8px" }}
+              align="right"
+            ></TableCell>
+            <TableCell
+              sx={{ width: "120px", padding: "8px" }}
+              align="right"
+            ></TableCell>
+            <TableCell
+              sx={{ width: "120px", padding: "8px" }}
+              align="right"
+            ></TableCell>
+            <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+              {moyenneSousPartie.toFixed(2)}%
+            </TableCell>
+            <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
               {montantSousPartie
                 .toFixed(2)
                 .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
@@ -198,12 +327,35 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
                   "& td": { padding: "8px" },
                 }}
               >
-                <TableCell></TableCell>
-                <TableCell>{ligne.description}</TableCell>
-                <TableCell align="right">{ligne.quantite}</TableCell>
-                <TableCell align="right">{ligne.prix_unitaire} €</TableCell>
-                <TableCell align="right">{ligne.total_ht} €</TableCell>
-                <TableCell align="right">
+                <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
+                <TableCell sx={{ width: "300px", padding: "8px" }}>
+                  {ligne.description}
+                </TableCell>
+                <TableCell
+                  sx={{ width: "100px", padding: "8px" }}
+                  align="right"
+                >
+                  {ligne.quantite}
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  {ligne.prix_unitaire} €
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  {parseFloat(ligne.total_ht)
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
                   <TextField
                     type="number"
                     value={ligne.pourcentage_actuel || 0}
@@ -232,16 +384,100 @@ const SousPartieTable = ({ sousPartie, handlePourcentageChange }) => {
                   />
                 </TableCell>
                 <TableCell
-                  align="right"
                   sx={{
+                    width: "120px",
+                    padding: "8px",
                     color: getComparisonColor(
                       ligne.pourcentage_actuel || 0,
                       ligne.pourcentage_precedent || 0
                     ),
                     fontWeight: "bold",
                   }}
+                  align="right"
                 >
                   {((ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100)
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
+            ))}
+            {/* Lignes spéciales de la sous-partie */}
+            {lignesSpecialesSousPartie.map((ligne, index) => (
+              <TableRow
+                key={ligne.id}
+                sx={{
+                  backgroundColor:
+                    index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                  "& td": { padding: "8px" },
+                }}
+              >
+                <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
+                <TableCell sx={{ width: "300px", padding: "8px" }}>
+                  {ligne.description}
+                  <Typography
+                    variant="caption"
+                    display="block"
+                    sx={{ color: "text.secondary" }}
+                  >
+                    Ligne spéciale sous-partie
+                  </Typography>
+                </TableCell>
+                <TableCell
+                  sx={{ width: "100px", padding: "8px" }}
+                  align="right"
+                ></TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                ></TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  {ligne.type === "reduction" ? "-" : ""}
+                  {parseFloat(ligne.montant_ht)
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  <TextField
+                    type="number"
+                    value={ligne.pourcentage_actuel || 0}
+                    onChange={(e) =>
+                      handlePourcentageChange(
+                        ligne.id,
+                        e.target.value,
+                        "special"
+                      )
+                    }
+                    onFocus={(e) => e.target.select()}
+                    InputProps={{
+                      inputProps: {
+                        min: 0,
+                        max: 100,
+                        step: "any",
+                      },
+                    }}
+                    size="small"
+                    sx={{
+                      width: "100px",
+                      "& input": {
+                        textAlign: "right",
+                      },
+                    }}
+                  />
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  {ligne.type === "reduction" ? "-" : ""}
+                  {((ligne.montant_ht * (ligne.pourcentage_actuel || 0)) / 100)
                     .toFixed(2)
                     .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
                   €
@@ -292,17 +528,29 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
               "& td": { padding: "8px" },
             }}
           >
-            <TableCell>
+            <TableCell sx={{ width: "50px", padding: "8px" }}>
               <IconButton size="small" onClick={() => setOpen(!open)}>
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
-            <TableCell>Avenant n°{avenant.numero}</TableCell>
-            <TableCell align="center"></TableCell>
-            <TableCell align="center"></TableCell>
-            <TableCell align="right">{avenant.montant_total} €</TableCell>
-            <TableCell align="right">{moyenneSousPartie.toFixed(2)}%</TableCell>
-            <TableCell align="right">
+            <TableCell sx={{ width: "300px", padding: "8px" }}>
+              Avenant n°{avenant.numero}
+            </TableCell>
+            <TableCell
+              sx={{ width: "100px", padding: "8px" }}
+              align="right"
+            ></TableCell>
+            <TableCell
+              sx={{ width: "120px", padding: "8px" }}
+              align="right"
+            ></TableCell>
+            <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+              {avenant.montant_total} €
+            </TableCell>
+            <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+              {moyenneSousPartie.toFixed(2)}%
+            </TableCell>
+            <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
               {montantSousPartie
                 .toFixed(2)
                 .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
@@ -323,16 +571,32 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                           "& td": { padding: "8px" },
                         }}
                       >
-                        <TableCell></TableCell>
-                        <TableCell>
+                        <TableCell
+                          sx={{ width: "50px", padding: "8px" }}
+                        ></TableCell>
+                        <TableCell sx={{ width: "300px", padding: "8px" }}>
                           {ts.devis_numero ||
                             `TS n°${String(ts.numero_ts).padStart(3, "0")}`}
                           {ts.designation}
                         </TableCell>
-                        <TableCell align="center"></TableCell>
-                        <TableCell align="center"></TableCell>
-                        <TableCell align="right">{ts.montant_ht} €</TableCell>
-                        <TableCell align="right">
+                        <TableCell
+                          sx={{ width: "100px", padding: "8px" }}
+                          align="right"
+                        ></TableCell>
+                        <TableCell
+                          sx={{ width: "120px", padding: "8px" }}
+                          align="right"
+                        ></TableCell>
+                        <TableCell
+                          sx={{ width: "120px", padding: "8px" }}
+                          align="right"
+                        >
+                          {ts.montant_ht} €
+                        </TableCell>
+                        <TableCell
+                          sx={{ width: "120px", padding: "8px" }}
+                          align="right"
+                        >
                           <TextField
                             type="number"
                             value={ts.pourcentage_actuel || 0}
@@ -366,14 +630,16 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                           />
                         </TableCell>
                         <TableCell
-                          align="right"
                           sx={{
+                            width: "120px",
+                            padding: "8px",
                             color: getComparisonColor(
                               ts.pourcentage_actuel || 0,
                               ts.pourcentage_precedent || 0
                             ),
                             fontWeight: "bold",
                           }}
+                          align="right"
                         >
                           {(
                             (ts.montant_ht * (ts.pourcentage_actuel || 0)) /
@@ -433,7 +699,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
           "& td": { color: "white", padding: "8px" },
         }}
       >
-        <TableCell>
+        <TableCell sx={{ width: "50px", padding: "8px" }}>
           <IconButton
             size="small"
             onClick={() => setOpen(!open)}
@@ -442,18 +708,26 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
             {open ? <FaChevronUp /> : <FaChevronDown />}
           </IconButton>
         </TableCell>
-        <TableCell>Avenants</TableCell>
-        <TableCell align="center"></TableCell>
-        <TableCell align="center"></TableCell>
-        <TableCell align="right">
+        <TableCell sx={{ width: "300px", padding: "8px" }}>Avenants</TableCell>
+        <TableCell
+          sx={{ width: "100px", padding: "8px" }}
+          align="right"
+        ></TableCell>
+        <TableCell
+          sx={{ width: "120px", padding: "8px" }}
+          align="right"
+        ></TableCell>
+        <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
           {avenants
             ?.reduce((acc, av) => acc + parseFloat(av.montant_total), 0)
             .toFixed(2)
             .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
           €
         </TableCell>
-        <TableCell align="right">{moyennePartie.toFixed(2)}%</TableCell>
-        <TableCell align="right">
+        <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+          {moyennePartie.toFixed(2)}%
+        </TableCell>
+        <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
           {montantPartie.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €
         </TableCell>
       </TableRow>
@@ -496,6 +770,7 @@ const SituationCreationModal = ({
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
+  const [lignesSpeciales, setLignesSpeciales] = useState([]);
   const [retenueCIE, setRetenueCIE] = useState(0);
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
@@ -527,6 +802,89 @@ const SituationCreationModal = ({
 
       // Utiliser price_ht au lieu de montant_ht
       setTotalHT(devis.price_ht || 0);
+
+      // Charger les lignes spéciales du devis (exclure les lignes display)
+      if (devis.lignes_speciales) {
+        const specialLines = [];
+
+        // Lignes spéciales globales
+        if (devis.lignes_speciales.global) {
+          devis.lignes_speciales.global.forEach((ligne, index) => {
+            if (ligne.type !== "display") {
+              specialLines.push({
+                id: `global_${index}`,
+                description: ligne.description,
+                value: ligne.value,
+                valueType: ligne.valueType,
+                type: ligne.type,
+                niveau: "global",
+                pourcentage_actuel: 0,
+                pourcentage_precedent: 0,
+                montant_ht:
+                  ligne.valueType === "percentage"
+                    ? (devis.price_ht * ligne.value) / 100
+                    : ligne.value,
+              });
+            }
+          });
+        }
+
+        // Lignes spéciales des parties
+        if (devis.lignes_speciales.parties) {
+          Object.keys(devis.lignes_speciales.parties).forEach((partieId) => {
+            devis.lignes_speciales.parties[partieId].forEach((ligne, index) => {
+              if (ligne.type !== "display") {
+                specialLines.push({
+                  id: `partie_${partieId}_${index}`,
+                  description: ligne.description,
+                  value: ligne.value,
+                  valueType: ligne.valueType,
+                  type: ligne.type,
+                  niveau: "partie",
+                  partie_id: partieId,
+                  pourcentage_actuel: 0,
+                  pourcentage_precedent: 0,
+                  montant_ht:
+                    ligne.valueType === "percentage"
+                      ? (devis.price_ht * ligne.value) / 100
+                      : ligne.value,
+                });
+              }
+            });
+          });
+        }
+
+        // Lignes spéciales des sous-parties
+        if (devis.lignes_speciales.sousParties) {
+          Object.keys(devis.lignes_speciales.sousParties).forEach(
+            (sousPartieId) => {
+              devis.lignes_speciales.sousParties[sousPartieId].forEach(
+                (ligne, index) => {
+                  if (ligne.type !== "display") {
+                    specialLines.push({
+                      id: `souspartie_${sousPartieId}_${index}`,
+                      description: ligne.description,
+                      value: ligne.value,
+                      valueType: ligne.valueType,
+                      type: ligne.type,
+                      niveau: "sous_partie",
+                      sous_partie_id: sousPartieId,
+                      pourcentage_actuel: 0,
+                      pourcentage_precedent: 0,
+                      montant_ht:
+                        ligne.valueType === "percentage"
+                          ? (devis.price_ht * ligne.value) / 100
+                          : ligne.value,
+                    });
+                  }
+                }
+              );
+            }
+          );
+        }
+
+        setLignesSpeciales(specialLines);
+      }
     }
   }, [devis]);
 
@@ -569,11 +927,22 @@ const SituationCreationModal = ({
         });
       });
 
+      // Ajouter les montants des lignes spéciales
+      lignesSpeciales.forEach((ligne) => {
+        const montantLigne =
+          (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) / 100;
+        if (ligne.type === "reduction") {
+          sommeMontantsLignes -= montantLigne;
+        } else {
+          sommeMontantsLignes += montantLigne;
+        }
+      });
+
       const pourcentageAvancement =
         (sommeMontantsLignes / (totalHT + montantTotalAvenants)) * 100;
       setTotalAvancement(pourcentageAvancement);
     }
-  }, [structure, totalHT, avenants, montantTotalAvenants]);
+  }, [structure, totalHT, avenants, montantTotalAvenants, lignesSpeciales]);
 
   useEffect(() => {
     if (avenants && Array.isArray(avenants)) {
@@ -972,6 +1341,18 @@ const SituationCreationModal = ({
         }),
       }));
       setAvenants(newAvenants);
+    } else if (type === "special") {
+      // Gestion des lignes spéciales
+      const newLignesSpeciales = lignesSpeciales.map((ligne) => {
+        if (ligne.id === ligneId) {
+          return {
+            ...ligne,
+            pourcentage_actuel: newValue,
+          };
+        }
+        return ligne;
+      });
+      setLignesSpeciales(newLignesSpeciales);
     } else {
       const newStructure = structure.map((partie) => ({
         ...partie,
@@ -1080,6 +1461,17 @@ const SituationCreationModal = ({
       });
     });
 
+    // Ajouter le montant des lignes spéciales avec les pourcentages précédents
+    lignesSpeciales.forEach((ligne) => {
+      const montantLigne =
+        (ligne.montant_ht * (ligne.pourcentage_precedent || 0)) / 100;
+      if (ligne.type === "reduction") {
+        montantTotal -= montantLigne;
+      } else {
+        montantTotal += montantLigne;
+      }
+    });
+
     return montantTotal;
   };
 
@@ -1104,6 +1496,17 @@ const SituationCreationModal = ({
         const montantTS = (ts.montant_ht * (ts.pourcentage_actuel || 0)) / 100;
         montantTotal += montantTS;
       });
+    });
+
+    // Ajouter le montant des lignes spéciales avec les pourcentages actuels
+    lignesSpeciales.forEach((ligne) => {
+      const montantLigne =
+        (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) / 100;
+      if (ligne.type === "reduction") {
+        montantTotal -= montantLigne;
+      } else {
+        montantTotal += montantLigne;
+      }
     });
 
     return montantTotal;
@@ -1168,6 +1571,20 @@ const SituationCreationModal = ({
           description: ligne.description,
           montant: formatNumber(ligne.montant),
           type: ligne.type,
+        })),
+        lignes_speciales: lignesSpeciales.map((ligne) => ({
+          id: ligne.id,
+          description: ligne.description,
+          value: formatNumber(ligne.value),
+          valueType: ligne.valueType,
+          type: ligne.type,
+          niveau: ligne.niveau,
+          partie_id: ligne.partie_id,
+          sous_partie_id: ligne.sous_partie_id,
+          pourcentage_actuel: formatNumber(ligne.pourcentage_actuel || 0),
+          montant: formatNumber(
+            (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) / 100
+          ),
         })),
         lignes_avenant: avenants.flatMap((avenant) =>
           avenant.factures_ts.map((ts) => ({
@@ -1293,7 +1710,14 @@ const SituationCreationModal = ({
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     updateCalculs();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+  }, [
+    structure,
+    avenants,
+    tauxProrata,
+    retenueCIE,
+    lignesSupplementaires,
+    lignesSpeciales,
+  ]);
 
   const renderCalculs = () => {
     if (!calculatedValues) return null;
@@ -1349,7 +1773,19 @@ const SituationCreationModal = ({
   if (!open || !devis || !chantier) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{
+        sx: {
+          minWidth: "1200px",
+          maxWidth: "95vw",
+          maxHeight: "95vh",
+        },
+      }}
+    >
       <DialogTitle>
         {existingSituation
           ? "Modification d'une situation"
@@ -1435,16 +1871,43 @@ const SituationCreationModal = ({
             overflow: "hidden",
           }}
         >
-          <Table>
+          <Table sx={{ minWidth: 1000 }}>
             <TableHead>
               <TableRow>
-                <TableCell />
-                <TableCell>Description</TableCell>
-                <TableCell align="right">Quantité</TableCell>
-                <TableCell align="center">Prix unitaire</TableCell>
-                <TableCell align="right">Total HT</TableCell>
-                <TableCell align="right">% Avancement</TableCell>
-                <TableCell align="right">Montant</TableCell>
+                <TableCell sx={{ width: "50px", padding: "8px" }} />
+                <TableCell sx={{ width: "300px", padding: "8px" }}>
+                  Description
+                </TableCell>
+                <TableCell
+                  sx={{ width: "100px", padding: "8px" }}
+                  align="right"
+                >
+                  Quantité
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  Prix unitaire
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  Total HT
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  % Avancement
+                </TableCell>
+                <TableCell
+                  sx={{ width: "120px", padding: "8px" }}
+                  align="right"
+                >
+                  Montant
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1453,8 +1916,98 @@ const SituationCreationModal = ({
                   key={partie.id}
                   partie={partie}
                   handlePourcentageChange={handlePourcentageChange}
+                  lignesSpeciales={lignesSpeciales}
                 />
               ))}
+              {/* Lignes spéciales globales */}
+              {lignesSpeciales
+                .filter((ligne) => ligne.niveau === "global")
+                .map((ligne, index) => (
+                  <TableRow
+                    key={ligne.id}
+                    sx={{
+                      backgroundColor:
+                        index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                      "& td": { padding: "8px" },
+                    }}
+                  >
+                    <TableCell
+                      sx={{ width: "50px", padding: "8px" }}
+                    ></TableCell>
+                    <TableCell sx={{ width: "300px", padding: "8px" }}>
+                      {ligne.description}
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: "text.secondary" }}
+                      >
+                        Ligne spéciale globale
+                      </Typography>
+                    </TableCell>
+                    <TableCell
+                      sx={{ width: "100px", padding: "8px" }}
+                      align="right"
+                    ></TableCell>
+                    <TableCell
+                      sx={{ width: "120px", padding: "8px" }}
+                      align="right"
+                    ></TableCell>
+                    <TableCell
+                      sx={{ width: "120px", padding: "8px" }}
+                      align="right"
+                    >
+                      {ligne.type === "reduction" ? "-" : ""}
+                      {parseFloat(ligne.montant_ht)
+                        .toFixed(2)
+                        .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                      €
+                    </TableCell>
+                    <TableCell
+                      sx={{ width: "120px", padding: "8px" }}
+                      align="right"
+                    >
+                      <TextField
+                        type="number"
+                        value={ligne.pourcentage_actuel || 0}
+                        onChange={(e) =>
+                          handlePourcentageChange(
+                            ligne.id,
+                            e.target.value,
+                            "special"
+                          )
+                        }
+                        onFocus={(e) => e.target.select()}
+                        InputProps={{
+                          inputProps: {
+                            min: 0,
+                            max: 100,
+                            step: "any",
+                          },
+                        }}
+                        size="small"
+                        sx={{
+                          width: "100px",
+                          "& input": {
+                            textAlign: "right",
+                          },
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell
+                      sx={{ width: "120px", padding: "8px" }}
+                      align="right"
+                    >
+                      {ligne.type === "reduction" ? "-" : ""}
+                      {(
+                        (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) /
+                        100
+                      )
+                        .toFixed(2)
+                        .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                      €
+                    </TableCell>
+                  </TableRow>
+                ))}
               <AvenantsPartieRow
                 avenants={avenants}
                 handlePourcentageChange={handlePourcentageChange}
@@ -1557,7 +2110,11 @@ const SituationCreationModal = ({
                         Factures incluses :
                         {facturesCIE.map((f) => (
                           <div key={f.id}>
-                            {f.numero}: {f.montant_ht.toFixed(2)}€
+                            {f.numero}:{" "}
+                            {parseFloat(f.montant_ht)
+                              .toFixed(2)
+                              .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}
+                            €
                           </div>
                         ))}
                       </Typography>
