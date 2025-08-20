@@ -41,9 +41,10 @@ def ensure_csrf_cookie_for_api(view_func):
 
 # Liste des patterns d'URLs à exempter de CSRF
 CSRF_EXEMPT_PATTERNS = [
-    r'^/api/.*$',  # Toutes les URLs commençant par /api/
     r'^/api/create-devis/$',  # Spécifiquement pour la création de devis
     r'^/api/csrf-token/$',  # Endpoint pour récupérer le token CSRF
+    # Ne pas exempter les URLs d'authentification !
+    # r'^/api/auth/.*$',  # Commenté pour garder l'authentification
 ]
 
 def is_csrf_exempt_url(path):
