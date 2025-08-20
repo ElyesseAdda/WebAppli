@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -31,7 +32,7 @@ const CreatePartieModal = ({
   const [selectedSousPartieId, setSelectedSousPartieId] = useState("");
   const [defaultTauxFixe, setDefaultTauxFixe] = useState("20"); // Valeur par défaut temporaire
 
-  // Charger le taux fixe depuis le backend
+  // Charger le taux fixe et les unités existantes depuis le backend
   useEffect(() => {
     const fetchTauxFixe = async () => {
       try {
@@ -54,8 +55,23 @@ const CreatePartieModal = ({
       }
     };
 
+    const fetchExistingUnites = async () => {
+      try {
+        const response = await axios.get("/api/ligne-details/");
+        const unites = [
+          ...new Set(
+            response.data.map((ligne) => ligne.unite).filter((unite) => unite)
+          ),
+        ];
+        setExistingUnites(unites);
+      } catch (error) {
+        console.error("Erreur lors du chargement des unités:", error);
+      }
+    };
+
     if (open) {
       fetchTauxFixe();
+      fetchExistingUnites();
     }
   }, [open]);
 
@@ -78,7 +94,14 @@ const CreatePartieModal = ({
   const [existingParties, setExistingParties] = useState([]);
   const [existingSousParties, setExistingSousParties] = useState([]);
   const [existingLignes, setExistingLignes] = useState([]);
+  const [existingUnites, setExistingUnites] = useState([]);
   const [openTauxFixeModal, setOpenTauxFixeModal] = useState(false);
+
+  // Fonction pour réinitialiser tous les états du modal
+  const resetModalState = () => {
+    setCreationType("partie");
+    resetForm();
+  };
 
   const handleAddSousPartie = () => {
     setSousParties([
@@ -508,15 +531,29 @@ const CreatePartieModal = ({
                             setSousParties(newSousParties);
                           }}
                         />
-                        <TextField
-                          label="Unité"
+                        <Autocomplete
+                          freeSolo
+                          options={existingUnites}
                           value={ligne.unite}
-                          onChange={(e) => {
+                          onChange={(event, newValue) => {
                             const newSousParties = [...sousParties];
                             newSousParties[spIndex].lignes[ligneIndex].unite =
-                              e.target.value;
+                              newValue || "";
                             setSousParties(newSousParties);
                           }}
+                          onInputChange={(event, newInputValue) => {
+                            const newSousParties = [...sousParties];
+                            newSousParties[spIndex].lignes[ligneIndex].unite =
+                              newInputValue;
+                            setSousParties(newSousParties);
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Unité"
+                              sx={{ minWidth: 120 }}
+                            />
+                          )}
                         />
                         <TextField
                           label="Main d'œuvre"
@@ -609,15 +646,29 @@ const CreatePartieModal = ({
                         setSousParties(newSousParties);
                       }}
                     />
-                    <TextField
-                      label="Unité"
+                    <Autocomplete
+                      freeSolo
+                      options={existingUnites}
                       value={ligne.unite}
-                      onChange={(e) => {
+                      onChange={(event, newValue) => {
                         const newSousParties = [...sousParties];
                         newSousParties[0].lignes[ligneIndex].unite =
-                          e.target.value;
+                          newValue || "";
                         setSousParties(newSousParties);
                       }}
+                      onInputChange={(event, newInputValue) => {
+                        const newSousParties = [...sousParties];
+                        newSousParties[0].lignes[ligneIndex].unite =
+                          newInputValue;
+                        setSousParties(newSousParties);
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Unité"
+                          sx={{ minWidth: 120 }}
+                        />
+                      )}
                     />
                     <TextField
                       label="Main d'œuvre"
@@ -689,15 +740,29 @@ const CreatePartieModal = ({
                         setSousParties(newSousParties);
                       }}
                     />
-                    <TextField
-                      label="Unité"
+                    <Autocomplete
+                      freeSolo
+                      options={existingUnites}
                       value={ligne.unite}
-                      onChange={(e) => {
+                      onChange={(event, newValue) => {
                         const newSousParties = [...sousParties];
                         newSousParties[0].lignes[ligneIndex].unite =
-                          e.target.value;
+                          newValue || "";
                         setSousParties(newSousParties);
                       }}
+                      onInputChange={(event, newInputValue) => {
+                        const newSousParties = [...sousParties];
+                        newSousParties[0].lignes[ligneIndex].unite =
+                          newInputValue;
+                        setSousParties(newSousParties);
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Unité"
+                          sx={{ minWidth: 120 }}
+                        />
+                      )}
                     />
                     <TextField
                       label="Coût main d'œuvre"
@@ -754,6 +819,22 @@ const CreatePartieModal = ({
           </Box>
         </DialogContent>
         <DialogActions>
+          <Button
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Voulez-vous vraiment vider tous les champs ? Cette action ne peut pas être annulée."
+                )
+              ) {
+                resetModalState();
+              }
+            }}
+            color="secondary"
+            variant="outlined"
+            sx={{ mr: "auto" }}
+          >
+            🗑️ Vider les champs
+          </Button>
           <Button onClick={() => setOpenTauxFixeModal(true)} color="primary">
             Modifier Taux Fixe
           </Button>

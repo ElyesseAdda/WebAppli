@@ -140,11 +140,20 @@ const CreationDevis = () => {
   // Ajout de l'état pour le taux fixe
   const [tauxFixe, setTauxFixe] = useState(null);
 
+  // Ajout de l'état pour contrôler la visibilité de la box de résumé
+  const [showSummaryBox, setShowSummaryBox] = useState(false);
+
+  // États pour la gestion des erreurs
+  const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   const location = useLocation();
 
-  // Charger les chantiers
+  // Charger les chantiers et l'état sauvegardé
   useEffect(() => {
     fetchChantiers();
+    loadStateFromLocalStorage();
   }, []);
 
   useEffect(() => {
@@ -155,18 +164,49 @@ const CreationDevis = () => {
     }
   }, [location.search]);
 
+  // Sauvegarder l'état automatiquement quand il change
+  useEffect(() => {
+    saveStateToLocalStorage();
+  }, [
+    selectedChantierId,
+    selectedParties,
+    selectedSousParties,
+    selectedLignes,
+    quantities,
+    customPrices,
+    customCouts,
+    customTauxFixes,
+    customMarges,
+    tvaRate,
+    natureTravaux,
+    specialLines,
+    devisType,
+    pendingChantierData,
+    selectedSocieteId,
+    showSummaryBox,
+  ]);
+
   const fetchChantiers = async () => {
     try {
+      setError(null);
       const response = await axiosInstance.get("chantier/");
       setChantiers(response.data);
     } catch (error) {
       console.error("Erreur lors du chargement des chantiers:", error);
+      setError("Impossible de charger la liste des chantiers");
+      setErrorDetails({
+        message: "Erreur lors de la récupération des chantiers",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
   // Charger les parties liées au chantier sélectionné
   useEffect(() => {
     if (selectedChantierId) {
+      setError(null);
       axios
         .get("/api/parties/", { params: { chantier: selectedChantierId } })
         .then((response) => {
@@ -174,12 +214,21 @@ const CreationDevis = () => {
         })
         .catch((error) => {
           console.error("Erreur lors du chargement des parties", error);
+          setError("Impossible de charger les parties du chantier");
+          setErrorDetails({
+            message: "Erreur lors de la récupération des parties",
+            details: error.response?.data?.detail || error.message,
+            code: error.response?.status,
+            chantierId: selectedChantierId,
+            timestamp: new Date().toISOString(),
+          });
         });
     }
   }, [selectedChantierId]);
 
   // Charger toutes les sous-parties
   useEffect(() => {
+    setError(null);
     axios
       .get("/api/sous-parties/")
       .then((response) => {
@@ -187,6 +236,13 @@ const CreationDevis = () => {
       })
       .catch((error) => {
         console.error("Erreur lors du chargement des sous-parties", error);
+        setError("Impossible de charger les sous-parties");
+        setErrorDetails({
+          message: "Erreur lors de la récupération des sous-parties",
+          details: error.response?.data?.detail || error.message,
+          code: error.response?.status,
+          timestamp: new Date().toISOString(),
+        });
       });
   }, []);
 
@@ -227,6 +283,7 @@ const CreationDevis = () => {
   // Charger les lignes de détail basées sur les sous-parties sélectionnées
   useEffect(() => {
     if (selectedSousParties.length > 0) {
+      setError(null);
       // Récupérer les sous-parties sélectionnées avec leurs lignes de détail
       axios
         .get("/api/sous-parties/", {
@@ -254,6 +311,14 @@ const CreationDevis = () => {
             "Erreur lors du chargement des lignes de détail",
             error
           );
+          setError("Impossible de charger les lignes de détail");
+          setErrorDetails({
+            message: "Erreur lors de la récupération des lignes de détail",
+            details: error.response?.data?.detail || error.message,
+            code: error.response?.status,
+            sousPartiesIds: selectedSousParties,
+            timestamp: new Date().toISOString(),
+          });
         });
     } else {
       setAllLignesDetails([]);
@@ -274,28 +339,32 @@ const CreationDevis = () => {
   // Nouvelles fonctions pour gérer les coûts détaillés
   const handleCoutMainOeuvreChange = (ligneId, cout) => {
     setIsPreviewed(false);
+    const value = cout === "" ? "" : cout;
     setCustomCouts({
       ...customCouts,
-      [ligneId]: { ...customCouts[ligneId], main_oeuvre: cout },
+      [ligneId]: { ...customCouts[ligneId], main_oeuvre: value },
     });
   };
 
   const handleCoutMaterielChange = (ligneId, cout) => {
     setIsPreviewed(false);
+    const value = cout === "" ? "" : cout;
     setCustomCouts({
       ...customCouts,
-      [ligneId]: { ...customCouts[ligneId], materiel: cout },
+      [ligneId]: { ...customCouts[ligneId], materiel: value },
     });
   };
 
   const handleTauxFixeChange = (ligneId, taux) => {
     setIsPreviewed(false);
-    setCustomTauxFixes({ ...customTauxFixes, [ligneId]: taux });
+    const value = taux === "" ? "" : taux;
+    setCustomTauxFixes({ ...customTauxFixes, [ligneId]: value });
   };
 
   const handleMargeChange = (ligneId, marge) => {
     setIsPreviewed(false);
-    setCustomMarges({ ...customMarges, [ligneId]: marge });
+    const value = marge === "" ? "" : marge;
+    setCustomMarges({ ...customMarges, [ligneId]: value });
   };
 
   // Fonction pour réinitialiser les coûts personnalisés d'une ligne
@@ -326,10 +395,10 @@ const CreationDevis = () => {
   // Fonction pour sauvegarder les modifications des coûts dans la base de données
   const saveCustomCostsToDatabase = async (ligneId) => {
     try {
+      setError(null);
       const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
       if (!ligne) {
-        console.error("Ligne non trouvée:", ligneId);
-        return;
+        throw new Error(`Ligne avec l'ID ${ligneId} non trouvée`);
       }
 
       // S'assurer que tous les nombres sont bien formatés avec 2 décimales
@@ -375,7 +444,16 @@ const CreationDevis = () => {
       console.log("Ligne mise à jour avec succès:", response.data);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde des coûts:", error);
-      alert("Erreur lors de la sauvegarde des coûts dans la base de données");
+      setError("Impossible de sauvegarder les modifications des coûts");
+      setErrorDetails({
+        message:
+          "Erreur lors de la sauvegarde des coûts dans la base de données",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        ligneId: ligneId,
+        ligneDescription: ligne?.description || "Inconnue",
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
@@ -656,6 +734,9 @@ const CreationDevis = () => {
   // Gère la soumission finale du devis
   const handleDevisModalSubmit = async () => {
     try {
+      setError(null);
+      setIsLoading(true);
+
       const totals = calculateEstimatedTotals(); // Calcul des coûts estimés
       const grandTotal = calculateGrandTotal(specialLines);
 
@@ -673,13 +754,19 @@ const CreationDevis = () => {
           !pendingChantierData.societe ||
           !pendingChantierData.chantier
         ) {
-          console.error("Données manquantes:", {
-            client: pendingChantierData.client,
-            societe: pendingChantierData.societe,
-            chantier: pendingChantierData.chantier,
-          });
-          alert("Données client ou société manquantes");
-          return;
+          const missingData = {
+            client: !pendingChantierData.client ? "Client manquant" : null,
+            societe: !pendingChantierData.societe ? "Société manquante" : null,
+            chantier: !pendingChantierData.chantier
+              ? "Chantier manquant"
+              : null,
+          };
+
+          throw new Error(
+            `Données manquantes: ${Object.values(missingData)
+              .filter(Boolean)
+              .join(", ")}`
+          );
         }
 
         // 1. Vérifier si le client existe
@@ -785,7 +872,7 @@ const CreationDevis = () => {
             custom_price: customPrices[ligneId] || ligne?.prix || 0,
             cout_main_oeuvre: ligne?.cout_main_oeuvre || 0,
             cout_materiel: ligne?.cout_materiel || 0,
-            taux_fixe: ligne?.taux_fixe || defaultTauxFixe,
+            taux_fixe: ligne?.taux_fixe || tauxFixe || 20,
           };
         }),
         lignes_speciales: {
@@ -824,12 +911,28 @@ const CreationDevis = () => {
       const response = await axios.post("/api/create-devis/", devisData);
 
       if (response.data) {
+        clearSavedState(); // Nettoyer l'état sauvegardé
         alert("Devis créé avec succès!");
         window.location.href = "/ListeDevis";
       }
     } catch (error) {
       console.error("Erreur lors de la création du devis:", error);
-      alert("Erreur lors de la création du devis");
+      setError("Impossible de créer le devis");
+      setErrorDetails({
+        message: "Erreur lors de la création du devis",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        devisData: {
+          numero: devisModalData.numero,
+          chantier: selectedChantierId,
+          devisType: devisType,
+          totalHT: grandTotal?.totalHT,
+          totalTTC: grandTotal?.totalTTC,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1235,6 +1338,7 @@ const CreationDevis = () => {
 
   const handleSaveEdit = async (editedData) => {
     try {
+      setError(null);
       let endpoint = "";
       let dataToSend = {};
 
@@ -1281,7 +1385,18 @@ const CreationDevis = () => {
       }
     } catch (error) {
       console.error("Erreur lors de la modification:", error);
-      alert("Une erreur est survenue lors de la modification");
+      setError("Impossible de modifier l'élément");
+      setErrorDetails({
+        message: "Erreur lors de la modification",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        editedData: {
+          type: editedData.type,
+          id: editedData.id,
+          data: dataToSend,
+        },
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
@@ -1595,8 +1710,288 @@ const CreationDevis = () => {
     }
   };
 
+  // Fonctions pour sauvegarder et restaurer l'état
+  const saveStateToLocalStorage = () => {
+    const stateToSave = {
+      selectedChantierId,
+      selectedParties,
+      selectedSousParties,
+      selectedLignes,
+      quantities,
+      customPrices,
+      customCouts,
+      customTauxFixes,
+      customMarges,
+      tvaRate,
+      natureTravaux,
+      specialLines,
+      devisType,
+      pendingChantierData,
+      selectedSocieteId,
+      showSummaryBox,
+    };
+    localStorage.setItem("creationDevisState", JSON.stringify(stateToSave));
+  };
+
+  const loadStateFromLocalStorage = () => {
+    const savedState = localStorage.getItem("creationDevisState");
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState);
+        setSelectedChantierId(parsedState.selectedChantierId || null);
+        setSelectedParties(parsedState.selectedParties || []);
+        setSelectedSousParties(parsedState.selectedSousParties || []);
+        setSelectedLignes(parsedState.selectedLignes || []);
+        setQuantities(parsedState.quantities || {});
+        setCustomPrices(parsedState.customPrices || {});
+        setCustomCouts(parsedState.customCouts || {});
+        setCustomTauxFixes(parsedState.customTauxFixes || {});
+        setCustomMarges(parsedState.customMarges || {});
+        setTvaRate(parsedState.tvaRate || 20);
+        setNatureTravaux(parsedState.natureTravaux || "");
+        setSpecialLines(
+          parsedState.specialLines || {
+            parties: {},
+            sousParties: {},
+            lignes: {},
+            global: [],
+          }
+        );
+        setDevisType(parsedState.devisType || "normal");
+        setPendingChantierData(
+          parsedState.pendingChantierData || {
+            client: {
+              name: "",
+              surname: "",
+              client_mail: "",
+              phone_Number: "",
+            },
+            societe: {
+              nom_societe: "",
+              ville_societe: "",
+              rue_societe: "",
+              codepostal_societe: "",
+            },
+            chantier: {
+              id: -1,
+              chantier_name: "",
+              ville: "",
+              rue: "",
+              code_postal: "",
+            },
+            devis: null,
+          }
+        );
+        setSelectedSocieteId(parsedState.selectedSocieteId || null);
+        setShowSummaryBox(parsedState.showSummaryBox || false);
+      } catch (error) {
+        console.error("Erreur lors du chargement de l'état:", error);
+      }
+    }
+  };
+
+  const clearSavedState = () => {
+    localStorage.removeItem("creationDevisState");
+  };
+
+  // Fonctions utilitaires pour la gestion des erreurs
+  const clearError = () => {
+    setError(null);
+    setErrorDetails(null);
+  };
+
+  const copyErrorToClipboard = () => {
+    if (errorDetails) {
+      const errorText = `
+ERREUR DÉTECTÉE DANS CREATIONDEVIS.JS
+====================================
+
+Message: ${errorDetails.message}
+Détails: ${errorDetails.details}
+Code: ${errorDetails.code || "N/A"}
+Timestamp: ${errorDetails.timestamp}
+
+Données contextuelles:
+${JSON.stringify(errorDetails, null, 2)}
+
+Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
+      `.trim();
+
+      navigator.clipboard
+        .writeText(errorText)
+        .then(() => {
+          alert("Détails de l'erreur copiés dans le presse-papiers !");
+        })
+        .catch(() => {
+          alert(
+            "Impossible de copier automatiquement. Veuillez copier manuellement les détails ci-dessus."
+          );
+        });
+    }
+  };
+
+  const getErrorMessage = (error) => {
+    if (error.response?.status === 404) {
+      return "Ressource non trouvée. Veuillez vérifier que les données existent.";
+    } else if (error.response?.status === 400) {
+      return "Données invalides. Veuillez vérifier les informations saisies.";
+    } else if (error.response?.status === 500) {
+      return "Erreur serveur. Veuillez réessayer plus tard.";
+    } else if (error.response?.status === 403) {
+      return "Accès refusé. Vous n'avez pas les permissions nécessaires.";
+    } else if (error.code === "NETWORK_ERROR") {
+      return "Erreur de connexion. Vérifiez votre connexion internet.";
+    } else {
+      return error.message || "Une erreur inattendue s'est produite.";
+    }
+  };
+
   return (
     <Container maxWidth="lg">
+      {/* Affichage des erreurs */}
+      {error && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            maxWidth: "90vw",
+            width: "600px",
+          }}
+        >
+          <Paper
+            elevation={8}
+            sx={{
+              p: 3,
+              backgroundColor: "#fff3cd",
+              border: "2px solid #ffc107",
+              borderRadius: 2,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+              <Typography
+                variant="h6"
+                sx={{ color: "#856404", fontWeight: "bold", flexGrow: 1 }}
+              >
+                ⚠️ {error}
+              </Typography>
+              <Button
+                size="small"
+                onClick={clearError}
+                sx={{ color: "#856404", minWidth: "auto" }}
+              >
+                ✕
+              </Button>
+            </Box>
+
+            {errorDetails && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ color: "#856404", mb: 1 }}>
+                  <strong>Détails techniques :</strong>
+                </Typography>
+                <Box
+                  sx={{
+                    backgroundColor: "#fff",
+                    p: 2,
+                    borderRadius: 1,
+                    border: "1px solid #dee2e6",
+                    maxHeight: "200px",
+                    overflow: "auto",
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Message: {errorDetails.message}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Détails: {errorDetails.details}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Code: {errorDetails.code || "N/A"}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Timestamp:{" "}
+                    {new Date(errorDetails.timestamp).toLocaleString()}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={copyErrorToClipboard}
+                sx={{
+                  color: "#856404",
+                  borderColor: "#856404",
+                  "&:hover": {
+                    borderColor: "#856404",
+                    backgroundColor: "rgba(133, 100, 4, 0.1)",
+                  },
+                }}
+              >
+                📋 Copier les détails
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={clearError}
+                sx={{
+                  backgroundColor: "#856404",
+                  "&:hover": {
+                    backgroundColor: "#6d5603",
+                  },
+                }}
+              >
+                Fermer
+              </Button>
+            </Box>
+          </Paper>
+        </Box>
+      )}
+
+      {/* Indicateur de chargement */}
+      {isLoading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9998,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100vh",
+          }}
+        >
+          <Paper
+            elevation={8}
+            sx={{
+              p: 4,
+              textAlign: "center",
+              backgroundColor: "white",
+              borderRadius: 2,
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              ⏳ Traitement en cours...
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Veuillez patienter pendant la création du devis.
+            </Typography>
+          </Paper>
+        </Box>
+      )}
+
       <Box sx={{ mt: 4, mb: 4 }}>
         <Paper elevation={3} sx={{ p: 3 }}>
           <FormControl fullWidth sx={{ mb: 3 }}>
@@ -2194,16 +2589,29 @@ const CreationDevis = () => {
                                 label="Prix Unitaire"
                                 type="number"
                                 step="0.10"
-                                value={formatPrice(
+                                value={
                                   customCouts[ligne.id] ||
-                                    customTauxFixes[ligne.id] ||
-                                    customMarges[ligne.id]
-                                    ? calculatePriceFromCosts(ligne)
-                                    : customPrices[ligne.id] || ligne.prix
-                                )}
+                                  customTauxFixes[ligne.id] ||
+                                  customMarges[ligne.id]
+                                    ? formatPrice(
+                                        calculatePriceFromCosts(ligne)
+                                      )
+                                    : customPrices[ligne.id] !== undefined
+                                    ? customPrices[ligne.id]
+                                    : ligne.prix || ""
+                                }
                                 onChange={(e) =>
                                   handlePriceChange(ligne.id, e.target.value)
                                 }
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "" ||
+                                    isNaN(parseFloat(value))
+                                  ) {
+                                    handlePriceChange(ligne.id, "");
+                                  }
+                                }}
                                 size="small"
                                 InputProps={{
                                   readOnly:
@@ -2253,6 +2661,15 @@ const CreationDevis = () => {
                                       e.target.value
                                     )
                                   }
+                                  onBlur={(e) => {
+                                    const value = e.target.value;
+                                    if (
+                                      value === "" ||
+                                      isNaN(parseFloat(value))
+                                    ) {
+                                      handleCoutMainOeuvreChange(ligne.id, "");
+                                    }
+                                  }}
                                   size="small"
                                   InputProps={{
                                     endAdornment: (
@@ -2277,6 +2694,15 @@ const CreationDevis = () => {
                                       e.target.value
                                     )
                                   }
+                                  onBlur={(e) => {
+                                    const value = e.target.value;
+                                    if (
+                                      value === "" ||
+                                      isNaN(parseFloat(value))
+                                    ) {
+                                      handleCoutMaterielChange(ligne.id, "");
+                                    }
+                                  }}
                                   size="small"
                                   InputProps={{
                                     endAdornment: (
@@ -2301,6 +2727,15 @@ const CreationDevis = () => {
                                       e.target.value
                                     )
                                   }
+                                  onBlur={(e) => {
+                                    const value = e.target.value;
+                                    if (
+                                      value === "" ||
+                                      isNaN(parseFloat(value))
+                                    ) {
+                                      handleTauxFixeChange(ligne.id, "");
+                                    }
+                                  }}
                                   size="small"
                                   InputProps={{
                                     endAdornment: (
@@ -2320,6 +2755,15 @@ const CreationDevis = () => {
                                   onChange={(e) =>
                                     handleMargeChange(ligne.id, e.target.value)
                                   }
+                                  onBlur={(e) => {
+                                    const value = e.target.value;
+                                    if (
+                                      value === "" ||
+                                      isNaN(parseFloat(value))
+                                    ) {
+                                      handleMargeChange(ligne.id, "");
+                                    }
+                                  }}
                                   size="small"
                                   InputProps={{
                                     endAdornment: (
@@ -2537,13 +2981,33 @@ const CreationDevis = () => {
             </Button>
           </Box>
 
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}
-          >
-            {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
-          </Button>
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}
+            >
+              {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
+            </Button>
+
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Voulez-vous vraiment effacer toutes les données en cours ? Cette action ne peut pas être annulée."
+                  )
+                ) {
+                  clearSavedState();
+                  window.location.reload();
+                }
+              }}
+              title="Effacer toutes les données sauvegardées"
+            >
+              🗑️ Effacer
+            </Button>
+          </Box>
 
           <ClientTypeModal
             open={showClientTypeModal}
@@ -2574,9 +3038,10 @@ const CreationDevis = () => {
               zIndex: 1000,
               border: "2px solid",
               borderColor: "primary.main",
-              display: "flex",
+              display: showSummaryBox ? "flex" : "none",
               flexDirection: "column",
               gap: 2,
+              transition: "all 0.3s ease",
             }}
           >
             {/* Totaux HT et TTC */}
@@ -2683,6 +3148,30 @@ const CreationDevis = () => {
             </Box>
           </Box>
 
+          {/* Bouton toggle pour masquer/afficher la box de résumé */}
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setShowSummaryBox(!showSummaryBox)}
+            sx={{
+              position: "fixed",
+              bottom: 20,
+              right: showSummaryBox ? 320 : 20,
+              zIndex: 1001,
+              minWidth: "auto",
+              width: "40px",
+              height: "40px",
+              borderRadius: "50%",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "scale(1.1)",
+              },
+            }}
+          >
+            {showSummaryBox ? "👁️" : "📊"}
+          </Button>
+
           <DevisModal
             open={openDevisModal}
             handleClose={() => setOpenDevisModal(false)}
@@ -2709,7 +3198,10 @@ const CreationDevis = () => {
         open={editModalOpen}
         handleClose={() => setEditModalOpen(false)}
         data={itemToEdit}
-        onSave={handleSaveEdit}
+        handleSave={handleSaveEdit}
+        parties={parties}
+        sousParties={sousParties}
+        allLignesDetails={allLignesDetails}
       />
       <ClientInfoModal
         open={showClientInfoModal}

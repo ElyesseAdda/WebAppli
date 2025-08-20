@@ -84,6 +84,11 @@ const ModificationDevis = () => {
   const [customMarges, setCustomMarges] = useState({});
   const [tauxFixe, setTauxFixe] = useState(0);
 
+  // États pour la gestion des erreurs
+  const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   const [showCreationPartie, setShowCreationPartie] = useState(false);
   const [isPreviewed, setIsPreviewed] = useState(false);
   const [devisType, setDevisType] = useState("normal");
@@ -131,6 +136,9 @@ const ModificationDevis = () => {
   // Ajouter cet état pour gérer les termes de recherche par sous-partie
   const [searchTerms, setSearchTerms] = useState({});
 
+  // Ajout de l'état pour contrôler la visibilité de la box de résumé
+  const [showSummaryBox, setShowSummaryBox] = useState(false);
+
   // Fonction utilitaire pour formater les prix
   const formatPrice = (value) => {
     if (value === null || value === undefined || value === "") {
@@ -166,6 +174,12 @@ const ModificationDevis = () => {
   // Fonction pour sauvegarder les coûts personnalisés
   const saveCustomCostsToDatabase = async (ligneId) => {
     try {
+      setError(null);
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      if (!ligne) {
+        throw new Error(`Ligne avec l'ID ${ligneId} non trouvée`);
+      }
+
       const coutMainOeuvre = parseFloat(
         customCouts[ligneId]?.main_oeuvre || 0
       ).toFixed(2);
@@ -199,7 +213,16 @@ const ModificationDevis = () => {
       }
     } catch (error) {
       console.error("Erreur lors de la sauvegarde des coûts:", error);
-      alert("Erreur lors de la sauvegarde des coûts");
+      setError("Impossible de sauvegarder les modifications des coûts");
+      setErrorDetails({
+        message:
+          "Erreur lors de la sauvegarde des coûts dans la base de données",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        ligneId: ligneId,
+        ligneDescription: ligne?.description || "Inconnue",
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
@@ -231,17 +254,26 @@ const ModificationDevis = () => {
     setCustomMarges({});
   };
 
-  // Charger les chantiers
+  // Charger les chantiers et l'état sauvegardé
   useEffect(() => {
     fetchChantiers();
+    loadStateFromLocalStorage();
   }, []);
 
   const fetchChantiers = async () => {
     try {
+      setError(null);
       const response = await axios.get("/api/chantier/");
       setChantiers(response.data);
     } catch (error) {
       console.error("Erreur lors du chargement des chantiers:", error);
+      setError("Impossible de charger la liste des chantiers");
+      setErrorDetails({
+        message: "Erreur lors de la récupération des chantiers",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
@@ -249,10 +281,18 @@ const ModificationDevis = () => {
   useEffect(() => {
     const fetchTauxFixe = async () => {
       try {
+        setError(null);
         const response = await axios.get("/api/parametres/taux-fixe/");
         setTauxFixe(response.data.valeur || 0);
       } catch (error) {
         console.error("Erreur lors du chargement du taux fixe:", error);
+        setError("Impossible de charger le taux fixe global");
+        setErrorDetails({
+          message: "Erreur lors de la récupération du taux fixe",
+          details: error.response?.data?.detail || error.message,
+          code: error.response?.status,
+          timestamp: new Date().toISOString(),
+        });
       }
     };
     fetchTauxFixe();
@@ -261,6 +301,7 @@ const ModificationDevis = () => {
   // Charger les parties liées au chantier sélectionné
   useEffect(() => {
     if (selectedChantierId) {
+      setError(null);
       axios
         .get("/api/parties/", { params: { chantier: selectedChantierId } })
         .then((response) => {
@@ -268,12 +309,21 @@ const ModificationDevis = () => {
         })
         .catch((error) => {
           console.error("Erreur lors du chargement des parties", error);
+          setError("Impossible de charger les parties du chantier");
+          setErrorDetails({
+            message: "Erreur lors de la récupération des parties",
+            details: error.response?.data?.detail || error.message,
+            code: error.response?.status,
+            chantierId: selectedChantierId,
+            timestamp: new Date().toISOString(),
+          });
         });
     }
   }, [selectedChantierId]);
 
   // Charger toutes les sous-parties
   useEffect(() => {
+    setError(null);
     axios
       .get("/api/sous-parties/")
       .then((response) => {
@@ -281,6 +331,13 @@ const ModificationDevis = () => {
       })
       .catch((error) => {
         console.error("Erreur lors du chargement des sous-parties", error);
+        setError("Impossible de charger les sous-parties");
+        setErrorDetails({
+          message: "Erreur lors de la récupération des sous-parties",
+          details: error.response?.data?.detail || error.message,
+          code: error.response?.status,
+          timestamp: new Date().toISOString(),
+        });
       });
   }, []);
 
@@ -362,34 +419,38 @@ const ModificationDevis = () => {
 
   const handlePriceChange = (ligneId, price) => {
     setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
-    setCustomPrices({ ...customPrices, [ligneId]: price });
+    const value = price === "" ? "" : price;
+    setCustomPrices({ ...customPrices, [ligneId]: value });
   };
 
   // Gestionnaires pour les coûts détaillés
   const handleCoutChange = (ligneId, type, value) => {
     setIsPreviewed(false);
+    const cleanValue = value === "" ? "" : value;
     setCustomCouts((prev) => ({
       ...prev,
       [ligneId]: {
         ...prev[ligneId],
-        [type]: value,
+        [type]: cleanValue,
       },
     }));
   };
 
   const handleTauxFixeChange = (ligneId, value) => {
     setIsPreviewed(false);
+    const cleanValue = value === "" ? "" : value;
     setCustomTauxFixes((prev) => ({
       ...prev,
-      [ligneId]: value,
+      [ligneId]: cleanValue,
     }));
   };
 
   const handleMargeChange = (ligneId, value) => {
     setIsPreviewed(false);
+    const cleanValue = value === "" ? "" : value;
     setCustomMarges((prev) => ({
       ...prev,
-      [ligneId]: value,
+      [ligneId]: cleanValue,
     }));
   };
 
@@ -608,6 +669,9 @@ const ModificationDevis = () => {
 
   const handleDevisModalSubmit = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
+
       const totals = calculateGrandTotal(specialLines);
       const totalHT = totals.totalHT;
       const totalTTC = totals.totalTTC;
@@ -621,24 +685,27 @@ const ModificationDevis = () => {
         tva_rate: parseFloat(tvaRate),
         description: devisModalData.description,
         nature_travaux: natureTravaux,
-        lignes: selectedLignes.map((ligneId) => ({
-          ligne_detail: parseInt(ligneId), // Conversion explicite en nombre
-          quantite: parseFloat(quantities[ligneId] || 0).toFixed(2),
-          prix_unitaire: parseFloat(
-            customPrices[ligneId] ||
-              filteredLignesDetails.find((l) => l.id === ligneId)?.prix ||
-              0
-          ).toFixed(2),
-        })),
+        lignes: selectedLignes.map((ligneId) => {
+          const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+          return {
+            ligne_detail: parseInt(ligneId),
+            quantite: parseFloat(quantities[ligneId] || 0).toFixed(2),
+            prix_unitaire: parseFloat(
+              customPrices[ligneId] || ligne?.prix || 0
+            ).toFixed(2),
+            taux_fixe: ligne?.taux_fixe || tauxFixe || 20,
+          };
+        }),
         lignes_speciales: specialLines,
       };
 
-      console.log("Données envoyées:", devisData); // Pour le débogage
+      console.log("Données envoyées:", devisData);
 
       // Appel API pour mettre à jour le devis
       const response = await axios.put(`/api/devisa/${devisId}/`, devisData);
 
       if (response.data) {
+        clearSavedState();
         alert("Devis modifié avec succès!");
         window.location.href = "/ListeDevis";
       }
@@ -647,9 +714,19 @@ const ModificationDevis = () => {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        data: error.response?.config?.data, // Afficher les données envoyées
+        data: error.response?.config?.data,
       });
-      alert("Une erreur est survenue lors de la modification du devis");
+      setError("Impossible de modifier le devis");
+      setErrorDetails({
+        message: "Erreur lors de la modification du devis",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        devisId: devisId,
+        devisData: devisData,
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1044,6 +1121,7 @@ const ModificationDevis = () => {
 
   const handleSaveEdit = async (editedData) => {
     try {
+      setError(null);
       let endpoint = "";
       let dataToSend = {};
 
@@ -1090,7 +1168,18 @@ const ModificationDevis = () => {
       }
     } catch (error) {
       console.error("Erreur lors de la modification:", error);
-      alert("Une erreur est survenue lors de la modification");
+      setError("Impossible de modifier l'élément");
+      setErrorDetails({
+        message: "Erreur lors de la modification",
+        details: error.response?.data?.detail || error.message,
+        code: error.response?.status,
+        editedData: {
+          type: editedData.type,
+          id: editedData.id,
+          data: dataToSend,
+        },
+        timestamp: new Date().toISOString(),
+      });
     }
   };
 
@@ -1367,8 +1456,310 @@ const ModificationDevis = () => {
     fetchDevisData();
   }, [devisId]);
 
+  // Sauvegarder l'état automatiquement quand il change
+  useEffect(() => {
+    saveStateToLocalStorage();
+  }, [
+    selectedChantierId,
+    selectedParties,
+    selectedSousParties,
+    selectedLignes,
+    quantities,
+    customPrices,
+    customCouts,
+    customTauxFixes,
+    customMarges,
+    tvaRate,
+    natureTravaux,
+    specialLines,
+    devisType,
+    pendingChantierData,
+    selectedSocieteId,
+    showSummaryBox,
+  ]);
+
+  // Fonctions pour sauvegarder et restaurer l'état
+  const saveStateToLocalStorage = () => {
+    const stateToSave = {
+      selectedChantierId,
+      selectedParties,
+      selectedSousParties,
+      selectedLignes,
+      quantities,
+      customPrices,
+      customCouts,
+      customTauxFixes,
+      customMarges,
+      tvaRate,
+      natureTravaux,
+      specialLines,
+      devisType,
+      pendingChantierData,
+      selectedSocieteId,
+      showSummaryBox,
+    };
+    localStorage.setItem("modificationDevisState", JSON.stringify(stateToSave));
+  };
+
+  const loadStateFromLocalStorage = () => {
+    const savedState = localStorage.getItem("modificationDevisState");
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState);
+        setSelectedChantierId(parsedState.selectedChantierId || null);
+        setSelectedParties(parsedState.selectedParties || []);
+        setSelectedSousParties(parsedState.selectedSousParties || []);
+        setSelectedLignes(parsedState.selectedLignes || []);
+        setQuantities(parsedState.quantities || {});
+        setCustomPrices(parsedState.customPrices || {});
+        setCustomCouts(parsedState.customCouts || {});
+        setCustomTauxFixes(parsedState.customTauxFixes || {});
+        setCustomMarges(parsedState.customMarges || {});
+        setTvaRate(parsedState.tvaRate || 20);
+        setNatureTravaux(parsedState.natureTravaux || "");
+        setSpecialLines(
+          parsedState.specialLines || {
+            parties: {},
+            sousParties: {},
+            lignes: {},
+            global: [],
+          }
+        );
+        setDevisType(parsedState.devisType || "normal");
+        setPendingChantierData(
+          parsedState.pendingChantierData || {
+            client: {
+              name: "",
+              surname: "",
+              client_mail: "",
+              phone_Number: "",
+            },
+            societe: {
+              nom_societe: "",
+              ville_societe: "",
+              rue_societe: "",
+              codepostal_societe: "",
+            },
+            chantier: {
+              id: -1,
+              chantier_name: "",
+              ville: "",
+              rue: "",
+              code_postal: "",
+            },
+            devis: null,
+          }
+        );
+        setSelectedSocieteId(parsedState.selectedSocieteId || null);
+        setShowSummaryBox(parsedState.showSummaryBox || false);
+      } catch (error) {
+        console.error("Erreur lors du chargement de l'état:", error);
+      }
+    }
+  };
+
+  const clearSavedState = () => {
+    localStorage.removeItem("modificationDevisState");
+  };
+
+  // Fonctions utilitaires pour la gestion des erreurs
+  const clearError = () => {
+    setError(null);
+    setErrorDetails(null);
+  };
+
+  const copyErrorToClipboard = () => {
+    if (errorDetails) {
+      const errorText = `
+ERREUR DÉTECTÉE DANS MODIFICATIONDEVIS.JS
+=========================================
+
+Message: ${errorDetails.message}
+Détails: ${errorDetails.details}
+Code: ${errorDetails.code || "N/A"}
+Timestamp: ${errorDetails.timestamp}
+
+Données contextuelles:
+${JSON.stringify(errorDetails, null, 2)}
+
+Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
+      `.trim();
+
+      navigator.clipboard
+        .writeText(errorText)
+        .then(() => {
+          alert("Détails de l'erreur copiés dans le presse-papiers !");
+        })
+        .catch(() => {
+          alert(
+            "Impossible de copier automatiquement. Veuillez copier manuellement les détails ci-dessus."
+          );
+        });
+    }
+  };
+
+  const getErrorMessage = (error) => {
+    if (error.response?.status === 404) {
+      return "Ressource non trouvée. Veuillez vérifier que les données existent.";
+    } else if (error.response?.status === 400) {
+      return "Données invalides. Veuillez vérifier les informations saisies.";
+    } else if (error.response?.status === 500) {
+      return "Erreur serveur. Veuillez réessayer plus tard.";
+    } else if (error.response?.status === 403) {
+      return "Accès refusé. Vous n'avez pas les permissions nécessaires.";
+    } else if (error.code === "NETWORK_ERROR") {
+      return "Erreur de connexion. Vérifiez votre connexion internet.";
+    } else {
+      return error.message || "Une erreur inattendue s'est produite.";
+    }
+  };
+
   return (
     <Container maxWidth="lg">
+      {/* Affichage des erreurs */}
+      {error && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            maxWidth: "90vw",
+            width: "600px",
+          }}
+        >
+          <Paper
+            elevation={8}
+            sx={{
+              p: 3,
+              backgroundColor: "#fff3cd",
+              border: "2px solid #ffc107",
+              borderRadius: 2,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+              <Typography
+                variant="h6"
+                sx={{ color: "#856404", fontWeight: "bold", flexGrow: 1 }}
+              >
+                ⚠️ {error}
+              </Typography>
+              <Button
+                size="small"
+                onClick={clearError}
+                sx={{ color: "#856404", minWidth: "auto" }}
+              >
+                ✕
+              </Button>
+            </Box>
+
+            {errorDetails && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ color: "#856404", mb: 1 }}>
+                  <strong>Détails techniques :</strong>
+                </Typography>
+                <Box
+                  sx={{
+                    backgroundColor: "#fff",
+                    p: 2,
+                    borderRadius: 1,
+                    border: "1px solid #dee2e6",
+                    maxHeight: "200px",
+                    overflow: "auto",
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Message: {errorDetails.message}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Détails: {errorDetails.details}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Code: {errorDetails.code || "N/A"}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" sx={{ color: "#6c757d" }}>
+                    Timestamp:{" "}
+                    {new Date(errorDetails.timestamp).toLocaleString()}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={copyErrorToClipboard}
+                sx={{
+                  color: "#856404",
+                  borderColor: "#856404",
+                  "&:hover": {
+                    borderColor: "#856404",
+                    backgroundColor: "rgba(133, 100, 4, 0.1)",
+                  },
+                }}
+              >
+                📋 Copier les détails
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={clearError}
+                sx={{
+                  backgroundColor: "#856404",
+                  "&:hover": {
+                    backgroundColor: "#6d5603",
+                  },
+                }}
+              >
+                Fermer
+              </Button>
+            </Box>
+          </Paper>
+        </Box>
+      )}
+
+      {/* Indicateur de chargement */}
+      {isLoading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9998,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100vh",
+          }}
+        >
+          <Paper
+            elevation={8}
+            sx={{
+              p: 4,
+              textAlign: "center",
+              backgroundColor: "white",
+              borderRadius: 2,
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              ⏳ Traitement en cours...
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Veuillez patienter pendant la modification du devis.
+            </Typography>
+          </Paper>
+        </Box>
+      )}
+
       <Box sx={{ mt: 4, mb: 4 }}>
         <Paper elevation={3} sx={{ p: 3 }}>
           <FormControl fullWidth sx={{ mb: 3 }}>
@@ -1977,6 +2368,19 @@ const ModificationDevis = () => {
                                     e.target.value
                                   )
                                 }
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "" ||
+                                    isNaN(parseFloat(value))
+                                  ) {
+                                    handleCoutChange(
+                                      ligne.id,
+                                      "main_oeuvre",
+                                      ""
+                                    );
+                                  }
+                                }}
                                 InputProps={{
                                   endAdornment: (
                                     <InputAdornment position="end">
@@ -2003,6 +2407,15 @@ const ModificationDevis = () => {
                                     e.target.value
                                   )
                                 }
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "" ||
+                                    isNaN(parseFloat(value))
+                                  ) {
+                                    handleCoutChange(ligne.id, "materiel", "");
+                                  }
+                                }}
                                 InputProps={{
                                   endAdornment: (
                                     <InputAdornment position="end">
@@ -2026,6 +2439,15 @@ const ModificationDevis = () => {
                                 onChange={(e) =>
                                   handleTauxFixeChange(ligne.id, e.target.value)
                                 }
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "" ||
+                                    isNaN(parseFloat(value))
+                                  ) {
+                                    handleTauxFixeChange(ligne.id, "");
+                                  }
+                                }}
                                 InputProps={{
                                   endAdornment: (
                                     <InputAdornment position="end">
@@ -2046,6 +2468,15 @@ const ModificationDevis = () => {
                                 onChange={(e) =>
                                   handleMargeChange(ligne.id, e.target.value)
                                 }
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "" ||
+                                    isNaN(parseFloat(value))
+                                  ) {
+                                    handleMargeChange(ligne.id, "");
+                                  }
+                                }}
                                 InputProps={{
                                   endAdornment: (
                                     <InputAdornment position="end">
@@ -2152,16 +2583,29 @@ const ModificationDevis = () => {
                                 label="Prix Unitaire"
                                 type="number"
                                 step="0.01"
-                                value={formatPrice(
+                                value={
                                   customCouts[ligne.id] ||
-                                    customTauxFixes[ligne.id] ||
-                                    customMarges[ligne.id]
-                                    ? calculatePriceFromCosts(ligne)
-                                    : customPrices[ligne.id] || ligne.prix
-                                )}
+                                  customTauxFixes[ligne.id] ||
+                                  customMarges[ligne.id]
+                                    ? formatPrice(
+                                        calculatePriceFromCosts(ligne)
+                                      )
+                                    : customPrices[ligne.id] !== undefined
+                                    ? customPrices[ligne.id]
+                                    : ligne.prix || ""
+                                }
                                 onChange={(e) =>
                                   handlePriceChange(ligne.id, e.target.value)
                                 }
+                                onBlur={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "" ||
+                                    isNaN(parseFloat(value))
+                                  ) {
+                                    handlePriceChange(ligne.id, "");
+                                  }
+                                }}
                                 size="small"
                                 readOnly={
                                   customCouts[ligne.id] ||
@@ -2271,13 +2715,33 @@ const ModificationDevis = () => {
             </Button>
           </Box>
 
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}
-          >
-            {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
-          </Button>
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={isPreviewed ? handleSaveDevis : handlePreviewDevis}
+            >
+              {isPreviewed ? "Enregistrer le devis" : "Voir le devis"}
+            </Button>
+
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Voulez-vous vraiment effacer toutes les données en cours ? Cette action ne peut pas être annulée."
+                  )
+                ) {
+                  clearSavedState();
+                  window.location.reload();
+                }
+              }}
+              title="Effacer toutes les données sauvegardées"
+            >
+              🗑️ Effacer
+            </Button>
+          </Box>
 
           <ClientTypeModal
             open={showClientTypeModal}
@@ -2307,12 +2771,38 @@ const ModificationDevis = () => {
               zIndex: 1000,
               border: "2px solid",
               borderColor: "primary.main",
+              display: showSummaryBox ? "block" : "none",
+              transition: "all 0.3s ease",
             }}
           >
             <Typography variant="h6" sx={{ color: "primary.main" }}>
               Total TTC: {calculateGrandTotal(specialLines).totalTTC} €
             </Typography>
           </Box>
+
+          {/* Bouton toggle pour masquer/afficher la box de résumé */}
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setShowSummaryBox(!showSummaryBox)}
+            sx={{
+              position: "fixed",
+              bottom: 20,
+              right: showSummaryBox ? 320 : 20,
+              zIndex: 1001,
+              minWidth: "auto",
+              width: "40px",
+              height: "40px",
+              borderRadius: "50%",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "scale(1.1)",
+              },
+            }}
+          >
+            {showSummaryBox ? "👁️" : "📊"}
+          </Button>
 
           <DevisModal
             open={openDevisModal}
@@ -2344,7 +2834,10 @@ const ModificationDevis = () => {
         open={editModalOpen}
         handleClose={() => setEditModalOpen(false)}
         data={itemToEdit}
-        onSave={handleSaveEdit}
+        handleSave={handleSaveEdit}
+        parties={parties}
+        sousParties={sousParties}
+        allLignesDetails={allLignesDetails}
       />
       <ClientInfoModal
         open={showClientInfoModal}
