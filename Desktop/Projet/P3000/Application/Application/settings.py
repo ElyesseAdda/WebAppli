@@ -94,9 +94,11 @@ CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com
 CSRF_USE_SESSIONS = False
 
 # Configuration des sessions
-SESSION_COOKIE_AGE = 14400  # 1 heure en secondes
+SESSION_COOKIE_AGE = 3600  # 1 heure en secondes (au lieu de 4 heures)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Session expire à la fermeture du navigateur
 SESSION_SAVE_EVERY_REQUEST = True  # Sauvegarder la session à chaque requête
+SESSION_COOKIE_HTTPONLY = True  # Empêcher l'accès JavaScript aux cookies de session
+SESSION_COOKIE_SAMESITE = 'Lax'  # Protection CSRF
 
 # Désactiver CSRF pour toutes les URLs API
 CSRF_EXEMPT_URLS = [

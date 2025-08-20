@@ -62,14 +62,28 @@ def login_view(request):
 @api_view(['POST'])
 def logout_view(request):
     """
-    Vue de déconnexion
+    Vue de déconnexion améliorée
     """
     try:
+        # Déconnecter l'utilisateur
         logout(request)
-        return Response({
+        
+        # Créer une réponse avec suppression des cookies
+        response = Response({
             'success': True,
             'message': 'Déconnexion réussie'
         })
+        
+        # Forcer la suppression des cookies de session
+        response.delete_cookie('sessionid')
+        response.delete_cookie('csrftoken')
+        
+        # Définir des cookies expirés
+        response.set_cookie('sessionid', '', max_age=0, expires='Thu, 01 Jan 1970 00:00:00 GMT')
+        response.set_cookie('csrftoken', '', max_age=0, expires='Thu, 01 Jan 1970 00:00:00 GMT')
+        
+        return response
+        
     except Exception as e:
         return Response({
             'error': f'Erreur lors de la déconnexion: {str(e)}'
