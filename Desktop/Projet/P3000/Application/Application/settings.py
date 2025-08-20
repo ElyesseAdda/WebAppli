@@ -93,6 +93,11 @@ CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com,http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["https://myp3000app.com", "http://localhost:3000"]
 CSRF_USE_SESSIONS = False
 
+# Configuration des sessions
+SESSION_COOKIE_AGE = 14400  # 1 heure en secondes
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Session expire à la fermeture du navigateur
+SESSION_SAVE_EVERY_REQUEST = True  # Sauvegarder la session à chaque requête
+
 # Désactiver CSRF pour toutes les URLs API
 CSRF_EXEMPT_URLS = [
     r'^/api/.*$',  # Toutes les URLs commençant par /api/
