@@ -75,6 +75,7 @@ from .views import (
     generate_monthly_agents_pdf,
     AppelOffresViewSet,
     DriveViewSet,
+    PaiementGlobalSousTraitantViewSet,
 )
 
 # Import des vues d'authentification
@@ -108,6 +109,7 @@ router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
 router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
 router.register(r'banques', BanqueViewSet)
 router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basename='paiements-sous-traitant')
+router.register(r'paiements-globaux-sous-traitant', PaiementGlobalSousTraitantViewSet, basename='paiements-globaux-sous-traitant')
 router.register(r'fournisseurs', FournisseurViewSet)
 router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 router.register(r'drive', DriveViewSet, basename='drive')

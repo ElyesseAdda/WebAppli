@@ -4,7 +4,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
+  Select,
   TextField,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
@@ -20,6 +24,7 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
     representant: "",
     forme_juridique: "SARL",
     email: "",
+    type: "",
   });
 
   const [errors, setErrors] = useState({});
@@ -41,6 +46,7 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
         representant: "",
         forme_juridique: "SARL",
         email: "",
+        type: "",
       });
     }
     setErrors({});
@@ -224,6 +230,25 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
               error={!!errors.email}
               helperText={errors.email}
             />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth>
+              <InputLabel>Type d'activité</InputLabel>
+              <Select
+                name="type"
+                value={formData.type}
+                onChange={handleChange}
+                label="Type d'activité"
+              >
+                <MenuItem value="">
+                  <em>Sélectionner un type</em>
+                </MenuItem>
+                <MenuItem value="NETTOYAGE">Nettoyage</MenuItem>
+                <MenuItem value="BTP">BTP</MenuItem>
+                <MenuItem value="TCE">TCE</MenuItem>
+                <MenuItem value="AUTRE">Autre</MenuItem>
+              </Select>
+            </FormControl>
           </Grid>
         </Grid>
       </DialogContent>

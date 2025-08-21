@@ -8,14 +8,19 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
@@ -40,6 +45,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [showContratForm, setShowContratForm] = useState(false);
   const [showAvenantForm, setShowAvenantForm] = useState(false);
   const [chantier, setChantier] = useState(null);
+  const [typeFilter, setTypeFilter] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -71,7 +77,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       }
       const sousTraitantsData = await response.json();
 
-      // Récupérer uniquement les contrats du chantier sélectionné
+      // Récupérer uniquement les contrats du chantier sélectionné avec leurs avenants
       const contratsResponse = await fetch(
         `/api/contrats-sous-traitance/?chantier_id=${chantierId}`
       );
@@ -129,23 +135,14 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
   const handleContratSave = async (contratData) => {
     try {
-      const response = await fetch("/api/contrats-sous-traitance/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(contratData),
-      });
-
-      if (response.ok) {
-        setShowContratForm(false);
-        fetchSousTraitants(); // Rafraîchir la liste
+      setShowContratForm(false);
+      // Rafraîchir après un court délai pour s'assurer que la base de données est mise à jour
+      setTimeout(() => {
+        fetchSousTraitants();
         if (onUpdate) {
           onUpdate();
         }
-      } else {
-        console.error("Erreur lors de la sauvegarde du contrat");
-      }
+      }, 500);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde du contrat:", error);
     }
@@ -153,23 +150,14 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
   const handleAvenantSave = async (avenantData) => {
     try {
-      const response = await fetch("/api/avenants-sous-traitance/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(avenantData),
-      });
-
-      if (response.ok) {
-        setShowAvenantForm(false);
-        fetchSousTraitants(); // Rafraîchir la liste
+      setShowAvenantForm(false);
+      // Rafraîchir après un court délai pour s'assurer que la base de données est mise à jour
+      setTimeout(() => {
+        fetchSousTraitants();
         if (onUpdate) {
           onUpdate();
         }
-      } else {
-        console.error("Erreur lors de la sauvegarde de l'avenant");
-      }
+      }, 500);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde de l'avenant:", error);
     }
@@ -264,206 +252,291 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
           </Box>
         </DialogTitle>
         <DialogContent>
-          {sousTraitants.map((sousTraitant) => (
-            <Accordion key={sousTraitant.id}>
-              <AccordionSummary
-                expandIcon={<FaChevronDown />}
-                aria-controls={`panel${sousTraitant.id}-content`}
-                id={`panel${sousTraitant.id}-header`}
+          {/* Filtre par type */}
+          <Box sx={{ mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Filtrer par type</InputLabel>
+              <Select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                label="Filtrer par type"
               >
-                <Box
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  width="100%"
+                <MenuItem value="">
+                  <em>Tous les types</em>
+                </MenuItem>
+                <MenuItem value="NETTOYAGE">Nettoyage</MenuItem>
+                <MenuItem value="BTP">BTP</MenuItem>
+                <MenuItem value="TCE">TCE</MenuItem>
+                <MenuItem value="AUTRE">Autre</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {sousTraitants
+            .filter(
+              (sousTraitant) => !typeFilter || sousTraitant.type === typeFilter
+            )
+            .map((sousTraitant) => (
+              <Accordion key={sousTraitant.id}>
+                <AccordionSummary
+                  expandIcon={<FaChevronDown />}
+                  aria-controls={`panel${sousTraitant.id}-content`}
+                  id={`panel${sousTraitant.id}-header`}
                 >
-                  <Typography>
-                    {sousTraitant.entreprise} - {sousTraitant.numero_rcs}
-                  </Typography>
-                  <Box>
-                    <IconButton
-                      edge="end"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditSousTraitant(sousTraitant);
-                      }}
-                      sx={{ mr: 2.5 }}
-                    >
-                      <FaEdit />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(
-                          `/paiements-sous-traitant/${chantier.id}/${sousTraitant.id}`,
-                          "_blank"
-                        );
-                      }}
-                      sx={{ mr: 2.5 }}
-                    >
-                      <FaTable />
-                    </IconButton>
-                    {sousTraitant.contrat ? (
-                      <IconButton
-                        edge="end"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCreateAvenant(sousTraitant);
-                        }}
-                        sx={{ mr: 2.5 }}
-                      >
-                        <FaPlusCircle />
-                      </IconButton>
-                    ) : (
-                      <IconButton
-                        edge="end"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCreateContrat(sousTraitant);
-                        }}
-                        sx={{ mr: 2.5 }}
-                      >
-                        <FaPlus />
-                      </IconButton>
-                    )}
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    width="100%"
+                  >
+                    <Box>
+                      <Typography>
+                        {sousTraitant.entreprise} - {sousTraitant.numero_rcs}
+                      </Typography>
+                      {sousTraitant.type && (
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "text.secondary" }}
+                        >
+                          Type: {sousTraitant.type}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Box>
+                      <Tooltip title="Modifier le sous-traitant" arrow>
+                        <IconButton
+                          edge="end"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditSousTraitant(sousTraitant);
+                          }}
+                          sx={{
+                            mr: 2.5,
+                            color: "#2e7d32",
+                            "&:hover": {
+                              backgroundColor: "rgba(46, 125, 50, 0.1)",
+                            },
+                          }}
+                        >
+                          <FaEdit />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Afficher le tableau de paiements" arrow>
+                        <IconButton
+                          edge="end"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(
+                              `/paiements-sous-traitant/${chantier.id}/${sousTraitant.id}`,
+                              "_blank"
+                            );
+                          }}
+                          sx={{
+                            mr: 2.5,
+                            color: "#9c27b0",
+                            "&:hover": {
+                              backgroundColor: "rgba(156, 39, 176, 0.1)",
+                            },
+                          }}
+                        >
+                          <FaTable />
+                        </IconButton>
+                      </Tooltip>
+                      {sousTraitant.contrat ? (
+                        <Tooltip title="Créer un avenant" arrow>
+                          <IconButton
+                            edge="end"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateAvenant(sousTraitant);
+                            }}
+                            sx={{
+                              mr: 2.5,
+                              color: "#1976d2",
+                              "&:hover": {
+                                backgroundColor: "rgba(25, 118, 210, 0.1)",
+                              },
+                            }}
+                          >
+                            <FaPlusCircle />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title="Créer un contrat" arrow>
+                          <IconButton
+                            edge="end"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateContrat(sousTraitant);
+                            }}
+                            sx={{
+                              mr: 2.5,
+                              color: "#1976d2",
+                              "&:hover": {
+                                backgroundColor: "rgba(25, 118, 210, 0.1)",
+                              },
+                            }}
+                          >
+                            <FaPlus />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </Box>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                {sousTraitant.contrat ? (
-                  <>
-                    <Typography variant="h6" gutterBottom>
-                      Contrat de sous-traitance
-                    </Typography>
-                    <TableContainer component={Paper} sx={{ mb: 3 }}>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell width="15%">Type</TableCell>
-                            <TableCell width="30%">Description</TableCell>
-                            <TableCell width="15%">Catégorie</TableCell>
-                            <TableCell width="15%">Date</TableCell>
-                            <TableCell
-                              width="15%"
-                              align="right"
-                              sx={{ whiteSpace: "nowrap" }}
-                            >
-                              Montant
-                            </TableCell>
-                            <TableCell width="10%" align="center">
-                              Actions
-                            </TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          <TableRow>
-                            <TableCell
-                              onClick={() =>
-                                handlePreviewContrat(sousTraitant.contrat.id)
-                              }
-                              sx={{
-                                cursor: "pointer",
-                                color: "primary.main",
-                                fontWeight: "bold",
-                                "&:hover": {
-                                  textDecoration: "underline",
-                                },
-                              }}
-                            >
-                              Contrat initial
-                            </TableCell>
-                            <TableCell>
-                              {sousTraitant.contrat.description_prestation}
-                            </TableCell>
-                            <TableCell>
-                              {sousTraitant.contrat.type_contrat}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(
-                                sousTraitant.contrat.date_debut
-                              ).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{ whiteSpace: "nowrap" }}
-                            >
-                              {sousTraitant.contrat.montant_operation.toLocaleString(
-                                "fr-FR"
-                              )}{" "}
-                              €
-                            </TableCell>
-                            <TableCell align="center">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() =>
-                                  handleDeleteContrat(sousTraitant.contrat.id)
-                                }
-                                title="Supprimer le contrat et tous ses avenants"
+                </AccordionSummary>
+                <AccordionDetails>
+                  {sousTraitant.contrat ? (
+                    <>
+                      <Typography variant="h6" gutterBottom>
+                        Contrat de sous-traitance
+                      </Typography>
+                      <TableContainer component={Paper} sx={{ mb: 3 }}>
+                        <Table>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell width="15%">Type</TableCell>
+                              <TableCell width="30%">Description</TableCell>
+                              <TableCell width="15%">Catégorie</TableCell>
+                              <TableCell width="15%">Date</TableCell>
+                              <TableCell
+                                width="15%"
+                                align="right"
+                                sx={{ whiteSpace: "nowrap" }}
                               >
-                                <FaTrash />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                          {sousTraitant.contrat.avenants &&
-                            sousTraitant.contrat.avenants.map((avenant) => (
-                              <TableRow key={avenant.id}>
-                                <TableCell
-                                  onClick={() =>
-                                    handlePreviewAvenant(avenant.id)
-                                  }
-                                  sx={{
-                                    cursor: "pointer",
-                                    color: "primary.main",
-                                    "&:hover": {
-                                      textDecoration: "underline",
-                                    },
-                                  }}
+                                Montant
+                              </TableCell>
+                              <TableCell width="10%" align="center">
+                                Actions
+                              </TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell
+                                onClick={() =>
+                                  handlePreviewContrat(sousTraitant.contrat.id)
+                                }
+                                sx={{
+                                  cursor: "pointer",
+                                  color: "primary.main",
+                                  fontWeight: "bold",
+                                  "&:hover": {
+                                    textDecoration: "underline",
+                                  },
+                                }}
+                              >
+                                Contrat initial
+                              </TableCell>
+                              <TableCell>
+                                {sousTraitant.contrat.description_prestation}
+                              </TableCell>
+                              <TableCell>
+                                {sousTraitant.contrat.type_contrat}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(
+                                  sousTraitant.contrat.date_debut
+                                ).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell
+                                align="right"
+                                sx={{ whiteSpace: "nowrap" }}
+                              >
+                                {sousTraitant.contrat.montant_operation.toLocaleString(
+                                  "fr-FR"
+                                )}{" "}
+                                €
+                              </TableCell>
+                              <TableCell align="center">
+                                <Tooltip
+                                  title="Supprimer le contrat et tous ses avenants"
+                                  arrow
                                 >
-                                  Avenant n°{avenant.numero}
-                                </TableCell>
-                                <TableCell>{avenant.description}</TableCell>
-                                <TableCell>
-                                  {sousTraitant.contrat.type_contrat}
-                                </TableCell>
-                                <TableCell>
-                                  {new Date(
-                                    avenant.date_creation
-                                  ).toLocaleDateString()}
-                                </TableCell>
-                                <TableCell
-                                  align="right"
-                                  sx={{ whiteSpace: "nowrap" }}
-                                >
-                                  {avenant.montant.toLocaleString("fr-FR")} €
-                                </TableCell>
-                                <TableCell align="center">
                                   <IconButton
                                     size="small"
-                                    color="error"
                                     onClick={() =>
-                                      handleDeleteAvenant(avenant.id)
+                                      handleDeleteContrat(
+                                        sousTraitant.contrat.id
+                                      )
                                     }
-                                    title="Supprimer l'avenant"
+                                    sx={{
+                                      color: "#d32f2f",
+                                      "&:hover": {
+                                        backgroundColor:
+                                          "rgba(211, 47, 47, 0.1)",
+                                      },
+                                    }}
                                   >
                                     <FaTrash />
                                   </IconButton>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </>
-                ) : (
-                  <Typography color="text.secondary">
-                    Aucun contrat de sous-traitance pour ce sous-traitant
-                  </Typography>
-                )}
-              </AccordionDetails>
-            </Accordion>
-          ))}
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                            {sousTraitant.contrat.avenants &&
+                              sousTraitant.contrat.avenants.map((avenant) => (
+                                <TableRow key={avenant.id}>
+                                  <TableCell
+                                    onClick={() =>
+                                      handlePreviewAvenant(avenant.id)
+                                    }
+                                    sx={{
+                                      cursor: "pointer",
+                                      color: "primary.main",
+                                      "&:hover": {
+                                        textDecoration: "underline",
+                                      },
+                                    }}
+                                  >
+                                    Avenant n°{avenant.numero}
+                                  </TableCell>
+                                  <TableCell>{avenant.description}</TableCell>
+                                  <TableCell>
+                                    {sousTraitant.contrat.type_contrat}
+                                  </TableCell>
+                                  <TableCell>
+                                    {new Date(
+                                      avenant.date_creation
+                                    ).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell
+                                    align="right"
+                                    sx={{ whiteSpace: "nowrap" }}
+                                  >
+                                    {avenant.montant.toLocaleString("fr-FR")} €
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Tooltip title="Supprimer l'avenant" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                          handleDeleteAvenant(avenant.id)
+                                        }
+                                        sx={{
+                                          color: "#d32f2f",
+                                          "&:hover": {
+                                            backgroundColor:
+                                              "rgba(211, 47, 47, 0.1)",
+                                          },
+                                        }}
+                                      >
+                                        <FaTrash />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </>
+                  ) : (
+                    <Typography color="text.secondary">
+                      Aucun contrat de sous-traitance pour ce sous-traitant
+                    </Typography>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))}
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Fermer</Button>

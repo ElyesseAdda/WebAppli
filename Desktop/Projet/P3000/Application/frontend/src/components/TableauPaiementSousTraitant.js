@@ -234,6 +234,147 @@ const AjouterPaiementModal = ({
   );
 };
 
+const PaiementGlobalModal = ({
+  open,
+  onClose,
+  chantierId,
+  sousTraitantId,
+  onSubmit,
+  montantRestant,
+}) => {
+  const [datePaiement, setDatePaiement] = useState("");
+  const [montantPaye, setMontantPaye] = useState("");
+  const [commentaire, setCommentaire] = useState("");
+
+  const handleSubmit = () => {
+    onSubmit({ datePaiement, montantPaye, commentaire });
+    onClose();
+    setDatePaiement("");
+    setMontantPaye("");
+    setCommentaire("");
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Nouveau paiement global</DialogTitle>
+      <DialogContent>
+        <Box sx={{ p: 2 }}>
+          <Typography variant="h6" sx={{ mb: 2, color: "warning.main" }}>
+            Montant restant à payer :{" "}
+            {montantRestant.toLocaleString("fr-FR", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            €
+          </Typography>
+          <TextField
+            type="date"
+            label="Date de paiement"
+            value={datePaiement}
+            onChange={(e) => setDatePaiement(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+          />
+          <TextField
+            type="number"
+            label="Montant payé HT"
+            value={montantPaye}
+            onChange={(e) => setMontantPaye(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            inputProps={{ step: "0.01", min: "0" }}
+          />
+          <TextField
+            label="Commentaire (optionnel)"
+            value={commentaire}
+            onChange={(e) => setCommentaire(e.target.value)}
+            fullWidth
+            multiline
+            rows={3}
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={!datePaiement || !montantPaye}
+        >
+          Valider
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const ModifierPaiementGlobalModal = ({ open, onClose, paiement, onSubmit }) => {
+  const [datePaiement, setDatePaiement] = useState("");
+  const [montantPaye, setMontantPaye] = useState("");
+  const [commentaire, setCommentaire] = useState("");
+
+  useEffect(() => {
+    if (paiement) {
+      setDatePaiement(paiement.date_paiement || "");
+      setMontantPaye(paiement.montant_paye_ht || "");
+      setCommentaire(paiement.commentaire || "");
+    }
+  }, [paiement]);
+
+  const handleSubmit = () => {
+    onSubmit(paiement.id, { datePaiement, montantPaye, commentaire });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Modifier le paiement</DialogTitle>
+      <DialogContent>
+        <Box sx={{ p: 2 }}>
+          <TextField
+            type="date"
+            label="Date de paiement"
+            value={datePaiement}
+            onChange={(e) => setDatePaiement(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+          />
+          <TextField
+            type="number"
+            label="Montant payé HT"
+            value={montantPaye}
+            onChange={(e) => setMontantPaye(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            inputProps={{ step: "0.01", min: "0" }}
+          />
+          <TextField
+            label="Commentaire (optionnel)"
+            value={commentaire}
+            onChange={(e) => setCommentaire(e.target.value)}
+            fullWidth
+            multiline
+            rows={3}
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={!datePaiement || !montantPaye}
+        >
+          Valider
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const TableauRecapContratAvenants = ({
   contrats,
   chantierId,
@@ -352,17 +493,14 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   const [contrats, setContrats] = useState([]);
   const [paiements, setPaiements] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [openDateModal, setOpenDateModal] = useState(false);
-  const [openPaiementModal, setOpenPaiementModal] = useState(false);
-  const [openMontantFactureModal, setOpenMontantFactureModal] = useState(false);
   const [selectedPaiement, setSelectedPaiement] = useState(null);
-  const [moisGrille, setMoisGrille] = useState([]);
-  const [openAjouterPaiementModal, setOpenAjouterPaiementModal] =
-    useState(false);
-  const [moisAnneeAjouter, setMoisAnneeAjouter] = useState({});
   const [chantierNom, setChantierNom] = useState("");
+  const [openPaiementGlobalModal, setOpenPaiementGlobalModal] = useState(false);
+  const [openModifierPaiementModal, setOpenModifierPaiementModal] =
+    useState(false);
+  const [montantRestant, setMontantRestant] = useState(0);
 
-  // Chargement contrats et paiements (Promise.all)
+  // Chargement contrats et paiements globaux (Promise.all)
   useEffect(() => {
     if (chantierId && sousTraitantId) {
       setLoading(true);
@@ -371,7 +509,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           `/api/contrats-sous-traitance/?chantier_id=${chantierId}&sous_traitant=${sousTraitantId}`
         ),
         axios.get(
-          `/api/paiements-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
+          `/api/paiements-globaux-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
         ),
       ])
         .then(([contratsRes, paiementsRes]) => {
@@ -387,95 +525,28 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     }
   }, [chantierId, sousTraitantId]);
 
-  // Générer la grille des mois unique (de la date de début la plus ancienne à aujourd'hui)
-  useEffect(() => {
-    if (contrats.length > 0) {
-      const contratsFiltres = contrats.filter(
-        (c) =>
-          String(c.chantier) === String(chantierId) &&
-          String(c.sous_traitant) === String(sousTraitantId)
-      );
-
-      if (contratsFiltres.length > 0) {
-        const contrat = contratsFiltres[0];
-        let moisTotal = [];
-
-        // Ajouter le contrat initial
-        const dateContrat = new Date(contrat.date_debut);
-        moisTotal.push({
-          mois: dateContrat.getMonth() + 1,
-          annee: dateContrat.getFullYear(),
-          contratId: contrat.id,
-          type: "CONTRAT",
-          montant: contrat.montant_operation,
-        });
-
-        // Ajouter les avenants s'ils existent
-        if (contrat.avenants && contrat.avenants.length > 0) {
-          contrat.avenants.forEach((avenant) => {
-            const dateAvenant = new Date(avenant.date_creation);
-            moisTotal.push({
-              mois: dateAvenant.getMonth() + 1,
-              annee: dateAvenant.getFullYear(),
-              contratId: contrat.id,
-              avenantId: avenant.id,
-              type: `AVENANT ${String(avenant.numero).padStart(2, "0")}`,
-              montant: avenant.montant,
-            });
-          });
-        }
-
-        // Trier par type puis par date (mois/année)
-        moisTotal.sort((a, b) => {
-          // D'abord trier par type : CONTRAT en premier, puis avenants par numéro
-          if (a.type === "CONTRAT" && b.type !== "CONTRAT") return -1;
-          if (a.type !== "CONTRAT" && b.type === "CONTRAT") return 1;
-
-          // Si les deux sont des avenants, trier par numéro d'avenant
-          if (a.type !== "CONTRAT" && b.type !== "CONTRAT") {
-            const numA = parseInt(a.type.split(" ")[1]);
-            const numB = parseInt(b.type.split(" ")[1]);
-            if (numA !== numB) return numA - numB;
-          }
-
-          // Enfin, trier par date (mois/année)
-          if (a.annee !== b.annee) return a.annee - b.annee;
-          return a.mois - b.mois;
-        });
-
-        setMoisGrille(moisTotal);
-      } else {
-        setMoisGrille([]);
-      }
-    } else {
-      setMoisGrille([]);
-    }
-  }, [contrats, chantierId, sousTraitantId]);
-
-  // Fusion grille et paiements existants
-  const grilleComplete = moisGrille.map((ligne) => {
-    const paiement = paiements.find(
-      (p) =>
-        Number(p.mois) === Number(ligne.mois) &&
-        Number(p.annee) === Number(ligne.annee) &&
-        // Ajouter la vérification pour l'avenant
-        (ligne.avenantId ? p.avenant === ligne.avenantId : !p.avenant)
-    );
-    return { ...ligne, paiement };
+  // Trier les paiements par date (du plus récent au plus ancien)
+  const paiementsTries = paiements.sort((a, b) => {
+    const dateA = new Date(a.date_paiement);
+    const dateB = new Date(b.date_paiement);
+    return dateB - dateA;
   });
 
-  // Handler création paiement (POST)
-  const handleAjouterPaiement = async (data) => {
-    console.log("Payload envoyé pour création paiement :", data);
+  // Handler création paiement global (POST)
+  const handleAjouterPaiementGlobal = async (data) => {
     try {
-      // Ajouter l'avenantId si c'est un avenant
       const payload = {
-        ...data,
-        contrat: data.contratId,
-        avenant: data.avenantId || null,
+        chantier: chantierId,
+        sous_traitant: sousTraitantId,
+        date_paiement: data.datePaiement,
+        montant_paye_ht: data.montantPaye,
+        commentaire: data.commentaire,
       };
 
-      const res = await axios.post(`/api/paiements-sous-traitant/`, payload);
+      const res = await axios.post(
+        `/api/paiements-globaux-sous-traitant/`,
+        payload
+      );
       setPaiements((prev) => [...prev, res.data]);
     } catch (error) {
       alert("Erreur lors de la création du paiement.");
@@ -485,45 +556,18 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     }
   };
 
-  // Handlers pour les modals (à compléter)
-  const handleDateModalSubmit = async (
+  // Handlers pour les modals de paiements globaux
+  const handleModifierPaiementGlobal = async (
     paiementId,
-    { dateEnvoi, delaiPaiement }
+    { datePaiement, montantPaye, commentaire }
   ) => {
     try {
       const res = await axios.patch(
-        `/api/paiements-sous-traitant/${paiementId}/`,
+        `/api/paiements-globaux-sous-traitant/${paiementId}/`,
         {
-          date_envoi_facture: dateEnvoi,
-          delai_paiement: delaiPaiement,
-        }
-      );
-      setPaiements((prev) =>
-        prev.map((p) =>
-          p.id === paiementId
-            ? {
-                ...p,
-                date_envoi_facture: dateEnvoi,
-                delai_paiement: delaiPaiement,
-              }
-            : p
-        )
-      );
-    } catch (error) {
-      alert("Erreur lors de la mise à jour de la date d'envoi/délai.");
-    }
-  };
-
-  const handlePaiementModalSubmit = async (
-    paiementId,
-    { montantPaye, datePaiementReel }
-  ) => {
-    try {
-      const res = await axios.patch(
-        `/api/paiements-sous-traitant/${paiementId}/`,
-        {
+          date_paiement: datePaiement,
           montant_paye_ht: montantPaye,
-          date_paiement_reel: datePaiementReel,
+          commentaire: commentaire,
         }
       );
       setPaiements((prev) =>
@@ -531,32 +575,28 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           p.id === paiementId
             ? {
                 ...p,
+                date_paiement: datePaiement,
                 montant_paye_ht: montantPaye,
-                date_paiement_reel: datePaiementReel,
+                commentaire: commentaire,
               }
             : p
         )
       );
     } catch (error) {
-      alert("Erreur lors de la mise à jour du paiement.");
+      alert("Erreur lors de la modification du paiement.");
     }
   };
 
-  const handleMontantFactureModalSubmit = async (
-    paiementId,
-    { montantFacture }
-  ) => {
-    try {
-      await axios.patch(`/api/paiements-sous-traitant/${paiementId}/`, {
-        montant_facture_ht: montantFacture,
-      });
-      setPaiements((prev) =>
-        prev.map((p) =>
-          p.id === paiementId ? { ...p, montant_facture_ht: montantFacture } : p
-        )
-      );
-    } catch (error) {
-      alert("Erreur lors de la mise à jour du montant facturé.");
+  const handleSupprimerPaiementGlobal = async (paiementId) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce paiement ?")) {
+      try {
+        await axios.delete(
+          `/api/paiements-globaux-sous-traitant/${paiementId}/`
+        );
+        setPaiements((prev) => prev.filter((p) => p.id !== paiementId));
+      } catch (error) {
+        alert("Erreur lors de la suppression du paiement.");
+      }
     }
   };
 
@@ -649,11 +689,54 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         )
       : 0;
   const montantTotalMarche = montantContrat + montantAvenants;
-  const montantDejaFacture = paiements.reduce(
-    (sum, p) => sum + (parseFloat(p.montant_facture_ht) || 0),
+  const montantTotalPaye = paiements.reduce(
+    (sum, p) => sum + (parseFloat(p.montant_paye_ht) || 0),
     0
   );
-  const montantRestant = montantTotalMarche - montantDejaFacture;
+  const montantRestantCalcul = montantTotalMarche - montantTotalPaye;
+
+  // Handler pour le paiement global avec validation
+  const handlePaiementGlobalSubmit = async (data) => {
+    const montantPaye = parseFloat(data.montantPaye);
+
+    // Vérifier si le paiement dépasse le montant restant
+    if (montantPaye > montantRestantCalcul) {
+      const surplus = montantPaye - montantRestantCalcul;
+      const confirmation = window.confirm(
+        `Attention : Ce paiement dépasse le montant restant de ${surplus.toFixed(
+          2
+        )}€.\n\n` +
+          `Montant restant : ${montantRestantCalcul.toFixed(2)}€\n` +
+          `Montant à payer : ${montantPaye.toFixed(2)}€\n\n` +
+          `Voulez-vous continuer malgré le surplus ?`
+      );
+
+      if (!confirmation) {
+        return;
+      }
+    }
+
+    try {
+      const payload = {
+        chantier: chantierId,
+        sous_traitant: sousTraitantId,
+        date_paiement: data.datePaiement,
+        montant_paye_ht: data.montantPaye,
+        commentaire: data.commentaire,
+      };
+      const res = await axios.post(
+        `/api/paiements-globaux-sous-traitant/`,
+        payload
+      );
+      setPaiements((prev) => [...prev, res.data]);
+      setOpenPaiementGlobalModal(false);
+    } catch (error) {
+      alert("Erreur lors de la création du paiement global.");
+      if (error.response) {
+        console.error("Erreur backend:", error.response.data);
+      }
+    }
+  };
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
@@ -677,16 +760,23 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           </Typography>
         </Box>
       )}
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Tableau Paiement Sous-Traitant
-      </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 2,
+        }}
+      >
+        <Typography variant="h6">Tableau Paiement Sous-Traitant</Typography>
+      </Box>
       {/* Tableau récapitulatif contrat/avenants */}
       <TableauRecapContratAvenants
         contrats={contrats}
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
       />
-      {/* Tableau de paiement */}
+      {/* Tableau de paiements globaux */}
       {loading ? (
         <Typography>Chargement...</Typography>
       ) : (
@@ -694,241 +784,78 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 1)" }}>
-                <TableCell sx={{ color: "white" }}>Mois</TableCell>
-                <TableCell sx={{ color: "white" }}>Type</TableCell>
-                <TableCell sx={{ color: "white" }}>
-                  Montant facture du mois
-                </TableCell>
-                <TableCell sx={{ color: "white" }}>
-                  Date d'envoi facture
-                </TableCell>
-                <TableCell sx={{ color: "white" }}>
-                  Date de paiement prévue
-                </TableCell>
+                <TableCell sx={{ color: "white" }}>Date de paiement</TableCell>
                 <TableCell sx={{ color: "white" }}>Montant payé HT</TableCell>
                 <TableCell sx={{ color: "white" }}>
-                  Date paiement réelle
+                  Date de paiement réelle
                 </TableCell>
-                <TableCell sx={{ color: "white" }}>Jours de retard</TableCell>
-                <TableCell sx={{ color: "white" }}>Écart du mois</TableCell>
+                <TableCell sx={{ color: "white" }}>Commentaire</TableCell>
+                <TableCell sx={{ color: "white" }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {grilleComplete.map((ligne, idx) => (
-                <TableRow
-                  key={`${ligne.annee}-${ligne.mois}-${
-                    ligne.type || "contrat"
-                  }`}
-                >
-                  <TableCell>{`${String(ligne.mois).padStart(2, "0")}/${
-                    ligne.annee
-                  }`}</TableCell>
+              {paiementsTries.map((paiement) => (
+                <TableRow key={paiement.id}>
+                  <TableCell>{formatDateFR2(paiement.date_paiement)}</TableCell>
                   <TableCell>
                     <Typography
                       sx={{
-                        color:
-                          ligne.type === "CONTRAT"
-                            ? "rgba(27, 120, 188, 1)"
-                            : "rgb(0, 168, 42)",
+                        color: "rgb(0, 168, 42)",
                         fontWeight: 600,
-                        fontSize: "0.8rem",
                       }}
                     >
-                      {ligne.type || "CONTRAT"}
+                      {parseFloat(paiement.montant_paye_ht).toLocaleString(
+                        "fr-FR",
+                        {
+                          minimumFractionDigits: 2,
+                        }
+                      )}{" "}
+                      €
                     </Typography>
                   </TableCell>
-                  {ligne.paiement ? (
-                    <>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setSelectedPaiement(ligne.paiement);
-                            setOpenMontantFactureModal(true);
-                          }}
-                        >
-                          {ligne.paiement.montant_facture_ht !== undefined &&
-                          ligne.paiement.montant_facture_ht !== null &&
-                          ligne.paiement.montant_facture_ht !== "" ? (
-                            <Typography
-                              sx={{
-                                color: "rgb(0, 168, 42)",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {parseFloat(
-                                ligne.paiement.montant_facture_ht
-                              ).toLocaleString("fr-FR", {
-                                minimumFractionDigits: 2,
-                              })}{" "}
-                              €
-                            </Typography>
-                          ) : (
-                            "Définir"
-                          )}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setSelectedPaiement(ligne.paiement);
-                            setOpenDateModal(true);
-                          }}
-                        >
-                          {ligne.paiement.date_envoi_facture
-                            ? formatDateFR2(ligne.paiement.date_envoi_facture)
-                            : "Définir"}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        {ligne.paiement.date_envoi_facture &&
-                        ligne.paiement.delai_paiement
-                          ? formatDateFR2(
-                              (() => {
-                                const d = new Date(
-                                  ligne.paiement.date_envoi_facture
-                                );
-                                d.setDate(
-                                  d.getDate() +
-                                    parseInt(ligne.paiement.delai_paiement)
-                                );
-                                return d;
-                              })()
-                            )
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setSelectedPaiement(ligne.paiement);
-                            setOpenPaiementModal(true);
-                          }}
-                        >
-                          {ligne.paiement.montant_paye_ht !== undefined &&
-                          ligne.paiement.montant_paye_ht !== null &&
-                          ligne.paiement.montant_paye_ht !== "" ? (
-                            <Typography
-                              sx={{
-                                color:
-                                  parseFloat(ligne.paiement.montant_paye_ht) >=
-                                  0
-                                    ? "rgb(0, 168, 42)"
-                                    : "error.main",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {parseFloat(
-                                ligne.paiement.montant_paye_ht
-                              ).toLocaleString("fr-FR", {
-                                minimumFractionDigits: 2,
-                              })}{" "}
-                              €
-                            </Typography>
-                          ) : (
-                            "Définir"
-                          )}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        {ligne.paiement.date_paiement_reel
-                          ? formatDateFR2(ligne.paiement.date_paiement_reel)
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        {calculerJoursRetard(
-                          calculerDatePrevue(
-                            ligne.paiement.date_envoi_facture,
-                            ligne.paiement.delai_paiement
-                          ),
-                          ligne.paiement.date_paiement_reel
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const paye =
-                            parseFloat(ligne.paiement.montant_paye_ht) || 0;
-                          const facture =
-                            parseFloat(ligne.paiement.montant_facture_ht) || 0;
-                          if (
-                            ligne.paiement.montant_paye_ht === undefined &&
-                            ligne.paiement.montant_facture_ht === undefined
-                          )
-                            return "-";
-                          const ecart = paye - facture;
-                          return (
-                            <Typography
-                              sx={{
-                                color:
-                                  ecart < 0 ? "error.main" : "rgb(0, 168, 42)",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {ecart >= 0 ? "+" : ""}
-                              {ecart.toFixed(2)} €
-                            </Typography>
-                          );
-                        })()}
-                      </TableCell>
-                    </>
-                  ) : (
-                    <>
-                      <TableCell colSpan={8} align="center">
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          color="primary"
-                          onClick={() => {
-                            setMoisAnneeAjouter({
-                              mois: ligne.mois,
-                              annee: ligne.annee,
-                              contratId: ligne.contratId,
-                              avenantId: ligne.avenantId || null,
-                              type: ligne.type,
-                            });
-                            setOpenAjouterPaiementModal(true);
-                          }}
-                        >
-                          Ajouter paiement
-                        </Button>
-                      </TableCell>
-                    </>
-                  )}
-                </TableRow>
-              ))}
-              {/* Ligne de total des écarts du mois */}
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  align="right"
-                  sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)" }}
-                >
-                  Total écarts du mois :
-                </TableCell>
-                <TableCell>
-                  {(() => {
-                    const totalEcart = grilleComplete.reduce((sum, ligne) => {
-                      if (!ligne.paiement) return sum;
-                      const paye =
-                        parseFloat(ligne.paiement.montant_paye_ht) || 0;
-                      const facture =
-                        parseFloat(ligne.paiement.montant_facture_ht) || 0;
-                      return sum + (paye - facture);
-                    }, 0);
-                    return (
-                      <Typography
-                        sx={{
-                          fontWeight: 700,
-                          color:
-                            totalEcart < 0 ? "error.main" : "rgb(0, 168, 42)",
+                  <TableCell>
+                    {paiement.date_paiement_reel
+                      ? formatDateFR2(paiement.date_paiement_reel)
+                      : "-"}
+                  </TableCell>
+                  <TableCell>{paiement.commentaire || "-"}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setSelectedPaiement(paiement);
+                          setOpenModifierPaiementModal(true);
                         }}
                       >
-                        {totalEcart >= 0 ? "+" : ""}
-                        {totalEcart.toFixed(2)} €
-                      </Typography>
-                    );
-                  })()}
+                        Modifier
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() =>
+                          handleSupprimerPaiementGlobal(paiement.id)
+                        }
+                      >
+                        Supprimer
+                      </Button>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {/* Ligne pour ajouter un nouveau paiement */}
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    onClick={() => setOpenPaiementGlobalModal(true)}
+                    sx={{ mt: 1, mb: 1 }}
+                  >
+                    + Ajouter un paiement
+                  </Button>
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -956,8 +883,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
             €
           </Typography>
           <Typography sx={{ fontWeight: 700, color: "rgb(0, 168, 42)" }}>
-            Montant déjà facturé :{" "}
-            {montantDejaFacture.toLocaleString("fr-FR", {
+            Montant total payé :{" "}
+            {montantTotalPaye.toLocaleString("fr-FR", {
               minimumFractionDigits: 2,
             })}{" "}
             €
@@ -968,46 +895,45 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
             sx={{
               fontWeight: 700,
               color:
-                montantRestant < 0 ? "error.main" : "rgba(27, 120, 188, 1)",
+                montantRestantCalcul < 0
+                  ? "error.main"
+                  : "rgba(27, 120, 188, 1)",
             }}
           >
             Montant restant du marché :{" "}
-            {montantRestant.toLocaleString("fr-FR", {
+            {montantRestantCalcul.toLocaleString("fr-FR", {
               minimumFractionDigits: 2,
             })}{" "}
             €
           </Typography>
+          <Typography
+            sx={{
+              fontWeight: 700,
+              color: "rgb(0, 168, 42)",
+              mt: 1,
+            }}
+          >
+            Pourcentage d'avancement :{" "}
+            {montantTotalMarche > 0
+              ? ((montantTotalPaye / montantTotalMarche) * 100).toFixed(1)
+              : 0}
+            %
+          </Typography>
         </Box>
       </Box>
-      <AjouterPaiementModal
-        open={openAjouterPaiementModal}
-        onClose={() => setOpenAjouterPaiementModal(false)}
-        mois={moisAnneeAjouter.mois}
-        annee={moisAnneeAjouter.annee}
-        contratId={moisAnneeAjouter.contratId}
+      <PaiementGlobalModal
+        open={openPaiementGlobalModal}
+        onClose={() => setOpenPaiementGlobalModal(false)}
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
-        avenantId={moisAnneeAjouter.avenantId}
-        type={moisAnneeAjouter.type}
-        onSubmit={handleAjouterPaiement}
+        onSubmit={handlePaiementGlobalSubmit}
+        montantRestant={montantRestantCalcul}
       />
-      <DateEnvoiModal
-        open={openDateModal}
-        onClose={() => setOpenDateModal(false)}
+      <ModifierPaiementGlobalModal
+        open={openModifierPaiementModal}
+        onClose={() => setOpenModifierPaiementModal(false)}
         paiement={selectedPaiement}
-        onSubmit={handleDateModalSubmit}
-      />
-      <PaiementModal
-        open={openPaiementModal}
-        onClose={() => setOpenPaiementModal(false)}
-        paiement={selectedPaiement}
-        onSubmit={handlePaiementModalSubmit}
-      />
-      <MontantFactureModal
-        open={openMontantFactureModal}
-        onClose={() => setOpenMontantFactureModal(false)}
-        paiement={selectedPaiement}
-        onSubmit={handleMontantFactureModalSubmit}
+        onSubmit={handleModifierPaiementGlobal}
       />
     </Box>
   );

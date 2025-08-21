@@ -156,6 +156,38 @@ class Chantier(models.Model):
             except:
                 self.taux_fixe = 20  # Valeur par défaut
         super().save(*args, **kwargs)
+    
+    @property
+    def montant_total_sous_traitance(self):
+        """Calcule le montant total de sous-traitance (contrat + avenants)"""
+        total = 0
+        for contrat in self.contrats_sous_traitance.all():
+            total += float(contrat.montant_operation or 0)
+            for avenant in contrat.avenants.all():
+                total += float(avenant.montant or 0)
+        return total
+    
+    @property
+    def montant_total_paye_sous_traitance(self):
+        """Calcule le montant total payé aux sous-traitants"""
+        return sum(
+            float(p.montant_paye_ht or 0) 
+            for p in self.paiements_globaux_sous_traitant.all()
+        )
+    
+    @property
+    def pourcentage_avancement_sous_traitance(self):
+        """Calcule le pourcentage d'avancement des paiements sous-traitance"""
+        total = self.montant_total_sous_traitance
+        if total == 0:
+            return 0
+        paye = self.montant_total_paye_sous_traitance
+        return round((paye / total) * 100, 2)
+    
+    @property
+    def montant_restant_sous_traitance(self):
+        """Calcule le montant restant à payer aux sous-traitants"""
+        return self.montant_total_sous_traitance - self.montant_total_paye_sous_traitance
 
 
 class AppelOffres(models.Model):
@@ -1175,6 +1207,13 @@ def recalc_aggregates_on_override_change(sender, instance: AgencyExpenseOverride
         pass
 
 class SousTraitant(models.Model):
+    TYPE_CHOICES = [
+        ('NETTOYAGE', 'Nettoyage'),
+        ('BTP', 'BTP'),
+        ('TCE', 'TCE'),
+        ('AUTRE', 'Autre'),
+    ]
+    
     entreprise = models.CharField(max_length=255)
     capital = models.DecimalField(max_digits=15, decimal_places=2)
     adresse = models.CharField(max_length=255)
@@ -1184,6 +1223,7 @@ class SousTraitant(models.Model):
     numero_rcs = models.CharField(max_length=100, unique=True)
     representant = models.CharField(max_length=255)
     email = models.EmailField(max_length=254, blank=True, null=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, blank=True, null=True, verbose_name="Type d'activité")
     date_creation = models.DateTimeField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
 
@@ -1342,23 +1382,66 @@ class PaiementSousTraitant(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_sous_traitant')
     contrat = models.ForeignKey('ContratSousTraitance', on_delete=models.CASCADE, related_name='paiements', null=True, blank=True)
     avenant = models.ForeignKey('AvenantSousTraitance', on_delete=models.CASCADE, related_name='paiements', null=True, blank=True)
-    mois = models.IntegerField()  # 1-12
-    annee = models.IntegerField()
+    # Nouveaux champs pour le paiement global
+    date_paiement = models.DateField()  # Date complète du paiement (remplace mois/année)
     montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2)  # Montant facturé par le sous-traitant ce mois
     date_envoi_facture = models.DateField(null=True, blank=True)
     delai_paiement = models.IntegerField(default=45)  # 45 ou 60 jours
     montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     date_paiement_reel = models.DateField(null=True, blank=True)
+    
+    # Champs conservés pour compatibilité (dépréciés)
+    mois = models.IntegerField(null=True, blank=True)  # Déprécié - utiliser date_paiement
+    annee = models.IntegerField(null=True, blank=True)  # Déprécié - utiliser date_paiement
 
     class Meta:
         verbose_name = "Paiement Sous-Traitant"
         verbose_name_plural = "Paiements Sous-Traitants"
-        ordering = ['chantier', 'sous_traitant', 'annee', 'mois']
-        unique_together = ('chantier', 'sous_traitant', 'mois', 'annee', 'avenant')
+        ordering = ['chantier', 'sous_traitant', 'date_paiement']
+        unique_together = ('chantier', 'sous_traitant', 'date_paiement', 'avenant')
 
     def __str__(self):
         avenant_info = f" - Avenant {self.avenant.numero}" if self.avenant else ""
-        return f"{self.sous_traitant} - {self.chantier} - {self.mois}/{self.annee}{avenant_info}"
+        return f"{self.sous_traitant} - {self.chantier} - {self.date_paiement}{avenant_info}"
+    
+    @property
+    def mois_annee(self):
+        """Propriété pour compatibilité avec l'ancien système"""
+        return f"{self.date_paiement.month:02d}/{self.date_paiement.year}"
+    
+    @property
+    def jours_retard(self):
+        """Calcule les jours de retard si applicable"""
+        if self.date_paiement_reel and self.date_envoi_facture and self.delai_paiement:
+            date_echeance = self.date_envoi_facture + timedelta(days=self.delai_paiement)
+            if self.date_paiement_reel > date_echeance:
+                return (self.date_paiement_reel - date_echeance).days
+        return 0
+
+class PaiementGlobalSousTraitant(models.Model):
+    """Nouveau modèle pour les paiements globaux mensuels des sous-traitants"""
+    sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, related_name='paiements_globaux')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_globaux_sous_traitant')
+    date_paiement = models.DateField()  # Date complète du paiement
+    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2)
+    date_paiement_reel = models.DateField(null=True, blank=True)
+    commentaire = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Paiement Global Sous-Traitant"
+        verbose_name_plural = "Paiements Globaux Sous-Traitants"
+        ordering = ['chantier', 'sous_traitant', 'date_paiement']
+        unique_together = ('chantier', 'sous_traitant', 'date_paiement')
+
+    def __str__(self):
+        return f"{self.sous_traitant} - {self.chantier} - {self.date_paiement} - {self.montant_paye_ht}€"
+    
+    @property
+    def mois_annee(self):
+        """Retourne le mois/année formaté"""
+        return f"{self.date_paiement.month:02d}/{self.date_paiement.year}"
 
 class PaiementFournisseurMateriel(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_materiel')
