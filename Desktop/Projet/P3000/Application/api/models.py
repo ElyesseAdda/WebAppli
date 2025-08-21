@@ -790,7 +790,7 @@ class Partie(models.Model):
 
 class SousPartie(models.Model):
     partie = models.ForeignKey(Partie, related_name='sous_parties', on_delete=models.CASCADE)
-    description = models.CharField(max_length=255, null=False, blank=False)
+    description = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return f'{self.description} - {self.partie.titre}'

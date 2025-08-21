@@ -679,6 +679,7 @@
           </tr>
           {% endfor %}
           {% for sous_partie in partie.sous_parties %}
+          {% if sous_partie.description != "Lignes directes" %}
           <tr class="sous-partie">
             <td colspan="5">
               {{ sous_partie.description }}
@@ -710,6 +711,7 @@
               </td>
           </tr>
           {% endfor %}
+          {% endif %}
           {% for ligne in sous_partie.lignes_details %}
           <tr>
             <td class="ligne-details">{{ ligne.description }}</td>

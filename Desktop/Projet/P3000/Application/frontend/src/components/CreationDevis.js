@@ -2463,7 +2463,10 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                   </Box>
                   <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                     <Typography variant="subtitle1">
-                      {sousPartie.description}
+                      {sousPartie.description === "Lignes directes"
+                        ? parties.find((p) => p.id === sousPartie.partie)
+                            ?.titre || sousPartie.description
+                        : sousPartie.description}
                     </Typography>
                     <Button
                       size="small"

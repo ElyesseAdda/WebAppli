@@ -105,6 +105,11 @@ const CreatePartieModal = ({
   const [existingUnites, setExistingUnites] = useState([]);
   const [openTauxFixeModal, setOpenTauxFixeModal] = useState(false);
 
+  // Fonction pour détecter si une partie a des "Lignes directes"
+  const getPartiesWithLignesDirectes = () => {
+    return existingParties.filter((partie) => partie.has_lignes_directes);
+  };
+
   // Fonction pour réinitialiser tous les états du modal
   const resetModalState = () => {
     setCreationType("partie");
@@ -202,70 +207,68 @@ const CreatePartieModal = ({
 
         // 2. Créer les sous-parties une par une
         for (const sousPartie of sousParties) {
-          if (sousPartie.description.trim()) {
-            try {
-              // Créer la sous-partie
-              const sousPartieResponse = await axios.post(
-                "/api/sous-parties/",
-                {
-                  description: sousPartie.description,
-                  partie: partieResponse.data.id,
-                }
-              );
-              console.log("Sous-partie créée:", sousPartieResponse.data);
+          // Si la description est vide, on crée une "Lignes directes"
+          const description = sousPartie.description.trim() || "";
 
-              // Attendre que la sous-partie soit bien créée
-              await new Promise((resolve) => setTimeout(resolve, 100));
+          try {
+            // Créer la sous-partie (même si description est vide, le backend créera "Lignes directes")
+            const sousPartieResponse = await axios.post("/api/sous-parties/", {
+              description: description,
+              partie: partieResponse.data.id,
+            });
+            console.log("Sous-partie créée:", sousPartieResponse.data);
 
-              // 3. Créer les lignes une par une pour cette sous-partie
-              const lignesCreees = [];
-              for (const ligne of sousPartie.lignes) {
-                if (ligne.description.trim()) {
-                  try {
-                    // Vérifier et convertir les valeurs numériques
-                    const cout_main_oeuvre =
-                      parseFloat(ligne.cout_main_oeuvre) || 0;
-                    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
-                    const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
-                    const marge = parseFloat(ligne.marge) || 0;
+            // Attendre que la sous-partie soit bien créée
+            await new Promise((resolve) => setTimeout(resolve, 100));
 
-                    const ligneData = {
-                      description: ligne.description.trim(),
-                      unite: ligne.unite.trim() || "unité",
-                      cout_main_oeuvre: cout_main_oeuvre,
-                      cout_materiel: cout_materiel,
-                      taux_fixe: taux_fixe,
-                      marge: marge,
-                      sous_partie: sousPartieResponse.data.id,
-                    };
+            // 3. Créer les lignes une par une pour cette sous-partie
+            const lignesCreees = [];
+            for (const ligne of sousPartie.lignes) {
+              if (ligne.description.trim()) {
+                try {
+                  // Vérifier et convertir les valeurs numériques
+                  const cout_main_oeuvre =
+                    parseFloat(ligne.cout_main_oeuvre) || 0;
+                  const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+                  const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
+                  const marge = parseFloat(ligne.marge) || 0;
 
-                    console.log("Tentative de création de ligne:", ligneData);
-                    const ligneResponse = await axios.post(
-                      "/api/ligne-details/",
-                      ligneData
-                    );
-                    console.log("Ligne créée:", ligneResponse.data);
-                    lignesCreees.push(ligneResponse.data);
-                  } catch (error) {
-                    console.error(
-                      "Erreur création ligne:",
-                      error.response?.data || error
-                    );
-                    throw new Error(
-                      `Erreur lors de la création de la ligne ${ligne.description}`
-                    );
-                  }
+                  const ligneData = {
+                    description: ligne.description.trim(),
+                    unite: ligne.unite.trim() || "unité",
+                    cout_main_oeuvre: cout_main_oeuvre,
+                    cout_materiel: cout_materiel,
+                    taux_fixe: taux_fixe,
+                    marge: marge,
+                    sous_partie: sousPartieResponse.data.id,
+                  };
+
+                  console.log("Tentative de création de ligne:", ligneData);
+                  const ligneResponse = await axios.post(
+                    "/api/ligne-details/",
+                    ligneData
+                  );
+                  console.log("Ligne créée:", ligneResponse.data);
+                  lignesCreees.push(ligneResponse.data);
+                } catch (error) {
+                  console.error(
+                    "Erreur création ligne:",
+                    error.response?.data || error
+                  );
+                  throw new Error(
+                    `Erreur lors de la création de la ligne ${ligne.description}`
+                  );
                 }
               }
-
-              sousPartiesData.push({
-                ...sousPartieResponse.data,
-                lignes_details: lignesCreees,
-              });
-            } catch (error) {
-              console.error("Erreur création sous-partie:", error);
-              throw error;
             }
+
+            sousPartiesData.push({
+              ...sousPartieResponse.data,
+              lignes_details: lignesCreees,
+            });
+          } catch (error) {
+            console.error("Erreur création sous-partie:", error);
+            throw error;
           }
         }
 
@@ -376,6 +379,55 @@ const CreatePartieModal = ({
           type: "ligne",
           data: lignesCreees,
         };
+      } else if (creationType === "lignesDirectes") {
+        if (!selectedPartieId) {
+          alert("Veuillez sélectionner une partie.");
+          return;
+        }
+
+        // Trouver la sous-partie "Lignes directes" de cette partie
+        const partie = existingParties.find((p) => p.id === selectedPartieId);
+        const sousPartieLignesDirectes = partie?.sous_parties?.find(
+          (sp) => sp.description === "Lignes directes"
+        );
+
+        if (!sousPartieLignesDirectes) {
+          alert(
+            "Cette partie n'a pas de lignes directes. Veuillez d'abord créer une partie avec des lignes directes."
+          );
+          return;
+        }
+
+        // Filtrer les lignes valides
+        const lignesValides = sousParties[0].lignes.filter((ligne) =>
+          ligne.description.trim()
+        );
+
+        if (lignesValides.length === 0) {
+          alert("Veuillez saisir au moins une ligne valide.");
+          return;
+        }
+
+        // Créer toutes les lignes dans la sous-partie "Lignes directes"
+        const lignesPromises = lignesValides.map((ligne) =>
+          axios.post("/api/ligne-details/", {
+            description: ligne.description.trim(),
+            unite: ligne.unite.trim() || "unité",
+            cout_main_oeuvre: parseFloat(ligne.cout_main_oeuvre) || 0,
+            cout_materiel: parseFloat(ligne.cout_materiel) || 0,
+            taux_fixe: parseFloat(ligne.taux_fixe) || 0,
+            marge: parseFloat(ligne.marge) || 0,
+            sous_partie: sousPartieLignesDirectes.id,
+          })
+        );
+
+        const responses = await Promise.all(lignesPromises);
+        const lignesCreees = responses.map((response) => response.data);
+
+        createdData = {
+          type: "lignesDirectes",
+          data: lignesCreees,
+        };
       }
 
       onPartieCreated(createdData);
@@ -460,17 +512,31 @@ const CreatePartieModal = ({
                   control={<Radio />}
                   label="Ligne de détail"
                 />
+                <FormControlLabel
+                  value="lignesDirectes"
+                  control={<Radio />}
+                  label="Ajouter lignes à une partie existante"
+                />
               </RadioGroup>
             </FormControl>
 
-            {(creationType === "sousPartie" || creationType === "ligne") && (
+            {(creationType === "sousPartie" ||
+              creationType === "ligne" ||
+              creationType === "lignesDirectes") && (
               <FormControl fullWidth>
-                <InputLabel>Sélectionner une partie</InputLabel>
+                <InputLabel>
+                  {creationType === "lignesDirectes"
+                    ? "Sélectionner une partie avec lignes directes"
+                    : "Sélectionner une partie"}
+                </InputLabel>
                 <Select
                   value={selectedPartieId}
                   onChange={(e) => setSelectedPartieId(e.target.value)}
                 >
-                  {existingParties.map((partie) => (
+                  {(creationType === "lignesDirectes"
+                    ? getPartiesWithLignesDirectes()
+                    : existingParties
+                  ).map((partie) => (
                     <MenuItem key={partie.id} value={partie.id}>
                       {partie.titre}
                     </MenuItem>
@@ -495,26 +561,52 @@ const CreatePartieModal = ({
               </FormControl>
             )}
 
-            {creationType === "partie" && (
+            {creationType === "lignesDirectes" && selectedPartieId && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Ajouter des lignes à la partie "
+                  {
+                    existingParties.find((p) => p.id === selectedPartieId)
+                      ?.titre
+                  }
+                  "
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 2 }}
+                >
+                  Ces lignes seront ajoutées aux lignes directes existantes de
+                  cette partie.
+                </Typography>
+              </Box>
+            )}
+
+            {(creationType === "partie" ||
+              creationType === "lignesDirectes") && (
               <>
-                <TextField
-                  label="Titre de la partie"
-                  value={partieTitle}
-                  onChange={(e) => setPartieTitle(e.target.value)}
-                />
-                <FormControl fullWidth>
-                  <InputLabel>Type de la partie</InputLabel>
-                  <Select
-                    value={selectedPartieType}
-                    onChange={(e) => setSelectedPartieType(e.target.value)}
-                  >
-                    {partieTypes.map((type) => (
-                      <MenuItem key={type.value} value={type.value}>
-                        {type.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                {creationType === "partie" && (
+                  <>
+                    <TextField
+                      label="Titre de la partie"
+                      value={partieTitle}
+                      onChange={(e) => setPartieTitle(e.target.value)}
+                    />
+                    <FormControl fullWidth>
+                      <InputLabel>Type de la partie</InputLabel>
+                      <Select
+                        value={selectedPartieType}
+                        onChange={(e) => setSelectedPartieType(e.target.value)}
+                      >
+                        {partieTypes.map((type) => (
+                          <MenuItem key={type.value} value={type.value}>
+                            {type.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </>
+                )}
 
                 {sousParties.map((sousPartie, spIndex) => (
                   <Box
@@ -526,16 +618,18 @@ const CreatePartieModal = ({
                       mt: 2,
                     }}
                   >
-                    <TextField
-                      fullWidth
-                      label="Description de la sous-partie"
-                      value={sousPartie.description}
-                      onChange={(e) => {
-                        const newSousParties = [...sousParties];
-                        newSousParties[spIndex].description = e.target.value;
-                        setSousParties(newSousParties);
-                      }}
-                    />
+                    {creationType !== "lignesDirectes" && (
+                      <TextField
+                        fullWidth
+                        label="Description de la sous-partie"
+                        value={sousPartie.description}
+                        onChange={(e) => {
+                          const newSousParties = [...sousParties];
+                          newSousParties[spIndex].description = e.target.value;
+                          setSousParties(newSousParties);
+                        }}
+                      />
+                    )}
 
                     {sousPartie.lignes.map((ligne, ligneIndex) => (
                       <Box
