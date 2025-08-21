@@ -6,19 +6,27 @@ import CreationPartie from "./CreationPartie";
 
 const ListePartiesSousParties = () => {
   const [parties, setParties] = useState([]);
+  const [selectedPartieType, setSelectedPartieType] = useState("PEINTURE");
   const [editMode, setEditMode] = useState({});
   const [editValue, setEditValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Charger les parties au démarrage
-  useEffect(() => {
-    loadParties();
-  }, []);
+  const partieTypes = [
+    { value: "PEINTURE", label: "Peinture" },
+    { value: "FACADE", label: "Façade" },
+    { value: "TCE", label: "TCE" },
+  ];
 
-  // Charger les parties existantes
-  const loadParties = () => {
+  // Charger les parties au démarrage et quand le type change
+  useEffect(() => {
+    loadParties(selectedPartieType);
+  }, [selectedPartieType]);
+
+  // Charger les parties existantes filtrées par type
+  const loadParties = (type = null) => {
+    const url = type ? `/api/parties/?type=${type}` : "/api/parties/";
     axios
-      .get("/api/parties/")
+      .get(url)
       .then((response) => {
         setParties(response.data);
       })
@@ -165,6 +173,27 @@ const ListePartiesSousParties = () => {
 
   return (
     <div className="main-container">
+      {/* Sélecteur de type */}
+      <div className="searchbar-container" style={{ marginBottom: "20px" }}>
+        <select
+          value={selectedPartieType}
+          onChange={(e) => setSelectedPartieType(e.target.value)}
+          style={{
+            padding: "10px",
+            borderRadius: "5px",
+            border: "1px solid #ccc",
+            fontSize: "16px",
+            width: "200px",
+          }}
+        >
+          {partieTypes.map((type) => (
+            <option key={type.value} value={type.value}>
+              {type.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Barre de recherche */}
       <div className="searchbar-container">
         <FaSearch className="search-icon" />
@@ -179,7 +208,7 @@ const ListePartiesSousParties = () => {
 
       {/* Liste des Parties et Sous-Parties */}
       <div className="list-sousPartie">
-        <h2>Liste des Parties et Sous-Parties</h2>
+        <h2>Liste des Parties et Sous-Parties ({selectedPartieType})</h2>
         <div>
           {filteredParties.map((partie) => (
             <div key={partie.id}>

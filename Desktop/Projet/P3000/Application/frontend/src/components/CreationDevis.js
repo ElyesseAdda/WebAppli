@@ -80,6 +80,7 @@ const CreationDevis = () => {
   const [selectedChantierId, setSelectedChantierId] = useState(null);
   const [parties, setParties] = useState([]);
   const [selectedParties, setSelectedParties] = useState([]);
+  const [selectedPartieType, setSelectedPartieType] = useState("PEINTURE");
   const [sousParties, setSousParties] = useState([]);
   const [filteredSousParties, setFilteredSousParties] = useState([]);
   const [selectedSousParties, setSelectedSousParties] = useState([]);
@@ -91,7 +92,13 @@ const CreationDevis = () => {
   const [customTauxFixes, setCustomTauxFixes] = useState({});
   const [customMarges, setCustomMarges] = useState({});
   const [showCreationPartie, setShowCreationPartie] = useState(false); // État pour afficher ou masquer CreationPartie.js
-  const [isPreviewed, setIsPreviewed] = useState(false); // Nouvel état pour savoir si le devis a été prévisualisé
+  const [isPreviewed, setIsPreviewed] = useState(false);
+
+  const partieTypes = [
+    { value: "PEINTURE", label: "Peinture" },
+    { value: "FACADE", label: "Façade" },
+    { value: "TCE", label: "TCE" },
+  ]; // Nouvel état pour savoir si le devis a été prévisualisé
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
   const [showClientForm, setShowClientForm] = useState(false);
   const [societeId, setSocieteId] = useState(null);
@@ -203,28 +210,26 @@ const CreationDevis = () => {
     }
   };
 
-  // Charger les parties liées au chantier sélectionné
+  // Charger les parties filtrées par type
   useEffect(() => {
-    if (selectedChantierId) {
-      setError(null);
-      axios
-        .get("/api/parties/", { params: { chantier: selectedChantierId } })
-        .then((response) => {
-          setParties(response.data);
-        })
-        .catch((error) => {
-          console.error("Erreur lors du chargement des parties", error);
-          setError("Impossible de charger les parties du chantier");
-          setErrorDetails({
-            message: "Erreur lors de la récupération des parties",
-            details: error.response?.data?.detail || error.message,
-            code: error.response?.status,
-            chantierId: selectedChantierId,
-            timestamp: new Date().toISOString(),
-          });
+    setError(null);
+    const params = { type: selectedPartieType };
+    axios
+      .get("/api/parties/", { params })
+      .then((response) => {
+        setParties(response.data);
+      })
+      .catch((error) => {
+        console.error("Erreur lors du chargement des parties", error);
+        setError("Impossible de charger les parties");
+        setErrorDetails({
+          message: "Erreur lors de la récupération des parties",
+          details: error.response?.data?.detail || error.message,
+          code: error.response?.status,
+          timestamp: new Date().toISOString(),
         });
-    }
-  }, [selectedChantierId]);
+      });
+  }, [selectedPartieType]);
 
   // Charger toutes les sous-parties
   useEffect(() => {
@@ -2167,7 +2172,24 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
           </Box>
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>
-              Parties
+              Type de domaine
+            </Typography>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <Select
+                value={selectedPartieType}
+                onChange={(e) => setSelectedPartieType(e.target.value)}
+                displayEmpty
+              >
+                {partieTypes.map((type) => (
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Typography variant="h6" gutterBottom>
+              Parties ({selectedPartieType})
             </Typography>
             <Accordion>
               <AccordionSummary
@@ -2441,7 +2463,10 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                   </Box>
                   <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                     <Typography variant="subtitle1">
-                      {sousPartie.description}
+                      {sousPartie.description === "Lignes directes"
+                        ? parties.find((p) => p.id === sousPartie.partie)
+                            ?.titre || sousPartie.description
+                        : sousPartie.description}
                     </Typography>
                     <Button
                       size="small"

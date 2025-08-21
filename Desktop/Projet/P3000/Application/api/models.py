@@ -774,7 +774,14 @@ class Quitus(models.Model):
         return f"Quitus {self.id}"
 
 class Partie(models.Model):
+    TYPE_CHOICES = [
+        ('PEINTURE', 'Peinture'),
+        ('FACADE', 'Façade'),
+        ('TCE', 'TCE'),
+    ]
+    
     titre = models.CharField(max_length=500, null=False, blank=False)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='PEINTURE', help_text="Domaine d'activité de la partie")
 
     def __str__(self):
         # Assurez-vous que "titre" n'est pas None avant de l'afficher
@@ -783,7 +790,7 @@ class Partie(models.Model):
 
 class SousPartie(models.Model):
     partie = models.ForeignKey(Partie, related_name='sous_parties', on_delete=models.CASCADE)
-    description = models.CharField(max_length=255, null=False, blank=False)
+    description = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return f'{self.description} - {self.partie.titre}'

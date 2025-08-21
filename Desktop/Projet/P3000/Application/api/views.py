@@ -590,6 +590,14 @@ class PartieViewSet(viewsets.ModelViewSet):
     serializer_class = PartieSerializer
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        type_filter = self.request.query_params.get('type')
+        
+        if type_filter:
+            queryset = queryset.filter(type=type_filter)
+        return queryset
+
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()
     serializer_class = SousPartieSerializer
@@ -1066,10 +1074,6 @@ def check_nom_devis_existe(request):
         return JsonResponse({'exists': exists})
     return JsonResponse({'error': 'Nom de devis non fourni'}, status=400)
 
-
-class PartieViewSet(viewsets.ModelViewSet):
-    queryset = Partie.objects.all()
-    serializer_class = PartieSerializer
 
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()

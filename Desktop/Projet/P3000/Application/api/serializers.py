@@ -190,53 +190,83 @@ class SousPartieSerializer(serializers.ModelSerializer):
         """
         Vérifie si une sous-partie similaire existe déjà dans la même partie
         """
-        description = data.get('description', '').strip().lower()
+        description = data.get('description', '').strip()
         partie = data.get('partie')
         
+        # Si la description est vide, on la remplace par "Lignes directes"
+        if not description or description.strip() == "":
+            data['description'] = "Lignes directes"
+            description = "Lignes directes"
+        
         if description and partie:
-            # Vérifie si une sous-partie avec la même description existe dans la partie
-            existing_sous_partie = SousPartie.objects.filter(
-                Q(description__iexact=description) &
-                Q(partie=partie)
-            ).first()
-            
-            if existing_sous_partie:
-                nb_lignes = existing_sous_partie.lignes_details.count()
-                raise serializers.ValidationError({
-                    'description': f'Cette sous-partie existe déjà dans la partie "{partie.titre}". '
-                                 f'Détails de la sous-partie existante : '
-                                 f'Description: {existing_sous_partie.description}, '
-                                 f'Nombre de lignes: {nb_lignes}'
-                })
+            # Vérifie si une sous-partie "Lignes directes" existe déjà dans la partie
+            if description == "Lignes directes":
+                existing_sous_partie = SousPartie.objects.filter(
+                    description="Lignes directes",
+                    partie=partie
+                ).first()
+                
+                if existing_sous_partie:
+                    nb_lignes = existing_sous_partie.lignes_details.count()
+                    raise serializers.ValidationError({
+                        'description': f'Cette partie a déjà des lignes directes. '
+                                     f'Nombre de lignes existantes : {nb_lignes}. '
+                                     f'Vous pouvez ajouter des lignes supplémentaires à cette sous-partie existante.'
+                    })
+            else:
+                # Vérifie si une sous-partie avec la même description existe dans la partie
+                existing_sous_partie = SousPartie.objects.filter(
+                    Q(description__iexact=description) &
+                    Q(partie=partie)
+                ).first()
+                
+                if existing_sous_partie:
+                    nb_lignes = existing_sous_partie.lignes_details.count()
+                    raise serializers.ValidationError({
+                        'description': f'Cette sous-partie existe déjà dans la partie "{partie.titre}". '
+                                     f'Détails de la sous-partie existante : '
+                                     f'Description: {existing_sous_partie.description}, '
+                                     f'Nombre de lignes: {nb_lignes}'
+                    })
         
         return data
 
 class PartieSerializer(serializers.ModelSerializer):
     sous_parties = SousPartieSerializer(many=True, read_only=True)
+    has_lignes_directes = serializers.SerializerMethodField()
 
     class Meta:
         model = Partie
         fields = '__all__'
 
+    def get_has_lignes_directes(self, obj):
+        """
+        Retourne True si la partie a une sous-partie "Lignes directes"
+        """
+        return obj.sous_parties.filter(description="Lignes directes").exists()
+
     def validate(self, data):
         """
-        Vérifie si une partie avec le même titre existe déjà
+        Vérifie si une partie avec le même titre existe déjà dans le même type
         """
         titre = data.get('titre', '').strip().lower()
+        type_partie = data.get('type')
         
-        if titre:
-            # Vérifie si une partie avec le même titre existe
+        if titre and type_partie:
+            # Vérifie si une partie avec le même titre existe dans le même type
             existing_partie = Partie.objects.filter(
-                titre__iexact=titre
+                titre__iexact=titre,
+                type=type_partie
             ).first()
             
             if existing_partie:
                 nb_sous_parties = existing_partie.sous_parties.count()
                 total_lignes = sum(sp.lignes_details.count() for sp in existing_partie.sous_parties.all())
                 raise serializers.ValidationError({
-                    'titre': f'Cette partie existe déjà. '
+                    'titre': f'Cette partie existe déjà dans le domaine "{existing_partie.get_type_display()}". '
                             f'Détails de la partie existante : '
                             f'Titre: {existing_partie.titre}, '
+                            f'Type: {existing_partie.get_type_display()}, '
                             f'Nombre de sous-parties: {nb_sous_parties}, '
                             f'Nombre total de lignes: {total_lignes}'
                 })

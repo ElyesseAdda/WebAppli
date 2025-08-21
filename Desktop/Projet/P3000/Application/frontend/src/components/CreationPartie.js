@@ -8,6 +8,7 @@ const CreationPartie = ({ refreshData }) => {
   const [creationType, setCreationType] = useState(""); // 'partie', 'sousPartie', 'ligne'
   const [newPartie, setNewPartie] = useState("");
   const [newSousPartie, setNewSousPartie] = useState("");
+  const [selectedPartieType, setSelectedPartieType] = useState("PEINTURE");
   const [lignesDetails, setLignesDetails] = useState([]);
 
   const [selectedPartieId, setSelectedPartieId] = useState("");
@@ -15,13 +16,20 @@ const CreationPartie = ({ refreshData }) => {
   const [parties, setParties] = useState([]);
   const [sousPartiesFiltered, setSousPartiesFiltered] = useState([]); // Sous-parties filtrées
 
+  const partieTypes = [
+    { value: "PEINTURE", label: "Peinture" },
+    { value: "FACADE", label: "Façade" },
+    { value: "TCE", label: "TCE" },
+  ];
+
   useEffect(() => {
     loadParties();
   }, []);
 
-  const loadParties = () => {
+  const loadParties = (type = null) => {
+    const url = type ? `/api/parties/?type=${type}` : "/api/parties/";
     axios
-      .get("/api/parties/")
+      .get(url)
       .then((response) => {
         setParties(response.data);
       })
@@ -64,7 +72,7 @@ const CreationPartie = ({ refreshData }) => {
       }
 
       axios
-        .post("/api/parties/", { titre: newPartie })
+        .post("/api/parties/", { titre: newPartie, type: selectedPartieType })
         .then((response) => {
           const partieId = response.data.id;
 
@@ -178,6 +186,7 @@ const CreationPartie = ({ refreshData }) => {
   const resetForm = () => {
     setNewPartie("");
     setNewSousPartie("");
+    setSelectedPartieType("PEINTURE");
     setSelectedPartieId("");
     setSelectedSousPartieId("");
     setLignesDetails([]);
@@ -220,6 +229,19 @@ const CreationPartie = ({ refreshData }) => {
           {/* Section Nouvelle Partie */}
           {creationType === "partie" && (
             <div className="new-creation-section">
+              <div>
+                <label>Type de domaine: </label>
+                <select
+                  value={selectedPartieType}
+                  onChange={(e) => setSelectedPartieType(e.target.value)}
+                >
+                  {partieTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label>Nouvelle Partie: </label>
                 <input
@@ -285,6 +307,23 @@ const CreationPartie = ({ refreshData }) => {
           {creationType === "sousPartie" && (
             <div className="new-creation-section">
               <div>
+                <label>Type de domaine: </label>
+                <select
+                  value={selectedPartieType}
+                  onChange={(e) => {
+                    setSelectedPartieType(e.target.value);
+                    setSelectedPartieId("");
+                    loadParties(e.target.value);
+                  }}
+                >
+                  {partieTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label>Associer à une Partie: </label>
                 <select
                   value={selectedPartieId}
@@ -296,7 +335,11 @@ const CreationPartie = ({ refreshData }) => {
                   <option value="">-- Sélectionner une Partie --</option>
                   {parties.map((partie) => (
                     <option key={partie.id} value={partie.id}>
-                      {partie.titre}
+                      {partie.titre} (
+                      {partie.get_type_display
+                        ? partie.get_type_display()
+                        : partie.type}
+                      )
                     </option>
                   ))}
                 </select>
@@ -357,6 +400,25 @@ const CreationPartie = ({ refreshData }) => {
           {/* Section Nouvelle Ligne de Détail */}
           {creationType === "ligne" && (
             <div className="new-creation-section">
+              {/* Sélection du Type */}
+              <div>
+                <label>Type de domaine: </label>
+                <select
+                  value={selectedPartieType}
+                  onChange={(e) => {
+                    setSelectedPartieType(e.target.value);
+                    setSelectedPartieId("");
+                    setSelectedSousPartieId("");
+                    loadParties(e.target.value);
+                  }}
+                >
+                  {partieTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {/* Sélection de la Partie */}
               <div>
                 <label>Associer à une Partie: </label>
@@ -370,7 +432,11 @@ const CreationPartie = ({ refreshData }) => {
                   <option value="">-- Sélectionner une Partie --</option>
                   {parties.map((partie) => (
                     <option key={partie.id} value={partie.id}>
-                      {partie.titre}
+                      {partie.titre} (
+                      {partie.get_type_display
+                        ? partie.get_type_display()
+                        : partie.type}
+                      )
                     </option>
                   ))}
                 </select>
