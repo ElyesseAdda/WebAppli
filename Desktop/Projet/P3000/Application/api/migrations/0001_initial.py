@@ -693,7 +693,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='facture',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('annee_situation__isnull', False), ('mois_situation__isnull', False), ('type_facture', 'cie')), models.Q(('type_facture', 'cie'), _negated=True), _connector='OR'), name='cie_requires_situation_date'),
+            constraint=models.CheckConstraint(check=models.Q(models.Q(('annee_situation__isnull', False), ('mois_situation__isnull', False), ('type_facture', 'cie')), models.Q(('type_facture', 'cie'), _negated=True), _connector='OR'), name='cie_requires_situation_date'),
         ),
         migrations.AlterUniqueTogether(
             name='facturets',
