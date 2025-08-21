@@ -30,7 +30,15 @@ const CreatePartieModal = ({
   const [partieTitle, setPartieTitle] = useState("");
   const [selectedPartieId, setSelectedPartieId] = useState("");
   const [selectedSousPartieId, setSelectedSousPartieId] = useState("");
+  const [selectedPartieType, setSelectedPartieType] = useState("PEINTURE");
   const [defaultTauxFixe, setDefaultTauxFixe] = useState("20"); // Valeur par défaut temporaire
+
+  // Types de parties disponibles
+  const partieTypes = [
+    { value: "PEINTURE", label: "Peinture" },
+    { value: "FACADE", label: "Façade" },
+    { value: "TCE", label: "TCE" },
+  ];
 
   // Charger le taux fixe et les unités existantes depuis le backend
   useEffect(() => {
@@ -183,6 +191,7 @@ const CreatePartieModal = ({
         // 1. Créer la partie
         const partieResponse = await axios.post("/api/parties/", {
           titre: partieTitle,
+          type: selectedPartieType,
           cout_estime_main_oeuvre: 0,
           cout_estime_materiel: 0,
           marge_estimee: 0,
@@ -382,6 +391,7 @@ const CreatePartieModal = ({
     setPartieTitle("");
     setSelectedPartieId("");
     setSelectedSousPartieId("");
+    setSelectedPartieType("PEINTURE");
     setSousParties([
       {
         description: "",
@@ -492,6 +502,19 @@ const CreatePartieModal = ({
                   value={partieTitle}
                   onChange={(e) => setPartieTitle(e.target.value)}
                 />
+                <FormControl fullWidth>
+                  <InputLabel>Type de la partie</InputLabel>
+                  <Select
+                    value={selectedPartieType}
+                    onChange={(e) => setSelectedPartieType(e.target.value)}
+                  >
+                    {partieTypes.map((type) => (
+                      <MenuItem key={type.value} value={type.value}>
+                        {type.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
                 {sousParties.map((sousPartie, spIndex) => (
                   <Box

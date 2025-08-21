@@ -220,23 +220,26 @@ class PartieSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Vérifie si une partie avec le même titre existe déjà
+        Vérifie si une partie avec le même titre existe déjà dans le même type
         """
         titre = data.get('titre', '').strip().lower()
+        type_partie = data.get('type')
         
-        if titre:
-            # Vérifie si une partie avec le même titre existe
+        if titre and type_partie:
+            # Vérifie si une partie avec le même titre existe dans le même type
             existing_partie = Partie.objects.filter(
-                titre__iexact=titre
+                titre__iexact=titre,
+                type=type_partie
             ).first()
             
             if existing_partie:
                 nb_sous_parties = existing_partie.sous_parties.count()
                 total_lignes = sum(sp.lignes_details.count() for sp in existing_partie.sous_parties.all())
                 raise serializers.ValidationError({
-                    'titre': f'Cette partie existe déjà. '
+                    'titre': f'Cette partie existe déjà dans le domaine "{existing_partie.get_type_display()}". '
                             f'Détails de la partie existante : '
                             f'Titre: {existing_partie.titre}, '
+                            f'Type: {existing_partie.get_type_display()}, '
                             f'Nombre de sous-parties: {nb_sous_parties}, '
                             f'Nombre total de lignes: {total_lignes}'
                 })

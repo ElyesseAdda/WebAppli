@@ -774,7 +774,14 @@ class Quitus(models.Model):
         return f"Quitus {self.id}"
 
 class Partie(models.Model):
+    TYPE_CHOICES = [
+        ('PEINTURE', 'Peinture'),
+        ('FACADE', 'Façade'),
+        ('TCE', 'TCE'),
+    ]
+    
     titre = models.CharField(max_length=500, null=False, blank=False)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='PEINTURE', help_text="Domaine d'activité de la partie")
 
     def __str__(self):
         # Assurez-vous que "titre" n'est pas None avant de l'afficher

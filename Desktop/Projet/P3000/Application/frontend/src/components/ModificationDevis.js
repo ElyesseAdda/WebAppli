@@ -70,6 +70,7 @@ const ModificationDevis = () => {
   const [selectedChantierId, setSelectedChantierId] = useState(null);
   const [parties, setParties] = useState([]);
   const [selectedParties, setSelectedParties] = useState([]);
+  const [selectedPartieType, setSelectedPartieType] = useState("PEINTURE");
   const [sousParties, setSousParties] = useState([]);
   const [filteredSousParties, setFilteredSousParties] = useState([]);
   const [selectedSousParties, setSelectedSousParties] = useState([]);
@@ -77,6 +78,12 @@ const ModificationDevis = () => {
   const [filteredLignesDetails, setFilteredLignesDetails] = useState([]);
   const [quantities, setQuantities] = useState({});
   const [customPrices, setCustomPrices] = useState({});
+
+  const partieTypes = [
+    { value: "PEINTURE", label: "Peinture" },
+    { value: "FACADE", label: "Façade" },
+    { value: "TCE", label: "TCE" },
+  ];
 
   // Nouveaux états pour les coûts détaillés
   const [customCouts, setCustomCouts] = useState({});
@@ -298,28 +305,26 @@ const ModificationDevis = () => {
     fetchTauxFixe();
   }, []);
 
-  // Charger les parties liées au chantier sélectionné
+  // Charger les parties filtrées par type
   useEffect(() => {
-    if (selectedChantierId) {
-      setError(null);
-      axios
-        .get("/api/parties/", { params: { chantier: selectedChantierId } })
-        .then((response) => {
-          setParties(response.data);
-        })
-        .catch((error) => {
-          console.error("Erreur lors du chargement des parties", error);
-          setError("Impossible de charger les parties du chantier");
-          setErrorDetails({
-            message: "Erreur lors de la récupération des parties",
-            details: error.response?.data?.detail || error.message,
-            code: error.response?.status,
-            chantierId: selectedChantierId,
-            timestamp: new Date().toISOString(),
-          });
+    setError(null);
+    const params = { type: selectedPartieType };
+    axios
+      .get("/api/parties/", { params })
+      .then((response) => {
+        setParties(response.data);
+      })
+      .catch((error) => {
+        console.error("Erreur lors du chargement des parties", error);
+        setError("Impossible de charger les parties");
+        setErrorDetails({
+          message: "Erreur lors de la récupération des parties",
+          details: error.response?.data?.detail || error.message,
+          code: error.response?.status,
+          timestamp: new Date().toISOString(),
         });
-    }
-  }, [selectedChantierId]);
+      });
+  }, [selectedPartieType]);
 
   // Charger toutes les sous-parties
   useEffect(() => {
@@ -1934,7 +1939,24 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
           </Box>
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>
-              Parties
+              Type de domaine
+            </Typography>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <Select
+                value={selectedPartieType}
+                onChange={(e) => setSelectedPartieType(e.target.value)}
+                displayEmpty
+              >
+                {partieTypes.map((type) => (
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Typography variant="h6" gutterBottom>
+              Parties ({selectedPartieType})
             </Typography>
             <Accordion>
               <AccordionSummary
