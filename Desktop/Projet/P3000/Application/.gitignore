@@ -61,3 +61,10 @@ Thumbs.db
 __pycache__/
 *.pyo
 *.pyd
+# Fichiers de build frontend générés automatiquement
+frontend/static/frontend/main.js
+frontend/static/frontend/main.js.LICENSE.txt
+
+# Fichiers de build frontend
+frontend/static/frontend/
+frontend/static/frontend/src/
