@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, serializers, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
@@ -15,15 +15,31 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import (
+    DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,
+    AppelOffresSerializer, BanqueSerializer, FournisseurSerializer, SousTraitantSerializer, 
+    ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer, PaiementFournisseurMaterielSerializer, 
+    PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, RecapFinancierSerializer, 
+    ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,
+    LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, 
+    StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, 
+    FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, 
+    FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, 
+    SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, 
+    SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer, ChantierLigneSupplementaireSerializer,
+    AgencyExpenseSerializer
+)
 from .models import (
-    TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, 
+    ContratSousTraitance, AvenantSousTraitance, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
-    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementFournisseurMateriel# Changé BonCommandeLigne en LigneBonCommande
+    LigneBonCommande, Fournisseur, FournisseurMagasin, Parametres, Avenant, FactureTS, Situation, 
+    SituationLigne, SituationLigneSupplementaire, ChantierLigneSupplementaire, SituationLigneAvenant,
+    AgencyExpense, AgencyExpenseOverride, PaiementGlobalSousTraitant, PaiementFournisseurMateriel,
+    Banque, AgencyExpenseAggregate
 )
 import logging
 from django.db import transaction, models
@@ -4841,6 +4857,16 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            # Si aucune date de création n'est fournie, utiliser la date actuelle
+            if not serializer.validated_data.get('date_creation'):
+                serializer.validated_data['date_creation'] = timezone.now().date()
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=True, methods=['get', 'post'])
     def avenants(self, request, pk=None):
         contrat = self.get_object()
@@ -4855,6 +4881,9 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
             
             serializer = AvenantSousTraitanceSerializer(data=data)
             if serializer.is_valid():
+                # Si aucune date de création n'est fournie, utiliser la date actuelle
+                if not serializer.validated_data.get('date_creation'):
+                    serializer.validated_data['date_creation'] = timezone.now().date()
                 serializer.save(contrat=contrat)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -4873,6 +4902,16 @@ class AvenantSousTraitanceViewSet(viewsets.ModelViewSet):
         if contrat_id:
             queryset = queryset.filter(contrat_id=contrat_id)
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            # Si aucune date de création n'est fournie, utiliser la date actuelle
+            if not serializer.validated_data.get('date_creation'):
+                serializer.validated_data['date_creation'] = timezone.now().date()
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 def preview_contrat(request, contrat_id):
     try:
@@ -5287,6 +5326,38 @@ class PaiementSousTraitantViewSet(viewsets.ModelViewSet):
         if avenant_id:
             queryset = queryset.filter(avenant_id=avenant_id)
         return queryset
+
+class PaiementGlobalSousTraitantViewSet(viewsets.ModelViewSet):
+    queryset = PaiementGlobalSousTraitant.objects.all()
+    serializer_class = PaiementGlobalSousTraitantSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        sous_traitant_id = self.request.query_params.get('sous_traitant')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        if sous_traitant_id:
+            queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        """Création avec validation du montant total"""
+        chantier_id = request.data.get('chantier')
+        sous_traitant_id = request.data.get('sous_traitant')
+        montant_paye = float(request.data.get('montant_paye_ht', 0))
+        
+        if chantier_id and sous_traitant_id:
+            chantier = Chantier.objects.get(id=chantier_id)
+            montant_total = chantier.montant_total_sous_traitance
+            montant_deja_paye = chantier.montant_total_paye_sous_traitance
+            
+            if montant_deja_paye + montant_paye > montant_total:
+                return Response({
+                    'error': f'Le montant payé ({montant_deja_paye + montant_paye}€) dépasse le montant total ({montant_total}€)'
+                }, status=400)
+        
+        return super().create(request, *args, **kwargs)
 
 class RecapFinancierChantierAPIView(APIView):
     permission_classes = []

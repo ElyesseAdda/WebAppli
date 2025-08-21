@@ -8,7 +8,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
-    Document
+    Document, PaiementGlobalSousTraitant
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -806,13 +806,16 @@ class SousTraitantSerializer(serializers.ModelSerializer):
             'date_creation',
             'date_modification',
             'forme_juridique',
-            'email'
+            'email',
+            'type'
         ]
 
 class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
+    montant_total_contrat_et_avenants = serializers.ReadOnlyField()
+    
     class Meta:
         model = AvenantSousTraitance
-        fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero', 'type_travaux']
+        fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero', 'type_travaux', 'montant_total_contrat_et_avenants']
         read_only_fields = ['date_creation', 'date_modification']
 
 class ContratSousTraitanceSerializer(serializers.ModelSerializer):
@@ -851,11 +854,30 @@ class PaiementSousTraitantSerializer(serializers.ModelSerializer):
             'avenant',
             'mois',
             'annee',
+            'date_paiement',
             'montant_facture_ht',
             'date_envoi_facture',
             'delai_paiement',
             'montant_paye_ht',
             'date_paiement_reel',
+            'mois_annee',
+            'jours_retard',
+        ]
+
+class PaiementGlobalSousTraitantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaiementGlobalSousTraitant
+        fields = [
+            'id',
+            'sous_traitant',
+            'chantier',
+            'date_paiement',
+            'montant_paye_ht',
+            'date_paiement_reel',
+            'commentaire',
+            'created_at',
+            'updated_at',
+            'mois_annee',
         ]
 
 # --- SERIALIZER POUR LE RECAP FINANCIER CHANTIER ---

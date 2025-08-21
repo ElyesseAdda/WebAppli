@@ -15,6 +15,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 
 const AvenantForm = ({ open, onClose, contrat, onSave }) => {
@@ -22,6 +26,7 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
     description: "",
     montant: "",
     type_travaux: "LOT PEINTURE",
+    date_creation: new Date(),
   });
 
   const [avenants, setAvenants] = useState([]);
@@ -52,6 +57,13 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
     }));
   };
 
+  const handleDateCreationChange = (date) => {
+    setFormData((prev) => ({
+      ...prev,
+      date_creation: date,
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -69,6 +81,7 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
             ...formData,
             numero: avenants.length + 1,
             contrat: contrat.id,
+            date_creation: formData.date_creation.toISOString().split("T")[0],
           }),
         }
       );
@@ -154,7 +167,7 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
                 required
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Type de Travaux"
@@ -163,6 +176,21 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
                 onChange={handleChange}
                 required
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <LocalizationProvider
+                dateAdapter={AdapterDateFns}
+                adapterLocale={frLocale}
+              >
+                <DatePicker
+                  label="Date de création de l'avenant"
+                  value={formData.date_creation}
+                  onChange={handleDateCreationChange}
+                  renderInput={(params) => (
+                    <TextField {...params} fullWidth required />
+                  )}
+                />
+              </LocalizationProvider>
             </Grid>
           </Grid>
         </form>

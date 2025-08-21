@@ -23,9 +23,10 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
   const [formData, setFormData] = useState({
     description_prestation: "",
     date_debut: new Date(),
+    date_creation: new Date(),
     duree: "Jusqu'à livraison du chantier",
-    adresse_prestation: chantier?.adresse || "",
-    nom_operation: chantier?.chantier_name || "",
+    adresse_prestation: "",
+    nom_operation: "",
     montant_operation: "",
     type_contrat: "NETTOYAGE",
     nom_maitre_ouvrage: "",
@@ -34,9 +35,18 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
 
   useEffect(() => {
     if (chantier) {
+      // Construction de l'adresse complète du chantier
+      const adresseComplete = [
+        chantier.rue || "",
+        chantier.code_postal || "",
+        chantier.ville || "",
+      ]
+        .filter((part) => part.trim() !== "")
+        .join(", ");
+
       setFormData((prev) => ({
         ...prev,
-        adresse_prestation: chantier.adresse || "",
+        adresse_prestation: adresseComplete,
         nom_operation: chantier.chantier_name || "",
       }));
     }
@@ -54,6 +64,13 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
     setFormData((prev) => ({
       ...prev,
       date_debut: date,
+    }));
+  };
+
+  const handleDateCreationChange = (date) => {
+    setFormData((prev) => ({
+      ...prev,
+      date_creation: date,
     }));
   };
 
@@ -92,6 +109,7 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
         sous_traitant: sousTraitant.id,
         chantier: chantier.id,
         date_debut: formData.date_debut.toISOString().split("T")[0],
+        date_creation: formData.date_creation.toISOString().split("T")[0],
         montant_operation: parseFloat(formData.montant_operation).toFixed(2),
         description_prestation: formData.description_prestation.trim(),
         adresse_prestation: formData.adresse_prestation.trim(),
@@ -185,6 +203,21 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
                   label="Date de début"
                   value={formData.date_debut}
                   onChange={handleDateChange}
+                  renderInput={(params) => (
+                    <TextField {...params} fullWidth required />
+                  )}
+                />
+              </LocalizationProvider>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <LocalizationProvider
+                dateAdapter={AdapterDateFns}
+                adapterLocale={frLocale}
+              >
+                <DatePicker
+                  label="Date de création du contrat"
+                  value={formData.date_creation}
+                  onChange={handleDateCreationChange}
                   renderInput={(params) => (
                     <TextField {...params} fullWidth required />
                   )}
