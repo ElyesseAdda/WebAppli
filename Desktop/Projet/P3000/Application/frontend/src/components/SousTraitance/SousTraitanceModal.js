@@ -46,6 +46,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [showAvenantForm, setShowAvenantForm] = useState(false);
   const [chantier, setChantier] = useState(null);
   const [typeFilter, setTypeFilter] = useState("");
+  const [hasChanges, setHasChanges] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -130,18 +131,17 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
   const handleSousTraitantSave = () => {
     setShowSousTraitantForm(false);
+    setHasChanges(true);
     fetchSousTraitants();
   };
 
   const handleContratSave = async (contratData) => {
     try {
       setShowContratForm(false);
+      setHasChanges(true);
       // Rafraîchir après un court délai pour s'assurer que la base de données est mise à jour
       setTimeout(() => {
         fetchSousTraitants();
-        if (onUpdate) {
-          onUpdate();
-        }
       }, 500);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde du contrat:", error);
@@ -151,12 +151,10 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const handleAvenantSave = async (avenantData) => {
     try {
       setShowAvenantForm(false);
+      setHasChanges(true);
       // Rafraîchir après un court délai pour s'assurer que la base de données est mise à jour
       setTimeout(() => {
         fetchSousTraitants();
-        if (onUpdate) {
-          onUpdate();
-        }
       }, 500);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde de l'avenant:", error);
@@ -182,10 +180,8 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       );
 
       if (response.ok) {
+        setHasChanges(true);
         fetchSousTraitants(); // Rafraîchir la liste
-        if (onUpdate) {
-          onUpdate();
-        }
       } else {
         console.error("Erreur lors de la suppression du contrat");
       }
@@ -209,10 +205,8 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       );
 
       if (response.ok) {
+        setHasChanges(true);
         fetchSousTraitants(); // Rafraîchir la liste
-        if (onUpdate) {
-          onUpdate();
-        }
       } else {
         console.error("Erreur lors de la suppression de l'avenant");
       }
@@ -231,9 +225,20 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     window.open(previewUrl, "_blank");
   };
 
+  const handleModalClose = () => {
+    // Si des modifications ont été faites, déclencher onUpdate
+    if (hasChanges && onUpdate) {
+      onUpdate();
+    }
+    // Réinitialiser l'état des modifications
+    setHasChanges(false);
+    // Fermer le modal
+    onClose();
+  };
+
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <Dialog open={open} onClose={handleModalClose} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box
             display="flex"
@@ -539,7 +544,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
             ))}
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>Fermer</Button>
+          <Button onClick={handleModalClose}>Fermer</Button>
         </DialogActions>
       </Dialog>
 

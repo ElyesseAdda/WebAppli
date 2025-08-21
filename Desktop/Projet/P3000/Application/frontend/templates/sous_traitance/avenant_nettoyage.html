@@ -156,7 +156,7 @@
 
     <h1>
       AVENANT N°{{ avenant.numero }} au CONTRAT DE PRESTATION DE SERVICES<br />du
-      {{ avenant.date_creation|date:"d/m/Y" }}
+      {{ avenant.contrat.date_creation|date:"d/m/Y" }}
     </h1>
 
     <div class="section">
@@ -334,7 +334,7 @@
             class="table-like-cell"
             style="text-align: right; padding: 8px; background-color: white"
           >
-            {{ avenant.contrat.montant_operation|floatformat:2|intcomma }} €
+            {{ avenant.contrat.montant_operation|floatformat:2 }} €
           </div>
         </div>
         {% for a in avenants_precedents %}
@@ -353,7 +353,7 @@
             class="table-like-cell"
             style="text-align: right; padding: 8px; background-color: white"
           >
-            {{ a.montant|floatformat:2|intcomma }} €
+            {{ a.montant|floatformat:2 }} €
           </div>
         </div>
         {% endfor %}
@@ -372,7 +372,7 @@
             class="table-like-cell"
             style="text-align: right; padding: 8px; background-color: white"
           >
-            {{ avenant.montant|floatformat:2|intcomma }} €
+            {{ avenant.montant|floatformat:2 }} €
           </div>
         </div>
         <div class="table-like-row">
@@ -396,8 +396,7 @@
               background-color: white;
             "
           >
-            {{avenant.contrat.montant_operation|add:avenant.montant|floatformat:2|intcomma}}
-            €
+            {{ avenant.montant_total_contrat_et_avenants|floatformat:2 }} €
           </div>
         </div>
       </div>

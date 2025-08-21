@@ -5862,6 +5862,16 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            # Si aucune date de création n'est fournie, utiliser la date actuelle
+            if not serializer.validated_data.get('date_creation'):
+                serializer.validated_data['date_creation'] = timezone.now().date()
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=True, methods=['get', 'post'])
     def avenants(self, request, pk=None):
         contrat = self.get_object()
@@ -5876,6 +5886,9 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
             
             serializer = AvenantSousTraitanceSerializer(data=data)
             if serializer.is_valid():
+                # Si aucune date de création n'est fournie, utiliser la date actuelle
+                if not serializer.validated_data.get('date_creation'):
+                    serializer.validated_data['date_creation'] = timezone.now().date()
                 serializer.save(contrat=contrat)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -5894,6 +5907,16 @@ class AvenantSousTraitanceViewSet(viewsets.ModelViewSet):
         if contrat_id:
             queryset = queryset.filter(contrat_id=contrat_id)
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            # Si aucune date de création n'est fournie, utiliser la date actuelle
+            if not serializer.validated_data.get('date_creation'):
+                serializer.validated_data['date_creation'] = timezone.now().date()
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 def preview_contrat(request, contrat_id):
     try:

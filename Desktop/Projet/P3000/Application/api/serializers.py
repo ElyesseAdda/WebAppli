@@ -811,9 +811,11 @@ class SousTraitantSerializer(serializers.ModelSerializer):
         ]
 
 class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
+    montant_total_contrat_et_avenants = serializers.ReadOnlyField()
+    
     class Meta:
         model = AvenantSousTraitance
-        fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero', 'type_travaux']
+        fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero', 'type_travaux', 'montant_total_contrat_et_avenants']
         read_only_fields = ['date_creation', 'date_modification']
 
 class ContratSousTraitanceSerializer(serializers.ModelSerializer):

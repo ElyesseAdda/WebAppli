@@ -1247,7 +1247,7 @@ class ContratSousTraitance(models.Model):
     montant_operation = models.DecimalField(max_digits=10, decimal_places=2)
     nom_maitre_ouvrage = models.CharField(max_length=255, verbose_name="Nom du maître d'ouvrage")
     nom_maitre_oeuvre = models.CharField(max_length=255, verbose_name="Nom du maître d'œuvre")
-    date_creation = models.DateField(auto_now_add=True)
+    date_creation = models.DateField(verbose_name="Date de création du contrat")
     date_modification = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1306,8 +1306,18 @@ class AvenantSousTraitance(models.Model):
     description = models.TextField()
     montant = models.DecimalField(max_digits=10, decimal_places=2)
     type_travaux = models.CharField(max_length=100, default='LOT PEINTURE')
-    date_creation = models.DateField(auto_now_add=True)
+    date_creation = models.DateField(verbose_name="Date de création de l'avenant")
     date_modification = models.DateTimeField(auto_now=True)
+
+    @property
+    def montant_total_contrat_et_avenants(self):
+        """Calcule le montant total du contrat + tous les avenants jusqu'à celui-ci"""
+        montant_contrat = self.contrat.montant_operation
+        montant_avenants = AvenantSousTraitance.objects.filter(
+            contrat=self.contrat,
+            numero__lte=self.numero
+        ).aggregate(total=models.Sum('montant'))['total'] or 0
+        return montant_contrat + montant_avenants
 
     class Meta:
         ordering = ['-date_creation']
