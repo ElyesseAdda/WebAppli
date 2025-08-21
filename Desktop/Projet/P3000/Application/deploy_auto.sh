@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Se donner automatiquement les permissions d'exécution
+chmod +x "$0"
+
 echo "🚀 Déploiement automatique P3000..."
 
 # Configuration
