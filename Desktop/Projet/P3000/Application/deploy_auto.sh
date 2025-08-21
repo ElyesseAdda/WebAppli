@@ -12,11 +12,15 @@ cd "$PROJECT_DIR"
 echo "[INFO] 🐍 Activation de l'environnement virtuel..."
 source "$VENV_PATH/bin/activate"
 
+echo "[INFO] 🧹 Nettoyage des fichiers .pyc..."
+find . -name "*.pyc" -delete
+find . -name "__pycache__" -type d -exec rm -rf {} +
+
 echo "[INFO] 🔄 Vérification des mises à jour Git..."
 git fetch origin
 
 echo "[INFO] 🔄 Mise à jour du code depuis Git..."
-git pull origin main
+git reset --hard origin/main
 
 echo "[INFO] 📦 Mise à jour des dépendances..."
 pip install -r requirements.txt
