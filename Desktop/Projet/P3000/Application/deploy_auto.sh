@@ -58,7 +58,7 @@ python manage.py migrate
 
 echo "[INFO] 🎨 Build du frontend..."
 cd frontend
-npm install --production
+npm install
 npm run build
 cd ..
 
