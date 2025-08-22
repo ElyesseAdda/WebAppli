@@ -73,13 +73,5 @@ frontend/static/frontend/src/
 env.production
 env.local
 
-.main.js
-.main.js.map
-.main.js.LICENSE.txt
-.main.js.LICENSE.txt.map
-.main.js.LICENSE.txt.map.map
-.main.js.LICENSE.txt.map.map.map
-.main.js.LICENSE.txt.map.map.map.map
-.main.js.LICENSE.txt.map.map.map.map.map
-.main.js.LICENSE.txt.map.map.map.map.map.map
-.main.js.LICENSE.txt.map.map.map.map.map.map.map
+# Build frontend
+frontend/static/frontend/main.*

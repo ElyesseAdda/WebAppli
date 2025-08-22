@@ -37,7 +37,8 @@ if [ -f ".env" ]; then
     echo "[INFO] 📄 Fichier .env sauvegardé"
 fi
 
-git reset --hard origin/main
+git checkout main
+git pull origin main
 
 # Restaurer le fichier .env après le reset
 if [ -f ".env.backup" ]; then
