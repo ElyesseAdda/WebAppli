@@ -138,26 +138,16 @@ WSGI_APPLICATION = 'Application.wsgi.application'
 # https://docs.djangoproject.com/en/dev/ref/settings/#databases
 
 # Configuration de la base de données
-DATABASE_URL = os.getenv('DATABASE_URL')
-
-if DATABASE_URL:
-    # Configuration pour la production (PostgreSQL)
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.parse(DATABASE_URL)
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'p3000db',
+        'USER': 'p3000user',
+        'PASSWORD': 'Boumediene30',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
-else:
-    # Configuration pour le développement
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'p3000db',
-            'USER': 'p3000user',
-            'PASSWORD': 'Boumediene30',
-            'HOST': 'localhost',
-            'PORT': '5432',
-        }
-    }
+}
 
 
 # Password validation
