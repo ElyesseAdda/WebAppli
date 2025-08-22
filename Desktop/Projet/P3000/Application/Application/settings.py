@@ -31,15 +31,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Charger le fichier .env
 load_env_file()
 
-# Charger les settings selon l'environnement
+# Configuration de base
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-
-if DEBUG:
-    # Charger les settings de développement
-    from .settings_local import *
-else:
-    # Charger les settings de production
-    from .settings_base import *
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
