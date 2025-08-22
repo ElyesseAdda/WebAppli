@@ -138,17 +138,31 @@ WSGI_APPLICATION = 'Application.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/dev/ref/settings/#databases
 
-# Configuration de la base de données
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'p3000db',
-        'USER': 'p3000user',
-        'PASSWORD': 'Boumediene30',
-        'HOST': 'localhost',
-        'PORT': '5432',
+# Configuration de la base de données selon l'environnement
+if DEBUG:
+    # Configuration pour l'environnement local
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'p3000db_local',
+            'USER': 'p3000user',
+            'PASSWORD': 'Boumediene30',
+            'HOST': 'localhost',
+            'PORT': '5432',
+        }
     }
-}
+else:
+    # Configuration pour l'environnement de production
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'p3000db',
+            'USER': 'p3000user',
+            'PASSWORD': 'Boumediene30',
+            'HOST': 'localhost',
+            'PORT': '5432',
+        }
+    }
 
 
 # Password validation
@@ -214,21 +228,10 @@ if not DEBUG:
     # Cookies sécurisés
     # SESSION_COOKIE_SECURE = True # This line is now handled by the DEBUG conditional block above
     
-    # Logs
+    # Logs (désactivés pour éviter les erreurs de fichiers manquants)
     LOGGING = {
         'version': 1,
-        'disable_existing_loggers': False,
-        'handlers': {
-            'file': {
-                'level': os.getenv('LOG_LEVEL', 'INFO'),
-                'class': 'logging.FileHandler',
-                'filename': os.getenv('LOG_FILE', '/var/log/django/app.log'),
-            },
-        },
-        'root': {
-            'handlers': ['file'],
-            'level': os.getenv('LOG_LEVEL', 'INFO'),
-        },
+        'disable_existing_loggers': True,
     }
 
 # Default primary key field type

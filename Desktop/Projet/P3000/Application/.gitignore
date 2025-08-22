@@ -68,3 +68,7 @@ frontend/static/frontend/main.js.LICENSE.txt
 # Fichiers de build frontend
 frontend/static/frontend/
 frontend/static/frontend/src/
+
+.env
+env.production
+env.local
