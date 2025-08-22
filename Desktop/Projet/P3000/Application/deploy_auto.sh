@@ -56,6 +56,12 @@ python manage.py collectstatic --noinput
 echo "[INFO] 🗄️ Application des migrations..."
 python manage.py migrate
 
+echo "[INFO] 🎨 Build du frontend..."
+cd frontend
+npm install --production
+npm run build
+cd ..
+
 echo "[INFO] 🛑 Arrêt de Gunicorn..."
 systemctl stop gunicorn
 
