@@ -126,8 +126,8 @@ function ProduitSelectionTable({
 
   const handleSave = async () => {
     try {
-      if (!selectedData.agent) {
-        throw new Error("Veuillez sélectionner un agent");
+      if (!selectedData.emetteur) {
+        throw new Error("Veuillez sélectionner un émetteur");
       }
 
       if (!products || products.length === 0) {
@@ -138,7 +138,7 @@ function ProduitSelectionTable({
         .filter((product) => selectedProducts[product.id])
         .map((product) => ({
           produit: product.id,
-          designation: product.designation || product.nom_materiel,
+          designation: product.designation,
           quantite: parseInt(quantities[product.id]) || 0,
           prix_unitaire: parseFloat(product.prix_unitaire),
           total: parseFloat(
@@ -157,9 +157,12 @@ function ProduitSelectionTable({
         numero: numeroBC,
         fournisseur: fournisseur,
         chantier: selectedData.chantier,
-        agent: selectedData.agent,
-        date_commande: selectedData.date_commande, // Assurez-vous que date_commande est ici
-
+        emetteur: selectedData.emetteur,
+        date_commande: selectedData.date_commande,
+        date_creation_personnalisee: selectedData.date_creation_personnalisee,
+        contact_type: selectedData.contact_type,
+        contact_agent: selectedData.contact_agent,
+        contact_sous_traitant: selectedData.contact_sous_traitant,
         lignes: selectedItems,
         montant_total: parseFloat(
           selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)
@@ -462,7 +465,7 @@ function ProduitSelectionTable({
           handleCloseNewProductModal();
           loadProducts();
         }}
-        fournisseur={fournisseur}
+        fournisseur={selectedData?.fournisseur}
       />
     </Dialog>
   );

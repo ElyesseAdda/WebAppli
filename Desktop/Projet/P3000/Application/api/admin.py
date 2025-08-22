@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Devis, FournisseurMagasin
+from .models import Devis, FournisseurMagasin, Emetteur
 
 # Register your models here.
 

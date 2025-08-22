@@ -32,7 +32,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -41,7 +41,7 @@ from .models import (
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
-    Banque,
+    Banque, Emetteur,
     AgencyExpenseAggregate,
 )
 from .drive_automation import drive_automation
@@ -1507,7 +1507,16 @@ def historique_stock(request):
 
 @api_view(['GET'])
 def get_latest_code_produit(request):
-    last_stock = Stock.objects.order_by('-code_produit').first()  # Récupérer le dernier code produit
+    # Récupérer le fournisseur depuis les paramètres
+    fournisseur_id = request.query_params.get('fournisseur_id')
+    
+    if fournisseur_id:
+        # Si un fournisseur est spécifié, récupérer le dernier code pour ce fournisseur
+        last_stock = Stock.objects.filter(fournisseur_id=fournisseur_id).order_by('-id').first()
+    else:
+        # Sinon, récupérer le dernier code global (pour compatibilité)
+        last_stock = Stock.objects.order_by('-id').first()
+    
     last_code = last_stock.code_produit if last_stock else '0'
     return Response({'last_code_produit': last_code})
 
@@ -3066,7 +3075,7 @@ def update_facture_status(request, facture_id):
 @api_view(['GET'])
 def get_fournisseurs(request):
     # Récupérer uniquement les noms distincts des fournisseurs depuis Stock
-    fournisseurs = Stock.objects.values_list('fournisseur', flat=True).distinct()
+    fournisseurs = Stock.objects.values_list('fournisseur__name', flat=True).distinct()
     return Response(list(fournisseurs))
 
 def bon_commande_view(request):
@@ -3074,7 +3083,7 @@ def bon_commande_view(request):
 
 
 class BonCommandeViewSet(viewsets.ModelViewSet):
-    queryset = BonCommande.objects.all()
+    queryset = BonCommande.objects.select_related('chantier', 'emetteur', 'contact_agent', 'contact_sous_traitant').all()
     serializer_class = BonCommandeSerializer
 
     def create(self, request, *args, **kwargs):
@@ -3085,13 +3094,26 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     'numero': request.data.get('numero'),
                     'fournisseur': request.data.get('fournisseur'),
                     'chantier_id': request.data.get('chantier'),
-                    'agent_id': request.data.get('agent'),
+                    'emetteur_id': request.data.get('emetteur'),
                     'montant_total': request.data.get('montant_total', 0),
                     'statut': request.data.get('statut', 'en_attente'),
                     'date_livraison': request.data.get('date_livraison'),
                     'magasin_retrait': request.data.get('magasin_retrait'),
                     'date_commande': request.data.get('date_commande')
                 }
+                
+                # Ajouter les champs de contact s'ils sont présents
+                if request.data.get('contact_type'):
+                    bon_commande_data['contact_type'] = request.data.get('contact_type')
+                    
+                if request.data.get('contact_agent'):
+                    bon_commande_data['contact_agent_id'] = request.data.get('contact_agent')
+                    
+                if request.data.get('contact_sous_traitant'):
+                    bon_commande_data['contact_sous_traitant_id'] = request.data.get('contact_sous_traitant')
+                    
+                if request.data.get('date_creation_personnalisee'):
+                    bon_commande_data['date_creation_personnalisee'] = request.data.get('date_creation_personnalisee')
 
                 bon_commande = BonCommande.objects.create(**bon_commande_data)
 
@@ -3128,7 +3150,8 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'fournisseur': bc.fournisseur,
                 'chantier': bc.chantier.id,
                 'chantier_name': bc.chantier.chantier_name,
-                'agent': bc.agent.id,
+                'emetteur': bc.emetteur.id if bc.emetteur else None,
+                'emetteur_name': f"{bc.emetteur.name} {bc.emetteur.surname}" if bc.emetteur else "Non spécifié",
                 'montant_total': float(bc.montant_total),
                 'date_creation': bc.date_creation,
                 'statut': bc.statut,
@@ -3140,6 +3163,21 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'date_paiement': bc.date_paiement,
                 'reste_a_payer': float(bc.montant_total - bc.montant_paye),
                 'date_commande': bc.date_commande,
+                # Informations de contact
+                'contact_type': bc.contact_type,
+                'contact_agent': {
+                    'id': bc.contact_agent.id,
+                    'name': bc.contact_agent.name,
+                    'surname': bc.contact_agent.surname,
+                    'phone_Number': bc.contact_agent.phone_Number
+                } if bc.contact_agent else None,
+                'contact_sous_traitant': {
+                    'id': bc.contact_sous_traitant.id,
+                    'entreprise': bc.contact_sous_traitant.entreprise,
+                    'representant': bc.contact_sous_traitant.representant,
+                    'phone_Number': bc.contact_sous_traitant.phone_Number
+                } if bc.contact_sous_traitant else None,
+                'date_creation_personnalisee': bc.date_creation_personnalisee,
             })
         return Response(data)
 
@@ -3153,7 +3191,7 @@ def get_products_by_fournisseur(request):
         )
 
     try:
-        products = Stock.objects.filter(fournisseur=fournisseur_name)
+        products = Stock.objects.filter(fournisseur__name=fournisseur_name)
         serializer = StockSerializer(products, many=True)
         return Response(serializer.data)
     except Exception as e:
@@ -3168,15 +3206,47 @@ def preview_bon_commande(request):
         bon_commande_data = json.loads(request.GET.get('bon_commande', '{}'))
         
         # Récupérer les informations détaillées
-        fournisseur = bon_commande_data['fournisseur']
+        fournisseur_id = bon_commande_data['fournisseur']
+        fournisseur_name = bon_commande_data.get('fournisseurName', f'Fournisseur #{fournisseur_id}')
         chantier = get_object_or_404(Chantier, id=bon_commande_data['chantier'])
-        agent = {
-            'id': bon_commande_data['agent'],
-        }
+        
+        # Récupérer l'émetteur depuis la base de données
+        emetteur_id = bon_commande_data['emetteur']
+        try:
+            agent = get_object_or_404(Emetteur, id=emetteur_id)
+        except:
+            agent = {'id': emetteur_id, 'name': 'Inconnu', 'surname': ''}
+
+        # Récupérer les informations de contact
+        contact_agent = None
+        contact_sous_traitant = None
+        contact_type = bon_commande_data.get('contact_type')
+        
+        if contact_type == 'agent' and bon_commande_data.get('contact_agent'):
+            try:
+                contact_agent = get_object_or_404(Agent, id=bon_commande_data['contact_agent'])
+            except:
+                contact_agent = None
+                
+        elif contact_type == 'sous_traitant' and bon_commande_data.get('contact_sous_traitant'):
+            try:
+                contact_sous_traitant = get_object_or_404(SousTraitant, id=bon_commande_data['contact_sous_traitant'])
+            except:
+                contact_sous_traitant = None
+
+        # Date de création personnalisée
+        date_creation_personnalisee = bon_commande_data.get('date_creation_personnalisee')
+        if date_creation_personnalisee:
+            try:
+                date_creation_personnalisee = datetime.strptime(date_creation_personnalisee, '%Y-%m-%d').date()
+            except:
+                date_creation_personnalisee = timezone.now().date()
+        else:
+            date_creation_personnalisee = timezone.now().date()
 
         context = {
             'numero': bon_commande_data['numero'],
-            'fournisseur': fournisseur,
+            'fournisseur': fournisseur_name,
             'chantier': chantier,
             'agent': agent,
             'lignes': bon_commande_data['lignes'],
@@ -3184,7 +3254,11 @@ def preview_bon_commande(request):
             'date': timezone.now(),
             'statut': bon_commande_data.get('statut', 'en_attente'),
             'date_livraison': bon_commande_data.get('date_livraison'),
-            'magasin_retrait': bon_commande_data.get('magasin_retrait')
+            'magasin_retrait': bon_commande_data.get('magasin_retrait'),
+            'contact_type': contact_type,
+            'contact_agent': contact_agent,
+            'contact_sous_traitant': contact_sous_traitant,
+            'date_creation_personnalisee': date_creation_personnalisee,
         }
         
         return render(request, 'bon_commande.html', context)
@@ -3215,18 +3289,71 @@ def create_bon_commande(request):
     try:
         data = request.data
         
+        # LOG: Données reçues du frontend
+        print("="*50)
+        print("DEBUG create_bon_commande - DONNÉES REÇUES:")
+        print(f"request.data complet: {data}")
+        print("="*50)
+        
+        # Récupérer l'émetteur depuis la base de données
+        try:
+            emetteur = Emetteur.objects.get(id=data['emetteur'])
+        except Emetteur.DoesNotExist:
+            return Response({'error': f'Émetteur avec l\'ID {data["emetteur"]} non trouvé'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Préparer les données pour la création
+        bon_commande_data = {
+            'numero': data['numero'],
+            'fournisseur': data.get('fournisseurName', f"Fournisseur #{data['fournisseur']}"),
+            'chantier_id': data['chantier'],
+            'montant_total': data['montant_total'],
+            'emetteur_id': emetteur.id,  # Utiliser l'ID de l'émetteur
+        }
+        
+        print(f"DEBUG - Émetteur ID reçu: {data['emetteur']}")
+        print(f"DEBUG - Émetteur trouvé: {emetteur}")
+        
+        # LOG: Données préparées pour BonCommande
+        print("DEBUG create_bon_commande - DONNÉES PRÉPARÉES BONCOMMANDE:")
+        print(f"bon_commande_data: {bon_commande_data}")
+        print("-"*30)
+        
+        # Ajouter les champs optionnels s'ils sont présents
+        if data.get('date_creation_personnalisee'):
+            bon_commande_data['date_creation_personnalisee'] = data['date_creation_personnalisee']
+            print(f"DEBUG - Ajout date_creation_personnalisee: {data['date_creation_personnalisee']}")
+            
+        if data.get('contact_type'):
+            bon_commande_data['contact_type'] = data['contact_type']
+            print(f"DEBUG - Ajout contact_type: {data['contact_type']}")
+            
+        if data.get('contact_agent'):
+            bon_commande_data['contact_agent_id'] = data['contact_agent']
+            print(f"DEBUG - Ajout contact_agent_id: {data['contact_agent']}")
+            
+        if data.get('contact_sous_traitant'):
+            bon_commande_data['contact_sous_traitant_id'] = data['contact_sous_traitant']
+            print(f"DEBUG - Ajout contact_sous_traitant_id: {data['contact_sous_traitant']}")
+        
+        # LOG: Données finales avant création
+        print("DEBUG create_bon_commande - DONNÉES FINALES BONCOMMANDE:")
+        print(f"bon_commande_data final: {bon_commande_data}")
+        print("-"*30)
+        
         # Créer le bon de commande
-        bon_commande = BonCommande.objects.create(
-            numero=data['numero'],
-            fournisseur=data['fournisseur'],
-            chantier_id=data['chantier'],
-            agent_id=data['agent'],
-            montant_total=data['montant_total']
-        )
+        print("DEBUG - Tentative de création BonCommande...")
+        bon_commande = BonCommande.objects.create(**bon_commande_data)
+        print(f"DEBUG - BonCommande créé avec succès, ID: {bon_commande.id}")
+        print(f"DEBUG - BonCommande.emetteur_id: {bon_commande.emetteur_id}")
+        print(f"DEBUG - BonCommande.contact_type: {bon_commande.contact_type}")
+        print(f"DEBUG - BonCommande.contact_agent: {bon_commande.contact_agent}")
+        print(f"DEBUG - BonCommande.contact_sous_traitant: {bon_commande.contact_sous_traitant}")
 
         # Créer les lignes de bon de commande
-        for ligne in data['lignes']:
-            LigneBonCommande.objects.create(
+        print(f"DEBUG - Création des lignes, nombre de lignes: {len(data['lignes'])}")
+        for i, ligne in enumerate(data['lignes']):
+            print(f"DEBUG - Ligne {i+1}: {ligne}")
+            ligne_obj = LigneBonCommande.objects.create(
                 bon_commande=bon_commande,
                 produit_id=ligne['produit'],
                 designation=ligne['designation'],
@@ -3234,21 +3361,50 @@ def create_bon_commande(request):
                 prix_unitaire=ligne['prix_unitaire'],
                 total=ligne['total']
             )
+            print(f"DEBUG - LigneBonCommande créée, ID: {ligne_obj.id}")
 
+        print("DEBUG create_bon_commande - CRÉATION TERMINÉE AVEC SUCCÈS")
+        print("="*50)
+        
         return Response({'message': 'Bon de commande créé avec succès'}, status=status.HTTP_201_CREATED)
 
     except Exception as e:
+        print("DEBUG create_bon_commande - ERREUR DÉTECTÉE:")
+        print(f"Type d'erreur: {type(e).__name__}")
+        print(f"Message d'erreur: {str(e)}")
+        print(f"Données reçues au moment de l'erreur: {data}")
+        print("="*50)
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def preview_saved_bon_commande(request, id):
     try:
-        bon_commande = get_object_or_404(BonCommande, id=id)
+        bon_commande = get_object_or_404(
+            BonCommande.objects.select_related('contact_agent', 'contact_sous_traitant', 'chantier', 'emetteur'), 
+            id=id
+        )
         lignes = bon_commande.lignes.all()
         
         # Récupérer les informations détaillées
         chantier = bon_commande.chantier
-        agent = bon_commande.agent
+        
+        # Récupérer l'émetteur depuis le nouveau modèle Emetteur
+        agent = bon_commande.emetteur if bon_commande.emetteur else None
+        print(f"DEBUG preview_saved - Émetteur trouvé: {agent}")
+
+        # Les objets contact sont automatiquement récupérés via les ForeignKey
+        print(f"DEBUG preview_saved - contact_type: {bon_commande.contact_type}")
+        print(f"DEBUG preview_saved - contact_agent: {bon_commande.contact_agent}")
+        print(f"DEBUG preview_saved - contact_sous_traitant: {bon_commande.contact_sous_traitant}")
+        
+        # Si contact_agent ou contact_sous_traitant est None, essayer de récupérer depuis l'agent principal
+        contact_agent = bon_commande.contact_agent
+        contact_sous_traitant = bon_commande.contact_sous_traitant
+        
+        # Note: Le champ agent n'existe plus, on utilise seulement les contacts spécifiques
+        # Si pas de contact spécifique, on laisse vide
+        if not contact_agent and not contact_sous_traitant:
+            print("DEBUG preview_saved - Aucun contact spécifique défini")
 
         # Formatage de la date directement dans la vue
         formatted_date = None
@@ -3272,7 +3428,11 @@ def preview_saved_bon_commande(request, id):
             'date': bon_commande.date_creation,
             'statut': bon_commande.statut,
             'date_livraison': formatted_date,  # Date déjà formatée
-            'magasin_retrait': bon_commande.magasin_retrait
+            'magasin_retrait': bon_commande.magasin_retrait,
+            'contact_type': bon_commande.contact_type,
+            'contact_agent': contact_agent,
+            'contact_sous_traitant': contact_sous_traitant,
+            'date_creation_personnalisee': bon_commande.date_creation_personnalisee or bon_commande.date_creation.date(),
         }
         
         return render(request, 'bon_commande.html', context)
@@ -7626,3 +7786,37 @@ def csrf_token_view(request):
     from django.middleware.csrf import get_token
     get_token(request)
     return Response({'detail': 'CSRF token generated'})
+
+@api_view(['GET'])
+def get_sous_traitants(request):
+    """
+    Récupère la liste des sous-traitants
+    """
+    try:
+        sous_traitants = SousTraitant.objects.all()
+        data = []
+        for st in sous_traitants:
+            data.append({
+                'id': st.id,
+                'entreprise': st.entreprise,
+                'representant': st.representant,
+                'phone_Number': st.phone_Number,
+                'email': st.email,
+            })
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_emetteurs(request):
+    """
+    Récupère la liste des émetteurs actifs
+    """
+    try:
+        emetteurs = Emetteur.objects.filter(is_active=True)
+        serializer = EmetteurSerializer(emetteurs, many=True)
+        return Response(serializer.data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

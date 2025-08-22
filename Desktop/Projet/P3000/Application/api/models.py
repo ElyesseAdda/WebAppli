@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from django.contrib.auth.models import User  # Si vous utilisez le modèle utilisateur intégré
 from decimal import Decimal, ROUND_HALF_UP,InvalidOperation
 from django.core.exceptions import ValidationError
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, post_migrate
 from django.dispatch import receiver
 from django.db.models.functions import TruncMonth
 from datetime import date
@@ -416,7 +416,7 @@ class Event(models.Model):
         return f"{self.agent} - {label} ({sublabel}) du {self.start_date} au {self.end_date}"
 
 class Stock(models.Model):
-    code_produit = models.CharField(max_length=50, unique=True, default='')
+    code_produit = models.CharField(max_length=50, default='')
     designation = models.CharField(max_length=50)
     fournisseur = models.ForeignKey(
         'Fournisseur',
@@ -425,11 +425,15 @@ class Stock(models.Model):
     )
     prix_unitaire = models.FloatField(default=0)
     unite = models.CharField(max_length=50)
+    # Champ utilisé dans les vues API pour la gestion des quantités
+    quantite_disponible = models.IntegerField(default=0)
     
-
+    class Meta:
+        # Code produit unique par fournisseur, pas globalement
+        unique_together = ('code_produit', 'fournisseur')
 
     def __str__(self):
-        return self.nom_materiel 
+        return self.designation 
 
 
 class StockHistory(models.Model):
@@ -442,7 +446,7 @@ class StockHistory(models.Model):
     montant = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
-        return f"{self.type_operation} - {self.stock.nom_materiel} - {self.quantite}"
+        return f"{self.type_operation} - {self.stock.designation} - {self.quantite}"
 
     @property
     def montant_total(self):
@@ -463,7 +467,7 @@ class StockMovement(models.Model):
         return self.quantite * self.stock.prix_unitaire
 
     def __str__(self):
-        return f"{self.mouvement_type} de {self.quantite} pour {self.stock.nom_materiel} le {self.date_mouvement}"
+        return f"{self.mouvement_type} de {self.quantite} pour {self.stock.designation} le {self.date_mouvement}"
 
         
 class Fournisseur(models.Model):
@@ -942,13 +946,26 @@ class BonCommande(models.Model):
     numero = models.CharField(max_length=50, unique=True)
     fournisseur = models.CharField(max_length=100)
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE)
-    agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, null=True, blank=True)  # Optionnel maintenant
+    emetteur = models.ForeignKey('Emetteur', on_delete=models.PROTECT, null=True, blank=True, help_text="Émetteur du bon de commande")
     montant_total = models.DecimalField(max_digits=10, decimal_places=2)
     date_creation = models.DateTimeField(auto_now_add=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     date_livraison = models.DateField(null=True, blank=True)
     magasin_retrait = models.CharField(max_length=200, null=True, blank=True)
     date_commande = models.DateField(default='2025-01-01')  # Ajout du champ de date avec une valeur par défaut
+    
+    # Champs pour le contact qui réceptionne
+    CONTACT_TYPE_CHOICES = [
+        ('agent', 'Agent'),
+        ('sous_traitant', 'Sous-traitant'),
+    ]
+    contact_type = models.CharField(max_length=20, choices=CONTACT_TYPE_CHOICES, null=True, blank=True)
+    contact_agent = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande_contact')
+    contact_sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande_contact')
+    
+    # Date de création personnalisable (pour antidater)
+    date_creation_personnalisee = models.DateField(null=True, blank=True, verbose_name="Date de création du document")
 
     # Nouveaux champs pour le paiement
     statut_paiement = models.CharField(
@@ -1213,6 +1230,58 @@ def recalc_aggregates_on_override_change(sender, instance: AgencyExpenseOverride
     except Exception:
         pass
 
+class Emetteur(models.Model):
+    """
+    Modèle pour les émetteurs de bons de commande (Adel et Amine)
+    """
+    # Données par défaut des émetteurs
+    EMETTEURS_DEFAULT = [
+        {
+            'name': 'Adel',
+            'surname': 'Majri', 
+            'email': 'adel.majri@peinture3000.fr',
+            'phone_Number': '0761566672'
+        },
+        {
+            'name': 'Amine',
+            'surname': 'Belaoued',
+            'email': 'amine.belaoued@peinture3000.fr', 
+            'phone_Number': '0770181227'
+        }
+    ]
+    
+    name = models.CharField(max_length=50)
+    surname = models.CharField(max_length=50)
+    email = models.EmailField()
+    phone_Number = models.CharField(max_length=20)
+    is_active = models.BooleanField(default=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Émetteur"
+        verbose_name_plural = "Émetteurs"
+        ordering = ['surname', 'name']
+    
+    def __str__(self):
+        return f"{self.name} {self.surname}"
+    
+    @classmethod
+    def create_default_emetteurs(cls):
+        """Crée les émetteurs par défaut s'ils n'existent pas"""
+        created_count = 0
+        for emetteur_data in cls.EMETTEURS_DEFAULT:
+            emetteur, created = cls.objects.get_or_create(
+                name=emetteur_data['name'],
+                surname=emetteur_data['surname'],
+                defaults=emetteur_data
+            )
+            if created:
+                created_count += 1
+                print(f"✅ Émetteur {emetteur} créé")
+            else:
+                print(f"⚠️  Émetteur {emetteur} existe déjà")
+        return created_count
+
 class SousTraitant(models.Model):
     TYPE_CHOICES = [
         ('NETTOYAGE', 'Nettoyage'),
@@ -1230,6 +1299,7 @@ class SousTraitant(models.Model):
     numero_rcs = models.CharField(max_length=100, unique=True)
     representant = models.CharField(max_length=255)
     email = models.EmailField(max_length=254, blank=True, null=True)
+    phone_Number = models.CharField(max_length=20, blank=True, null=True, verbose_name="Numéro de téléphone")
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, blank=True, null=True, verbose_name="Type d'activité")
     date_creation = models.DateTimeField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
@@ -1544,3 +1614,17 @@ class Document(models.Model):
     def get_download_url(self):
         """Retourne l'URL de téléchargement (sera implémentée avec les URLs présignées)"""
         return f"/api/drive/download/{self.id}/"
+
+
+# Signal pour créer automatiquement les émetteurs après les migrations
+@receiver(post_migrate)
+def create_default_emetteurs(sender, **kwargs):
+    """Crée automatiquement les émetteurs par défaut après les migrations"""
+    if sender.name == 'api':  # S'assurer que c'est notre app
+        try:
+            # Utiliser la méthode de classe pour créer les émetteurs
+            created_count = Emetteur.create_default_emetteurs()
+            if created_count > 0:
+                print(f"✅ {created_count} émetteur(s) créé(s) automatiquement")
+        except Exception as e:
+            print(f"❌ Erreur lors de la création des émetteurs : {e}")
