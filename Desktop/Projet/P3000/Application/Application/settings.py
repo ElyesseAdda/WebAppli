@@ -41,7 +41,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production'
 # Configuration conditionnelle pour développement vs production
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
+# Configuration ALLOWED_HOSTS forcée pour la production
+ALLOWED_HOSTS = ['myp3000app.com', 'www.myp3000app.com', 'localhost', '127.0.0.1']
 
 
 # Application definition
