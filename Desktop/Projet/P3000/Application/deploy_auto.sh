@@ -15,6 +15,14 @@ cd "$PROJECT_DIR"
 echo "[INFO] 🐍 Activation de l'environnement virtuel..."
 source "$VENV_PATH/bin/activate"
 
+echo "[INFO] 📄 Chargement des variables d'environnement..."
+if [ -f ".env" ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+    echo "[INFO] ✅ Variables d'environnement chargées"
+else
+    echo "[WARNING] ⚠️ Fichier .env non trouvé"
+fi
+
 echo "[INFO] 🧹 Nettoyage des fichiers .pyc..."
 find . -name "*.pyc" -delete
 find . -name "__pycache__" -type d -exec rm -rf {} +
