@@ -3,12 +3,10 @@ import React, { useEffect, useState } from "react";
 
 const AddStockForm = ({ onClose, onProductAdded }) => {
   const [codeProduit, setCodeProduit] = useState("");
-  const [nomMateriel, setNomMateriel] = useState("");
   const [fournisseur, setFournisseur] = useState("");
   const [designation, setDesignation] = useState("");
   const [prixUnitaire, setPrixUnitaire] = useState(0);
   const [quantiteDisponible, setQuantiteDisponible] = useState(0);
-  const [quantiteMinimum, setQuantiteMinimum] = useState(0);
 
   // Fonction pour récupérer le dernier code produit
   useEffect(() => {
@@ -38,11 +36,9 @@ const AddStockForm = ({ onClose, onProductAdded }) => {
 
     const newStock = {
       code_produit: codeProduit,
-      nom_materiel: nomMateriel,
-      fournisseur: fournisseur || "N/A",
+      fournisseur: parseInt(fournisseur) || null,
       designation: designation || "N/A",
       quantite_disponible: quantiteDisponible,
-      quantite_minimum: quantiteMinimum || 0,
       prix_unitaire: prixUnitaire,
     };
 
@@ -94,22 +90,7 @@ const AddStockForm = ({ onClose, onProductAdded }) => {
               required
             />
           </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Nom Matériel:</label>
-            <input
-              type="text"
-              value={nomMateriel}
-              onChange={(e) => setNomMateriel(e.target.value)}
-              style={{
-                width: "95%",
-                padding: "10px",
-                marginTop: "5px",
-                borderRadius: "5px",
-                border: "1px solid #ccc",
-              }}
-              required
-            />
-          </div>
+
           <div style={{ marginBottom: "15px" }}>
             <label>Fournisseur (optionnel):</label>
             <input
@@ -125,21 +106,7 @@ const AddStockForm = ({ onClose, onProductAdded }) => {
               }}
             />
           </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Quantité Minimum (optionnel):</label>
-            <input
-              type="number"
-              value={quantiteMinimum}
-              onChange={(e) => setQuantiteMinimum(e.target.value)}
-              style={{
-                width: "95%",
-                padding: "10px",
-                marginTop: "5px",
-                borderRadius: "5px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
+
           <div style={{ marginBottom: "15px" }}>
             <label>Désignation (optionnel):</label>
             <input

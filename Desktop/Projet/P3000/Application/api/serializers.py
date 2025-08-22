@@ -8,7 +8,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
-    Document, PaiementGlobalSousTraitant
+    Document, PaiementGlobalSousTraitant, Emetteur
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -314,8 +314,8 @@ class EventSerializer(serializers.ModelSerializer):
 
 class StockSerializer(serializers.ModelSerializer):
     fournisseur = serializers.PrimaryKeyRelatedField(queryset=Fournisseur.objects.all())
-    # Si tu veux afficher le nom du fournisseur en lecture :
-    # fournisseur_name = serializers.CharField(source='fournisseur.name_fournisseur', read_only=True)
+    # Afficher le nom du fournisseur en lecture pour le frontend
+    fournisseur_name = serializers.CharField(source='fournisseur.name', read_only=True)
 
     class Meta:
         model = Stock
@@ -1067,5 +1067,14 @@ class FolderItemSerializer(serializers.Serializer):
     size_mb = serializers.FloatField(required=False)
     modified_at = serializers.DateTimeField(required=False)
     extension = serializers.CharField(required=False)
-    document_id = serializers.IntegerField(required=False) 
-        
+    document_id = serializers.IntegerField(required=False)
+
+
+class EmetteurSerializer(serializers.ModelSerializer):
+    """
+    Serializer pour les émetteurs de bons de commande
+    """
+    class Meta:
+        model = Emetteur
+        fields = ['id', 'name', 'surname', 'email', 'phone_Number', 'is_active']
+        read_only_fields = ['id']

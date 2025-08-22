@@ -1,3 +1,4 @@
+{% load phone_filters %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -278,26 +279,35 @@
       </div>
       <div class="contact-info">
         <h3>Émetteur:</h3>
-        {% if agent.id == 1 %}
-        <p>Mr Adel Majri</p>
-        <p>Mail: adel.majri@peinture3000.fr</p>
-        <p>Tél: 07.61.56.66.72</p>
-        {% elif agent.id == 2 %}
-        <p>Mr Amine Belaoued</p>
-        <p>Mail: amine.belaoued@peinture3000.fr</p>
-        <p>Tél: 07.70.18.12.27</p>
+        {% if agent %}
+        <p>Mr {{ agent.name }} {{ agent.surname }}</p>
+        <p>Mail: {{ agent.email }}</p>
+        <p>Tél: {{ agent.phone_Number|format_phone }}</p>
+        {% else %}
+        <p>Émetteur non spécifié</p>
         {% endif %}
       </div>
     </div>
 
     <div class="client-info">
       <h3>Contact qui réceptionne:</h3>
-      <p>Mr Saif JLASSI</p>
-      <p>FT SERVICES</p>
-      <p>Tél: 07.58.1.14.67</p>
+      {% if contact_type == 'agent' and contact_agent %}
+        <p>{{ contact_agent.name }} {{ contact_agent.surname }}</p>
+        {% if contact_agent.phone_Number %}
+          <p>Tél: {{ contact_agent.phone_Number|format_phone }}</p>
+        {% endif %}
+      {% elif contact_type == 'sous_traitant' and contact_sous_traitant %}
+        <p>{{ contact_sous_traitant.representant }}</p>
+        <p>{{ contact_sous_traitant.entreprise }}</p>
+        {% if contact_sous_traitant.phone_Number %}
+          <p>Tél: {{ contact_sous_traitant.phone_Number|format_phone }}</p>
+        {% endif %}
+      {% else %}
+        <p>Aucun contact spécifié</p>
+      {% endif %}
     </div>
     <div class="date">
-      <p>A Marseille, le {% now "d/m/Y" %}</p>
+      <p>A Marseille, le {{ date_creation_personnalisee|date:"d/m/Y"|default:"{% now 'd/m/Y' %}" }}</p>
     </div>
 
     <div class="header">

@@ -28,11 +28,16 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
 
   const handleInitialSelection = (data) => {
     setSelectedData({
-      fournisseur: data.fournisseur,
+      fournisseur: data.fournisseur, // ID pour la création du BC
+      fournisseurName: data.fournisseurName, // Nom pour l'API produits
       chantier: data.chantier,
-      agent: data.agent,
+      emetteur: data.emetteur,
       numero_bon_commande: data.numero_bon_commande,
       date_commande: data.date_commande,
+      date_creation_personnalisee: data.date_creation_personnalisee,
+      contact_type: data.contact_type,
+      contact_agent: data.contact_agent,
+      contact_sous_traitant: data.contact_sous_traitant,
     });
     setStep(2);
     setIsModalOpen(true);
@@ -55,8 +60,13 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
     const bonCommandeData = {
       numero: selectedData.numero_bon_commande,
       fournisseur: selectedData.fournisseur,
+      fournisseurName: selectedData.fournisseurName,
       chantier: selectedData.chantier,
-      agent: selectedData.agent,
+      emetteur: selectedData.emetteur,
+      date_creation_personnalisee: selectedData.date_creation_personnalisee,
+      contact_type: selectedData.contact_type,
+      contact_agent: selectedData.contact_agent,
+      contact_sous_traitant: selectedData.contact_sous_traitant,
       lignes: products.map((product) => ({
         produit: product.produit,
         designation: product.designation,
@@ -79,8 +89,13 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
     const bonCommandeData = {
       numero: numeroFinal,
       fournisseur: selectedData.fournisseur,
+      fournisseurName: selectedData.fournisseurName,
       chantier: selectedData.chantier,
-      agent: selectedData.agent,
+      emetteur: selectedData.emetteur,
+      date_creation_personnalisee: selectedData.date_creation_personnalisee,
+      contact_type: selectedData.contact_type,
+      contact_agent: selectedData.contact_agent,
+      contact_sous_traitant: selectedData.contact_sous_traitant,
       lignes: selectedProducts.map((product) => ({
         produit: product.produit,
         designation: product.designation,
@@ -158,7 +173,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
               setStep(1);
               setIsModalOpen(false);
             }}
-            fournisseur={selectedData?.fournisseur}
+            fournisseur={selectedData?.fournisseurName}
             onValidate={handleValidate}
             numeroBC={numeroBC}
             selectedData={selectedData}

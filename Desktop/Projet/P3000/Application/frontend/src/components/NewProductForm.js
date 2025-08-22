@@ -42,21 +42,19 @@ const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
 
   useEffect(() => {
     setFormData((prev) => ({ ...prev, fournisseur: fournisseur || "" }));
+
+    // Générer automatiquement le code produit à l'ouverture
+    if (open && (fournisseur || formData.fournisseur)) {
+      generateCodeProduit(fournisseur || formData.fournisseur);
+    }
   }, [fournisseur, open]);
 
   useEffect(() => {
     if (!fournisseur && open) {
       const fetchFournisseurs = async () => {
         try {
-          const response = await axios.get("/api/stockf/fournisseurs/");
-          const uniqueFournisseurs = [
-            ...new Set(
-              response.data.filter(
-                (fournisseur) => fournisseur && fournisseur.trim()
-              )
-            ),
-          ];
-          setFournisseurs(uniqueFournisseurs);
+          const response = await axios.get("/api/fournisseurs/");
+          setFournisseurs(response.data);
         } catch (error) {
           console.error("Erreur lors du chargement des fournisseurs:", error);
         }
@@ -77,6 +75,34 @@ const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
         [name]: "",
       }));
     }
+  };
+
+  const generateCodeProduit = async (fournisseurParam = null) => {
+    const fournisseurId = parseInt(fournisseurParam || formData.fournisseur);
+    if (!fournisseurId) {
+      // Si pas de fournisseur, on ne génère pas de code (silencieux)
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `/api/stock/latest_code?fournisseur_id=${fournisseurId}`
+      );
+      const lastCode = response.data.last_code_produit || "0";
+      const nextCode = incrementCode(lastCode);
+      setFormData((prev) => ({ ...prev, code_produit: nextCode }));
+      if (errors.code_produit) {
+        setErrors((prev) => ({ ...prev, code_produit: "" }));
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération du code:", error);
+      // En mode automatique, on ne montre pas d'erreur à l'utilisateur
+    }
+  };
+
+  const incrementCode = (lastCode) => {
+    const codeNumber = parseInt(lastCode, 10) + 1;
+    return codeNumber.toString().padStart(lastCode.length || 3, "0");
   };
 
   const validateForm = () => {
@@ -104,7 +130,8 @@ const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
     try {
       const response = await axios.post("/api/stock/", {
         ...formData,
-        fournisseur: fournisseur || formData.fournisseur || null,
+        fournisseur:
+          parseInt(fournisseur) || parseInt(formData.fournisseur) || null,
         prix_unitaire: parseFloat(formData.prix_unitaire),
       });
       onAddProduct(response.data);
@@ -121,9 +148,28 @@ const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
       });
     } catch (error) {
       console.error("Erreur lors de l'ajout du produit:", error);
-      setErrors({
-        submit: "Une erreur est survenue lors de l'ajout du produit",
-      });
+
+      if (error.response?.data?.non_field_errors) {
+        const errorMessage = error.response.data.non_field_errors[0];
+        if (
+          errorMessage.includes(
+            "code_produit, fournisseur must make a unique set"
+          )
+        ) {
+          setErrors({
+            code_produit:
+              "Ce code produit existe déjà pour ce fournisseur. Veuillez choisir un code différent.",
+          });
+        } else {
+          setErrors({
+            submit: errorMessage,
+          });
+        }
+      } else {
+        setErrors({
+          submit: "Une erreur est survenue lors de l'ajout du produit",
+        });
+      }
     }
   };
 
@@ -152,11 +198,14 @@ const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
         <form onSubmit={handleSubmit}>
           <TextField
             name="code_produit"
-            label="Code Produit"
+            label="Code Produit (généré automatiquement)"
             value={formData.code_produit}
             onChange={handleChange}
             error={!!errors.code_produit}
-            helperText={errors.code_produit}
+            helperText={
+              errors.code_produit ||
+              "Le code est pré-rempli automatiquement, vous pouvez le modifier"
+            }
             sx={inputStyle}
           />
           <TextField
@@ -172,18 +221,34 @@ const NewProductForm = ({ open, handleClose, onAddProduct, fournisseur }) => {
             <Autocomplete
               freeSolo
               options={fournisseurs}
-              value={formData.fournisseur}
+              getOptionLabel={(option) =>
+                typeof option === "object" ? option.name : option
+              }
+              value={
+                fournisseurs.find(
+                  (f) => f.id === parseInt(formData.fournisseur)
+                ) || formData.fournisseur
+              }
               onChange={(event, newValue) => {
+                const newFournisseurId =
+                  typeof newValue === "object" ? newValue.id : newValue || "";
                 setFormData((prev) => ({
                   ...prev,
-                  fournisseur: newValue || "",
+                  fournisseur: newFournisseurId,
                 }));
+                // Générer un nouveau code quand on change de fournisseur
+                if (newFournisseurId && typeof newValue === "object") {
+                  generateCodeProduit(newFournisseurId);
+                }
               }}
               onInputChange={(event, newInputValue) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  fournisseur: newInputValue,
-                }));
+                // Permettre la saisie libre pour les nouveaux fournisseurs
+                if (!fournisseurs.find((f) => f.name === newInputValue)) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    fournisseur: newInputValue,
+                  }));
+                }
               }}
               renderInput={(params) => (
                 <TextField
