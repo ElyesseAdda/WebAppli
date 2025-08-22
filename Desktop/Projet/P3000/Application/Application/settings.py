@@ -31,17 +31,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Charger le fichier .env
 load_env_file()
 
+# Charger les settings selon l'environnement
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/dev/howto/deployment/checklist/
+if DEBUG:
+    # Charger les settings de développement
+    from .settings_local import *
+else:
+    # Charger les settings de production
+    from .settings_base import *
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 
-# Configuration conditionnelle pour développement vs production
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-
-# Configuration ALLOWED_HOSTS forcée pour la production
+# Configuration ALLOWED_HOSTS
 ALLOWED_HOSTS = ['myp3000app.com', 'www.myp3000app.com', 'localhost', '127.0.0.1']
 
 

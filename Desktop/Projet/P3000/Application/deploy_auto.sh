@@ -31,7 +31,20 @@ echo "[INFO] 🔄 Vérification des mises à jour Git..."
 git fetch origin
 
 echo "[INFO] 🔄 Mise à jour du code depuis Git..."
+# Sauvegarder le fichier .env avant le reset
+if [ -f ".env" ]; then
+    cp .env .env.backup
+    echo "[INFO] 📄 Fichier .env sauvegardé"
+fi
+
 git reset --hard origin/main
+
+# Restaurer le fichier .env après le reset
+if [ -f ".env.backup" ]; then
+    cp .env.backup .env
+    rm .env.backup
+    echo "[INFO] 📄 Fichier .env restauré"
+fi
 
 echo "[INFO] 📦 Mise à jour des dépendances..."
 pip install -r requirements.txt
