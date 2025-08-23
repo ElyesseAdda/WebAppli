@@ -154,6 +154,22 @@ const ChantierDetail = () => {
         "Erreur lors du chargement des données du chantier:",
         error
       );
+
+      // Si le chantier n'existe pas (404 ou 500), rediriger vers le premier chantier disponible
+      if (error.response?.status === 404 || error.response?.status === 500) {
+        try {
+          const chantiersResponse = await axios.get("/api/chantier/");
+          if (chantiersResponse.data && chantiersResponse.data.length > 0) {
+            const premierChantier = chantiersResponse.data[0];
+            console.log(`Redirection vers le chantier ${premierChantier.id}`);
+            navigate(`/ChantierDetail/${premierChantier.id}`);
+            return;
+          }
+        } catch (redirectError) {
+          console.error("Erreur lors de la redirection:", redirectError);
+        }
+      }
+
       setError(
         "Impossible de charger les données du chantier. Veuillez réessayer."
       );
