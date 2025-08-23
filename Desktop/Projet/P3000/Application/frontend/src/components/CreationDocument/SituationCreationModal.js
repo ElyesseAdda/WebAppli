@@ -59,29 +59,47 @@ const style = {
 const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
   const [open, setOpen] = useState(false);
 
-  // Calculer le pourcentage moyen et le montant de la partie directement
+  // Calculer le pourcentage moyen, le montant et le total HT de la partie
   let moyennePartie = 0;
   let montantPartie = 0;
+  let totalHTPartie = 0;
 
-  if (partie.sous_parties.length > 0) {
+  if (partie.sous_parties && partie.sous_parties.length > 0) {
     let totalPourcentage = 0;
+    let nombreSousPartiesAvecLignes = 0;
+
     partie.sous_parties.forEach((sousPartie) => {
-      if (sousPartie.lignes.length > 0) {
+      if (sousPartie.lignes && sousPartie.lignes.length > 0) {
         const pourcentageSousPartie =
           sousPartie.lignes.reduce(
-            (acc, ligne) => acc + (ligne.pourcentage_actuel || 0),
+            (acc, ligne) => acc + (parseFloat(ligne.pourcentage_actuel) || 0),
             0
           ) / sousPartie.lignes.length;
         totalPourcentage += pourcentageSousPartie;
+        nombreSousPartiesAvecLignes++;
 
         montantPartie += sousPartie.lignes.reduce(
           (acc, ligne) =>
-            acc + (ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100,
+            acc +
+            (parseFloat(ligne.total_ht || 0) *
+              (parseFloat(ligne.pourcentage_actuel) || 0)) /
+              100,
+          0
+        );
+
+        // Calculer le total HT de base (somme des total_ht des lignes)
+        totalHTPartie += sousPartie.lignes.reduce(
+          (acc, ligne) => acc + parseFloat(ligne.total_ht || 0),
           0
         );
       }
     });
-    moyennePartie = totalPourcentage / partie.sous_parties.length;
+
+    // Éviter la division par zéro
+    moyennePartie =
+      nombreSousPartiesAvecLignes > 0
+        ? totalPourcentage / nombreSousPartiesAvecLignes
+        : 0;
   }
 
   // Filtrer les lignes spéciales de cette partie
@@ -118,15 +136,20 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
           sx={{ width: "120px", padding: "8px" }}
           align="right"
         ></TableCell>
-        <TableCell
-          sx={{ width: "120px", padding: "8px" }}
-          align="right"
-        ></TableCell>
         <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
-          {moyennePartie.toFixed(2)}%
+          {(totalHTPartie || 0)
+            .toFixed(2)
+            .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+          €
         </TableCell>
         <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
-          {montantPartie.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €
+          {(moyennePartie || 0).toFixed(2)}%
+        </TableCell>
+        <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+          {(montantPartie || 0)
+            .toFixed(2)
+            .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+          €
         </TableCell>
       </TableRow>
       <TableRow>
@@ -242,20 +265,30 @@ const SousPartieTable = ({
 }) => {
   const [open, setOpen] = useState(false);
 
-  // Calculer le pourcentage moyen et le montant de la sous-partie directement
+  // Calculer le pourcentage moyen, le montant et le total HT de la sous-partie
   let moyenneSousPartie = 0;
   let montantSousPartie = 0;
+  let totalHTSousPartie = 0;
 
-  if (sousPartie.lignes.length > 0) {
+  if (sousPartie.lignes && sousPartie.lignes.length > 0) {
     moyenneSousPartie =
       sousPartie.lignes.reduce(
-        (acc, ligne) => acc + (ligne.pourcentage_actuel || 0),
+        (acc, ligne) => acc + (parseFloat(ligne.pourcentage_actuel) || 0),
         0
       ) / sousPartie.lignes.length;
 
     montantSousPartie = sousPartie.lignes.reduce(
       (acc, ligne) =>
-        acc + (ligne.total_ht * (ligne.pourcentage_actuel || 0)) / 100,
+        acc +
+        (parseFloat(ligne.total_ht || 0) *
+          (parseFloat(ligne.pourcentage_actuel) || 0)) /
+          100,
+      0
+    );
+
+    // Calculer le total HT de base (somme des total_ht des lignes)
+    totalHTSousPartie = sousPartie.lignes.reduce(
+      (acc, ligne) => acc + parseFloat(ligne.total_ht || 0),
       0
     );
   }
@@ -299,15 +332,17 @@ const SousPartieTable = ({
               sx={{ width: "120px", padding: "8px" }}
               align="right"
             ></TableCell>
-            <TableCell
-              sx={{ width: "120px", padding: "8px" }}
-              align="right"
-            ></TableCell>
             <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
-              {moyenneSousPartie.toFixed(2)}%
+              {(totalHTSousPartie || 0)
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+              €
             </TableCell>
             <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
-              {montantSousPartie
+              {(moyenneSousPartie || 0).toFixed(2)}%
+            </TableCell>
+            <TableCell sx={{ width: "120px", padding: "8px" }} align="right">
+              {(montantSousPartie || 0)
                 .toFixed(2)
                 .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
               €
