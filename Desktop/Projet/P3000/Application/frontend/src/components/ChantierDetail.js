@@ -154,6 +154,8 @@ const ChantierDetail = () => {
         "Erreur lors du chargement des données du chantier:",
         error
       );
+      console.log("Status de l'erreur:", error.response?.status);
+      console.log("Tentative de redirection...");
 
       // Si le chantier n'existe pas (404 ou 500), rediriger vers le premier chantier disponible
       if (error.response?.status === 404 || error.response?.status === 500) {
