@@ -1,5 +1,6 @@
 import { AppBar, Box, Paper, Tab, Tabs } from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
+import { useSituationsManager } from "../../hooks/useSituationsManager";
 import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
 import ChantierListeSituation from "./ChantierListeSituation";
@@ -8,8 +9,12 @@ const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
   // Centralisation des états pour chaque sous-liste et filtres
   const [selectedTab, setSelectedTab] = useState(state.selectedTab || 0);
 
-  // Situations
-  const [situations, setSituations] = useState([]);
+  // Utiliser le hook centralisé pour les situations
+  const { situations, loading: loadingSituations } = useSituationsManager(
+    chantierData?.id
+  );
+
+  // Filtres pour les situations
   const [filtersSituations, setFiltersSituations] = useState(
     state.filtersSituations || {
       numero_situation: "",
@@ -141,10 +146,10 @@ const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
             <ChantierListeSituation
               chantierData={chantierData}
               situations={situations}
-              setSituations={setSituations}
+              setSituations={() => {}} // Fonction vide car géré par le hook
               filters={filtersSituations}
               setFilters={setFiltersSituations}
-              isLoaded={isLoadedSituations}
+              isLoaded={!loadingSituations}
               setIsLoaded={setIsLoadedSituations}
               onSaveFilters={saveFiltersSituations}
             />

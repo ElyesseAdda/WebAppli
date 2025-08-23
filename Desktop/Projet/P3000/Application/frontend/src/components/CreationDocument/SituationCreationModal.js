@@ -26,6 +26,57 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
 
+// Utilitaire de logging persistant
+const SituationLogger = {
+  log: (category, data, label = "") => {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      category,
+      label,
+      data: JSON.parse(JSON.stringify(data)), // Deep clone pour éviter les références
+    };
+
+    // Sauvegarder dans localStorage
+    const existingLogs = JSON.parse(
+      localStorage.getItem("situationDebugLogs") || "[]"
+    );
+    existingLogs.push(logEntry);
+
+    // Garder seulement les 50 derniers logs
+    if (existingLogs.length > 50) {
+      existingLogs.splice(0, existingLogs.length - 50);
+    }
+
+    localStorage.setItem("situationDebugLogs", JSON.stringify(existingLogs));
+
+    // Aussi afficher dans la console avec style
+    console.group(
+      `🔍 [${category}] ${label} - ${timestamp.split("T")[1].split(".")[0]}`
+    );
+    console.log(data);
+    console.groupEnd();
+  },
+
+  getLogs: () => JSON.parse(localStorage.getItem("situationDebugLogs") || "[]"),
+
+  clearLogs: () => localStorage.removeItem("situationDebugLogs"),
+
+  exportLogs: () => {
+    const logs = SituationLogger.getLogs();
+    const dataStr = JSON.stringify(logs, null, 2);
+    const dataBlob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `situation-debug-logs-${
+      new Date().toISOString().split("T")[0]
+    }.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  },
+};
+
 const MOIS = [
   { value: 1, label: "Janvier" },
   { value: 2, label: "Février" },
@@ -65,19 +116,8 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
   let totalHTPartie = 0;
 
   if (partie.sous_parties && partie.sous_parties.length > 0) {
-    let totalPourcentage = 0;
-    let nombreSousPartiesAvecLignes = 0;
-
     partie.sous_parties.forEach((sousPartie) => {
       if (sousPartie.lignes && sousPartie.lignes.length > 0) {
-        const pourcentageSousPartie =
-          sousPartie.lignes.reduce(
-            (acc, ligne) => acc + (parseFloat(ligne.pourcentage_actuel) || 0),
-            0
-          ) / sousPartie.lignes.length;
-        totalPourcentage += pourcentageSousPartie;
-        nombreSousPartiesAvecLignes++;
-
         montantPartie += sousPartie.lignes.reduce(
           (acc, ligne) =>
             acc +
@@ -95,11 +135,9 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
       }
     });
 
-    // Éviter la division par zéro
+    // Calculer le pourcentage basé sur Montant / Total HT
     moyennePartie =
-      nombreSousPartiesAvecLignes > 0
-        ? totalPourcentage / nombreSousPartiesAvecLignes
-        : 0;
+      totalHTPartie > 0 ? (montantPartie / totalHTPartie) * 100 : 0;
   }
 
   // Filtrer les lignes spéciales de cette partie
@@ -271,12 +309,6 @@ const SousPartieTable = ({
   let totalHTSousPartie = 0;
 
   if (sousPartie.lignes && sousPartie.lignes.length > 0) {
-    moyenneSousPartie =
-      sousPartie.lignes.reduce(
-        (acc, ligne) => acc + (parseFloat(ligne.pourcentage_actuel) || 0),
-        0
-      ) / sousPartie.lignes.length;
-
     montantSousPartie = sousPartie.lignes.reduce(
       (acc, ligne) =>
         acc +
@@ -291,6 +323,10 @@ const SousPartieTable = ({
       (acc, ligne) => acc + parseFloat(ligne.total_ht || 0),
       0
     );
+
+    // Calculer le pourcentage basé sur Montant / Total HT
+    moyenneSousPartie =
+      totalHTSousPartie > 0 ? (montantSousPartie / totalHTSousPartie) * 100 : 0;
   }
 
   // Filtrer les lignes spéciales de cette sous-partie
@@ -1560,11 +1596,73 @@ const SituationCreationModal = ({
       if (!calculatedValues) {
         throw new Error("Les calculs ne sont pas disponibles");
       }
+
+      // 🔍 LOG 1: État initial du modal
+      SituationLogger.log(
+        "MODAL_STATE",
+        {
+          chantier: chantier,
+          devis: devis,
+          mois,
+          annee,
+          structure: structure,
+          avenants: avenants,
+          lignesSpeciales: lignesSpeciales,
+          lignesSupplementaires: lignesSupplementaires,
+          tauxProrata,
+          retenueCIE,
+        },
+        "État initial du modal"
+      );
+
       // Fonction helper pour formater les nombres
       const formatNumber = (num) => {
         if (num === null || num === undefined) return "0.00";
         return parseFloat(num).toFixed(2);
       };
+      // 🔍 LOG 2: Calculs effectués dans le modal
+      const calculsManuels = {
+        montantTotalCumul: calculerMontantTotalCumul(),
+        cumulPrecedent: calculerCumulPrecedent(),
+        montantHTMois: calculerMontantHTMois(),
+        totalHTDevis: structure.reduce((total, partie) => {
+          return (
+            total +
+            partie.sous_parties.reduce((sousTotal, sousPartie) => {
+              return (
+                sousTotal +
+                sousPartie.lignes.reduce((ligneTotal, ligne) => {
+                  return ligneTotal + parseFloat(ligne.total_ht || 0);
+                }, 0)
+              );
+            }, 0)
+          );
+        }, 0),
+        pourcentageCalcule: (() => {
+          const totalHT = structure.reduce((total, partie) => {
+            return (
+              total +
+              partie.sous_parties.reduce((sousTotal, sousPartie) => {
+                return (
+                  sousTotal +
+                  sousPartie.lignes.reduce((ligneTotal, ligne) => {
+                    return ligneTotal + parseFloat(ligne.total_ht || 0);
+                  }, 0)
+                );
+              }, 0)
+            );
+          }, 0);
+          const montantCumul = calculerMontantTotalCumul();
+          return totalHT > 0 ? (montantCumul / totalHT) * 100 : 0;
+        })(),
+      };
+
+      SituationLogger.log(
+        "CALCULS_MODAL",
+        calculsManuels,
+        "Calculs effectués dans le modal"
+      );
+
       // Récupérer le prochain numéro de situation
       const situationNumero = await getNextSituationNumber();
 
@@ -1637,18 +1735,64 @@ const SituationCreationModal = ({
         total_avancement: formatNumber(totalAvancement),
       };
 
-      console.log("Données envoyées:", situationData); // Pour debug
+      // 🔍 LOG 3: Données envoyées à l'API
+      SituationLogger.log(
+        "API_REQUEST",
+        situationData,
+        "Données envoyées à l'API"
+      );
 
+      let response;
       if (existingSituation) {
         // Mise à jour d'une situation existante
-        await axios.put(
+        response = await axios.put(
           `/api/situations/${existingSituation.id}/update/`,
           situationData
         );
+        SituationLogger.log(
+          "API_RESPONSE",
+          response.data,
+          "Réponse API - Mise à jour"
+        );
       } else {
         // Création d'une nouvelle situation
-        await axios.post("/api/situations/", situationData);
+        response = await axios.post("/api/situations/", situationData);
+        SituationLogger.log(
+          "API_RESPONSE",
+          response.data,
+          "Réponse API - Création"
+        );
       }
+
+      // 🔍 LOG 4: Comparaison des données
+      const comparison = {
+        envoyees: {
+          montant_ht_mois: situationData.montant_ht_mois,
+          montant_total_cumul_ht: situationData.montant_total_cumul_ht,
+          montant_total_devis: situationData.montant_total_devis,
+          pourcentage_avancement: situationData.pourcentage_avancement,
+          montant_apres_retenues: situationData.montant_apres_retenues,
+          tva: situationData.tva,
+          retenue_garantie: situationData.retenue_garantie,
+          montant_prorata: situationData.montant_prorata,
+        },
+        recues: {
+          montant_ht_mois: response.data.montant_ht_mois,
+          montant_total_cumul_ht: response.data.montant_total_cumul_ht,
+          montant_total_devis: response.data.montant_total_devis,
+          pourcentage_avancement: response.data.pourcentage_avancement,
+          montant_apres_retenues: response.data.montant_apres_retenues,
+          tva: response.data.tva,
+          retenue_garantie: response.data.retenue_garantie,
+          montant_prorata: response.data.montant_prorata,
+        },
+      };
+
+      SituationLogger.log(
+        "COMPARISON",
+        comparison,
+        "Comparaison Envoyé vs Reçu"
+      );
 
       if (onCreated) onCreated();
       onClose();

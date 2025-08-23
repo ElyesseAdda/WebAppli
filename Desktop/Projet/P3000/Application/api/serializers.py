@@ -4,7 +4,7 @@ from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
     Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
-    Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire,
+    Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
@@ -645,10 +645,28 @@ class SituationLigneAvenantSerializer(serializers.ModelSerializer):
                     data[field] = Decimal('0.00')
         return super().to_internal_value(data)
 
+class SituationLigneSpecialeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SituationLigneSpeciale
+        fields = ['id', 'description', 'montant_ht', 'value', 'value_type', 'type', 
+                 'niveau', 'partie_id', 'sous_partie_id', 'pourcentage_precedent', 
+                 'pourcentage_actuel', 'montant']
+
+    def to_internal_value(self, data):
+        numeric_fields = ['montant_ht', 'value', 'pourcentage_precedent', 'pourcentage_actuel', 'montant']
+        for field in numeric_fields:
+            if field in data:
+                try:
+                    data[field] = Decimal(str(data[field])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                except:
+                    data[field] = Decimal('0.00')
+        return super().to_internal_value(data)
+
 class SituationSerializer(serializers.ModelSerializer):
     lignes = SituationLigneSerializer(many=True, read_only=True)
     lignes_supplementaires = SituationLigneSupplementaireSerializer(many=True, read_only=True)
     lignes_avenant = SituationLigneAvenantSerializer(many=True, read_only=True)
+    lignes_speciales = SituationLigneSpecialeSerializer(many=True, read_only=True)
 
     class Meta:
         model = Situation

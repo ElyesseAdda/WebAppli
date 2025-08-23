@@ -39,7 +39,7 @@ from .models import (
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
-    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, 
+    LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur,
     AgencyExpenseAggregate,
@@ -4257,16 +4257,38 @@ class SituationService:
 def create_situation(request):
     try:
         data = request.data.copy()
-        print("Données reçues:", data)
+        
+        # 🔍 LOG BACKEND 1: Données reçues
+        print("\n" + "="*80)
+        print("🔍 [BACKEND] CRÉATION SITUATION - Données reçues")
+        print("="*80)
+        print(f"Chantier ID: {data.get('chantier')}")
+        print(f"Devis ID: {data.get('devis')}")
+        print(f"Mois/Année: {data.get('mois')}/{data.get('annee')}")
+        print("\n📊 MONTANTS REÇUS:")
+        for key in ['montant_ht_mois', 'montant_total_cumul_ht', 'montant_total_devis', 
+                    'pourcentage_avancement', 'montant_apres_retenues', 'tva', 
+                    'retenue_garantie', 'montant_prorata']:
+            print(f"  {key}: {data.get(key, 'NON FOURNI')}")
+        
+        print(f"\n📝 Nombre de lignes: {len(data.get('lignes', []))}")
+        print(f"📝 Nombre de lignes supplémentaires: {len(data.get('lignes_supplementaires', []))}")
+        print(f"📝 Nombre de lignes spéciales: {len(data.get('lignes_speciales', []))}")
+        if data.get('lignes_speciales'):
+            for ligne in data.get('lignes_speciales', []):
+                print(f"  - {ligne.get('description', 'N/A')}: {ligne.get('montant', 'N/A')}€ ({ligne.get('type', 'N/A')})")
+        print("="*80)
         
         # Utiliser le SituationCreateSerializer au lieu de SituationSerializer
         serializer = SituationCreateSerializer(data=data)
         if not serializer.is_valid():
-            print("Erreurs de validation:", serializer.errors)
+            print("❌ Erreurs de validation:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # Créer la situation
+        print("✅ Validation réussie, création de la situation...")
         situation = serializer.save()
+        print(f"✅ Situation créée avec ID: {situation.id}")
 
         # Créer les lignes de situation
         for ligne_data in data.get('lignes', []):
@@ -4290,13 +4312,60 @@ def create_situation(request):
                 type=ligne_data.get('type', 'deduction')
             )
 
+        # Créer les lignes spéciales
+        for ligne_data in data.get('lignes_speciales', []):
+            SituationLigneSpeciale.objects.create(
+                situation=situation,
+                description=ligne_data['description'],
+                montant_ht=Decimal(str(ligne_data.get('value', 0))),
+                value=Decimal(str(ligne_data.get('value', 0))),
+                value_type=ligne_data.get('valueType', 'fixed'),
+                type=ligne_data.get('type', 'reduction'),
+                niveau=ligne_data.get('niveau', 'global'),
+                partie_id=ligne_data.get('partie_id'),
+                sous_partie_id=ligne_data.get('sous_partie_id'),
+                pourcentage_precedent=Decimal(str(ligne_data.get('pourcentage_precedent', 0))),
+                pourcentage_actuel=Decimal(str(ligne_data.get('pourcentage_actuel', 0))),
+                montant=Decimal(str(ligne_data.get('montant', 0)))
+            )
+
         # Recharger la situation avec toutes ses relations
         situation = Situation.objects.select_related('devis').prefetch_related(
             'lignes',
-            'lignes_supplementaires'
+            'lignes_supplementaires',
+            'lignes_speciales'
         ).get(id=situation.id)
+        
+        # 🔍 LOG BACKEND 2: Données finales en DB
+        print("\n" + "="*80)
+        print("🔍 [BACKEND] SITUATION CRÉÉE - Données en DB")
+        print("="*80)
+        print("📊 MONTANTS EN DB:")
+        for field in ['montant_ht_mois', 'montant_total_cumul_ht', 'montant_total_devis', 
+                      'pourcentage_avancement', 'montant_apres_retenues', 'tva', 
+                      'retenue_garantie', 'montant_prorata']:
+            value = getattr(situation, field, 'CHAMP INEXISTANT')
+            print(f"  {field}: {value}")
+        
+        print(f"\n📝 Lignes créées: {situation.lignes.count()}")
+        print(f"📝 Lignes supplémentaires créées: {situation.lignes_supplementaires.count()}")
+        print(f"📝 Lignes spéciales créées: {situation.lignes_speciales.count()}")
+        print("="*80)
 
-        return Response(SituationSerializer(situation).data, status=status.HTTP_201_CREATED)
+        response_data = SituationSerializer(situation).data
+        
+        # 🔍 LOG BACKEND 3: Données renvoyées au frontend
+        print("\n" + "="*80)
+        print("🔍 [BACKEND] RÉPONSE ENVOYÉE AU FRONTEND")
+        print("="*80)
+        print("📊 MONTANTS RENVOYÉS:")
+        for key in ['montant_ht_mois', 'montant_total_cumul_ht', 'montant_total_devis', 
+                    'pourcentage_avancement', 'montant_apres_retenues', 'tva', 
+                    'retenue_garantie', 'montant_prorata']:
+            print(f"  {key}: {response_data.get(key, 'NON PRÉSENT')}")
+        print("="*80 + "\n")
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         print("Erreur dans create:", str(e))

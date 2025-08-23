@@ -768,6 +768,25 @@ class SituationLigneSupplementaire(models.Model):
     class Meta:
         ordering = ['id']
 
+class SituationLigneSpeciale(models.Model):
+    situation = models.ForeignKey('Situation',
+                                related_name='lignes_speciales',
+                                on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
+    montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    value_type = models.CharField(max_length=20, choices=[('fixed', 'Montant fixe'), ('percentage', 'Pourcentage')], default='fixed')
+    type = models.CharField(max_length=20, choices=[('reduction', 'Réduction'), ('ajout', 'Ajout')], default='reduction')
+    niveau = models.CharField(max_length=20, choices=[('global', 'Global'), ('partie', 'Partie'), ('sous_partie', 'Sous-partie')], default='global')
+    partie_id = models.CharField(max_length=50, null=True, blank=True)
+    sous_partie_id = models.CharField(max_length=50, null=True, blank=True)
+    pourcentage_precedent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    pourcentage_actuel = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    montant = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    class Meta:
+        ordering = ['id']
+
 class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)
     client = models.ManyToManyField(Client, related_name='quitus', blank=True)  # Modification ici

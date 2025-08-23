@@ -35,6 +35,7 @@ import {
 import { useSituationsManager } from "../../hooks/useSituationsManager";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
+import SituationDebugViewer from "../debug/SituationDebugViewer";
 
 const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const {
@@ -53,9 +54,8 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     setState({ ...state, openAccordions: newOpen });
 
   // Utiliser le hook pour gérer les situations
-  const { situations, updateDateEnvoi, updatePaiement } = useSituationsManager(
-    chantierData?.id
-  );
+  const { situations, updateDateEnvoi, updatePaiement, loadSituations } =
+    useSituationsManager(chantierData?.id);
 
   // State local pour tout ce qui n'a pas besoin d'être global
   const [tauxFacturationData, setTauxFacturationData] = React.useState(null);
@@ -598,9 +598,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         devis={devisChantier}
         chantier={chantierData}
         onCreated={() => {
+          // Recharger les données de taux de facturation
           axios
             .get(`/api/chantier/${chantierData.id}/taux-facturation/`)
             .then((res) => setTauxFacturationData(res.data));
+
+          // Recharger la liste des situations (synchronisé avec ChantierDocumentsTab)
+          loadSituations();
         }}
       />
 
@@ -1270,6 +1274,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Composant de debug pour les situations */}
+      <SituationDebugViewer />
     </Box>
   );
 };
