@@ -1666,6 +1666,20 @@ const SituationCreationModal = ({
       // Récupérer le prochain numéro de situation
       const situationNumero = await getNextSituationNumber();
 
+      // Debug des calculs
+      const totalNet = calculerTotalNet();
+      const tva = totalNet * 0.2;
+      const montantTTC = totalNet + tva;
+
+      console.log("🔍 DEBUG CALCULS:", {
+        totalNet,
+        tva,
+        montantTTC,
+        isNaNTotalNet: isNaN(totalNet),
+        isNaNTVA: isNaN(tva),
+        isNaNMontantTTC: isNaN(montantTTC),
+      });
+
       const situationData = {
         chantier: chantier.id,
         devis: devis.id,
@@ -1695,9 +1709,9 @@ const SituationCreationModal = ({
           calculerMontantHTMois() * (tauxProrata / 100)
         ),
         retenue_cie: formatNumber(retenueCIE),
-        montant_apres_retenues: formatNumber(calculerTotalNet()),
-        tva: formatNumber(calculerTotalNet() * 0.2),
-        montant_total_ttc: formatNumber(calculerTotalNet() * 1.2),
+        montant_apres_retenues: formatNumber(totalNet),
+        tva: formatNumber(tva),
+        montant_ttc: formatNumber(montantTTC),
         pourcentage_avancement: formatNumber(
           (calculerMontantTotalCumul() / (totalHT + montantTotalAvenants)) * 100
         ),
@@ -1829,18 +1843,20 @@ const SituationCreationModal = ({
 
   // Calcul du total avec les lignes supplémentaires
   const calculerTotalNet = () => {
-    let total = calculerMontantHTMois();
+    const montantHtMois = calculerMontantHTMois();
 
     // Retenue de garantie (5%)
-    const retenueGarantie = total * 0.05;
-    total -= retenueGarantie;
+    const retenueGarantie = montantHtMois * 0.05;
 
-    // Compte prorata
-    const compteProrata = total * (tauxProrata / 100);
-    total -= compteProrata;
+    // Compte prorata (calculé sur le montant HT du mois)
+    const compteProrata = montantHtMois * (tauxProrata / 100);
 
     // Retenue CIE
-    total -= parseFloat(retenueCIE);
+    const retenueCIEValue = parseFloat(retenueCIE || 0);
+
+    // Montant après retenues
+    let total =
+      montantHtMois - retenueGarantie - compteProrata - retenueCIEValue;
 
     // Lignes supplémentaires
     lignesSupplementaires.forEach((ligne) => {
@@ -1849,6 +1865,16 @@ const SituationCreationModal = ({
       } else {
         total += parseFloat(ligne.montant);
       }
+    });
+
+    console.log("🔍 calculerTotalNet DEBUG:", {
+      montantHtMois,
+      retenueGarantie,
+      compteProrata,
+      retenueCIEValue,
+      total,
+      isNaNTotal: isNaN(total),
+      lignesSupplementaires: lignesSupplementaires.length,
     });
 
     return total;
@@ -1864,11 +1890,20 @@ const SituationCreationModal = ({
 
     const retenueGarantie = montantHtMois * 0.05;
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
-    const montantApresRetenues =
+    let montantApresRetenues =
       montantHtMois -
       retenueGarantie -
       montantProrata -
       parseFloat(retenueCIE || 0);
+
+    // Ajouter l'impact des lignes supplémentaires
+    lignesSupplementaires.forEach((ligne) => {
+      if (ligne.type === "deduction") {
+        montantApresRetenues -= parseFloat(ligne.montant);
+      } else {
+        montantApresRetenues += parseFloat(ligne.montant);
+      }
+    });
     const tva = montantApresRetenues * 0.2;
     const pourcentageAvancement =
       montantTotalTravaux > 0

@@ -4338,6 +4338,28 @@ def create_situation(request):
             'lignes_speciales'
         ).get(id=situation.id)
         
+        # Recalculer le montant_apres_retenues pour s'assurer qu'il est correct
+        montant_ht_mois = situation.montant_ht_mois
+        retenue_garantie = situation.retenue_garantie
+        montant_prorata = situation.montant_prorata
+        retenue_cie = situation.retenue_cie
+        
+        # Calculer le montant après retenues
+        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie
+        
+        # Ajouter l'impact des lignes supplémentaires
+        for ligne_suppl in situation.lignes_supplementaires.all():
+            if ligne_suppl.type == 'deduction':
+                montant_apres_retenues -= ligne_suppl.montant
+            else:
+                montant_apres_retenues += ligne_suppl.montant
+        
+        # Mettre à jour le montant_apres_retenues en base de données
+        situation.montant_apres_retenues = montant_apres_retenues
+        situation.save()
+        
+        print(f"🔍 [BACKEND] MONTANT_APRES_RETENUES RECALCULÉ: {montant_apres_retenues}")
+        
         # 🔍 LOG BACKEND 2: Données finales en DB
         print("\n" + "="*80)
         print("🔍 [BACKEND] SITUATION CRÉÉE - Données en DB")

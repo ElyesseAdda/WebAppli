@@ -683,15 +683,10 @@ class Situation(models.Model):
     montant_total_travaux = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_total_devis = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_total_cumul_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
-
     
-    # Renommer ces champs pour correspondre au frontend
-    cumul_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # au lieu de cumul_mois_precedent
-    montant_apres_retenues = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # au lieu de montant_total_mois_apres_retenue
-    
-    # Nouveaux champs
-    montant_total_cumul_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Champs pour correspondre au frontend
+    cumul_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_apres_retenues = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tva = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     # Déductions standard
@@ -699,6 +694,7 @@ class Situation(models.Model):
     taux_prorata = models.DecimalField(max_digits=5, decimal_places=2, default=2.50)
     montant_prorata = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     retenue_cie = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     # Traçabilité
     created_by = models.ForeignKey(
@@ -713,11 +709,6 @@ class Situation(models.Model):
         null=True,
         related_name='situations_validated'
     )
-
-    # Ajout des nouveaux champs
-    montant_total_devis = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    montant_total_travaux = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    total_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     class Meta:
         ordering = ['-annee', '-mois']

@@ -1226,18 +1226,20 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
   // Calcul du total avec les lignes supplémentaires
   const calculerTotalNet = () => {
-    let total = calculerMontantHTMois();
+    const montantHtMois = calculerMontantHTMois();
 
     // Retenue de garantie (5%)
-    const retenueGarantie = total * 0.05;
-    total -= retenueGarantie;
+    const retenueGarantie = montantHtMois * 0.05;
 
-    // Compte prorata
-    const compteProrata = total * (tauxProrata / 100);
-    total -= compteProrata;
+    // Compte prorata (calculé sur le montant HT du mois)
+    const compteProrata = montantHtMois * (tauxProrata / 100);
 
     // Retenue CIE
-    total -= parseFloat(retenueCIE);
+    const retenueCIEValue = parseFloat(retenueCIE || 0);
+
+    // Montant après retenues
+    let total =
+      montantHtMois - retenueGarantie - compteProrata - retenueCIEValue;
 
     // Lignes supplémentaires
     lignesSupplementaires.forEach((ligne) => {
@@ -1261,11 +1263,20 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
 
     const retenueGarantie = montantHtMois * 0.05;
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
-    const montantApresRetenues =
+    let montantApresRetenues =
       montantHtMois -
       retenueGarantie -
       montantProrata -
       parseFloat(retenueCIE || 0);
+
+    // Ajouter l'impact des lignes supplémentaires
+    lignesSupplementaires.forEach((ligne) => {
+      if (ligne.type === "deduction") {
+        montantApresRetenues -= parseFloat(ligne.montant);
+      } else {
+        montantApresRetenues += parseFloat(ligne.montant);
+      }
+    });
     const tva = montantApresRetenues * 0.2;
     const pourcentageAvancement =
       montantTotalTravaux > 0
