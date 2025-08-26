@@ -81,7 +81,7 @@ const SituationDebugViewer = () => {
       sx={{
         position: "fixed",
         bottom: 20,
-        right: 20,
+        left: 20,
         zIndex: 9999,
         maxWidth: 400,
       }}

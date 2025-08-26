@@ -3984,86 +3984,88 @@ class SituationViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         try:
-            data = request.data
-    
+            data = request.data.copy()
+            
+            # Utiliser le SituationCreateSerializer pour la validation et la création
+            serializer = SituationCreateSerializer(data=data)
+            if not serializer.is_valid():
+                print("❌ Erreurs de validation:", serializer.errors)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # Conversion et validation des montants
-            try:
-                montants = {
-                    'montant_ht_mois': Decimal(str(data['montant_ht_mois'])),
-                    'montant_precedent': Decimal(str(data.get('montant_precedent', '0'))),
-                    'cumul_precedent': Decimal(str(data.get('cumul_precedent', '0'))),
-                    'retenue_garantie': Decimal(str(data.get('retenue_garantie', '0'))),
-                    'montant_prorata': Decimal(str(data.get('montant_prorata', '0'))),
-                    'retenue_cie': Decimal(str(data.get('retenue_cie', '0'))),
-                    'montant_apres_retenues': Decimal(str(data.get('montant_apres_retenues', '0'))),
-                    'montant_total': Decimal(str(data.get('montant_total', '0'))),  # Rendu optionnel
-                    'tva': Decimal(str(data.get('tva', '0'))),
-                    'pourcentage_avancement': Decimal(str(data['pourcentage_avancement']))
-                }
-            except Exception as e:
-                return Response(
-                    {'error': f'Erreur de conversion des montants: {str(e)}'},
-                    status=400
+            # Créer la situation
+            print("✅ Validation réussie, création de la situation...")
+            situation = serializer.save()
+            print(f"✅ Situation créée avec ID: {situation.id}")
+
+            # Créer les lignes de situation
+            for ligne_data in data.get('lignes', []):
+                SituationLigne.objects.create(
+                    situation=situation,
+                    ligne_devis_id=ligne_data['ligne_devis'],
+                    description=ligne_data['description'],
+                    quantite=Decimal(str(ligne_data['quantite'])),
+                    prix_unitaire=Decimal(str(ligne_data['prix_unitaire'])),
+                    total_ht=Decimal(str(ligne_data['total_ht'])),
+                    pourcentage_actuel=Decimal(str(ligne_data['pourcentage_actuel'])),
+                    montant=Decimal(str(ligne_data['montant']))
                 )
 
-            # Création de la situation
-            situation = Situation.objects.create(
-                chantier_id=data['chantier'],
-                devis_id=data['devis'],
-                mois=int(data['mois']),
-                annee=int(data['annee']),
-                **montants,
-                taux_prorata=Decimal(str(data.get('taux_prorata', '2.5'))),
-                numero_situation=data['numero_situation']
-            )
+            # Créer les lignes supplémentaires
+            for ligne_data in data.get('lignes_supplementaires', []):
+                SituationLigneSupplementaire.objects.create(
+                    situation=situation,
+                    description=ligne_data['description'],
+                    montant=Decimal(str(ligne_data['montant'])),
+                    type=ligne_data.get('type', 'deduction')
+                )
 
-            # Création des lignes de situation
-            if 'lignes' in data:
-                for ligne in data['lignes']:
-                    SituationLigne.objects.create(
-                        situation=situation,
-                        ligne_devis_id=ligne['ligne_devis'],
-                        description=ligne.get('description', ''),
-                        quantite=Decimal(str(ligne.get('quantite', '0'))),
-                        prix_unitaire=Decimal(str(ligne.get('prix_unitaire', '0'))),
-                        total_ht=Decimal(str(ligne.get('total_ht', '0'))),
-                        pourcentage_actuel=Decimal(str(ligne.get('pourcentage_actuel', '0'))),
-                        montant=Decimal(str(ligne.get('montant', '0')))
-                    )
+            # Créer les lignes spéciales
+            for ligne_data in data.get('lignes_speciales', []):
+                SituationLigneSpeciale.objects.create(
+                    situation=situation,
+                    description=ligne_data['description'],
+                    montant_ht=Decimal(str(ligne_data.get('value', 0))),
+                    value=Decimal(str(ligne_data.get('value', 0))),
+                    value_type=ligne_data.get('valueType', 'fixed'),
+                    type=ligne_data.get('type', 'reduction'),
+                    niveau=ligne_data.get('niveau', 'global'),
+                    partie_id=ligne_data.get('partie_id'),
+                    sous_partie_id=ligne_data.get('sous_partie_id'),
+                    pourcentage_precedent=Decimal(str(ligne_data.get('pourcentage_precedent', 0))),
+                    pourcentage_actuel=Decimal(str(ligne_data.get('pourcentage_actuel', 0))),
+                    montant=Decimal(str(ligne_data.get('montant', 0)))
+                )
 
-            # Création des lignes supplémentaires si présentes
-            if 'lignes_supplementaires' in data:
-                for ligne in data['lignes_supplementaires']:
-                    SituationLigneSupplementaire.objects.create(
-                        situation=situation,
-                        description=ligne.get('description', ''),
-                        montant=Decimal(str(ligne.get('montant', '0'))),
-                        type=ligne.get('type', 'deduction')
-                    )
-
-            # Création des lignes d'avenants si présentes
+            # Créer les lignes d'avenants si présentes
             if 'lignes_avenant' in data:
                 for ligne in data['lignes_avenant']:
                     SituationLigneAvenant.objects.create(
                         situation=situation,
                         facture_ts_id=ligne['facture_ts'],
-                        avenant_id=ligne['avenant_id'],  # Ajout de l'ID de l'avenant
-                        montant_ht=Decimal(str(ligne.get('montant_ht', '0'))),  # Ajout du montant HT
+                        avenant_id=ligne['avenant_id'],
+                        montant_ht=Decimal(str(ligne.get('montant_ht', '0'))),
                         pourcentage_actuel=Decimal(str(ligne.get('pourcentage_actuel', '0'))),
                         montant=Decimal(str(ligne.get('montant', '0')))
                     )
 
+            # Recharger la situation avec toutes ses relations
+            situation = Situation.objects.select_related('devis').prefetch_related(
+                'lignes',
+                'lignes_supplementaires',
+                'lignes_speciales',
+                'lignes_avenant'
+            ).get(id=situation.id)
+
             return Response(
                 SituationSerializer(situation).data,
-                status=201
+                status=status.HTTP_201_CREATED
             )
 
         except Exception as e:
-    
+            print("Erreur dans SituationViewSet.create:", str(e))
             return Response(
-                {'error': str(e)},
-                status=400
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
 
 class SituationLigneViewSet(viewsets.ModelViewSet):
