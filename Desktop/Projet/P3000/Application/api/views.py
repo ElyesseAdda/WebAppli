@@ -56,7 +56,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from decimal import Decimal
 from django.db.models import Q
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import tempfile
 from django.views import View
 import random
@@ -3999,8 +3999,8 @@ class SituationViewSet(viewsets.ModelViewSet):
 
             # Créer les lignes de situation
             for ligne_data in data.get('lignes', []):
-                SituationLigne.objects.create(
-                    situation=situation,
+                    SituationLigne.objects.create(
+                        situation=situation,
                     ligne_devis_id=ligne_data['ligne_devis'],
                     description=ligne_data['description'],
                     quantite=Decimal(str(ligne_data['quantite'])),
@@ -4012,8 +4012,8 @@ class SituationViewSet(viewsets.ModelViewSet):
 
             # Créer les lignes supplémentaires
             for ligne_data in data.get('lignes_supplementaires', []):
-                SituationLigneSupplementaire.objects.create(
-                    situation=situation,
+                    SituationLigneSupplementaire.objects.create(
+                        situation=situation,
                     description=ligne_data['description'],
                     montant=Decimal(str(ligne_data['montant'])),
                     type=ligne_data.get('type', 'deduction')
@@ -4064,7 +4064,7 @@ class SituationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print("Erreur dans SituationViewSet.create:", str(e))
             return Response(
-                {'error': str(e)}, 
+                {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -5048,8 +5048,18 @@ def preview_situation(request, situation_id):
                     situation_ligne = situation_lignes_dict.get(ligne_devis.id)
                     pourcentage = situation_ligne.pourcentage_actuel if situation_ligne else Decimal('0')
                     
-                    total_ligne = ligne_devis.quantite * ligne_devis.prix_unitaire
-                    montant_situation = (total_ligne * pourcentage) / Decimal('100')
+                    # Utiliser les données stockées en base de données
+                    ligne_situation = situation_lignes_dict.get(ligne_devis.id)
+                    if ligne_situation:
+                        # Utiliser les données de la situation stockées en DB
+                        total_ligne = ligne_situation.total_ht
+                        montant_situation = ligne_situation.montant
+                        pourcentage = ligne_situation.pourcentage_actuel
+                    else:
+                        # Fallback si la ligne n'existe pas en situation
+                        total_ligne = ligne_devis.quantite * ligne_devis.prix_unitaire
+                        montant_situation = (total_ligne * pourcentage) / Decimal('100')
+                    
                     total_sous_partie += total_ligne
                     total_avancement_sous_partie += montant_situation
 
@@ -5118,16 +5128,18 @@ def preview_situation(request, situation_id):
                 pourcentage_avenant = Decimal('0')
                 nb_lignes_avenant = 0
 
+            # Utiliser les données stockées en base de données
+            montant_avancement_avenant = ligne_avenant.montant  # Utiliser le montant stocké en DB
+
             current_avenant_lines.append({
                 'devis_numero': facture_ts.devis.numero,
                 'designation': facture_ts.designation,
                 'montant_ht': ligne_avenant.montant_ht,
                 'pourcentage_actuel': ligne_avenant.pourcentage_actuel,
-                'montant': (ligne_avenant.montant_ht * ligne_avenant.pourcentage_actuel) / Decimal('100')
+                'montant': ligne_avenant.montant  # Utiliser le montant stocké en DB
             })
 
             total_avenant += ligne_avenant.montant_ht
-            montant_avancement_avenant = (ligne_avenant.montant_ht * ligne_avenant.pourcentage_actuel) / Decimal('100')
             pourcentage_avenant += ligne_avenant.pourcentage_actuel
             nb_lignes_avenant += 1
 
@@ -5297,6 +5309,68 @@ def preview_situation(request, situation_id):
                     'isHighlighted': display_line.get('isHighlighted', False)
                 })
 
+        # Préparer les lignes spéciales de la situation
+        lignes_speciales_situation = []
+        total_lignes_speciales = Decimal('0')
+        for ligne_speciale in situation.lignes_speciales.all():
+            lignes_speciales_situation.append({
+                'id': ligne_speciale.id,
+                'description': ligne_speciale.description,
+                'montant_ht': ligne_speciale.montant_ht,
+                'value': ligne_speciale.value,
+                'value_type': ligne_speciale.value_type,
+                'type': ligne_speciale.type,
+                'niveau': ligne_speciale.niveau,
+                'partie_id': ligne_speciale.partie_id,
+                'sous_partie_id': ligne_speciale.sous_partie_id,
+                'pourcentage_precedent': ligne_speciale.pourcentage_precedent,
+                'pourcentage_actuel': ligne_speciale.pourcentage_actuel,
+                'montant': ligne_speciale.montant,
+            })
+            # Calculer l'impact des lignes spéciales sur le total
+            if ligne_speciale.type == 'reduction':
+                total_lignes_speciales -= ligne_speciale.montant
+            else:  # ajout
+                total_lignes_speciales += ligne_speciale.montant
+
+        # Calculer le montant global après lignes spéciales
+        total_ht_apres_lignes_speciales = total_ht + total_lignes_speciales
+
+        # Calculer les montants en utilisant les valeurs stockées en DB
+        montant_ht_mois = situation.montant_ht_mois
+        retenue_garantie = situation.retenue_garantie
+        montant_prorata = situation.montant_prorata
+        retenue_cie = situation.retenue_cie
+        
+        # Debug: Afficher les valeurs de base
+        print(f"🔍 DEBUG CALCULS:")
+        print(f"  Montant HT du mois: {montant_ht_mois}")
+        print(f"  Retenue Garantie: {retenue_garantie}")
+        print(f"  Montant Prorata: {montant_prorata}")
+        print(f"  Retenue CIE: {retenue_cie}")
+        
+        # Calculer le montant après retenues en tenant compte des lignes supplémentaires
+        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie
+        print(f"  Montant après retenues (base): {montant_apres_retenues}")
+        
+        # Ajouter l'impact des lignes supplémentaires
+        for ligne_suppl in lignes_supplementaires_data:
+            if ligne_suppl['type'] == 'deduction':
+                montant_apres_retenues -= ligne_suppl['montant']
+                print(f"  - Ligne supplémentaire (déduction): {ligne_suppl['montant']}")
+            else:
+                montant_apres_retenues += ligne_suppl['montant']
+                print(f"  + Ligne supplémentaire (ajout): {ligne_suppl['montant']}")
+        
+        print(f"  Montant après retenues (final): {montant_apres_retenues}")
+        
+        # Calculer la TVA
+        
+        tva = (montant_apres_retenues * Decimal('0.20')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        print(f"  TVA: {tva}")
+        print(f"  Montant TTC: {montant_apres_retenues + tva}")
+        print(f"🔍 FIN DEBUG")
+        
         context = {
             'chantier': {
                 'nom': chantier.chantier_name,
@@ -5324,33 +5398,34 @@ def preview_situation(request, situation_id):
                 'mois': situation.mois,
                 'annee': situation.annee,
                 'numero_situation': situation.numero_situation,
-                'montant_ht_mois': situation.montant_ht_mois,
+                'montant_ht_mois': montant_ht_mois,
                 'montant_precedent': situation.montant_precedent,
                 'montant_total': situation.montant_total,
                 'pourcentage_avancement': situation.pourcentage_avancement,
-                'retenue_garantie': situation.retenue_garantie,
-                'montant_prorata': situation.montant_prorata,
+                'retenue_garantie': retenue_garantie,
+                'montant_prorata': montant_prorata,
                 'taux_prorata': situation.taux_prorata,
-                'retenue_cie': situation.retenue_cie,
+                'retenue_cie': retenue_cie,
                 'date_creation': situation.date_creation,
                 'montant_total_devis': situation.montant_total_devis,
                 'montant_total_travaux': situation.montant_total_travaux,
                 'total_avancement': situation.total_avancement,
                 # Ajout des champs manquants
                 'cumul_precedent': situation.cumul_precedent,
-                'montant_apres_retenues': situation.montant_apres_retenues,
+                'montant_apres_retenues': montant_apres_retenues,
                 'montant_total_cumul_ht': situation.montant_total_cumul_ht,
-                'tva': situation.tva,
+                'tva': tva,
                 'statut': situation.statut,
                 'date_validation': situation.date_validation,
+                'lignes_speciales': lignes_speciales_situation,
             },
             'parties': parties_data,
             'lignes_avenant': avenant_data,
             'lignes_supplementaires': lignes_supplementaires_data,
             'special_lines_global': special_lines_global,
-            'total_ht': str(total_ht),
-            'tva': str(total_ht * Decimal('0.20')),
-            'montant_ttc': str(total_ht * Decimal('1.20')),
+            'total_ht': str(total_ht_apres_lignes_speciales),
+            'tva': str(tva),
+            'montant_ttc': str(montant_apres_retenues + tva),
             'total_avenants': total_avenants,
             'pourcentage_total_avenants': pourcentage_total_avenants,
             'montant_total_avenants': total_montant_avancement_avenants,

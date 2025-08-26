@@ -1690,8 +1690,10 @@ const SituationCreationModal = ({
         montant_ht_mois: formatNumber(calculerMontantHTMois()),
         cumul_precedent: formatNumber(calculerCumulPrecedent()),
         montant_total_cumul_ht: formatNumber(calculerMontantTotalCumul()),
-        retenue_garantie: formatNumber(montantHTMois * 0.05),
-        montant_prorata: formatNumber(montantHTMois * (tauxProrata / 100)),
+        retenue_garantie: formatNumber(calculerMontantHTMois() * 0.05),
+        montant_prorata: formatNumber(
+          calculerMontantHTMois() * (tauxProrata / 100)
+        ),
         retenue_cie: formatNumber(retenueCIE),
         montant_apres_retenues: formatNumber(calculerTotalNet()),
         tva: formatNumber(calculerTotalNet() * 0.2),

@@ -671,25 +671,15 @@
           {% for special_line in partie.special_lines %}
           <tr class="special-line-spacer"><td colspan="7"></td></tr>
           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td colspan="6" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
-                  {{ special_line.description }}
-                  {% if special_line.type == 'display' %}
-                      {{ special_line.value }}
-                  {% else %}
-                      {% if special_line.valueType == 'percentage' %}
-                          ({{ special_line.value }}%)
-                      {% else %}
-                          ({{ special_line.value }}€)
-                      {% endif %}
-                  {% endif %}
-              </td>
-              <td class="totalHttableau">
-                  {% if special_line.type == 'display' %}
-                      {{ special_line.montant|floatformat:2 }} €
-                  {% else %}
-                      {% if special_line.type == 'reduction' %}-{% endif %}
-                      {{ special_line.montant|floatformat:2 }} €
-                  {% endif %}
+              <td class="ligne-details">{{ special_line.description }}</td>
+              <td class="unitetableau">-</td>
+              <td class="quantitetableau">-</td>
+              <td class="prixtableau">-</td>
+              <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
+              <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
+              <td class="montanttableau">
+                  {% if special_line.type == 'reduction' %}-{% endif %}
+                  {{ special_line.montant|floatformat:2 }} €
               </td>
           </tr>
           {% endfor %}
@@ -708,25 +698,15 @@
           {% for special_line in sous_partie.special_lines %}
           <tr class="special-line-spacer"><td colspan="7"></td></tr>
           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td colspan="6" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
-                  {{ special_line.description }}
-                  {% if special_line.type == 'display' %}
-                      {{ special_line.value }}
-                  {% else %}
-                      {% if special_line.valueType == 'percentage' %}
-                          ({{ special_line.value }}%)
-                      {% else %}
-                          ({{ special_line.value }}€)
-                      {% endif %}
-                  {% endif %}
-              </td>
-              <td class="totalHttableau">
-                  {% if special_line.type == 'display' %}
-                      {{ special_line.montant|floatformat:2 }} €
-                  {% else %}
-                      {% if special_line.type == 'reduction' %}-{% endif %}
-                      {{ special_line.montant|floatformat:2 }} €
-                  {% endif %}
+              <td class="ligne-details">{{ special_line.description }}</td>
+              <td class="unitetableau">-</td>
+              <td class="quantitetableau">-</td>
+              <td class="prixtableau">-</td>
+              <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
+              <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
+              <td class="montanttableau">
+                  {% if special_line.type == 'reduction' %}-{% endif %}
+                  {{ special_line.montant|floatformat:2 }} €
               </td>
           </tr>
           {% endfor %}
@@ -742,31 +722,28 @@
             <td class="montanttableau">{{ ligne.montant_situation|floatformat:2 }} €</td>
           </tr>
           {% endfor %} {% endfor %} {% endfor %}
-          {% for special_line in special_lines_global %}
+          {% comment %}
+          Les lignes spéciales du devis ne sont plus affichées ici car elles sont maintenant gérées au niveau de la situation
+          {% endcomment %}
+
+          <!-- Lignes spéciales de la situation -->
+          {% if situation.lignes_speciales %}
+          {% for ligne_speciale in situation.lignes_speciales %}
           <tr class="special-line-spacer"><td colspan="7"></td></tr>
-          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td colspan="6" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
-                  {{ special_line.description }}
-                  {% if special_line.type == 'display' %}
-                      {{ special_line.value }}
-                  {% else %}
-                      {% if special_line.valueType == 'percentage' %}
-                          ({{ special_line.value }}%)
-                      {% else %}
-                          ({{ special_line.value }}€)
-                      {% endif %}
-                  {% endif %}
-              </td>
-              <td class="totalHttableau">
-                  {% if special_line.type == 'display' %}
-                      {{ special_line.montant|floatformat:2 }} €
-                  {% else %}
-                      {% if special_line.type == 'reduction' %}{% endif %}
-                      {{ special_line.montant|floatformat:2 }} €
-                  {% endif %}
+          <tr class="{% if ligne_speciale.type == 'reduction' %}highlighted{% endif %}">
+              <td class="ligne-details">{{ ligne_speciale.description }}</td>
+              <td class="unitetableau">-</td>
+              <td class="quantitetableau">-</td>
+              <td class="prixtableau">-</td>
+              <td class="totalHttableau">{{ ligne_speciale.value|floatformat:2 }} €</td>
+              <td class="pourcentagetableau">{{ ligne_speciale.pourcentage_actuel|floatformat:2 }} %</td>
+              <td class="montanttableau">
+                  {% if ligne_speciale.type == 'reduction' %}-{% endif %}
+                  {{ ligne_speciale.montant|floatformat:2 }} €
               </td>
           </tr>
           {% endfor %}
+          {% endif %}
 
           {% if lignes_avenant %}
           <!-- Section Avenants -->
@@ -836,7 +813,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant total cumul HT</span>
-            <span class="montanta">{{ situation.cumul_precedent|add:situation.montant_ht_mois|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_total_cumul_ht|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
@@ -918,7 +895,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant total T.T.C. à payer</span>
-            <span class="montanta">{{ situation.montant_apres_retenues|add:situation.tva|floatformat:2 }} €</span>
+            <span class="montanta">{{ montant_ttc|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
