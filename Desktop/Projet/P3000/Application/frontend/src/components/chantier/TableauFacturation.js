@@ -380,8 +380,7 @@ const TableauFacturation = () => {
     };
 
     const calculerEcartMois = (situation) => {
-      const montantHTSituation =
-        parseFloat(situation.montant_apres_retenues) || 0;
+      const montantHTSituation = parseFloat(situation.montant_ht_mois) || 0;
       const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
       const ecart = montantRecuHT - montantHTSituation;
 
@@ -416,12 +415,12 @@ const TableauFacturation = () => {
       );
 
       if (currentIndex === -1) {
-        return parseFloat(situation.montant_apres_retenues) || 0;
+        return parseFloat(situation.montant_ht_mois) || 0;
       }
 
       // Calculer le cumul jusqu'à la situation actuelle (inclusive)
       return situationsTriees.slice(0, currentIndex + 1).reduce((sum, s) => {
-        const montantHT = parseFloat(s.montant_apres_retenues) || 0;
+        const montantHT = parseFloat(s.montant_ht_mois) || 0;
         return sum + montantHT;
       }, 0);
     };
@@ -432,14 +431,14 @@ const TableauFacturation = () => {
           return {
             montantHTSituation:
               totaux.montantHTSituation +
-              (parseFloat(situation.montant_apres_retenues) || 0),
+              (parseFloat(situation.montant_ht_mois) || 0),
             montantRecuHT:
               totaux.montantRecuHT +
               (parseFloat(situation.montant_reel_ht) || 0),
             ecartMois:
               totaux.ecartMois +
               (parseFloat(situation.montant_reel_ht || 0) -
-                parseFloat(situation.montant_apres_retenues || 0)),
+                parseFloat(situation.montant_ht_mois || 0)),
           };
         },
         {
@@ -476,7 +475,7 @@ const TableauFacturation = () => {
 
         // Ajouter une ligne de sous-total après chaque mois
         const sousTotalMois = situationsDuMois.reduce((total, situation) => {
-          return total + (parseFloat(situation.montant_apres_retenues) || 0);
+          return total + (parseFloat(situation.montant_ht_mois) || 0);
         }, 0);
 
         situationsAvecSousTotaux.push({
@@ -632,7 +631,26 @@ const TableauFacturation = () => {
                           {situation.mois.toString().padStart(2, "0")}
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
-                          {extractSituationNumber(situation.numero_situation)}
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              const previewUrl = `/preview-situation/${situation.id}/`;
+                              window.open(previewUrl, "_blank");
+                            }}
+                            sx={{
+                              color: "rgba(27, 120, 188, 1)",
+                              fontWeight: "bold",
+                              fontSize: "0.75rem",
+                              textTransform: "none",
+                              minWidth: "auto",
+                              padding: "2px 8px",
+                              "&:hover": {
+                                backgroundColor: "rgba(27, 120, 188, 0.1)",
+                              },
+                            }}
+                          >
+                            {extractSituationNumber(situation.numero_situation)}
+                          </Button>
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           <TextField
@@ -659,7 +677,7 @@ const TableauFacturation = () => {
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           {formatMontant(
-                            parseFloat(situation.montant_apres_retenues) || 0
+                            parseFloat(situation.montant_ht_mois) || 0
                           )}
                         </TableCell>
                         <TableCell
@@ -703,7 +721,7 @@ const TableauFacturation = () => {
                             {situation.montant_reel_ht
                               ? formatNumberWithColor(
                                   situation.montant_reel_ht,
-                                  situation.montant_apres_retenues
+                                  situation.montant_ht_mois
                                 )
                               : "Définir paiement"}
                           </Button>
@@ -917,7 +935,26 @@ const TableauFacturation = () => {
                         </Button>
                       </TableCell>
                       <TableCell sx={commonBodyCellStyle}>
-                        {extractSituationNumber(situation.numero_situation)}
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            const previewUrl = `/api/preview-situation/${situation.id}/`;
+                            window.open(previewUrl, "_blank");
+                          }}
+                          sx={{
+                            color: "rgba(27, 120, 188, 1)",
+                            fontWeight: "bold",
+                            fontSize: "0.75rem",
+                            textTransform: "none",
+                            minWidth: "auto",
+                            padding: "2px 8px",
+                            "&:hover": {
+                              backgroundColor: "rgba(27, 120, 188, 0.1)",
+                            },
+                          }}
+                        >
+                          {extractSituationNumber(situation.numero_situation)}
+                        </Button>
                       </TableCell>
                       <TableCell sx={commonBodyCellStyle}>
                         <TextField
@@ -944,7 +981,7 @@ const TableauFacturation = () => {
                       </TableCell>
                       <TableCell sx={commonBodyCellStyle}>
                         {formatMontant(
-                          parseFloat(situation.montant_apres_retenues) || 0
+                          parseFloat(situation.montant_ht_mois) || 0
                         )}
                       </TableCell>
 
@@ -989,7 +1026,7 @@ const TableauFacturation = () => {
                           {situation.montant_reel_ht
                             ? formatNumberWithColor(
                                 situation.montant_reel_ht,
-                                situation.montant_apres_retenues
+                                situation.montant_ht_mois
                               )
                             : "Définir paiement"}
                         </Button>

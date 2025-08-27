@@ -451,8 +451,7 @@ const TableauSuivi = () => {
     };
 
     const calculerEcartMois = (situation) => {
-      const montantHTSituation =
-        parseFloat(situation.montant_apres_retenues) || 0;
+      const montantHTSituation = parseFloat(situation.montant_ht_mois) || 0;
       const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
       const ecart = montantRecuHT - montantHTSituation;
 
@@ -463,8 +462,8 @@ const TableauSuivi = () => {
 
     const calculerCumulSituationHT = (situations, indexCourant) => {
       return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
-        // Utiliser le montant HT situation (montant_apres_retenues)
-        const montantHT = parseFloat(situation.montant_apres_retenues) || 0;
+        // Utiliser le montant HT du mois (montant_ht_mois)
+        const montantHT = parseFloat(situation.montant_ht_mois) || 0;
         return sum + montantHT;
       }, 0);
     };
@@ -482,11 +481,11 @@ const TableauSuivi = () => {
           return {
             montantHTSituation:
               totaux.montantHTSituation +
-              (parseFloat(situation.montant_apres_retenues) || 0),
+              (parseFloat(situation.montant_ht_mois) || 0),
             rg: totaux.rg + (parseFloat(situation.retenue_garantie) || 0),
             netAPayer:
               totaux.netAPayer +
-              ((parseFloat(situation.montant_apres_retenues) || 0) +
+              ((parseFloat(situation.montant_ht_mois) || 0) +
                 (parseFloat(situation.tva) || 0)),
             montantRecuHT:
               totaux.montantRecuHT +
@@ -494,7 +493,7 @@ const TableauSuivi = () => {
             ecartMois:
               totaux.ecartMois +
               (parseFloat(situation.montant_reel_ht || 0) -
-                parseFloat(situation.montant_apres_retenues || 0)),
+                parseFloat(situation.montant_ht_mois || 0)),
           };
         },
         {
@@ -508,9 +507,12 @@ const TableauSuivi = () => {
     };
 
     const calculerResteAPayer = () => {
-      const montantTotalMarche = calculerMontantTotalMarche();
+      const derniereSituation = situationsTriees[situationsTriees.length - 1];
+      if (!derniereSituation) return 0;
+      const montantTotalCumulHT =
+        parseFloat(derniereSituation.montant_total_cumul_ht) || 0;
       const totalMontantRecuHT = calculerTotaux().montantRecuHT;
-      return montantTotalMarche - totalMontantRecuHT;
+      return montantTotalCumulHT - totalMontantRecuHT;
     };
 
     const calculerPourcentageAvancement = () => {
@@ -518,6 +520,23 @@ const TableauSuivi = () => {
       if (!derniereSituation) return 0;
       return parseFloat(derniereSituation.pourcentage_avancement) || 0;
     };
+
+    // Fonction pour obtenir toutes les lignes supplémentaires uniques
+    const getAllLignesSupplementaires = () => {
+      const allLignes = new Map();
+
+      situations.forEach((situation) => {
+        situation.lignes_supplementaires?.forEach((ligne) => {
+          if (!allLignes.has(ligne.description)) {
+            allLignes.set(ligne.description, ligne);
+          }
+        });
+      });
+
+      return Array.from(allLignes.values());
+    };
+
+    const lignesSupplementairesUniques = getAllLignesSupplementaires();
 
     return (
       <>
@@ -539,8 +558,12 @@ const TableauSuivi = () => {
                   Montant HT Situation
                 </TableCell>
                 <TableCell sx={{ ...commonCellStyle }}>RG</TableCell>
-                {situations[0]?.lignes_supplementaires?.map((ligne) => (
-                  <TableCell sx={{ ...commonCellStyle }} key={ligne.id}>
+                <TableCell sx={{ ...commonCellStyle }}>Prorata</TableCell>
+                {lignesSupplementairesUniques.map((ligne) => (
+                  <TableCell
+                    sx={{ ...commonCellStyle }}
+                    key={ligne.description}
+                  >
                     {ligne.description.length > 20
                       ? ligne.description.substring(0, 20) + "..."
                       : ligne.description}
@@ -591,21 +614,55 @@ const TableauSuivi = () => {
                       {formatMoisAnnee(situation.mois, situation.annee)}
                     </TableCell>
                     <TableCell>
-                      {extractSituationNumber(situation.numero_situation)}
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          const previewUrl = `/api/preview-situation/${situation.id}/`;
+                          window.open(previewUrl, "_blank");
+                        }}
+                        sx={{
+                          color: "rgba(27, 120, 188, 1)",
+                          fontWeight: "bold",
+                          fontSize: "0.75rem",
+                          textTransform: "none",
+                          minWidth: "auto",
+                          padding: "2px 8px",
+                          "&:hover": {
+                            backgroundColor: "rgba(27, 120, 188, 0.1)",
+                          },
+                        }}
+                      >
+                        {extractSituationNumber(situation.numero_situation)}
+                      </Button>
                     </TableCell>
                     <TableCell>
                       {formatMontant(
-                        parseFloat(situation.montant_apres_retenues) || 0
+                        parseFloat(situation.montant_ht_mois) || 0
                       )}
                     </TableCell>
                     <TableCell>
                       {formatMontant(situation.retenue_garantie, true)}
                     </TableCell>
-                    {situation.lignes_supplementaires?.map((ligne) => (
-                      <TableCell key={ligne.id}>
-                        {formatMontant(ligne.montant, false, ligne.type)}
-                      </TableCell>
-                    ))}
+                    <TableCell>
+                      {formatMontant(situation.montant_prorata, true)}
+                    </TableCell>
+                    {lignesSupplementairesUniques.map((ligneUnique) => {
+                      const ligneSituation =
+                        situation.lignes_supplementaires?.find(
+                          (l) => l.description === ligneUnique.description
+                        );
+                      return (
+                        <TableCell key={ligneUnique.description}>
+                          {ligneSituation
+                            ? formatMontant(
+                                ligneSituation.montant,
+                                false,
+                                ligneSituation.type
+                              )
+                            : formatMontant(0, false)}
+                        </TableCell>
+                      );
+                    })}
                     <TableCell>
                       {formatMontant(
                         (parseFloat(situation.montant_apres_retenues) || 0) +
@@ -649,7 +706,7 @@ const TableauSuivi = () => {
                         {situation.montant_reel_ht
                           ? formatNumberWithColor(
                               situation.montant_reel_ht,
-                              situation.montant_apres_retenues
+                              situation.montant_ht_mois
                             )
                           : "Définir paiement"}
                       </Button>
@@ -706,12 +763,21 @@ const TableauSuivi = () => {
                 <TableCell>
                   {formatMontant(calculerTotaux().rg, true)}
                 </TableCell>
-                {situations[0]?.lignes_supplementaires?.map((ligne) => (
-                  <TableCell key={ligne.id}>
+                <TableCell>
+                  {formatMontant(
+                    situations.reduce(
+                      (sum, s) => sum + (parseFloat(s.montant_prorata) || 0),
+                      0
+                    ),
+                    true
+                  )}
+                </TableCell>
+                {lignesSupplementairesUniques.map((ligneUnique) => (
+                  <TableCell key={ligneUnique.description}>
                     {formatMontant(
                       situations.reduce((sum, s) => {
-                        const ligneSup = s.lignes_supplementaires.find(
-                          (l) => l.description === ligne.description
+                        const ligneSup = s.lignes_supplementaires?.find(
+                          (l) => l.description === ligneUnique.description
                         );
                         const montant = parseFloat(ligneSup?.montant || 0);
                         return (
@@ -720,7 +786,7 @@ const TableauSuivi = () => {
                         );
                       }, 0),
                       false,
-                      ligne.type
+                      ligneUnique.type
                     )}
                   </TableCell>
                 ))}
@@ -902,9 +968,10 @@ const TableauSuivi = () => {
   const isMontantDifferent = (situationId, montantRecu) => {
     const situation = situations.find((s) => s.id === situationId);
     if (!situation || !montantRecu) return false;
+    // Comparer avec le montant HT du mois (ce qui est facturé)
     return (
       Math.abs(
-        parseFloat(situation.montant_total_cumul_ht) - parseFloat(montantRecu)
+        parseFloat(situation.montant_ht_mois) - parseFloat(montantRecu)
       ) > 0.01
     );
   };
