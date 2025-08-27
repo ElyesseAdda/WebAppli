@@ -148,8 +148,8 @@ build_frontend() {
     
     cd "$PROJECT_DIR/frontend"
     
-    # Installer les dépendances Node.js
-    npm ci --production
+    # Installer les dépendances Node.js (y compris dev pour le build)
+    npm install
     
     # Build de production
     npm run build
