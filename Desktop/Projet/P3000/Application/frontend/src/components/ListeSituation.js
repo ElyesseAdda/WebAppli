@@ -1,4 +1,12 @@
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
   MenuItem,
   Paper,
   Select,
@@ -67,6 +75,8 @@ const ListeSituation = () => {
   const [orderBy, setOrderBy] = useState("date_creation");
   const [order, setOrder] = useState("desc");
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [situationToDelete, setSituationToDelete] = useState(null);
 
   const statusOptions = ["brouillon", "validee", "facturee"];
 
@@ -164,6 +174,35 @@ const ListeSituation = () => {
 
   const handlePreviewSituation = (situationId) => {
     window.open(`/api/preview-situation/${situationId}/`, "_blank");
+  };
+
+  const handleDeleteClick = (situation) => {
+    setSituationToDelete(situation);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!situationToDelete) return;
+
+    try {
+      await axios.delete(`/api/situations/${situationToDelete.id}/`);
+
+      // Mettre à jour la liste des situations
+      setSituations((prevSituations) =>
+        prevSituations.filter((s) => s.id !== situationToDelete.id)
+      );
+
+      setDeleteDialogOpen(false);
+      setSituationToDelete(null);
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      alert("Erreur lors de la suppression de la situation");
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setSituationToDelete(null);
   };
 
   if (loading) {
@@ -300,6 +339,18 @@ const ListeSituation = () => {
                     ))}
                   </StyledSelect>
                 </FilterCell>
+                <FilterCell>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "rgba(27, 120, 188, 1)",
+                      fontWeight: "bold",
+                      textAlign: "center",
+                    }}
+                  >
+                    Actions
+                  </Typography>
+                </FilterCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -325,12 +376,55 @@ const ListeSituation = () => {
                   <StatusCell status={situation.statut}>
                     {situation.statut}
                   </StatusCell>
+                  <CenteredTableCell>
+                    <IconButton
+                      onClick={() => handleDeleteClick(situation)}
+                      sx={{
+                        color: "error.main",
+                        "&:hover": {
+                          backgroundColor: "error.light",
+                          color: "white",
+                        },
+                      }}
+                      size="small"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </CenteredTableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </StyledTableContainer>
       </StyledBox>
+
+      {/* Modal de confirmation de suppression */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          Confirmer la suppression
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            Êtes-vous sûr de vouloir supprimer la situation{" "}
+            <strong>{situationToDelete?.numero_situation}</strong> ?
+            <br />
+            Cette action est irréversible.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color="primary">
+            Annuler
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" autoFocus>
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };
