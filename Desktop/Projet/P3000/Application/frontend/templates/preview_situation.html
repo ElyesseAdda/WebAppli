@@ -86,14 +86,14 @@
       }
       .ligne-details {
         text-align: left;
-        width: 400px;
+        width: 380px;
         font-size: 0.9rem;
         padding-left: 22px;
         height: 20px;
       }
       .designation {
         text-align: center; /* Alignement à gauche pour la désignation */
-        width: 480px;
+        width: 345px;
         font-size: 0.8rem;
         border: 2px solid black;
       }
@@ -106,7 +106,7 @@
         font-size: 0.8rem;
       }
       .unite {
-        width: 30px;
+        width: 35px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
@@ -115,13 +115,13 @@
         
         text-align: center;
         font-size: 12px;
-        width: 22px;
+        width: 35px;
         font-size: 0.8rem;
-        padding-left: 10px;
+        padding-left: 6px;
         
       }
       .quantite {
-        width: 78px;
+        width: 72px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
@@ -147,16 +147,30 @@
         
       }
       .totalHt {
-        width: 108px;
+        width: 82px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
       }
       .totalHttableau {
-        text-align: right;
+        text-align: center;
         width: 100px;
         font-size: 0.8rem;
         font-weight: 700;
+        
+      }
+      .pourcentage {
+        text-align: center;
+        width: 65px;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .pourcentagetitre {
+        text-align: center;
+        width: 65px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        border: 2px solid black;
         
       }
       .bordertitre {
@@ -181,7 +195,7 @@
         right: 0;
         bottom: 0;
         display: grid;
-        grid-template-columns: 345px 24px 72px 58px 82px 78px 87px;
+        grid-template-columns: 345px 35px 72px 58px 82px 65px 87px;
         gap: 6px;
         pointer-events: none;
         height: calc(100% - 4px);
@@ -204,7 +218,7 @@
 
       .ghost-cell.unite {
         grid-column: 2;
-        width: 24px;
+        width: 35px;
         
       }
 
@@ -228,7 +242,7 @@
 
       .ghost-cell.pourcentage {
         grid-column: 6;
-        width: 78px;
+        width: 65px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
@@ -480,6 +494,7 @@
       .highlighted {
         background-color: yellow;
         color: #dc3545;
+        font-weight: bold;
       }
 
       /* Styles pour les lignes spéciales de type 'display' */
@@ -496,10 +511,12 @@
         color: #dc3545 !important;
         font-weight: bold;
         border-left: 3px solid #dc3545;
+        font-weight: bold;
       }
       .display-only.highlighted .display-line {
         font-style: normal;
         color: #dc3545 !important;
+        font-weight: bold;
       }
       .special-line {
         font-size: 14px;
@@ -522,16 +539,17 @@
       
       .pourcentage {
         text-align: center;
-        width: 80px;
+        width: 65px;
         border: 2px solid black;
         font-size: 0.8rem;
       }
 
       .pourcentagetableau {
-        text-align: right;
-        width: 90px;
+        text-align: center;
+        width: 65px;
         font-size: 0.8rem;
-        font-weight: 500;
+        font-weight: 700;
+        transform: translateX(5px);
       }
 
       .montanttableau {
@@ -570,9 +588,9 @@
          <h3>Contact:</h3>
          <p>{{ client.nom }} {{ client.prenom }}</p>
          <p class="client-mail">Mail: {{ client.client_mail }}</p>
-         <p>
-           Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
-         </p>
+                   <p>
+            Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
+          </p>
        </div>
     </div>
 
@@ -596,21 +614,21 @@
         <div style="width: 50%;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 2px black;">Montant du marché HT:</strong>
-                <span style="font-size: 0.9rem;font-weight: 700;">{{ total_marche_ht|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;">{{ total_marche_ht|floatformat:2 }} €</span>
             </div>
             {% if total_avenants != 0 %}
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 2px black;">Avenant HT:</strong>
-                <span style="font-size: 0.9rem;font-weight: 700;">{{ total_avenants|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;">{{ total_avenants|floatformat:2 }} €</span>
             </div>
             {% endif %}
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 2px black;">% Avancement:</strong>
-                <span style="font-size: 0.9rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|floatformat:2 }}%</span>
+                <span class="pourcentagetableau" style="font-size: 0.9rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|floatformat:2 }}%</span>
             </div>
             <div style="display: flex; justify-content: space-between; ">
                 <strong style="text-decoration: underline 2px black;">Montant total des travaux HT</strong>
-                <span style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: center;width: 150px;">{{ total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: center;width: 150px;">{{ total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
             </div>
         </div>
     </div>
@@ -625,7 +643,7 @@
               <th class="quantite">Quantité</th>
               <th class="prix">Prix <br>Unitaire</th>
               <th class="totalHt">Total HT</th>
-              <th class="totalHt">AV %</th>
+              <th class="pourcentagetitre">AV %</th>
               <th class="totalHt">TOTAL HT</th>
             </tr>
           </thead>
@@ -662,27 +680,27 @@
             <td class="partie" colspan="7">
                 {{ partie.titre }}
                 <span style="float: right">
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ partie.montant_avancement|floatformat:2 }} € </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ partie.pourcentage|floatformat:2 }} % </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ partie.total_partie|floatformat:2 }} €</span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;;">{{ partie.montant_avancement|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ partie.pourcentage|floatformat:2 }} % </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ partie.total_partie|floatformat:2 }} €</span>
                 </span>
             </td>
           </tr>
-          {% for special_line in partie.special_lines %}
-          <tr class="special-line-spacer"><td colspan="7"></td></tr>
-          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td class="ligne-details">{{ special_line.description }}</td>
-              <td class="unitetableau">-</td>
-              <td class="quantitetableau">-</td>
-              <td class="prixtableau">-</td>
-              <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
-              <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
-              <td class="montanttableau">
-                  {% if special_line.type == 'reduction' %}-{% endif %}
-                  {{ special_line.montant|floatformat:2 }} €
-              </td>
-          </tr>
-          {% endfor %}
+                     {% for special_line in partie.special_lines %}
+           <tr class="special-line-spacer"><td colspan="7"></td></tr>
+           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+               <td class="ligne-details">{{ special_line.description }}</td>
+               <td class="unitetableau"></td>
+               <td class="quantitetableau"></td>
+               <td class="prixtableau"></td>
+               <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
+               <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
+               <td class="montanttableau">
+                   {% if special_line.type == 'reduction' %}-{% endif %}
+                   {{ special_line.montant|floatformat:2 }} €
+               </td>
+           </tr>
+           {% endfor %}
           {% for sous_partie in partie.sous_parties %}
           {% if sous_partie.description != "Lignes directes" %}
           <tr class="sous-partie">
@@ -690,26 +708,26 @@
                 {{ sous_partie.description }}
                 <span style="float: right">
                   <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;;">{{ sous_partie.montant_avancement|floatformat:2 }} €</span>
-                  <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;transform: translateX(-10px);">{{ sous_partie.pourcentage|floatformat:2 }} % </span>
-                  <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;transform: translateX(-5px)">{{ sous_partie.total_sous_partie|floatformat:2 }} € </span>
+                  <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;">{{ sous_partie.pourcentage|floatformat:2 }} % </span>
+                  <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ sous_partie.total_sous_partie|floatformat:2 }} € </span>
                 </span>
             </td>
           </tr>
-          {% for special_line in sous_partie.special_lines %}
-          <tr class="special-line-spacer"><td colspan="7"></td></tr>
-          <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td class="ligne-details">{{ special_line.description }}</td>
-              <td class="unitetableau">-</td>
-              <td class="quantitetableau">-</td>
-              <td class="prixtableau">-</td>
-              <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
-              <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
-              <td class="montanttableau">
-                  {% if special_line.type == 'reduction' %}-{% endif %}
-                  {{ special_line.montant|floatformat:2 }} €
-              </td>
-          </tr>
-          {% endfor %}
+                     {% for special_line in sous_partie.special_lines %}
+           <tr class="special-line-spacer"><td colspan="7"></td></tr>
+           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+               <td class="ligne-details">{{ special_line.description }}</td>
+               <td class="unitetableau"></td>
+               <td class="quantitetableau"></td>
+               <td class="prixtableau"></td>
+               <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
+               <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
+               <td class="montanttableau">
+                   {% if special_line.type == 'reduction' %}-{% endif %}
+                   {{ special_line.montant|floatformat:2 }} €
+               </td>
+           </tr>
+           {% endfor %}
           {% endif %}
           {% for ligne in sous_partie.lignes_details %}
           <tr>
@@ -728,21 +746,21 @@
 
           <!-- Lignes spéciales de la situation -->
           {% if situation.lignes_speciales %}
-          {% for ligne_speciale in situation.lignes_speciales %}
-          <tr class="special-line-spacer"><td colspan="7"></td></tr>
-          <tr class="{% if ligne_speciale.type == 'reduction' %}highlighted{% endif %}">
-              <td class="ligne-details">{{ ligne_speciale.description }}</td>
-              <td class="unitetableau">-</td>
-              <td class="quantitetableau">-</td>
-              <td class="prixtableau">-</td>
-              <td class="totalHttableau">{{ ligne_speciale.value|floatformat:2 }} €</td>
-              <td class="pourcentagetableau">{{ ligne_speciale.pourcentage_actuel|floatformat:2 }} %</td>
-              <td class="montanttableau">
-                  {% if ligne_speciale.type == 'reduction' %}-{% endif %}
-                  {{ ligne_speciale.montant|floatformat:2 }} €
-              </td>
-          </tr>
-          {% endfor %}
+                     {% for ligne_speciale in situation.lignes_speciales %}
+           <tr class="special-line-spacer"><td colspan="7"></td></tr>
+           <tr class="{% if ligne_speciale.type == 'reduction' %}highlighted{% endif %}">
+               <td class="ligne-details">{{ ligne_speciale.description }}</td>
+               <td class="unitetableau"></td>
+               <td class="quantitetableau"></td>
+               <td class="prixtableau"></td>
+               <td class="totalHttableau">{{ ligne_speciale.value|floatformat:2 }} €</td>
+               <td class="pourcentagetableau">{{ ligne_speciale.pourcentage_actuel|floatformat:2 }} %</td>
+               <td class="montanttableau">
+                   {% if ligne_speciale.type == 'reduction' %}-{% endif %}
+                   {{ ligne_speciale.montant|floatformat:2 }} €
+               </td>
+           </tr>
+           {% endfor %}
           {% endif %}
 
           {% if lignes_avenant %}
@@ -752,22 +770,22 @@
                 Avenants
                 <span style="float: right">
                     <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ montant_total_avenants|floatformat:2 }} € </span>
-                    <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ pourcentage_total_avenants|floatformat:2 }} % </span>
-                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ total_avenants|floatformat:2 }} €</span>
+                    <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ pourcentage_total_avenants|floatformat:2 }} % </span>
+                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ total_avenants|floatformat:2 }} €</span>
                 </span>
             </td>
           </tr>
-          {% for avenant in lignes_avenant %}
-          <tr class="sous-partie">
-            <td colspan="7">
-                Avenant N°{{ avenant.numero }}
-                <span style="float: right">
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ avenant.total_avenant|floatformat:2 }} € </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: right;margin-left: 10px;">{{ avenant.pourcentage_avenant|floatformat:2 }} % </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|floatformat:2 }} €</span>
-                </span>
-            </td>
-          </tr>
+                     {% for avenant in lignes_avenant %}
+           <tr class="sous-partie">
+             <td colspan="7">
+                 Avenant N°{{ avenant.numero }}
+                 <span style="float: right">
+                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|floatformat:2 }} €</span>
+                     <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(5px);">{{ avenant.pourcentage_avenant|floatformat:2 }} % </span>
+                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ avenant.total_avenant|floatformat:2 }} € </span>
+                 </span>
+             </td>
+           </tr>
           {% for ligne in avenant.lignes %}
           <tr>
             <td class="ligne-details">{{ ligne.devis_numero }}</td>
@@ -782,15 +800,17 @@
           {% endfor %}
           {% endif %}
 
-          <!-- Ligne du montant global (existante) -->
-          <tr style="margin-top: 20px;">
-            <td colspan="6" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px; width: 450px">
-                MONTANT GLOBAL HT APRÈS FRAIS DIVERS <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;& AUTRES
-            </td>
-            <td class="montanttableau" style="padding-top: 15px;">
-                {{ total_ht|floatformat:2 }} €
-            </td>
-          </tr>
+                                           <!-- Ligne du montant global (existante) -->
+            <tr style="margin-top: 20px;">
+              <td colspan="7" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
+                  <span style="max-width: 300px; word-wrap: break-word; display: inline-block;">MONTANT GLOBAL HT APRÈS FRAIS DIVERS & AUTRES</span>
+                  <span style="float: right; margin-left: 20px;">
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ situation.montant_total_cumul_ht|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ situation.pourcentage_avancement|floatformat:2 }} % </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;transform: translateX(10px)">{{ total_ht|floatformat:2 }} €</span>
+                  </span>
+              </td>
+            </tr>
         </tbody>
       </table>
     </div>
@@ -927,22 +947,41 @@
         return parts.join('.');
     }
 
-    // Sélectionne tous les éléments qui contiennent des nombres à formater
-    document.addEventListener('DOMContentLoaded', function() {
-        const elements = document.querySelectorAll('.totalHttableau, .montanttableau, .prixtableau, .montanta, .pourcentagetableau, .prixtableau, .quantitetableau, .centaine');
-        elements.forEach(element => {
-            const text = element.textContent;
-            // Extrait le nombre du texte (enlève le symbole €)
-            const number = parseFloat(text.replace(/[^0-9.-]+/g, ''));
-            if (!isNaN(number)) {
-                // Remplace le nombre par sa version formatée
-                element.textContent = element.textContent.replace(
-                    number.toFixed(2), 
-                    formatNumber(number)
-                );
-            }
-        });
-    });
+         // Sélectionne tous les éléments qui contiennent des nombres à formater
+     document.addEventListener('DOMContentLoaded', function() {
+         const elements = document.querySelectorAll('.totalHttableau, .montanttableau, .prixtableau, .montanta, .pourcentagetableau, .prixtableau, .quantitetableau, .centaine');
+         elements.forEach(element => {
+             const text = element.textContent;
+             // Extrait le nombre du texte (enlève le symbole € et les espaces existants)
+             const number = parseFloat(text.replace(/[^0-9.-]+/g, ''));
+             if (!isNaN(number)) {
+                 // Remplace le nombre par sa version formatée avec espaces
+                 const formattedNumber = formatNumber(number);
+                 // Remplace le nombre dans le texte en préservant les symboles € et %
+                 element.textContent = element.textContent.replace(
+                     number.toFixed(2), 
+                     formattedNumber
+                 );
+             }
+         });
+         
+                   // Formater le numéro de téléphone
+          const phoneElement = document.getElementById('phone-number');
+          if (phoneElement && phoneElement.textContent.trim()) {
+              const phoneNumber = phoneElement.textContent.trim();
+              if (phoneNumber.length === 9) {
+                  // Ajouter un 0 devant pour passer à 10 chiffres
+                  const phoneWithZero = '0' + phoneNumber;
+                  // Format: 06.13.26.34.34 pour 10 chiffres
+                  const formatted = phoneWithZero.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                  phoneElement.textContent = formatted;
+              } else if (phoneNumber.length >= 10) {
+                  // Format: 06.13.26.34.34 pour 10 chiffres ou plus
+                  const formatted = phoneNumber.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                  phoneElement.textContent = formatted;
+              }
+          }
+     });
     </script>
   </body>
 </html>

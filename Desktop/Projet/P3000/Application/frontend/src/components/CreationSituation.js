@@ -651,10 +651,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               setLignesSupplementaires(currentSituation.lignes_supplementaires);
             }
           } else {
-            console.log(
-              "Pas de situation existante pour ce mois, recherche du mois précédent"
-            );
-
             let moisPrecedent = parseInt(mois) - 1;
             let anneePrecedente = parseInt(annee);
             if (moisPrecedent === 0) {
@@ -905,16 +901,12 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         montantActuel += montantTS;
       });
     });
-    console.log(
-      `Montant total actuel (avec avenants): ${montantActuel.toFixed(2)} €`
-    );
 
     // Récupération du montant cumulé précédent
     let montantCumulePrecedent = 0;
     if (lastSituation) {
       montantCumulePrecedent = parseFloat(lastSituation.montant_ht_mois || 0);
     } else {
-      console.log("Première situation - pas de montant cumulé précédent");
     }
 
     // Le montant HT du mois est la différence entre le montant actuel et le cumul précédent
@@ -1058,10 +1050,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
   const calculerCumulPrecedent = () => {
     // Si on a une situation précédente, utiliser son montant_total_cumul_ht
     if (lastSituation && lastSituation.montant_total_cumul_ht) {
-      console.log(
-        "🔍 Utilisation de lastSituation:",
-        lastSituation.montant_total_cumul_ht
-      );
       return parseFloat(lastSituation.montant_total_cumul_ht);
     }
 
@@ -1194,8 +1182,6 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
         montant_total_travaux: formatNumber(totalHT + montantTotalAvenants),
         total_avancement: formatNumber(totalAvancement),
       };
-
-      console.log("Données envoyées:", situationData); // Pour debug
 
       if (existingSituation) {
         // Mise à jour d'une situation existante

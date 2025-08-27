@@ -5145,8 +5145,8 @@ def preview_situation(request, situation_id):
 
         pourcentage_total_avenants = (total_montant_avancement_avenants / total_avenants * 100) if total_avenants else Decimal('0')
 
-        # Calculer la somme des total_partie
-        total_marche_ht = sum(Decimal(str(partie['total_partie'])) for partie in parties_data)
+        # Calculer la somme des total_partie (sans les lignes spéciales)
+        total_ht_sans_lignes_speciales = sum(Decimal(str(partie['total_partie'])) for partie in parties_data)
 
         # Récupérer les lignes spéciales du devis
         lignes_speciales = devis.lignes_speciales or {}
@@ -5248,17 +5248,21 @@ def preview_situation(request, situation_id):
         
         # Traiter les lignes spéciales globales
         special_lines_global = []
+        total_lignes_speciales_globales = Decimal('0')
         if lignes_speciales.get('global'):
             for special_line in lignes_speciales['global']:
                 # Calcul normal pour les autres types de lignes spéciales
                 montant = Decimal('0')
                 if special_line['valueType'] == "percentage":
-                    montant = (total_ht * Decimal(str(special_line['value']))) / Decimal('100')
+                    montant = (total_ht_sans_lignes_speciales * Decimal(str(special_line['value']))) / Decimal('100')
                 else:
                     montant = Decimal(str(special_line['value']))
                 
                 if special_line.get('type') == 'reduction':
                     montant = -montant
+                    total_lignes_speciales_globales -= abs(montant)
+                else:
+                    total_lignes_speciales_globales += montant
                 
                 special_lines_global.append({
                     'description': special_line['description'],
@@ -5272,14 +5276,23 @@ def preview_situation(request, situation_id):
         # Ajouter les lignes display globales
         if lignes_display.get('global'):
             for display_line in lignes_display['global']:
+                montant = Decimal(str(display_line['value']))
+                if display_line.get('type') == 'reduction':
+                    total_lignes_speciales_globales -= montant
+                else:
+                    total_lignes_speciales_globales += montant
+                
                 special_lines_global.append({
                     'description': display_line['description'],
                     'value': display_line['value'],
                     'valueType': display_line['valueType'],
                     'type': display_line['type'],
-                    'montant': Decimal(str(display_line['value'])),  # Montant affiché directement
+                    'montant': montant,  # Montant affiché directement
                     'isHighlighted': display_line.get('isHighlighted', False)
                 })
+
+        # Calculer le montant total du marché HT avec les lignes spéciales
+        total_marche_ht = total_ht_sans_lignes_speciales + total_lignes_speciales_globales
 
         # Préparer les lignes spéciales de la situation
         lignes_speciales_situation = []

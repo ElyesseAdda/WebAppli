@@ -1046,10 +1046,6 @@ const SituationCreationModal = ({
               setLignesSupplementaires(currentSituation.lignes_supplementaires);
             }
           } else {
-            console.log(
-              "Pas de situation existante pour ce mois, recherche du mois précédent"
-            );
-
             let moisPrecedent = parseInt(mois) - 1;
             let anneePrecedente = parseInt(annee);
             if (moisPrecedent === 0) {
@@ -1069,10 +1065,6 @@ const SituationCreationModal = ({
 
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
-              console.log(
-                "🔍 Situation précédente chargée:",
-                situationPrecedente.montant_total_cumul_ht
-              );
 
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
@@ -1304,16 +1296,12 @@ const SituationCreationModal = ({
         montantActuel += montantTS;
       });
     });
-    console.log(
-      `Montant total actuel (avec avenants): ${montantActuel.toFixed(2)} €`
-    );
 
     // Récupération du montant cumulé précédent
     let montantCumulePrecedent = 0;
     if (lastSituation) {
       montantCumulePrecedent = parseFloat(lastSituation.montant_ht_mois || 0);
     } else {
-      console.log("Première situation - pas de montant cumulé précédent");
     }
 
     // Le montant HT du mois est la différence entre le montant actuel et le cumul précédent
@@ -1469,10 +1457,6 @@ const SituationCreationModal = ({
   const calculerCumulPrecedent = () => {
     // Si on a une situation précédente, utiliser son montant_total_cumul_ht
     if (lastSituation && lastSituation.montant_total_cumul_ht) {
-      console.log(
-        "🔍 Utilisation de lastSituation:",
-        lastSituation.montant_total_cumul_ht
-      );
       return parseFloat(lastSituation.montant_total_cumul_ht);
     }
 

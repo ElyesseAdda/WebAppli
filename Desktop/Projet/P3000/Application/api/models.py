@@ -683,7 +683,7 @@ class Situation(models.Model):
     montant_total_travaux = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_total_devis = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_total_cumul_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    
+
     # Champs pour correspondre au frontend
     cumul_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_apres_retenues = models.DecimalField(max_digits=10, decimal_places=2, default=0)
