@@ -4130,61 +4130,7 @@ def get_situation_detail(request, situation_id):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
-@api_view(['PUT'])
-def update_situation(request, situation_id):
-    """Met à jour une situation existante"""
-    try:
-        situation = Situation.objects.get(id=situation_id)     
-        data = request.data
-        
-        # Mise à jour des lignes
-        if 'lignes' in data:
-            situation.lignes.all().delete()
-            for ligne_data in data['lignes']:
-                SituationLigne.objects.create(
-                    situation=situation,
-                    ligne_devis_id=ligne_data['ligne_devis_id'],
-                    pourcentage_precedent=ligne_data['pourcentage_precedent'],
-                    pourcentage_actuel=ligne_data['pourcentage_actuel'],
-                    montant=ligne_data['montant']
-                )
-                
-        # Mise à jour des lignes supplémentaires
-        if 'lignes_supplementaires' in data:
-            situation.lignes_supplementaires.all().delete()
-            for ligne_data in data['lignes_supplementaires']:
-                SituationLigneSupplementaire.objects.create(
-                    situation=situation,
-                    description=ligne_data['description'],
-                    montant=ligne_data['montant'],
-                    type=ligne_data['type']
-                )
-                
-        # Mise à jour des montants
-        situation.montant_ht_mois = SituationService.calculer_montant_ht_mois(situation)
-        situation.montant_total = situation.montant_precedent + situation.montant_ht_mois
-        situation.pourcentage_avancement = SituationService.calculer_pourcentage_avancement(
-            situation.montant_total, 
-            situation.devis.price_ht
-        )
-        
-        # Mise à jour des autres champs
-        if 'taux_prorata' in data:
-            situation.taux_prorata = data['taux_prorata']
-        if 'retenue_cie' in data:
-            situation.retenue_cie = data['retenue_cie']
-            
-        situation.save()
-        
-        return Response({
-            'id': situation.id,
-            'net_a_payer': SituationService.calculer_net_a_payer(situation)
-        })
-        
-    except Situation.DoesNotExist:
-        return Response({'error': 'Situation non trouvée'}, status=404)
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
+
 
 @api_view(['DELETE'])
 def delete_situation(request, situation_id):
@@ -4366,7 +4312,7 @@ def get_situations_chantier(request, chantier_id):
     serializer = SituationSerializer(situations, many=True)
     return Response(serializer.data)
 
-@api_view(['PUT'])
+@api_view(['PATCH'])
 def update_situation(request, pk):
     try:
         situation = Situation.objects.get(pk=pk)
@@ -4382,6 +4328,7 @@ def update_situation(request, pk):
         situation.lignes.all().delete()
         situation.lignes_supplementaires.all().delete()
         situation.lignes_avenant.all().delete()
+        situation.lignes_speciales.all().delete()
 
         # Mise à jour des champs de base
         for field in ['mois', 'annee', 'montant_ht_mois', 'cumul_precedent', 
@@ -4428,15 +4375,235 @@ def update_situation(request, pk):
                     montant=Decimal(str(ligne.get('montant', '0')))
                 )
 
+        # Création des lignes spéciales
+        if 'lignes_speciales' in data:
+            for ligne in data['lignes_speciales']:
+                # Calculer montant_ht à partir de value et pourcentage_actuel si montant_ht n'est pas fourni
+                montant_ht = ligne.get('montant_ht')
+                if montant_ht is None:
+                    value = Decimal(str(ligne.get('value', '0')))
+                    pourcentage_actuel = Decimal(str(ligne.get('pourcentage_actuel', '0')))
+                    montant_ht = (value * pourcentage_actuel) / Decimal('100')
+                else:
+                    montant_ht = Decimal(str(montant_ht))
+                
+                SituationLigneSpeciale.objects.create(
+                    situation=situation,
+                    description=ligne.get('description', ''),
+                    montant_ht=montant_ht,
+                    value=Decimal(str(ligne.get('value', '0'))),
+                    value_type=ligne.get('valueType', 'fixed'),
+                    type=ligne.get('type', 'addition'),
+                    niveau=ligne.get('niveau', 'global'),
+                    partie_id=ligne.get('partie_id'),
+                    sous_partie_id=ligne.get('sous_partie_id'),
+                    pourcentage_actuel=Decimal(str(ligne.get('pourcentage_actuel', '0'))),
+                    montant=Decimal(str(ligne.get('montant', '0')))
+                )
+
+        # Mise à jour des champs spécifiques
+        if 'date_envoi' in data:
+            situation.date_envoi = data['date_envoi']
+        if 'delai_paiement' in data:
+            situation.delai_paiement = data['delai_paiement']
+        if 'montant_reel_ht' in data:
+            situation.montant_reel_ht = data['montant_reel_ht']
+        if 'date_paiement_reel' in data:
+            situation.date_paiement_reel = data['date_paiement_reel']
+        if 'numero_cp' in data:
+            situation.numero_cp = data['numero_cp']
+        if 'banque' in data:
+            situation.banque_id = data['banque']
+            
+        # Calculer le montant_total_cumul_ht selon la logique correcte (somme des lignes avec pourcentages actuels)
+        montant_total_cumul_ht = Decimal('0.00')
+        
+        # Somme des lignes standard avec pourcentages actuels
+        for ligne in situation.lignes.all():
+            montant_ligne = (ligne.total_ht * ligne.pourcentage_actuel) / Decimal('100')
+            montant_total_cumul_ht += montant_ligne
+        
+        # Somme des lignes d'avenant avec pourcentages actuels
+        for ligne_avenant in situation.lignes_avenant.all():
+            montant_avenant = (ligne_avenant.montant_ht * ligne_avenant.pourcentage_actuel) / Decimal('100')
+            montant_total_cumul_ht += montant_avenant
+        
+        # Somme des lignes spéciales avec pourcentages actuels
+        for ligne_speciale in situation.lignes_speciales.all():
+            montant_speciale = (ligne_speciale.value * ligne_speciale.pourcentage_actuel) / Decimal('100')
+            if ligne_speciale.type == 'reduction':
+                montant_total_cumul_ht -= montant_speciale
+            else:
+                montant_total_cumul_ht += montant_speciale
+                
+        situation.montant_total_cumul_ht = montant_total_cumul_ht
+        
+        # Calculer le cumul_precedent à partir de la situation précédente
+        situation_precedente = Situation.objects.filter(
+            chantier=situation.chantier
+        ).filter(
+            Q(annee__lt=situation.annee) | (Q(annee=situation.annee) & Q(mois__lt=situation.mois))
+        ).order_by('-annee', '-mois').first()
+        
+        if situation_precedente:
+            situation.cumul_precedent = situation_precedente.montant_total_cumul_ht
+        else:
+            situation.cumul_precedent = Decimal('0.00')
+            
+        # Calculer le montant_ht_mois (différence entre total cumulé et cumul précédent)
+        montant_ht_mois = montant_total_cumul_ht - situation.cumul_precedent
+        situation.montant_ht_mois = montant_ht_mois
+        
+        # Recalculer les montants dérivés basés sur montant_ht_mois
+        # Retenue de garantie (5%)
+        situation.retenue_garantie = (montant_ht_mois * Decimal('5')) / Decimal('100')
+        
+        # Prorata (basé sur taux_prorata)
+        taux_prorata_decimal = Decimal(str(situation.taux_prorata or '0'))
+        situation.montant_prorata = (montant_ht_mois * taux_prorata_decimal) / Decimal('100')
+        
+        # Retenue CIE (montant fixe, déjà défini)
+        retenue_cie_decimal = Decimal(str(situation.retenue_cie or '0'))
+        
+        # Calculer le montant après retenues
+        montant_apres_retenues = montant_ht_mois - situation.retenue_garantie - situation.montant_prorata - retenue_cie_decimal
+        
+        # Ajouter l'impact des lignes supplémentaires
+        for ligne_suppl in situation.lignes_supplementaires.all():
+            if ligne_suppl.type == 'deduction':
+                montant_apres_retenues -= ligne_suppl.montant
+            else:
+                montant_apres_retenues += ligne_suppl.montant
+                
+        situation.montant_apres_retenues = montant_apres_retenues
+        
+        # Calculer la TVA (20%)
+        situation.tva = (montant_apres_retenues * Decimal('20')) / Decimal('100')
+        
+        # Calculer le montant TTC
+        situation.montant_total_ttc = montant_apres_retenues + situation.tva
+        
+        # Recalculer le montant_precedent à partir de la situation précédente
+        situation_precedente = Situation.objects.filter(
+            chantier=situation.chantier
+        ).filter(
+            Q(annee__lt=situation.annee) | (Q(annee=situation.annee) & Q(mois__lt=situation.mois))
+        ).order_by('-annee', '-mois').first()
+        
+        if situation_precedente:
+            situation.montant_precedent = situation_precedente.montant_total
+        else:
+            situation.montant_precedent = Decimal('0.00')
+            
+        # Recalculer le montant_total
+        situation.montant_total = situation.montant_precedent + situation.montant_ht_mois
+        
+        # Recalculer le pourcentage d'avancement (comme dans le frontend)
+        montant_total_travaux_decimal = Decimal(str(situation.montant_total_travaux or '0'))
+        if montant_total_travaux_decimal > 0:
+            situation.pourcentage_avancement = (montant_total_cumul_ht / montant_total_travaux_decimal) * Decimal('100')
+        else:
+            situation.pourcentage_avancement = Decimal('0.00')
+            
+        situation.save()
+        
+        # Recalculer les montants des situations suivantes
+        situations_suivantes = Situation.objects.filter(
+            chantier=situation.chantier
+        ).filter(
+            Q(annee__gt=situation.annee) | (Q(annee=situation.annee) & Q(mois__gt=situation.mois))
+        ).order_by('annee', 'mois')
+        
+        for situation_suivante in situations_suivantes:
+            # Recalculer le montant_total_cumul_ht pour chaque situation suivante (somme des lignes avec pourcentages actuels)
+            montant_total_cumul_ht_suivante = Decimal('0.00')
+            
+            # Somme des lignes standard avec pourcentages actuels
+            for ligne in situation_suivante.lignes.all():
+                montant_ligne = (ligne.total_ht * ligne.pourcentage_actuel) / Decimal('100')
+                montant_total_cumul_ht_suivante += montant_ligne
+            
+            # Somme des lignes d'avenant avec pourcentages actuels
+            for ligne_avenant in situation_suivante.lignes_avenant.all():
+                montant_avenant = (ligne_avenant.montant_ht * ligne_avenant.pourcentage_actuel) / Decimal('100')
+                montant_total_cumul_ht_suivante += montant_avenant
+            
+            # Somme des lignes spéciales avec pourcentages actuels
+            for ligne_speciale in situation_suivante.lignes_speciales.all():
+                montant_speciale = (ligne_speciale.value * ligne_speciale.pourcentage_actuel) / Decimal('100')
+                if ligne_speciale.type == 'reduction':
+                    montant_total_cumul_ht_suivante -= montant_speciale
+                else:
+                    montant_total_cumul_ht_suivante += montant_speciale
+                    
+            situation_suivante.montant_total_cumul_ht = montant_total_cumul_ht_suivante
+            
+            # Recalculer le cumul_precedent pour chaque situation suivante
+            situation_precedente_suivante = Situation.objects.filter(
+                chantier=situation_suivante.chantier
+            ).filter(
+                Q(annee__lt=situation_suivante.annee) | (Q(annee=situation_suivante.annee) & Q(mois__lt=situation_suivante.mois))
+            ).order_by('-annee', '-mois').first()
+            
+            if situation_precedente_suivante:
+                situation_suivante.cumul_precedent = situation_precedente_suivante.montant_total_cumul_ht
+            else:
+                situation_suivante.cumul_precedent = Decimal('0.00')
+                
+            # Recalculer le montant_ht_mois pour chaque situation suivante
+            montant_ht_mois_suivante = montant_total_cumul_ht_suivante - situation_suivante.cumul_precedent
+            situation_suivante.montant_ht_mois = montant_ht_mois_suivante
+            
+            # Recalculer les montants dérivés pour chaque situation suivante
+            # Retenue de garantie (5%)
+            situation_suivante.retenue_garantie = (montant_ht_mois_suivante * Decimal('5')) / Decimal('100')
+            
+            # Prorata (basé sur taux_prorata)
+            taux_prorata_suivante_decimal = Decimal(str(situation_suivante.taux_prorata or '0'))
+            situation_suivante.montant_prorata = (montant_ht_mois_suivante * taux_prorata_suivante_decimal) / Decimal('100')
+            
+            # Retenue CIE (montant fixe, déjà défini)
+            retenue_cie_suivante_decimal = Decimal(str(situation_suivante.retenue_cie or '0'))
+            
+            # Calculer le montant après retenues
+            montant_apres_retenues_suivante = montant_ht_mois_suivante - situation_suivante.retenue_garantie - situation_suivante.montant_prorata - retenue_cie_suivante_decimal
+            
+            # Ajouter l'impact des lignes supplémentaires
+            for ligne_suppl in situation_suivante.lignes_supplementaires.all():
+                if ligne_suppl.type == 'deduction':
+                    montant_apres_retenues_suivante -= ligne_suppl.montant
+                else:
+                    montant_apres_retenues_suivante += ligne_suppl.montant
+                    
+            situation_suivante.montant_apres_retenues = montant_apres_retenues_suivante
+            
+            # Calculer la TVA (20%)
+            situation_suivante.tva = (montant_apres_retenues_suivante * Decimal('20')) / Decimal('100')
+            
+            # Calculer le montant TTC
+            situation_suivante.montant_total_ttc = montant_apres_retenues_suivante + situation_suivante.tva
+            
+            # Recalculer le montant_precedent et montant_total
+            if situation_precedente_suivante:
+                situation_suivante.montant_precedent = situation_precedente_suivante.montant_total
+            else:
+                situation_suivante.montant_precedent = Decimal('0.00')
+                
+            situation_suivante.montant_total = situation_suivante.montant_precedent + situation_suivante.montant_ht_mois
+                
+            situation_suivante.save()
+
         # Retourner la situation mise à jour
         situation_complete = Situation.objects.prefetch_related(
-            'lignes', 'lignes_supplementaires', 'lignes_avenant'
+            'lignes', 'lignes_supplementaires', 'lignes_avenant', 'lignes_speciales'
         ).get(pk=situation.pk)
         
         return Response(SituationSerializer(situation_complete).data)
         
     except Exception as e:
-        print("Erreur lors de la mise à jour:", str(e))
+        print(f"🔧 Erreur dans update_situation: {str(e)}")
+        import traceback
+        print(f"🔧 Traceback: {traceback.format_exc()}")
         return Response({'error': str(e)}, status=400)
 
 @api_view(['DELETE'])
@@ -5339,7 +5506,7 @@ def preview_situation(request, situation_id):
         
         # Calculer la TVA
         tva = (montant_apres_retenues * Decimal('0.20')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        
+
         context = {
             'chantier': {
                 'nom': chantier.chantier_name,
@@ -5533,29 +5700,7 @@ class AgencyExpenseViewSet(viewsets.ModelViewSet):
         
         return Response(status=status.HTTP_200_OK)
 
-@api_view(['PATCH'])
-def update_situation(request, pk):
-    try:
-        situation = Situation.objects.get(pk=pk)
-        
-        # Mise à jour des champs spécifiques
-        if 'date_envoi' in request.data:
-            situation.date_envoi = request.data['date_envoi']
-        if 'delai_paiement' in request.data:
-            situation.delai_paiement = request.data['delai_paiement']
-        if 'montant_reel_ht' in request.data:
-            situation.montant_reel_ht = request.data['montant_reel_ht']
-        if 'date_paiement_reel' in request.data:
-            situation.date_paiement_reel = request.data['date_paiement_reel']
-        if 'numero_cp' in request.data:
-            situation.numero_cp = request.data['numero_cp']
-        if 'banque' in request.data:
-            situation.banque_id = request.data['banque']
-            
-        situation.save()
-        return Response(SituationSerializer(situation).data)
-    except Situation.DoesNotExist:
-        return Response({'error': 'Situation non trouvée'}, status=404)
+
 
 class DashboardViewSet(viewsets.ViewSet):
     def list(self, request):

@@ -1793,7 +1793,7 @@ const SituationCreationModal = ({
       let response;
       if (existingSituation) {
         // Mise à jour d'une situation existante
-        response = await axios.put(
+        response = await axios.patch(
           `/api/situations/${existingSituation.id}/update/`,
           situationData
         );

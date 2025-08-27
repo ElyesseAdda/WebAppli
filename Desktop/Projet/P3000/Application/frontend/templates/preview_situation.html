@@ -807,7 +807,7 @@
                   <span style="float: right; margin-left: 20px;">
                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ situation.montant_total_cumul_ht|floatformat:2 }} € </span>
                     <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ situation.pourcentage_avancement|floatformat:2 }} % </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;transform: translateX(10px)">{{ total_ht|floatformat:2 }} €</span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;transform: translateX(10px)">{{total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
                   </span>
               </td>
             </tr>
