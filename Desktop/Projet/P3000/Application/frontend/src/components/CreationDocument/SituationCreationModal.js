@@ -26,57 +26,6 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
 
-// Utilitaire de logging persistant
-const SituationLogger = {
-  log: (category, data, label = "") => {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-      timestamp,
-      category,
-      label,
-      data: JSON.parse(JSON.stringify(data)), // Deep clone pour éviter les références
-    };
-
-    // Sauvegarder dans localStorage
-    const existingLogs = JSON.parse(
-      localStorage.getItem("situationDebugLogs") || "[]"
-    );
-    existingLogs.push(logEntry);
-
-    // Garder seulement les 50 derniers logs
-    if (existingLogs.length > 50) {
-      existingLogs.splice(0, existingLogs.length - 50);
-    }
-
-    localStorage.setItem("situationDebugLogs", JSON.stringify(existingLogs));
-
-    // Aussi afficher dans la console avec style
-    console.group(
-      `🔍 [${category}] ${label} - ${timestamp.split("T")[1].split(".")[0]}`
-    );
-    console.log(data);
-    console.groupEnd();
-  },
-
-  getLogs: () => JSON.parse(localStorage.getItem("situationDebugLogs") || "[]"),
-
-  clearLogs: () => localStorage.removeItem("situationDebugLogs"),
-
-  exportLogs: () => {
-    const logs = SituationLogger.getLogs();
-    const dataStr = JSON.stringify(logs, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `situation-debug-logs-${
-      new Date().toISOString().split("T")[0]
-    }.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  },
-};
-
 const MOIS = [
   { value: 1, label: "Janvier" },
   { value: 2, label: "Février" },
@@ -1118,6 +1067,13 @@ const SituationCreationModal = ({
             if (responsePrecedent.data.length > 0) {
               const situationPrecedente = responsePrecedent.data[0];
 
+              // Définir la situation précédente comme lastSituation
+              setLastSituation(situationPrecedente);
+              console.log(
+                "🔍 Situation précédente chargée:",
+                situationPrecedente.montant_total_cumul_ht
+              );
+
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
                 ...partie,
@@ -1181,6 +1137,7 @@ const SituationCreationModal = ({
               setMontantHTMois(0);
               setExistingSituation(null);
             } else {
+              setLastSituation(null);
               resetSituationData();
             }
           }
@@ -1476,7 +1433,7 @@ const SituationCreationModal = ({
       });
     });
 
-    const cumulPrecedent = lastSituation?.montant_total_cumul_ht || 0;
+    const cumulPrecedent = calculerCumulPrecedent();
     const retenueGarantie = montantHtMois * 0.05;
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     const montantApresRetenues =
@@ -1508,8 +1465,18 @@ const SituationCreationModal = ({
     calculateMontants();
   }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
 
-  // Fonction pour calculer le cumul des mois précédents (sans les changements actuels)
+  // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
+    // Si on a une situation précédente, utiliser son montant_total_cumul_ht
+    if (lastSituation && lastSituation.montant_total_cumul_ht) {
+      console.log(
+        "🔍 Utilisation de lastSituation:",
+        lastSituation.montant_total_cumul_ht
+      );
+      return parseFloat(lastSituation.montant_total_cumul_ht);
+    }
+
+    // Sinon, calculer à partir des pourcentages précédents (pour la première situation)
     let montantTotal = 0;
 
     // Calculer le total des lignes standard
@@ -1597,88 +1564,14 @@ const SituationCreationModal = ({
         throw new Error("Les calculs ne sont pas disponibles");
       }
 
-      // 🔍 LOG 1: État initial du modal
-      SituationLogger.log(
-        "MODAL_STATE",
-        {
-          chantier: chantier,
-          devis: devis,
-          mois,
-          annee,
-          structure: structure,
-          avenants: avenants,
-          lignesSpeciales: lignesSpeciales,
-          lignesSupplementaires: lignesSupplementaires,
-          tauxProrata,
-          retenueCIE,
-        },
-        "État initial du modal"
-      );
-
       // Fonction helper pour formater les nombres
       const formatNumber = (num) => {
         if (num === null || num === undefined) return "0.00";
         return parseFloat(num).toFixed(2);
       };
-      // 🔍 LOG 2: Calculs effectués dans le modal
-      const calculsManuels = {
-        montantTotalCumul: calculerMontantTotalCumul(),
-        cumulPrecedent: calculerCumulPrecedent(),
-        montantHTMois: calculerMontantHTMois(),
-        totalHTDevis: structure.reduce((total, partie) => {
-          return (
-            total +
-            partie.sous_parties.reduce((sousTotal, sousPartie) => {
-              return (
-                sousTotal +
-                sousPartie.lignes.reduce((ligneTotal, ligne) => {
-                  return ligneTotal + parseFloat(ligne.total_ht || 0);
-                }, 0)
-              );
-            }, 0)
-          );
-        }, 0),
-        pourcentageCalcule: (() => {
-          const totalHT = structure.reduce((total, partie) => {
-            return (
-              total +
-              partie.sous_parties.reduce((sousTotal, sousPartie) => {
-                return (
-                  sousTotal +
-                  sousPartie.lignes.reduce((ligneTotal, ligne) => {
-                    return ligneTotal + parseFloat(ligne.total_ht || 0);
-                  }, 0)
-                );
-              }, 0)
-            );
-          }, 0);
-          const montantCumul = calculerMontantTotalCumul();
-          return totalHT > 0 ? (montantCumul / totalHT) * 100 : 0;
-        })(),
-      };
-
-      SituationLogger.log(
-        "CALCULS_MODAL",
-        calculsManuels,
-        "Calculs effectués dans le modal"
-      );
 
       // Récupérer le prochain numéro de situation
       const situationNumero = await getNextSituationNumber();
-
-      // Debug des calculs
-      const totalNet = calculerTotalNet();
-      const tva = totalNet * 0.2;
-      const montantTTC = totalNet + tva;
-
-      console.log("🔍 DEBUG CALCULS:", {
-        totalNet,
-        tva,
-        montantTTC,
-        isNaNTotalNet: isNaN(totalNet),
-        isNaNTVA: isNaN(tva),
-        isNaNMontantTTC: isNaN(montantTTC),
-      });
 
       const situationData = {
         chantier: chantier.id,
@@ -1709,9 +1602,9 @@ const SituationCreationModal = ({
           calculerMontantHTMois() * (tauxProrata / 100)
         ),
         retenue_cie: formatNumber(retenueCIE),
-        montant_apres_retenues: formatNumber(totalNet),
-        tva: formatNumber(tva),
-        montant_ttc: formatNumber(montantTTC),
+        montant_apres_retenues: formatNumber(calculerTotalNet()),
+        tva: formatNumber(calculerTotalNet() * 0.2),
+        montant_ttc: formatNumber(calculerTotalNet() * 1.2),
         pourcentage_avancement: formatNumber(
           (calculerMontantTotalCumul() / (totalHT + montantTotalAvenants)) * 100
         ),
@@ -1751,13 +1644,6 @@ const SituationCreationModal = ({
         total_avancement: formatNumber(totalAvancement),
       };
 
-      // 🔍 LOG 3: Données envoyées à l'API
-      SituationLogger.log(
-        "API_REQUEST",
-        situationData,
-        "Données envoyées à l'API"
-      );
-
       let response;
       if (existingSituation) {
         // Mise à jour d'une situation existante
@@ -1765,50 +1651,10 @@ const SituationCreationModal = ({
           `/api/situations/${existingSituation.id}/update/`,
           situationData
         );
-        SituationLogger.log(
-          "API_RESPONSE",
-          response.data,
-          "Réponse API - Mise à jour"
-        );
       } else {
         // Création d'une nouvelle situation
         response = await axios.post("/api/situations/", situationData);
-        SituationLogger.log(
-          "API_RESPONSE",
-          response.data,
-          "Réponse API - Création"
-        );
       }
-
-      // 🔍 LOG 4: Comparaison des données
-      const comparison = {
-        envoyees: {
-          montant_ht_mois: situationData.montant_ht_mois,
-          montant_total_cumul_ht: situationData.montant_total_cumul_ht,
-          montant_total_devis: situationData.montant_total_devis,
-          pourcentage_avancement: situationData.pourcentage_avancement,
-          montant_apres_retenues: situationData.montant_apres_retenues,
-          tva: situationData.tva,
-          retenue_garantie: situationData.retenue_garantie,
-          montant_prorata: situationData.montant_prorata,
-        },
-        recues: {
-          montant_ht_mois: response.data.montant_ht_mois,
-          montant_total_cumul_ht: response.data.montant_total_cumul_ht,
-          montant_total_devis: response.data.montant_total_devis,
-          pourcentage_avancement: response.data.pourcentage_avancement,
-          montant_apres_retenues: response.data.montant_apres_retenues,
-          tva: response.data.tva,
-          retenue_garantie: response.data.retenue_garantie,
-          montant_prorata: response.data.montant_prorata,
-        },
-      };
-
-      SituationLogger.log(
-        "COMPARISON",
-        comparison,
-        "Comparaison Envoyé vs Reçu"
-      );
 
       if (onCreated) onCreated();
       onClose();
@@ -1865,16 +1711,6 @@ const SituationCreationModal = ({
       } else {
         total += parseFloat(ligne.montant);
       }
-    });
-
-    console.log("🔍 calculerTotalNet DEBUG:", {
-      montantHtMois,
-      retenueGarantie,
-      compteProrata,
-      retenueCIEValue,
-      total,
-      isNaNTotal: isNaN(total),
-      lignesSupplementaires: lignesSupplementaires.length,
     });
 
     return total;

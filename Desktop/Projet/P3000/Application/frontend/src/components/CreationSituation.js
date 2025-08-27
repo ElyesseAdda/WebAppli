@@ -672,6 +672,9 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
             if (responsePrecedent.data.length > 0) {
               const situationPrecedente = responsePrecedent.data[0];
 
+              // Définir la situation précédente comme lastSituation
+              setLastSituation(situationPrecedente);
+
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
                 ...partie,
@@ -735,6 +738,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
               setMontantHTMois(0);
               setExistingSituation(null);
             } else {
+              setLastSituation(null);
               resetSituationData();
             }
           }
@@ -1018,7 +1022,7 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
       });
     });
 
-    const cumulPrecedent = lastSituation?.montant_total_cumul_ht || 0;
+    const cumulPrecedent = calculerCumulPrecedent();
     const retenueGarantie = montantHtMois * 0.05;
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     const montantApresRetenues =
@@ -1050,8 +1054,18 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
     calculateMontants();
   }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
 
-  // Fonction pour calculer le cumul des mois précédents (sans les changements actuels)
+  // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
+    // Si on a une situation précédente, utiliser son montant_total_cumul_ht
+    if (lastSituation && lastSituation.montant_total_cumul_ht) {
+      console.log(
+        "🔍 Utilisation de lastSituation:",
+        lastSituation.montant_total_cumul_ht
+      );
+      return parseFloat(lastSituation.montant_total_cumul_ht);
+    }
+
+    // Sinon, calculer à partir des pourcentages précédents (pour la première situation)
     let montantTotal = 0;
 
     // Calculer le total des lignes standard

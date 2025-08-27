@@ -4260,37 +4260,15 @@ def create_situation(request):
     try:
         data = request.data.copy()
         
-        # 🔍 LOG BACKEND 1: Données reçues
-        print("\n" + "="*80)
-        print("🔍 [BACKEND] CRÉATION SITUATION - Données reçues")
-        print("="*80)
-        print(f"Chantier ID: {data.get('chantier')}")
-        print(f"Devis ID: {data.get('devis')}")
-        print(f"Mois/Année: {data.get('mois')}/{data.get('annee')}")
-        print("\n📊 MONTANTS REÇUS:")
-        for key in ['montant_ht_mois', 'montant_total_cumul_ht', 'montant_total_devis', 
-                    'pourcentage_avancement', 'montant_apres_retenues', 'tva', 
-                    'retenue_garantie', 'montant_prorata']:
-            print(f"  {key}: {data.get(key, 'NON FOURNI')}")
-        
-        print(f"\n📝 Nombre de lignes: {len(data.get('lignes', []))}")
-        print(f"📝 Nombre de lignes supplémentaires: {len(data.get('lignes_supplementaires', []))}")
-        print(f"📝 Nombre de lignes spéciales: {len(data.get('lignes_speciales', []))}")
-        if data.get('lignes_speciales'):
-            for ligne in data.get('lignes_speciales', []):
-                print(f"  - {ligne.get('description', 'N/A')}: {ligne.get('montant', 'N/A')}€ ({ligne.get('type', 'N/A')})")
-        print("="*80)
+
         
         # Utiliser le SituationCreateSerializer au lieu de SituationSerializer
         serializer = SituationCreateSerializer(data=data)
         if not serializer.is_valid():
-            print("❌ Erreurs de validation:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # Créer la situation
-        print("✅ Validation réussie, création de la situation...")
         situation = serializer.save()
-        print(f"✅ Situation créée avec ID: {situation.id}")
 
         # Créer les lignes de situation
         for ligne_data in data.get('lignes', []):
@@ -4357,42 +4335,14 @@ def create_situation(request):
         # Mettre à jour le montant_apres_retenues en base de données
         situation.montant_apres_retenues = montant_apres_retenues
         situation.save()
-        
-        print(f"🔍 [BACKEND] MONTANT_APRES_RETENUES RECALCULÉ: {montant_apres_retenues}")
-        
-        # 🔍 LOG BACKEND 2: Données finales en DB
-        print("\n" + "="*80)
-        print("🔍 [BACKEND] SITUATION CRÉÉE - Données en DB")
-        print("="*80)
-        print("📊 MONTANTS EN DB:")
-        for field in ['montant_ht_mois', 'montant_total_cumul_ht', 'montant_total_devis', 
-                      'pourcentage_avancement', 'montant_apres_retenues', 'tva', 
-                      'retenue_garantie', 'montant_prorata']:
-            value = getattr(situation, field, 'CHAMP INEXISTANT')
-            print(f"  {field}: {value}")
-        
-        print(f"\n📝 Lignes créées: {situation.lignes.count()}")
-        print(f"📝 Lignes supplémentaires créées: {situation.lignes_supplementaires.count()}")
-        print(f"📝 Lignes spéciales créées: {situation.lignes_speciales.count()}")
-        print("="*80)
 
         response_data = SituationSerializer(situation).data
         
-        # 🔍 LOG BACKEND 3: Données renvoyées au frontend
-        print("\n" + "="*80)
-        print("🔍 [BACKEND] RÉPONSE ENVOYÉE AU FRONTEND")
-        print("="*80)
-        print("📊 MONTANTS RENVOYÉS:")
-        for key in ['montant_ht_mois', 'montant_total_cumul_ht', 'montant_total_devis', 
-                    'pourcentage_avancement', 'montant_apres_retenues', 'tva', 
-                    'retenue_garantie', 'montant_prorata']:
-            print(f"  {key}: {response_data.get(key, 'NON PRÉSENT')}")
-        print("="*80 + "\n")
+
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        print("Erreur dans create:", str(e))
         return Response(
             {'error': str(e)}, 
             status=status.HTTP_400_BAD_REQUEST
@@ -5364,34 +5314,18 @@ def preview_situation(request, situation_id):
         montant_prorata = situation.montant_prorata
         retenue_cie = situation.retenue_cie
         
-        # Debug: Afficher les valeurs de base
-        print(f"🔍 DEBUG CALCULS:")
-        print(f"  Montant HT du mois: {montant_ht_mois}")
-        print(f"  Retenue Garantie: {retenue_garantie}")
-        print(f"  Montant Prorata: {montant_prorata}")
-        print(f"  Retenue CIE: {retenue_cie}")
-        
         # Calculer le montant après retenues en tenant compte des lignes supplémentaires
         montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie
-        print(f"  Montant après retenues (base): {montant_apres_retenues}")
         
         # Ajouter l'impact des lignes supplémentaires
         for ligne_suppl in lignes_supplementaires_data:
             if ligne_suppl['type'] == 'deduction':
                 montant_apres_retenues -= ligne_suppl['montant']
-                print(f"  - Ligne supplémentaire (déduction): {ligne_suppl['montant']}")
             else:
                 montant_apres_retenues += ligne_suppl['montant']
-                print(f"  + Ligne supplémentaire (ajout): {ligne_suppl['montant']}")
-        
-        print(f"  Montant après retenues (final): {montant_apres_retenues}")
         
         # Calculer la TVA
-        
         tva = (montant_apres_retenues * Decimal('0.20')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        print(f"  TVA: {tva}")
-        print(f"  Montant TTC: {montant_apres_retenues + tva}")
-        print(f"🔍 FIN DEBUG")
         
         context = {
             'chantier': {
