@@ -35,7 +35,6 @@ import {
 import { useSituationsManager } from "../../hooks/useSituationsManager";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
-import SituationDebugViewer from "../debug/SituationDebugViewer";
 
 const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const {
@@ -1276,7 +1275,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       </Dialog>
 
       {/* Composant de debug pour les situations */}
-      <SituationDebugViewer />
     </Box>
   );
 };
