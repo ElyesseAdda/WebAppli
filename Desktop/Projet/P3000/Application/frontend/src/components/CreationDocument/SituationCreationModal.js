@@ -95,6 +95,19 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
       ligne.niveau === "partie" && ligne.partie_id === partie.id.toString()
   );
 
+  // Vérifier si la partie a une seule sous-partie "Lignes directes"
+  const hasOnlyLignesDirectes =
+    partie.sous_parties &&
+    partie.sous_parties.length === 1 &&
+    partie.sous_parties[0].description === "Lignes directes";
+
+  // Fonction pour obtenir la couleur de comparaison
+  const getComparisonColor = (current, previous) => {
+    if (current < previous) return "error.main"; // Rouge
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    return "text.primary"; // Noir
+  };
+
   return (
     <>
       <TableRow
@@ -143,14 +156,116 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
         <TableCell style={{ padding: 0 }} colSpan={7}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box>
-              {partie.sous_parties.map((sousPartie) => (
-                <SousPartieTable
-                  key={sousPartie.id}
-                  sousPartie={sousPartie}
-                  handlePourcentageChange={handlePourcentageChange}
-                  lignesSpeciales={lignesSpeciales}
-                />
-              ))}
+              {partie.sous_parties.map((sousPartie) =>
+                hasOnlyLignesDirectes ? (
+                  // Si c'est une seule sous-partie "Lignes directes", afficher directement les lignes
+                  <Table key={sousPartie.id}>
+                    <TableBody>
+                      {sousPartie.lignes.map((ligne, index) => (
+                        <TableRow
+                          key={ligne.id}
+                          sx={{
+                            backgroundColor:
+                              index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                            "& td": { padding: "8px" },
+                          }}
+                        >
+                          <TableCell
+                            sx={{ width: "50px", padding: "8px" }}
+                          ></TableCell>
+                          <TableCell sx={{ width: "300px", padding: "8px" }}>
+                            {ligne.description}
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: "100px", padding: "8px" }}
+                            align="right"
+                          >
+                            {ligne.quantite}
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: "120px", padding: "8px" }}
+                            align="right"
+                          >
+                            {ligne.prix_unitaire} €
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: "120px", padding: "8px" }}
+                            align="right"
+                          >
+                            {parseFloat(ligne.total_ht)
+                              .toFixed(2)
+                              .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                            €
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: "120px", padding: "8px" }}
+                            align="right"
+                          >
+                            <TextField
+                              type="number"
+                              value={ligne.pourcentage_actuel || 0}
+                              onChange={(e) =>
+                                handlePourcentageChange(
+                                  ligne.id,
+                                  e.target.value
+                                )
+                              }
+                              onFocus={(e) => e.target.select()}
+                              InputProps={{
+                                inputProps: {
+                                  min: 0,
+                                  max: 100,
+                                  step: "any",
+                                },
+                              }}
+                              size="small"
+                              sx={{
+                                width: "100px",
+                                "& input": {
+                                  textAlign: "right",
+                                  color: getComparisonColor(
+                                    ligne.pourcentage_actuel || 0,
+                                    ligne.pourcentage_precedent || 0
+                                  ),
+                                },
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              width: "120px",
+                              padding: "8px",
+                              color: getComparisonColor(
+                                ligne.pourcentage_actuel || 0,
+                                ligne.pourcentage_precedent || 0
+                              ),
+                              fontWeight: "bold",
+                            }}
+                            align="right"
+                          >
+                            {(
+                              (ligne.total_ht *
+                                (ligne.pourcentage_actuel || 0)) /
+                              100
+                            )
+                              .toFixed(2)
+                              .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                            €
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  // Sinon, utiliser le composant SousPartieTable normal
+                  <SousPartieTable
+                    key={sousPartie.id}
+                    sousPartie={sousPartie}
+                    handlePourcentageChange={handlePourcentageChange}
+                    lignesSpeciales={lignesSpeciales}
+                  />
+                )
+              )}
               {/* Lignes spéciales de la partie */}
               {lignesSpecialesPartie.map((ligne, index) => (
                 <TableRow
@@ -1045,6 +1160,29 @@ const SituationCreationModal = ({
             if (currentSituation.lignes_supplementaires?.length > 0) {
               setLignesSupplementaires(currentSituation.lignes_supplementaires);
             }
+
+            // Mettre à jour les lignes spéciales avec les pourcentages de la situation existante
+            if (
+              lignesSpeciales.length > 0 &&
+              currentSituation.lignes_speciales?.length > 0
+            ) {
+              const newLignesSpeciales = lignesSpeciales.map((ligne) => {
+                // Chercher la ligne spéciale correspondante dans la situation existante
+                const ligneExistante = currentSituation.lignes_speciales.find(
+                  (l) =>
+                    l.description === ligne.description &&
+                    l.niveau === ligne.niveau
+                );
+
+                return {
+                  ...ligne,
+                  pourcentage_actuel: ligneExistante
+                    ? parseFloat(ligneExistante.pourcentage_actuel || 0)
+                    : 0,
+                };
+              });
+              setLignesSpeciales(newLignesSpeciales);
+            }
           } else {
             let moisPrecedent = parseInt(mois) - 1;
             let anneePrecedente = parseInt(annee);
@@ -1123,6 +1261,30 @@ const SituationCreationModal = ({
                     montant: "0.00", // Montant à 0 pour la nouvelle situation
                   }))
                 );
+              }
+
+              // Mettre à jour les lignes spéciales avec les pourcentages de la situation précédente
+              if (
+                lignesSpeciales.length > 0 &&
+                situationPrecedente.lignes_speciales?.length > 0
+              ) {
+                const newLignesSpeciales = lignesSpeciales.map((ligne) => {
+                  // Chercher la ligne spéciale correspondante dans la situation précédente
+                  const lignePrecedente =
+                    situationPrecedente.lignes_speciales.find(
+                      (l) =>
+                        l.description === ligne.description &&
+                        l.niveau === ligne.niveau
+                    );
+
+                  return {
+                    ...ligne,
+                    pourcentage_actuel: lignePrecedente
+                      ? parseFloat(lignePrecedente.pourcentage_actuel || 0)
+                      : 0,
+                  };
+                });
+                setLignesSpeciales(newLignesSpeciales);
               }
 
               // Réinitialiser le montant HT du mois à 0
