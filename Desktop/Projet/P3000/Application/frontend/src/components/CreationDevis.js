@@ -883,12 +883,19 @@ const CreationDevis = () => {
         lignes_speciales: {
           global: (() => {
             // Calculer le montant de base (lignes du devis sans lignes spéciales)
+            // Utiliser la même logique que calculateTotalPrice pour être cohérent
             let montantBase = 0;
             selectedLignes.forEach((ligneId) => {
               const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
               if (ligne) {
                 const quantity = quantities[ligneId] || 0;
-                const price = customPrices[ligneId] || ligne.prix;
+                // Utiliser le prix calculé automatiquement si les coûts ont été modifiés
+                const price =
+                  customCouts[ligneId] ||
+                  customTauxFixes[ligneId] ||
+                  customMarges[ligneId]
+                    ? calculatePriceFromCosts(ligne)
+                    : customPrices[ligneId] || ligne.prix;
                 montantBase += quantity * price;
               }
             });
