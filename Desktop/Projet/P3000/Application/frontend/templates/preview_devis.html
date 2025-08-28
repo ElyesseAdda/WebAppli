@@ -631,13 +631,6 @@
            <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
               <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
                   {{ special_line.description }}
-                  {% if special_line.type != 'display' %}
-                  {% if special_line.valueType == 'percentage' %}
-                      ({{ special_line.value }}%)
-                  {% else %}
-                      ({{ special_line.value }}€)
-                      {% endif %}
-                  {% endif %}
               </td>
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
@@ -664,13 +657,6 @@
            <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
               <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
                   {{ special_line.description }}
-                  {% if special_line.type != 'display' %}
-                  {% if special_line.valueType == 'percentage' %}
-                      ({{ special_line.value }}%)
-                  {% else %}
-                      ({{ special_line.value }}€)
-                      {% endif %}
-                  {% endif %}
               </td>
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
@@ -697,13 +683,6 @@
            <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
               <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
                   {{ special_line.description }}
-                  {% if special_line.type != 'display' %}
-                  {% if special_line.valueType == 'percentage' %}
-                      ({{ special_line.value }}%)
-                  {% else %}
-                      ({{ special_line.value }}€)
-                      {% endif %}
-                  {% endif %}
               </td>
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}

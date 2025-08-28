@@ -885,6 +885,7 @@
       </tr>
       {% endfor %}
       <!-- Retenue CIE -->
+      {% if situation.retenue_cie != 0 %}
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
@@ -893,6 +894,7 @@
           </div>
         </td>
       </tr>
+      {% endif %}
       <tr class="total-row">
         <td colspan="2">
           <div class="recap-line" style="background-color: rgba(27, 120, 188, 1); color: white;">
