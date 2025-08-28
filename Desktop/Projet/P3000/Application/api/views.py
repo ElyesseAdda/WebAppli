@@ -4678,11 +4678,33 @@ def get_devis_structure(request, devis_id):
                 'ligne_detail_id': ligne_detail.id
             })
             
-        # Convertir en liste pour l'API
+        # Fonction de tri naturel pour les parties
+        def natural_sort_key(titre):
+            import re
+            # Extraire le numéro au début du titre (ex: "1-", "11-", "21-")
+            match = re.match(r'^(\d+)-', titre)
+            if match:
+                # Retourner un tuple (numéro, titre) pour un tri correct
+                return (int(match.group(1)), titre)
+            # Si pas de numéro, retourner (0, titre) pour mettre en premier
+            return (0, titre)
+        
+        # Convertir en liste pour l'API et trier
         result = []
         for partie in structure.values():
-            partie['sous_parties'] = list(partie['sous_parties'].values())
+            # Trier les sous-parties par ordre naturel
+            sous_parties_list = list(partie['sous_parties'].values())
+            sous_parties_list.sort(key=lambda sp: natural_sort_key(sp['description']))
+            
+            # Trier les lignes de détail par ordre naturel
+            for sous_partie in sous_parties_list:
+                sous_partie['lignes'].sort(key=lambda l: natural_sort_key(l['description']))
+            
+            partie['sous_parties'] = sous_parties_list
             result.append(partie)
+        
+        # Trier les parties par ordre naturel
+        result.sort(key=lambda p: natural_sort_key(p['titre']))
             
         return Response(result)
         
