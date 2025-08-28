@@ -374,8 +374,7 @@
         </p>
         {% elif statut == 'retrait_magasin' %}
         <p>
-          RETRAIT {{ fournisseur|upper }} {{ magasin_retrait|upper }} LE {{
-          date_livraison }}
+          RETRAIT {{ fournisseur|upper }}{% if magasin_retrait %} {{ magasin_retrait|upper }}{% endif %} LE {{ date_commande }}
         </p>
         {% endif %}
       </div>
