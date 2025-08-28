@@ -32,6 +32,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
       fournisseurName: data.fournisseurName, // Nom pour l'API produits
       chantier: data.chantier,
       emetteur: data.emetteur,
+      statut: data.statut, // Ajout du statut
       numero_bon_commande: data.numero_bon_commande,
       date_commande: data.date_commande,
       date_creation_personnalisee: data.date_creation_personnalisee,
@@ -63,6 +64,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
       fournisseurName: selectedData.fournisseurName,
       chantier: selectedData.chantier,
       emetteur: selectedData.emetteur,
+      statut: selectedData.statut, // Ajout du statut pour la prévisualisation
       date_creation_personnalisee: selectedData.date_creation_personnalisee,
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,

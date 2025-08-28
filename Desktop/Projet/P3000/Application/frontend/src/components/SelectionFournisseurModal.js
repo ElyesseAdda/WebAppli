@@ -21,6 +21,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
     fournisseur: "",
     chantier: "",
     agent: "",
+    statut: "en_attente", // Statut par défaut
   });
   const [dateCommande, setDateCommande] = useState(
     new Date().toISOString().split("T")[0]
@@ -40,6 +41,13 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
 
   // Liste dynamique des agents pour la réception (depuis API)
   const [agentsReceptionnaires, setAgentsReceptionnaires] = useState([]);
+
+  // Options de statut pour les bons de commande
+  const statutOptions = [
+    { value: "en_attente", label: "En attente Livraison" },
+    { value: "livre_chantier", label: "Livré Chantier" },
+    { value: "retrait_magasin", label: "Retrait Magasin" },
+  ];
 
   useEffect(() => {
     // Charger la liste des fournisseurs
@@ -89,6 +97,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
       fournisseurName: selectedFournisseur ? selectedFournisseur.name : "",
       chantier: selectedData.chantier,
       emetteur: selectedData.emetteur,
+      statut: selectedData.statut, // Ajout du statut
       date_commande: dateCommande,
       date_creation_personnalisee: dateCreation,
       numero_bon_commande: numeroBonCommande,
@@ -183,28 +192,52 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
             </Select>
           </FormControl>
 
-          <TextField
-            label="Date de Commande"
-            type="date"
-            value={dateCommande}
-            onChange={(e) => setDateCommande(e.target.value)}
-            InputLabelProps={{
-              shrink: true,
-            }}
-            required
-          />
+          <FormControl fullWidth>
+            <InputLabel>Statut de Livraison</InputLabel>
+            <Select
+              value={selectedData.statut}
+              onChange={(e) =>
+                setSelectedData({
+                  ...selectedData,
+                  statut: e.target.value,
+                })
+              }
+              label="Statut de Livraison"
+            >
+              {statutOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-          <TextField
-            label="Date de Création du Document"
-            type="date"
-            value={dateCreation}
-            onChange={(e) => setDateCreation(e.target.value)}
-            InputLabelProps={{
-              shrink: true,
-            }}
-            helperText="Date qui apparaîtra sur le document (pour antidater)"
-            required
-          />
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <TextField
+              label="Date de Commande"
+              type="date"
+              value={dateCommande}
+              onChange={(e) => setDateCommande(e.target.value)}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              fullWidth
+              required
+            />
+
+            <TextField
+              label="Date de Création du Document"
+              type="date"
+              value={dateCreation}
+              onChange={(e) => setDateCreation(e.target.value)}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              helperText="Date qui apparaîtra sur le document (pour antidater)"
+              fullWidth
+              required
+            />
+          </Box>
 
           <FormControl fullWidth>
             <InputLabel>Type de Contact Réceptionnaire</InputLabel>

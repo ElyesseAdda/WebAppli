@@ -3329,6 +3329,39 @@ def preview_bon_commande(request):
         else:
             date_creation_personnalisee = timezone.now().date()
 
+        # Formatage de la date de commande
+        formatted_date_commande = None
+        date_commande = bon_commande_data.get('date_commande')
+        if date_commande:
+            try:
+                if isinstance(date_commande, str):
+                    # Gérer les formats ISO avec timestamp ou date simple
+                    if 'T' in date_commande:
+                        date_obj = datetime.fromisoformat(date_commande.replace('Z', '+00:00'))
+                    else:
+                        date_obj = datetime.strptime(date_commande, '%Y-%m-%d')
+                else:
+                    date_obj = date_commande
+                formatted_date_commande = date_obj.strftime('%d/%m/%Y').upper()
+            except (ValueError, TypeError):
+                formatted_date_commande = None
+
+        # Formatage de la date de livraison
+        formatted_date_livraison = None
+        date_livraison = bon_commande_data.get('date_livraison')
+        if date_livraison:
+            try:
+                if isinstance(date_livraison, str):
+                    if 'T' in date_livraison:
+                        date_obj = datetime.fromisoformat(date_livraison.replace('Z', '+00:00'))
+                    else:
+                        date_obj = datetime.strptime(date_livraison, '%Y-%m-%d')
+                else:
+                    date_obj = date_livraison
+                formatted_date_livraison = date_obj.strftime('%d/%m/%Y').upper()
+            except (ValueError, TypeError):
+                formatted_date_livraison = None
+
         context = {
             'numero': bon_commande_data['numero'],
             'fournisseur': fournisseur_name,
@@ -3338,7 +3371,8 @@ def preview_bon_commande(request):
             'montant_total': bon_commande_data['montant_total'],
             'date': timezone.now(),
             'statut': bon_commande_data.get('statut', 'en_attente'),
-            'date_livraison': bon_commande_data.get('date_livraison'),
+            'date_commande': formatted_date_commande,
+            'date_livraison': formatted_date_livraison,
             'magasin_retrait': bon_commande_data.get('magasin_retrait'),
             'contact_type': contact_type,
             'contact_agent': contact_agent,
@@ -3491,17 +3525,36 @@ def preview_saved_bon_commande(request, id):
         if not contact_agent and not contact_sous_traitant:
             print("DEBUG preview_saved - Aucun contact spécifique défini")
 
-        # Formatage de la date directement dans la vue
-        formatted_date = None
+        # Formatage de la date de commande
+        formatted_date_commande = None
+        if bon_commande.date_commande:
+            try:
+                if isinstance(bon_commande.date_commande, str):
+                    # Gérer les formats ISO avec timestamp ou date simple
+                    if 'T' in bon_commande.date_commande:
+                        date_obj = datetime.fromisoformat(bon_commande.date_commande.replace('Z', '+00:00'))
+                    else:
+                        date_obj = datetime.strptime(bon_commande.date_commande, '%Y-%m-%d')
+                else:
+                    date_obj = bon_commande.date_commande
+                formatted_date_commande = date_obj.strftime('%d/%m/%Y').upper()
+            except (ValueError, TypeError):
+                formatted_date_commande = None
+
+        # Formatage de la date de livraison
+        formatted_date_livraison = None
         if bon_commande.date_livraison:
             try:
                 if isinstance(bon_commande.date_livraison, str):
-                    date_obj = datetime.strptime(bon_commande.date_livraison, '%Y-%m-%d')
+                    if 'T' in bon_commande.date_livraison:
+                        date_obj = datetime.fromisoformat(bon_commande.date_livraison.replace('Z', '+00:00'))
+                    else:
+                        date_obj = datetime.strptime(bon_commande.date_livraison, '%Y-%m-%d')
                 else:
                     date_obj = bon_commande.date_livraison
-                formatted_date = date_obj.strftime('%d/%m/%y').upper()
-            except ValueError:
-                formatted_date = None
+                formatted_date_livraison = date_obj.strftime('%d/%m/%Y').upper()
+            except (ValueError, TypeError):
+                formatted_date_livraison = None
 
         context = {
             'numero': bon_commande.numero,
@@ -3512,7 +3565,8 @@ def preview_saved_bon_commande(request, id):
             'montant_total': bon_commande.montant_total,
             'date': bon_commande.date_creation,
             'statut': bon_commande.statut,
-            'date_livraison': formatted_date,  # Date déjà formatée
+            'date_commande': formatted_date_commande,
+            'date_livraison': formatted_date_livraison,
             'magasin_retrait': bon_commande.magasin_retrait,
             'contact_type': bon_commande.contact_type,
             'contact_agent': contact_agent,

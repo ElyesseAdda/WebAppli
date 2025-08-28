@@ -160,6 +160,7 @@ function ProduitSelectionTable({
         fournisseur: fournisseur,
         chantier: selectedData.chantier,
         emetteur: selectedData.emetteur,
+        statut: selectedData.statut, // Ajout du statut
         date_commande: selectedData.date_commande,
         date_creation_personnalisee: selectedData.date_creation_personnalisee,
         contact_type: selectedData.contact_type,

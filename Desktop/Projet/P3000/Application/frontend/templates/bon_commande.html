@@ -370,7 +370,7 @@
         <p>En attente Livraison</p>
         {% elif statut == 'livre_chantier' %}
         <p>
-          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_livraison }}
+          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_commande }}
         </p>
         {% elif statut == 'retrait_magasin' %}
         <p>
