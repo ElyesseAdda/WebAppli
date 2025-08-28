@@ -3,6 +3,7 @@ import {
   Button,
   Checkbox,
   InputAdornment,
+  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -27,10 +28,32 @@ const BonCommandeModif = () => {
   const [isPreviewed, setIsPreviewed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [numeroBonCommande, setNumeroBonCommande] = useState("");
+  const [codeRangeFilter, setCodeRangeFilter] = useState(""); // Nouveau filtre par plage de codes
 
   useEffect(() => {
     fetchBonCommande();
   }, [id]);
+
+  // Fonction pour recharger les produits avec le filtre de plage
+  const reloadProductsWithFilter = async () => {
+    if (!bonCommande) return;
+
+    try {
+      const productsResponse = await axios.get(
+        `/api/products-by-fournisseur/?fournisseur=${encodeURIComponent(
+          bonCommande.fournisseur
+        )}${codeRangeFilter ? `&code_range=${codeRangeFilter}` : ""}`
+      );
+      setAllProducts(productsResponse.data);
+    } catch (error) {
+      console.error("Erreur lors du rechargement des produits:", error);
+    }
+  };
+
+  // Recharger les produits quand le filtre de plage change
+  useEffect(() => {
+    reloadProductsWithFilter();
+  }, [codeRangeFilter, bonCommande]);
 
   const fetchBonCommande = async () => {
     try {
@@ -42,7 +65,7 @@ const BonCommandeModif = () => {
       const productsResponse = await axios.get(
         `/api/products-by-fournisseur/?fournisseur=${encodeURIComponent(
           response.data.fournisseur
-        )}`
+        )}${codeRangeFilter ? `&code_range=${codeRangeFilter}` : ""}`
       );
       setAllProducts(productsResponse.data);
 
@@ -190,21 +213,41 @@ const BonCommandeModif = () => {
           <Typography variant="h5">
             Modification du Bon de Commande {bonCommande.numero}
           </Typography>
-          <TextField
-            size="small"
-            variant="outlined"
-            placeholder="Rechercher..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <FiSearch style={{ fontSize: "1.2rem" }} />
-                </InputAdornment>
-              ),
-              sx: { width: "300px" },
-            }}
-          />
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <TextField
+              size="small"
+              variant="outlined"
+              placeholder="Rechercher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <FiSearch style={{ fontSize: "1.2rem" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ width: 250 }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Plage de codes"
+              variant="outlined"
+              value={codeRangeFilter}
+              onChange={(e) => setCodeRangeFilter(e.target.value)}
+              sx={{ width: 150 }}
+            >
+              <MenuItem value="">Tous les codes</MenuItem>
+              <MenuItem value="0-99">0-99</MenuItem>
+              <MenuItem value="100-199">100-199</MenuItem>
+              <MenuItem value="200-299">200-299</MenuItem>
+              <MenuItem value="300-399">300-399</MenuItem>
+              <MenuItem value="400-499">400-499</MenuItem>
+              <MenuItem value="500+">500+</MenuItem>
+              <MenuItem value="non-numeric">Non-numérique</MenuItem>
+            </TextField>
+          </Box>
         </Box>
 
         <TextField

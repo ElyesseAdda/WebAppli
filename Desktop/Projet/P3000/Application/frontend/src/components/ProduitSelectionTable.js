@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogTitle,
   InputAdornment,
+  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -36,6 +37,7 @@ function ProduitSelectionTable({
   const [quantities, setQuantities] = useState({});
   const [isPreviewed, setIsPreviewed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [codeRangeFilter, setCodeRangeFilter] = useState(""); // Nouveau filtre par plage de codes
   const [openNewProductModal, setOpenNewProductModal] = useState(false);
   const [editingCell, setEditingCell] = useState({
     productId: null,
@@ -227,7 +229,8 @@ function ProduitSelectionTable({
   const loadProducts = async () => {
     try {
       const data = await bonCommandeService.getProductsByFournisseur(
-        fournisseur
+        fournisseur,
+        codeRangeFilter || null
       );
       setProducts(data);
     } catch (error) {
@@ -237,7 +240,7 @@ function ProduitSelectionTable({
 
   useEffect(() => {
     loadProducts();
-  }, [fournisseur]);
+  }, [fournisseur, codeRangeFilter]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -263,14 +266,31 @@ function ProduitSelectionTable({
                   <FiSearch style={{ fontSize: "1.2rem" }} />
                 </InputAdornment>
               ),
-              sx: { width: "300px" },
             }}
+            sx={{ width: "250px" }}
           />
+          <TextField
+            select
+            size="small"
+            label="Plage de codes"
+            variant="outlined"
+            value={codeRangeFilter}
+            onChange={(e) => setCodeRangeFilter(e.target.value)}
+            sx={{ width: "150px" }}
+          >
+            <MenuItem value="">Tous les codes</MenuItem>
+            <MenuItem value="0-99">0-99</MenuItem>
+            <MenuItem value="100-199">100-199</MenuItem>
+            <MenuItem value="200-299">200-299</MenuItem>
+            <MenuItem value="300-399">300-399</MenuItem>
+            <MenuItem value="400-499">400-499</MenuItem>
+            <MenuItem value="500+">500+</MenuItem>
+            <MenuItem value="non-numeric">Non-numérique</MenuItem>
+          </TextField>
           <Button
             variant="outlined"
             color="primary"
             onClick={handleOpenNewProductModal}
-            sx={{ ml: 2 }}
           >
             Nouveau Produit
           </Button>

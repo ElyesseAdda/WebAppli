@@ -1,6 +1,7 @@
 import {
   Box,
   IconButton,
+  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -50,6 +51,7 @@ const ListeStock = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
+  const [codeRangeFilter, setCodeRangeFilter] = useState(""); // Nouveau filtre par plage de codes
   const [totalItems, setTotalItems] = useState(0);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
@@ -92,10 +94,10 @@ const ListeStock = () => {
     setPage(0);
   };
 
-  // Filtrer les stocks en fonction de la recherche
+  // Filtrer les stocks en fonction de la recherche et de la plage de codes
   const filteredStocks = stocks.filter((stock) => {
     const searchString = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       (stock.code_produit &&
         stock.code_produit.toLowerCase().includes(searchString)) ||
       (stock.designation &&
@@ -103,6 +105,38 @@ const ListeStock = () => {
       (stock.fournisseur &&
         stock.fournisseur.toLowerCase().includes(searchString))
     );
+
+    // Nouveau filtre par plage de codes
+    const matchesCodeRange = () => {
+      if (codeRangeFilter === "") return true;
+      
+      const code = stock.code_produit || "";
+      const isNumeric = /^\d+$/.test(code);
+      
+      if (!isNumeric && codeRangeFilter === "non-numeric") return true;
+      if (!isNumeric) return false;
+      
+      const codeNum = parseInt(code);
+      
+      switch (codeRangeFilter) {
+        case "0-99":
+          return codeNum >= 0 && codeNum <= 99;
+        case "100-199":
+          return codeNum >= 100 && codeNum <= 199;
+        case "200-299":
+          return codeNum >= 200 && codeNum <= 299;
+        case "300-399":
+          return codeNum >= 300 && codeNum <= 399;
+        case "400-499":
+          return codeNum >= 400 && codeNum <= 499;
+        case "500+":
+          return codeNum >= 500;
+        default:
+          return true;
+      }
+    };
+
+    return matchesSearch && matchesCodeRange();
   });
 
   // Gestion de la modification d'un stock
@@ -141,22 +175,50 @@ const ListeStock = () => {
         >
           Liste des Stocks
         </Typography>
-        <TextField
-          label="Rechercher"
-          variant="outlined"
-          size="small"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{
-            width: 300,
-            "& .MuiInputLabel-root": {
-              fontFamily: '"Roboto", sans-serif',
-            },
-            "& .MuiInputBase-root": {
-              fontFamily: '"Roboto Slab", sans-serif',
-            },
-          }}
-        />
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <TextField
+            label="Rechercher"
+            variant="outlined"
+            size="small"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{
+              width: 250,
+              "& .MuiInputLabel-root": {
+                fontFamily: '"Roboto", sans-serif',
+              },
+              "& .MuiInputBase-root": {
+                fontFamily: '"Roboto Slab", sans-serif',
+              },
+            }}
+          />
+          <TextField
+            select
+            label="Plage de codes"
+            variant="outlined"
+            size="small"
+            value={codeRangeFilter}
+            onChange={(e) => setCodeRangeFilter(e.target.value)}
+            sx={{
+              width: 150,
+              "& .MuiInputLabel-root": {
+                fontFamily: '"Roboto", sans-serif',
+              },
+              "& .MuiInputBase-root": {
+                fontFamily: '"Roboto Slab", sans-serif',
+              },
+            }}
+          >
+            <MenuItem value="">Tous les codes</MenuItem>
+            <MenuItem value="0-99">0-99</MenuItem>
+            <MenuItem value="100-199">100-199</MenuItem>
+            <MenuItem value="200-299">200-299</MenuItem>
+            <MenuItem value="300-399">300-399</MenuItem>
+            <MenuItem value="400-499">400-499</MenuItem>
+            <MenuItem value="500+">500+</MenuItem>
+            <MenuItem value="non-numeric">Non-numérique</MenuItem>
+          </TextField>
+        </Box>
       </Box>
 
       <TableContainer component={Paper}>

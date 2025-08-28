@@ -1410,8 +1410,25 @@ class EventViewSet(viewsets.ModelViewSet):
         return queryset
 
 class StockViewSet(viewsets.ModelViewSet):
-    queryset = Stock.objects.all()
     serializer_class = StockSerializer
+    
+    def get_queryset(self):
+        queryset = Stock.objects.all()
+        
+        # Tri naturel par code produit
+        queryset = queryset.extra(
+            select={
+                'code_numeric': """
+                    CASE 
+                        WHEN code_produit ~ '^[0-9]+$' 
+                        THEN CAST(code_produit AS INTEGER)
+                        ELSE 999999 
+                    END
+                """
+            }
+        ).order_by('code_numeric', 'code_produit')
+        
+        return queryset
 
     # Action personnalisée pour ajouter du stock
     @action(detail=True, methods=['post'])
@@ -3205,6 +3222,8 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 def get_products_by_fournisseur(request):
     fournisseur_name = request.query_params.get('fournisseur')
+    code_range = request.query_params.get('code_range')  # Nouveau paramètre pour le filtre par plage
+    
     if not fournisseur_name:
         return Response(
             {'error': 'Fournisseur name is required'},
@@ -3213,6 +3232,51 @@ def get_products_by_fournisseur(request):
 
     try:
         products = Stock.objects.filter(fournisseur__name=fournisseur_name)
+        
+        # Filtre par plage de codes si spécifié
+        if code_range:
+            if code_range == '0-99':
+                products = products.extra(
+                    where=["code_produit ~ '^[0-9]+$' AND CAST(code_produit AS INTEGER) BETWEEN 0 AND 99"]
+                )
+            elif code_range == '100-199':
+                products = products.extra(
+                    where=["code_produit ~ '^[0-9]+$' AND CAST(code_produit AS INTEGER) BETWEEN 100 AND 199"]
+                )
+            elif code_range == '200-299':
+                products = products.extra(
+                    where=["code_produit ~ '^[0-9]+$' AND CAST(code_produit AS INTEGER) BETWEEN 200 AND 299"]
+                )
+            elif code_range == '300-399':
+                products = products.extra(
+                    where=["code_produit ~ '^[0-9]+$' AND CAST(code_produit AS INTEGER) BETWEEN 300 AND 399"]
+                )
+            elif code_range == '400-499':
+                products = products.extra(
+                    where=["code_produit ~ '^[0-9]+$' AND CAST(code_produit AS INTEGER) BETWEEN 400 AND 499"]
+                )
+            elif code_range == '500+':
+                products = products.extra(
+                    where=["code_produit ~ '^[0-9]+$' AND CAST(code_produit AS INTEGER) >= 500"]
+                )
+            elif code_range == 'non-numeric':
+                products = products.extra(
+                    where=["NOT (code_produit ~ '^[0-9]+$')"]
+                )
+        
+        # Tri naturel par code produit
+        products = products.extra(
+            select={
+                'code_numeric': """
+                    CASE 
+                        WHEN code_produit ~ '^[0-9]+$' 
+                        THEN CAST(code_produit AS INTEGER)
+                        ELSE 999999 
+                    END
+                """
+            }
+        ).order_by('code_numeric', 'code_produit')
+        
         serializer = StockSerializer(products, many=True)
         return Response(serializer.data)
     except Exception as e:

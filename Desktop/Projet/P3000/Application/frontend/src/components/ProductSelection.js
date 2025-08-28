@@ -12,6 +12,7 @@ const ProductSelection = ({
   const [designationQuery, setDesignationQuery] = useState(""); // Filtre pour la désignation
   const [fournisseurQuery, setFournisseurQuery] = useState(""); // Filtre pour le fournisseur
   const [showLowStock, setShowLowStock] = useState(false); // Filtre pour afficher les stocks faibles
+  const [codeRangeFilter, setCodeRangeFilter] = useState(""); // Nouveau filtre par plage de codes
   const [editRowId, setEditRowId] = useState(null); // Gérer la ligne en mode édition
   const [editedProduct, setEditedProduct] = useState({}); // Stocker les données modifiées
 
@@ -97,7 +98,7 @@ const ProductSelection = ({
     }
   };
 
-  // Filtrer les produits en fonction de la recherche, désignation, fournisseur et stock faible
+  // Filtrer les produits en fonction de la recherche, désignation, fournisseur, stock faible et plage de codes
   const filteredProducts = productList.filter((product) => {
     const matchesSearch =
       product.designation.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -120,11 +121,42 @@ const ProductSelection = ({
       (product.quantite_minimum &&
         product.quantite_disponible < product.quantite_minimum);
 
+    // Nouveau filtre par plage de codes
+    const matchesCodeRange = () => {
+      if (codeRangeFilter === "") return true;
+      
+      const code = product.code_produit || "";
+      const isNumeric = /^\d+$/.test(code);
+      
+      if (!isNumeric && codeRangeFilter === "non-numeric") return true;
+      if (!isNumeric) return false;
+      
+      const codeNum = parseInt(code);
+      
+      switch (codeRangeFilter) {
+        case "0-99":
+          return codeNum >= 0 && codeNum <= 99;
+        case "100-199":
+          return codeNum >= 100 && codeNum <= 199;
+        case "200-299":
+          return codeNum >= 200 && codeNum <= 299;
+        case "300-399":
+          return codeNum >= 300 && codeNum <= 399;
+        case "400-499":
+          return codeNum >= 400 && codeNum <= 499;
+        case "500+":
+          return codeNum >= 500;
+        default:
+          return true;
+      }
+    };
+
     return (
       matchesSearch &&
       matchesDesignation &&
       matchesFournisseur &&
-      matchesLowStock
+      matchesLowStock &&
+      matchesCodeRange()
     );
   });
 
@@ -132,29 +164,43 @@ const ProductSelection = ({
     <div style={mainContainer}>
       <h2>Sélectionner un produit</h2>
       <div
-        style={{ display: "flex", alignItems: "center", marginBottom: "20px" }}
+        style={{ display: "flex", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}
       >
         <input
           type="text"
           placeholder="Rechercher un produit..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ width: "200px", marginRight: "10px" }}
+          style={{ width: "200px" }}
         />
         <input
           type="text"
           placeholder="Désignation..."
           value={designationQuery}
           onChange={(e) => setDesignationQuery(e.target.value)}
-          style={{ width: "150px", marginRight: "10px" }}
+          style={{ width: "150px" }}
         />
         <input
           type="text"
           placeholder="Fournisseur..."
           value={fournisseurQuery}
           onChange={(e) => setFournisseurQuery(e.target.value)}
-          style={{ width: "150px", marginRight: "10px" }}
+          style={{ width: "150px" }}
         />
+        <select
+          value={codeRangeFilter}
+          onChange={(e) => setCodeRangeFilter(e.target.value)}
+          style={{ width: "120px", padding: "4px" }}
+        >
+          <option value="">Tous les codes</option>
+          <option value="0-99">0-99</option>
+          <option value="100-199">100-199</option>
+          <option value="200-299">200-299</option>
+          <option value="300-399">300-399</option>
+          <option value="400-499">400-499</option>
+          <option value="500+">500+</option>
+          <option value="non-numeric">Non-numérique</option>
+        </select>
         <label style={{ marginBottom: "0px" }}>
           <input
             type="checkbox"

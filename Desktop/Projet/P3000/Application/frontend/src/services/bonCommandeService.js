@@ -8,12 +8,12 @@ export const bonCommandeService = {
     return response.json();
   },
 
-  getProductsByFournisseur: async (fournisseurId) => {
-    const response = await fetch(
-      `${BASE_URL}/products-by-fournisseur/?fournisseur=${encodeURIComponent(
-        fournisseurId
-      )}`
-    );
+  getProductsByFournisseur: async (fournisseurId, codeRange = null) => {
+    const url = `${BASE_URL}/products-by-fournisseur/?fournisseur=${encodeURIComponent(
+      fournisseurId
+    )}${codeRange ? `&code_range=${codeRange}` : ""}`;
+    
+    const response = await fetch(url);
     if (!response.ok)
       throw new Error("Erreur lors de la récupération des produits");
     return response.json();
