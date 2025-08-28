@@ -949,16 +949,17 @@ const SituationCreationModal = ({
               specialLines.push({
                 id: `global_${index}`,
                 description: ligne.description,
-                value: ligne.value,
-                valueType: ligne.valueType,
+                value: ligne.montant_calcule || ligne.value, // Utiliser le montant calculé si disponible
+                valueType: ligne.montant_calcule ? "fixed" : ligne.valueType, // Forcer en fixe si montant calculé
                 type: ligne.type,
                 niveau: "global",
                 pourcentage_actuel: 0,
                 pourcentage_precedent: 0,
                 montant_ht:
-                  ligne.valueType === "percentage"
+                  ligne.montant_calcule ||
+                  (ligne.valueType === "percentage"
                     ? (devis.price_ht * ligne.value) / 100
-                    : ligne.value,
+                    : ligne.value),
               });
             }
           });
@@ -972,17 +973,18 @@ const SituationCreationModal = ({
                 specialLines.push({
                   id: `partie_${partieId}_${index}`,
                   description: ligne.description,
-                  value: ligne.value,
-                  valueType: ligne.valueType,
+                  value: ligne.montant_calcule || ligne.value, // Utiliser le montant calculé si disponible
+                  valueType: ligne.montant_calcule ? "fixed" : ligne.valueType, // Forcer en fixe si montant calculé
                   type: ligne.type,
                   niveau: "partie",
                   partie_id: partieId,
                   pourcentage_actuel: 0,
                   pourcentage_precedent: 0,
                   montant_ht:
-                    ligne.valueType === "percentage"
+                    ligne.montant_calcule ||
+                    (ligne.valueType === "percentage"
                       ? (devis.price_ht * ligne.value) / 100
-                      : ligne.value,
+                      : ligne.value),
                 });
               }
             });
@@ -999,17 +1001,20 @@ const SituationCreationModal = ({
                     specialLines.push({
                       id: `souspartie_${sousPartieId}_${index}`,
                       description: ligne.description,
-                      value: ligne.value,
-                      valueType: ligne.valueType,
+                      value: ligne.montant_calcule || ligne.value, // Utiliser le montant calculé si disponible
+                      valueType: ligne.montant_calcule
+                        ? "fixed"
+                        : ligne.valueType, // Forcer en fixe si montant calculé
                       type: ligne.type,
                       niveau: "sous_partie",
                       sous_partie_id: sousPartieId,
                       pourcentage_actuel: 0,
                       pourcentage_precedent: 0,
                       montant_ht:
-                        ligne.valueType === "percentage"
+                        ligne.montant_calcule ||
+                        (ligne.valueType === "percentage"
                           ? (devis.price_ht * ligne.value) / 100
-                          : ligne.value,
+                          : ligne.value),
                     });
                   }
                 }

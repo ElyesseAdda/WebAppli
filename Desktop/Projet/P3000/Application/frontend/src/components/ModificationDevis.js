@@ -701,7 +701,43 @@ const ModificationDevis = () => {
             taux_fixe: ligne?.taux_fixe || tauxFixe || 20,
           };
         }),
-        lignes_speciales: specialLines,
+        lignes_speciales: {
+          global: (specialLines.global || []).map((line) => ({
+            ...line,
+            montant_calcule:
+              line.valueType === "percentage"
+                ? (calculateBaseTotalHT() * parseFloat(line.value)) / 100
+                : parseFloat(line.value),
+          })),
+          parties: Object.fromEntries(
+            Object.entries(specialLines.parties || {}).map(
+              ([partieId, lines]) => [
+                partieId,
+                lines.map((line) => ({
+                  ...line,
+                  montant_calcule:
+                    line.valueType === "percentage"
+                      ? (calculateBaseTotalHT() * parseFloat(line.value)) / 100
+                      : parseFloat(line.value),
+                })),
+              ]
+            )
+          ),
+          sousParties: Object.fromEntries(
+            Object.entries(specialLines.sousParties || {}).map(
+              ([sousPartieId, lines]) => [
+                sousPartieId,
+                lines.map((line) => ({
+                  ...line,
+                  montant_calcule:
+                    line.valueType === "percentage"
+                      ? (calculateBaseTotalHT() * parseFloat(line.value)) / 100
+                      : parseFloat(line.value),
+                })),
+              ]
+            )
+          ),
+        },
       };
 
       console.log("Données envoyées:", devisData);
@@ -896,6 +932,21 @@ const ModificationDevis = () => {
       type: "global",
       id: null,
     });
+  };
+
+  // Fonction pour calculer le total HT de base (sans lignes spéciales)
+  const calculateBaseTotalHT = () => {
+    let totalHT = 0;
+    selectedLignes.forEach((ligneId) => {
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      if (ligne) {
+        const quantity = quantities[ligneId] || 0;
+        const price = customPrices[ligneId] || ligne.prix;
+        const ligneTotalHT = quantity * price;
+        totalHT += ligneTotalHT;
+      }
+    });
+    return totalHT;
   };
 
   const calculateGrandTotal = (specialLines) => {

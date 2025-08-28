@@ -881,7 +881,17 @@ const CreationDevis = () => {
           };
         }),
         lignes_speciales: {
-          global: specialLines.global || [],
+          global: (specialLines.global || []).map((line) => ({
+            description: line.description,
+            value: parseFloat(line.value),
+            valueType: line.valueType,
+            type: line.type,
+            isHighlighted: line.isHighlighted || false,
+            montant_calcule:
+              line.valueType === "percentage"
+                ? (calculateGrandTotal.totalHT * parseFloat(line.value)) / 100
+                : parseFloat(line.value),
+          })),
           parties: Object.fromEntries(
             Object.entries(specialLines.parties || {}).map(
               ([partieId, lines]) => [
@@ -892,6 +902,11 @@ const CreationDevis = () => {
                   valueType: line.valueType,
                   type: line.type,
                   isHighlighted: line.isHighlighted || false,
+                  montant_calcule:
+                    line.valueType === "percentage"
+                      ? (calculateGrandTotal.totalHT * parseFloat(line.value)) /
+                        100
+                      : parseFloat(line.value),
                 })),
               ]
             )
@@ -906,6 +921,11 @@ const CreationDevis = () => {
                   valueType: line.valueType,
                   type: line.type,
                   isHighlighted: line.isHighlighted || false,
+                  montant_calcule:
+                    line.valueType === "percentage"
+                      ? (calculateGrandTotal.totalHT * parseFloat(line.value)) /
+                        100
+                      : parseFloat(line.value),
                 })),
               ]
             )
