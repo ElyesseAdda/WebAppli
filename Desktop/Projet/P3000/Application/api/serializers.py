@@ -112,9 +112,15 @@ class DevisSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance
+    
+class SocieteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Societe
+        fields = '__all__'
 
 class ChantierSerializer(serializers.ModelSerializer):
     marge_fourniture = serializers.SerializerMethodField()
+    societe = SocieteSerializer(read_only=True)
 
     class Meta:
         model = Chantier
@@ -134,10 +140,7 @@ class ChantierSerializer(serializers.ModelSerializer):
 
 
 
-class SocieteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Societe
-        fields = '__all__'
+
 
 class LigneDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -431,7 +434,10 @@ class ChantierDetailSerializer(serializers.ModelSerializer):
         
         return {
             'id': obj.societe.id,
-            'nom_societe': obj.societe.nom_societe,
+            'nom': obj.societe.nom_societe,
+            'ville_societe': obj.societe.ville_societe,
+            'rue_societe': obj.societe.rue_societe,
+            'codepostal_societe': obj.societe.codepostal_societe,
             'client': {
                 'nom': f"{obj.societe.client_name.name} {obj.societe.client_name.surname}" if obj.societe.client_name else None,
                 'email': obj.societe.client_name.client_mail if obj.societe.client_name else None,

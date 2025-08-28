@@ -2,6 +2,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Button,
   Card,
@@ -10,7 +11,9 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   Grid,
+  InputLabel,
   LinearProgress,
   MenuItem,
   Select,
@@ -20,7 +23,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import dayjs from "dayjs";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FaChartBar,
   FaCheckCircle,
@@ -31,6 +34,7 @@ import {
   FaHandshake,
   FaHourglassHalf,
   FaTable,
+  FaTrash,
 } from "react-icons/fa";
 import { useSituationsManager } from "../../hooks/useSituationsManager";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
@@ -72,6 +76,42 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const [datePaiementReel, setDatePaiementReel] = React.useState("");
   const [mainOeuvreReelle, setMainOeuvreReelle] = React.useState(0);
   const [loadingMainOeuvre, setLoadingMainOeuvre] = React.useState(false);
+  const [completeChantierData, setCompleteChantierData] = React.useState(null);
+  const [loadingCompleteData, setLoadingCompleteData] = React.useState(false);
+
+  // États pour la modification du chantier
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
+  const [openStatusModal, setOpenStatusModal] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+
+  // Données de modification
+  const [editData, setEditData] = useState({
+    chantier: {
+      nom: "",
+      statut: "",
+    },
+    societe: {
+      nom: "",
+      ville: "",
+      rue: "",
+      code_postal: "",
+    },
+    chantier_adresse: {
+      ville: "",
+      rue: "",
+      code_postal: "",
+    },
+    client: {
+      nom: "",
+      prenom: "",
+      email: "",
+      telephone: "",
+    },
+  });
 
   const hasLoadedTaux = useRef(false);
   useEffect(() => {
@@ -319,6 +359,401 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     setOpenPaiementModal(true);
   };
 
+  // Fonction pour récupérer les données complètes du chantier
+  const fetchCompleteChantierData = async () => {
+    if (!chantierData?.id) return null;
+
+    setLoadingCompleteData(true);
+    try {
+      // Essayer d'abord l'endpoint détaillé
+      let response;
+      try {
+        response = await axios.get(`/api/chantier/${chantierData.id}/details/`);
+      } catch {
+        // Fallback vers l'endpoint standard
+        response = await axios.get(`/api/chantier/${chantierData.id}/`);
+      }
+
+      const completeData = response.data;
+
+      // Si les données de société ne sont pas complètes, récupérer la société séparément
+      if (completeData.societe?.id) {
+        try {
+          const societeResponse = await axios.get(
+            `/api/societe/${completeData.societe.id}/`
+          );
+          completeData.societe_complete = societeResponse.data;
+
+          // Récupérer les données du client si nécessaire
+          if (societeResponse.data.client_name) {
+            try {
+              const clientResponse = await axios.get(
+                `/api/client/${societeResponse.data.client_name}/`
+              );
+              completeData.societe_complete.client_data = clientResponse.data;
+            } catch (clientError) {
+              console.warn(
+                "Erreur lors de la récupération du client:",
+                clientError
+              );
+            }
+          }
+        } catch (societeError) {
+          console.warn(
+            "Erreur lors de la récupération de la société:",
+            societeError
+          );
+        }
+      }
+
+      setCompleteChantierData(completeData);
+      return completeData;
+    } catch (error) {
+      console.error(
+        "Erreur lors de la récupération des données complètes:",
+        error
+      );
+      return null;
+    } finally {
+      setLoadingCompleteData(false);
+    }
+  };
+
+  // Fonction pour ouvrir le modal d'édition
+  const handleOpenEditModal = async () => {
+    // Debug: afficher la structure des données
+    console.log("Structure chantierData:", chantierData);
+    console.log("Société:", chantierData?.societe);
+    console.log("Client:", chantierData?.societe?.client);
+
+    // Récupérer les données complètes
+    const completeData = await fetchCompleteChantierData();
+    const dataToUse = completeData || chantierData;
+
+    console.log("Données complètes récupérées:", completeData);
+
+    // Récupérer les données du client depuis les données complètes
+    const societeData = dataToUse?.societe_complete || dataToUse?.societe || {};
+    const clientData =
+      societeData?.client_data ||
+      societeData?.client_name ||
+      societeData?.client ||
+      {};
+    const clientNom = clientData.name || "";
+    const clientPrenom = clientData.surname || "";
+
+    // Charger les données actuelles dans le formulaire
+    setEditData({
+      chantier: {
+        nom: dataToUse?.nom || dataToUse?.chantier_name || "",
+        statut: dataToUse?.statut || dataToUse?.state_chantier || "",
+      },
+      societe: {
+        nom: societeData?.nom_societe || "",
+        ville: societeData?.ville_societe || "",
+        rue: societeData?.rue_societe || "",
+        code_postal: societeData?.codepostal_societe || "",
+      },
+      chantier_adresse: {
+        ville: dataToUse?.adresse?.ville || dataToUse?.ville || "",
+        rue: dataToUse?.adresse?.rue || dataToUse?.rue || "",
+        code_postal:
+          dataToUse?.adresse?.code_postal || dataToUse?.code_postal || "",
+      },
+      client: {
+        nom: clientNom,
+        prenom: clientPrenom,
+        email: clientData.client_mail || "",
+        telephone: clientData.phone_Number?.toString() || "",
+      },
+    });
+    setOpenEditModal(true);
+  };
+
+  // Fonction pour sauvegarder les modifications
+  const handleSaveEdit = async () => {
+    setLoadingEdit(true);
+    try {
+      // Mettre à jour le client - seulement si les valeurs ont changé
+      const dataForSave = completeChantierData || chantierData;
+      const societeForSave =
+        dataForSave?.societe_complete || dataForSave?.societe || {};
+      const clientId =
+        societeForSave?.client_data?.id ||
+        societeForSave?.client_name?.id ||
+        societeForSave?.client?.id;
+      if (clientId) {
+        const currentClient =
+          societeForSave.client_data ||
+          societeForSave.client_name ||
+          societeForSave.client;
+        const clientData = {};
+
+        // Récupérer les données actuelles du client
+        const currentNom = currentClient.name || "";
+        const currentPrenom = currentClient.surname || "";
+        const currentEmail = currentClient.client_mail || "";
+        const currentTelephone = currentClient.phone_Number?.toString() || "";
+
+        console.log("=== COMPARAISON CLIENT ===");
+        console.log("Actuel:", {
+          nom: currentNom,
+          prenom: currentPrenom,
+          email: currentEmail,
+          telephone: currentTelephone,
+        });
+        console.log("Nouveau:", {
+          nom: editData.client.nom,
+          prenom: editData.client.prenom,
+          email: editData.client.email,
+          telephone: editData.client.telephone,
+        });
+
+        // Vérifier les changements et construire les données à envoyer
+        if (editData.client.nom && editData.client.nom.trim() !== currentNom) {
+          console.log("Nom client modifié:", editData.client.nom);
+          clientData.name = editData.client.nom;
+        }
+
+        if (
+          editData.client.prenom &&
+          editData.client.prenom.trim() !== currentPrenom
+        ) {
+          console.log("Prénom client modifié:", editData.client.prenom);
+          clientData.surname = editData.client.prenom;
+        }
+
+        if (
+          editData.client.email &&
+          editData.client.email.trim() !== currentEmail
+        ) {
+          console.log("Email client modifié:", editData.client.email);
+          clientData.client_mail = editData.client.email;
+        }
+
+        if (
+          editData.client.telephone &&
+          editData.client.telephone.trim() !== currentTelephone
+        ) {
+          console.log("Téléphone client modifié:", editData.client.telephone);
+          clientData.phone_Number = parseInt(editData.client.telephone) || 0;
+        }
+
+        // Envoyer la requête seulement s'il y a des changements
+        if (Object.keys(clientData).length > 0) {
+          console.log("Envoi des données client:", clientData);
+          await axios.patch(`/api/client/${clientId}/`, clientData);
+        }
+      }
+
+      // Mettre à jour la société - seulement si les valeurs ont changé
+      if (societeForSave?.id) {
+        const currentSociete = societeForSave;
+        const societeData = {};
+
+        // Comparer avec les valeurs actuelles (adresse de la société)
+        const currentNom = currentSociete.nom_societe || "";
+        const currentVille = currentSociete.ville_societe || "";
+        const currentRue = currentSociete.rue_societe || "";
+        const currentCodePostal = currentSociete.codepostal_societe || "";
+
+        console.log("=== COMPARAISON SOCIÉTÉ ===");
+        console.log("Actuel:", {
+          nom: currentNom,
+          ville: currentVille,
+          rue: currentRue,
+          code_postal: currentCodePostal,
+        });
+        console.log("Nouveau:", {
+          nom: editData.societe.nom,
+          ville: editData.societe.ville,
+          rue: editData.societe.rue,
+          code_postal: editData.societe.code_postal,
+        });
+
+        if (
+          editData.societe.nom &&
+          editData.societe.nom.trim() !== currentNom
+        ) {
+          console.log("Nom société modifié:", editData.societe.nom);
+          societeData.nom_societe = editData.societe.nom;
+        }
+        if (
+          editData.societe.ville &&
+          editData.societe.ville.trim() !== currentVille
+        ) {
+          console.log("Ville société modifiée:", editData.societe.ville);
+          societeData.ville_societe = editData.societe.ville;
+        }
+        if (
+          editData.societe.rue &&
+          editData.societe.rue.trim() !== currentRue
+        ) {
+          console.log("Rue société modifiée:", editData.societe.rue);
+          societeData.rue_societe = editData.societe.rue;
+        }
+        if (
+          editData.societe.code_postal &&
+          editData.societe.code_postal.trim() !== currentCodePostal
+        ) {
+          console.log(
+            "Code postal société modifié:",
+            editData.societe.code_postal
+          );
+          societeData.codepostal_societe = editData.societe.code_postal;
+        }
+
+        // Envoyer la requête seulement s'il y a des changements
+        if (Object.keys(societeData).length > 0) {
+          console.log("Envoi des données société:", societeData);
+          await axios.patch(`/api/societe/${societeForSave.id}/`, societeData);
+        } else {
+          console.log("Aucune modification détectée pour la société");
+        }
+      }
+
+      // Mettre à jour le chantier - seulement si les valeurs ont changé
+      if (chantierData?.id) {
+        const chantierDataToUpdate = {};
+
+        // Debug: afficher les valeurs pour comparaison
+        console.log("Valeurs actuelles:", {
+          nom: chantierData.nom,
+          statut: chantierData.state_chantier,
+        });
+        console.log("Nouvelles valeurs:", {
+          nom: editData.chantier.nom,
+          statut: editData.chantier.statut,
+        });
+
+        // Comparer avec les valeurs actuelles
+        if (
+          editData.chantier.nom &&
+          editData.chantier.nom.trim() !== (chantierData.nom || "")
+        ) {
+          console.log("Nom du chantier modifié:", editData.chantier.nom);
+          chantierDataToUpdate.chantier_name = editData.chantier.nom;
+        }
+        if (
+          editData.chantier.statut &&
+          editData.chantier.statut.trim() !==
+            (chantierData.state_chantier || "")
+        ) {
+          console.log("Statut du chantier modifié:", editData.chantier.statut);
+          chantierDataToUpdate.state_chantier = editData.chantier.statut;
+        }
+
+        // Gérer l'adresse du chantier
+        if (
+          editData.chantier_adresse.ville &&
+          editData.chantier_adresse.ville.trim() !==
+            (chantierData.adresse?.ville || "")
+        ) {
+          console.log(
+            "Ville chantier modifiée:",
+            editData.chantier_adresse.ville
+          );
+          chantierDataToUpdate.ville = editData.chantier_adresse.ville;
+        }
+        if (
+          editData.chantier_adresse.rue &&
+          editData.chantier_adresse.rue.trim() !==
+            (chantierData.adresse?.rue || "")
+        ) {
+          console.log("Rue chantier modifiée:", editData.chantier_adresse.rue);
+          chantierDataToUpdate.rue = editData.chantier_adresse.rue;
+        }
+        if (
+          editData.chantier_adresse.code_postal &&
+          editData.chantier_adresse.code_postal.trim() !==
+            (chantierData.adresse?.code_postal || "")
+        ) {
+          console.log(
+            "Code postal chantier modifié:",
+            editData.chantier_adresse.code_postal
+          );
+          chantierDataToUpdate.code_postal =
+            editData.chantier_adresse.code_postal;
+        }
+
+        console.log("Données à mettre à jour:", chantierDataToUpdate);
+
+        // Envoyer la requête seulement s'il y a des changements
+        if (Object.keys(chantierDataToUpdate).length > 0) {
+          console.log("Envoi de la requête de mise à jour du chantier");
+          await axios.patch(
+            `/api/chantier/${chantierData.id}/`,
+            chantierDataToUpdate
+          );
+        } else {
+          console.log("Aucune modification détectée pour le chantier");
+        }
+      }
+
+      setOpenEditModal(false);
+      // Recharger les données du chantier
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (error) {
+      console.error("Erreur lors de la modification:", error);
+      if (error.response?.data) {
+        // Afficher les erreurs spécifiques de validation
+        const errorMessages = Object.values(error.response.data)
+          .flat()
+          .join("\n");
+        alert(`Erreur de validation:\n${errorMessages}`);
+      } else {
+        alert("Erreur lors de la modification des données");
+      }
+    } finally {
+      setLoadingEdit(false);
+    }
+  };
+
+  // Fonction pour supprimer le chantier
+  const handleDeleteChantier = async () => {
+    setLoadingDelete(true);
+    try {
+      await axios.delete(`/api/chantier/${chantierData.id}/`);
+      setOpenDeleteModal(false);
+      // Rediriger vers la liste des chantiers
+      window.location.href = "/chantiers";
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      alert("Erreur lors de la suppression du chantier");
+    } finally {
+      setLoadingDelete(false);
+    }
+  };
+
+  // Fonction pour modifier le statut
+  const handleStatusChange = async (newStatus) => {
+    setLoadingStatus(true);
+    try {
+      await axios.put(`/api/chantier/${chantierData.id}/`, {
+        state_chantier: newStatus,
+      });
+      setOpenStatusModal(false);
+      // Recharger les données du chantier
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (error) {
+      console.error("Erreur lors de la modification du statut:", error);
+      if (error.response?.data) {
+        const errorMessages = Object.values(error.response.data)
+          .flat()
+          .join("\n");
+        alert(`Erreur de validation:\n${errorMessages}`);
+      } else {
+        alert("Erreur lors de la modification du statut");
+      }
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
   return (
     <Box>
       {/* Nouvelle section d'informations principales */}
@@ -330,7 +765,15 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           boxShadow: 4,
         }}
       >
-        <CardContent>
+        <CardContent
+          onDoubleClick={handleOpenEditModal}
+          sx={{
+            cursor: "pointer",
+            "&:hover": {
+              backgroundColor: "rgba(0, 0, 0, 0.02)",
+            },
+          }}
+        >
           <Grid container spacing={4}>
             {/* Nom du chantier */}
             <Grid item xs={12} sm={6} md={2.4}>
@@ -406,7 +849,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   color: "text.primary",
                 }}
               >
-                {chantierData?.societe?.nom || "Non défini"}
+                {chantierData?.societe?.nom ||
+                  chantierData?.societe?.nom_societe ||
+                  "Non défini"}
               </Typography>
             </Grid>
 
@@ -459,8 +904,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   display: "inline-block",
                 }}
               >
-                <span
-                  style={{
+                <Box
+                  onClick={() => setOpenStatusModal(true)}
+                  sx={{
                     backgroundColor:
                       chantierData?.statut === "En Cours"
                         ? "rgba(46, 125, 50, 0.1)"
@@ -477,10 +923,17 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                     padding: "2px 12px",
                     fontWeight: 700,
                     fontSize: "1.1rem",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      opacity: 0.8,
+                      transform: "scale(1.02)",
+                    },
+                    display: "inline-block",
                   }}
                 >
                   {chantierData?.statut || "Non défini"}
-                </span>
+                </Box>
               </Typography>
             </Grid>
           </Grid>
@@ -1274,7 +1727,348 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         </DialogActions>
       </Dialog>
 
-      {/* Composant de debug pour les situations */}
+      {/* Modal d'édition des informations */}
+      <Dialog
+        open={openEditModal}
+        onClose={() => setOpenEditModal(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Modifier les informations du chantier</DialogTitle>
+        <DialogContent>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
+              Informations du chantier
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nom du chantier"
+                  value={editData.chantier.nom}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      chantier: { ...editData.chantier, nom: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Statut</InputLabel>
+                  <Select
+                    value={editData.chantier.statut}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        chantier: {
+                          ...editData.chantier,
+                          statut: e.target.value,
+                        },
+                      })
+                    }
+                    label="Statut"
+                  >
+                    <MenuItem value="En Cours">En Cours</MenuItem>
+                    <MenuItem value="Terminé">Terminé</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+
+            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
+              Informations de la société
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nom de la société"
+                  value={editData.societe.nom}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe: { ...editData.societe, nom: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Ville de la société"
+                  value={editData.societe.ville}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe: { ...editData.societe, ville: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Rue de la société"
+                  value={editData.societe.rue}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe: { ...editData.societe, rue: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Code postal de la société"
+                  value={editData.societe.code_postal}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe: {
+                        ...editData.societe,
+                        code_postal: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+            </Grid>
+
+            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
+              Adresse du chantier
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Ville du chantier"
+                  value={editData.chantier_adresse.ville}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      chantier_adresse: {
+                        ...editData.chantier_adresse,
+                        ville: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Rue du chantier"
+                  value={editData.chantier_adresse.rue}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      chantier_adresse: {
+                        ...editData.chantier_adresse,
+                        rue: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Code postal du chantier"
+                  value={editData.chantier_adresse.code_postal}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      chantier_adresse: {
+                        ...editData.chantier_adresse,
+                        code_postal: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+            </Grid>
+
+            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
+              Informations du client
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nom"
+                  value={editData.client.nom}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client: { ...editData.client, nom: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Prénom"
+                  value={editData.client.prenom}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client: { ...editData.client, prenom: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  type="email"
+                  value={editData.client.email}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client: { ...editData.client, email: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Téléphone"
+                  type="tel"
+                  value={editData.client.telephone}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client: { ...editData.client, telephone: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "space-between" }}>
+          <Button
+            onClick={() => setOpenDeleteModal(true)}
+            variant="outlined"
+            color="error"
+            startIcon={<FaTrash />}
+          >
+            Supprimer le chantier
+          </Button>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button onClick={() => setOpenEditModal(false)}>Annuler</Button>
+            <Button
+              onClick={handleSaveEdit}
+              variant="contained"
+              disabled={loadingEdit}
+            >
+              {loadingEdit ? "Sauvegarde..." : "Sauvegarder"}
+            </Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de confirmation de suppression */}
+      <Dialog open={openDeleteModal} onClose={() => setOpenDeleteModal(false)}>
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+              Attention ! Cette action est irréversible.
+            </Typography>
+            <Typography variant="body2">
+              Vous êtes sur le point de supprimer définitivement le chantier "
+              {chantierData?.nom}" ainsi que toutes les données associées
+              (situations, devis, etc.).
+            </Typography>
+          </Alert>
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Pour confirmer la suppression, veuillez taper le nom du chantier :{" "}
+            <strong>{chantierData?.nom}</strong>
+          </Typography>
+          <TextField
+            fullWidth
+            label="Nom du chantier"
+            placeholder={chantierData?.nom}
+            sx={{ mt: 2 }}
+            onChange={(e) => {
+              // La suppression ne sera activée que si le nom correspond exactement
+              const canDelete = e.target.value === chantierData?.nom;
+              setCanDelete(canDelete);
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDeleteModal(false)}>Annuler</Button>
+          <Button
+            onClick={handleDeleteChantier}
+            variant="contained"
+            color="error"
+            disabled={loadingDelete || !canDelete}
+          >
+            {loadingDelete ? "Suppression..." : "Supprimer définitivement"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de modification du statut */}
+      <Dialog open={openStatusModal} onClose={() => setOpenStatusModal(false)}>
+        <DialogTitle>Modifier le statut du chantier</DialogTitle>
+        <DialogContent>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Statut actuel : <strong>{chantierData?.statut}</strong>
+            </Typography>
+            <FormControl fullWidth>
+              <InputLabel>Nouveau statut</InputLabel>
+              <Select
+                value={editData.chantier.statut}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    chantier: { ...editData.chantier, statut: e.target.value },
+                  })
+                }
+                label="Nouveau statut"
+              >
+                <MenuItem value="En Cours">En Cours</MenuItem>
+                <MenuItem value="Terminé">Terminé</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenStatusModal(false)}>Annuler</Button>
+          <Button
+            onClick={() => handleStatusChange(editData.chantier.statut)}
+            variant="contained"
+            disabled={
+              loadingStatus || editData.chantier.statut === chantierData?.statut
+            }
+          >
+            {loadingStatus ? "Modification..." : "Modifier le statut"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
