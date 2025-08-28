@@ -881,17 +881,49 @@ const CreationDevis = () => {
           };
         }),
         lignes_speciales: {
-          global: (specialLines.global || []).map((line) => ({
-            description: line.description,
-            value: parseFloat(line.value),
-            valueType: line.valueType,
-            type: line.type,
-            isHighlighted: line.isHighlighted || false,
-            montant_calcule:
-              line.valueType === "percentage"
-                ? (calculateGrandTotal.totalHT * parseFloat(line.value)) / 100
-                : parseFloat(line.value),
-          })),
+          global: (() => {
+            // Calculer le montant de base (lignes du devis sans lignes spéciales)
+            let montantBase = 0;
+            selectedLignes.forEach((ligneId) => {
+              const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+              if (ligne) {
+                const quantity = quantities[ligneId] || 0;
+                const price = customPrices[ligneId] || ligne.prix;
+                montantBase += quantity * price;
+              }
+            });
+
+            // Calcul séquentiel : chaque ligne spéciale s'applique après les précédentes
+            let montantCourant = montantBase;
+
+            return (specialLines.global || []).map((line) => {
+              let montant_calcule;
+
+              if (line.valueType === "percentage") {
+                // Le pourcentage s'applique sur le montant courant (après les lignes précédentes)
+                montant_calcule =
+                  (montantCourant * parseFloat(line.value)) / 100;
+              } else {
+                montant_calcule = parseFloat(line.value);
+              }
+
+              // Mettre à jour le montant courant pour la ligne suivante
+              if (line.type === "reduction") {
+                montantCourant -= montant_calcule;
+              } else {
+                montantCourant += montant_calcule;
+              }
+
+              return {
+                description: line.description,
+                value: parseFloat(line.value),
+                valueType: line.valueType,
+                type: line.type,
+                isHighlighted: line.isHighlighted || false,
+                montant_calcule: montant_calcule,
+              };
+            });
+          })(),
           parties: Object.fromEntries(
             Object.entries(specialLines.parties || {}).map(
               ([partieId, lines]) => [
