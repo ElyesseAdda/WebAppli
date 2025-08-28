@@ -492,7 +492,7 @@ const ChantierListeDevis = ({
         <MenuItem onClick={handleModifyDevis}>Modifier le devis</MenuItem>
         <MenuItem onClick={handleEditFacture}>Éditer en facture</MenuItem>
         {selectedDevis && selectedDevis.devis_chantier !== true && (
-          <MenuItem onClick={handleEditTS}>Éditer en TS</MenuItem>
+          <MenuItem onClick={handleEditTS}>Éditer en avenant</MenuItem>
         )}
         <MenuItem onClick={handleEditCIE}>Éditer en CIE</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>

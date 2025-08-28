@@ -56,6 +56,7 @@ const AgencyExpenses = () => {
   const [allExpenses, setAllExpenses] = useState([]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
+  const [yearlyTotal, setYearlyTotal] = useState(0);
 
   // Utilitaires de calcul: inclusion d'une dépense dans un mois/année
   const toYearMonth = (dateObj) =>
@@ -93,7 +94,14 @@ const AgencyExpenses = () => {
     fetchMonthlySummary();
     // 2) Vue globale (sans overrides) pour le calcul annuel
     fetchExpenses();
+    // 3) Calculer le total annuel avec les overrides
+    updateYearlyTotal();
   }, [selectedMonth, selectedYear]);
+
+  const updateYearlyTotal = async () => {
+    const total = await calculateYearlyTotal();
+    setYearlyTotal(total);
+  };
 
   const fetchExpenses = async () => {
     try {
@@ -150,6 +158,8 @@ const AgencyExpenses = () => {
       // Recharger la vue mensuelle (overrides) et la base annuelle
       await fetchMonthlySummary();
       await fetchExpenses();
+      // Recalculer le total annuel
+      await updateYearlyTotal();
 
       setNewExpense({
         description: "",
@@ -174,6 +184,8 @@ const AgencyExpenses = () => {
       // Recharger la vue mensuelle et la base annuelle
       await fetchMonthlySummary();
       await fetchExpenses();
+      // Recalculer le total annuel
+      await updateYearlyTotal();
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
       alert("Erreur lors de la suppression de la dépense");
@@ -234,6 +246,8 @@ const AgencyExpenses = () => {
         setOpenDialog(false);
         // Recharger depuis le résumé mensuel pour refléter l'override appliqué
         await fetchMonthlySummary();
+        // Recalculer le total annuel
+        await updateYearlyTotal();
         setIsEditing(false);
         setEditingExpense(null);
       } catch (error) {
@@ -265,6 +279,8 @@ const AgencyExpenses = () => {
       setOpenDialog(false);
       await fetchExpenses();
       await fetchMonthlySummary();
+      // Recalculer le total annuel
+      await updateYearlyTotal();
       setIsEditing(false);
       setEditingExpense(null);
     } catch (error) {
@@ -301,22 +317,54 @@ const AgencyExpenses = () => {
     return activeEnd - activeStart + 1;
   };
 
-  const calculateYearlyTotal = () => {
-    if (!Array.isArray(allExpenses) || allExpenses.length === 0) return 0;
-    return allExpenses.reduce((sum, expense) => {
-      const baseAmount = parseFloat(
-        expense.current_override
-          ? expense.current_override.amount
-          : expense.amount
+  const calculateYearlyTotal = async () => {
+    if (!selectedYear) return 0;
+
+    let yearlyTotal = 0;
+
+    try {
+      // Récupérer le résumé mensuel pour chaque mois de l'année
+      const monthlyTotals = await Promise.all(
+        Array.from({ length: 12 }, async (_, monthIndex) => {
+          try {
+            const response = await axios.get(
+              `/api/agency-expenses/monthly_summary/?month=${
+                monthIndex + 1
+              }&year=${selectedYear}`
+            );
+            return response.data?.total || 0;
+          } catch (error) {
+            console.error(`Erreur pour le mois ${monthIndex + 1}:`, error);
+            return 0;
+          }
+        })
       );
-      if (Number.isNaN(baseAmount)) return sum;
-      if (expense.type === ExpenseTypes.FIXED) {
-        const months = countActiveMonthsInYear(expense, selectedYear);
-        return sum + baseAmount * months;
-      }
-      const d = new Date(expense.date);
-      return d.getFullYear() === selectedYear ? sum + baseAmount : sum;
-    }, 0);
+
+      yearlyTotal = monthlyTotals.reduce(
+        (sum, monthTotal) => sum + monthTotal,
+        0
+      );
+    } catch (error) {
+      console.error("Erreur lors du calcul du total annuel:", error);
+      // Fallback sur l'ancienne méthode si l'API échoue
+      if (!Array.isArray(allExpenses) || allExpenses.length === 0) return 0;
+      yearlyTotal = allExpenses.reduce((sum, expense) => {
+        const baseAmount = parseFloat(
+          expense.current_override
+            ? expense.current_override.amount
+            : expense.amount
+        );
+        if (Number.isNaN(baseAmount)) return sum;
+        if (expense.type === ExpenseTypes.FIXED) {
+          const months = countActiveMonthsInYear(expense, selectedYear);
+          return sum + baseAmount * months;
+        }
+        const d = new Date(expense.date);
+        return d.getFullYear() === selectedYear ? sum + baseAmount : sum;
+      }, 0);
+    }
+
+    return yearlyTotal;
   };
 
   const handleFilterChange = (field) => (event) => {
@@ -664,7 +712,7 @@ const AgencyExpenses = () => {
           variant="body1"
           sx={{ fontWeight: 600, color: "primary.main" }}
         >
-          {calculateYearlyTotal().toFixed(2)} €
+          {yearlyTotal.toFixed(2)} €
         </Typography>
       </Paper>
 

@@ -5661,8 +5661,16 @@ class AgencyExpenseViewSet(viewsets.ModelViewSet):
 
         # Filtrer les dépenses
         expenses = self.queryset.filter(
-            models.Q(type='fixed', end_date__isnull=True) |
-            models.Q(type='fixed', end_date__gte=target_date) |
+            models.Q(
+                type='fixed', 
+                date__lte=target_date,  # La dépense doit avoir commencé avant ou pendant ce mois
+                end_date__isnull=True
+            ) |
+            models.Q(
+                type='fixed', 
+                date__lte=target_date,  # La dépense doit avoir commencé avant ou pendant ce mois
+                end_date__gte=target_date
+            ) |
             models.Q(
                 type='punctual',
                 date__month=month,

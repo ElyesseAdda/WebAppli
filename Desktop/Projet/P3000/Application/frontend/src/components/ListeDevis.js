@@ -765,7 +765,7 @@ const ListeDevis = () => {
               handleTransformDevis(selectedDevis, "TS");
             }}
           >
-            Éditer en TS
+            Éditer en avenant
           </MenuItem>
         )}
         <MenuItem
