@@ -295,12 +295,21 @@ class AppelOffres(models.Model):
         return chantier
 
 class Agent(models.Model):
+    PAYMENT_TYPE_CHOICES = [
+        ('horaire', 'Horaire'),
+        ('journalier', 'Journalier'),
+    ]
+    
     name = models.CharField(max_length=25)
     surname = models.CharField(max_length=25)
     address = models.CharField(max_length=100, blank=True, null=True)
     phone_Number = models.IntegerField()
     taux_Horaire = models.FloatField(null=True, blank=True)
     conge = models.FloatField(null=True, blank=True)
+    
+    # Nouveaux champs pour les agents journaliers
+    type_paiement = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, default='horaire')
+    taux_journalier = models.FloatField(null=True, blank=True, help_text="Taux pour une journée complète (agents journaliers)")
     
     # Modification du champ primes pour stocker par mois
     # Format: { "2024-01": { "description": montant }, "2024-02": { "description": montant } }

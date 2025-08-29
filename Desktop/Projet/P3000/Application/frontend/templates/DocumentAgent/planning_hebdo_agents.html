@@ -43,7 +43,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for hour in hours %}
+        {% for hour in agent_hours_map|dict_get:agent.id %}
         <tr>
           <td>{{ hour }}</td>
           {% for day in days_of_week %} {% with cell_rendered=False %} {% for chantier, start_hour, span in planning_rowspan|dict_get:agent.id|dict_get:day %} {% if start_hour == hour %}

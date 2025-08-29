@@ -35,6 +35,30 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
   const [error, setError] = useState("");
   const [mode, setMode] = useState("chantier"); // "chantier" ou "agent"
 
+  // Fonction pour formater l'affichage des heures selon le type d'agent
+  const formatHeures = (heures, agentTypePaiement) => {
+    console.log(`DEBUG formatHeures: ${heures}h, type=${agentTypePaiement}`);
+    if (agentTypePaiement === "journalier") {
+      // Pour les agents journaliers, convertir les heures en jours (8h = 1j)
+      const jours = heures / 8;
+      const result = jours === 1 ? "1j" : `${jours}j`;
+      console.log(`DEBUG formatHeures journalier: ${heures}h -> ${result}`);
+      return result;
+    } else {
+      // Pour les agents horaires, afficher les heures normalement
+      console.log(`DEBUG formatHeures horaire: ${heures}h -> ${heures}h`);
+      return `${heures}h`;
+    }
+  };
+
+  // Fonction pour obtenir le label selon le type d'agent
+  const getLabel = (labelBase, agentTypePaiement) => {
+    if (agentTypePaiement === "journalier") {
+      return labelBase.replace("Heures", "Jours").replace("heures", "jours");
+    }
+    return labelBase;
+  };
+
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
@@ -45,6 +69,10 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
       axios
         .get(url)
         .then((res) => {
+          console.log(
+            "DEBUG LaborCostsSummary - Données reçues de l'API:",
+            res.data
+          );
           setSummary(res.data);
         })
         .catch((err) => {
@@ -80,6 +108,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
         if (!agentMap[detail.agent_id]) {
           agentMap[detail.agent_id] = {
             agent_nom: detail.agent_nom,
+            agent_type_paiement: detail.type_paiement,
             heures_normal: 0,
             heures_samedi: 0,
             heures_dimanche: 0,
@@ -307,15 +336,38 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         {chantier.details.map((agent, idx) => (
                           <TableRow key={idx}>
                             <TableCell>{agent.agent_nom}</TableCell>
-                            <TableCell>{agent.heures_normal}</TableCell>
-                            <TableCell>{agent.heures_samedi}</TableCell>
-                            <TableCell>{agent.heures_dimanche}</TableCell>
-                            <TableCell>{agent.heures_ferie}</TableCell>
                             <TableCell>
-                              {agent.heures_normal +
-                                agent.heures_samedi +
-                                agent.heures_dimanche +
-                                agent.heures_ferie}
+                              {formatHeures(
+                                agent.heures_normal,
+                                agent.agent_type_paiement
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatHeures(
+                                agent.heures_samedi,
+                                agent.agent_type_paiement
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatHeures(
+                                agent.heures_dimanche,
+                                agent.agent_type_paiement
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatHeures(
+                                agent.heures_ferie,
+                                agent.agent_type_paiement
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatHeures(
+                                agent.heures_normal +
+                                  agent.heures_samedi +
+                                  agent.heures_dimanche +
+                                  agent.heures_ferie,
+                                agent.agent_type_paiement
+                              )}
                             </TableCell>
                             <TableCell>
                               {(
@@ -387,16 +439,29 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                     <Box display="flex" gap={3} mt={1} alignItems="center">
                       <Box>
                         <Typography fontWeight="bold">
-                          Heures normales
+                          {getLabel(
+                            "Heures normales",
+                            agent.agent_type_paiement
+                          )}
                         </Typography>
-                        <Typography>{agent.heures_normal}h</Typography>
+                        <Typography>
+                          {formatHeures(
+                            agent.heures_normal,
+                            agent.agent_type_paiement
+                          )}
+                        </Typography>
                         <Typography color="textSecondary">
                           Montant : {agent.montant_normal.toFixed(2)} €
                         </Typography>
                       </Box>
                       <Box>
                         <Typography fontWeight="bold">Samedi (125%)</Typography>
-                        <Typography>{agent.heures_samedi}h</Typography>
+                        <Typography>
+                          {formatHeures(
+                            agent.heures_samedi,
+                            agent.agent_type_paiement
+                          )}
+                        </Typography>
                         <Typography color="textSecondary">
                           Montant : {agent.montant_samedi.toFixed(2)} €
                         </Typography>
@@ -405,14 +470,24 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         <Typography fontWeight="bold">
                           Dimanche (150%)
                         </Typography>
-                        <Typography>{agent.heures_dimanche}h</Typography>
+                        <Typography>
+                          {formatHeures(
+                            agent.heures_dimanche,
+                            agent.agent_type_paiement
+                          )}
+                        </Typography>
                         <Typography color="textSecondary">
                           Montant : {agent.montant_dimanche.toFixed(2)} €
                         </Typography>
                       </Box>
                       <Box>
                         <Typography fontWeight="bold">Férié (150%)</Typography>
-                        <Typography>{agent.heures_ferie}h</Typography>
+                        <Typography>
+                          {formatHeures(
+                            agent.heures_ferie,
+                            agent.agent_type_paiement
+                          )}
+                        </Typography>
                         <Typography color="textSecondary">
                           Montant : {agent.montant_ferie.toFixed(2)} €
                         </Typography>
@@ -430,11 +505,13 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             fontWeight: 700,
                           }}
                         >
-                          {agent.heures_normal +
-                            agent.heures_samedi +
-                            agent.heures_dimanche +
-                            agent.heures_ferie}
-                          h
+                          {formatHeures(
+                            agent.heures_normal +
+                              agent.heures_samedi +
+                              agent.heures_dimanche +
+                              agent.heures_ferie,
+                            agent.agent_type_paiement
+                          )}
                         </Typography>
                         <Typography
                           color="textSecondary"

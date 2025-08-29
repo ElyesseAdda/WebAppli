@@ -219,13 +219,25 @@ const PlanningContainer = () => {
   useEffect(() => {
     if (!selectedAgentId || !selectedWeek || !selectedYear) return;
 
+    // Trouver l'agent sélectionné pour connaître son type de paiement
+    const selectedAgent = agents.find((agent) => agent.id === selectedAgentId);
+    const isAgentJournalier = selectedAgent?.type_paiement === "journalier";
+
     // Calculer les heures par chantier pour l'agent/semaine/année sélectionnés
     const hoursPerChantier = {};
     if (schedule[selectedAgentId]) {
       Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
         Object.entries(dayData).forEach(([day, chantier]) => {
           if (chantier && chantier.trim() !== "") {
-            hoursPerChantier[chantier] = (hoursPerChantier[chantier] || 0) + 1;
+            if (isAgentJournalier) {
+              // Pour les agents journaliers : Matin ou Après-midi = 0.5 jour = 4h
+              hoursPerChantier[chantier] =
+                (hoursPerChantier[chantier] || 0) + 4;
+            } else {
+              // Pour les agents horaires : 1 heure par créneau
+              hoursPerChantier[chantier] =
+                (hoursPerChantier[chantier] || 0) + 1;
+            }
           }
         });
       });
@@ -236,10 +248,11 @@ const PlanningContainer = () => {
         hours: hours,
       })
     );
+
     // Appeler la sauvegarde (même si laborCosts est vide)
     handleCostsCalculated(laborCosts);
     // eslint-disable-next-line
-  }, [schedule, selectedAgentId, selectedWeek, selectedYear]);
+  }, [schedule, selectedAgentId, selectedWeek, selectedYear, agents]);
 
   return (
     <div className="planning-container">

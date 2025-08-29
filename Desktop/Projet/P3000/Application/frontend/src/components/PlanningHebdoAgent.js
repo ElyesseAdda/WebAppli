@@ -31,7 +31,6 @@ const PlanningHebdoAgent = ({
   onSelectionChange,
 }) => {
   const [agents, setAgents] = useState([]);
-  const hours = Array.from({ length: 17 }, (_, i) => `${i + 6}:00`); // Heures de 6h à 22h
   const daysOfWeek = [
     "Lundi",
     "Mardi",
@@ -41,6 +40,15 @@ const PlanningHebdoAgent = ({
     "Samedi",
     "Dimanche",
   ];
+
+  // Déterminer le type d'agent sélectionné
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId);
+  const isAgentJournalier = selectedAgent?.type_paiement === "journalier";
+
+  // Adapter les heures selon le type d'agent
+  const hours = isAgentJournalier
+    ? ["Matin", "Après-midi"]
+    : Array.from({ length: 17 }, (_, i) => `${i + 6}:00`); // Heures de 6h à 22h
   const [events, setEvents] = useState([]);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedCells, setSelectedCells] = useState([]);
@@ -134,10 +142,6 @@ const PlanningHebdoAgent = ({
           const scheduleResponse = await axios.get(
             `/api/get_schedule/?agent=${selectedAgentId}&week=${selectedWeek}&year=${selectedYear}`
           );
-          console.log(
-            "Données reçues de l'API schedule:",
-            scheduleResponse.data
-          );
 
           // Initialiser scheduleData avec toutes les heures et jours par défaut
           const scheduleData = {};
@@ -150,23 +154,23 @@ const PlanningHebdoAgent = ({
 
           // Remplir scheduleData avec les données de l'API
           scheduleResponse.data.forEach((item, index) => {
-            console.log(`Traitement de l'élément ${index}:`, item);
+            let formattedHour;
 
-            // Formater l'heure pour correspondre au format défini dans 'hours'
-            const formattedHour = dayjs(item.hour, "HH:mm:ss").format("H:mm");
+            // Adapter le formatage selon le type d'agent
+            if (isAgentJournalier) {
+              // Pour les agents journaliers, item.hour est déjà "Matin" ou "Après-midi"
+              formattedHour = item.hour;
+            } else {
+              // Pour les agents horaires, formater l'heure au format "H:mm"
+              formattedHour = dayjs(item.hour, "HH:mm:ss").format("H:mm");
+            }
 
             if (scheduleData[formattedHour] && daysOfWeek.includes(item.day)) {
               scheduleData[formattedHour][item.day] = item.chantier_id
                 ? getChantierName(item.chantier_id) // Utiliser le nom du chantier
                 : "";
-            } else {
-              console.warn(
-                `Heure ou jour invalide détecté: Heure=${item.hour}, Jour=${item.day}`
-              );
             }
           });
-
-          console.log("Données transformées pour le planning:", scheduleData);
 
           // Récupérer les événements de la semaine
           const startOfWeek = dayjs()
@@ -183,8 +187,6 @@ const PlanningHebdoAgent = ({
             },
           });
 
-          console.log("Données reçues de l'API events:", eventsResponse.data);
-
           // Remplacer le filtrage des événements par :
           const eventsData = eventsResponse.data.filter(
             (event) =>
@@ -195,8 +197,6 @@ const PlanningHebdoAgent = ({
           const joursAvecEvents = eventsData.map((event) =>
             dayjs(event.start_date).format("DD/MM/YYYY")
           );
-
-          console.log("Jours avec événements A ou C:", joursAvecEvents);
 
           // Supprimer les assignations pour les jours avec événements A ou C
           joursAvecEvents.forEach((date) => {
@@ -844,9 +844,7 @@ const PlanningHebdoAgent = ({
               value={selectedChantier ? selectedChantier.id : ""}
               onChange={(e) => {
                 const selectedId = Number(e.target.value);
-                console.log("ID Sélectionné:", selectedId);
                 const chantier = chantiers.find((c) => c.id === selectedId);
-                console.log("Chantier Trouvé:", chantier);
                 setSelectedChantier(chantier);
               }}
             >
