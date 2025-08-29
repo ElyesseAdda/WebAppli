@@ -1301,11 +1301,11 @@ class SousTraitant(models.Model):
     ]
     
     entreprise = models.CharField(max_length=255)
-    capital = models.DecimalField(max_digits=15, decimal_places=2)
+    capital = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
     adresse = models.CharField(max_length=255)
     code_postal = models.CharField(max_length=10)
     ville = models.CharField(max_length=100)
-    forme_juridique = models.CharField(max_length=100, default="SARL")
+    forme_juridique = models.CharField(max_length=100, blank=True, null=True)
     numero_rcs = models.CharField(max_length=100, unique=True)
     representant = models.CharField(max_length=255)
     email = models.EmailField(max_length=254, blank=True, null=True)

@@ -212,12 +212,14 @@
             {{avenant.contrat.sous_traitant.ville }}
           </div>
         </div>
+        {% if avenant.contrat.sous_traitant.forme_juridique %}
         <div class="table-like-row">
           <div class="table-like-cell label">Forme juridique</div>
           <div class="table-like-cell">
             {{ avenant.contrat.sous_traitant.forme_juridique }}
           </div>
         </div>
+        {% endif %}
         <div class="table-like-row">
           <div class="table-like-cell label">N°RCS</div>
           <div class="table-like-cell">
@@ -248,7 +250,7 @@
         Dans le cadre de l'opération {{ avenant.contrat.nom_operation }}, l'EP a
         confié au ST de {{avenant.type_travaux}} : pour un montant global de
         {{avenant.contrat.montant_operation }}€ HT, suivant un contrat de
-        prestation de services en date du 30/08/2024.
+        prestation de services en date du {{ avenant.contrat.date_creation|date:"d/m/Y" }}.
       </p>
       <p>
         En application de la loi n°75-1334 du 31 décembre 1975 relative à la
@@ -454,7 +456,7 @@
         <p>
           Fait à Marseille, le
           <span style="color: black; font-weight: bold"
-            >{{ avenant.contrat.date_creation|date:"d/m/Y" }}</span
+            >{{ avenant.date_creation|date:"d/m/Y" }}</span
           >
         </p>
         <p>

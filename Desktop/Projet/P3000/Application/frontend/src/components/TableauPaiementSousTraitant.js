@@ -915,7 +915,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           >
             Pourcentage d'avancement :{" "}
             {montantTotalMarche > 0
-              ? ((montantTotalPaye / montantTotalMarche) * 100).toFixed(1)
+              ? ((montantTotalPaye / montantTotalMarche) * 100).toFixed(2)
               : 0}
             %
           </Typography>

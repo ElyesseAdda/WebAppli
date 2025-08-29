@@ -478,58 +478,64 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                               </TableCell>
                             </TableRow>
                             {sousTraitant.contrat.avenants &&
-                              sousTraitant.contrat.avenants.map((avenant) => (
-                                <TableRow key={avenant.id}>
-                                  <TableCell
-                                    onClick={() =>
-                                      handlePreviewAvenant(avenant.id)
-                                    }
-                                    sx={{
-                                      cursor: "pointer",
-                                      color: "primary.main",
-                                      "&:hover": {
-                                        textDecoration: "underline",
-                                      },
-                                    }}
-                                  >
-                                    Avenant n°{avenant.numero}
-                                  </TableCell>
-                                  <TableCell>{avenant.description}</TableCell>
-                                  <TableCell>
-                                    {sousTraitant.contrat.type_contrat}
-                                  </TableCell>
-                                  <TableCell>
-                                    {new Date(
-                                      avenant.date_creation
-                                    ).toLocaleDateString()}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ whiteSpace: "nowrap" }}
-                                  >
-                                    {avenant.montant.toLocaleString("fr-FR")} €
-                                  </TableCell>
-                                  <TableCell align="center">
-                                    <Tooltip title="Supprimer l'avenant" arrow>
-                                      <IconButton
-                                        size="small"
-                                        onClick={() =>
-                                          handleDeleteAvenant(avenant.id)
-                                        }
-                                        sx={{
-                                          color: "#d32f2f",
-                                          "&:hover": {
-                                            backgroundColor:
-                                              "rgba(211, 47, 47, 0.1)",
-                                          },
-                                        }}
+                              sousTraitant.contrat.avenants
+                                .sort((a, b) => a.numero - b.numero)
+                                .map((avenant) => (
+                                  <TableRow key={avenant.id}>
+                                    <TableCell
+                                      onClick={() =>
+                                        handlePreviewAvenant(avenant.id)
+                                      }
+                                      sx={{
+                                        cursor: "pointer",
+                                        color: "primary.main",
+                                        "&:hover": {
+                                          textDecoration: "underline",
+                                        },
+                                      }}
+                                    >
+                                      Avenant n°{avenant.numero}
+                                    </TableCell>
+                                    <TableCell>{avenant.description}</TableCell>
+                                    <TableCell>
+                                      {sousTraitant.contrat.type_contrat}
+                                    </TableCell>
+                                    <TableCell>
+                                      {new Date(
+                                        avenant.date_creation
+                                      ).toLocaleDateString()}
+                                    </TableCell>
+                                    <TableCell
+                                      align="right"
+                                      sx={{ whiteSpace: "nowrap" }}
+                                    >
+                                      {avenant.montant.toLocaleString("fr-FR")}{" "}
+                                      €
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Tooltip
+                                        title="Supprimer l'avenant"
+                                        arrow
                                       >
-                                        <FaTrash />
-                                      </IconButton>
-                                    </Tooltip>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleDeleteAvenant(avenant.id)
+                                          }
+                                          sx={{
+                                            color: "#d32f2f",
+                                            "&:hover": {
+                                              backgroundColor:
+                                                "rgba(211, 47, 47, 0.1)",
+                                            },
+                                          }}
+                                        >
+                                          <FaTrash />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
                           </TableBody>
                         </Table>
                       </TableContainer>

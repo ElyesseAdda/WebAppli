@@ -140,10 +140,10 @@
           Et la société
           <span style="font-weight: bold; color: black"
             >{{ contrat.sous_traitant.entreprise }}</span
-          >, au capital de
+          >{% if contrat.sous_traitant.capital and contrat.sous_traitant.capital != 0 %}, au capital de
           <span style="font-weight: bold; color: black"
             >{{ contrat.sous_traitant.capital }}€</span
-          >, dont le siège social est situé au
+          >{% endif %}, dont le siège social est situé au
           <span style="font-weight: bold; color: black"
             >{{ contrat.sous_traitant.adresse }}</span
           >,

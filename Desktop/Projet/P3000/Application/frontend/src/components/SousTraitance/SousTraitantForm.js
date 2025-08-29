@@ -22,7 +22,7 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
     ville: "",
     numero_rcs: "",
     representant: "",
-    forme_juridique: "SARL",
+    forme_juridique: "",
     email: "",
     type: "",
   });
@@ -44,7 +44,7 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
         ville: "",
         numero_rcs: "",
         representant: "",
-        forme_juridique: "SARL",
+        forme_juridique: "",
         email: "",
         type: "",
       });
@@ -55,7 +55,6 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
   const validateForm = () => {
     const newErrors = {};
     if (!formData.entreprise) newErrors.entreprise = "L'entreprise est requise";
-    if (!formData.capital) newErrors.capital = "Le capital est requis";
     if (!formData.adresse) newErrors.adresse = "L'adresse est requise";
     if (!formData.code_postal)
       newErrors.code_postal = "Le code postal est requis";
@@ -63,8 +62,6 @@ const SousTraitantForm = ({ open, onClose, sousTraitant, onSave }) => {
     if (!formData.numero_rcs) newErrors.numero_rcs = "Le numéro RCS est requis";
     if (!formData.representant)
       newErrors.representant = "Le représentant est requis";
-    if (!formData.forme_juridique)
-      newErrors.forme_juridique = "La forme juridique est requise";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
