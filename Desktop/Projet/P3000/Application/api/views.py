@@ -1726,11 +1726,22 @@ def copy_schedule(request):
         return Response({'error': 'Tous les paramètres sont requis.'}, status=400)
 
     try:
-        # Vérifier l'existence des agents
-        if not Agent.objects.filter(id=source_agent_id).exists():
-            return Response({'error': 'Agent source invalide.'}, status=400)
-        if not Agent.objects.filter(id=target_agent_id).exists():
-            return Response({'error': 'Agent cible invalide.'}, status=400)
+        # Vérifier l'existence des agents et récupérer leurs types
+        try:
+            source_agent = Agent.objects.get(id=source_agent_id)
+            target_agent = Agent.objects.get(id=target_agent_id)
+        except Agent.DoesNotExist:
+            return Response({'error': 'Agent source ou cible invalide.'}, status=400)
+        
+        # Vérifier la compatibilité des types d'agents
+        if source_agent.type_paiement != target_agent.type_paiement:
+            source_type = "journalier" if source_agent.type_paiement == "journalier" else "horaire"
+            target_type = "journalier" if target_agent.type_paiement == "journalier" else "horaire"
+            return Response({
+                'error': f'Impossible de copier le planning entre agents de types différents.\n'
+                         f'Agent source: {source_type} - Agent cible: {target_type}\n'
+                         f'Veuillez sélectionner un agent du même type de paiement.'
+            }, status=400)
 
         # Récupérer le planning de l'agent source pour la semaine et l'année spécifiées
         source_schedules = Schedule.objects.filter(
@@ -7583,7 +7594,7 @@ def schedule_monthly_summary(request):
         else:
             # Pour les agents horaires : 1 créneau = 1h
             heures_increment = 1
-            taux_horaire = s.agent.taux_Horaire or 0
+        taux_horaire = s.agent.taux_Horaire or 0
 
         key = (agent_id, chantier_id)
         if key not in result:
@@ -7814,12 +7825,7 @@ def preview_monthly_agents_report(request):
     agent_map = {}
     
     # Traiter les données de schedule_monthly_summary
-    print(f"DEBUG: schedule_data type: {type(schedule_data)}")
-    print(f"DEBUG: schedule_data content: {schedule_data}")
-    
     for chantier_data in schedule_data:
-        print(f"DEBUG: chantier_data type: {type(chantier_data)}")
-        print(f"DEBUG: chantier_data content: {chantier_data}")
         for detail in chantier_data['details']:
             agent_id = detail['agent_id']
             
