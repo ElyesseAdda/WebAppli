@@ -1665,22 +1665,28 @@ def assign_chantier(request):
                     logger.error(f"Chantier avec id {chantier_id} n'existe pas à l'index {index}.")
                     return Response({'error': f'Chantier avec id {chantier_id} n\'existe pas.'}, status=status.HTTP_400_BAD_REQUEST)
 
-                # Récupérer ou créer l'objet Schedule
-                schedule, created = Schedule.objects.get_or_create(
+                # Supprimer d'abord toute assignation existante pour cette plage horaire
+                existing_schedules = Schedule.objects.filter(
+                    agent=agent,
+                    week=week,
+                    year=year,
+                    day=day,
+                    hour=hour
+                )
+                
+                if existing_schedules.exists():
+                    existing_schedules.delete()
+
+                # Créer la nouvelle assignation
+                Schedule.objects.create(
                     agent=agent,
                     week=week,
                     year=year,
                     day=day,
                     hour=hour,
-                    defaults={'chantier': chantier, 'is_sav': is_sav}
+                    chantier=chantier,
+                    is_sav=is_sav
                 )
-
-                if not created:
-                    # Mettre à jour le chantier et le statut SAV si le Schedule existe déjà
-                    schedule.chantier = chantier
-                    schedule.is_sav = is_sav
-                    schedule.save()
-                    logger.debug(f"Chantier et statut SAV mis à jour pour Schedule id {schedule.id}.")
 
         logger.info("Chantiers assignés avec succès.")
         # À la fin, déclenche le recalcul pour la semaine/année concernée
@@ -1862,13 +1868,16 @@ def delete_schedule(request):
                     logger.error(f"Agent avec id {agent_id} n'existe pas à l'index {index}.")
                     return Response({'error': f'Agent avec id {agent_id} n\'existe pas.'}, status=status.HTTP_400_BAD_REQUEST)
 
-                # Convertir l'heure en format approprié en utilisant datetime.strptime
-                try:
-                    # Supposons que le format attendu est 'H:M' ou 'HH:MM'
-                    hour = datetime.strptime(hour_str, '%H:%M').time()
-                except ValueError:
-                    logger.error(f"Format d'heure invalide à l'index {index}: {hour_str}")
-                    return Response({'error': f'Format d\'heure invalide à l\'index {index}.'}, status=status.HTTP_400_BAD_REQUEST)
+                # Gérer les formats d'heure selon le type d'agent
+                if agent.type_paiement == 'journalier':
+                    # Pour les agents journaliers, l'heure est "Matin" ou "Après-midi"
+                    if hour_str not in ['Matin', 'Après-midi']:
+                        logger.error(f"Format d'heure invalide pour agent journalier à l'index {index}: {hour_str}")
+                        return Response({'error': f'Pour un agent journalier, l\'heure doit être "Matin" ou "Après-midi".'}, status=status.HTTP_400_BAD_REQUEST)
+                    hour = hour_str
+                else:
+                    # Pour les agents horaires, garder le format string
+                    hour = hour_str
 
                 # Récupérer l'objet Schedule correspondant
                 try:
@@ -1880,10 +1889,8 @@ def delete_schedule(request):
                         hour=hour
                     )
                     schedule.delete()
-                    logger.debug(f"Schedule supprimé: {schedule}")
                 except Schedule.DoesNotExist:
                     logger.warning(f"Schedule inexistant à l'index {index}: {deletion}")
-                    # Vous pouvez choisir de continuer ou de retourner une erreur
                     continue
 
         logger.info("Horaires supprimés avec succès.")

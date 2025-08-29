@@ -56,17 +56,67 @@
   height: 40px;
   position: relative;
   font-weight: 500;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  transition: all 0.2s ease;
 }
 
 .planning-table .schedule-cell:hover {
   transform: scale(1.02);
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
   z-index: 1;
 }
 
 /* Style pour les cellules sélectionnées */
-.planning-table .schedule-cell[style*="background-color: lightblue"] {
-  border: 2px solid rgba(27, 120, 188, 1);
+.planning-table .schedule-cell.selected {
+  border: 3px solid #1976d2 !important;
+  box-shadow: 0 0 8px rgba(25, 118, 210, 0.5) !important;
+  transform: scale(1.02);
+  z-index: 2;
+}
+
+/* Animation pour la sélection */
+.planning-table .schedule-cell.selected::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #1976d2, #42a5f5);
+  border-radius: 4px;
+  z-index: -1;
+  opacity: 0.1;
+}
+
+/* Style pour les informations de sélection */
+.selection-info {
+  font-weight: 600;
+  color: #1976d2;
+  font-size: 16px;
+}
+
+/* Styles pour les boutons d'action avec icônes */
+.MuiIconButton-root {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.MuiIconButton-root:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Style pour l'icône d'information */
+.info-icon-tooltip {
+  color: #1976d2;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.info-icon-tooltip:hover {
+  color: #1565c0;
+  transform: scale(1.1);
 }
 
 /* Style pour les cellules assignées */

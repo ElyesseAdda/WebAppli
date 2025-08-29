@@ -1,4 +1,12 @@
-import { Button, styled as muiStyled } from "@mui/material";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import ClearIcon from "@mui/icons-material/Clear";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import {
+  Button,
+  IconButton,
+  styled as muiStyled,
+  Tooltip,
+} from "@mui/material";
 import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
@@ -50,8 +58,8 @@ const PlanningHebdoAgent = ({
     ? ["Matin", "Après-midi"]
     : Array.from({ length: 17 }, (_, i) => `${i + 6}:00`); // Heures de 6h à 22h
   const [events, setEvents] = useState([]);
-  const [isSelecting, setIsSelecting] = useState(false);
   const [selectedCells, setSelectedCells] = useState([]);
+  const [lastSelectedCell, setLastSelectedCell] = useState(null);
   const [chantiers, setChantiers] = useState([]); // Nouvel état pour les chantiers
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
@@ -267,34 +275,157 @@ const PlanningHebdoAgent = ({
     );
   };
 
-  // Fonctions de sélection de cellules (handleMouseDown, handleMouseEnter, handleMouseUp)
-  const handleMouseDown = (hour, day) => {
-    setIsSelecting(true);
-    setSelectedCells([{ hour, day }]);
+  // Fonction pour calculer une plage de cellules
+  const getCellRange = (startCell, endCell) => {
+    if (!startCell || !endCell) {
+      console.warn("getCellRange: startCell ou endCell manquant");
+      return [];
+    }
+
+    const startHourIndex = hours.indexOf(startCell.hour);
+    const endHourIndex = hours.indexOf(endCell.hour);
+    const startDayIndex = daysOfWeek.indexOf(startCell.day);
+    const endDayIndex = daysOfWeek.indexOf(endCell.day);
+
+    // Vérification que les indices sont valides
+    if (
+      startHourIndex === -1 ||
+      endHourIndex === -1 ||
+      startDayIndex === -1 ||
+      endDayIndex === -1
+    ) {
+      console.warn("getCellRange: indices invalides", {
+        startHourIndex,
+        endHourIndex,
+        startDayIndex,
+        endDayIndex,
+      });
+      return [endCell]; // Retourner au moins la cellule de fin
+    }
+
+    const minHour = Math.min(startHourIndex, endHourIndex);
+    const maxHour = Math.max(startHourIndex, endHourIndex);
+    const minDay = Math.min(startDayIndex, endDayIndex);
+    const maxDay = Math.max(startDayIndex, endDayIndex);
+
+    const range = [];
+    for (let h = minHour; h <= maxHour; h++) {
+      for (let d = minDay; d <= maxDay; d++) {
+        if (hours[h] && daysOfWeek[d]) {
+          range.push({ hour: hours[h], day: daysOfWeek[d] });
+        }
+      }
+    }
+
+    console.log("getCellRange result:", range);
+    return range;
   };
 
-  const handleMouseEnter = (hour, day) => {
-    if (isSelecting) {
+  // Double-clic pour ouvrir directement le modal
+  const handleCellDoubleClick = (hour, day, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log("Double-click detected");
+    const newCell = { hour, day };
+    setSelectedCells([newCell]);
+    setLastSelectedCell(newCell);
+    openChantierModal();
+  };
+
+  // Gestionnaire pour onMouseDown pour capturer les modificateurs plus tôt
+  const handleCellMouseDown = (hour, day, event) => {
+    // Empêcher la sélection de texte
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Stocker les informations pour le mouseup
+    const cellInfo = {
+      hour,
+      day,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      button: event.button,
+    };
+
+    // Stocker dans une ref ou variable temporaire
+    window.tempCellInfo = cellInfo;
+
+
+  };
+
+  // Gestionnaire pour onMouseUp pour traiter la sélection
+  const handleCellMouseUp = (hour, day, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Récupérer les informations stockées
+    const cellInfo = window.tempCellInfo;
+    if (!cellInfo || cellInfo.hour !== hour || cellInfo.day !== day) {
+      return; // Pas le même élément
+    }
+
+    // Nettoyer
+    delete window.tempCellInfo;
+
+    const newCell = { hour, day };
+
+
+
+    if (cellInfo.ctrlKey || cellInfo.metaKey) {
+      // Ctrl/Cmd + clic : ajouter/supprimer de la sélection
+
       setSelectedCells((prev) => {
-        // Éviter les duplications
-        const newCell = { hour, day };
-        if (
-          !prev.some(
-            (cell) => cell.hour === newCell.hour && cell.day === newCell.day
-          )
-        ) {
+        const exists = prev.some(
+          (cell) => cell.hour === newCell.hour && cell.day === newCell.day
+        );
+        if (exists) {
+          // Supprimer la cellule de la sélection
+
+          return prev.filter(
+            (cell) => !(cell.hour === newCell.hour && cell.day === newCell.day)
+          );
+        } else {
+          // Ajouter la cellule à la sélection
+
+          setLastSelectedCell(newCell);
           return [...prev, newCell];
         }
-        return prev;
       });
+    } else if (cellInfo.shiftKey && lastSelectedCell) {
+      // Shift + clic : sélection de plage depuis la dernière cellule sélectionnée
+      console.log("SHIFT click detected");
+      console.log(
+        "Shift+click range selection from",
+        lastSelectedCell,
+        "to",
+        newCell
+      );
+      const range = getCellRange(lastSelectedCell, newCell);
+      console.log("Range calculated:", range);
+      setSelectedCells(range);
+      // Ne pas changer lastSelectedCell pour permettre des extensions de sélection
+    } else if (cellInfo.shiftKey && !lastSelectedCell) {
+      // Shift sans cellule de référence - traiter comme un clic simple
+      console.log(
+        "SHIFT click without reference cell, treating as simple click"
+      );
+      setSelectedCells([newCell]);
+      setLastSelectedCell(newCell);
+    } else {
+      // Clic simple : nouvelle sélection
+      console.log("Simple click, new selection");
+      setSelectedCells([newCell]);
+      setLastSelectedCell(newCell);
     }
   };
 
-  const handleMouseUp = () => {
-    setIsSelecting(false);
+  // Fonction pour valider la sélection et ouvrir le modal
+  const validateSelection = () => {
     if (selectedCells.length > 0) {
-      // Ouvrir le modal pour sélectionner le chantier
       openChantierModal();
+    } else {
+      alert("Veuillez sélectionner au moins une cellule.");
     }
   };
 
@@ -307,6 +438,7 @@ const PlanningHebdoAgent = ({
     setIsChantierModalOpen(false);
     setSelectedChantier(null);
     setSelectedCells([]); // Réinitialiser la sélection des cellules
+    setLastSelectedCell(null); // Réinitialiser la dernière cellule sélectionnée
     setIsSav(false); // Réinitialiser la checkbox SAV
   };
 
@@ -384,6 +516,10 @@ const PlanningHebdoAgent = ({
       return;
     }
 
+    console.log("Assignation du chantier:", selectedChantier.chantier_name);
+    console.log("Cellules sélectionnées:", selectedCells);
+    console.log("SAV:", isSav);
+
     try {
       const updates = selectedCells.map((cell) => {
         // Calculer la date réelle du créneau
@@ -395,7 +531,8 @@ const PlanningHebdoAgent = ({
         const date = startOfWeek.add(dayIndex, "day");
         const weekISO = date.isoWeek();
         const yearISO = date.isoWeekYear();
-        return {
+
+        const update = {
           agentId: selectedAgentId,
           week: weekISO,
           year: yearISO,
@@ -404,9 +541,14 @@ const PlanningHebdoAgent = ({
           chantierId: selectedChantier.id,
           isSav: isSav, // Ajouter le paramètre SAV
         };
+
+        console.log("Données d'assignation:", update);
+        return update;
       });
 
-      await axios.post("/api/assign_chantier/", updates);
+      console.log("Envoi de la requête d'assignation:", updates);
+      const response = await axios.post("/api/assign_chantier/", updates);
+      console.log("Réponse d'assignation:", response.data);
 
       // Mettre à jour le state schedule localement
       setSchedule((prevSchedule) => {
@@ -430,6 +572,7 @@ const PlanningHebdoAgent = ({
 
       // Réinitialiser la sélection
       setSelectedCells([]);
+      setLastSelectedCell(null);
       closeChantierModal();
 
       // Recalculer les coûts de main d'œuvre pour tout le mois (nouveau endpoint)
@@ -438,11 +581,15 @@ const PlanningHebdoAgent = ({
         year,
         month,
       });
+
+      alert(
+        `Chantier "${selectedChantier.chantier_name}" assigné à ${selectedCells.length} cellule(s) avec succès !`
+      );
     } catch (error) {
       console.error("Erreur lors de l'assignation du chantier :", error);
-      alert(
-        "Erreur lors de l'assignation du chantier. Consultez la console pour plus de détails."
-      );
+      const errorMessage =
+        error.response?.data?.error || error.message || "Erreur inconnue";
+      alert(`Erreur lors de l'assignation du chantier: ${errorMessage}`);
     }
   };
 
@@ -454,9 +601,11 @@ const PlanningHebdoAgent = ({
     }
 
     const confirmation = window.confirm(
-      "Êtes-vous sûr de vouloir supprimer les assignations sélectionnées ?"
+      `Êtes-vous sûr de vouloir supprimer les assignations de ${selectedCells.length} cellule(s) sélectionnée(s) ?`
     );
     if (!confirmation) return;
+
+    console.log("Suppression des cellules:", selectedCells);
 
     // Préparer les données à envoyer
     const deletions = selectedCells.map((cell) => {
@@ -469,17 +618,26 @@ const PlanningHebdoAgent = ({
       const date = startOfWeek.add(dayIndex, "day");
       const weekISO = date.isoWeek();
       const yearISO = date.isoWeekYear();
-      return {
+
+      const deletion = {
         agentId: selectedAgentId,
         week: weekISO,
         year: yearISO,
         day: cell.day,
         hour: cell.hour,
       };
+
+      console.log("Données de suppression:", deletion);
+      return deletion;
     });
 
     try {
-      await axios.post("/api/delete_schedule/", deletions);
+      console.log("Envoi de la requête de suppression:", deletions);
+      const deleteResponse = await axios.post(
+        "/api/delete_schedule/",
+        deletions
+      );
+      console.log("Réponse de suppression:", deleteResponse.data);
 
       // Recalculer les coûts de main d'œuvre pour tout le mois (nouveau endpoint)
       const { month, year } = getCurrentMonthYear();
@@ -507,12 +665,17 @@ const PlanningHebdoAgent = ({
 
       // Réinitialiser la sélection
       setSelectedCells([]);
+      setLastSelectedCell(null);
       closeChantierModal();
+
+      alert(
+        `${selectedCells.length} assignation(s) supprimée(s) avec succès !`
+      );
     } catch (error) {
       console.error("Erreur lors de la suppression des assignations :", error);
-      alert(
-        "Erreur lors de la suppression des assignations. Consultez la console pour plus de détails."
-      );
+      const errorMessage =
+        error.response?.data?.error || error.message || "Erreur inconnue";
+      alert(`Erreur lors de la suppression des assignations: ${errorMessage}`);
     }
   };
 
@@ -718,8 +881,16 @@ const PlanningHebdoAgent = ({
     return { month: startOfWeek.month() + 1, year: startOfWeek.year() };
   };
 
+  // Nettoyer les informations temporaires si la souris sort du tableau
+  const handleTableMouseLeave = () => {
+    if (window.tempCellInfo) {
+      console.log("Mouse left table, cleaning temp cell info");
+      delete window.tempCellInfo;
+    }
+  };
+
   return (
-    <div onMouseUp={handleMouseUp}>
+    <div onMouseLeave={handleTableMouseLeave}>
       {/* Ligne titre + bouton */}
       <div
         style={{
@@ -799,6 +970,129 @@ const PlanningHebdoAgent = ({
               </Button>
             </div>
 
+            {/* Contrôles de sélection */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: "15px",
+                padding: "10px 0",
+              }}
+            >
+              <span className="selection-info">
+                Cellules sélectionnées: {selectedCells.length}
+                {lastSelectedCell && (
+                  <span
+                    style={{
+                      marginLeft: "10px",
+                      fontSize: "12px",
+                      color: "#666",
+                    }}
+                  >
+                    (Dernière: {lastSelectedCell.hour} - {lastSelectedCell.day})
+                  </span>
+                )}
+              </span>
+
+              <Tooltip
+                title="Assigner un chantier aux cellules sélectionnées"
+                arrow
+              >
+                <span>
+                  <IconButton
+                    onClick={validateSelection}
+                    disabled={selectedCells.length === 0}
+                    sx={{
+                      backgroundColor: "#1976d2",
+                      color: "white",
+                      "&:hover": {
+                        backgroundColor: "#1565c0",
+                        transform: "scale(1.05)",
+                      },
+                      "&:disabled": {
+                        backgroundColor: "#1976d2",
+                        color: "white",
+                        opacity: 0.5,
+                      },
+                      transition: "all 0.2s ease",
+                      width: "36px",
+                      height: "36px",
+                    }}
+                  >
+                    <AssignmentIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              <Tooltip title="Effacer la sélection actuelle" arrow>
+                <span>
+                  <IconButton
+                    onClick={() => {
+                      setSelectedCells([]);
+                      setLastSelectedCell(null);
+                    }}
+                    disabled={selectedCells.length === 0}
+                    sx={{
+                      backgroundColor: "#f44336",
+                      color: "white",
+                      "&:hover": {
+                        backgroundColor: "#d32f2f",
+                        transform: "scale(1.05)",
+                      },
+                      "&:disabled": {
+                        backgroundColor: "#f44336",
+                        color: "white",
+                        opacity: 0.5,
+                      },
+                      transition: "all 0.2s ease",
+                      width: "36px",
+                      height: "36px",
+                    }}
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              <Tooltip
+                title={
+                  <div style={{ fontSize: "13px", lineHeight: "1.4" }}>
+                    <div style={{ fontWeight: "bold", marginBottom: "8px" }}>
+                      🎯 Raccourcis de sélection :
+                    </div>
+                    <div>
+                      • <strong>Clic simple</strong> : Sélectionner une cellule
+                    </div>
+                    <div>
+                      • <strong>Ctrl + clic</strong> : Ajouter/supprimer de la
+                      sélection
+                    </div>
+                    <div>
+                      • <strong>Shift + clic</strong> : Sélectionner une plage
+                    </div>
+                    <div>
+                      • <strong>Double-clic</strong> : Sélection rapide + modal
+                    </div>
+                  </div>
+                }
+                arrow
+                placement="top"
+              >
+                <IconButton
+                  size="small"
+                  sx={{
+                    color: "#1976d2",
+                    "&:hover": {
+                      backgroundColor: "rgba(25, 118, 210, 0.1)",
+                    },
+                  }}
+                >
+                  <InfoOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </div>
+
             <table className={`planning-table ${isLoading ? "loading" : ""}`}>
               <thead>
                 <tr>
@@ -840,9 +1134,18 @@ const PlanningHebdoAgent = ({
                       return (
                         <td
                           key={`${hour}-${day}`}
-                          onMouseDown={() => handleMouseDown(hour, day)}
-                          onMouseEnter={() => handleMouseEnter(hour, day)}
-                          className={`schedule-cell`}
+                          onMouseDown={(e) => handleCellMouseDown(hour, day, e)}
+                          onMouseUp={(e) => handleCellMouseUp(hour, day, e)}
+                          onDoubleClick={(e) =>
+                            handleCellDoubleClick(hour, day, e)
+                          }
+                          className={`schedule-cell ${
+                            selectedCells.some(
+                              (cell) => cell.hour === hour && cell.day === day
+                            )
+                              ? "selected"
+                              : ""
+                          }`}
                           style={{
                             backgroundColor: getCellStyle(
                               hour,
@@ -852,6 +1155,16 @@ const PlanningHebdoAgent = ({
                             fontWeight: cellEvent ? "bold" : "normal",
                             color: cellEvent ? "#222" : undefined,
                             textAlign: "center",
+                            border: selectedCells.some(
+                              (cell) => cell.hour === hour && cell.day === day
+                            )
+                              ? "3px solid #1976d2"
+                              : "1px solid #ddd",
+                            boxShadow: selectedCells.some(
+                              (cell) => cell.hour === hour && cell.day === day
+                            )
+                              ? "0 0 8px rgba(25, 118, 210, 0.5)"
+                              : "none",
                           }}
                         >
                           {cellEvent
@@ -917,44 +1230,96 @@ const PlanningHebdoAgent = ({
               ))}
             </select>
 
-            {/* Checkbox SAV */}
+            {/* Checkbox SAV Modernisée */}
             <div
               style={{
-                marginTop: "15px",
-                marginBottom: "15px",
-                padding: "12px",
-                backgroundColor: "#f5f5f5",
-                borderRadius: "6px",
-                border: "1px solid #e0e0e0",
+                marginTop: "20px",
+                marginBottom: "20px",
+                padding: "16px",
+                backgroundColor: isSav ? "#fff3e0" : "#f8f9fa",
+                borderRadius: "12px",
+                border: `2px solid ${isSav ? "#ff9800" : "#e0e0e0"}`,
+                transition: "all 0.3s ease",
+                cursor: "pointer",
               }}
+              onClick={() => setIsSav(!isSav)}
             >
-              <label
+              <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                  cursor: "pointer",
-                  width: "100%",
+                  justifyContent: "space-between",
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={isSav}
-                  onChange={(e) => setIsSav(e.target.checked)}
-                  style={{
-                    marginRight: "12px",
-                    transform: "scale(1.2)",
-                    cursor: "pointer",
-                  }}
-                />
-                <span
-                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "12px" }}
                 >
-                  <span style={{ fontSize: "16px" }}>⚠️</span>
-                  <span>SAV (Service Après-Vente)</span>
-                </span>
-              </label>
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "4px",
+                      border: `2px solid ${isSav ? "#ff9800" : "#ccc"}`,
+                      backgroundColor: isSav ? "#ff9800" : "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.2s ease",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isSav && (
+                      <span
+                        style={{
+                          color: "white",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: isSav ? "#e65100" : "#333",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span style={{ fontSize: "18px" }}>⚠️</span>
+                      <span>SAV (Service Après-Vente)</span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: isSav ? "#bf360c" : "#666",
+                        marginTop: "2px",
+                        marginLeft: "26px",
+                      }}
+                    >
+                      Marquer cette intervention comme du service après-vente
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "12px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: isSav ? "#ff9800" : "#e0e0e0",
+                    color: isSav ? "white" : "#666",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {isSav ? "ACTIVÉ" : "DÉSACTIVÉ"}
+                </div>
+              </div>
             </div>
 
             <div style={{ marginTop: "10px" }}>
