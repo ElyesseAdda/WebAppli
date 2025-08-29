@@ -45,10 +45,10 @@ const RecapCategoryDetails = ({
         ];
       case "sous_traitant":
         return [
-          { label: "N°", key: "numero" },
+          { label: "Sous-traitant", key: "sous_traitant" },
+          { label: "N°", key: "facture_numero" },
           { label: "Date", key: "date" },
           { label: "Montant", key: "montant" },
-          { label: "Sous-traitant", key: "sous_traitant" },
         ];
       default:
         return [
@@ -88,6 +88,34 @@ const RecapCategoryDetails = ({
       grouped[key].montant += doc.montant || 0;
     });
     displayDocuments = Object.values(grouped);
+  }
+
+  // Pour sous_traitant : trier par sous-traitant puis par numéro de facture
+  if (category === "sous_traitant" && documents && documents.length > 0) {
+    displayDocuments = [...documents].sort((a, b) => {
+      // D'abord trier par sous-traitant
+      const sousTraitantA = (a.sous_traitant || "").toLowerCase();
+      const sousTraitantB = (b.sous_traitant || "").toLowerCase();
+
+      if (sousTraitantA !== sousTraitantB) {
+        return sousTraitantA.localeCompare(sousTraitantB);
+      }
+
+      // Ensuite trier par numéro de facture
+      const numeroA = a.facture_numero || a.numero || "";
+      const numeroB = b.facture_numero || b.numero || "";
+
+      // Essayer de comparer comme des nombres si possible
+      const numA = parseInt(numeroA.toString().replace(/\D/g, ""), 10);
+      const numB = parseInt(numeroB.toString().replace(/\D/g, ""), 10);
+
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+
+      // Sinon comparer comme des chaînes
+      return numeroA.toString().localeCompare(numeroB.toString());
+    });
   }
 
   // Ajout pour édition des paiements matériel
@@ -248,7 +276,13 @@ const RecapCategoryDetails = ({
                           {col.key === "montant" && doc.montant !== undefined
                             ? Number(doc.montant).toLocaleString("fr-FR", {
                                 minimumFractionDigits: 2,
-                              }) + " €"
+                              }) +
+                              " €" +
+                              (doc.retard && doc.retard > 0
+                                ? ` (${doc.retard}j retard)`
+                                : doc.retard && doc.retard < 0
+                                ? ` (${Math.abs(doc.retard)}j avance)`
+                                : "")
                             : col.key === "heures" && doc.heures !== undefined
                             ? Number(doc.heures).toLocaleString("fr-FR", {
                                 minimumFractionDigits: 2,
@@ -266,6 +300,10 @@ const RecapCategoryDetails = ({
                                   .slice(-2);
                                 return `${day}/${month}/${year}`;
                               })()
+                            : col.key === "facture_numero"
+                            ? doc.facture_numero ||
+                              doc.numero?.split("-").pop() ||
+                              "-"
                             : doc[col.key] || "-"}
                         </TableCell>
                       ))}

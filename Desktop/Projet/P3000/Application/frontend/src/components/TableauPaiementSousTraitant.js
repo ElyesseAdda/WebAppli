@@ -1,3 +1,7 @@
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import PaymentIcon from "@mui/icons-material/Payment";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import {
   Box,
   Button,
@@ -5,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -13,6 +18,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import axios from "axios";
@@ -234,65 +240,137 @@ const AjouterPaiementModal = ({
   );
 };
 
-const PaiementGlobalModal = ({
+const FactureModal = ({
   open,
   onClose,
+  onSubmit,
   chantierId,
   sousTraitantId,
-  onSubmit,
-  montantRestant,
+  factures = [], // Ajouter les factures existantes pour calculer le prochain numéro
 }) => {
-  const [datePaiement, setDatePaiement] = useState("");
-  const [montantPaye, setMontantPaye] = useState("");
-  const [commentaire, setCommentaire] = useState("");
+  const [mois, setMois] = useState(new Date().getMonth() + 1);
+  const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [numeroFacture, setNumeroFacture] = useState("");
+  const [montantFacture, setMontantFacture] = useState("");
+  const [dateReception, setDateReception] = useState("");
+  const [delaiPaiement, setDelaiPaiement] = useState(45);
+
+  // Calculer le prochain numéro de facture
+  useEffect(() => {
+    if (open && factures.length > 0) {
+      const facturesDuMois = factures.filter(
+        (f) => f.mois === mois && f.annee === annee
+      );
+      const prochainNumero = facturesDuMois.length + 1;
+      setNumeroFacture(prochainNumero.toString());
+    } else if (open) {
+      setNumeroFacture("1");
+    }
+  }, [open, mois, annee, factures]);
 
   const handleSubmit = () => {
-    onSubmit({ datePaiement, montantPaye, commentaire });
+    onSubmit({
+      mois,
+      annee,
+      numeroFacture: numeroFacture || "1", // Auto-généré côté backend si vide
+      montantFacture,
+      dateReception,
+      delaiPaiement,
+    });
     onClose();
-    setDatePaiement("");
-    setMontantPaye("");
-    setCommentaire("");
+    // Reset form
+    setNumeroFacture("");
+    setMontantFacture("");
+    setDateReception("");
   };
+
+  const moisOptions = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+  ];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Nouveau paiement global</DialogTitle>
+      <DialogTitle>Nouvelle facture sous-traitant</DialogTitle>
       <DialogContent>
         <Box sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, color: "warning.main" }}>
-            Montant restant à payer :{" "}
-            {montantRestant.toLocaleString("fr-FR", {
-              minimumFractionDigits: 2,
-            })}{" "}
-            €
-          </Typography>
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <TextField
+              select
+              label="Mois"
+              value={mois}
+              onChange={(e) => setMois(parseInt(e.target.value))}
+              SelectProps={{ native: true }}
+              sx={{ flex: 1 }}
+            >
+              {moisOptions.map((nom, index) => (
+                <option key={index + 1} value={index + 1}>
+                  {nom}
+                </option>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              label="Année"
+              value={annee}
+              onChange={(e) => setAnnee(parseInt(e.target.value))}
+              sx={{ flex: 1 }}
+              inputProps={{ min: 2020, max: 2030 }}
+            />
+          </Box>
+
           <TextField
-            type="date"
-            label="Date de paiement"
-            value={datePaiement}
-            onChange={(e) => setDatePaiement(e.target.value)}
+            label="Numéro de facture"
+            value={numeroFacture}
+            onChange={(e) => setNumeroFacture(e.target.value)}
             fullWidth
             sx={{ mb: 2 }}
-            required
+            placeholder="Laissez vide pour auto-génération"
           />
+
           <TextField
             type="number"
-            label="Montant payé HT"
-            value={montantPaye}
-            onChange={(e) => setMontantPaye(e.target.value)}
+            label="Montant facturé HT"
+            value={montantFacture}
+            onChange={(e) => setMontantFacture(e.target.value)}
             fullWidth
             sx={{ mb: 2 }}
             required
             inputProps={{ step: "0.01", min: "0" }}
           />
+
           <TextField
-            label="Commentaire (optionnel)"
-            value={commentaire}
-            onChange={(e) => setCommentaire(e.target.value)}
+            type="date"
+            label="Date de réception"
+            value={dateReception}
+            onChange={(e) => setDateReception(e.target.value)}
             fullWidth
-            multiline
-            rows={3}
+            sx={{ mb: 2 }}
+            required
+            InputLabelProps={{ shrink: true }}
           />
+
+          <TextField
+            select
+            label="Délai de paiement"
+            value={delaiPaiement}
+            onChange={(e) => setDelaiPaiement(parseInt(e.target.value))}
+            fullWidth
+            SelectProps={{ native: true }}
+          >
+            <option value={45}>45 jours</option>
+            <option value={60}>60 jours</option>
+          </TextField>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -300,47 +378,97 @@ const PaiementGlobalModal = ({
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={!datePaiement || !montantPaye}
+          disabled={!montantFacture || !dateReception}
         >
-          Valider
+          Créer la facture
         </Button>
       </DialogActions>
     </Dialog>
   );
 };
 
-const ModifierPaiementGlobalModal = ({ open, onClose, paiement, onSubmit }) => {
-  const [datePaiement, setDatePaiement] = useState("");
+const PaiementFactureModal = ({ open, onClose, facture, onSubmit }) => {
   const [montantPaye, setMontantPaye] = useState("");
+  const [datePaiementReel, setDatePaiementReel] = useState("");
   const [commentaire, setCommentaire] = useState("");
 
-  useEffect(() => {
-    if (paiement) {
-      setDatePaiement(paiement.date_paiement || "");
-      setMontantPaye(paiement.montant_paye_ht || "");
-      setCommentaire(paiement.commentaire || "");
-    }
-  }, [paiement]);
+  // Calculer l'écart (montant restant à payer)
+  const calculerEcartFacture = (facture) => {
+    if (!facture) return 0;
+    const montantFacture = parseFloat(facture.montant_facture_ht) || 0;
+    const montantTotalPaye =
+      facture.paiements?.reduce(
+        (sum, p) => sum + (parseFloat(p.montant_paye) || 0),
+        0
+      ) || 0;
+    return montantFacture - montantTotalPaye; // Montant restant à payer
+  };
+
+  const ecartFacture = calculerEcartFacture(facture);
+  const isPremierPaiement =
+    !facture?.paiements || facture.paiements.length === 0;
 
   const handleSubmit = () => {
-    onSubmit(paiement.id, { datePaiement, montantPaye, commentaire });
-    onClose();
+    if (facture) {
+      onSubmit({
+        factureId: facture.id,
+        montantPaye,
+        datePaiementReel,
+        commentaire,
+      });
+      onClose();
+      // Reset form
+      setMontantPaye("");
+      setDatePaiementReel("");
+      setCommentaire("");
+    }
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Modifier le paiement</DialogTitle>
+      <DialogTitle>
+        Nouveau paiement - Facture {facture?.numero_facture}
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ p: 2 }}>
-          <TextField
-            type="date"
-            label="Date de paiement"
-            value={datePaiement}
-            onChange={(e) => setDatePaiement(e.target.value)}
-            fullWidth
-            sx={{ mb: 2 }}
-            required
-          />
+          {facture && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Facture n° {facture.numero_facture}</strong> -{" "}
+                {facture.mois_annee}
+              </Typography>
+
+              {isPremierPaiement ? (
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Montant facturé :{" "}
+                  {parseFloat(facture.montant_facture_ht).toLocaleString(
+                    "fr-FR",
+                    {
+                      minimumFractionDigits: 2,
+                    }
+                  )}{" "}
+                  €
+                </Typography>
+              ) : (
+                <Typography
+                  variant="body2"
+                  sx={{ mb: 1, color: "warning.main", fontWeight: 600 }}
+                >
+                  Montant restant à payer :{" "}
+                  {Math.abs(ecartFacture).toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Typography>
+              )}
+
+              <Typography variant="body2">
+                Date de paiement prévue :{" "}
+                {formatDateFR2(facture.date_paiement_prevue)}
+              </Typography>
+            </Box>
+          )}
+
           <TextField
             type="number"
             label="Montant payé HT"
@@ -351,6 +479,18 @@ const ModifierPaiementGlobalModal = ({ open, onClose, paiement, onSubmit }) => {
             required
             inputProps={{ step: "0.01", min: "0" }}
           />
+
+          <TextField
+            type="date"
+            label="Date de paiement réelle"
+            value={datePaiementReel}
+            onChange={(e) => setDatePaiementReel(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            InputLabelProps={{ shrink: true }}
+          />
+
           <TextField
             label="Commentaire (optionnel)"
             value={commentaire}
@@ -366,9 +506,9 @@ const ModifierPaiementGlobalModal = ({ open, onClose, paiement, onSubmit }) => {
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={!datePaiement || !montantPaye}
+          disabled={!montantPaye || !datePaiementReel}
         >
-          Valider
+          Enregistrer le paiement
         </Button>
       </DialogActions>
     </Dialog>
@@ -491,16 +631,18 @@ const formatDateFR2 = (dateStr) => {
 
 const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   const [contrats, setContrats] = useState([]);
-  const [paiements, setPaiements] = useState([]);
+  const [factures, setFactures] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFacture, setSelectedFacture] = useState(null);
   const [selectedPaiement, setSelectedPaiement] = useState(null);
   const [chantierNom, setChantierNom] = useState("");
-  const [openPaiementGlobalModal, setOpenPaiementGlobalModal] = useState(false);
+  const [openFactureModal, setOpenFactureModal] = useState(false);
+  const [openPaiementModal, setOpenPaiementModal] = useState(false);
   const [openModifierPaiementModal, setOpenModifierPaiementModal] =
     useState(false);
   const [montantRestant, setMontantRestant] = useState(0);
 
-  // Chargement contrats et paiements globaux (Promise.all)
+  // Chargement contrats et factures (Promise.all)
   useEffect(() => {
     if (chantierId && sousTraitantId) {
       setLoading(true);
@@ -509,136 +651,174 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           `/api/contrats-sous-traitance/?chantier_id=${chantierId}&sous_traitant=${sousTraitantId}`
         ),
         axios.get(
-          `/api/paiements-globaux-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
+          `/api/factures-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
         ),
       ])
-        .then(([contratsRes, paiementsRes]) => {
+        .then(([contratsRes, facturesRes]) => {
           setContrats(contratsRes.data);
-          setPaiements(paiementsRes.data);
+          setFactures(facturesRes.data);
           setLoading(false);
         })
         .catch(() => {
           setContrats([]);
-          setPaiements([]);
+          setFactures([]);
           setLoading(false);
         });
     }
   }, [chantierId, sousTraitantId]);
 
-  // Trier les paiements par date (du plus récent au plus ancien)
-  const paiementsTries = paiements.sort((a, b) => {
-    const dateA = new Date(a.date_paiement);
-    const dateB = new Date(b.date_paiement);
-    return dateB - dateA;
+  // Trier les factures par année, mois, puis numéro de facture
+  const facturesTries = factures.sort((a, b) => {
+    if (a.annee !== b.annee) return b.annee - a.annee;
+    if (a.mois !== b.mois) return b.mois - a.mois;
+    return parseInt(a.numero_facture) - parseInt(b.numero_facture);
   });
 
-  // Handler création paiement global (POST)
-  const handleAjouterPaiementGlobal = async (data) => {
+  // Handler création facture (POST)
+  const handleAjouterFacture = async (data) => {
     try {
       const payload = {
         chantier: chantierId,
         sous_traitant: sousTraitantId,
-        date_paiement: data.datePaiement,
-        montant_paye_ht: data.montantPaye,
-        commentaire: data.commentaire,
+        mois: data.mois,
+        annee: data.annee,
+        numero_facture: data.numeroFacture,
+        montant_facture_ht: data.montantFacture,
+        date_reception: data.dateReception,
+        delai_paiement: data.delaiPaiement,
       };
 
-      const res = await axios.post(
-        `/api/paiements-globaux-sous-traitant/`,
-        payload
-      );
-      setPaiements((prev) => [...prev, res.data]);
+      const res = await axios.post(`/api/factures-sous-traitant/`, payload);
+      setFactures((prev) => [...prev, res.data]);
     } catch (error) {
-      alert("Erreur lors de la création du paiement.");
+      alert("Erreur lors de la création de la facture.");
       if (error.response) {
         console.error("Erreur backend:", error.response.data);
       }
     }
   };
 
-  // Handlers pour les modals de paiements globaux
-  const handleModifierPaiementGlobal = async (
-    paiementId,
-    { datePaiement, montantPaye, commentaire }
-  ) => {
+  // Handler ajout paiement pour une facture
+  const handleAjouterPaiement = async (data) => {
     try {
-      const res = await axios.patch(
-        `/api/paiements-globaux-sous-traitant/${paiementId}/`,
-        {
-          date_paiement: datePaiement,
-          montant_paye_ht: montantPaye,
-          commentaire: commentaire,
-        }
+      const payload = {
+        facture: data.factureId,
+        montant_paye: data.montantPaye,
+        date_paiement_reel: data.datePaiementReel,
+        commentaire: data.commentaire,
+      };
+
+      const res = await axios.post(
+        `/api/paiements-facture-sous-traitant/`,
+        payload
       );
-      setPaiements((prev) =>
-        prev.map((p) =>
-          p.id === paiementId
-            ? {
-                ...p,
-                date_paiement: datePaiement,
-                montant_paye_ht: montantPaye,
-                commentaire: commentaire,
-              }
-            : p
+
+      // Mettre à jour la facture avec le nouveau paiement
+      setFactures((prev) =>
+        prev.map((f) =>
+          f.id === data.factureId
+            ? { ...f, paiements: [...(f.paiements || []), res.data] }
+            : f
         )
       );
     } catch (error) {
-      alert("Erreur lors de la modification du paiement.");
+      alert("Erreur lors de l'ajout du paiement.");
+      if (error.response) {
+        console.error("Erreur backend:", error.response.data);
+      }
     }
   };
 
-  const handleSupprimerPaiementGlobal = async (paiementId) => {
+  // Handler suppression facture
+  const handleSupprimerFacture = async (factureId) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette facture ?")) {
+      try {
+        await axios.delete(`/api/factures-sous-traitant/${factureId}/`);
+        setFactures((prev) => prev.filter((f) => f.id !== factureId));
+      } catch (error) {
+        alert("Erreur lors de la suppression de la facture.");
+      }
+    }
+  };
+
+  // Handler suppression paiement
+  const handleSupprimerPaiement = async (paiementId, factureId) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer ce paiement ?")) {
       try {
         await axios.delete(
-          `/api/paiements-globaux-sous-traitant/${paiementId}/`
+          `/api/paiements-facture-sous-traitant/${paiementId}/`
         );
-        setPaiements((prev) => prev.filter((p) => p.id !== paiementId));
+
+        // Mettre à jour la facture en retirant le paiement
+        setFactures((prev) =>
+          prev.map((f) =>
+            f.id === factureId
+              ? {
+                  ...f,
+                  paiements: f.paiements.filter((p) => p.id !== paiementId),
+                }
+              : f
+          )
+        );
       } catch (error) {
         alert("Erreur lors de la suppression du paiement.");
       }
     }
   };
 
-  // Calculs utilitaires
-  const calculerDatePrevue = (dateEnvoi, delai) => {
-    if (!dateEnvoi || !delai) return "-";
-    try {
-      const date = new Date(dateEnvoi);
-      date.setDate(date.getDate() + parseInt(delai));
-      return date.toLocaleDateString("fr-FR");
-    } catch {
-      return "-";
-    }
+  // Fonctions utilitaires pour les calculs
+  const calculerEcartFacture = (facture) => {
+    const montantFacture = parseFloat(facture.montant_facture_ht) || 0;
+    const montantTotalPaye =
+      facture.paiements?.reduce(
+        (sum, p) => sum + (parseFloat(p.montant_paye) || 0),
+        0
+      ) || 0;
+    return montantTotalPaye - montantFacture;
   };
 
   const calculerJoursRetard = (datePrevue, dateReelle) => {
-    if (!datePrevue || !dateReelle || datePrevue === "-") return "-";
+    if (!datePrevue || !dateReelle) return 0;
     try {
-      const [jourP, moisP, anneeP] = datePrevue.split("/").map(Number);
-      const [anneeR, moisR, jourR] = dateReelle.split("-").map(Number);
-      const dPrevue = new Date(
-        anneeP < 100 ? 2000 + anneeP : anneeP,
-        (moisP || 1) - 1,
-        jourP || 1
-      );
-      const dReelle = new Date(anneeR, (moisR || 1) - 1, jourR || 1);
+      const dPrevue = new Date(datePrevue);
+      const dReelle = new Date(dateReelle);
       const diff = Math.round((dReelle - dPrevue) / (1000 * 60 * 60 * 24));
-      if (isNaN(diff)) return "-";
-      if (diff > 0) return `${diff} jours de retard`;
-      if (diff < 0) return `${Math.abs(diff)} jours d'avance`;
-      return "0 jour";
+      return isNaN(diff) ? 0 : diff;
     } catch {
-      return "-";
+      return 0;
     }
   };
 
-  const calculerEcartMois = (montantPaye, montantFacture) => {
-    const paye = parseFloat(montantPaye) || 0;
-    const facture = parseFloat(montantFacture) || 0;
-    if (!montantPaye && !montantFacture) return "-";
-    const ecart = paye - facture;
-    return `${ecart >= 0 ? "+" : ""}${ecart.toFixed(2)} €`;
+  const formaterJoursRetard = (jours) => {
+    if (jours === 0) return "0 jour";
+    if (jours > 0) return `${jours} jour${jours > 1 ? "s" : ""} de retard`;
+    return `${Math.abs(jours)} jour${Math.abs(jours) > 1 ? "s" : ""} d'avance`;
+  };
+
+  const formaterEcart = (ecart) => {
+    if (Math.abs(ecart) < 0.01) return "0,00 €";
+    return `${ecart >= 0 ? "+" : ""}${ecart.toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} €`;
+  };
+
+  const getNomMois = (mois) => {
+    const moisNoms = [
+      "Janvier",
+      "Février",
+      "Mars",
+      "Avril",
+      "Mai",
+      "Juin",
+      "Juillet",
+      "Août",
+      "Septembre",
+      "Octobre",
+      "Novembre",
+      "Décembre",
+    ];
+    return moisNoms[mois - 1] || mois;
   };
 
   // Filtrage des contrats pour le chantier et sous-traitant courant
@@ -689,54 +869,57 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         )
       : 0;
   const montantTotalMarche = montantContrat + montantAvenants;
-  const montantTotalPaye = paiements.reduce(
-    (sum, p) => sum + (parseFloat(p.montant_paye_ht) || 0),
-    0
-  );
+
+  // Calculer le montant total payé à partir des factures
+  const montantTotalPaye = factures.reduce((sum, facture) => {
+    const montantFacturePaye =
+      facture.paiements?.reduce(
+        (sumPaiements, paiement) =>
+          sumPaiements + (parseFloat(paiement.montant_paye) || 0),
+        0
+      ) || 0;
+    return sum + montantFacturePaye;
+  }, 0);
+
   const montantRestantCalcul = montantTotalMarche - montantTotalPaye;
 
-  // Handler pour le paiement global avec validation
-  const handlePaiementGlobalSubmit = async (data) => {
-    const montantPaye = parseFloat(data.montantPaye);
+  // Créer les lignes à afficher dans le tableau (factures + paiements)
+  const lignesTableau = [];
 
-    // Vérifier si le paiement dépasse le montant restant
-    if (montantPaye > montantRestantCalcul) {
-      const surplus = montantPaye - montantRestantCalcul;
-      const confirmation = window.confirm(
-        `Attention : Ce paiement dépasse le montant restant de ${surplus.toFixed(
-          2
-        )}€.\n\n` +
-          `Montant restant : ${montantRestantCalcul.toFixed(2)}€\n` +
-          `Montant à payer : ${montantPaye.toFixed(2)}€\n\n` +
-          `Voulez-vous continuer malgré le surplus ?`
-      );
+  facturesTries.forEach((facture) => {
+    const ecart = calculerEcartFacture(facture);
+    const paiements = facture.paiements || [];
 
-      if (!confirmation) {
-        return;
-      }
+    if (paiements.length === 0) {
+      // Facture sans paiement
+      lignesTableau.push({
+        type: "facture",
+        facture: facture,
+        paiement: null,
+        ecart: ecart,
+        joursRetard: null,
+        isFirstForFacture: true,
+        isLastForFacture: true,
+      });
+    } else {
+      // Facture avec paiements
+      paiements.forEach((paiement, index) => {
+        const jours = calculerJoursRetard(
+          facture.date_paiement_prevue,
+          paiement.date_paiement_reel
+        );
+        lignesTableau.push({
+          type: "facture",
+          facture: facture,
+          paiement: paiement,
+          ecart: index === paiements.length - 1 ? ecart : null, // Afficher l'écart seulement sur la dernière ligne
+          joursRetard: jours,
+          isFirstForFacture: index === 0,
+          isLastForFacture: index === paiements.length - 1,
+        });
+      });
     }
-
-    try {
-      const payload = {
-        chantier: chantierId,
-        sous_traitant: sousTraitantId,
-        date_paiement: data.datePaiement,
-        montant_paye_ht: data.montantPaye,
-        commentaire: data.commentaire,
-      };
-      const res = await axios.post(
-        `/api/paiements-globaux-sous-traitant/`,
-        payload
-      );
-      setPaiements((prev) => [...prev, res.data]);
-      setOpenPaiementGlobalModal(false);
-    } catch (error) {
-      alert("Erreur lors de la création du paiement global.");
-      if (error.response) {
-        console.error("Erreur backend:", error.response.data);
-      }
-    }
-  };
+  });
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
@@ -776,7 +959,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
       />
-      {/* Tableau de paiements globaux */}
+      {/* Tableau des factures */}
       {loading ? (
         <Typography>Chargement...</Typography>
       ) : (
@@ -784,77 +967,226 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 1)" }}>
-                <TableCell sx={{ color: "white" }}>Date de paiement</TableCell>
-                <TableCell sx={{ color: "white" }}>Montant payé HT</TableCell>
-                <TableCell sx={{ color: "white" }}>
-                  Date de paiement réelle
+                <TableCell sx={{ color: "white" }}>Mois</TableCell>
+                <TableCell sx={{ color: "white" }} align="center">
+                  Facture n°
                 </TableCell>
-                <TableCell sx={{ color: "white" }}>Commentaire</TableCell>
+                <TableCell sx={{ color: "white" }}>Montant facturé</TableCell>
+                <TableCell sx={{ color: "white" }}>Date de réception</TableCell>
+                <TableCell sx={{ color: "white" }}>Date de paiement</TableCell>
+                <TableCell sx={{ color: "white" }}>Montant payé</TableCell>
+                <TableCell sx={{ color: "white" }}>
+                  Date paiement réel
+                </TableCell>
+                <TableCell sx={{ color: "white" }}>Écart mois</TableCell>
+                <TableCell sx={{ color: "white" }}>Jours de retard</TableCell>
                 <TableCell sx={{ color: "white" }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {paiementsTries.map((paiement) => (
-                <TableRow key={paiement.id}>
-                  <TableCell>{formatDateFR2(paiement.date_paiement)}</TableCell>
+              {lignesTableau.map((ligne, index) => (
+                <TableRow
+                  key={`${ligne.facture.id}-${
+                    ligne.paiement?.id || "no-payment"
+                  }`}
+                >
+                  {/* Mois - affiché seulement sur la première ligne de la facture */}
                   <TableCell>
-                    <Typography
-                      sx={{
-                        color: "rgb(0, 168, 42)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {parseFloat(paiement.montant_paye_ht).toLocaleString(
-                        "fr-FR",
-                        {
-                          minimumFractionDigits: 2,
-                        }
-                      )}{" "}
-                      €
-                    </Typography>
+                    {ligne.isFirstForFacture
+                      ? `${getNomMois(ligne.facture.mois)} ${
+                          ligne.facture.annee
+                        }`
+                      : ""}
                   </TableCell>
+
+                  {/* Facture n° - affiché seulement sur la première ligne de la facture */}
+                  <TableCell align="center">
+                    {ligne.isFirstForFacture
+                      ? ligne.facture.numero_facture
+                      : ""}
+                  </TableCell>
+
+                  {/* Montant facturé - affiché seulement sur la première ligne de la facture */}
                   <TableCell>
-                    {paiement.date_paiement_reel
-                      ? formatDateFR2(paiement.date_paiement_reel)
+                    {ligne.isFirstForFacture ? (
+                      <Typography
+                        sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: 600 }}
+                      >
+                        {parseFloat(
+                          ligne.facture.montant_facture_ht
+                        ).toLocaleString("fr-FR", {
+                          minimumFractionDigits: 2,
+                        })}{" "}
+                        €
+                      </Typography>
+                    ) : (
+                      ""
+                    )}
+                  </TableCell>
+
+                  {/* Date de réception - affiché seulement sur la première ligne de la facture */}
+                  <TableCell>
+                    {ligne.isFirstForFacture
+                      ? formatDateFR2(ligne.facture.date_reception)
+                      : ""}
+                  </TableCell>
+
+                  {/* Date de paiement prévue - affiché seulement sur la première ligne de la facture */}
+                  <TableCell>
+                    {ligne.isFirstForFacture
+                      ? formatDateFR2(ligne.facture.date_paiement_prevue)
+                      : ""}
+                  </TableCell>
+
+                  {/* Montant payé */}
+                  <TableCell>
+                    {ligne.paiement ? (
+                      <Typography
+                        sx={{ color: "rgb(0, 168, 42)", fontWeight: 600 }}
+                      >
+                        {parseFloat(ligne.paiement.montant_paye).toLocaleString(
+                          "fr-FR",
+                          {
+                            minimumFractionDigits: 2,
+                          }
+                        )}{" "}
+                        €
+                      </Typography>
+                    ) : (
+                      <Tooltip title="Ajouter un paiement">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => {
+                            setSelectedFacture(ligne.facture);
+                            setOpenPaiementModal(true);
+                          }}
+                        >
+                          <PaymentIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </TableCell>
+
+                  {/* Date paiement réel */}
+                  <TableCell>
+                    {ligne.paiement
+                      ? formatDateFR2(ligne.paiement.date_paiement_reel)
                       : "-"}
                   </TableCell>
-                  <TableCell>{paiement.commentaire || "-"}</TableCell>
+
+                  {/* Écart mois - affiché seulement sur la dernière ligne de la facture */}
                   <TableCell>
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => {
-                          setSelectedPaiement(paiement);
-                          setOpenModifierPaiementModal(true);
+                    {ligne.ecart !== null ? (
+                      Math.abs(ligne.ecart) > 0.01 ? (
+                        <Tooltip title="Cliquer pour ajouter un paiement">
+                          <Typography
+                            sx={{
+                              color:
+                                ligne.ecart > 0
+                                  ? "rgb(0, 168, 42)"
+                                  : "error.main",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              "&:hover": {
+                                textDecoration: "underline",
+                              },
+                            }}
+                            onClick={() => {
+                              setSelectedFacture(ligne.facture);
+                              setOpenPaiementModal(true);
+                            }}
+                          >
+                            {formaterEcart(ligne.ecart)}
+                          </Typography>
+                        </Tooltip>
+                      ) : (
+                        <Typography
+                          sx={{
+                            color: "inherit",
+                            fontWeight: 400,
+                          }}
+                        >
+                          {formaterEcart(ligne.ecart)}
+                        </Typography>
+                      )
+                    ) : (
+                      ""
+                    )}
+                  </TableCell>
+
+                  {/* Jours de retard */}
+                  <TableCell>
+                    {ligne.joursRetard !== null ? (
+                      <Typography
+                        sx={{
+                          color:
+                            ligne.joursRetard === 0
+                              ? "inherit"
+                              : ligne.joursRetard > 0
+                              ? "error.main"
+                              : "rgb(0, 168, 42)",
+                          fontWeight: ligne.joursRetard !== 0 ? 600 : 400,
                         }}
                       >
-                        Modifier
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="error"
-                        onClick={() =>
-                          handleSupprimerPaiementGlobal(paiement.id)
-                        }
-                      >
-                        Supprimer
-                      </Button>
+                        {formaterJoursRetard(ligne.joursRetard)}
+                      </Typography>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+
+                  {/* Actions */}
+                  <TableCell>
+                    <Box
+                      sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
+                    >
+                      {ligne.isFirstForFacture && (
+                        <Tooltip title="Supprimer la facture">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() =>
+                              handleSupprimerFacture(ligne.facture.id)
+                            }
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+
+                      {ligne.paiement && (
+                        <Tooltip title="Supprimer ce paiement">
+                          <IconButton
+                            size="small"
+                            color="warning"
+                            onClick={() =>
+                              handleSupprimerPaiement(
+                                ligne.paiement.id,
+                                ligne.facture.id
+                              )
+                            }
+                          >
+                            <RemoveCircleOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>
               ))}
-              {/* Ligne pour ajouter un nouveau paiement */}
+
+              {/* Ligne pour ajouter une nouvelle facture */}
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={10} align="center">
                   <Button
                     variant="outlined"
                     color="primary"
-                    onClick={() => setOpenPaiementGlobalModal(true)}
+                    onClick={() => setOpenFactureModal(true)}
+                    startIcon={<AddIcon />}
                     sx={{ mt: 1, mb: 1 }}
                   >
-                    + Ajouter un paiement
+                    Ajouter une facture
                   </Button>
                 </TableCell>
               </TableRow>
@@ -921,19 +1253,19 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           </Typography>
         </Box>
       </Box>
-      <PaiementGlobalModal
-        open={openPaiementGlobalModal}
-        onClose={() => setOpenPaiementGlobalModal(false)}
+      <FactureModal
+        open={openFactureModal}
+        onClose={() => setOpenFactureModal(false)}
+        onSubmit={handleAjouterFacture}
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
-        onSubmit={handlePaiementGlobalSubmit}
-        montantRestant={montantRestantCalcul}
+        factures={factures}
       />
-      <ModifierPaiementGlobalModal
-        open={openModifierPaiementModal}
-        onClose={() => setOpenModifierPaiementModal(false)}
-        paiement={selectedPaiement}
-        onSubmit={handleModifierPaiementGlobal}
+      <PaiementFactureModal
+        open={openPaiementModal}
+        onClose={() => setOpenPaiementModal(false)}
+        facture={selectedFacture}
+        onSubmit={handleAjouterPaiement}
       />
     </Box>
   );

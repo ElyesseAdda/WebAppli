@@ -1540,6 +1540,95 @@ class PaiementGlobalSousTraitant(models.Model):
         """Retourne le mois/année formaté"""
         return f"{self.date_paiement.month:02d}/{self.date_paiement.year}"
 
+class FactureSousTraitant(models.Model):
+    """Modèle pour les factures des sous-traitants avec paiements multiples possibles"""
+    sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, related_name='factures')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='factures_sous_traitant')
+    
+    # Informations de la facture
+    mois = models.IntegerField()  # Mois de la facture (1-12)
+    annee = models.IntegerField()  # Année de la facture
+    numero_facture = models.CharField(max_length=50)  # Numéro de facture (auto-incrémenté ou manuel)
+    montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2)  # Montant facturé
+    
+    # Gestion des échéances
+    date_reception = models.DateField()  # Date de réception de la facture
+    delai_paiement = models.IntegerField(default=45)  # Délai en jours (45 ou 60)
+    date_paiement_prevue = models.DateField(null=True, blank=True)  # Calculée automatiquement
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Facture Sous-Traitant"
+        verbose_name_plural = "Factures Sous-Traitants"
+        ordering = ['chantier', 'sous_traitant', 'annee', 'mois', 'numero_facture']
+        unique_together = ('chantier', 'sous_traitant', 'annee', 'mois', 'numero_facture')
+
+    def __str__(self):
+        return f"{self.sous_traitant} - {self.chantier} - Facture {self.numero_facture} ({self.mois:02d}/{self.annee})"
+    
+    @property
+    def mois_annee(self):
+        """Retourne le mois/année formaté"""
+        return f"{self.mois:02d}/{self.annee}"
+    
+    @property
+    def montant_total_paye(self):
+        """Calcule le montant total payé pour cette facture"""
+        return self.paiements.aggregate(
+            total=models.Sum('montant_paye')
+        )['total'] or 0
+    
+    @property
+    def ecart_paiement(self):
+        """Calcule l'écart entre montant facturé et montant total payé"""
+        return float(self.montant_total_paye) - float(self.montant_facture_ht)
+    
+    @property
+    def est_soldee(self):
+        """Indique si la facture est entièrement payée"""
+        return abs(self.ecart_paiement) < 0.01  # Tolérance pour les arrondis
+    
+    def save(self, *args, **kwargs):
+        # Calcul automatique de la date de paiement prévue
+        if self.date_reception and self.delai_paiement:
+            from datetime import timedelta
+            self.date_paiement_prevue = self.date_reception + timedelta(days=self.delai_paiement)
+        super().save(*args, **kwargs)
+
+
+class PaiementFactureSousTraitant(models.Model):
+    """Modèle pour les paiements d'une facture de sous-traitant (peut y en avoir plusieurs par facture)"""
+    facture = models.ForeignKey(FactureSousTraitant, on_delete=models.CASCADE, related_name='paiements')
+    
+    # Informations du paiement
+    montant_paye = models.DecimalField(max_digits=12, decimal_places=2)
+    date_paiement_reel = models.DateField()
+    commentaire = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Paiement Facture Sous-Traitant"
+        verbose_name_plural = "Paiements Factures Sous-Traitants"
+        ordering = ['facture', 'date_paiement_reel']
+
+    def __str__(self):
+        return f"Paiement {self.montant_paye}€ - {self.facture.numero_facture} ({self.date_paiement_reel})"
+    
+    @property
+    def jours_retard(self):
+        """Calcule les jours de retard par rapport à la date prévue"""
+        if self.date_paiement_reel and self.facture.date_paiement_prevue:
+            diff = (self.date_paiement_reel - self.facture.date_paiement_prevue).days
+            return diff
+        return 0
+
+
 class PaiementFournisseurMateriel(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_materiel')
     fournisseur = models.CharField(max_length=255)

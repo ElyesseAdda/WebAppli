@@ -32,7 +32,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -41,7 +41,7 @@ from .models import (
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
-    Banque, Emetteur,
+    Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate,
 )
 from .drive_automation import drive_automation
@@ -6957,6 +6957,52 @@ class PaiementGlobalSousTraitantViewSet(viewsets.ModelViewSet):
         
         return super().create(request, *args, **kwargs)
 
+class FactureSousTraitantViewSet(viewsets.ModelViewSet):
+    queryset = FactureSousTraitant.objects.all()
+    serializer_class = FactureSousTraitantSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        chantier_id = self.request.query_params.get('chantier')
+        sous_traitant_id = self.request.query_params.get('sous_traitant')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        if sous_traitant_id:
+            queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        return queryset.prefetch_related('paiements')
+
+    def create(self, request, *args, **kwargs):
+        """Création d'une facture avec auto-génération du numéro si nécessaire"""
+        chantier_id = request.data.get('chantier')
+        sous_traitant_id = request.data.get('sous_traitant')
+        mois = request.data.get('mois')
+        annee = request.data.get('annee')
+        numero_facture = request.data.get('numero_facture')
+        
+        # Auto-génération du numéro de facture si pas fourni
+        if not numero_facture and chantier_id and sous_traitant_id and mois and annee:
+            existing_factures = FactureSousTraitant.objects.filter(
+                chantier_id=chantier_id,
+                sous_traitant_id=sous_traitant_id,
+                mois=mois,
+                annee=annee
+            ).count()
+            numero_facture = str(existing_factures + 1)
+            request.data['numero_facture'] = numero_facture
+        
+        return super().create(request, *args, **kwargs)
+
+class PaiementFactureSousTraitantViewSet(viewsets.ModelViewSet):
+    queryset = PaiementFactureSousTraitant.objects.all()
+    serializer_class = PaiementFactureSousTraitantSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        facture_id = self.request.query_params.get('facture')
+        if facture_id:
+            queryset = queryset.filter(facture_id=facture_id)
+        return queryset
+
 class RecapFinancierChantierAPIView(APIView):
     permission_classes = []
 
@@ -7039,12 +7085,25 @@ class RecapFinancierChantierAPIView(APIView):
         facture_payees = facture_qs.filter(date_paiement__isnull=False)
         facture_reste = facture_qs.filter(date_paiement__isnull=True)
 
-        # 4. Paiement Sous-Traitant (Sorties)
-        pst_qs = PaiementSousTraitant.objects.filter(chantier=chantier)
-        if date_debut and date_fin:
-            pst_qs = pst_qs.filter(date_envoi_facture__range=(date_debut, date_fin))
-        pst_payes = pst_qs.filter(date_paiement_reel__isnull=False)
-        pst_reste = pst_qs.filter(date_paiement_reel__isnull=True)
+        # 4. Factures Sous-Traitant (Sorties) - NOUVEAU SYSTÈME
+        # Récupérer toutes les factures du chantier avec leurs paiements
+        factures_qs = FactureSousTraitant.objects.filter(chantier=chantier).prefetch_related('paiements', 'sous_traitant')
+        
+        # Collecter les paiements effectués dans la période
+        paiements_periode = []
+        factures_reste_periode = []
+        
+        for facture in factures_qs:
+            # Paiements effectués dans la période
+            for paiement in facture.paiements.all():
+                # Filtrer par date de paiement réelle
+                if not date_debut or not date_fin or (date_debut <= paiement.date_paiement_reel <= date_fin):
+                    paiements_periode.append(paiement)
+            
+            # Factures avec échéance dans la période et pas entièrement payées
+            if not facture.est_soldee and facture.date_paiement_prevue:
+                if not date_debut or not date_fin or (date_debut <= facture.date_paiement_prevue <= date_fin):
+                    factures_reste_periode.append(facture)
 
         # 5. Main d'œuvre (Sorties) - NOUVELLE LOGIQUE AVEC SCHEDULE
         # Gestion des jours fériés pour toutes les années concernées
@@ -7164,14 +7223,39 @@ class RecapFinancierChantierAPIView(APIView):
                 "statut": "payé" if fac.date_paiement else "à encaisser",
             }
 
-        def pst_to_doc(pst):
+        def paiement_facture_to_doc(paiement):
+            """Transforme un paiement de facture en document pour les dépenses payées"""
             return {
-                "id": pst.id,
-                "numero": f"{getattr(pst.sous_traitant, 'entreprise', str(pst.sous_traitant))}-{pst.mois}/{pst.annee}",
-                "date": pst.date_envoi_facture,
-                "montant": float(pst.montant_facture_ht),
-                "statut": "payé" if pst.date_paiement_reel else "à payer",
-                "sous_traitant": getattr(pst.sous_traitant, 'entreprise', None),
+                "id": paiement.id,
+                "numero": f"{getattr(paiement.facture.sous_traitant, 'entreprise', str(paiement.facture.sous_traitant))}-{paiement.facture.numero_facture}",
+                "date": paiement.date_paiement_reel,
+                "montant": float(paiement.montant_paye),
+                "statut": "payé",
+                "sous_traitant": getattr(paiement.facture.sous_traitant, 'entreprise', None),
+                "facture_numero": paiement.facture.numero_facture,
+            }
+
+        def facture_reste_to_doc(facture):
+            """Transforme une facture non soldée en document pour les dépenses restantes"""
+            montant_restant = float(facture.montant_facture_ht) - float(facture.montant_total_paye)
+            
+            # Calculer les jours de retard par rapport à la date prévue
+            jours_retard = 0
+            if facture.date_paiement_prevue:
+                from datetime import date
+                aujourd_hui = date.today()
+                diff = (aujourd_hui - facture.date_paiement_prevue).days
+                jours_retard = diff  # Positif = retard, Négatif = avance
+            
+            return {
+                "id": facture.id,
+                "numero": f"{getattr(facture.sous_traitant, 'entreprise', str(facture.sous_traitant))}-{facture.numero_facture}",
+                "date": facture.date_paiement_prevue,
+                "montant": montant_restant,
+                "statut": "à payer",
+                "sous_traitant": getattr(facture.sous_traitant, 'entreprise', None),
+                "facture_numero": facture.numero_facture,
+                "retard": jours_retard,  # Jours de retard/avance
             }
 
 
@@ -7203,8 +7287,8 @@ class RecapFinancierChantierAPIView(APIView):
                 },
                 "main_oeuvre": main_oeuvre,
                 "sous_traitant": {
-                    "total": float(pst_payes.aggregate(s=Sum('montant_facture_ht'))['s'] or 0),
-                    "documents": [pst_to_doc(pst) for pst in pst_payes]
+                    "total": float(sum(paiement.montant_paye for paiement in paiements_periode)),
+                    "documents": [paiement_facture_to_doc(paiement) for paiement in paiements_periode]
                 }
             },
             "reste_a_payer": {
@@ -7214,8 +7298,8 @@ class RecapFinancierChantierAPIView(APIView):
                 },
                 "main_oeuvre": { 'total': 0, 'documents': [] },
                 "sous_traitant": {
-                    "total": float(pst_reste.aggregate(s=Sum('montant_facture_ht'))['s'] or 0),
-                    "documents": [pst_to_doc(pst) for pst in pst_reste]
+                    "total": float(sum(float(facture.montant_facture_ht) - float(facture.montant_total_paye) for facture in factures_reste_periode)),
+                    "documents": [facture_reste_to_doc(facture) for facture in factures_reste_periode]
                 }
             }
         }

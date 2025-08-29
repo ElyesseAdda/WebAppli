@@ -8,7 +8,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
-    Document, PaiementGlobalSousTraitant, Emetteur
+    Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -932,6 +932,52 @@ class PaiementGlobalSousTraitantSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'mois_annee',
+        ]
+
+class PaiementFactureSousTraitantSerializer(serializers.ModelSerializer):
+    jours_retard = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = PaiementFactureSousTraitant
+        fields = [
+            'id',
+            'facture',
+            'montant_paye',
+            'date_paiement_reel',
+            'commentaire',
+            'jours_retard',
+            'created_at',
+            'updated_at',
+        ]
+
+class FactureSousTraitantSerializer(serializers.ModelSerializer):
+    paiements = PaiementFactureSousTraitantSerializer(many=True, read_only=True)
+    mois_annee = serializers.ReadOnlyField()
+    montant_total_paye = serializers.ReadOnlyField()
+    ecart_paiement = serializers.ReadOnlyField()
+    est_soldee = serializers.ReadOnlyField()
+    date_paiement_prevue = serializers.ReadOnlyField()  # Calculé automatiquement
+    
+    class Meta:
+        model = FactureSousTraitant
+        fields = [
+            'id',
+            'sous_traitant',
+            'chantier',
+            'mois',
+            'annee',
+            'numero_facture',
+            'montant_facture_ht',
+            'date_reception',
+            'delai_paiement',
+            'date_paiement_prevue',
+            'paiements',
+            'mois_annee',
+            'montant_total_paye',
+            'ecart_paiement',
+            'est_soldee',
+            'created_at',
+            'updated_at',
         ]
 
 # --- SERIALIZER POUR LE RECAP FINANCIER CHANTIER ---
