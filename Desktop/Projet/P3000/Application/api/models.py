@@ -828,6 +828,7 @@ class Schedule(models.Model):
     day = models.CharField(max_length=10)  # "Lundi", "Mardi", etc.
     hour = models.CharField(max_length=10)  # "06:00", "07:00", etc.
     chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
+    is_sav = models.BooleanField(default=False)  # True si c'est du SAV (Service Après-Vente)
 
     class Meta:
         unique_together = ('agent', 'week', 'year', 'day', 'hour')

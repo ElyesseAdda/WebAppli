@@ -342,7 +342,7 @@ class StockMovementSerializer(serializers.ModelSerializer):
 class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
-        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id']
+        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav']
 
 class LaborCostSerializer(serializers.ModelSerializer):
     # Champs calculés/dérivés

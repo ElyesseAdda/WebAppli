@@ -228,15 +228,24 @@ const PlanningContainer = () => {
     if (schedule[selectedAgentId]) {
       Object.entries(schedule[selectedAgentId]).forEach(([hour, dayData]) => {
         Object.entries(dayData).forEach(([day, chantier]) => {
-          if (chantier && chantier.trim() !== "") {
+          let chantierName;
+
+          // Gérer le nouveau format d'objet et l'ancien format de chaîne
+          if (typeof chantier === "object" && chantier !== null) {
+            chantierName = chantier.chantierName;
+          } else {
+            chantierName = chantier;
+          }
+
+          if (chantierName && chantierName.trim() !== "") {
             if (isAgentJournalier) {
               // Pour les agents journaliers : Matin ou Après-midi = 0.5 jour = 4h
-              hoursPerChantier[chantier] =
-                (hoursPerChantier[chantier] || 0) + 4;
+              hoursPerChantier[chantierName] =
+                (hoursPerChantier[chantierName] || 0) + 4;
             } else {
               // Pour les agents horaires : 1 heure par créneau
-              hoursPerChantier[chantier] =
-                (hoursPerChantier[chantier] || 0) + 1;
+              hoursPerChantier[chantierName] =
+                (hoursPerChantier[chantierName] || 0) + 1;
             }
           }
         });

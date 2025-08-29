@@ -160,6 +160,7 @@ CSRF_EXEMPT_PATTERNS = [
     r'^/api/fournisseurs/$',
     r'^/api/recalculate_labor_costs_month/$',
     r'^/api/schedule/monthly_summary/$',
+    r'^/api/labor_costs/monthly_summary/$',
     r'^/api/preview-monthly-agents-report/$',
     r'^/api/generate-monthly-agents-pdf/$',
 ]

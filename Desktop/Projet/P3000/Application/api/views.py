@@ -1629,6 +1629,7 @@ def assign_chantier(request):
                 day = update.get('day')
                 hour_str = update.get('hour')
                 chantier_id = update.get('chantierId')
+                is_sav = update.get('isSav', False)  # Par défaut False si non fourni
 
                 # Validation des données
                 if not all([agent_id, week, year, day, hour_str, chantier_id]):
@@ -1671,14 +1672,15 @@ def assign_chantier(request):
                     year=year,
                     day=day,
                     hour=hour,
-                    defaults={'chantier': chantier}
+                    defaults={'chantier': chantier, 'is_sav': is_sav}
                 )
 
                 if not created:
-                    # Mettre à jour le chantier si le Schedule existe déjà
+                    # Mettre à jour le chantier et le statut SAV si le Schedule existe déjà
                     schedule.chantier = chantier
+                    schedule.is_sav = is_sav
                     schedule.save()
-                    logger.debug(f"Chantier mis à jour pour Schedule id {schedule.id}.")
+                    logger.debug(f"Chantier et statut SAV mis à jour pour Schedule id {schedule.id}.")
 
         logger.info("Chantiers assignés avec succès.")
         # À la fin, déclenche le recalcul pour la semaine/année concernée

@@ -55,6 +55,7 @@ const PlanningHebdoAgent = ({
   const [chantiers, setChantiers] = useState([]); // Nouvel état pour les chantiers
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
+  const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
 
   // Nouvel état pour le modal de copie
   const [targetAgentId, setTargetAgentId] = useState(null);
@@ -153,6 +154,7 @@ const PlanningHebdoAgent = ({
           });
 
           // Remplir scheduleData avec les données de l'API
+          console.log("DEBUG: Données reçues de l'API:", scheduleResponse.data);
           scheduleResponse.data.forEach((item, index) => {
             let formattedHour;
 
@@ -162,12 +164,32 @@ const PlanningHebdoAgent = ({
               formattedHour = item.hour;
             } else {
               // Pour les agents horaires, formater l'heure au format "H:mm"
-              formattedHour = dayjs(item.hour, "HH:mm:ss").format("H:mm");
+              // Essayer plusieurs formats pour être compatible avec différents formats d'heure
+              let parsedHour = dayjs(item.hour, "H:mm"); // Format "8:00"
+              if (!parsedHour.isValid()) {
+                parsedHour = dayjs(item.hour, "HH:mm"); // Format "08:00"
+              }
+              if (!parsedHour.isValid()) {
+                parsedHour = dayjs(item.hour, "HH:mm:ss"); // Format "08:00:00"
+              }
+
+              if (parsedHour.isValid()) {
+                formattedHour = parsedHour.format("H:mm");
+              } else {
+                // Si aucun format ne marche, utiliser directement la valeur
+                console.warn(
+                  `Impossible de parser l'heure "${item.hour}", utilisation directe`
+                );
+                formattedHour = item.hour;
+              }
             }
 
             if (scheduleData[formattedHour] && daysOfWeek.includes(item.day)) {
               scheduleData[formattedHour][item.day] = item.chantier_id
-                ? getChantierName(item.chantier_id) // Utiliser le nom du chantier
+                ? {
+                    chantierName: getChantierName(item.chantier_id),
+                    isSav: item.is_sav || false,
+                  }
                 : "";
             }
           });
@@ -285,6 +307,7 @@ const PlanningHebdoAgent = ({
     setIsChantierModalOpen(false);
     setSelectedChantier(null);
     setSelectedCells([]); // Réinitialiser la sélection des cellules
+    setIsSav(false); // Réinitialiser la checkbox SAV
   };
 
   // Fonction pour gérer le changement d'agent
@@ -379,6 +402,7 @@ const PlanningHebdoAgent = ({
           day: cell.day,
           hour: cell.hour,
           chantierId: selectedChantier.id,
+          isSav: isSav, // Ajouter le paramètre SAV
         };
       });
 
@@ -395,8 +419,10 @@ const PlanningHebdoAgent = ({
           if (!newSchedule[selectedAgentId][cell.hour]) {
             newSchedule[selectedAgentId][cell.hour] = {};
           }
-          newSchedule[selectedAgentId][cell.hour][cell.day] =
-            selectedChantier.chantier_name;
+          newSchedule[selectedAgentId][cell.hour][cell.day] = {
+            chantierName: selectedChantier.chantier_name,
+            isSav: isSav,
+          };
         });
 
         return newSchedule;
@@ -577,9 +603,16 @@ const PlanningHebdoAgent = ({
 
     // Couleur par chantier si assigné
     if (scheduleData && scheduleData[hour] && scheduleData[hour][day]) {
-      // On suppose que scheduleData[hour][day] contient le nom du chantier
-      // Il faut retrouver l'id du chantier correspondant au nom
-      const chantierName = scheduleData[hour][day];
+      const cellData = scheduleData[hour][day];
+      let chantierName;
+
+      // Gérer le nouveau format d'objet et l'ancien format de chaîne
+      if (typeof cellData === "object") {
+        chantierName = cellData.chantierName;
+      } else {
+        chantierName = cellData;
+      }
+
       const chantier = chantiers.find((c) => c.chantier_name === chantierName);
       return getColorForChantier(chantier ? chantier.id : chantierName);
     }
@@ -823,7 +856,35 @@ const PlanningHebdoAgent = ({
                         >
                           {cellEvent
                             ? getEventInitials(cellEvent)
-                            : schedule[selectedAgentId]?.[hour]?.[day] || ""}
+                            : (() => {
+                                const cellData =
+                                  schedule[selectedAgentId]?.[hour]?.[day];
+                                if (!cellData) return "";
+
+                                // Si c'est un objet (nouveau format)
+                                if (typeof cellData === "object") {
+                                  return (
+                                    <span>
+                                      {cellData.chantierName}
+                                      {cellData.isSav && (
+                                        <span
+                                          style={{
+                                            marginLeft: "4px",
+                                            fontSize: "12px",
+                                            color: "#ff5722",
+                                            fontWeight: "bold",
+                                          }}
+                                        >
+                                          ⚠️
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                }
+
+                                // Si c'est une chaîne (ancien format pour compatibilité)
+                                return cellData;
+                              })()}
                         </td>
                       );
                     })}
@@ -855,6 +916,47 @@ const PlanningHebdoAgent = ({
                 </option>
               ))}
             </select>
+
+            {/* Checkbox SAV */}
+            <div
+              style={{
+                marginTop: "15px",
+                marginBottom: "15px",
+                padding: "12px",
+                backgroundColor: "#f5f5f5",
+                borderRadius: "6px",
+                border: "1px solid #e0e0e0",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSav}
+                  onChange={(e) => setIsSav(e.target.checked)}
+                  style={{
+                    marginRight: "12px",
+                    transform: "scale(1.2)",
+                    cursor: "pointer",
+                  }}
+                />
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span style={{ fontSize: "16px" }}>⚠️</span>
+                  <span>SAV (Service Après-Vente)</span>
+                </span>
+              </label>
+            </div>
+
             <div style={{ marginTop: "10px" }}>
               <StyledButton
                 variant="contained"
