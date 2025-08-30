@@ -14,6 +14,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { RecapFinancierProvider } from "./chantier/RecapFinancierContext";
 
 // Composants des onglets
+import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import Fuse from "fuse.js";
 import ChantierCommandesTab from "./chantier/ChantierCommandesTab";
@@ -84,12 +85,52 @@ const ChantierDetail = () => {
       try {
         const res = await axios.get("/api/chantier/");
         setChantiers(res.data);
+
+        // Nettoyer l'historique avec les données fraîches
+        cleanHistory(res.data);
       } catch (e) {
-        // Optionnel: gestion d'erreur
+        console.error("Erreur lors du chargement des chantiers:", e);
       }
     };
     fetchChantiers();
   }, []);
+
+  // Fonction pour nettoyer et mettre à jour l'historique
+  const cleanHistory = (freshChantiers) => {
+    const hist = JSON.parse(localStorage.getItem("chantier_history") || "[]");
+    const validChantierIds = freshChantiers.map((c) => c.id);
+
+    // Filtrer les chantiers supprimés et mettre à jour les noms
+    const updatedHistory = hist
+      .filter((chantier) => validChantierIds.includes(chantier.id))
+      .map((chantier) => {
+        // Trouver les données fraîches pour ce chantier
+        const freshChantier = freshChantiers.find((c) => c.id === chantier.id);
+        if (freshChantier) {
+          return {
+            id: chantier.id,
+            chantier_name:
+              freshChantier.nom ||
+              freshChantier.chantier_name ||
+              chantier.chantier_name,
+          };
+        }
+        return chantier;
+      });
+
+    // Mettre à jour l'historique si des changements ont été détectés
+    const hasChanges =
+      updatedHistory.length !== hist.length ||
+      updatedHistory.some(
+        (updated, index) =>
+          hist[index] && updated.chantier_name !== hist[index].chantier_name
+      );
+
+    if (hasChanges) {
+      setHistory(updatedHistory);
+      localStorage.setItem("chantier_history", JSON.stringify(updatedHistory));
+    }
+  };
 
   // Recherche fuzzy avec Fuse.js
   useEffect(() => {
@@ -121,16 +162,61 @@ const ChantierDetail = () => {
   }, []);
 
   // Gérer la sélection d'un chantier
-  const handleSelectChantier = (chantier) => {
-    // Mettre à jour l'historique (max 5)
-    let newHistory = [chantier, ...history.filter((c) => c.id !== chantier.id)];
-    if (newHistory.length > 5) newHistory = newHistory.slice(0, 5);
-    setHistory(newHistory);
-    localStorage.setItem("chantier_history", JSON.stringify(newHistory));
-    setShowDropdown(false);
-    setSearchValue("");
-    // Rediriger vers le chantier sélectionné
-    navigate(`/ChantierDetail/${chantier.id}`);
+  const handleSelectChantier = async (chantier) => {
+    try {
+      // Récupérer les données fraîches du chantier depuis l'API
+      const response = await axios.get(`/api/chantier/${chantier.id}/details/`);
+      const freshChantierData = response.data;
+
+      // Créer un objet chantier avec les données fraîches pour l'historique
+      const updatedChantier = {
+        id: freshChantierData.id,
+        chantier_name: freshChantierData.nom || freshChantierData.chantier_name,
+      };
+
+      // Mettre à jour l'historique avec les données fraîches
+      let newHistory = [
+        updatedChantier,
+        ...history.filter((c) => c.id !== updatedChantier.id),
+      ];
+      if (newHistory.length > 5) newHistory = newHistory.slice(0, 5);
+      setHistory(newHistory);
+      localStorage.setItem("chantier_history", JSON.stringify(newHistory));
+
+      setShowDropdown(false);
+      setSearchValue("");
+
+      // Rediriger vers le chantier sélectionné
+      navigate(`/ChantierDetail/${updatedChantier.id}`);
+    } catch (error) {
+      console.error("Erreur lors de la sélection du chantier:", error);
+
+      if (error.response?.status === 404) {
+        // Si le chantier n'existe plus, le retirer de l'historique
+        const filteredHistory = history.filter((c) => c.id !== chantier.id);
+        setHistory(filteredHistory);
+        localStorage.setItem(
+          "chantier_history",
+          JSON.stringify(filteredHistory)
+        );
+        alert("Ce chantier n'existe plus ou a été supprimé.");
+      } else {
+        // Autre erreur (500, réseau, etc.) - essayer de rafraîchir l'historique
+        console.log("Tentative de rafraîchissement de l'historique...");
+        await refreshHistory();
+        alert("Erreur de connexion. L'historique a été mis à jour.");
+      }
+    }
+  };
+
+  // Fonction pour forcer la mise à jour de l'historique (utile après modification d'un chantier)
+  const refreshHistory = async () => {
+    try {
+      const res = await axios.get("/api/chantier/");
+      cleanHistory(res.data);
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour de l'historique:", error);
+    }
   };
 
   // Afficher la liste à afficher (historique ou résultats)
@@ -256,6 +342,16 @@ const ChantierDetail = () => {
                   fontSize: 18,
                   flex: 1,
                 }}
+              />
+              <RefreshIcon
+                sx={{
+                  color: "#757575",
+                  ml: 1,
+                  cursor: "pointer",
+                  "&:hover": { color: "primary.main" },
+                }}
+                onClick={refreshHistory}
+                title="Rafraîchir l'historique"
               />
             </Box>
             {/* Dropdown suggestions */}

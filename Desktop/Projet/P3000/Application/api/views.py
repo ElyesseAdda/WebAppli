@@ -5810,8 +5810,8 @@ def generate_situation_pdf(request):
         preview_url = request.build_absolute_uri(f"/api/preview-situation/{situation_id}/")
 
         # Utiliser le même script Puppeteer mais avec un nom de fichier différent
-        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
-        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\situation.pdf'
+        node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
+        pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'situation.pdf')
 
         command = ['node', node_script_path, preview_url]
         result = subprocess.run(command, check=True, capture_output=True, text=True)
@@ -6828,14 +6828,27 @@ def planning_hebdo_pdf(request):
     week = int(request.GET.get('week'))
     year = int(request.GET.get('year'))
     preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}")
-    node_script_path = r'C:\\Users\\dell xps 9550\\Desktop\\Projet\\P3000\\Application\\frontend\\src\\components\\generate_pdf.js'
-    pdf_path = r'C:\\Users\\dell xps 9550\\Desktop\\Projet\\P3000\\Application\\frontend\\src\\components\\planning_hebdo.pdf'
+    
+    # Utiliser des chemins relatifs qui fonctionnent en production
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
+    pdf_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'planning_hebdo.pdf')
+    
     command = ['node', node_script_path, preview_url, pdf_path]
-    subprocess.run(command, check=True)
-    with open(pdf_path, 'rb') as pdf_file:
-        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename=\"planning_hebdo_agents_semaine_{week}_{year}.pdf\"'
-        return response
+    
+    try:
+        subprocess.run(command, check=True)
+        with open(pdf_path, 'rb') as pdf_file:
+            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="planning_hebdo_agents_semaine_{week}_{year}.pdf"'
+            return response
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        return JsonResponse({'error': error_msg}, status=500)
 
 def get_color_palette(n):
     base_colors = [
@@ -8059,8 +8072,8 @@ def generate_monthly_agents_pdf(request):
     preview_url = request.build_absolute_uri(f"/api/preview-monthly-agents-report/?month={month}&year={year}")
     
     # Chemin vers le script Puppeteer
-    node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_monthly_agents_pdf.js'
-    pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\monthly_agents_report.pdf'
+    node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_monthly_agents_pdf.js')
+    pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'monthly_agents_report.pdf')
     
     command = ['node', node_script_path, preview_url, pdf_path]
     
