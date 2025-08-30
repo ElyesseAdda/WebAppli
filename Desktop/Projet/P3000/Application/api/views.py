@@ -527,7 +527,7 @@ def generate_pdf_from_preview(request):
         print("Preview URL:", preview_url)
 
             # Chemin vers le script Puppeteer
-        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
         print("Node script path:", node_script_path)
 
             # Commande pour exécuter Puppeteer avec Node.js
@@ -545,7 +545,7 @@ def generate_pdf_from_preview(request):
         print("Sortie d'erreur:", result.stderr)
 
             # Lire le fichier PDF généré
-        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+        pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
         print("Chemin du PDF:", pdf_path)
         print("Le fichier existe ?", os.path.exists(pdf_path))
 
@@ -1038,7 +1038,7 @@ def generate_pdf_from_preview(request):
         print("Preview URL:", preview_url)
 
             # Chemin vers le script Puppeteer
-        node_script_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\generate_pdf.js'
+        node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
         print("Node script path:", node_script_path)
 
             # Commande pour exécuter Puppeteer avec Node.js
@@ -1056,7 +1056,7 @@ def generate_pdf_from_preview(request):
         print("Sortie d'erreur:", result.stderr)
 
             # Lire le fichier PDF généré
-        pdf_path = r'C:\Users\dell xps 9550\Desktop\Projet\P3000\Application\frontend\src\components\devis.pdf'
+        pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
         print("Chemin du PDF:", pdf_path)
         print("Le fichier existe ?", os.path.exists(pdf_path))
 
@@ -3926,7 +3926,7 @@ def get_agent_primes(request, agent_id):
         if not month_year:
             return Response(
                 {"error": "month_year est requis"}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_404_NOT_FOUND
             )
             
         primes = agent.primes or {}
@@ -5809,20 +5809,59 @@ def generate_situation_pdf(request):
 
         preview_url = request.build_absolute_uri(f"/api/preview-situation/{situation_id}/")
 
-        # Utiliser le même script Puppeteer mais avec un nom de fichier différent
-        node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
-        pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'situation.pdf')
+        # Utiliser des chemins relatifs qui fonctionnent en production
+        import os
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
+        pdf_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'situation.pdf')
 
-        command = ['node', node_script_path, preview_url]
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-
-        if os.path.exists(pdf_path):
+        # Vérifications préliminaires
+        if not os.path.exists(node_script_path):
+            error_msg = f'Script Node.js introuvable: {node_script_path}'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
+        
+        # Vérifier si Node.js est disponible
+        try:
+            subprocess.run(['node', '--version'], check=True, capture_output=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
+        
+        command = ['node', node_script_path, preview_url, pdf_path]
+        print(f"Commande exécutée: {' '.join(command)}")
+        
+        try:
+            # Exécuter avec capture de sortie pour debug
+            result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
+            print(f"Sortie standard: {result.stdout}")
+            print(f"Sortie d'erreur: {result.stderr}")
+            
+            if not os.path.exists(pdf_path):
+                error_msg = f'Le fichier PDF n\'a pas été généré: {pdf_path}'
+                print(f"ERREUR: {error_msg}")
+                return JsonResponse({'error': error_msg}, status=500)
+            
             with open(pdf_path, 'rb') as pdf_file:
                 response = HttpResponse(pdf_file.read(), content_type='application/pdf')
                 response['Content-Disposition'] = f'attachment; filename="situation_{situation_id}.pdf"'
                 return response
-        else:
-            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+                
+        except subprocess.TimeoutExpired:
+            error_msg = 'Timeout lors de la génération du PDF (60 secondes)'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
+        except subprocess.CalledProcessError as e:
+            error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.stdout}\nErreur: {e.stderr}'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
+        except Exception as e:
+            error_msg = f'Erreur inattendue: {str(e)}'
+            print(f"ERREUR: {error_msg}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            return JsonResponse({'error': error_msg}, status=500)
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
@@ -6835,19 +6874,52 @@ def planning_hebdo_pdf(request):
     node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
     pdf_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'planning_hebdo.pdf')
     
+    # Vérifications préliminaires
+    if not os.path.exists(node_script_path):
+        error_msg = f'Script Node.js introuvable: {node_script_path}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    
+    # Vérifier si Node.js est disponible
+    try:
+        subprocess.run(['node', '--version'], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    
     command = ['node', node_script_path, preview_url, pdf_path]
+    print(f"Commande exécutée: {' '.join(command)}")
     
     try:
-        subprocess.run(command, check=True)
+        # Exécuter avec capture de sortie pour debug
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
+        print(f"Sortie standard: {result.stdout}")
+        print(f"Sortie d'erreur: {result.stderr}")
+        
+        if not os.path.exists(pdf_path):
+            error_msg = f'Le fichier PDF n\'a pas été généré: {pdf_path}'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
+        
         with open(pdf_path, 'rb') as pdf_file:
             response = HttpResponse(pdf_file.read(), content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="planning_hebdo_agents_semaine_{week}_{year}.pdf"'
             return response
+            
+    except subprocess.TimeoutExpired:
+        error_msg = 'Timeout lors de la génération du PDF (60 secondes)'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
     except subprocess.CalledProcessError as e:
-        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.stdout}\nErreur: {e.stderr}'
+        print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return JsonResponse({'error': error_msg}, status=500)
 
 def get_color_palette(n):
@@ -7856,7 +7928,8 @@ def preview_monthly_agents_report(request):
                 'montant_samedi': 0,
                 'montant_dimanche': 0,
                 'montant_ferie': 0,
-                'jours_majoration': []
+                'jours_majoration': [],
+                'chantiers': set()
             }
 
         # Déterminer le type de jour
@@ -8071,25 +8144,58 @@ def generate_monthly_agents_pdf(request):
     # URL de prévisualisation
     preview_url = request.build_absolute_uri(f"/api/preview-monthly-agents-report/?month={month}&year={year}")
     
-    # Chemin vers le script Puppeteer
-    node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_monthly_agents_pdf.js')
-    pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'monthly_agents_report.pdf')
+    # Utiliser des chemins relatifs qui fonctionnent en production
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_monthly_agents_pdf.js')
+    pdf_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'monthly_agents_report.pdf')
+    
+    # Vérifications préliminaires
+    if not os.path.exists(node_script_path):
+        error_msg = f'Script Node.js introuvable: {node_script_path}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    
+    # Vérifier si Node.js est disponible
+    try:
+        subprocess.run(['node', '--version'], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
     
     command = ['node', node_script_path, preview_url, pdf_path]
+    print(f"Commande exécutée: {' '.join(command)}")
     
     try:
-        subprocess.run(command, check=True)
+        # Exécuter avec capture de sortie pour debug
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
+        print(f"Sortie standard: {result.stdout}")
+        print(f"Sortie d'erreur: {result.stderr}")
+        
+        if not os.path.exists(pdf_path):
+            error_msg = f'Le fichier PDF n\'a pas été généré: {pdf_path}'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
         
         with open(pdf_path, 'rb') as pdf_file:
             response = HttpResponse(pdf_file.read(), content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="rapport_mensuel_agents_{month}_{year}.pdf"'
             return response
             
+    except subprocess.TimeoutExpired:
+        error_msg = 'Timeout lors de la génération du PDF (60 secondes)'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
     except subprocess.CalledProcessError as e:
-        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.stdout}\nErreur: {e.stderr}'
+        print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return JsonResponse({'error': error_msg}, status=500)
 
 
