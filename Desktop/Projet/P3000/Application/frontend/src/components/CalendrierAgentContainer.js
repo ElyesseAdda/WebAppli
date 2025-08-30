@@ -1,4 +1,4 @@
-import { Box, Button } from "@mui/material";
+import { Box, Button, Divider, Typography } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import CalendrierAgent from "./CalendrierAgent";
@@ -39,11 +39,70 @@ const CalendrierAgentContainer = () => {
     setIsEditModalOpen(false);
   };
 
+  // Séparer les agents par type de paiement
+  const agentsJournaliers = agents.filter(
+    (agent) => agent.type_paiement === "journalier"
+  );
+  const agentsHoraires = agents.filter(
+    (agent) => agent.type_paiement === "horaire"
+  );
+
   return (
     <div>
-      <Box mb={3}>
-        <CalendrierAgent agents={agents} />
-      </Box>
+      {/* Section Agents Horaires */}
+      {agentsHoraires.length > 0 && (
+        <>
+          <Box mb={2}>
+            <Typography
+              variant="h5"
+              component="h2"
+              sx={{
+                fontWeight: "bold",
+                color: "#ed6c02",
+                borderBottom: "2px solid #ed6c02",
+                paddingBottom: 1,
+                marginBottom: 2,
+              }}
+            >
+              ⏰ Agents Horaires ({agentsHoraires.length})
+            </Typography>
+            <CalendrierAgent agents={agentsHoraires} />
+          </Box>
+          <Divider sx={{ margin: "24px 0" }} />
+        </>
+      )}
+
+      {/* Section Agents Journaliers */}
+      {agentsJournaliers.length > 0 && (
+        <>
+          <Box mb={2}>
+            <Typography
+              variant="h5"
+              component="h2"
+              sx={{
+                fontWeight: "bold",
+                color: "#1976d2",
+                borderBottom: "2px solid #1976d2",
+                paddingBottom: 1,
+                marginBottom: 2,
+              }}
+            >
+              👷‍♂️ Agents Journaliers ({agentsJournaliers.length})
+            </Typography>
+            <CalendrierAgent agents={agentsJournaliers} />
+          </Box>
+        </>
+      )}
+
+      {/* Message si aucun agent */}
+      {agents.length === 0 && (
+        <Box textAlign="center" py={4}>
+          <Typography variant="h6" color="textSecondary">
+            Aucun agent trouvé
+          </Typography>
+        </Box>
+      )}
+
       <Box
         display="flex"
         justifyContent="space-evenly"

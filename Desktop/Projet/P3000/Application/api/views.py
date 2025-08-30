@@ -1916,8 +1916,8 @@ def save_labor_costs(request):
             taux_horaire = (agent.taux_journalier or 0) / 8  # Convertir taux journalier en taux horaire
         else:
             taux_horaire = agent.taux_Horaire or 0
-        fr_holidays = holidays.country_holidays('FR', years=[int(year)])
-        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+            fr_holidays = holidays.country_holidays('FR', years=[int(year)])
+            days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
         for cost_entry in costs:
             chantier_name = cost_entry['chantier_name']
@@ -7284,15 +7284,15 @@ class RecapFinancierChantierAPIView(APIView):
                     agent_map[agent_id]['heures'] += heures_increment
                     agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
                 elif s.day == "Samedi":
-                    agent_map[agent_id]['heures'] += heures_increment
-                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.25
+                        agent_map[agent_id]['heures'] += heures_increment
+                        agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.25
                 elif s.day == "Dimanche":
-                    agent_map[agent_id]['heures'] += heures_increment
-                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
+                        agent_map[agent_id]['heures'] += heures_increment
+                        agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
                 else:
-                    agent_map[agent_id]['heures'] += heures_increment
-                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment
-        
+                        agent_map[agent_id]['heures'] += heures_increment
+                        agent_map[agent_id]['montant'] += taux_horaire * heures_increment
+            
 
         
         # Convertir les heures en jours pour les agents journaliers (pour l'affichage)
@@ -7666,7 +7666,7 @@ def schedule_monthly_summary(request):
         else:
             # Pour les agents horaires : 1 créneau = 1h
             heures_increment = 1
-            taux_horaire = s.agent.taux_Horaire or 0
+        taux_horaire = s.agent.taux_Horaire or 0
 
         key = (agent_id, chantier_id)
         if key not in result:

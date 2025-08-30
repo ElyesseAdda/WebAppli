@@ -19,19 +19,75 @@ import "./../../static/css/calendrierAgent.css";
 // Configurer dayjs pour utiliser la locale française
 dayjs.locale("fr");
 
-// Styles de la modale avec Emotion
+// Styles de la modale avec Emotion - Version moderne
 const ModalStyle = styled(Box)({
   position: "absolute",
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: 400,
-  bgcolor: "background.paper",
-  border: "2px solid #000",
-  boxShadow: 24,
-  p: 4,
-  color: "rgba(27, 120, 188, 1)",
-  fontSize: "18px",
+  width: 450,
+  maxHeight: "90vh",
+  overflowY: "auto",
+  background: "linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)",
+  border: "none",
+  borderRadius: "20px",
+  boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.15)",
+  padding: "30px",
+  color: "#2c3e50",
+  fontSize: "16px",
+  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+
+  "& h2": {
+    color: "#2c3e50",
+    fontSize: "24px",
+    fontWeight: "700",
+    marginBottom: "8px",
+    textAlign: "center",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+  },
+
+  "& p": {
+    color: "#6c757d",
+    fontSize: "14px",
+    textAlign: "center",
+    marginBottom: "24px",
+    fontWeight: "500",
+  },
+
+  "& .MuiTextField-root": {
+    marginBottom: "16px",
+    "& .MuiOutlinedInput-root": {
+      borderRadius: "12px",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        boxShadow: "0 4px 12px rgba(102, 126, 234, 0.15)",
+      },
+      "&.Mui-focused": {
+        boxShadow: "0 4px 12px rgba(102, 126, 234, 0.25)",
+      },
+    },
+  },
+
+  "& .MuiSelect-root": {
+    borderRadius: "12px",
+  },
+
+  "& .MuiFormControl-root": {
+    marginBottom: "16px",
+    "& .MuiOutlinedInput-root": {
+      borderRadius: "12px",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        boxShadow: "0 4px 12px rgba(102, 126, 234, 0.15)",
+      },
+      "&.Mui-focused": {
+        boxShadow: "0 4px 12px rgba(102, 126, 234, 0.25)",
+      },
+    },
+  },
 });
 
 const fetchEvents = async () => {
@@ -102,19 +158,9 @@ const CalendrierAgent = ({ agents }) => {
   const [selectedEndDate, setSelectedEndDate] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [selectedAgentName, setSelectedAgentName] = useState(null);
-  const [chantiers, setChantiers] = useState([]);
-  const [selectedChantier, setSelectedChantier] = useState(null);
+
   const [eventType, setEventType] = useState("");
   const [subtype, setSubtype] = useState("");
-
-  const fetchChantiers = async () => {
-    try {
-      const response = await axios.get("/api/chantier/");
-      setChantiers(response.data);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des chantiers:", error);
-    }
-  };
 
   const fetchAgentsWithWorkDays = async () => {
     try {
@@ -214,7 +260,6 @@ const CalendrierAgent = ({ agents }) => {
 
   useEffect(() => {
     loadEvents();
-    fetchChantiers();
   }, []);
 
   const handleResourceClick = (agentId, agentName) => {
@@ -238,17 +283,6 @@ const CalendrierAgent = ({ agents }) => {
         (eventType === "conge" && !subtype)
       ) {
         alert("Veuillez sélectionner un sous-type pour l'absence ou le congé.");
-        return;
-      }
-
-      // Vérifier si un chantier est sélectionné pour les événements "M"
-      if (eventType === "modification_horaire" && !selectedChantier) {
-        console.error(
-          "Un chantier doit être sélectionné pour les événements modifiés (M)."
-        );
-        alert(
-          "Veuillez sélectionner un chantier pour les événements modifiés."
-        );
         return;
       }
 
@@ -330,8 +364,7 @@ const CalendrierAgent = ({ agents }) => {
           event_type: eventType,
           subtype: subtype || null,
           hours_modified: eventType === "modification_horaire" ? hours : 0,
-          chantier:
-            eventType === "modification_horaire" ? selectedChantier : null,
+          chantier: null,
         };
 
         try {
@@ -356,7 +389,6 @@ const CalendrierAgent = ({ agents }) => {
                 ? `${hours}H`
                 : `${eventType}${subtype ? ` (${subtype})` : ""}`,
             color: getColorByStatus(eventType, subtype),
-            chantier: newEvent.chantier,
           });
         } catch (error) {
           console.error("Erreur lors de la création de l'événement:", error);
@@ -523,43 +555,68 @@ const CalendrierAgent = ({ agents }) => {
             </Select>
           )}
 
-          <Select
-            label="Sélectionner un chantier"
-            value={selectedChantier || ""}
-            onChange={(e) => setSelectedChantier(e.target.value)}
-            fullWidth
-            displayEmpty
-            style={{ marginTop: "16px", marginBottom: "16px" }}
+          <Box
+            sx={{ display: "flex", gap: 2, justifyContent: "center", mt: 3 }}
           >
-            <MenuItem value="">
-              <em>--Sélectionner un chantier--</em>
-            </MenuItem>
-            {chantiers.map((chantier) => (
-              <MenuItem key={chantier.id} value={chantier.id}>
-                {chantier.chantier_name}
-              </MenuItem>
-            ))}
-          </Select>
-
-          <Button
-            variant="contained"
-            sx={{ bgcolor: getColorByStatus(eventType, subtype) }}
-            color="primary"
-            onClick={() =>
-              addEvent(
-                eventType === "modification_horaire"
-                  ? prompt("Combien d'heures à modifier ?")
-                  : 0
-              )
-            }
-            disabled={
-              !eventType ||
-              ((eventType === "absence" || eventType === "conge") && !subtype)
-            }
-          >
-            Ajouter l'événement
-          </Button>
-          <Button onClick={closeModal}>Fermer</Button>
+            <Button
+              variant="contained"
+              sx={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                borderRadius: "12px",
+                padding: "12px 24px",
+                fontWeight: "600",
+                fontSize: "14px",
+                textTransform: "none",
+                boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  background:
+                    "linear-gradient(135deg, #764ba2 0%, #667eea 100%)",
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 6px 20px rgba(102, 126, 234, 0.4)",
+                },
+                "&:disabled": {
+                  background: "#e9ecef",
+                  color: "#6c757d",
+                  boxShadow: "none",
+                },
+              }}
+              onClick={() =>
+                addEvent(
+                  eventType === "modification_horaire"
+                    ? prompt("Combien d'heures à modifier ?")
+                    : 0
+                )
+              }
+              disabled={
+                !eventType ||
+                ((eventType === "absence" || eventType === "conge") && !subtype)
+              }
+            >
+              ✅ Ajouter l'événement
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={closeModal}
+              sx={{
+                borderRadius: "12px",
+                padding: "12px 24px",
+                fontWeight: "600",
+                fontSize: "14px",
+                textTransform: "none",
+                borderColor: "#dee2e6",
+                color: "#6c757d",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  borderColor: "#adb5bd",
+                  backgroundColor: "#f8f9fa",
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              ❌ Fermer
+            </Button>
+          </Box>
         </ModalStyle>
       </Modal>
     </>
