@@ -284,7 +284,8 @@ const RecapCategoryDetails = ({
                                 ? ` (${Math.abs(doc.retard)}j avance)`
                                 : "")
                             : col.key === "heures" && doc.heures !== undefined
-                            ? Number(doc.heures).toLocaleString("fr-FR", {
+                            ? doc.heures_affichage ||
+                              Number(doc.heures).toLocaleString("fr-FR", {
                                 minimumFractionDigits: 2,
                               })
                             : col.key === "date" && doc.date

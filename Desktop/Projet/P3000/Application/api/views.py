@@ -1678,7 +1678,7 @@ def assign_chantier(request):
                     existing_schedules.delete()
 
                 # Créer la nouvelle assignation
-                Schedule.objects.create(
+                schedule = Schedule.objects.create(
                     agent=agent,
                     week=week,
                     year=year,
@@ -1904,16 +1904,18 @@ def delete_schedule(request):
 @api_view(['POST'])
 def save_labor_costs(request):
     import logging
-    logger = logging.getLogger("laborcost")
+    logger = logging.getLogger(__name__)
     try:
-        logger.info(f"save_labor_costs called with data: {request.data}")
         agent_id = request.data.get('agent_id')
         week = request.data.get('week')
         year = request.data.get('year')
         costs = request.data.get('costs', [])
 
         agent = Agent.objects.get(id=agent_id)
-        taux_horaire = agent.taux_Horaire or 0
+        if agent.type_paiement == 'journalier':
+            taux_horaire = (agent.taux_journalier or 0) / 8  # Convertir taux journalier en taux horaire
+        else:
+            taux_horaire = agent.taux_Horaire or 0
         fr_holidays = holidays.country_holidays('FR', years=[int(year)])
         days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
@@ -1924,7 +1926,17 @@ def save_labor_costs(request):
 
             # Si pas de planning détaillé, utiliser le champ hours
             if not schedule:
-                hours_normal = cost_entry.get('hours', 0)
+                hours_sent = cost_entry.get('hours', 0)
+                
+                if agent.type_paiement == 'journalier':
+                    # Pour un agent journalier : convertir les heures reçues en jours puis en heures d'affichage
+                    # Le frontend envoie 4h par créneau (Matin/Après-midi), donc 8h = 1 jour
+                    jours_travailles = hours_sent / 8  # 8h = 1 jour
+                    hours_normal = jours_travailles * 8  # Affichage en heures (8h par jour)
+                else:
+                    # Pour un agent horaire : utiliser directement les heures
+                    hours_normal = hours_sent
+                    
                 hours_samedi = 0
                 hours_dimanche = 0
                 hours_ferie = 0
@@ -1940,7 +1952,13 @@ def save_labor_costs(request):
                 # Parcours du planning pour ce chantier
                 for hour, day_data in schedule.items():
                     for day, chantier_nom in day_data.items():
-                        if chantier_nom != chantier_name:
+                        # Gérer le nouveau format d'objet et l'ancien format de chaîne
+                        if isinstance(chantier_nom, dict) and 'chantierName' in chantier_nom:
+                            actual_chantier_name = chantier_nom['chantierName']
+                        else:
+                            actual_chantier_name = chantier_nom
+                        
+                        if actual_chantier_name != chantier_name:
                             continue
                         day_index = days_of_week.index(day)
                         lundi = datetime.strptime(f'{year}-W{int(week):02d}-1', "%Y-W%W-%w")
@@ -1948,36 +1966,67 @@ def save_labor_costs(request):
                         date_str = date_creneau.strftime("%Y-%m-%d")
 
                         if date_creneau in fr_holidays:
-                            hours_ferie += 1
+                            if agent.type_paiement == 'journalier':
+                                hours_ferie += 4  # 4h par créneau pour journalier
+                                hours_to_log = 4
+                            else:
+                                hours_ferie += 1  # 1h par créneau pour horaire
+                                hours_to_log = 1
                             details_majoration.append({
                                 "date": date_str,
                                 "type": "ferie",
-                                "hours": 1,
+                                "hours": hours_to_log,
                                 "taux": 1.5
                             })
                         elif day == "Samedi":
-                            hours_samedi += 1
+                            if agent.type_paiement == 'journalier':
+                                hours_samedi += 4  # 4h par créneau pour journalier
+                                hours_to_log = 4
+                            else:
+                                hours_samedi += 1  # 1h par créneau pour horaire
+                                hours_to_log = 1
                             details_majoration.append({
                                 "date": date_str,
                                 "type": "samedi",
-                                "hours": 1,
+                                "hours": hours_to_log,
                                 "taux": 1.25
                             })
                         elif day == "Dimanche":
-                            hours_dimanche += 1
+                            if agent.type_paiement == 'journalier':
+                                hours_dimanche += 4  # 4h par créneau pour journalier
+                                hours_to_log = 4
+                            else:
+                                hours_dimanche += 1  # 1h par créneau pour horaire
+                                hours_to_log = 1
                             details_majoration.append({
                                 "date": date_str,
                                 "type": "dimanche",
-                                "hours": 1,
+                                "hours": hours_to_log,
                                 "taux": 1.5
                             })
                         else:
-                            hours_normal += 1
+                            if agent.type_paiement == 'journalier':
+                                # Pour un agent journalier : Matin ou Après-midi = 4 heures
+                                hours_normal += 4
+                            else:
+                                # Pour un agent horaire : 1 heure par créneau
+                                hours_normal += 1
 
-            cost_normal = hours_normal * taux_horaire
-            cost_samedi = hours_samedi * taux_horaire * 1.25
-            cost_dimanche = hours_dimanche * taux_horaire * 1.5
-            cost_ferie = hours_ferie * taux_horaire * 1.5
+            if agent.type_paiement == 'journalier':
+                # Pour un agent journalier : calculer le coût basé sur les jours travaillés
+                jours_travailles = hours_normal / 8  # Convertir les heures d'affichage en jours
+                cost_normal = jours_travailles * (agent.taux_journalier or 0)
+                # Pour les majorations, utiliser le taux horaire équivalent
+                taux_horaire_equiv = (agent.taux_journalier or 0) / 8
+                cost_samedi = hours_samedi * taux_horaire_equiv * 1.25
+                cost_dimanche = hours_dimanche * taux_horaire_equiv * 1.5
+                cost_ferie = hours_ferie * taux_horaire_equiv * 1.5
+            else:
+                # Pour un agent horaire : utiliser le taux horaire
+                cost_normal = hours_normal * taux_horaire
+                cost_samedi = hours_samedi * taux_horaire * 1.25
+                cost_dimanche = hours_dimanche * taux_horaire * 1.5
+                cost_ferie = hours_ferie * taux_horaire * 1.5
 
             obj, created = LaborCost.objects.update_or_create(
                 agent=agent,
@@ -7215,7 +7264,16 @@ class RecapFinancierChantierAPIView(APIView):
             
             agent_id = s.agent.id
             agent_nom = f"{s.agent.name} {s.agent.surname}"
-            taux_horaire = s.agent.taux_Horaire or 0
+            
+            # Gestion des agents journaliers vs horaires
+            is_journalier = s.agent.type_paiement == 'journalier'
+            if is_journalier:
+                taux_horaire = (s.agent.taux_journalier or 0) / 8  # Convertir en taux horaire
+                heures_increment = 4  # Matin/Après-midi = 4h chacun
+            else:
+                taux_horaire = s.agent.taux_Horaire or 0
+                heures_increment = 1  # 1h par créneau
+                
             processed_count += 1
             
             if agent_id not in agent_map:
@@ -7227,23 +7285,37 @@ class RecapFinancierChantierAPIView(APIView):
                     'montant': 0,
                     'date': f"{annee}-{str(mois).zfill(2)}-01" if mois and annee else None,
                     'statut': 'à payer',  # Par défaut, la main d'œuvre est à payer
+                    'type_paiement': s.agent.type_paiement,  # Ajouter le type d'agent
                 }
             
             # Déterminer le type de jour et calculer le montant
             if date_creneau in fr_holidays:
-                agent_map[agent_id]['heures'] += 1
-                agent_map[agent_id]['montant'] += taux_horaire * 1.5
+                agent_map[agent_id]['heures'] += heures_increment
+                agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
             elif s.day == "Samedi":
-                agent_map[agent_id]['heures'] += 1
-                agent_map[agent_id]['montant'] += taux_horaire * 1.25
+                agent_map[agent_id]['heures'] += heures_increment
+                agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.25
             elif s.day == "Dimanche":
-                agent_map[agent_id]['heures'] += 1
-                agent_map[agent_id]['montant'] += taux_horaire * 1.5
+                agent_map[agent_id]['heures'] += heures_increment
+                agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
             else:
-                agent_map[agent_id]['heures'] += 1
-                agent_map[agent_id]['montant'] += taux_horaire
+                agent_map[agent_id]['heures'] += heures_increment
+                agent_map[agent_id]['montant'] += taux_horaire * heures_increment
         
 
+        
+        # Convertir les heures en jours pour les agents journaliers (pour l'affichage)
+        for agent_data in agent_map.values():
+            if agent_data['type_paiement'] == 'journalier':
+                # Convertir 8h = 1j pour l'affichage
+                jours = agent_data['heures'] / 8
+                if jours == int(jours):  # Si c'est un nombre entier de jours
+                    agent_data['heures_affichage'] = f"{int(jours)}j"
+                else:  # Si c'est une fraction de jour
+                    agent_data['heures_affichage'] = f"{jours:.1f}j"
+            else:
+                # Pour les agents horaires, garder l'affichage en heures
+                agent_data['heures_affichage'] = f"{int(agent_data['heures'])}h"
         
         main_oeuvre_total = sum(a['montant'] for a in agent_map.values())
         main_oeuvre_documents = list(agent_map.values())
@@ -7599,11 +7671,11 @@ def schedule_monthly_summary(request):
         if is_journalier:
             # Pour les agents journaliers : 0.5 jour = 4h équivalent
             heures_increment = 4
-            taux_horaire = (s.agent.taux_journalier or 0) / 2  # Demi-journée
+            taux_horaire = (s.agent.taux_journalier or 0) / 8  # Convertir en taux horaire
         else:
             # Pour les agents horaires : 1 créneau = 1h
             heures_increment = 1
-        taux_horaire = s.agent.taux_Horaire or 0
+            taux_horaire = s.agent.taux_Horaire or 0
 
         key = (agent_id, chantier_id)
         if key not in result:
@@ -7627,7 +7699,7 @@ def schedule_monthly_summary(request):
         # Déterminer le type de jour
         if date_creneau in fr_holidays:
             result[key]['heures_ferie'] += heures_increment
-            result[key]['montant_ferie'] += taux_horaire * 1.5
+            result[key]['montant_ferie'] += taux_horaire * heures_increment * 1.5
             result[key]['jours_majoration'].append({
                 'date': date_creneau.strftime("%Y-%m-%d"),
                 'type': 'ferie',
@@ -7636,7 +7708,7 @@ def schedule_monthly_summary(request):
             })
         elif s.day == "Samedi":
             result[key]['heures_samedi'] += heures_increment
-            result[key]['montant_samedi'] += taux_horaire * 1.25
+            result[key]['montant_samedi'] += taux_horaire * heures_increment * 1.25
             result[key]['jours_majoration'].append({
                 'date': date_creneau.strftime("%Y-%m-%d"),
                 'type': 'samedi',
@@ -7645,7 +7717,7 @@ def schedule_monthly_summary(request):
             })
         elif s.day == "Dimanche":
             result[key]['heures_dimanche'] += heures_increment
-            result[key]['montant_dimanche'] += taux_horaire * 1.5
+            result[key]['montant_dimanche'] += taux_horaire * heures_increment * 1.5
             result[key]['jours_majoration'].append({
                 'date': date_creneau.strftime("%Y-%m-%d"),
                 'type': 'dimanche',
@@ -7654,7 +7726,7 @@ def schedule_monthly_summary(request):
             })
         else:
             result[key]['heures_normal'] += heures_increment
-            result[key]['montant_normal'] += taux_horaire
+            result[key]['montant_normal'] += taux_horaire * heures_increment
 
     # Regrouper par chantier pour l'affichage
     chantier_map = {}

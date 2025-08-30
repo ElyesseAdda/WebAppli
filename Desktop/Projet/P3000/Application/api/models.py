@@ -849,25 +849,42 @@ def recalculate_labor_costs_for_period(week=None, year=None, agent_id=None, chan
     if chantier_id:
         schedules = schedules.filter(chantier_id=chantier_id)
 
+    # Regrouper par agent/chantier/semaine/année
     data = {}
     for s in schedules:
         key = (s.agent_id, s.chantier_id, s.week, s.year)
         data.setdefault(key, 0)
-        data[key] += 1
+        
+        agent = Agent.objects.get(id=s.agent_id)
+        if agent.type_paiement == 'journalier':
+            # Pour les agents journaliers : Matin ou Après-midi = 0.5 jour
+            data[key] += 0.5
+        else:
+            # Pour les agents horaires : 1 heure par créneau
+            data[key] += 1
 
-    from .models import Agent, Chantier, LaborCost  # Import local pour éviter la boucle
-    for (agent_id, chantier_id, week, year), hours in data.items():
+    # Pas besoin d'importer - nous sommes déjà dans models.py
+    for (agent_id, chantier_id, week, year), hours_or_days in data.items():
         agent = Agent.objects.get(id=agent_id)
         chantier = Chantier.objects.get(id=chantier_id)
-        # Ici, on suppose que toutes les heures sont normales (à adapter si planning détaillé)
+        
+        if agent.type_paiement == 'journalier':
+            # Pour les agents journaliers : hours_or_days représente des jours
+            cost = hours_or_days * (agent.taux_journalier or 0)
+            hours_for_display = hours_or_days * 8  # 8h par jour
+        else:
+            # Pour les agents horaires : hours_or_days représente des heures
+            cost = hours_or_days * (agent.taux_Horaire or 0)
+            hours_for_display = hours_or_days
+        
         LaborCost.objects.update_or_create(
             agent=agent, chantier=chantier, week=week, year=year,
             defaults={
-                'hours_normal': hours,
+                'hours_normal': hours_for_display,
                 'hours_samedi': 0,
                 'hours_dimanche': 0,
                 'hours_ferie': 0,
-                'cost_normal': hours * (agent.taux_Horaire or 0),
+                'cost_normal': cost,
                 'cost_samedi': 0,
                 'cost_dimanche': 0,
                 'cost_ferie': 0,

@@ -317,7 +317,6 @@ const PlanningHebdoAgent = ({
       }
     }
 
-    console.log("getCellRange result:", range);
     return range;
   };
 
@@ -325,7 +324,7 @@ const PlanningHebdoAgent = ({
   const handleCellDoubleClick = (hour, day, event) => {
     event.preventDefault();
     event.stopPropagation();
-    console.log("Double-click detected");
+
     const newCell = { hour, day };
     setSelectedCells([newCell]);
     setLastSelectedCell(newCell);
@@ -350,8 +349,6 @@ const PlanningHebdoAgent = ({
 
     // Stocker dans une ref ou variable temporaire
     window.tempCellInfo = cellInfo;
-
-
   };
 
   // Gestionnaire pour onMouseUp pour traiter la sélection
@@ -369,8 +366,6 @@ const PlanningHebdoAgent = ({
     delete window.tempCellInfo;
 
     const newCell = { hour, day };
-
-
 
     if (cellInfo.ctrlKey || cellInfo.metaKey) {
       // Ctrl/Cmd + clic : ajouter/supprimer de la sélection
@@ -394,27 +389,17 @@ const PlanningHebdoAgent = ({
       });
     } else if (cellInfo.shiftKey && lastSelectedCell) {
       // Shift + clic : sélection de plage depuis la dernière cellule sélectionnée
-      console.log("SHIFT click detected");
-      console.log(
-        "Shift+click range selection from",
-        lastSelectedCell,
-        "to",
-        newCell
-      );
       const range = getCellRange(lastSelectedCell, newCell);
-      console.log("Range calculated:", range);
       setSelectedCells(range);
       // Ne pas changer lastSelectedCell pour permettre des extensions de sélection
     } else if (cellInfo.shiftKey && !lastSelectedCell) {
       // Shift sans cellule de référence - traiter comme un clic simple
-      console.log(
-        "SHIFT click without reference cell, treating as simple click"
-      );
+
       setSelectedCells([newCell]);
       setLastSelectedCell(newCell);
     } else {
       // Clic simple : nouvelle sélection
-      console.log("Simple click, new selection");
+
       setSelectedCells([newCell]);
       setLastSelectedCell(newCell);
     }
@@ -516,10 +501,6 @@ const PlanningHebdoAgent = ({
       return;
     }
 
-    console.log("Assignation du chantier:", selectedChantier.chantier_name);
-    console.log("Cellules sélectionnées:", selectedCells);
-    console.log("SAV:", isSav);
-
     try {
       const updates = selectedCells.map((cell) => {
         // Calculer la date réelle du créneau
@@ -542,13 +523,10 @@ const PlanningHebdoAgent = ({
           isSav: isSav, // Ajouter le paramètre SAV
         };
 
-        console.log("Données d'assignation:", update);
         return update;
       });
 
-      console.log("Envoi de la requête d'assignation:", updates);
       const response = await axios.post("/api/assign_chantier/", updates);
-      console.log("Réponse d'assignation:", response.data);
 
       // Mettre à jour le state schedule localement
       setSchedule((prevSchedule) => {
@@ -605,8 +583,6 @@ const PlanningHebdoAgent = ({
     );
     if (!confirmation) return;
 
-    console.log("Suppression des cellules:", selectedCells);
-
     // Préparer les données à envoyer
     const deletions = selectedCells.map((cell) => {
       // Calculer la date réelle du créneau
@@ -627,17 +603,14 @@ const PlanningHebdoAgent = ({
         hour: cell.hour,
       };
 
-      console.log("Données de suppression:", deletion);
       return deletion;
     });
 
     try {
-      console.log("Envoi de la requête de suppression:", deletions);
       const deleteResponse = await axios.post(
         "/api/delete_schedule/",
         deletions
       );
-      console.log("Réponse de suppression:", deleteResponse.data);
 
       // Recalculer les coûts de main d'œuvre pour tout le mois (nouveau endpoint)
       const { month, year } = getCurrentMonthYear();
@@ -884,7 +857,6 @@ const PlanningHebdoAgent = ({
   // Nettoyer les informations temporaires si la souris sort du tableau
   const handleTableMouseLeave = () => {
     if (window.tempCellInfo) {
-      console.log("Mouse left table, cleaning temp cell info");
       delete window.tempCellInfo;
     }
   };
