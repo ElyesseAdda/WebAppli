@@ -1965,51 +1965,36 @@ def save_labor_costs(request):
                         date_creneau = lundi + timedelta(days=day_index)
                         date_str = date_creneau.strftime("%Y-%m-%d")
 
-                        if date_creneau in fr_holidays:
-                            if agent.type_paiement == 'journalier':
-                                hours_ferie += 4  # 4h par créneau pour journalier
-                                hours_to_log = 4
-                            else:
-                                hours_ferie += 1  # 1h par créneau pour horaire
-                                hours_to_log = 1
-                            details_majoration.append({
-                                "date": date_str,
-                                "type": "ferie",
-                                "hours": hours_to_log,
-                                "taux": 1.5
-                            })
-                        elif day == "Samedi":
-                            if agent.type_paiement == 'journalier':
-                                hours_samedi += 4  # 4h par créneau pour journalier
-                                hours_to_log = 4
-                            else:
-                                hours_samedi += 1  # 1h par créneau pour horaire
-                                hours_to_log = 1
-                            details_majoration.append({
-                                "date": date_str,
-                                "type": "samedi",
-                                "hours": hours_to_log,
-                                "taux": 1.25
-                            })
-                        elif day == "Dimanche":
-                            if agent.type_paiement == 'journalier':
-                                hours_dimanche += 4  # 4h par créneau pour journalier
-                                hours_to_log = 4
-                            else:
-                                hours_dimanche += 1  # 1h par créneau pour horaire
-                                hours_to_log = 1
-                            details_majoration.append({
-                                "date": date_str,
-                                "type": "dimanche",
-                                "hours": hours_to_log,
-                                "taux": 1.5
-                            })
+                        if agent.type_paiement == 'journalier':
+                            # Pour les agents journaliers : toujours taux normal, peu importe le jour
+                            hours_normal += 4  # Matin ou Après-midi = 4 heures
                         else:
-                            if agent.type_paiement == 'journalier':
-                                # Pour un agent journalier : Matin ou Après-midi = 4 heures
-                                hours_normal += 4
+                            # Pour les agents horaires : appliquer les majorations
+                            if date_creneau in fr_holidays:
+                                hours_ferie += 1
+                                details_majoration.append({
+                                    "date": date_str,
+                                    "type": "ferie",
+                                    "hours": 1,
+                                    "taux": 1.5
+                                })
+                            elif day == "Samedi":
+                                hours_samedi += 1
+                                details_majoration.append({
+                                    "date": date_str,
+                                    "type": "samedi",
+                                    "hours": 1,
+                                    "taux": 1.25
+                                })
+                            elif day == "Dimanche":
+                                hours_dimanche += 1
+                                details_majoration.append({
+                                    "date": date_str,
+                                    "type": "dimanche",
+                                    "hours": 1,
+                                    "taux": 1.5
+                                })
                             else:
-                                # Pour un agent horaire : 1 heure par créneau
                                 hours_normal += 1
 
             if agent.type_paiement == 'journalier':
@@ -7289,18 +7274,24 @@ class RecapFinancierChantierAPIView(APIView):
                 }
             
             # Déterminer le type de jour et calculer le montant
-            if date_creneau in fr_holidays:
-                agent_map[agent_id]['heures'] += heures_increment
-                agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
-            elif s.day == "Samedi":
-                agent_map[agent_id]['heures'] += heures_increment
-                agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.25
-            elif s.day == "Dimanche":
-                agent_map[agent_id]['heures'] += heures_increment
-                agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
-            else:
+            if is_journalier:
+                # Pour les agents journaliers : toujours taux normal, peu importe le jour
                 agent_map[agent_id]['heures'] += heures_increment
                 agent_map[agent_id]['montant'] += taux_horaire * heures_increment
+            else:
+                # Pour les agents horaires : appliquer les majorations
+                if date_creneau in fr_holidays:
+                    agent_map[agent_id]['heures'] += heures_increment
+                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
+                elif s.day == "Samedi":
+                    agent_map[agent_id]['heures'] += heures_increment
+                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.25
+                elif s.day == "Dimanche":
+                    agent_map[agent_id]['heures'] += heures_increment
+                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment * 1.5
+                else:
+                    agent_map[agent_id]['heures'] += heures_increment
+                    agent_map[agent_id]['montant'] += taux_horaire * heures_increment
         
 
         
@@ -7697,36 +7688,42 @@ def schedule_monthly_summary(request):
             }
 
         # Déterminer le type de jour
-        if date_creneau in fr_holidays:
-            result[key]['heures_ferie'] += heures_increment
-            result[key]['montant_ferie'] += taux_horaire * heures_increment * 1.5
-            result[key]['jours_majoration'].append({
-                'date': date_creneau.strftime("%Y-%m-%d"),
-                'type': 'ferie',
-                'hours': heures_increment,
-                'taux': 1.5
-            })
-        elif s.day == "Samedi":
-            result[key]['heures_samedi'] += heures_increment
-            result[key]['montant_samedi'] += taux_horaire * heures_increment * 1.25
-            result[key]['jours_majoration'].append({
-                'date': date_creneau.strftime("%Y-%m-%d"),
-                'type': 'samedi',
-                'hours': heures_increment,
-                'taux': 1.25
-            })
-        elif s.day == "Dimanche":
-            result[key]['heures_dimanche'] += heures_increment
-            result[key]['montant_dimanche'] += taux_horaire * heures_increment * 1.5
-            result[key]['jours_majoration'].append({
-                'date': date_creneau.strftime("%Y-%m-%d"),
-                'type': 'dimanche',
-                'hours': heures_increment,
-                'taux': 1.5
-            })
-        else:
+        if is_journalier:
+            # Pour les agents journaliers : toujours taux normal, peu importe le jour
             result[key]['heures_normal'] += heures_increment
             result[key]['montant_normal'] += taux_horaire * heures_increment
+        else:
+            # Pour les agents horaires : appliquer les majorations
+            if date_creneau in fr_holidays:
+                result[key]['heures_ferie'] += heures_increment
+                result[key]['montant_ferie'] += taux_horaire * heures_increment * 1.5
+                result[key]['jours_majoration'].append({
+                    'date': date_creneau.strftime("%Y-%m-%d"),
+                    'type': 'ferie',
+                    'hours': heures_increment,
+                    'taux': 1.5
+                })
+            elif s.day == "Samedi":
+                result[key]['heures_samedi'] += heures_increment
+                result[key]['montant_samedi'] += taux_horaire * heures_increment * 1.25
+                result[key]['jours_majoration'].append({
+                    'date': date_creneau.strftime("%Y-%m-%d"),
+                    'type': 'samedi',
+                    'hours': heures_increment,
+                    'taux': 1.25
+                })
+            elif s.day == "Dimanche":
+                result[key]['heures_dimanche'] += heures_increment
+                result[key]['montant_dimanche'] += taux_horaire * heures_increment * 1.5
+                result[key]['jours_majoration'].append({
+                    'date': date_creneau.strftime("%Y-%m-%d"),
+                    'type': 'dimanche',
+                    'hours': heures_increment,
+                    'taux': 1.5
+                })
+            else:
+                result[key]['heures_normal'] += heures_increment
+                result[key]['montant_normal'] += taux_horaire * heures_increment
 
     # Regrouper par chantier pour l'affichage
     chantier_map = {}

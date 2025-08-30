@@ -284,10 +284,23 @@ const RecapCategoryDetails = ({
                                 ? ` (${Math.abs(doc.retard)}j avance)`
                                 : "")
                             : col.key === "heures" && doc.heures !== undefined
-                            ? doc.heures_affichage ||
-                              Number(doc.heures).toLocaleString("fr-FR", {
-                                minimumFractionDigits: 2,
-                              })
+                            ? (() => {
+                                // Pour les agents journaliers, convertir les heures en jours
+                                // On détecte un agent journalier si les heures sont un multiple de 8 et >= 8
+                                const heures = Number(doc.heures);
+                                if (heures >= 8 && heures % 8 === 0) {
+                                  const jours = heures / 8;
+                                  return jours === 1 ? "1j" : `${jours}j`;
+                                }
+                                // Demi-journées (4h) pour agents journaliers
+                                if (heures === 4) {
+                                  return "0.5j";
+                                }
+                                // Pour les autres cas (agents horaires)
+                                return heures.toLocaleString("fr-FR", {
+                                  minimumFractionDigits: 2,
+                                });
+                              })()
                             : col.key === "date" && doc.date
                             ? (() => {
                                 const d = new Date(doc.date);
