@@ -1083,3 +1083,45 @@ def rename_local_item(old_path, new_name):
     except Exception as e:
         print(f"Erreur lors du renommage local: {e}")
         return False, None
+
+def upload_file_to_s3(local_file_path: str, s3_file_path: str) -> bool:
+    """
+    Upload un fichier local vers AWS S3
+    
+    Args:
+        local_file_path: Chemin du fichier local
+        s3_file_path: Chemin du fichier dans S3
+        
+    Returns:
+        bool: True si l'upload a réussi, False sinon
+    """
+    try:
+        if not is_s3_available():
+            print(f"❌ AWS S3 non disponible pour l'upload de {local_file_path}")
+            return False
+        
+        s3_client = get_s3_client()
+        bucket_name = get_s3_bucket_name()
+        
+        # Vérifier que le fichier local existe
+        if not os.path.exists(local_file_path):
+            print(f"❌ Fichier local introuvable: {local_file_path}")
+            return False
+        
+        # Upload du fichier
+        print(f"🚀 Upload de {local_file_path} vers S3: {s3_file_path}")
+        
+        with open(local_file_path, 'rb') as file:
+            s3_client.upload_fileobj(
+                file,
+                bucket_name,
+                s3_file_path,
+                ExtraArgs={'ContentType': 'application/pdf'}
+            )
+        
+        print(f"✅ Fichier uploadé avec succès: {s3_file_path}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de l'upload vers S3: {str(e)}")
+        return False

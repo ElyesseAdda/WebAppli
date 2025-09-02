@@ -19,19 +19,38 @@ class DriveAutomation:
     Classe pour automatiser les opérations du drive
     """
     
-    # Structure des dossiers
-    SUBFOLDERS = [
+    # Structure des dossiers pour les appels d'offres
+    APPEL_OFFRES_SUBFOLDERS = [
+        "Devis",
+        "Devis_Marche",  # Dossier spécifique pour les devis de marché
+        "DCE",           # Dossier des Cahiers des Charges
+        "Plans",
+        "Photos",
+        "Documents_Techniques"
+    ]
+    
+    # Structure des dossiers pour les chantiers
+    CHANTIER_SUBFOLDERS = [
         "Devis",
         "Devis TS", 
         "Situation",
         "Avenant",
         "Sous Traitant",
-        "Facture"
+        "Facture",
+        "Planning",
+        "Photos_Chantier",
+        "Documents_Execution"
     ]
     
     def __init__(self):
-        self.appels_offres_root = "Appels d'offres"
-        self.chantiers_root = "Chantiers"
+        self.appels_offres_root = "Appels_Offres"
+        self.chantiers_root = "Sociétés"  # Changé de "Chantiers" vers "Sociétés"
+    
+    def custom_slugify(self, text: str) -> str:
+        """
+        Méthode utilitaire pour slugifier le texte (compatibilité avec l'ancien code)
+        """
+        return custom_slugify(text)
     
     def create_societe_folder_if_not_exists(self, societe_name: str, root_path: str) -> str:
         """
@@ -55,6 +74,79 @@ class DriveAutomation:
         
         return societe_path
     
+    def create_appel_offres_structure(self, appel_offres_id: int, societe_name: str, appel_offres_name: str) -> str:
+        """
+        Crée la structure complète pour un appel d'offres
+        
+        Args:
+            appel_offres_id: ID de l'appel d'offres
+            societe_name: Nom de la société
+            appel_offres_name: Nom de l'appel d'offres
+            
+        Returns:
+            str: Chemin complet créé
+        """
+        try:
+            # Créer le dossier société s'il n'existe pas
+            societe_path = self.create_societe_folder_if_not_exists(societe_name, self.appels_offres_root)
+            
+            # Créer le dossier de l'appel d'offres avec format: 001_Nom_Appel_Offre
+            appel_offres_folder = f"{appel_offres_id:03d}_{custom_slugify(appel_offres_name)}"
+            appel_offres_path = f"{societe_path}/{appel_offres_folder}"
+            
+            # Créer le dossier principal de l'appel d'offres
+            success = create_s3_folder_recursive(appel_offres_path)
+            if not success:
+                raise Exception(f"Impossible de créer le dossier appel d'offres: {appel_offres_path}")
+            
+            # Créer tous les sous-dossiers spécifiques aux appels d'offres
+            for subfolder in self.APPEL_OFFRES_SUBFOLDERS:
+                subfolder_path = f"{appel_offres_path}/{subfolder}"
+                success = create_s3_folder_recursive(subfolder_path)
+                if not success:
+                    print(f"⚠️  Impossible de créer le sous-dossier: {subfolder_path}")
+                    # Continuer avec les autres dossiers
+                else:
+                    print(f"✅ Dossier créé: {subfolder_path}")
+            
+            print(f"🎯 Structure d'appel d'offres créée: {appel_offres_path}")
+            return appel_offres_path
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la création de la structure d'appel d'offres: {str(e)}")
+            raise
+    
+    def create_chantier_structure(self, societe_name: str, chantier_name: str) -> str:
+        """
+        Crée la structure complète pour un chantier
+        """
+        try:
+            # Créer le dossier société s'il n'existe pas
+            societe_path = self.create_societe_folder_if_not_exists(societe_name, self.chantiers_root)
+            
+            # Créer le dossier chantier
+            chantier_path = f"{societe_path}/{custom_slugify(chantier_name)}"
+            success = create_s3_folder_recursive(chantier_path)
+            if not success:
+                raise Exception(f"Impossible de créer le dossier chantier: {chantier_path}")
+            
+            # Créer tous les sous-dossiers spécifiques aux chantiers
+            for subfolder in self.CHANTIER_SUBFOLDERS:
+                subfolder_path = f"{chantier_path}/{subfolder}"
+                success = create_s3_folder_recursive(subfolder_path)
+                if not success:
+                    print(f"⚠️  Impossible de créer le sous-dossier: {subfolder_path}")
+                    # Continuer avec les autres dossiers
+                else:
+                    print(f"✅ Dossier créé: {subfolder_path}")
+            
+            print(f"🏗️  Structure de chantier créée: {chantier_path}")
+            return chantier_path
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la création de la structure de chantier: {str(e)}")
+            raise
+    
     def create_project_structure(self, societe_name: str, project_name: str, root_path: str) -> str:
         """
         Crée la structure complète d'un projet (appel d'offres ou chantier)
@@ -69,7 +161,7 @@ class DriveAutomation:
             raise Exception(f"Impossible de créer le dossier projet: {project_path}")
         
         # Créer tous les sous-dossiers
-        for subfolder in self.SUBFOLDERS:
+        for subfolder in self.CHANTIER_SUBFOLDERS:
             subfolder_path = f"{project_path}/{subfolder}"
             success = create_s3_folder_recursive(subfolder_path)
             if not success:
@@ -77,17 +169,77 @@ class DriveAutomation:
         
         return project_path
     
-    def create_appel_offres_structure(self, societe_name: str, appel_offres_name: str) -> str:
+    def transfer_appel_offres_to_chantier(self, appel_offres_id: int, societe_name: str, appel_offres_name: str, chantier_name: str) -> bool:
         """
-        Crée la structure pour un appel d'offres
+        Transfère un appel d'offres vers un chantier
+        
+        Args:
+            appel_offres_id: ID de l'appel d'offres
+            societe_name: Nom de la société
+            appel_offres_name: Nom de l'appel d'offres
+            chantier_name: Nom du chantier
+            
+        Returns:
+            bool: True si le transfert a réussi
         """
-        return self.create_project_structure(societe_name, appel_offres_name, self.appels_offres_root)
-    
-    def create_chantier_structure(self, societe_name: str, chantier_name: str) -> str:
-        """
-        Crée la structure pour un chantier
-        """
-        return self.create_project_structure(societe_name, chantier_name, self.chantiers_root)
+        try:
+            print(f"🔄 Début du transfert: Appel d'offres {appel_offres_id} → Chantier {chantier_name}")
+            
+            # Chemins source et destination
+            source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{appel_offres_id:03d}_{custom_slugify(appel_offres_name)}"
+            dest_societe_path = f"{self.chantiers_root}/{custom_slugify(societe_name)}"
+            dest_chantier_path = f"{dest_societe_path}/{custom_slugify(chantier_name)}"
+            
+            # Créer la structure de destination du chantier
+            self.create_chantier_structure(societe_name, chantier_name)
+            
+            # Lister tout le contenu du projet source
+            content = list_s3_folder_content(source_path)
+            
+            print(f"📁 Contenu à transférer: {len(content['files'])} fichiers, {len(content['folders'])} dossiers")
+            
+            # Transférer tous les fichiers
+            for file in content['files']:
+                source_file_path = f"{source_path}/{file['name']}"
+                dest_file_path = f"{dest_chantier_path}/{file['name']}"
+                move_s3_file(source_file_path, dest_file_path)
+                print(f"📄 Fichier transféré: {file['name']}")
+            
+            # Transférer tous les dossiers (y compris les dossiers custom)
+            for folder in content['folders']:
+                source_folder_path = f"{source_path}/{folder['name']}"
+                dest_folder_path = f"{dest_chantier_path}/{folder['name']}"
+                
+                # Créer le dossier de destination
+                create_s3_folder_recursive(dest_folder_path)
+                
+                # Transférer le contenu du dossier
+                folder_content = list_s3_folder_content(source_folder_path)
+                
+                for subfile in folder_content['files']:
+                    source_subfile_path = f"{source_folder_path}/{subfile['name']}"
+                    dest_subfile_path = f"{dest_folder_path}/{subfile['name']}"
+                    move_s3_file(source_subfile_path, dest_subfile_path)
+                    print(f"📄 Sous-fichier transféré: {folder['name']}/{subfile['name']}")
+                
+                # Transférer les sous-dossiers récursivement
+                for subfolder in folder_content['folders']:
+                    self._transfer_folder_recursive(
+                        f"{source_folder_path}/{subfolder['name']}",
+                        f"{dest_folder_path}/{subfolder['name']}"
+                    )
+                    print(f"📁 Sous-dossier transféré: {folder['name']}/{subfolder['name']}")
+            
+            # Supprimer le dossier source (appel d'offres)
+            self._delete_folder_recursive(source_path)
+            print(f"🗑️  Dossier source supprimé: {source_path}")
+            
+            print(f"✅ Transfert réussi: {source_path} → {dest_chantier_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erreur lors du transfert: {str(e)}")
+            return False
     
     def save_document_to_folder(self, document_path: str, target_folder: str, filename: str) -> bool:
         """

@@ -525,11 +525,11 @@ def generate_pdf_from_preview(request):
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
         logger.debug(f"Preview URL: {preview_url}")
 
-        # Chemin vers le script Puppeteer
+            # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
         logger.debug(f"Node script path: {node_script_path}")
 
-        # Commande pour exécuter Puppeteer avec Node.js
+            # Commande pour exécuter Puppeteer avec Node.js
         command = ['node', node_script_path, preview_url]
         logger.debug(f"Commande: {command}")
 
@@ -543,17 +543,17 @@ def generate_pdf_from_preview(request):
         logger.debug(f"Sortie standard: {result.stdout}")
         logger.debug(f"Sortie d'erreur: {result.stderr}")
 
-        # Lire le fichier PDF généré
+            # Lire le fichier PDF généré
         pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
         logger.debug(f"Chemin du PDF: {pdf_path}")
         logger.debug(f"Le fichier existe: {os.path.exists(pdf_path)}")
 
         if os.path.exists(pdf_path):
-            with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
-            logger.info("PDF généré avec succès")
-            return response
+                with open(pdf_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                    response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+                    logger.info("PDF généré avec succès")
+                return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
             logger.error(error_msg)
@@ -6906,7 +6906,7 @@ def planning_hebdo_pdf(request):
             response = HttpResponse(pdf_file.read(), content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="planning_hebdo_agents_semaine_{week}_{year}.pdf"'
             return response
-            
+    
     except subprocess.TimeoutExpired:
         error_msg = 'Timeout lors de la génération du PDF (60 secondes)'
         print(f"ERREUR: {error_msg}")

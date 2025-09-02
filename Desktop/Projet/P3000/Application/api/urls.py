@@ -80,6 +80,16 @@ from .views import (
     PaiementFactureSousTraitantViewSet,
 )
 
+# Import des nouvelles vues PDF avec stockage AWS S3
+from .pdf_views import (
+    planning_hebdo_pdf_drive,
+    generate_monthly_agents_pdf_drive,
+    generate_devis_travaux_pdf_drive,
+    generate_devis_marche_pdf_drive,
+    download_pdf_from_s3,
+    list_pdfs_in_drive,
+)
+
 # Import des vues d'authentification
 from .auth_views import login_view, logout_view, check_auth_view, create_user_view
 
@@ -322,4 +332,17 @@ urlpatterns += [
     path('drive-complete/rename-item/', DriveCompleteViewSet.as_view({
         'post': 'rename_item'
     }), name='drive-complete-rename-item'),
+]
+
+# --- URLs POUR LES NOUVELLES VUES PDF AVEC STOCKAGE AWS S3 ---
+urlpatterns += [
+    # Vues PDF avec stockage automatique dans AWS S3
+    path('planning-hebdo-pdf-drive/', planning_hebdo_pdf_drive, name='planning_hebdo_pdf_drive'),
+    path('generate-monthly-agents-pdf-drive/', generate_monthly_agents_pdf_drive, name='generate_monthly_agents_pdf_drive'),
+    path('generate-devis-travaux-pdf-drive/', generate_devis_travaux_pdf_drive, name='generate_devis_travaux_pdf_drive'),
+    path('generate-devis-marche-pdf-drive/', generate_devis_marche_pdf_drive, name='generate_devis_marche_pdf_drive'),
+    
+    # Vues utilitaires
+    path('download-pdf-from-s3/', download_pdf_from_s3, name='download_pdf_from_s3'),
+    path('list-pdfs-in-drive/', list_pdfs_in_drive, name='list_pdfs_in_drive'),
 ]
