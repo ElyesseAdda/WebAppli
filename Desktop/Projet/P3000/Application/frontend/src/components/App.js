@@ -1,6 +1,7 @@
+import { Box, CircularProgress } from "@mui/material";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
 import {
   Navigate,
@@ -8,6 +9,7 @@ import {
   BrowserRouter as Router,
   Routes,
 } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import "./../../static/css/app.css";
 import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
@@ -62,76 +64,18 @@ const ProtectedRoute = ({ children, isAuthenticated }) => {
 };
 
 function App() {
-  // États pour gérer l'authentification
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Vérifier l'authentification au chargement de l'application
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  // Fonction pour vérifier si l'utilisateur est connecté
-  const checkAuthStatus = async () => {
-    try {
-      const response = await fetch("/api/auth/check/", {
-        credentials: "include", // Important pour envoyer les cookies de session
-      });
-      const data = await response.json();
-
-      if (data.authenticated) {
-        // Utilisateur connecté côté serveur
-        setIsAuthenticated(true);
-        setUser(data.user);
-        localStorage.setItem("user", JSON.stringify(data.user));
-      } else {
-        // Vérifier s'il y a un utilisateur stocké localement (fallback)
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          setIsAuthenticated(true);
-        }
-      }
-    } catch (error) {
-      console.error(
-        "Erreur lors de la vérification de l'authentification:",
-        error
-      );
-      // En cas d'erreur, vérifier localStorage comme fallback
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        setIsAuthenticated(true);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Utiliser le hook d'authentification personnalisé
+  const { isAuthenticated, user, loading, checkAuth } = useAuth();
 
   // Fonction appelée après une connexion réussie
   const handleLoginSuccess = (userData) => {
-    setIsAuthenticated(true);
-    setUser(userData);
+    checkAuth(); // Vérifier l'état d'authentification
   };
 
   // Fonction pour se déconnecter
   const handleLogout = async () => {
-    try {
-      await fetch("/api/auth/logout/", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Erreur lors de la déconnexion:", error);
-    } finally {
-      // Nettoyer l'état local même si la requête échoue
-      setIsAuthenticated(false);
-      setUser(null);
-      localStorage.removeItem("user");
-    }
+    // La déconnexion est gérée par le hook useAuth
+    // Pas besoin de logique supplémentaire ici
   };
 
   // Afficher un écran de chargement pendant la vérification
@@ -139,16 +83,14 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100vh",
-          }}
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="100vh"
         >
-          <div>Chargement...</div>
-        </div>
+          <CircularProgress />
+        </Box>
       </ThemeProvider>
     );
   }

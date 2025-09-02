@@ -53,8 +53,6 @@ const Login = ({ onLoginSuccess }) => {
 
       if (response.ok) {
         setSuccess("Connexion réussie !");
-        // Stocker les informations utilisateur
-        localStorage.setItem("user", JSON.stringify(data.user));
         // Appeler la fonction de callback pour rediriger
         if (onLoginSuccess) {
           onLoginSuccess(data.user);

@@ -89,6 +89,17 @@ axiosInstance.interceptors.response.use(
       }
     }
 
+    // Gestion des erreurs d'authentification (401)
+    if (error.response && error.response.status === 401) {
+      console.log(
+        "Erreur d'authentification détectée, redirection vers login..."
+      );
+      // Rediriger vers la page de login
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
+
     console.error("Axios error:", error);
     return Promise.reject(error);
   }

@@ -8,13 +8,14 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 import json
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
     """
-    Vue de connexion
+    Vue de connexion améliorée avec gestion des cookies
     """
     try:
         data = json.loads(request.body)
@@ -32,7 +33,9 @@ def login_view(request):
         if user is not None:
             # Connecter l'utilisateur
             login(request, user)
-            return Response({
+            
+            # Créer la réponse
+            response = Response({
                 'success': True,
                 'message': 'Connexion réussie',
                 'user': {
@@ -45,6 +48,18 @@ def login_view(request):
                     'is_superuser': user.is_superuser
                 }
             })
+            
+            # Configurer les cookies de session
+            response.set_cookie(
+                'sessionid', 
+                request.session.session_key,
+                max_age=3600,  # 1 heure
+                httponly=True,
+                samesite='Lax',
+                secure=not getattr(settings, 'DEBUG', False)
+            )
+            
+            return response
         else:
             return Response({
                 'error': 'Nom d\'utilisateur ou mot de passe incorrect'
@@ -93,7 +108,7 @@ def logout_view(request):
 @permission_classes([AllowAny])
 def check_auth_view(request):
     """
-    Vérifier si l'utilisateur est connecté
+    Vérifier si l'utilisateur est connecté avec gestion des cookies
     """
     if request.user.is_authenticated:
         return Response({
@@ -110,7 +125,8 @@ def check_auth_view(request):
         })
     else:
         return Response({
-            'authenticated': False
+            'authenticated': False,
+            'user': None
         })
 
 @api_view(['POST'])

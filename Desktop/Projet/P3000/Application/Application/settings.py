@@ -71,32 +71,48 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Configuration CORS
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else ["http://localhost:3000"]
+# Configuration CORS optimisée
+CORS_ALLOWED_ORIGINS = [
+    'https://myp3000app.com',
+    'http://localhost:3000'
+] if not DEBUG else ['http://localhost:3000']
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['X-CSRFToken']
 
-# Configuration CSRF pour les API REST
-CSRF_COOKIE_SAMESITE = 'Lax'
-if DEBUG:
-    # Configuration pour le développement
-    CSRF_COOKIE_SECURE = False
-    SESSION_COOKIE_SECURE = False
-else:
-    # Configuration pour la production
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SECURE = True
-
+# Configuration CSRF simplifiée
+CSRF_COOKIE_AGE = 31449600  # 1 an
 CSRF_COOKIE_HTTPONLY = False  # Pour permettre à JS d'accéder au cookie
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com,http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["https://myp3000app.com", "http://localhost:3000"]
+CSRF_COOKIE_SECURE = not DEBUG  # HTTPS en production
+CSRF_COOKIE_SAMESITE = 'Lax'  # Protection CSRF
 CSRF_USE_SESSIONS = False
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://myp3000app.com,http://localhost:3000').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else ["https://myp3000app.com", "http://localhost:3000"]
 
-# Configuration des sessions
-SESSION_COOKIE_AGE = 3600  # 1 heure en secondes (au lieu de 4 heures)
+# Configuration des sessions améliorée
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 3600  # 1 heure en secondes
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Session expire à la fermeture du navigateur
-SESSION_SAVE_EVERY_REQUEST = True  # Sauvegarder la session à chaque requête
+SESSION_SAVE_EVERY_REQUEST = False  # Optimisation des performances
 SESSION_COOKIE_HTTPONLY = True  # Empêcher l'accès JavaScript aux cookies de session
 SESSION_COOKIE_SAMESITE = 'Lax'  # Protection CSRF
+SESSION_COOKIE_SECURE = not DEBUG  # HTTPS en production
+
+# Configuration du cache
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,  # 5 minutes
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    }
+}
+
+# Configuration des cookies de sécurité
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
 
 # Désactiver CSRF pour toutes les URLs API
 CSRF_EXEMPT_URLS = [
