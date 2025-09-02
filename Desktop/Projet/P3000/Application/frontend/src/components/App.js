@@ -65,7 +65,7 @@ const ProtectedRoute = ({ children, isAuthenticated }) => {
 
 function App() {
   // Utiliser le hook d'authentification personnalisé
-  const { isAuthenticated, user, loading, checkAuth } = useAuth();
+  const { isAuthenticated, user, loading, checkAuth, logout } = useAuth();
 
   // Fonction appelée après une connexion réussie
   const handleLoginSuccess = (userData) => {
@@ -74,8 +74,16 @@ function App() {
 
   // Fonction pour se déconnecter
   const handleLogout = async () => {
-    // La déconnexion est gérée par le hook useAuth
-    // Pas besoin de logique supplémentaire ici
+    try {
+      // Utiliser la fonction logout du hook useAuth
+      await logout();
+      // Rediriger vers la page de login
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Erreur lors de la déconnexion:", error);
+      // En cas d'erreur, forcer la redirection
+      window.location.href = "/login";
+    }
   };
 
   // Afficher un écran de chargement pendant la vérification

@@ -176,6 +176,23 @@ manage_django() {
     log_success "Gestion Django terminée"
 }
 
+# Fonction de génération de version de déploiement
+generate_deploy_version() {
+    log "🔄 Génération de la version de déploiement..."
+    
+    cd "$PROJECT_DIR"
+    source "$VENV_PATH/bin/activate"
+    
+    # Exécuter le script de génération de version
+    if [ -f "deploy_version.py" ]; then
+        log "📝 Exécution de deploy_version.py..."
+        python deploy_version.py
+        log_success "Version de déploiement générée"
+    else
+        log_warning "Script deploy_version.py non trouvé - version par défaut utilisée"
+    fi
+}
+
 # Fonction de redémarrage des services
 restart_services() {
     log "🔄 Redémarrage des services..."
@@ -244,6 +261,7 @@ main() {
     update_dependencies
     build_frontend
     manage_django
+    generate_deploy_version
     restart_services
     post_deployment_check
     

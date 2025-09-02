@@ -80,8 +80,14 @@ def logout_view(request):
     Vue de déconnexion améliorée
     """
     try:
+        # Log pour déboguer
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Déconnexion demandée pour l'utilisateur: {request.user.username if request.user.is_authenticated else 'Non authentifié'}")
+        
         # Déconnecter l'utilisateur
         logout(request)
+        logger.info("Utilisateur déconnecté côté Django")
         
         # Créer une réponse avec suppression des cookies
         response = Response({
@@ -89,14 +95,27 @@ def logout_view(request):
             'message': 'Déconnexion réussie'
         })
         
-        # Forcer la suppression des cookies de session
-        response.delete_cookie('sessionid')
-        response.delete_cookie('csrftoken')
+        # Forcer la suppression de tous les cookies de session
+        cookies_to_delete = ['sessionid', 'csrftoken']
+        for cookie_name in cookies_to_delete:
+            response.delete_cookie(cookie_name, path='/')
+            response.delete_cookie(cookie_name, path='/api/')
+            response.delete_cookie(cookie_name, domain=None)
+            
+            # Définir des cookies expirés avec tous les chemins possibles
+            response.set_cookie(
+                cookie_name, 
+                '', 
+                max_age=0, 
+                expires='Thu, 01 Jan 1970 00:00:00 GMT',
+                path='/',
+                domain=None,
+                secure=not getattr(settings, 'DEBUG', False),
+                httponly=True,
+                samesite='Lax'
+            )
         
-        # Définir des cookies expirés
-        response.set_cookie('sessionid', '', max_age=0, expires='Thu, 01 Jan 1970 00:00:00 GMT')
-        response.set_cookie('csrftoken', '', max_age=0, expires='Thu, 01 Jan 1970 00:00:00 GMT')
-        
+        logger.info("Cookies supprimés et expirés")
         return response
         
     except Exception as e:

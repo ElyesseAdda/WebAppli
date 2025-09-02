@@ -83,6 +83,9 @@ from .views import (
 # Import des vues d'authentification
 from .auth_views import login_view, logout_view, check_auth_view, create_user_view
 
+# Import de la vue de version
+from .views import app_version_view
+
 # Import de la vue CSRF
 from .csrf_views import csrf_token_view
 
@@ -232,6 +235,7 @@ urlpatterns += [
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
+    path('app-version/', app_version_view, name='app-version'),
 ] + auth_urlpatterns
 
 # Agency expense aggregates endpoints (via ViewSet actions)

@@ -1697,6 +1697,7 @@ def assign_chantier(request):
         logger.exception("Erreur imprévue lors de l'assignation du chantier.")
         return Response({'error': 'Une erreur imprévue est survenue.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 @api_view(['GET'])
 def get_schedule(request):
     """
@@ -8714,4 +8715,79 @@ def get_emetteurs(request):
         return Response(serializer.data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def app_version_view(request):
+    """
+    Endpoint pour récupérer la version de l'application
+    """
+    import os
+    import json
+    from pathlib import Path
+    
+    # Chemin vers le fichier de version de déploiement
+    project_root = Path(__file__).parent.parent
+    version_file = project_root / 'deploy_version.json'
+    
+    # Si le fichier de version existe, l'utiliser
+    if version_file.exists():
+        try:
+            with open(version_file, 'r', encoding='utf-8') as f:
+                version_data = json.load(f)
+            
+            return Response({
+                'version': version_data['version'],
+                'deploy_date': version_data['deploy_date'],
+                'deploy_timestamp': version_data['deploy_timestamp'],
+                'source': 'deploy_version.json',
+                'files_updated': version_data['files_updated']
+            })
+        except Exception as e:
+            # En cas d'erreur, utiliser la version par défaut
+            pass
+    
+    # Fallback : version basée sur la date de modification de manage.py
+    main_file = project_root / 'manage.py'
+    fallback_version = str(int(os.path.getmtime(main_file))) if main_file.exists() else '1.0.0'
+    
+    return Response({
+        'version': fallback_version,
+        'timestamp': int(os.path.getmtime(main_file)) if main_file.exists() else None,
+        'source': 'fallback_timestamp',
+        'files_updated': ['manage.py']
+    })
+
+
+@api_view(['POST'])
+def force_version_update(request):
+    """
+    Force la mise à jour de la version (pour les déploiements)
+    """
+    import os
+    from pathlib import Path
+    
+    try:
+        # Toucher le fichier manage.py pour forcer un changement de version
+        manage_py = Path(__file__).parent.parent / 'manage.py'
+        if manage_py.exists():
+            # Modifier la date de modification
+            current_time = os.time()
+            os.utime(manage_py, (current_time, current_time))
+            
+            return Response({
+                'success': True,
+                'message': 'Version forcée à jour',
+                'new_timestamp': current_time
+            })
+        else:
+            return Response({
+                'error': 'Fichier manage.py non trouvé'
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors de la mise à jour de version: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
