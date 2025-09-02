@@ -512,27 +512,26 @@ def preview_devis(request):
 def generate_pdf_from_preview(request):
     try:
         # Ajout de logs
-        print("Début de generate_pdf_from_preview")
-        print("Request body:", request.body)
+        logger.info("Début de generate_pdf_from_preview")
         
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
-        print("Devis ID:", devis_id)
+        logger.info(f"Génération PDF - Devis ID: {devis_id}")
 
         if not devis_id:
             return JsonResponse({'error': 'ID du devis manquant'}, status=400)
 
         # URL de la page de prévisualisation pour un devis sauvegardé
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
-        print("Preview URL:", preview_url)
+        logger.debug(f"Preview URL: {preview_url}")
 
-            # Chemin vers le script Puppeteer
+        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
-        print("Node script path:", node_script_path)
+        logger.debug(f"Node script path: {node_script_path}")
 
-            # Commande pour exécuter Puppeteer avec Node.js
+        # Commande pour exécuter Puppeteer avec Node.js
         command = ['node', node_script_path, preview_url]
-        print("Commande à exécuter:", command)
+        logger.debug(f"Commande: {command}")
 
         # Exécuter Puppeteer avec capture de la sortie
         result = subprocess.run(
@@ -541,38 +540,38 @@ def generate_pdf_from_preview(request):
             capture_output=True,
             text=True
         )
-        print("Sortie standard:", result.stdout)
-        print("Sortie d'erreur:", result.stderr)
+        logger.debug(f"Sortie standard: {result.stdout}")
+        logger.debug(f"Sortie d'erreur: {result.stderr}")
 
-            # Lire le fichier PDF généré
+        # Lire le fichier PDF généré
         pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
-        print("Chemin du PDF:", pdf_path)
-        print("Le fichier existe ?", os.path.exists(pdf_path))
+        logger.debug(f"Chemin du PDF: {pdf_path}")
+        logger.debug(f"Le fichier existe: {os.path.exists(pdf_path)}")
 
         if os.path.exists(pdf_path):
-                with open(pdf_path, 'rb') as pdf_file:
-                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
-                print("PDF généré avec succès")
-                return response
+            with open(pdf_path, 'rb') as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+            logger.info("PDF généré avec succès")
+            return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
-            print(error_msg)
+            logger.error(error_msg)
             return JsonResponse({'error': error_msg}, status=500)
 
     except json.JSONDecodeError as e:
         error_msg = f'Données JSON invalides: {str(e)}'
-        print(error_msg)
+        logger.error(error_msg)
         return JsonResponse({'error': error_msg}, status=400)
     except subprocess.CalledProcessError as e:
         error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.output}'
-        print(error_msg)
+        logger.error(error_msg)
         return JsonResponse({'error': error_msg}, status=500)
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
-        print(error_msg)
-        print("Type d'erreur:", type(e))
-        print("Traceback:", traceback.format_exc())
+        logger.error(error_msg)
+        logger.error(f"Type d'erreur: {type(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return JsonResponse({'error': error_msg}, status=500)
 
 
@@ -2192,7 +2191,7 @@ def create_chantier_from_devis(request):
 def create_devis(request):
     try:
         # Log pour déboguer les données reçues
-        print("Données reçues du frontend:", request.data)
+        logger.debug("Données reçues du frontend")
         
         with transaction.atomic():
             devis_chantier = request.data.get('devis_chantier', False)
@@ -2224,7 +2223,7 @@ def create_devis(request):
                 }
                 
                 # Log pour déboguer les données de l'appel d'offres
-                print("Données de l'appel d'offres:", appel_offres_data)
+                logger.debug("Données de l'appel d'offres traitées")
                 
                 appel_offres = AppelOffres.objects.create(**appel_offres_data)
                 

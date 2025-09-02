@@ -241,10 +241,40 @@ if not DEBUG:
     # Cookies sécurisés
     # SESSION_COOKIE_SECURE = True # This line is now handled by the DEBUG conditional block above
     
-    # Logs (désactivés pour éviter les erreurs de fichiers manquants)
+    # Configuration des logs pour la production
     LOGGING = {
         'version': 1,
-        'disable_existing_loggers': True,
+        'disable_existing_loggers': False,  # ✅ Garder les logs
+        'formatters': {
+            'verbose': {
+                'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+                'style': '{',
+            },
+        },
+        'handlers': {
+            'file': {
+                'level': 'INFO',
+                'class': 'logging.FileHandler',
+                'filename': '/var/log/django/app.log',
+                'formatter': 'verbose',
+            },
+        },
+        'root': {
+            'handlers': ['file'],
+            'level': 'INFO',
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['file'],
+                'level': 'INFO',
+                'propagate': False,
+            },
+            'django.security': {
+                'handlers': ['file'],
+                'level': 'WARNING',
+                'propagate': False,
+            },
+        },
     }
 
 # Default primary key field type
