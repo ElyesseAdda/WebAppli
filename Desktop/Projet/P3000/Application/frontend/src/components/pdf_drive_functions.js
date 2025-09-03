@@ -20,10 +20,6 @@ export const generatePlanningHebdoDrive = async (week, year) => {
   );
 
   try {
-    console.log(
-      `🚀 Génération du planning hebdomadaire semaine ${week}/${year} vers le Drive...`
-    );
-
     const response = await axios.get(
       `${API_BASE_URL}/planning-hebdo-pdf-drive/`,
       {
@@ -33,8 +29,6 @@ export const generatePlanningHebdoDrive = async (week, year) => {
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
-
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
 
@@ -43,7 +37,40 @@ export const generatePlanningHebdoDrive = async (week, year) => {
       throw new Error(response.data.error || "Erreur inconnue");
     }
   } catch (error) {
-    console.error("❌ Erreur lors de la génération du planning:", error);
+    // Vérifier si c'est un conflit de fichier
+    if (
+      error.response &&
+      error.response.status === 500 &&
+      error.response.data &&
+      error.response.data.error &&
+      error.response.data.error.includes("Conflit de fichier détecté")
+    ) {
+      // Émettre un événement personnalisé pour ouvrir le modal de conflit
+      const conflictId = `planning_${week}_${year}_${Date.now()}`;
+      const conflictEvent = new CustomEvent("openConflictDialog", {
+        detail: {
+          conflictId: conflictId, // Identifiant unique pour ce conflit
+          fileName: `PH S${week} ${String(year).slice(-2)}.pdf`, // Nom correct pour le planning - NE PAS TRANSFORMER
+          existingFilePath: `Agents/Document_Generaux/PlanningHebdo/${year}/`,
+          conflictMessage:
+            "Un fichier avec le même nom existe déjà dans le Drive.",
+          documentType: "planning_hebdo",
+          societeName: "Société par défaut",
+          week: week,
+          year: year,
+          previewUrl: `${window.location.origin}/api/preview-planning-hebdo/?week=${week}&year=${year}`,
+        },
+      });
+
+      window.dispatchEvent(conflictEvent);
+
+      // Masquer la notification de chargement
+      hideLoadingNotification();
+
+      return { conflict_detected: true, error: "Conflit de fichier détecté" };
+    }
+
+    // Autres erreurs
     showErrorNotification(`Erreur: ${error.message}`);
     throw error;
   }
@@ -59,10 +86,6 @@ export const generateMonthlyAgentsPDFDrive = async (month, year) => {
   );
 
   try {
-    console.log(
-      `🚀 Génération du rapport mensuel agents ${month}/${year} vers le Drive...`
-    );
-
     const response = await axios.get(
       `${API_BASE_URL}/generate-monthly-agents-pdf-drive/`,
       {
@@ -72,8 +95,6 @@ export const generateMonthlyAgentsPDFDrive = async (month, year) => {
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
-
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
 
@@ -82,7 +103,40 @@ export const generateMonthlyAgentsPDFDrive = async (month, year) => {
       throw new Error(response.data.error || "Erreur inconnue");
     }
   } catch (error) {
-    console.error("❌ Erreur lors de la génération du rapport mensuel:", error);
+    // Vérifier si c'est un conflit de fichier
+    if (
+      error.response &&
+      error.response.status === 500 &&
+      error.response.data &&
+      error.response.data.error &&
+      error.response.data.error.includes("Conflit de fichier détecté")
+    ) {
+      // Émettre un événement personnalisé pour ouvrir le modal de conflit
+      const conflictId = `rapport_${month}_${year}_${Date.now()}`;
+      const conflictEvent = new CustomEvent("openConflictDialog", {
+        detail: {
+          conflictId: conflictId, // Identifiant unique pour ce conflit
+          fileName: `RapportComptable Septembre ${String(year).slice(-2)}.pdf`, // Nom correct avec mois en français
+          existingFilePath: "Agents/Document_Generaux/Rapport_mensuel/",
+          conflictMessage:
+            "Un fichier avec le même nom existe déjà dans le Drive.",
+          documentType: "rapport_agents",
+          societeName: "Société par défaut",
+          month: month,
+          year: year,
+          previewUrl: `${window.location.origin}/api/preview-monthly-agents-report/?month=${month}&year=${year}`,
+        },
+      });
+
+      window.dispatchEvent(conflictEvent);
+
+      // Masquer la notification de chargement
+      hideLoadingNotification();
+
+      return { conflict_detected: true, error: "Conflit de fichier détecté" };
+    }
+
+    // Autres erreurs
     showErrorNotification(`Erreur: ${error.message}`);
     throw error;
   }

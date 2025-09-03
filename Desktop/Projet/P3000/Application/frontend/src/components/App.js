@@ -25,13 +25,12 @@ import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Drive from "./Drive";
 import GestionAppelsOffres from "./GestionAppelsOffres";
+import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
-import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
-import ListePartiesSousParties from "./ListPartiesSousParties";
 import Login from "./Login";
 import ModificationDevis from "./ModificationDevis";
 import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
@@ -107,6 +106,9 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
+        {/* Modal global pour les conflits de fichiers - accessible partout */}
+        <GlobalConflictModal />
+
         <Routes>
           {/* Route de connexion - accessible sans authentification */}
           <Route
@@ -199,11 +201,11 @@ function App() {
           />
 
           <Route
-            path="/ListePartie"
+            path="/CreationPartie"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
-                  <ListePartiesSousParties />
+                  <CreationPartie />
                 </Layout>
               </ProtectedRoute>
             }
@@ -221,77 +223,11 @@ function App() {
           />
 
           <Route
-            path="/CreationPartie"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <Layout user={user} onLogout={handleLogout}>
-                  <CreationPartie />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/Stock"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <Layout user={user} onLogout={handleLogout}>
-                  <StockForm />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/Agent"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <Layout user={user} onLogout={handleLogout}>
-                  <CalendrierAgentContainer />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/AgentCard"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <Layout user={user} onLogout={handleLogout}>
-                  <AgentCardContainer />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/PlanningContainer"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <Layout user={user} onLogout={handleLogout}>
-                  <PlanningContainer />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
             path="/ListeFactures"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeFactures />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/AgencyExpenses"
-            element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
-                <Layout user={user} onLogout={handleLogout}>
-                  <AgencyExpenses />
                 </Layout>
               </ProtectedRoute>
             }
@@ -309,18 +245,62 @@ function App() {
           />
 
           <Route
-            path="/BonCommande"
+            path="/AgentCardContainer"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
-                  <ListeBonCommande />
+                  <AgentCardContainer />
                 </Layout>
               </ProtectedRoute>
             }
           />
 
           <Route
-            path="/ModificationBC/:id"
+            path="/CalendrierAgentContainer"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <CalendrierAgentContainer />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/PlanningContainer"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <PlanningContainer />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/StockForm"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <StockForm />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/AgencyExpenses"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AgencyExpenses />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/BonCommandeModif"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>

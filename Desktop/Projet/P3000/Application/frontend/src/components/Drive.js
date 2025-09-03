@@ -165,6 +165,8 @@ const Drive = () => {
     contentType: "",
   });
 
+  // État pour le modal de conflit
+
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
   // Fonction pour fermer la sidebar

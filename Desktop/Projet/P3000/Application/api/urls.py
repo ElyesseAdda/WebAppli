@@ -89,6 +89,8 @@ from .pdf_views import (
     download_pdf_from_s3,
     download_file_from_drive,
     list_pdfs_in_drive,
+    replace_file_after_confirmation,
+    get_existing_file_name,
 )
 
 # Import de la vue de recherche
@@ -346,6 +348,12 @@ urlpatterns += [
     path('generate-monthly-agents-pdf-drive/', generate_monthly_agents_pdf_drive, name='generate_monthly_agents_pdf_drive'),
     path('generate-devis-travaux-pdf-drive/', generate_devis_travaux_pdf_drive, name='generate_devis_travaux_pdf_drive'),
     path('generate-devis-marche-pdf-drive/', generate_devis_marche_pdf_drive, name='generate_devis_marche_pdf_drive'),
+    
+    # Vue pour le remplacement après confirmation
+    path('replace-file-after-confirmation/', replace_file_after_confirmation, name='replace_file_after_confirmation'),
+    
+    # Vue pour récupérer le nom du fichier existant
+    path('get-existing-file-name/', get_existing_file_name, name='get_existing_file_name'),
     
     # Vues utilitaires
     path('download-pdf-from-s3/', download_pdf_from_s3, name='download_pdf_from_s3'),

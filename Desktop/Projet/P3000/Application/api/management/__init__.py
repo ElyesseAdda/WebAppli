@@ -1,1 +1,1 @@
-# Fichier vide pour créer le package management
+# Package pour les commandes de management Django
