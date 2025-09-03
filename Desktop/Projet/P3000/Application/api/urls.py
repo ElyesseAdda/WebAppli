@@ -87,8 +87,12 @@ from .pdf_views import (
     generate_devis_travaux_pdf_drive,
     generate_devis_marche_pdf_drive,
     download_pdf_from_s3,
+    download_file_from_drive,
     list_pdfs_in_drive,
 )
+
+# Import de la vue de recherche
+from .search_views import search_in_drive
 
 # Import des vues d'authentification
 from .auth_views import login_view, logout_view, check_auth_view, create_user_view
@@ -326,6 +330,7 @@ urlpatterns += [
     path('drive-complete/search/', DriveCompleteViewSet.as_view({
         'get': 'search_files'
     }), name='drive-complete-search'),
+    path('drive-complete/search-simple/', search_in_drive, name='drive-complete-search-simple'),
     path('drive-complete/move-file/', DriveCompleteViewSet.as_view({
         'post': 'move_file'
     }), name='drive-complete-move-file'),
@@ -344,5 +349,6 @@ urlpatterns += [
     
     # Vues utilitaires
     path('download-pdf-from-s3/', download_pdf_from_s3, name='download_pdf_from_s3'),
+    path('download-file-from-drive/', download_file_from_drive, name='download_file_from_drive'),
     path('list-pdfs-in-drive/', list_pdfs_in_drive, name='list_pdfs_in_drive'),
 ]

@@ -33,9 +33,9 @@ class PDFManager:
         
         # Mapping des types de documents vers les dossiers S3
         self.document_type_folders = {
-            'planning_hebdo': 'Planning',
-            'planning_mensuel': 'Planning',
-            'rapport_agents': 'Documents_Execution',
+            'planning_hebdo': 'PlanningHebdo',
+            'planning_mensuel': 'PlanningHebdo',
+            'rapport_agents': 'Rapport_mensuel',
             'devis_travaux': 'Devis',
             'devis_marche': 'Devis_Marche',
             'situation': 'Situation',
@@ -60,31 +60,35 @@ class PDFManager:
         if document_type == 'planning_hebdo':
             week = kwargs.get('week', 'XX')
             year = kwargs.get('year', 'XXXX')
-            return f"planning_semaine_{week}_{year}_{timestamp}.pdf"
+            # Nouveau format : PH S{week} {year}
+            year_short = str(year)[-2:] if len(str(year)) >= 2 else str(year)
+            return f"PH S{week} {year_short}.pdf"
         
         elif document_type == 'planning_mensuel':
             month = kwargs.get('month', 'XX')
             year = kwargs.get('year', 'XXXX')
-            # Utiliser les noms de mois en français
+            # Nouveau format : PH {mois} {année}
             mois_francais = {
-                1: 'janvier', 2: 'fevrier', 3: 'mars', 4: 'avril',
-                5: 'mai', 6: 'juin', 7: 'juillet', 8: 'aout',
-                9: 'septembre', 10: 'octobre', 11: 'novembre', 12: 'decembre'
+                1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
+                5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
+                9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
             }
-            month_name = mois_francais.get(month, f'mois_{month}')
-            return f"planning_{month_name}_{year}_{timestamp}.pdf"
+            month_name = mois_francais.get(month, f'Mois_{month}')
+            year_short = str(year)[-2:] if len(str(year)) >= 2 else str(year)
+            return f"PH {month_name} {year_short}.pdf"
         
         elif document_type == 'rapport_agents':
             month = kwargs.get('month', 'XX')
             year = kwargs.get('year', 'XXXX')
-            # Utiliser les noms de mois en français
+            # Nouveau format : RapportComptable {mois} {année}
             mois_francais = {
-                1: 'janvier', 2: 'fevrier', 3: 'mars', 4: 'avril',
-                5: 'mai', 6: 'juin', 7: 'juillet', 8: 'aout',
-                9: 'septembre', 10: 'octobre', 11: 'novembre', 12: 'decembre'
+                1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
+                5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
+                9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
             }
-            month_name = mois_francais.get(month, f'mois_{month}')
-            return f"rapport_agents_{month_name}_{year}_{timestamp}.pdf"
+            month_name = mois_francais.get(month, f'Mois_{month}')
+            year_short = str(year)[-2:] if len(str(year)) >= 2 else str(year)
+            return f"RapportComptable {month_name} {year_short}.pdf"
         
         elif document_type == 'devis_travaux':
             chantier_name = kwargs.get('chantier_name', 'chantier')
@@ -144,15 +148,14 @@ class PDFManager:
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
-            # Ces documents sont liés à un chantier
-            chantier_name = kwargs.get('chantier_name')
-            if chantier_name:
-                chantier_slug = custom_slugify(chantier_name)
-                subfolder = self.document_type_folders.get(document_type, 'Documents_Execution')
-                return f"Sociétés/{societe_slug}/{chantier_slug}/{subfolder}"
+            # Ces documents sont maintenant stockés dans Agents/Document_Generaux/
+            # Pour le planning hebdo, ajouter l'année comme sous-dossier
+            if document_type == 'planning_hebdo':
+                year = kwargs.get('year', 'XXXX')
+                return f"Agents/Document_Generaux/PlanningHebdo/{year}"
             else:
-                # Pas de chantier spécifique, stocker dans un dossier général
-                return f"Documents_Generaux/{societe_slug}/{self.document_type_folders.get(document_type, 'Documents')}"
+                # Planning mensuel et rapport agents
+                return f"Agents/Document_Generaux/{self.document_type_folders.get(document_type, 'Documents')}"
         
         elif document_type in ['situation', 'facture', 'avenant']:
             # Ces documents sont toujours liés à un chantier
@@ -314,6 +317,88 @@ class PDFManager:
             error_msg = f"Erreur lors du téléchargement depuis S3: {str(e)}"
             print(f"❌ {error_msg}")
             return False, error_msg, b""
+
+    def get_file_from_s3(self, file_path: str) -> Tuple[bool, bytes, str, str]:
+        """
+        Télécharge n'importe quel fichier depuis AWS S3
+        
+        Args:
+            file_path: Chemin S3 du fichier
+            
+        Returns:
+            Tuple[bool, bytes, str, str]: (succès, contenu_du_fichier, type_mime, nom_fichier)
+        """
+        try:
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            
+            print(f"📥 Téléchargement du fichier depuis S3: {file_path}")
+            
+            # Télécharger le fichier depuis S3
+            response = s3_client.get_object(Bucket=bucket_name, Key=file_path)
+            file_content = response['Body'].read()
+            
+            # Déterminer le type MIME basé sur l'extension
+            file_extension = file_path.split('.')[-1].lower() if '.' in file_path else ''
+            content_type = self.get_mime_type(file_extension)
+            
+            # Extraire le nom du fichier
+            file_name = file_path.split('/')[-1]
+            
+            print(f"✅ Fichier téléchargé avec succès: {file_name} ({len(file_content)} octets, {content_type})")
+            return True, file_content, content_type, file_name
+            
+        except Exception as e:
+            error_msg = f"Erreur lors du téléchargement depuis S3: {str(e)}"
+            print(f"❌ {error_msg}")
+            return False, b"", "application/octet-stream", ""
+
+    def get_mime_type(self, extension: str) -> str:
+        """
+        Détermine le type MIME basé sur l'extension du fichier
+        
+        Args:
+            extension: Extension du fichier (sans le point)
+            
+        Returns:
+            str: Type MIME correspondant
+        """
+        mime_types = {
+            'pdf': 'application/pdf',
+            'txt': 'text/plain',
+            'html': 'text/html',
+            'htm': 'text/html',
+            'css': 'text/css',
+            'js': 'application/javascript',
+            'json': 'application/json',
+            'xml': 'application/xml',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'bmp': 'image/bmp',
+            'svg': 'image/svg+xml',
+            'webp': 'image/webp',
+            'mp4': 'video/mp4',
+            'webm': 'video/webm',
+            'ogg': 'video/ogg',
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'flac': 'audio/flac',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt': 'application/vnd.ms-powerpoint',
+            'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'zip': 'application/zip',
+            'rar': 'application/x-rar-compressed',
+            '7z': 'application/x-7z-compressed',
+            'tar': 'application/x-tar',
+            'gz': 'application/gzip'
+        }
+        
+        return mime_types.get(extension, 'application/octet-stream')
 
 
 # Instance globale

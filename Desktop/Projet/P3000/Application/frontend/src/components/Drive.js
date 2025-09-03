@@ -36,6 +36,7 @@ import {
   Divider,
   Grid,
   IconButton,
+  InputAdornment,
   Link,
   List,
   ListItem,
@@ -59,6 +60,9 @@ const DriveContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   backgroundColor: theme.palette.grey[50],
+  borderRadius: theme.spacing(2),
+  boxShadow: theme.shadows[8],
+  overflow: "hidden",
 }));
 
 const DriveHeader = styled(Paper)(({ theme }) => ({
@@ -69,6 +73,8 @@ const DriveHeader = styled(Paper)(({ theme }) => ({
   justifyContent: "space-between",
   flexWrap: "wrap",
   gap: theme.spacing(2),
+  borderRadius: theme.spacing(1.5),
+  boxShadow: theme.shadows[4],
 }));
 
 const DriveContent = styled(Box)(({ theme }) => ({
@@ -77,6 +83,8 @@ const DriveContent = styled(Box)(({ theme }) => ({
   flexDirection: "column",
   overflow: "auto", // Permettre le scroll
   minHeight: "calc(100vh - 120px)", // Hauteur minimale pour la zone de drag & drop
+  borderRadius: theme.spacing(1.5),
+  padding: theme.spacing(1),
 }));
 
 const FileGrid = styled(Grid)(({ theme }) => ({
@@ -125,6 +133,10 @@ const Drive = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState({
+    folders: [],
+    files: [],
+  });
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -255,6 +267,99 @@ const Drive = () => {
   };
 
   // Fonctions utilitaires
+  const formatFileName = (fileName) => {
+    // Transformer les underscores en espaces pour un affichage plus lisible
+    // Garder l'extension intacte
+    if (!fileName) return fileName;
+
+    const lastDotIndex = fileName.lastIndexOf(".");
+    if (lastDotIndex === -1) {
+      // Pas d'extension, remplacer tous les underscores
+      return fileName.replace(/_/g, " ");
+    } else {
+      // Garder l'extension intacte, remplacer les underscores dans le nom
+      const name = fileName.substring(0, lastDotIndex);
+      const extension = fileName.substring(lastDotIndex);
+      return name.replace(/_/g, " ") + extension;
+    }
+  };
+
+  // Fonction pour normaliser le texte (supprimer accents et mettre en minuscules)
+  const normalizeText = (text) => {
+    return text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Supprimer les accents
+      .toLowerCase();
+  };
+
+  // Fonction de recherche intelligente dans le contenu du dossier courant
+  const performSearch = (searchQuery) => {
+    if (!searchQuery.trim()) {
+      // Si la recherche est vide, afficher le contenu normal
+      setSearchResults({ folders: [], files: [] });
+      return;
+    }
+
+    console.log(
+      `🔍 Recherche intelligente de "${searchQuery}" dans ${
+        currentPath || "racine"
+      }`
+    );
+
+    // Recherche dans le contenu du dossier courant (plus rapide)
+    const normalizedQuery = normalizeText(searchQuery);
+
+    // Recherche partielle : trouve tous les éléments contenant la chaîne
+    const filteredFolders = folderContent.folders.filter((folder) =>
+      normalizeText(folder.name).includes(normalizedQuery)
+    );
+
+    const filteredFiles = folderContent.files.filter((file) =>
+      normalizeText(file.name).includes(normalizedQuery)
+    );
+
+    setSearchResults({
+      folders: filteredFolders,
+      files: filteredFiles,
+    });
+
+    console.log(
+      `✅ Recherche intelligente terminée: ${filteredFolders.length} dossiers, ${filteredFiles.length} fichiers trouvés`
+    );
+  };
+
+  // Fonction pour gérer la saisie et la recherche en temps réel
+  const handleSearchInput = (value) => {
+    setSearchTerm(value);
+
+    // Si le champ est vide, effacer les résultats
+    if (!value.trim()) {
+      setSearchResults({ folders: [], files: [] });
+      return;
+    }
+
+    // Recherche en temps réel avec délai pour éviter trop de requêtes
+    const timeoutId = setTimeout(() => {
+      if (value.trim()) {
+        performSearch(value);
+      }
+    }, 200); // Délai de 200ms pour la fluidité
+
+    // Nettoyer le timeout précédent
+    return () => clearTimeout(timeoutId);
+  };
+
+  // Fonction pour gérer la touche Entrée (recherche immédiate)
+  const handleSearchKeyPress = (event) => {
+    if (event.key === "Enter") {
+      if (searchTerm.trim()) {
+        performSearch(searchTerm);
+      } else {
+        setSearchResults({ folders: [], files: [] });
+      }
+    }
+  };
+
   const getFileIcon = (contentType, extension) => {
     if (contentType?.includes("pdf") || extension === "pdf")
       return <PdfIcon color="error" />;
@@ -910,7 +1015,9 @@ const Drive = () => {
       for (const file of selectedFiles) {
         if (file.size > MAX_FILE_SIZE) {
           showSnackbar(
-            `Le fichier ${file.name} dépasse la taille maximale de 100 MB`,
+            `Le fichier ${formatFileName(
+              file.name
+            )} dépasse la taille maximale de 100 MB`,
             "error"
           );
           continue;
@@ -958,9 +1065,10 @@ const Drive = () => {
     let currentPathPart = "";
     parts.forEach((part) => {
       currentPathPart += (currentPathPart ? "/" : "") + part;
+      // Ajouter un / à la fin pour s'assurer que la navigation fonctionne correctement
       breadcrumb.push({
         name: part,
-        path: currentPathPart,
+        path: currentPathPart + "/",
       });
     });
 
@@ -1018,7 +1126,7 @@ const Drive = () => {
                 ) : (
                   <FolderIcon fontSize="small" />
                 )}
-                {item.name}
+                {formatFileName(item.name)}
               </Link>
             ))}
           </Breadcrumbs>
@@ -1028,15 +1136,31 @@ const Drive = () => {
           {/* Recherche */}
           <TextField
             size="small"
-            placeholder="Rechercher..."
+            placeholder="Rechercher en temps réel... (ou appuyez sur Entrée)"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchInput(e.target.value)}
+            onKeyPress={handleSearchKeyPress}
             InputProps={{
               startAdornment: (
                 <SearchIcon
                   fontSize="small"
                   sx={{ mr: 1, color: "text.secondary" }}
                 />
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      if (searchTerm.trim()) {
+                        performSearch(searchTerm);
+                      }
+                    }}
+                    disabled={!searchTerm.trim()}
+                  >
+                    <SearchIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
               ),
             }}
             sx={{ minWidth: 200 }}
@@ -1136,8 +1260,15 @@ const Drive = () => {
               <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
                 <CircularProgress />
               </Box>
-            ) : folderContent.folders.length === 0 &&
-              folderContent.files.length === 0 ? (
+            ) : (
+                searchTerm.trim() &&
+                (searchResults.folders.length > 0 ||
+                  searchResults.files.length > 0)
+                  ? searchResults.folders.length === 0 &&
+                    searchResults.files.length === 0
+                  : folderContent.folders.length === 0 &&
+                    folderContent.files.length === 0
+              ) ? (
               <Box
                 sx={{
                   textAlign: "center",
@@ -1168,17 +1299,29 @@ const Drive = () => {
                   sx={{ fontSize: 80, color: "text.secondary", mb: 3 }}
                 />
                 <Typography variant="h5" color="text.secondary" gutterBottom>
-                  Dossier vide
+                  {searchTerm.trim() &&
+                  (searchResults.folders.length > 0 ||
+                    searchResults.files.length > 0)
+                    ? "Aucun résultat trouvé"
+                    : "Dossier vide"}
                 </Typography>
                 <Typography
                   variant="body1"
                   color="text.secondary"
                   sx={{ mb: 2 }}
                 >
-                  Glissez-déposez des fichiers ici
+                  {searchTerm.trim() &&
+                  (searchResults.folders.length > 0 ||
+                    searchResults.files.length > 0)
+                    ? `Aucun fichier ou dossier ne correspond à "${searchTerm}"`
+                    : "Glissez-déposez des fichiers ici"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  ou cliquez pour en sélectionner
+                  {searchTerm.trim() &&
+                  (searchResults.folders.length > 0 ||
+                    searchResults.files.length > 0)
+                    ? "Essayez de modifier votre recherche"
+                    : "ou cliquez pour en sélectionner"}
                 </Typography>
               </Box>
             ) : (
@@ -1216,7 +1359,10 @@ const Drive = () => {
                 {/* Liste des éléments */}
                 <List sx={{ p: 0, width: "100%" }}>
                   {/* Dossiers */}
-                  {folderContent.folders.map((folder) => (
+                  {(searchTerm.trim() && searchResults.folders.length > 0
+                    ? searchResults.folders
+                    : folderContent.folders
+                  ).map((folder) => (
                     <ListItem
                       key={folder.path}
                       sx={{
@@ -1253,7 +1399,7 @@ const Drive = () => {
                         >
                           <FolderIcon color="primary" />
                           <Typography variant="body2" noWrap>
-                            {folder.name}
+                            {formatFileName(folder.name)}
                           </Typography>
                         </Box>
                         <Typography variant="body2" color="text.secondary">
@@ -1284,7 +1430,10 @@ const Drive = () => {
                   ))}
 
                   {/* Fichiers */}
-                  {folderContent.files.map((file) => (
+                  {(searchTerm.trim() && searchResults.files.length > 0
+                    ? searchResults.files
+                    : folderContent.files
+                  ).map((file) => (
                     <ListItem
                       key={file.path}
                       data-file-name={file.name}
@@ -1344,7 +1493,7 @@ const Drive = () => {
                             file.name.split(".").pop()
                           )}
                           <Typography variant="body2" noWrap>
-                            {file.name}
+                            {formatFileName(file.name)}
                           </Typography>
                         </Box>
                         <Typography variant="body2" color="text.secondary">
@@ -1358,41 +1507,20 @@ const Drive = () => {
                             "Fichier"}
                         </Typography>
                         <Box sx={{ display: "flex", gap: 0.5 }}>
-                          {(canOpenInBrowser(file.content_type, file.name) ||
-                            canOpenWithOfficeOnline(file.name)) && (
-                            <Tooltip title="Ouvrir">
-                              <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Vérifier si c'est un fichier Office
-                                  if (canOpenWithOfficeOnline(file.name)) {
-                                    openOfficeFile(file.path, file.name);
-                                  } else if (
-                                    canOpenInBrowser(
-                                      file.content_type,
-                                      file.name
-                                    )
-                                  ) {
-                                    openFile(
-                                      file.path,
-                                      file.name,
-                                      file.content_type
-                                    );
-                                  }
-                                }}
-                              >
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <Tooltip title="Télécharger">
+                          <Tooltip title="Télécharger le fichier">
                             <IconButton
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                downloadFile(file.path, file.name);
+                                // Télécharger directement dans le navigateur
+                                const link = document.createElement("a");
+                                link.href = `/api/download-file-from-drive/?file_path=${encodeURIComponent(
+                                  file.path
+                                )}`;
+                                link.download = file.name;
+                                link.click();
                               }}
+                              sx={{ color: "success.main" }}
                             >
                               <DownloadIcon fontSize="small" />
                             </IconButton>
@@ -1472,7 +1600,7 @@ const Drive = () => {
                       {getFileIcon(file.type, file.name.split(".").pop())}
                     </ListItemIcon>
                     <ListItemText
-                      primary={file.name}
+                      primary={formatFileName(file.name)}
                       secondary={`${formatFileSize(file.size)} - ${
                         file.type || "Type inconnu"
                       }`}

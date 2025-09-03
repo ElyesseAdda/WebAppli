@@ -549,11 +549,11 @@ def generate_pdf_from_preview(request):
         logger.debug(f"Le fichier existe: {os.path.exists(pdf_path)}")
 
         if os.path.exists(pdf_path):
-                with open(pdf_path, 'rb') as pdf_file:
-                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-                    response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
-                    logger.info("PDF généré avec succès")
-                return response
+            with open(pdf_path, 'rb') as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+            logger.info("PDF généré avec succès")
+            return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
             logger.error(error_msg)

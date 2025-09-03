@@ -280,3 +280,28 @@ def list_pdfs_in_drive(request):
         error_msg = f'Erreur lors de la récupération de la liste: {str(e)}'
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def download_file_from_drive(request):
+    """
+    Télécharger n'importe quel fichier depuis le Drive AWS S3
+    """
+    try:
+        file_path = request.GET.get('file_path')
+        if not file_path:
+            return JsonResponse({'error': 'Chemin du fichier requis'}, status=400)
+        
+        # Utiliser le pdf_manager pour récupérer le fichier
+        success, file_content, content_type, file_name = pdf_manager.get_file_from_s3(file_path)
+        
+        if success:
+            response = HttpResponse(file_content, content_type=content_type)
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+            return response
+        else:
+            return JsonResponse({'error': 'Fichier non trouvé'}, status=404)
+            
+    except Exception as e:
+        return JsonResponse({'error': f'Erreur: {str(e)}'}, status=500)
