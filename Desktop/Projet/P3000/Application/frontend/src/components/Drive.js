@@ -889,35 +889,28 @@ const Drive = () => {
   // Envoyer un fichier par email
   const sendFileByEmail = async (filePath, fileName) => {
     try {
-      // Obtenir l'URL de téléchargement du fichier
-      const response = await fetch(
-        `/api/drive-complete/download-url/?file_path=${encodeURIComponent(
-          filePath
-        )}`
-      );
-      if (!response.ok) {
-        throw new Error(
-          "Erreur lors de la génération du lien de téléchargement"
-        );
-      }
+      // 1. Télécharger le fichier automatiquement
+      const link = document.createElement("a");
+      link.href = `/api/download-file-from-drive/?file_path=${encodeURIComponent(
+        filePath
+      )}`;
+      link.download = fileName;
+      link.click();
 
-      const data = await response.json();
-      const fileUrl = data.download_url;
-
-      // Créer le lien mailto avec le fichier en pièce jointe
-      const subject = encodeURIComponent(`Fichier: ${fileName}`);
+      // 2. Ouvrir l'application email avec contenu pré-rempli
+      const subject = encodeURIComponent(fileName);
       const body = encodeURIComponent(
-        `Bonjour,\n\nVeuillez trouver ci-joint le fichier "${fileName}".\n\nCordialement`
+        `Bonjour,\n\nVeuillez trouver en pièce jointe le fichier ${fileName}.\n\nCordialement`
       );
 
-      // Note: Les pièces jointes directes ne sont pas supportées par mailto
-      // On utilise une approche alternative avec le lien de téléchargement
-      const mailtoLink = `mailto:?subject=${subject}&body=${body}\n\nLien vers le fichier: ${fileUrl}`;
-
-      // Ouvrir l'application de mail par défaut
+      const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
       window.open(mailtoLink, "_blank");
 
-      showSnackbar("Application de mail ouverte", "success");
+      // 3. Afficher une notification d'aide
+      showSnackbar(
+        `📧 Email ouvert avec contenu pré-rempli ! Le fichier "${fileName}" a été téléchargé. Joignez-le depuis votre dossier de téléchargements.`,
+        "success"
+      );
     } catch (error) {
       console.error("Erreur envoi email:", error);
       showSnackbar(
@@ -1451,6 +1444,7 @@ const Drive = () => {
                           selectedItem && selectedItem.name === file.name
                             ? "primary.light + 20"
                             : "transparent",
+                        transition: "all 0.2s ease",
                         "&:hover": {
                           backgroundColor: "action.hover",
                         },
@@ -1506,7 +1500,13 @@ const Drive = () => {
                           {file.name.split(".").pop()?.toUpperCase() ||
                             "Fichier"}
                         </Typography>
-                        <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            gap: 0.5,
+                            alignItems: "center",
+                          }}
+                        >
                           <Tooltip title="Télécharger le fichier">
                             <IconButton
                               size="small"
@@ -1525,7 +1525,7 @@ const Drive = () => {
                               <DownloadIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Envoyer par email">
+                          <Tooltip title="Envoyer par email (ouvre votre client email avec contenu pré-rempli)">
                             <IconButton
                               size="small"
                               onClick={(e) => {
