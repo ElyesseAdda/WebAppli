@@ -75,7 +75,7 @@ const DriveContent = styled(Box)(({ theme }) => ({
   flex: 1,
   display: "flex",
   flexDirection: "column",
-  overflow: "hidden",
+  overflow: "auto", // Permettre le scroll
   minHeight: "calc(100vh - 120px)", // Hauteur minimale pour la zone de drag & drop
 }));
 
@@ -154,6 +154,105 @@ const Drive = () => {
   });
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+  // Fonction pour fermer la sidebar
+  const closeSidebar = () => {
+    // Émettre un événement personnalisé pour fermer la sidebar
+    window.dispatchEvent(new CustomEvent("closeSidebar"));
+
+    // Alternative : essayer de trouver et cliquer sur le bouton close
+    const closeButton = document.querySelector(
+      '.close-button, [data-testid="close-button"], button[aria-label*="close"]'
+    );
+    if (closeButton) {
+      closeButton.click();
+    }
+  };
+
+  // Fonction pour naviguer vers un chemin spécifique
+  const navigateToSpecificPath = async (path) => {
+    if (!path) return;
+
+    try {
+      setLoading(true);
+
+      // Déterminer si c'est un fichier ou un dossier
+      const isFile = path.includes(".") && path.split("/").pop().includes(".");
+
+      let folderPath, fileName;
+
+      if (isFile) {
+        // Si c'est un fichier, extraire le dossier parent
+        const pathParts = path.split("/");
+        fileName = pathParts.pop(); // Nom du fichier
+        folderPath = pathParts.join("/"); // Chemin du dossier parent
+
+        // S'assurer que le chemin se termine par / pour ouvrir le dossier
+        if (!folderPath.endsWith("/")) {
+          folderPath += "/";
+        }
+      } else {
+        // Si c'est un dossier, utiliser le chemin tel quel
+        folderPath = path;
+        // S'assurer que le chemin se termine par / pour l'ouvrir
+        if (!folderPath.endsWith("/")) {
+          folderPath += "/";
+        }
+      }
+
+      console.log("Navigation vers le dossier (avec /):", folderPath);
+      console.log("Fichier cible:", fileName);
+
+      // Utiliser votre API existante pour naviguer vers le dossier
+      const response = await fetch(
+        `/api/drive-complete/list-content/?folder_path=${encodeURIComponent(
+          folderPath
+        )}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentPath(folderPath);
+        setFolderContent(data);
+
+        // Mettre en surbrillance le fichier si focus=file est spécifié et qu'on a un nom de fichier
+        const urlParams = new URLSearchParams(window.location.search);
+        if (fileName && urlParams.get("focus") === "file" && data.files) {
+          const targetFile = data.files.find((file) => file.name === fileName);
+          if (targetFile) {
+            setSelectedItem(targetFile);
+            console.log("Fichier sélectionné:", targetFile);
+          }
+        }
+      } else {
+        console.error("Erreur API:", response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la navigation:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour interpréter les paramètres d'URL
+  const handleUrlParameters = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = urlParams.get("path");
+    const sidebar = urlParams.get("sidebar");
+    const focus = urlParams.get("focus");
+
+    // Fermer la sidebar si demandé
+    if (sidebar === "closed") {
+      // Délai pour s'assurer que le composant est monté
+      setTimeout(() => {
+        closeSidebar();
+      }, 100);
+    }
+
+    // Naviguer vers le chemin spécifié
+    if (path) {
+      navigateToSpecificPath(path);
+    }
+  };
 
   // Fonctions utilitaires
   const getFileIcon = (contentType, extension) => {
@@ -873,6 +972,11 @@ const Drive = () => {
     fetchFolderContent("");
   }, [fetchFolderContent]);
 
+  // Effet pour interpréter les paramètres d'URL au chargement
+  useEffect(() => {
+    handleUrlParameters();
+  }, []);
+
   // Nettoyer le timeout au démontage
   useEffect(() => {
     return () => {
@@ -1183,13 +1287,21 @@ const Drive = () => {
                   {folderContent.files.map((file) => (
                     <ListItem
                       key={file.path}
+                      data-file-name={file.name}
                       sx={{
-                        border: "1px solid",
-                        borderColor: "divider",
+                        border: "2px solid",
+                        borderColor:
+                          selectedItem && selectedItem.name === file.name
+                            ? "primary.main"
+                            : "divider",
                         mb: 1,
                         borderRadius: 1,
                         cursor: "pointer",
                         width: "100%",
+                        backgroundColor:
+                          selectedItem && selectedItem.name === file.name
+                            ? "primary.light + 20"
+                            : "transparent",
                         "&:hover": {
                           backgroundColor: "action.hover",
                         },

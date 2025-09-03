@@ -15,6 +15,7 @@ import React, { useEffect, useState } from "react";
 
 import "./../../static/css/planningHebdo.css";
 import LaborCostsSummary from "./LaborCostsSummary";
+import { generatePlanningHebdoDrive } from "./pdf_drive_functions";
 
 dayjs.extend(isoWeek);
 dayjs.locale("fr"); // Définir la locale sur français
@@ -795,28 +796,25 @@ const PlanningHebdoAgent = ({
       setIsLoading(false);
     }
   };
-  // Fonction pour générer le PDF de tous les agents pour la semaine sélectionnée
+  // Fonction pour générer le PDF de tous les agents pour la semaine sélectionnée et le stocker dans le Drive
   const handleGeneratePDF = async () => {
     try {
-      const response = await axios.get(
-        `/api/planning_hebdo_pdf/?week=${selectedWeek}&year=${selectedYear}`,
-        { responseType: "blob" }
+      console.log(
+        `🚀 Génération du planning hebdomadaire semaine ${selectedWeek}/${selectedYear} vers le Drive...`
       );
-      const url = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" })
+
+      const result = await generatePlanningHebdoDrive(
+        selectedWeek,
+        selectedYear
       );
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute(
-        "download",
-        `planning_hebdo_agents_semaine_${selectedWeek}_${selectedYear}.pdf`
-      );
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+
+      if (result.success) {
+        console.log("✅ PDF généré et stocké avec succès dans le Drive");
+        // La redirection se fait automatiquement dans la fonction generatePlanningHebdoDrive
+      }
     } catch (error) {
-      alert("Erreur lors de la génération du PDF.");
-      console.error(error);
+      console.error("❌ Erreur lors de la génération du PDF:", error);
+      alert(`Erreur lors de la génération du PDF: ${error.message}`);
     }
   };
 

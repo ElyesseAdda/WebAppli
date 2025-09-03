@@ -11,6 +11,7 @@ import dayjs from "dayjs";
 import React, { useEffect, useState } from "react";
 import LaborCostsSummary from "./LaborCostsSummary";
 import PlanningHebdoAgent from "./PlanningHebdoAgent";
+import { generateMonthlyAgentsPDFDrive } from "./pdf_drive_functions";
 
 const StyledFormControl = styled(FormControl)({
   minWidth: 150,
@@ -114,25 +115,27 @@ const PlanningContainer = () => {
 
   const handleGenerateMonthlyReport = async () => {
     try {
-      const response = await axios.get(
-        `/api/generate-monthly-agents-pdf/?month=${selectedMonth}&year=${selectedReportYear}`,
-        { responseType: "blob" }
+      console.log(
+        `🚀 Génération du rapport mensuel agents ${selectedMonth}/${selectedReportYear} vers le Drive...`
       );
-      const url = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" })
+
+      const result = await generateMonthlyAgentsPDFDrive(
+        selectedMonth,
+        selectedReportYear
       );
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute(
-        "download",
-        `rapport_mensuel_agents_${selectedMonth}_${selectedReportYear}.pdf`
-      );
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+
+      if (result.success) {
+        console.log("✅ PDF généré et stocké avec succès dans le Drive");
+        // La redirection se fait automatiquement dans la fonction generateMonthlyAgentsPDFDrive
+      }
     } catch (error) {
-      alert("Erreur lors de la génération du rapport mensuel.");
-      console.error(error);
+      console.error(
+        "❌ Erreur lors de la génération du rapport mensuel:",
+        error
+      );
+      alert(
+        `Erreur lors de la génération du rapport mensuel: ${error.message}`
+      );
     }
   };
 

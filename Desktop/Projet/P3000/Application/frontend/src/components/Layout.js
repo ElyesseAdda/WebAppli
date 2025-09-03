@@ -11,6 +11,24 @@ const Layout = ({ children, user, onLogout }) => {
     setSidebarVisible(!isSidebarVisible);
   };
 
+  // Fonction pour fermer la sidebar
+  const closeSidebar = () => {
+    setSidebarVisible(false);
+  };
+
+  // Écouter l'événement closeSidebar depuis le composant Drive
+  React.useEffect(() => {
+    const handleCloseSidebar = () => {
+      closeSidebar();
+    };
+
+    window.addEventListener("closeSidebar", handleCloseSidebar);
+
+    return () => {
+      window.removeEventListener("closeSidebar", handleCloseSidebar);
+    };
+  }, []);
+
   return (
     <div
       className={`layout ${
