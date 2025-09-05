@@ -23,6 +23,7 @@ def planning_hebdo_pdf_drive(request):
     try:
         week = int(request.GET.get('week'))
         year = int(request.GET.get('year'))
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
         
         # URL de prévisualisation
         preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}")
@@ -36,6 +37,7 @@ def planning_hebdo_pdf_drive(request):
             document_type='planning_hebdo',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=force_replace,
             week=week,
             year=year
         )
@@ -85,6 +87,7 @@ def generate_monthly_agents_pdf_drive(request):
     try:
         month = int(request.GET.get('month'))
         year = int(request.GET.get('year'))
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
         
         # URL de prévisualisation
         preview_url = request.build_absolute_uri(f"/api/preview-monthly-agents-report/?month={month}&year={year}")
@@ -98,11 +101,15 @@ def generate_monthly_agents_pdf_drive(request):
             document_type='rapport_agents',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=force_replace,
             month=month,
             year=year
         )
         
         if success:
+            # Debug: Log du chemin S3
+            print(f"🔍 DEBUG: s3_file_path = {s3_file_path}")
+            
             # Succès : retourner les informations du fichier stocké
             response_data = {
                 'success': True,
@@ -481,7 +488,7 @@ def get_existing_file_name(request):
                 month_name = month_names.get(int(month), f'Mois_{month}')
                 year = request.GET.get('year', '2025')
                 year_short = str(year)[-2:] if len(str(year)) >= 2 else str(year)
-                target_pattern = f"RapportComptable {month_name} {year_short}.pdf"
+                target_pattern = f"RapportComptable_{month_name}_{year_short}.pdf"
                 
                 for file in files:
                     if file == target_pattern:

@@ -62,8 +62,24 @@ const GlobalConflictModal = () => {
         break;
 
       case "rapport_mensuel":
-        folderPath = `Agents/Document_Generaux/RapportMensuel/${year}/`;
-        fileName = `RM ${String(month).padStart(2, "0")} ${String(year).slice(
+      case "rapport_agents": // Support du nouveau type
+        folderPath = `Agents/Document_Generaux/Rapport_mensuel/${year}/`;
+        const monthNames = [
+          "Janvier",
+          "Février",
+          "Mars",
+          "Avril",
+          "Mai",
+          "Juin",
+          "Juillet",
+          "Août",
+          "Septembre",
+          "Octobre",
+          "Novembre",
+          "Décembre",
+        ];
+        const monthName = monthNames[month - 1] || `Mois_${month}`;
+        fileName = `RapportComptable_${monthName}_${String(year).slice(
           -2
         )}.pdf`;
         break;
@@ -176,20 +192,38 @@ const GlobalConflictModal = () => {
         "🚀 Remplacement du fichier avec le nouveau système universel"
       );
 
-      // Pour les nouveaux types (devis_chantier), utiliser le système universel
-      if (conflictData.documentType === "devis_chantier") {
-        // Construire les données pour le système universel
-        const documentData = {
-          devisId: conflictData.devisId,
-          appelOffresId: conflictData.appelOffresId,
-          appelOffresName: conflictData.appelOffresName,
-          societeName: conflictData.societeName,
-          numero: conflictData.numero,
-        };
+      // Pour les nouveaux types, utiliser le système universel
+      if (
+        ["devis_chantier", "planning_hebdo", "rapport_agents"].includes(
+          conflictData.documentType
+        )
+      ) {
+        // Construire les données pour le système universel selon le type
+        let documentData = {};
+
+        if (conflictData.documentType === "devis_chantier") {
+          documentData = {
+            devisId: conflictData.devisId,
+            appelOffresId: conflictData.appelOffresId,
+            appelOffresName: conflictData.appelOffresName,
+            societeName: conflictData.societeName,
+            numero: conflictData.numero,
+          };
+        } else if (conflictData.documentType === "planning_hebdo") {
+          documentData = {
+            week: conflictData.week,
+            year: conflictData.year,
+          };
+        } else if (conflictData.documentType === "rapport_agents") {
+          documentData = {
+            month: conflictData.month,
+            year: conflictData.year,
+          };
+        }
 
         // Utiliser le système universel avec force_replace = true
         await generatePDFDrive(
-          "devis_chantier",
+          conflictData.documentType,
           documentData,
           {
             onSuccess: (response) => {

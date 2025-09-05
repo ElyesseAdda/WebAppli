@@ -32,6 +32,30 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du devis ${data.appelOffresName} vers le Drive...`,
   },
+  planning_hebdo: {
+    apiEndpoint: "/planning-hebdo-pdf-drive/",
+    previewUrl: (data) =>
+      `/api/preview-planning-hebdo/?week=${data.week}&year=${data.year}`,
+    requiredFields: ["week", "year"],
+    displayName: "Planning Hebdomadaire",
+    // Fonction pour construire le nom d'affichage
+    getDisplayName: (data) => `Planning Semaine ${data.week}/${data.year}`,
+    // Fonction pour construire le message de chargement
+    getLoadingMessage: (data) =>
+      `Génération du planning hebdomadaire semaine ${data.week}/${data.year} vers le Drive...`,
+  },
+  rapport_agents: {
+    apiEndpoint: "/generate-monthly-agents-pdf-drive/",
+    previewUrl: (data) =>
+      `/api/preview-monthly-agents-report/?month=${data.month}&year=${data.year}`,
+    requiredFields: ["month", "year"],
+    displayName: "Rapport Mensuel Agents",
+    // Fonction pour construire le nom d'affichage
+    getDisplayName: (data) => `Rapport Agents ${data.month}/${data.year}`,
+    // Fonction pour construire le message de chargement
+    getLoadingMessage: (data) =>
+      `Génération du rapport mensuel agents ${data.month}/${data.year} vers le Drive...`,
+  },
   // Autres types à ajouter plus tard :
   // 'facture': { ... },
   // 'situation': { ... },
@@ -147,6 +171,18 @@ const buildApiParams = (documentType, data) => {
         societe_name: data.societeName,
       };
 
+    case "planning_hebdo":
+      return {
+        week: data.week,
+        year: data.year,
+      };
+
+    case "rapport_agents":
+      return {
+        month: data.month,
+        year: data.year,
+      };
+
     // Autres types à ajouter ici
     default:
       return data;
@@ -240,6 +276,27 @@ const buildFileName = (documentType, data) => {
       }`;
       return `${devisName}.pdf`;
 
+    case "planning_hebdo":
+      return `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
+
+    case "rapport_agents":
+      const monthNames = [
+        "Janvier",
+        "Février",
+        "Mars",
+        "Avril",
+        "Mai",
+        "Juin",
+        "Juillet",
+        "Août",
+        "Septembre",
+        "Octobre",
+        "Novembre",
+        "Décembre",
+      ];
+      const monthName = monthNames[data.month - 1] || `Mois_${data.month}`;
+      return `RapportComptable_${monthName}_${String(data.year).slice(-2)}.pdf`;
+
     // Autres types à ajouter ici
     default:
       return `${documentType}_${data.id || Date.now()}.pdf`;
@@ -255,6 +312,12 @@ const buildFilePath = (documentType, data, fileName) => {
       const societeSlug = customSlugify(data.societeName);
       const appelOffresSlug = customSlugify(data.appelOffresName);
       return `Appels_Offres/${societeSlug}/${appelOffresSlug}/Devis/Devis_Marche/${fileName}`;
+
+    case "planning_hebdo":
+      return `Agents/Document_Generaux/PlanningHebdo/${data.year}/${fileName}`;
+
+    case "rapport_agents":
+      return `Agents/Document_Generaux/Rapport_mensuel/${data.year}/${fileName}`;
 
     // Autres types à ajouter ici
     default:
@@ -273,6 +336,18 @@ const getDocumentSpecificData = (documentType, data) => {
         appelOffresName: data.appelOffresName,
         devisId: data.devisId,
         numero: data.numero,
+      };
+
+    case "planning_hebdo":
+      return {
+        week: data.week,
+        year: data.year,
+      };
+
+    case "rapport_agents":
+      return {
+        month: data.month,
+        year: data.year,
       };
 
     // Autres types à ajouter ici

@@ -13,9 +13,9 @@ import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
 import isoWeek from "dayjs/plugin/isoWeek";
 import React, { useEffect, useState } from "react";
 
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import "./../../static/css/planningHebdo.css";
 import LaborCostsSummary from "./LaborCostsSummary";
-import { generatePlanningHebdoDrive } from "./pdf_drive_functions";
 
 dayjs.extend(isoWeek);
 dayjs.locale("fr"); // Définir la locale sur français
@@ -800,21 +800,37 @@ const PlanningHebdoAgent = ({
   const handleGeneratePDF = async () => {
     try {
       console.log(
-        `🚀 Génération du planning hebdomadaire semaine ${selectedWeek}/${selectedYear} vers le Drive...`
+        `🚀 NOUVEAU: Génération du planning hebdomadaire semaine ${selectedWeek}/${selectedYear} vers le Drive...`
       );
 
-      const result = await generatePlanningHebdoDrive(
-        selectedWeek,
-        selectedYear
+      // Utiliser le nouveau système universel
+      await generatePDFDrive(
+        "planning_hebdo",
+        {
+          week: selectedWeek,
+          year: selectedYear,
+        },
+        {
+          onSuccess: (response) => {
+            console.log(
+              "✅ NOUVEAU: Planning hebdomadaire généré avec succès:",
+              response
+            );
+          },
+          onError: (error) => {
+            console.error(
+              "❌ NOUVEAU: Erreur lors de la génération du planning hebdomadaire:",
+              error
+            );
+            alert(
+              `❌ Erreur lors de la génération du planning hebdomadaire: ${error.message}`
+            );
+          },
+        }
       );
-
-      if (result.success) {
-        console.log("✅ PDF généré et stocké avec succès dans le Drive");
-        // La redirection se fait automatiquement dans la fonction generatePlanningHebdoDrive
-      }
     } catch (error) {
-      console.error("❌ Erreur lors de la génération du PDF:", error);
-      alert(`Erreur lors de la génération du PDF: ${error.message}`);
+      console.error("❌ NOUVEAU: Erreur lors de la génération du PDF:", error);
+      alert(`❌ Erreur lors de la génération du PDF: ${error.message}`);
     }
   };
 

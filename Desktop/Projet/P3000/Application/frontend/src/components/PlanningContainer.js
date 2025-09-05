@@ -9,9 +9,9 @@ import { styled } from "@mui/material/styles";
 import axios from "axios";
 import dayjs from "dayjs";
 import React, { useEffect, useState } from "react";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import LaborCostsSummary from "./LaborCostsSummary";
 import PlanningHebdoAgent from "./PlanningHebdoAgent";
-import { generateMonthlyAgentsPDFDrive } from "./pdf_drive_functions";
 
 const StyledFormControl = styled(FormControl)({
   minWidth: 150,
@@ -116,25 +116,41 @@ const PlanningContainer = () => {
   const handleGenerateMonthlyReport = async () => {
     try {
       console.log(
-        `🚀 Génération du rapport mensuel agents ${selectedMonth}/${selectedReportYear} vers le Drive...`
+        `🚀 NOUVEAU: Génération du rapport mensuel agents ${selectedMonth}/${selectedReportYear} vers le Drive...`
       );
 
-      const result = await generateMonthlyAgentsPDFDrive(
-        selectedMonth,
-        selectedReportYear
+      // Utiliser le nouveau système universel
+      await generatePDFDrive(
+        "rapport_agents",
+        {
+          month: selectedMonth,
+          year: selectedReportYear,
+        },
+        {
+          onSuccess: (response) => {
+            console.log(
+              "✅ NOUVEAU: Rapport mensuel généré avec succès:",
+              response
+            );
+          },
+          onError: (error) => {
+            console.error(
+              "❌ NOUVEAU: Erreur lors de la génération du rapport mensuel:",
+              error
+            );
+            alert(
+              `❌ Erreur lors de la génération du rapport mensuel: ${error.message}`
+            );
+          },
+        }
       );
-
-      if (result.success) {
-        console.log("✅ PDF généré et stocké avec succès dans le Drive");
-        // La redirection se fait automatiquement dans la fonction generateMonthlyAgentsPDFDrive
-      }
     } catch (error) {
       console.error(
-        "❌ Erreur lors de la génération du rapport mensuel:",
+        "❌ NOUVEAU: Erreur lors de la génération du rapport mensuel:",
         error
       );
       alert(
-        `Erreur lors de la génération du rapport mensuel: ${error.message}`
+        `❌ Erreur lors de la génération du rapport mensuel: ${error.message}`
       );
     }
   };

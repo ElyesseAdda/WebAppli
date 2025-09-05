@@ -81,7 +81,7 @@ class PDFManager:
         elif document_type == 'rapport_agents':
             month = kwargs.get('month', 'XX')
             year = kwargs.get('year', 'XXXX')
-            # Nouveau format : RapportComptable {mois} {année}
+            # Format cohérent avec le frontend : RapportComptable_{mois}_{année}
             mois_francais = {
                 1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
                 5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
@@ -89,7 +89,7 @@ class PDFManager:
             }
             month_name = mois_francais.get(month, f'Mois_{month}')
             year_short = str(year)[-2:] if len(str(year)) >= 2 else str(year)
-            return f"RapportComptable {month_name} {year_short}.pdf"
+            return f"RapportComptable_{month_name}_{year_short}.pdf"
         
         elif document_type == 'devis_travaux':
             chantier_name = kwargs.get('chantier_name', 'chantier')
@@ -166,8 +166,12 @@ class PDFManager:
             if document_type == 'planning_hebdo':
                 year = kwargs.get('year', 'XXXX')
                 return f"Agents/Document_Generaux/PlanningHebdo/{year}"
+            elif document_type == 'rapport_agents':
+                # Pour le rapport agents, ajouter l'année comme sous-dossier
+                year = kwargs.get('year', 'XXXX')
+                return f"Agents/Document_Generaux/{self.document_type_folders.get(document_type, 'Documents')}/{year}"
             else:
-                # Planning mensuel et rapport agents
+                # Planning mensuel
                 return f"Agents/Document_Generaux/{self.document_type_folders.get(document_type, 'Documents')}"
         
         elif document_type in ['situation', 'facture', 'avenant']:
