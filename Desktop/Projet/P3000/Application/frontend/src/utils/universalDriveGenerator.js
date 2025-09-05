@@ -78,6 +78,22 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du devis ${data.chantierName} vers le Drive...`,
   },
+
+  situation: {
+    apiEndpoint: "/generate-situation-pdf-drive/",
+    previewUrl: (data) => `/api/preview-situation/${data.situationId}/`,
+    requiredFields: [
+      "situationId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "numeroSituation",
+    ],
+    displayName: "Situation",
+    getDisplayName: (data) => `Situation ${data.numeroSituation}`,
+    getLoadingMessage: (data) =>
+      `Génération de la situation ${data.numeroSituation} vers le Drive...`,
+  },
   planning_hebdo: {
     apiEndpoint: "/planning-hebdo-pdf-drive/",
     previewUrl: (data) =>
@@ -245,6 +261,15 @@ const buildApiParams = (documentType, data) => {
         numero_avenant: data.numeroAvenant,
       };
 
+    case "situation":
+      return {
+        situation_id: data.situationId,
+        chantier_id: data.chantierId,
+        chantier_name: data.chantierName,
+        societe_name: data.societeName,
+        numero_situation: data.numeroSituation,
+      };
+
     case "planning_hebdo":
       return {
         week: data.week,
@@ -362,6 +387,10 @@ const buildFileName = (documentType, data) => {
       const avenantName = `Avenant ${data.numeroAvenant} ${data.sousTraitantName} - ${data.chantierName}`;
       return `${avenantName}.pdf`;
 
+    case "situation":
+      // Nom du fichier : "{numero_situation}.pdf"
+      return `${data.numeroSituation}.pdf`;
+
     case "planning_hebdo":
       return `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
 
@@ -416,6 +445,11 @@ const buildFilePath = (documentType, data, fileName) => {
       const entrepriseAvenantSlug = customSlugify(data.sousTraitantName);
       return `Chantiers/${societeAvenantSlug}/${chantierAvenantSlug}/Sous_Traitant/${entrepriseAvenantSlug}/${fileName}`;
 
+    case "situation":
+      const societeSituationSlug = customSlugify(data.societeName);
+      const chantierSituationSlug = customSlugify(data.chantierName);
+      return `Chantiers/${societeSituationSlug}/${chantierSituationSlug}/Situation/${fileName}`;
+
     case "planning_hebdo":
       return `Agents/Document_Generaux/PlanningHebdo/${data.year}/${fileName}`;
 
@@ -467,6 +501,15 @@ const getDocumentSpecificData = (documentType, data) => {
         societeName: data.societeName,
         sousTraitantName: data.sousTraitantName,
         numeroAvenant: data.numeroAvenant,
+      };
+
+    case "situation":
+      return {
+        situationId: data.situationId,
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
+        societeName: data.societeName,
+        numeroSituation: data.numeroSituation,
       };
 
     case "planning_hebdo":

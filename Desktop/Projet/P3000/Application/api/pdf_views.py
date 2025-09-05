@@ -774,3 +774,66 @@ def generate_avenant_sous_traitance_pdf_drive(request):
         error_msg = f'Erreur inattendue: {str(e)}'
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def generate_situation_pdf_drive(request):
+    """
+    Vue pour générer le PDF d'une situation et le stocker dans AWS S3
+    """
+    try:
+        # Récupérer les paramètres depuis la requête
+        situation_id = request.GET.get('situation_id')
+        chantier_id = request.GET.get('chantier_id')
+        chantier_name = request.GET.get('chantier_name', 'Chantier')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        numero_situation = request.GET.get('numero_situation', 'SIT-001')
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        
+        if not situation_id:
+            return JsonResponse({'error': 'situation_id est requis'}, status=400)
+        
+        # URL de prévisualisation
+        preview_url = request.build_absolute_uri(f"/api/preview-situation/{situation_id}/")
+        
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='situation',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            force_replace=force_replace,
+            situation_id=situation_id,
+            chantier_id=chantier_id,
+            chantier_name=chantier_name,
+            numero_situation=numero_situation
+        )
+        
+        if success:
+            # Succès : retourner les informations du fichier stocké
+            return JsonResponse({
+                'success': True,
+                'message': f'PDF situation {numero_situation} généré et stocké avec succès dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'document_type': 'situation',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'situation_id': situation_id,
+                'numero_situation': numero_situation,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
+            })
+        else:
+            # Échec : retourner l'erreur
+            return JsonResponse({
+                'success': False,
+                'error': message
+            }, status=500)
+            
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)

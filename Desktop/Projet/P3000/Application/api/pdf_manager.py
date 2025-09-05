@@ -122,10 +122,10 @@ class PDFManager:
             return f"{avenant_name}.pdf"
         
         elif document_type == 'situation':
-            chantier_name = kwargs.get('chantier_name', 'chantier')
-            chantier_id = kwargs.get('chantier_id', 'XXX')
-            situation_num = kwargs.get('situation_num', '001')
-            return f"situation_{situation_num}_{chantier_id}_{custom_slugify(chantier_name)}_{timestamp}.pdf"
+            # Utiliser le numero_situation depuis la DB (sans timestamp ni ID)
+            numero_situation = kwargs.get('numero_situation', 'situation')
+            print(f"🔍 DEBUG generate_pdf_filename - numero_situation reçu: '{numero_situation}'")
+            return f"{numero_situation}.pdf"
         
         elif document_type == 'facture':
             chantier_name = kwargs.get('chantier_name', 'chantier')
@@ -197,7 +197,14 @@ class PDFManager:
                 # Planning mensuel
                 return f"Agents/Document_Generaux/{self.document_type_folders.get(document_type, 'Documents')}"
         
-        elif document_type in ['situation', 'facture', 'avenant']:
+        elif document_type == 'situation':
+            # Pour les situations, utiliser la structure Chantiers/
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            chantier_slug = custom_slugify(chantier_name)
+            subfolder = self.document_type_folders.get(document_type, 'Situation')
+            return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
+        
+        elif document_type in ['facture', 'avenant']:
             # Ces documents sont toujours liés à un chantier
             chantier_name = kwargs['chantier_name']
             chantier_slug = custom_slugify(chantier_name)

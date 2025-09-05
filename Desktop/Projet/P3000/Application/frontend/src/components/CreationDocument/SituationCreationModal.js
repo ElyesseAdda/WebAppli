@@ -25,6 +25,7 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
+import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 
 const MOIS = [
   { value: 1, label: "Janvier" },
@@ -1805,6 +1806,38 @@ const SituationCreationModal = ({
       } else {
         // Création d'une nouvelle situation
         response = await axios.post("/api/situations/", situationData);
+
+        // Téléchargement automatique vers le Drive après création
+        try {
+          console.log(
+            "🚀 Lancement du téléchargement automatique de la situation vers le Drive..."
+          );
+
+          const driveData = {
+            situationId: response.data.id,
+            chantierId: chantier.id,
+            chantierName: chantier.chantier_name || chantier.nom || "Chantier",
+            societeName:
+              chantier.societe?.nom_societe ||
+              chantier.societe?.nom ||
+              "Société",
+            numeroSituation: response.data.numero_situation,
+          };
+
+          console.log(
+            "🔍 DEBUG SituationCreationModal - driveData:",
+            driveData
+          );
+
+          await generatePDFDrive("situation", driveData);
+          console.log("✅ Situation téléchargée avec succès vers le Drive");
+        } catch (driveError) {
+          console.error(
+            "❌ Erreur lors du téléchargement automatique de la situation:",
+            driveError
+          );
+          // Ne pas bloquer la création de la situation si le téléchargement échoue
+        }
       }
 
       if (onCreated) onCreated();
