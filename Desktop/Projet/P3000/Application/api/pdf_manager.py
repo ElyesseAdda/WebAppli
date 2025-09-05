@@ -92,9 +92,10 @@ class PDFManager:
             return f"RapportComptable_{month_name}_{year_short}.pdf"
         
         elif document_type == 'devis_travaux':
-            chantier_name = kwargs.get('chantier_name', 'chantier')
-            chantier_id = kwargs.get('chantier_id', 'XXX')
-            return f"devis_travaux_{chantier_id}_{custom_slugify(chantier_name)}_{timestamp}.pdf"
+            # Utiliser le numéro du devis depuis la DB (sans timestamp ni ID)
+            devis_numero = kwargs.get('devis_numero', 'devis_travaux')
+            print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
+            return f"{devis_numero}.pdf"
         
         elif document_type == 'devis_marche':
             # Utiliser le nom du devis depuis la DB (sans timestamp ni ID)
@@ -140,11 +141,11 @@ class PDFManager:
         if document_type in ['devis_travaux', 'devis_marche']:
             # Pour les devis, vérifier s'il s'agit d'un chantier ou d'un appel d'offres
             if 'chantier_name' in kwargs:
-                # C'est un chantier
+                # C'est un chantier (devis normal)
                 chantier_name = kwargs['chantier_name']
                 chantier_slug = custom_slugify(chantier_name)
                 subfolder = self.document_type_folders.get(document_type, 'Devis')
-                return f"Sociétés/{societe_slug}/{chantier_slug}/{subfolder}"
+                return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
             else:
                 # C'est un appel d'offres
                 appel_offres_name = kwargs['appel_offres_name']

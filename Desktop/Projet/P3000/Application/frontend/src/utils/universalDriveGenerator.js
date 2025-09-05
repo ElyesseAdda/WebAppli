@@ -32,6 +32,17 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du devis ${data.appelOffresName} vers le Drive...`,
   },
+  devis_normal: {
+    apiEndpoint: "/generate-devis-travaux-pdf-drive/",
+    previewUrl: (data) => `/api/preview-saved-devis/${data.devisId}/`,
+    requiredFields: ["devisId", "chantierId", "chantierName", "societeName"],
+    displayName: "Devis Normal",
+    // Fonction pour construire le nom d'affichage
+    getDisplayName: (data) => `Devis ${data.numero || data.devisId}`,
+    // Fonction pour construire le message de chargement
+    getLoadingMessage: (data) =>
+      `Génération du devis ${data.chantierName} vers le Drive...`,
+  },
   planning_hebdo: {
     apiEndpoint: "/planning-hebdo-pdf-drive/",
     previewUrl: (data) =>
@@ -171,6 +182,14 @@ const buildApiParams = (documentType, data) => {
         societe_name: data.societeName,
       };
 
+    case "devis_normal":
+      return {
+        devis_id: data.devisId,
+        chantier_id: data.chantierId,
+        chantier_name: data.chantierName,
+        societe_name: data.societeName,
+      };
+
     case "planning_hebdo":
       return {
         week: data.week,
@@ -271,10 +290,12 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
 const buildFileName = (documentType, data) => {
   switch (documentType) {
     case "devis_chantier":
-      const devisName = `DEV-${String(data.devisId).padStart(3, "0")}-25 - ${
-        data.appelOffresName
-      }`;
-      return `${devisName}.pdf`;
+      // Utiliser le numéro du devis depuis la DB (ex: "DEV-008-25 - Test Appel Offres")
+      return `${data.numero || data.devisId}.pdf`;
+
+    case "devis_normal":
+      // Utiliser le numéro du devis depuis la DB (ex: "DEV-008-25 - Test Chantier")
+      return `${data.numero || data.devisId}.pdf`;
 
     case "planning_hebdo":
       return `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
@@ -313,6 +334,11 @@ const buildFilePath = (documentType, data, fileName) => {
       const appelOffresSlug = customSlugify(data.appelOffresName);
       return `Appels_Offres/${societeSlug}/${appelOffresSlug}/Devis/Devis_Marche/${fileName}`;
 
+    case "devis_normal":
+      const societeNormalSlug = customSlugify(data.societeName);
+      const chantierSlug = customSlugify(data.chantierName);
+      return `Chantiers/${societeNormalSlug}/${chantierSlug}/Devis/${fileName}`;
+
     case "planning_hebdo":
       return `Agents/Document_Generaux/PlanningHebdo/${data.year}/${fileName}`;
 
@@ -334,6 +360,14 @@ const getDocumentSpecificData = (documentType, data) => {
       return {
         appelOffresId: data.appelOffresId,
         appelOffresName: data.appelOffresName,
+        devisId: data.devisId,
+        numero: data.numero,
+      };
+
+    case "devis_normal":
+      return {
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
         devisId: data.devisId,
         numero: data.numero,
       };

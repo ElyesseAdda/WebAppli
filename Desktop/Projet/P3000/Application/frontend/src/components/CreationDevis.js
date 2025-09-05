@@ -1028,6 +1028,61 @@ const CreationDevis = () => {
           }
         }
 
+        // Si c'est un devis normal, préparer le téléchargement automatique
+        if (devisType === "normal") {
+          try {
+            console.log(
+              "🚀 Préparation du téléchargement automatique pour le devis normal..."
+            );
+
+            const devisId = response.data.id;
+
+            if (devisId && chantierIdToUse) {
+              // Récupérer les informations du chantier
+              const chantierResponse = await axios.get(
+                `/api/chantier/${chantierIdToUse}/`
+              );
+              const chantier = chantierResponse.data;
+
+              // Récupérer le nom de la société
+              // chantier.societe est un objet complet de la société (SocieteSerializer)
+              const societe = chantier.societe;
+
+              // Construire l'URL avec les paramètres pour le téléchargement automatique
+              const urlParams = new URLSearchParams({
+                autoDownload: "true",
+                devisId: devisId,
+                chantierId: chantierIdToUse,
+                chantierName: chantier.chantier_name,
+                societeName: societe.nom_societe,
+                numero: devisModalData.numero,
+              });
+
+              // Message de succès et redirection avec paramètres
+              alert(
+                "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
+              );
+              window.location.href = `/ListeDevis?${urlParams.toString()}`;
+              return; // IMPORTANT: Arrêter l'exécution pour éviter la redirection suivante
+            } else {
+              console.warn(
+                "⚠️ Données manquantes pour le téléchargement automatique du devis normal"
+              );
+              alert("Devis créé avec succès !");
+              window.location.href = "/ListeDevis";
+              return; // IMPORTANT: Arrêter l'exécution pour éviter la redirection suivante
+            }
+          } catch (error) {
+            console.error(
+              "❌ Erreur lors de la préparation du téléchargement automatique du devis normal:",
+              error
+            );
+            alert("Devis créé avec succès !");
+            window.location.href = "/ListeDevis";
+            return; // IMPORTANT: Arrêter l'exécution pour éviter la redirection suivante
+          }
+        }
+
         // Redirection par défaut pour les devis normaux (non-chantier)
         alert("Devis créé avec succès!");
         window.location.href = "/ListeDevis";

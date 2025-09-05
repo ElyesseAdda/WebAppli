@@ -193,6 +193,8 @@ const ListeDevis = () => {
         const devisId = urlParams.get("devisId");
         const appelOffresId = urlParams.get("appelOffresId");
         const appelOffresName = urlParams.get("appelOffresName");
+        const chantierId = urlParams.get("chantierId");
+        const chantierName = urlParams.get("chantierName");
         const societeName = urlParams.get("societeName");
         const numero = urlParams.get("numero");
 
@@ -200,12 +202,15 @@ const ListeDevis = () => {
           devisId,
           appelOffresId,
           appelOffresName,
+          chantierId,
+          chantierName,
           societeName,
           numero,
         });
 
-        // Vérifier que tous les paramètres requis sont présents
+        // Vérifier si c'est un devis de chantier ou un devis normal
         if (devisId && appelOffresId && appelOffresName && societeName) {
+          // C'est un devis de chantier
           // Attendre que les devis soient chargés
           setTimeout(async () => {
             try {
@@ -251,6 +256,62 @@ const ListeDevis = () => {
             } catch (error) {
               console.error(
                 "❌ NOUVEAU: Erreur lors du téléchargement automatique:",
+                error
+              );
+              alert(
+                `❌ Erreur lors du téléchargement automatique: ${error.message}`
+              );
+              // Nettoyer l'URL en cas d'erreur
+              const newUrl = window.location.pathname;
+              window.history.replaceState({}, document.title, newUrl);
+            }
+          }, 2000); // Attendre 2 secondes pour que les devis soient chargés
+        } else if (devisId && chantierId && chantierName && societeName) {
+          // C'est un devis normal
+          // Attendre que les devis soient chargés
+          setTimeout(async () => {
+            try {
+              console.log(
+                "🎯 NOUVEAU: Lancement du téléchargement automatique pour devis normal avec le système universel"
+              );
+
+              // Utiliser le nouveau système universel pour les devis normaux
+              await generatePDFDrive(
+                "devis_normal",
+                {
+                  devisId: parseInt(devisId),
+                  chantierId: parseInt(chantierId),
+                  chantierName: chantierName,
+                  societeName: societeName,
+                  numero: numero || `DEV-${devisId}`,
+                },
+                {
+                  onSuccess: (response) => {
+                    console.log(
+                      "✅ NOUVEAU: Téléchargement automatique devis normal réussi:",
+                      response
+                    );
+                    // Nettoyer l'URL après succès
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                  },
+                  onError: (error) => {
+                    console.error(
+                      "❌ NOUVEAU: Erreur lors du téléchargement automatique devis normal:",
+                      error
+                    );
+                    alert(
+                      `❌ Erreur lors du téléchargement automatique: ${error.message}`
+                    );
+                    // Nettoyer l'URL même en cas d'erreur
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                  },
+                }
+              );
+            } catch (error) {
+              console.error(
+                "❌ NOUVEAU: Erreur lors du téléchargement automatique devis normal:",
                 error
               );
               alert(

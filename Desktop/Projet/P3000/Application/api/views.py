@@ -307,8 +307,8 @@ def preview_devis(request):
                 societe = chantier.societe
                 client = societe.client_name
 
-            total_ht = 0
-            parties_data = []
+                total_ht = 0
+                parties_data = []
             
             # Fonction de tri naturel pour les parties
             def natural_sort_key(titre):
@@ -8297,7 +8297,7 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 print(f"   Chantier: {chantier_name}")
                 
                 success = drive_automation.copy_appel_offres_to_chantier(
-                    societe_name=societe_name,
+                        societe_name=societe_name,
                     appel_offres_name=appel_offres_name,
                     chantier_name=chantier_name
                     )

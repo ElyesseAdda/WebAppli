@@ -35,7 +35,7 @@ class DriveAutomation:
     
     def __init__(self):
         self.appels_offres_root = "Appels_Offres"
-        self.chantiers_root = "Chantiers/Société"
+        self.chantiers_root = "Chantiers"
     
     def custom_slugify(self, text: str) -> str:
         """
@@ -322,11 +322,11 @@ class DriveAutomation:
         try:
             print(f"🔄 Début de la copie: Appel d'offres → Chantier")
             print(f"   Source: Appels_Offres/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}")
-            print(f"   Destination: Chantiers/Société/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}")
+            print(f"   Destination: Chantiers/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}")
             
             # Chemins source et destination
             source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}"
-            dest_societe_path = f"Chantiers/Société/{custom_slugify(societe_name)}"
+            dest_societe_path = f"Chantiers/{custom_slugify(societe_name)}"
             dest_chantier_path = f"{dest_societe_path}/{custom_slugify(chantier_name)}"
             
             print(f"🔍 Chemins détaillés:")

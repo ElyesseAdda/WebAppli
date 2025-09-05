@@ -154,20 +154,37 @@ def generate_devis_travaux_pdf_drive(request):
     try:
         chantier_id = request.GET.get('chantier_id')
         chantier_name = request.GET.get('chantier_name', 'Chantier')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        devis_id = request.GET.get('devis_id')
         
-        # URL de prévisualisation (à adapter selon votre logique)
-        preview_url = request.build_absolute_uri(f"/api/preview-devis-travaux/?chantier_id={chantier_id}")
+        if not devis_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'devis_id est requis pour générer le PDF'
+            }, status=400)
         
-        # Récupérer la société (à adapter selon votre logique)
-        societe_name = "Société par défaut"  # À adapter selon votre logique
+        # Récupérer le numéro du devis depuis la base de données
+        from .models import Devis
+        try:
+            devis = Devis.objects.get(id=devis_id)
+            devis_numero = devis.numero
+        except Devis.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Devis avec ID {devis_id} introuvable'
+            }, status=404)
+        
+        # URL de prévisualisation pour les devis de travaux
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
         
         # Générer le PDF et le stocker dans AWS S3
-        success, message, s3_file_path = pdf_manager.generate_andStore_pdf(
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='devis_travaux',
             preview_url=preview_url,
             societe_name=societe_name,
             chantier_id=chantier_id,
-            chantier_name=chantier_name
+            chantier_name=chantier_name,
+            devis_numero=devis_numero
         )
         
         if success:
