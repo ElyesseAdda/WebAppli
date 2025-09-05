@@ -8266,23 +8266,47 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 devis.appel_offres = None
                 devis.save()
             
-            # Transférer automatiquement les dossiers du drive
+            # Récupérer les informations pour la copie (sans génération de PDF)
             try:
+                # Récupérer le nom de la société depuis l'appel d'offres
                 societe_name = "Société par défaut"
-                if hasattr(appel_offres, 'devis') and appel_offres.devis.first():
+                if appel_offres.societe:
+                    societe_name = appel_offres.societe.nom_societe
+                elif hasattr(appel_offres, 'devis') and appel_offres.devis.first():
                     devis = appel_offres.devis.first()
                     if devis.societe:
                         societe_name = devis.societe.nom
                 
-                if appel_offres.nom:
-                    success = drive_automation.transfer_project_to_chantier(
-                        societe_name=societe_name,
-                        project_name=appel_offres.nom
-                    )
-                    if not success:
-                        print("Erreur lors du transfert des dossiers du drive")
+                # Utiliser le nom de l'appel d'offres et du chantier
+                appel_offres_name = appel_offres.chantier_name
+                chantier_name = chantier.chantier_name
+                
+                print(f"🔄 Préparation de la copie des dossiers:")
+                print(f"   Société: {societe_name}")
+                print(f"   Appel d'offres: {appel_offres_name}")
+                print(f"   Chantier: {chantier_name}")
+                
             except Exception as e:
-                print(f"Erreur lors du transfert automatique des dossiers: {str(e)}")
+                print(f"Erreur lors de la préparation de la copie: {str(e)}")
+            
+            # Copier automatiquement les dossiers du drive vers le nouveau chemin
+            try:
+                print(f"🔄 Copie des dossiers Drive:")
+                print(f"   Société: {societe_name}")
+                print(f"   Appel d'offres: {appel_offres_name}")
+                print(f"   Chantier: {chantier_name}")
+                
+                success = drive_automation.copy_appel_offres_to_chantier(
+                    societe_name=societe_name,
+                    appel_offres_name=appel_offres_name,
+                    chantier_name=chantier_name
+                    )
+                if not success:
+                    print("Erreur lors de la copie des dossiers du drive")
+                else:
+                    print("✅ Copie des dossiers Drive réussie")
+            except Exception as e:
+                print(f"Erreur lors de la copie automatique des dossiers: {str(e)}")
             
             return Response({
                 'message': 'Appel d\'offres transformé en chantier avec succès',
@@ -8314,6 +8338,49 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
             appel_offres.save()
             
             return Response({'message': 'Statut mis à jour avec succès'})
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['delete'])
+    def supprimer_appel_offres(self, request, pk=None):
+        """Supprime un appel d'offres, ses devis associés et ses dossiers dans le drive"""
+        try:
+            appel_offres = self.get_object()
+            
+            # Récupérer les devis associés pour information
+            devis_associes = appel_offres.devis.all()
+            nombre_devis = devis_associes.count()
+            
+            # Supprimer les dossiers du drive
+            try:
+                societe_name = "Société par défaut"
+                if appel_offres.societe:
+                    societe_name = appel_offres.societe.nom_societe
+                
+                # Supprimer la structure de dossiers dans le drive
+                drive_automation.delete_appel_offres_structure(
+                    societe_name=societe_name,
+                    appel_offres_name=appel_offres.chantier_name
+                )
+            except Exception as e:
+                print(f"Erreur lors de la suppression des dossiers du drive: {str(e)}")
+                # Continuer la suppression même si les dossiers n'ont pas pu être supprimés
+            
+            # Supprimer les devis associés en premier (pour éviter les contraintes de clé étrangère)
+            for devis in devis_associes:
+                print(f"🗑️ Suppression du devis {devis.id} - {devis.numero}")
+                devis.delete()
+            
+            # Supprimer l'appel d'offres
+            appel_offres.delete()
+            
+            # Message de confirmation avec le nombre de devis supprimés
+            message = f'Appel d\'offres supprimé avec succès'
+            if nombre_devis > 0:
+                message += f' ({nombre_devis} devis associé(s) supprimé(s))'
+            
+            return Response({'message': message})
             
         except Exception as e:
             return Response({'error': str(e)}, status=500)

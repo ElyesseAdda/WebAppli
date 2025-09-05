@@ -1,4 +1,5 @@
 import {
+  Delete as DeleteIcon,
   Transform as TransformIcon,
   Visibility as VisibilityIcon,
 } from "@mui/icons-material";
@@ -35,6 +36,7 @@ const GestionAppelsOffres = () => {
   const [appelsOffres, setAppelsOffres] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAppelOffres, setSelectedAppelOffres] = useState(null);
   const [nouveauStatut, setNouveauStatut] = useState("");
   const [raisonRefus, setRaisonRefus] = useState("");
@@ -95,6 +97,22 @@ const GestionAppelsOffres = () => {
       console.error("Erreur lors de la mise à jour:", error);
       const errorMessage =
         error.response?.data?.error || "Erreur lors de la mise à jour";
+      showAlert(errorMessage, "error");
+    }
+  };
+
+  const handleSupprimerAppelOffres = async () => {
+    try {
+      await axios.delete(
+        `/api/appels-offres/${selectedAppelOffres.id}/supprimer_appel_offres/`
+      );
+      setDeleteDialogOpen(false);
+      fetchAppelsOffres();
+      showAlert("Appel d'offres supprimé avec succès !");
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      const errorMessage =
+        error.response?.data?.error || "Erreur lors de la suppression";
       showAlert(errorMessage, "error");
     }
   };
@@ -263,6 +281,19 @@ const GestionAppelsOffres = () => {
                               <VisibilityIcon />
                             </IconButton>
                           </Tooltip>
+
+                          <Tooltip title="Supprimer l'appel d'offres">
+                            <IconButton
+                              color="error"
+                              onClick={() => {
+                                setSelectedAppelOffres(appelOffres);
+                                setDeleteDialogOpen(true);
+                              }}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -330,6 +361,63 @@ const GestionAppelsOffres = () => {
             disabled={!nouveauStatut}
           >
             Confirmer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de confirmation de suppression */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          {selectedAppelOffres && (
+            <Box>
+              <Typography variant="h6" gutterBottom color="error">
+                ⚠️ Attention : Cette action est irréversible !
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                Êtes-vous sûr de vouloir supprimer l'appel d'offres :
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
+                {selectedAppelOffres.chantier_name}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Société:{" "}
+                {selectedAppelOffres.societe
+                  ? selectedAppelOffres.societe.nom_societe
+                  : "Non spécifiée"}
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Statut: {getStatutLabel(selectedAppelOffres.statut)}
+              </Typography>
+              <Alert severity="error" sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight="bold" gutterBottom>
+                  ⚠️ Cette action supprimera définitivement :
+                </Typography>
+                <Typography variant="body2" component="ul" sx={{ pl: 2, m: 0 }}>
+                  <li>L'appel d'offres et toutes ses données</li>
+                  <li>Tous les devis associés à cet appel d'offres</li>
+                  <li>Tous les dossiers et fichiers dans le Drive</li>
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1, fontWeight: "bold" }}>
+                  Cette action est irréversible !
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Annuler</Button>
+          <Button
+            onClick={handleSupprimerAppelOffres}
+            variant="contained"
+            color="error"
+          >
+            Supprimer définitivement
           </Button>
         </DialogActions>
       </Dialog>

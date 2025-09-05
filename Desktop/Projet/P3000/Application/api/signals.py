@@ -65,37 +65,38 @@ def create_chantier_folders(sender, instance, created, **kwargs):
             # Ne pas faire échouer la création du chantier à cause du Drive
 
 
-@receiver(post_save, sender=AppelOffres)
-def handle_appel_offres_transformation(sender, instance, **kwargs):
-    """
-    Gère la transformation d'un appel d'offres en chantier
-    """
-    # Vérifier si l'appel d'offres vient d'être validé
-    if instance.statut == 'valide':
-        try:
-            print(f"🔄 Transformation de l'appel d'offres {instance.id} en chantier")
-            
-            # Récupérer le nom de la société
-            societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
-            
-            # Créer le chantier
-            chantier = instance.transformer_en_chantier()
-            
-            # Transférer les dossiers S3 de l'appel d'offres vers le chantier
-            success = drive_automation.transfer_appel_offres_to_chantier(
-                appel_offres_id=instance.id,
-                societe_name=societe_name,
-                appel_offres_name=instance.chantier_name,
-                chantier_name=chantier.chantier_name
-            )
-            
-            if success:
-                print(f"✅ Transfert S3 réussi: Appel d'offres {instance.id} → Chantier {chantier.id}")
-            else:
-                print(f"⚠️  Transfert S3 échoué pour l'appel d'offres {instance.id}")
-            
-        except Exception as e:
-            print(f"❌ Erreur lors de la transformation de l'appel d'offres {instance.id}: {str(e)}")
+# Signal désactivé pour éviter les boucles infinies
+# La transformation se fait maintenant uniquement via l'API manuelle
+# @receiver(post_save, sender=AppelOffres)
+# def handle_appel_offres_transformation(sender, instance, **kwargs):
+#     """
+#     Gère la transformation d'un appel d'offres en chantier
+#     """
+#     # Vérifier si l'appel d'offres vient d'être validé
+#     if instance.statut == 'valide':
+#         try:
+#             print(f"🔄 Transformation de l'appel d'offres {instance.id} en chantier")
+#             
+#             # Récupérer le nom de la société
+#             societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
+#             
+#             # Créer le chantier
+#             chantier = instance.transformer_en_chantier()
+#             
+#             # Copier les dossiers S3 de l'appel d'offres vers le chantier
+#             success = drive_automation.copy_appel_offres_to_chantier(
+#                 societe_name=societe_name,
+#                 appel_offres_name=instance.chantier_name,
+#                 chantier_name=chantier.chantier_name
+#             )
+#             
+#             if success:
+#                 print(f"✅ Copie S3 réussie: Appel d'offres {instance.id} → Chantier {chantier.id}")
+#             else:
+#                 print(f"⚠️  Copie S3 échouée pour l'appel d'offres {instance.id}")
+#             
+#         except Exception as e:
+#             print(f"❌ Erreur lors de la transformation de l'appel d'offres {instance.id}: {str(e)}")
 
 
 @receiver(post_delete, sender=AppelOffres)

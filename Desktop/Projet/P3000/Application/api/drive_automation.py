@@ -28,19 +28,14 @@ class DriveAutomation:
     # Structure des dossiers pour les chantiers
     CHANTIER_SUBFOLDERS = [
         "Devis",
-        "Devis TS", 
         "Situation",
-        "Avenant",
         "Sous Traitant",
-        "Facture",
-        "Planning",
-        "Photos_Chantier",
-        "Documents_Execution"
+        "Facture"
     ]
     
     def __init__(self):
         self.appels_offres_root = "Appels_Offres"
-        self.chantiers_root = "Sociétés"  # Changé de "Chantiers" vers "Sociétés"
+        self.chantiers_root = "Chantiers/Société"
     
     def custom_slugify(self, text: str) -> str:
         """
@@ -120,13 +115,17 @@ class DriveAutomation:
             print(f"❌ Erreur lors de la création de la structure d'appel d'offres: {str(e)}")
             raise
     
-    def create_chantier_structure(self, societe_name: str, chantier_name: str) -> str:
+    def create_chantier_structure(self, societe_name: str, chantier_name: str, root_path: str = None) -> str:
         """
         Crée la structure complète pour un chantier
         """
         try:
+            # Utiliser le root_path fourni ou le défaut
+            if root_path is None:
+                root_path = self.chantiers_root
+            
             # Créer le dossier société s'il n'existe pas
-            societe_path = self.create_societe_folder_if_not_exists(societe_name, self.chantiers_root)
+            societe_path = self.create_societe_folder_if_not_exists(societe_name, root_path)
             
             # Créer le dossier chantier
             chantier_path = f"{societe_path}/{custom_slugify(chantier_name)}"
@@ -262,7 +261,7 @@ class DriveAutomation:
     
     def transfer_project_to_chantier(self, societe_name: str, project_name: str) -> bool:
         """
-        Transfère un projet d'appel d'offres vers chantier
+        Transfère un projet d'appel d'offres vers chantier (DÉPLACE les fichiers)
         """
         try:
             # Chemins source et destination
@@ -314,6 +313,101 @@ class DriveAutomation:
             print(f"Erreur lors du transfert: {str(e)}")
             return False
     
+    def copy_appel_offres_to_chantier(self, societe_name: str, appel_offres_name: str, chantier_name: str) -> bool:
+        """
+        Copie un appel d'offres vers un chantier (COPIE les fichiers sans supprimer l'original)
+        Chemin source: Appels_Offres/Societe/nom_appel_offres
+        Chemin destination: Chantier/Societe/nom_chantier
+        """
+        try:
+            print(f"🔄 Début de la copie: Appel d'offres → Chantier")
+            print(f"   Source: Appels_Offres/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}")
+            print(f"   Destination: Chantiers/Société/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}")
+            
+            # Chemins source et destination
+            source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}"
+            dest_societe_path = f"Chantiers/Société/{custom_slugify(societe_name)}"
+            dest_chantier_path = f"{dest_societe_path}/{custom_slugify(chantier_name)}"
+            
+            print(f"🔍 Chemins détaillés:")
+            print(f"   Source: {source_path}")
+            print(f"   Destination: {dest_chantier_path}")
+            
+            # S'assurer que les chemins se terminent par /
+            if not source_path.endswith('/'):
+                source_path += '/'
+            if not dest_chantier_path.endswith('/'):
+                dest_chantier_path += '/'
+            
+            print(f"🔍 Chemins corrigés:")
+            print(f"   Source: {source_path}")
+            print(f"   Destination: {dest_chantier_path}")
+            
+            # Lister tout le contenu du projet source AVANT de créer la structure
+            content = list_s3_folder_content(source_path)
+            
+            print(f"📁 Contenu à copier: {len(content['files'])} fichiers, {len(content['folders'])} dossiers")
+            print(f"🔍 Détail du contenu source:")
+            print(f"   Fichiers: {[f['name'] for f in content['files']]}")
+            print(f"   Dossiers: {[f['name'] for f in content['folders']]}")
+            
+            # Vérifier le contenu des dossiers Devis et DCE
+            for folder in content['folders']:
+                if folder['name'] in ['Devis', 'DCE']:
+                    folder_content = list_s3_folder_content(f"{source_path}/{folder['name']}")
+                    print(f"   📂 Contenu du dossier {folder['name']}: {len(folder_content['files'])} fichiers")
+                    for file in folder_content['files']:
+                        print(f"      📄 {file['name']}")
+                    
+                    # Vérifier aussi les sous-dossiers (comme Devis_Marche)
+                    for subfolder in folder_content['folders']:
+                        subfolder_content = list_s3_folder_content(f"{source_path}/{folder['name']}/{subfolder['name']}")
+                        print(f"   📂 Contenu du sous-dossier {folder['name']}/{subfolder['name']}: {len(subfolder_content['files'])} fichiers")
+                        for file in subfolder_content['files']:
+                            print(f"      📄 {file['name']}")
+            
+            # Créer seulement le dossier racine du chantier
+            create_s3_folder_recursive(dest_chantier_path)
+            print(f"✅ Dossier racine créé: {dest_chantier_path}")
+            
+            # Créer seulement les dossiers spécifiques au chantier (Situation, Sous Traitant, Facture)
+            # Ne pas créer Devis et DCE car ils seront copiés depuis l'appel d'offres
+            existing_folders = [f['name'] for f in content['folders']]
+            chantier_specific_folders = ["Situation", "Sous Traitant", "Facture"]
+            
+            for folder_name in chantier_specific_folders:
+                if folder_name not in existing_folders:
+                    folder_path = f"{dest_chantier_path.rstrip('/')}/{folder_name}"
+                    create_s3_folder_recursive(folder_path)
+                    print(f"✅ Dossier créé: {folder_path}")
+            
+            # Copier tous les fichiers
+            for file in content['files']:
+                source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
+                dest_file_path = f"{dest_chantier_path.rstrip('/')}/{file['name']}"
+                self._copy_s3_file(source_file_path, dest_file_path)
+                print(f"📄 Fichier copié: {file['name']}")
+            
+            # Copier tous les dossiers (Devis et DCE) directement dans le chantier
+            for folder in content['folders']:
+                source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
+                dest_folder_path = f"{dest_chantier_path.rstrip('/')}/{folder['name']}"
+                
+                print(f"📂 Copie du dossier: {folder['name']}")
+                print(f"   Source: {source_folder_path}")
+                print(f"   Destination: {dest_folder_path}")
+                
+                # Copier le contenu du dossier récursivement
+                self._copy_folder_recursive(source_folder_path, dest_folder_path)
+                print(f"📁 Dossier copié: {folder['name']}")
+            
+            print(f"✅ Copie réussie: {source_path} → {dest_chantier_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la copie: {str(e)}")
+            return False
+    
     def _transfer_folder_recursive(self, source_folder: str, dest_folder: str):
         """
         Transfère récursivement un dossier et son contenu
@@ -362,6 +456,100 @@ class DriveAutomation:
                 
         except Exception as e:
             print(f"Erreur lors de la suppression du dossier {folder_path}: {str(e)}")
+    
+    def _copy_s3_file(self, source_path: str, dest_path: str) -> bool:
+        """
+        Copie un fichier dans S3 (sans supprimer l'original)
+        """
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name
+            
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            
+            # Copier le fichier
+            copy_source = {'Bucket': bucket_name, 'Key': source_path}
+            s3_client.copy_object(
+                CopySource=copy_source,
+                Bucket=bucket_name,
+                Key=dest_path
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Erreur lors de la copie du fichier {source_path} vers {dest_path}: {str(e)}")
+            return False
+    
+    def _copy_folder_recursive(self, source_folder: str, dest_folder: str):
+        """
+        Copie récursivement un dossier et son contenu
+        """
+        try:
+            # S'assurer que les chemins se terminent par /
+            if not source_folder.endswith('/'):
+                source_folder += '/'
+            if not dest_folder.endswith('/'):
+                dest_folder += '/'
+            
+            # Créer le dossier de destination
+            create_s3_folder_recursive(dest_folder)
+            
+            # Lister le contenu
+            content = list_s3_folder_content(source_folder)
+            
+            print(f"   📁 Contenu du dossier {source_folder}: {len(content['files'])} fichiers, {len(content['folders'])} dossiers")
+            
+            # Copier les fichiers
+            for file in content['files']:
+                source_file_path = f"{source_folder.rstrip('/')}/{file['name']}"
+                dest_file_path = f"{dest_folder.rstrip('/')}/{file['name']}"
+                self._copy_s3_file(source_file_path, dest_file_path)
+                print(f"   📄 Fichier copié: {file['name']}")
+            
+            # Copier les sous-dossiers récursivement
+            for subfolder in content['folders']:
+                print(f"   📂 Copie du sous-dossier: {subfolder['name']}")
+                self._copy_folder_recursive(
+                    f"{source_folder.rstrip('/')}/{subfolder['name']}",
+                    f"{dest_folder.rstrip('/')}/{subfolder['name']}"
+                )
+                
+        except Exception as e:
+            print(f"Erreur lors de la copie du dossier {source_folder}: {str(e)}")
+    
+    def delete_appel_offres_structure(self, societe_name: str, appel_offres_name: str) -> bool:
+        """
+        Supprime complètement la structure de dossiers d'un appel d'offres
+        
+        Args:
+            societe_name: Nom de la société
+            appel_offres_name: Nom de l'appel d'offres
+            
+        Returns:
+            bool: True si la suppression a réussi
+        """
+        try:
+            print(f"🗑️ Suppression de la structure d'appel d'offres: {appel_offres_name}")
+            
+            # Construire le chemin de l'appel d'offres
+            appel_offres_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}"
+            
+            # Vérifier si le dossier existe
+            content = list_s3_folder_content(appel_offres_path)
+            if not content['files'] and not content['folders']:
+                print(f"⚠️ Le dossier {appel_offres_path} n'existe pas ou est vide")
+                return True
+            
+            # Supprimer récursivement tout le contenu
+            self._delete_folder_recursive(appel_offres_path)
+            
+            print(f"✅ Structure d'appel d'offres supprimée: {appel_offres_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la suppression de la structure d'appel d'offres: {str(e)}")
+            return False
 
 
 # Instance globale

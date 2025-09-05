@@ -304,8 +304,8 @@ class PDFManager:
                         print(f"❌ Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}")
                         return False, f"Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}", "", False
                 else:
-                    # Retourner immédiatement avec l'information de conflit
-                    # L'utilisateur devra confirmer avant de continuer
+                # Retourner immédiatement avec l'information de conflit
+                # L'utilisateur devra confirmer avant de continuer
                     return False, "Conflit de fichier détecté - confirmation requise", s3_file_path, True
             
             # 7. Uploader le nouveau PDF dans S3 (seulement si pas de conflit)

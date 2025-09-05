@@ -265,9 +265,16 @@ class AppelOffres(models.Model):
         if self.statut != 'valide':
             raise ValueError("Seuls les appels d'offres validés peuvent être transformés en chantier")
         
+        # Vérifier si un chantier avec ce nom existe déjà
+        chantier_name = self.chantier_name
+        counter = 1
+        while Chantier.objects.filter(chantier_name=chantier_name).exists():
+            chantier_name = f"{self.chantier_name} ({counter})"
+            counter += 1
+        
         # Créer le chantier avec tous les champs de l'appel d'offres
         chantier = Chantier.objects.create(
-            chantier_name=self.chantier_name,
+            chantier_name=chantier_name,
             societe=self.societe,
             date_debut=self.date_debut,
             date_fin=self.date_fin,
@@ -287,10 +294,10 @@ class AppelOffres(models.Model):
             taux_fixe=self.taux_fixe,
         )
         
-        # Mettre à jour le statut de l'appel d'offres
-        self.statut = 'valide'
-        self.date_validation = timezone.now().date()
-        self.save()
+        # Le statut est déjà géré par l'API, pas besoin de le modifier ici
+        # self.statut = 'valide'
+        # self.date_validation = timezone.now().date()
+        # self.save()
         
         return chantier
 
