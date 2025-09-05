@@ -1125,4 +1125,5 @@ export default {
   addDocumentType,
   getSupportedDocumentTypes,
   isDocumentTypeSupported,
+  customSlugify,
 };

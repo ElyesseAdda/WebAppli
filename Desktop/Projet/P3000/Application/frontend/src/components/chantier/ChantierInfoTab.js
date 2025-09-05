@@ -29,6 +29,7 @@ import {
   FaCheckCircle,
   FaChevronDown,
   FaClipboardList,
+  FaCloud,
   FaExclamationCircle,
   FaFileInvoice,
   FaHandshake,
@@ -37,6 +38,7 @@ import {
   FaTrash,
 } from "react-icons/fa";
 import { useSituationsManager } from "../../hooks/useSituationsManager";
+import universalDriveGenerator from "../../utils/universalDriveGenerator";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 
@@ -59,6 +61,42 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   // Utiliser le hook pour gérer les situations
   const { situations, updateDateEnvoi, updatePaiement, loadSituations } =
     useSituationsManager(chantierData?.id);
+
+  // État pour stocker les informations complètes du chantier
+  const [fullChantierData, setFullChantierData] = useState(null);
+
+  // Récupérer les informations complètes du chantier
+  useEffect(() => {
+    if (chantierData?.id) {
+      console.log(
+        "🔍 DEBUG ChantierInfoTab - Récupération des détails du chantier ID:",
+        chantierData.id
+      );
+      axios
+        .get(`/api/chantier/${chantierData.id}/details/`)
+        .then((response) => {
+          console.log(
+            "✅ DEBUG ChantierInfoTab - Détails du chantier récupérés:",
+            response.data
+          );
+          setFullChantierData(response.data);
+        })
+        .catch((error) => {
+          console.error(
+            "❌ DEBUG ChantierInfoTab - Erreur lors de la récupération des informations du chantier:",
+            error
+          );
+          console.log(
+            "❌ DEBUG ChantierInfoTab - ID utilisé:",
+            chantierData.id
+          );
+          console.log(
+            "❌ DEBUG ChantierInfoTab - URL appelée:",
+            `/api/chantier/${chantierData.id}/details/`
+          );
+        });
+    }
+  }, [chantierData?.id]);
 
   // State local pour tout ce qui n'a pas besoin d'être global
   const [tauxFacturationData, setTauxFacturationData] = React.useState(null);
@@ -754,6 +792,45 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     }
   };
 
+  // Fonction pour ouvrir le Drive du chantier
+  const handleOpenDrive = () => {
+    // Utiliser les données complètes du chantier si disponibles, sinon les données de base
+    const chantierInfo = fullChantierData || chantierData;
+
+    console.log("🔍 DEBUG handleOpenDrive - chantierInfo:", chantierInfo);
+    console.log("🔍 DEBUG handleOpenDrive - societe:", chantierInfo?.societe);
+    console.log("🔍 DEBUG handleOpenDrive - nom:", chantierInfo?.nom);
+
+    if (!chantierInfo?.societe?.nom || !chantierInfo?.nom) {
+      console.error("❌ DEBUG handleOpenDrive - Données manquantes:");
+      console.error("  - societe?.nom:", chantierInfo?.societe?.nom);
+      console.error("  - nom:", chantierInfo?.nom);
+      alert(
+        "Impossible d'ouvrir le Drive : informations du chantier manquantes"
+      );
+      return;
+    }
+
+    // Construire le chemin du Drive en utilisant customSlugify
+    const societeSlug = universalDriveGenerator.customSlugify(
+      chantierInfo.societe.nom
+    );
+    const chantierSlug = universalDriveGenerator.customSlugify(
+      chantierInfo.nom
+    );
+
+    const drivePath = `Chantiers/${societeSlug}/${chantierSlug}`;
+
+    console.log("🔍 DEBUG handleOpenDrive - drivePath:", drivePath);
+
+    // Ouvrir le Drive dans une nouvelle fenêtre
+    const driveUrl = `/drive?path=${encodeURIComponent(
+      drivePath
+    )}&sidebar=closed`;
+    console.log("🔍 DEBUG handleOpenDrive - driveUrl:", driveUrl);
+    window.open(driveUrl, "_blank", "width=1200,height=800");
+  };
+
   return (
     <Box>
       {/* Nouvelle section d'informations principales */}
@@ -1032,6 +1109,22 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           }}
         >
           Tableau facturation
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<FaCloud />}
+          onClick={handleOpenDrive}
+          sx={{
+            backgroundColor: "#00bcd4",
+            color: "white",
+            boxShadow: 3,
+            "&:hover": {
+              backgroundColor: "#00acc1",
+              boxShadow: 5,
+            },
+          }}
+        >
+          Accéder au Drive
         </Button>
       </Box>
 
