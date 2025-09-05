@@ -39,6 +39,7 @@ class PDFManager:
             'devis_travaux': 'Devis',
             'devis_marche': 'Devis_Marche',
             'situation': 'Situation',
+            'bon_commande': 'Bon_Commande',
             'facture': 'Facture',
             'avenant': 'Avenant',
             'rapport_chantier': 'Documents_Execution',
@@ -127,6 +128,12 @@ class PDFManager:
             print(f"🔍 DEBUG generate_pdf_filename - numero_situation reçu: '{numero_situation}'")
             return f"{numero_situation}.pdf"
         
+        elif document_type == 'bon_commande':
+            # Utiliser le numero_bon_commande depuis la DB (sans timestamp ni ID)
+            numero_bon_commande = kwargs.get('numero_bon_commande', 'bon_commande')
+            print(f"🔍 DEBUG generate_pdf_filename - numero_bon_commande reçu: '{numero_bon_commande}'")
+            return f"{numero_bon_commande}.pdf"
+        
         elif document_type == 'facture':
             chantier_name = kwargs.get('chantier_name', 'chantier')
             chantier_id = kwargs.get('chantier_id', 'XXX')
@@ -203,6 +210,15 @@ class PDFManager:
             chantier_slug = custom_slugify(chantier_name)
             subfolder = self.document_type_folders.get(document_type, 'Situation')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
+        
+        elif document_type == 'bon_commande':
+            # Pour les bons de commande, utiliser la structure Chantiers/ avec sous-dossier par fournisseur
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            chantier_slug = custom_slugify(chantier_name)
+            fournisseur_name = kwargs.get('fournisseur_name', 'Fournisseur')
+            fournisseur_slug = custom_slugify(fournisseur_name)
+            subfolder = self.document_type_folders.get(document_type, 'Bon_Commande')
+            return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}/{fournisseur_slug}"
         
         elif document_type in ['facture', 'avenant']:
             # Ces documents sont toujours liés à un chantier

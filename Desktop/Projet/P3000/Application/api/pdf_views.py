@@ -837,3 +837,69 @@ def generate_situation_pdf_drive(request):
         error_msg = f'Erreur inattendue: {str(e)}'
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def generate_bon_commande_pdf_drive(request):
+    """
+    Vue pour générer le PDF d'un bon de commande et le stocker dans AWS S3
+    """
+    try:
+        # Récupérer les paramètres depuis la requête
+        bon_commande_id = request.GET.get('bon_commande_id')
+        chantier_id = request.GET.get('chantier_id')
+        chantier_name = request.GET.get('chantier_name', 'Chantier')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        numero_bon_commande = request.GET.get('numero_bon_commande', 'BC-001')
+        fournisseur_name = request.GET.get('fournisseur_name', 'Fournisseur')
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        
+        if not bon_commande_id:
+            return JsonResponse({'error': 'bon_commande_id est requis'}, status=400)
+        
+        # URL de prévisualisation
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-bon-commande/{bon_commande_id}/")
+        
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='bon_commande',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            force_replace=force_replace,
+            bon_commande_id=bon_commande_id,
+            chantier_id=chantier_id,
+            chantier_name=chantier_name,
+            numero_bon_commande=numero_bon_commande,
+            fournisseur_name=fournisseur_name
+        )
+        
+        if success:
+            # Succès : retourner les informations du fichier stocké
+            return JsonResponse({
+                'success': True,
+                'message': f'PDF bon de commande {numero_bon_commande} généré et stocké avec succès dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'document_type': 'bon_commande',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'bon_commande_id': bon_commande_id,
+                'numero_bon_commande': numero_bon_commande,
+                'fournisseur_name': fournisseur_name,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
+            })
+        else:
+            # Échec : retourner l'erreur
+            return JsonResponse({
+                'success': False,
+                'error': message
+            }, status=500)
+            
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)

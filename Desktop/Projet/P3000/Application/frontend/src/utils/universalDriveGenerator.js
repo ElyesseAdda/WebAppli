@@ -94,6 +94,24 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération de la situation ${data.numeroSituation} vers le Drive...`,
   },
+
+  bon_commande: {
+    apiEndpoint: "/generate-bon-commande-pdf-drive/",
+    previewUrl: (data) =>
+      `/api/preview-saved-bon-commande/${data.bonCommandeId}/`,
+    requiredFields: [
+      "bonCommandeId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "numeroBonCommande",
+      "fournisseurName",
+    ],
+    displayName: "Bon de Commande",
+    getDisplayName: (data) => `Bon de Commande ${data.numeroBonCommande}`,
+    getLoadingMessage: (data) =>
+      `Génération du bon de commande ${data.numeroBonCommande} vers le Drive...`,
+  },
   planning_hebdo: {
     apiEndpoint: "/planning-hebdo-pdf-drive/",
     previewUrl: (data) =>
@@ -270,6 +288,16 @@ const buildApiParams = (documentType, data) => {
         numero_situation: data.numeroSituation,
       };
 
+    case "bon_commande":
+      return {
+        bon_commande_id: data.bonCommandeId,
+        chantier_id: data.chantierId,
+        chantier_name: data.chantierName,
+        societe_name: data.societeName,
+        numero_bon_commande: data.numeroBonCommande,
+        fournisseur_name: data.fournisseurName,
+      };
+
     case "planning_hebdo":
       return {
         week: data.week,
@@ -391,6 +419,10 @@ const buildFileName = (documentType, data) => {
       // Nom du fichier : "{numero_situation}.pdf"
       return `${data.numeroSituation}.pdf`;
 
+    case "bon_commande":
+      // Nom du fichier : "{numero_bon_commande}.pdf"
+      return `${data.numeroBonCommande}.pdf`;
+
     case "planning_hebdo":
       return `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
 
@@ -449,6 +481,12 @@ const buildFilePath = (documentType, data, fileName) => {
       const societeSituationSlug = customSlugify(data.societeName);
       const chantierSituationSlug = customSlugify(data.chantierName);
       return `Chantiers/${societeSituationSlug}/${chantierSituationSlug}/Situation/${fileName}`;
+
+    case "bon_commande":
+      const societeBonCommandeSlug = customSlugify(data.societeName);
+      const chantierBonCommandeSlug = customSlugify(data.chantierName);
+      const fournisseurSlug = customSlugify(data.fournisseurName);
+      return `Chantiers/${societeBonCommandeSlug}/${chantierBonCommandeSlug}/Bon_Commande/${fournisseurSlug}/${fileName}`;
 
     case "planning_hebdo":
       return `Agents/Document_Generaux/PlanningHebdo/${data.year}/${fileName}`;
@@ -510,6 +548,16 @@ const getDocumentSpecificData = (documentType, data) => {
         chantierName: data.chantierName,
         societeName: data.societeName,
         numeroSituation: data.numeroSituation,
+      };
+
+    case "bon_commande":
+      return {
+        bonCommandeId: data.bonCommandeId,
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
+        societeName: data.societeName,
+        numeroBonCommande: data.numeroBonCommande,
+        fournisseurName: data.fournisseurName,
       };
 
     case "planning_hebdo":

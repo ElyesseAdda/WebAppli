@@ -22,6 +22,7 @@ import React, { useEffect, useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { bonCommandeService } from "../services/bonCommandeService";
 import { updateChantierMaterialCost } from "../services/chantierService";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import NewProductForm from "./NewProductForm";
 
 function ProduitSelectionTable({
@@ -44,9 +45,27 @@ function ProduitSelectionTable({
     field: null,
   });
   const [editedProducts, setEditedProducts] = useState({});
+  const [chantierInfo, setChantierInfo] = useState(null);
 
   const handleOpenNewProductModal = () => setOpenNewProductModal(true);
   const handleCloseNewProductModal = () => setOpenNewProductModal(false);
+
+  // Récupérer les informations du chantier
+  useEffect(() => {
+    if (selectedData?.chantier) {
+      axios
+        .get(`/api/chantier/${selectedData.chantier}/`)
+        .then((response) => {
+          setChantierInfo(response.data);
+        })
+        .catch((error) => {
+          console.error(
+            "Erreur lors de la récupération des informations du chantier:",
+            error
+          );
+        });
+    }
+  }, [selectedData?.chantier]);
 
   const handleCheckboxChange = (productId) => {
     setIsPreviewed(false);
@@ -179,17 +198,54 @@ function ProduitSelectionTable({
         bonCommandeData
       );
 
+      // Téléchargement automatique vers le Drive après création
+      // Attendre un délai pour s'assurer que le bon de commande est bien enregistré en DB
+      setTimeout(async () => {
+        try {
+          console.log(
+            "🚀 Lancement du téléchargement automatique du bon de commande vers le Drive..."
+          );
+
+          const driveData = {
+            bonCommandeId: bonCommande.id,
+            chantierId: selectedData.chantier,
+            chantierName:
+              chantierInfo?.chantier_name || chantierInfo?.nom || "Chantier",
+            societeName:
+              chantierInfo?.societe?.nom_societe ||
+              chantierInfo?.societe?.nom ||
+              "Société",
+            numeroBonCommande: bonCommande.numero,
+            fournisseurName: selectedData.fournisseurName,
+          };
+
+          console.log("🔍 DEBUG ProduitSelectionTable - driveData:", driveData);
+
+          await generatePDFDrive("bon_commande", driveData);
+          console.log(
+            "✅ Bon de commande téléchargé avec succès vers le Drive"
+          );
+        } catch (driveError) {
+          console.error(
+            "❌ Erreur lors du téléchargement automatique du bon de commande:",
+            driveError
+          );
+          // Ne pas bloquer la création du bon de commande si le téléchargement échoue
+        }
+      }, 2000); // Délai de 2 secondes
+
       // Attendre que la création soit terminée avant de mettre à jour le coût
       await updateChantierMaterialCost(selectedData.chantier);
 
+      // Fermer le modal mais ne pas recharger la page pour pouvoir analyser les logs
       onClose();
 
       if (onValidate && typeof onValidate === "function") {
         onValidate(bonCommande);
       }
 
-      // Recharger la page après la création
-      window.location.reload();
+      // Commenté temporairement pour analyser les logs
+      // window.location.reload();
     } catch (error) {
       console.error("Erreur lors de la création du bon de commande:", error);
       throw error;

@@ -2,7 +2,8 @@ from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -3567,6 +3568,7 @@ def create_bon_commande(request):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def preview_saved_bon_commande(request, id):
     try:
         bon_commande = get_object_or_404(
