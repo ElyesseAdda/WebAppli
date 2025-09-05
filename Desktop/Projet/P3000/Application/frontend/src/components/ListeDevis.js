@@ -181,75 +181,80 @@ const ListeDevis = () => {
   // Fonction pour vérifier et lancer le téléchargement automatique depuis l'URL
   const checkAutoDownloadFromURL = async () => {
     try {
-      console.log("🔍 DEBUG - checkAutoDownloadFromURL appelée");
-      console.log("🔍 DEBUG - URL actuelle:", window.location.href);
-      console.log("🔍 DEBUG - Search params:", window.location.search);
+      console.log(
+        "🔍 NOUVEAU: Vérification du téléchargement automatique depuis l'URL"
+      );
+      console.log("🔍 URL actuelle:", window.location.href);
 
       const urlParams = new URLSearchParams(window.location.search);
       const autoDownload = urlParams.get("autoDownload");
-
-      console.log("🔍 DEBUG - autoDownload param:", autoDownload);
 
       if (autoDownload === "true") {
         const devisId = urlParams.get("devisId");
         const appelOffresId = urlParams.get("appelOffresId");
         const appelOffresName = urlParams.get("appelOffresName");
         const societeName = urlParams.get("societeName");
-        const devisType = urlParams.get("devisType");
+        const numero = urlParams.get("numero");
 
-        console.log("🚀 Téléchargement automatique détecté depuis l'URL:", {
+        console.log("🚀 NOUVEAU: Téléchargement automatique détecté:", {
           devisId,
           appelOffresId,
           appelOffresName,
           societeName,
-          devisType,
+          numero,
         });
 
         // Vérifier que tous les paramètres requis sont présents
-        if (
-          devisId &&
-          appelOffresId &&
-          appelOffresName &&
-          societeName &&
-          devisType === "chantier"
-        ) {
+        if (devisId && appelOffresId && appelOffresName && societeName) {
           // Attendre que les devis soient chargés
           setTimeout(async () => {
             try {
               console.log(
-                "🎯 Lancement du téléchargement automatique pour le devis:",
-                devisId
+                "🎯 NOUVEAU: Lancement du téléchargement automatique avec le système universel"
               );
 
-              // Lancer la génération PDF avec les paramètres de l'URL
-              await generateDevisMarchePDFDrive(
-                parseInt(devisId),
-                parseInt(appelOffresId),
-                appelOffresName,
-                societeName,
-                (response) => {
-                  console.log(
-                    "✅ Téléchargement automatique réussi:",
-                    response
-                  );
-                  // Nettoyer l'URL après succès
-                  const newUrl = window.location.pathname;
-                  window.history.replaceState({}, document.title, newUrl);
+              // Utiliser le nouveau système universel
+              await generatePDFDrive(
+                "devis_chantier",
+                {
+                  devisId: parseInt(devisId),
+                  appelOffresId: parseInt(appelOffresId),
+                  appelOffresName: appelOffresName,
+                  societeName: societeName,
+                  numero: numero || `DEV-${devisId}`,
                 },
-                (error) => {
-                  console.error(
-                    "❌ Erreur lors du téléchargement automatique:",
-                    error
-                  );
-                  // Nettoyer l'URL même en cas d'erreur
-                  const newUrl = window.location.pathname;
-                  window.history.replaceState({}, document.title, newUrl);
+                {
+                  onSuccess: (response) => {
+                    console.log(
+                      "✅ NOUVEAU: Téléchargement automatique réussi:",
+                      response
+                    );
+                    // Nettoyer l'URL après succès
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                  },
+                  onError: (error) => {
+                    console.error(
+                      "❌ NOUVEAU: Erreur lors du téléchargement automatique:",
+                      error
+                    );
+                    // Afficher une notification d'erreur
+                    alert(
+                      `❌ Erreur lors du téléchargement automatique: ${error.message}`
+                    );
+                    // Nettoyer l'URL même en cas d'erreur
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                  },
                 }
               );
             } catch (error) {
               console.error(
-                "❌ Erreur lors du téléchargement automatique:",
+                "❌ NOUVEAU: Erreur lors du téléchargement automatique:",
                 error
+              );
+              alert(
+                `❌ Erreur lors du téléchargement automatique: ${error.message}`
               );
               // Nettoyer l'URL en cas d'erreur
               const newUrl = window.location.pathname;
@@ -258,8 +263,9 @@ const ListeDevis = () => {
           }, 2000); // Attendre 2 secondes pour que les devis soient chargés
         } else {
           console.warn(
-            "⚠️ Paramètres manquants pour le téléchargement automatique"
+            "⚠️ NOUVEAU: Paramètres manquants pour le téléchargement automatique"
           );
+          alert("⚠️ Paramètres manquants pour le téléchargement automatique");
           // Nettoyer l'URL si les paramètres sont incomplets
           const newUrl = window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
@@ -267,8 +273,11 @@ const ListeDevis = () => {
       }
     } catch (error) {
       console.error(
-        "❌ Erreur lors de la vérification du téléchargement automatique:",
+        "❌ NOUVEAU: Erreur lors de la vérification du téléchargement automatique:",
         error
+      );
+      alert(
+        `❌ Erreur lors de la vérification du téléchargement automatique: ${error.message}`
       );
     }
   };
