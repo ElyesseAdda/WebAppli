@@ -22,11 +22,7 @@ class DriveAutomation:
     # Structure des dossiers pour les appels d'offres
     APPEL_OFFRES_SUBFOLDERS = [
         "Devis",
-        "Devis_Marche",  # Dossier spécifique pour les devis de marché
-        "DCE",           # Dossier des Cahiers des Charges
-        "Plans",
-        "Photos",
-        "Documents_Techniques"
+        "DCE"           # Dossier des Cahiers des Charges
     ]
     
     # Structure des dossiers pour les chantiers
@@ -108,6 +104,14 @@ class DriveAutomation:
                     # Continuer avec les autres dossiers
                 else:
                     print(f"✅ Dossier créé: {subfolder_path}")
+            
+            # Créer le sous-dossier Devis_Marche dans le dossier Devis
+            devis_marche_path = f"{appel_offres_path}/Devis/Devis_Marche"
+            success = create_s3_folder_recursive(devis_marche_path)
+            if not success:
+                print(f"⚠️  Impossible de créer le sous-dossier Devis_Marche: {devis_marche_path}")
+            else:
+                print(f"✅ Dossier Devis_Marche créé: {devis_marche_path}")
             
             print(f"🎯 Structure d'appel d'offres créée: {appel_offres_path}")
             return appel_offres_path

@@ -86,6 +86,7 @@ from .pdf_views import (
     generate_monthly_agents_pdf_drive,
     generate_devis_travaux_pdf_drive,
     generate_devis_marche_pdf_drive,
+    generate_devis_marche_auto,
     download_pdf_from_s3,
     download_file_from_drive,
     list_pdfs_in_drive,
@@ -348,6 +349,7 @@ urlpatterns += [
     path('generate-monthly-agents-pdf-drive/', generate_monthly_agents_pdf_drive, name='generate_monthly_agents_pdf_drive'),
     path('generate-devis-travaux-pdf-drive/', generate_devis_travaux_pdf_drive, name='generate_devis_travaux_pdf_drive'),
     path('generate-devis-marche-pdf-drive/', generate_devis_marche_pdf_drive, name='generate_devis_marche_pdf_drive'),
+    path('generate-devis-marche-auto/', generate_devis_marche_auto, name='generate_devis_marche_auto'),
     
     # Vue pour le remplacement après confirmation
     path('replace-file-after-confirmation/', replace_file_after_confirmation, name='replace_file_after_confirmation'),

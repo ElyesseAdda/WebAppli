@@ -47,8 +47,8 @@ def planning_hebdo_pdf_drive(request):
                 'message': f'PDF planning hebdomadaire semaine {week}/{year} généré et stocké avec succès dans le Drive',
                 'file_path': s3_file_path,
                 'file_name': s3_file_path.split('/')[-1],
-                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
-                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
                 'document_type': 'planning_hebdo',
                 'societe_name': societe_name,
                 'week': week,
@@ -109,8 +109,8 @@ def generate_monthly_agents_pdf_drive(request):
                 'message': f'PDF rapport mensuel agents {month}/{year} généré et stocké avec succès dans le Drive',
                 'file_path': s3_file_path,
                 'file_name': s3_file_path.split('/')[-1],
-                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
-                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
                 'document_type': 'rapport_agents',
                 'societe_name': societe_name,
                 'month': month,
@@ -170,8 +170,8 @@ def generate_devis_travaux_pdf_drive(request):
                 'message': f'PDF devis travaux {chantier_name} généré et stocké avec succès dans le Drive',
                 'file_path': s3_file_path,
                 'file_name': s3_file_path.split('/')[-1],
-                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
-                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
                 'document_type': 'devis_travaux',
                 'societe_name': societe_name,
                 'chantier_id': chantier_id,
@@ -198,38 +198,73 @@ def generate_devis_marche_pdf_drive(request):
     Vue pour générer le PDF du devis de marché et le stocker dans AWS S3
     """
     try:
+        devis_id = request.GET.get('devis_id')
         appel_offres_id = request.GET.get('appel_offres_id')
         appel_offres_name = request.GET.get('appel_offres_name', 'Appel d\'offres')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
         
-        # URL de prévisualisation (à adapter selon votre logique)
-        preview_url = request.build_absolute_uri(f"/api/preview-devis-marche/?appel_offres_id={appel_offres_id}")
+        # Validation des paramètres requis
+        if not devis_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Paramètre manquant: devis_id'
+            }, status=400)
         
-        # Récupérer la société (à adapter selon votre logique)
-        societe_name = "Société par défaut"  # À adapter selon votre logique
+        # Récupérer le numéro du devis depuis la DB
+        from .models import Devis
+        try:
+            devis = Devis.objects.get(id=devis_id)
+            print(f"🔍 DEBUG pdf_views - devis trouvé: id={devis.id}, numero='{devis.numero}'")
+            devis_name = devis.numero  # Utiliser le numéro du devis (ex: "DEV-008-25 - TestDrive-2")
+            if not devis_name or devis_name.strip() == "":
+                print(f"⚠️ DEBUG pdf_views - devis.numero est vide, utilisation du fallback")
+                devis_name = appel_offres_name  # Fallback si numero est vide
+        except Devis.DoesNotExist:
+            print(f"❌ DEBUG pdf_views - Devis avec id={devis_id} n'existe pas")
+            devis_name = appel_offres_name  # Fallback sur le nom de l'appel d'offres
+        
+        print(f"🔍 DEBUG pdf_views - devis_name final: '{devis_name}'")
+        
+        # URL de prévisualisation - utiliser l'ID du devis
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
         
         # Générer le PDF et le stocker dans AWS S3
-        success, message, s3_file_path = pdf_manager.generate_andStore_pdf(
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='devis_marche',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=force_replace,
             appel_offres_id=appel_offres_id,
-            appel_offres_name=appel_offres_name
+            appel_offres_name=appel_offres_name,
+            devis_name=devis_name  # Passer le nom du devis depuis la DB
         )
         
         if success:
             # Succès : retourner les informations du fichier stocké
+            import time
+            timestamp = int(time.time())
+            
+            # Construire le message selon le contexte
+            if force_replace and conflict_detected:
+                message = f'PDF devis marché {appel_offres_name} généré et remplacé avec succès dans le Drive. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
+            else:
+                message = f'PDF devis marché {appel_offres_name} généré et stocké avec succès dans le Drive'
+            
             return JsonResponse({
                 'success': True,
-                'message': f'PDF devis marché {appel_offres_name} généré et stocké avec succès dans le Drive',
+                'message': message,
                 'file_path': s3_file_path,
                 'file_name': s3_file_path.split('/')[-1],
-                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
-                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&_t={timestamp}",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&_t={timestamp}",
                 'document_type': 'devis_marche',
                 'societe_name': societe_name,
                 'appel_offres_id': appel_offres_id,
                 'appel_offres_name': appel_offres_name,
-                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected,
+                'file_replaced': force_replace and conflict_detected
             })
         else:
             # Échec : retourner l'erreur
@@ -276,6 +311,26 @@ def replace_file_after_confirmation(request):
         elif document_type == 'devis_marche':
             kwargs['appel_offres_id'] = data.get('appel_offres_id')
             kwargs['appel_offres_name'] = data.get('appel_offres_name')
+            
+            # Récupérer le numéro du devis depuis la DB
+            devis_id = data.get('devis_id')
+            if devis_id:
+                try:
+                    from .models import Devis
+                    devis = Devis.objects.get(id=devis_id)
+                    print(f"🔍 DEBUG replace_file_after_confirmation - devis trouvé: id={devis.id}, numero='{devis.numero}'")
+                    devis_name = devis.numero
+                    if not devis_name or devis_name.strip() == "":
+                        print(f"⚠️ DEBUG replace_file_after_confirmation - devis.numero est vide, utilisation du fallback")
+                        devis_name = kwargs['appel_offres_name']
+                except Devis.DoesNotExist:
+                    print(f"❌ DEBUG replace_file_after_confirmation - Devis avec id={devis_id} n'existe pas")
+                    devis_name = kwargs['appel_offres_name']
+            else:
+                devis_name = kwargs['appel_offres_name']
+            
+            print(f"🔍 DEBUG replace_file_after_confirmation - devis_name final: '{devis_name}'")
+            kwargs['devis_name'] = devis_name
         
         # Utiliser la méthode de remplacement avec confirmation
         success, message, s3_file_path = pdf_manager.replace_file_with_confirmation(
@@ -291,8 +346,8 @@ def replace_file_after_confirmation(request):
                 'message': f'Fichier remplacé avec succès dans le Drive',
                 'file_path': s3_file_path,
                 'file_name': s3_file_path.split('/')[-1],
-                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
-                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file&view=grid",
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
                 'document_type': document_type,
                 'societe_name': societe_name,
                 'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
@@ -312,18 +367,34 @@ def replace_file_after_confirmation(request):
         return JsonResponse({'error': error_msg}, status=500)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([AllowAny])
 def download_pdf_from_s3(request):
     """
-    Vue pour télécharger un PDF depuis AWS S3
+    Vue pour télécharger un PDF depuis AWS S3 ou vérifier son existence (HEAD)
     """
     try:
         s3_path = request.GET.get('path')
         if not s3_path:
             return JsonResponse({'error': 'Chemin S3 manquant'}, status=400)
         
-        # Télécharger le PDF depuis S3
+        # Pour les requêtes HEAD, juste vérifier l'existence
+        if request.method == 'HEAD':
+            from .utils import get_s3_client, get_s3_bucket_name
+            try:
+                s3_client = get_s3_client()
+                bucket_name = get_s3_bucket_name()
+                
+                # Vérifier si le fichier existe
+                s3_client.head_object(Bucket=bucket_name, Key=s3_path)
+                return HttpResponse(status=200)  # Fichier existe
+            except s3_client.exceptions.NoSuchKey:
+                return HttpResponse(status=404)  # Fichier n'existe pas
+            except Exception as e:
+                print(f"ERREUR HEAD: {str(e)}")
+                return HttpResponse(status=500)  # Erreur serveur
+        
+        # Pour les requêtes GET, télécharger le PDF
         success, message, pdf_content = pdf_manager.download_pdf_from_s3(s3_path)
         
         if success:
@@ -464,3 +535,88 @@ def download_file_from_drive(request):
             
     except Exception as e:
         return JsonResponse({'error': f'Erreur: {str(e)}'}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def generate_devis_marche_auto(request):
+    """
+    Vue pour générer automatiquement le PDF du devis de marché lors de la création d'un appel d'offre
+    """
+    try:
+        # Récupérer les paramètres depuis le body de la requête
+        data = request.data
+        appel_offres_id = data.get('appel_offres_id')
+        appel_offres_name = data.get('appel_offres_name', 'Appel d\'offres')
+        societe_name = data.get('societe_name', 'Société par défaut')
+        
+        # Validation des paramètres requis
+        if not appel_offres_id:
+            error_msg = "appel_offres_id est requis pour la génération automatique du PDF"
+            print(f"❌ ERREUR VALIDATION: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=400)
+        
+        print(f"🚀 DÉBUT génération automatique PDF devis marché pour appel d'offres {appel_offres_id}")
+        
+        # URL de prévisualisation - utiliser l'endpoint existant
+        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{appel_offres_id}/")
+        print(f"📄 URL de prévisualisation: {preview_url}")
+        
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='devis_marche',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            appel_offres_id=appel_offres_id,
+            appel_offres_name=appel_offres_name
+        )
+        
+        if success:
+            print(f"✅ PDF généré avec succès: {s3_file_path}")
+            # Succès : retourner les informations du fichier stocké
+            return JsonResponse({
+                'success': True,
+                'message': f'PDF devis marché {appel_offres_name} généré automatiquement et stocké dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'document_type': 'devis_marche',
+                'societe_name': societe_name,
+                'appel_offres_id': appel_offres_id,
+                'appel_offres_name': appel_offres_name,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected,
+                'auto_generated': True
+            })
+        else:
+            # Échec : retourner l'erreur avec détails pour le debug
+            error_msg = f"Échec de la génération automatique du PDF: {message}"
+            print(f"❌ ERREUR GÉNÉRATION: {error_msg}")
+            return JsonResponse({
+                'success': False,
+                'error': error_msg,
+                'details': {
+                    'appel_offres_id': appel_offres_id,
+                    'appel_offres_name': appel_offres_name,
+                    'societe_name': societe_name,
+                    'preview_url': preview_url
+                }
+            }, status=500)
+            
+    except Exception as e:
+        # Gestion d'erreur avec détails complets pour le debug
+        error_msg = f'Erreur inattendue lors de la génération automatique du PDF: {str(e)}'
+        print(f"❌ ERREUR INATTENDUE: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        
+        return JsonResponse({
+            'error': error_msg,
+            'details': {
+                'appel_offres_id': request.data.get('appel_offres_id') if hasattr(request, 'data') else None,
+                'appel_offres_name': request.data.get('appel_offres_name') if hasattr(request, 'data') else None,
+                'societe_name': request.data.get('societe_name') if hasattr(request, 'data') else None,
+                'traceback': traceback.format_exc()
+            }
+        }, status=500)

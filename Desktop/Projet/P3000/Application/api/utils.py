@@ -39,13 +39,16 @@ LOCAL_STORAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspat
 
 def custom_slugify(text):
     """
-    Slugification personnalisée qui préserve mieux la casse et les caractères spéciaux
+    Slugification personnalisée qui préserve les majuscules au début des mots
     """
     if not text:
         return ""
     
+    # Nettoyer le texte : supprimer les espaces multiples et normaliser
+    text = re.sub(r'\s+', ' ', text.strip())
+    
     # Remplacer les espaces par des tirets
-    text = re.sub(r'\s+', '-', text.strip())
+    text = re.sub(r'\s+', '-', text)
     
     # Garder les caractères alphanumériques, tirets, underscores et points
     text = re.sub(r'[^a-zA-Z0-9\-_.]', '', text)
@@ -56,18 +59,19 @@ def custom_slugify(text):
     # Supprimer les tirets en début et fin
     text = text.strip('-')
     
-    # Si le texte est entièrement en majuscules, le convertir en minuscules
-    # Sinon, préserver la casse originale
-    if text.isupper():
-        text = text.lower()
-    elif text and text[0].isupper() and text[1:].islower():
-        # Si c'est un titre (première lettre majuscule, reste minuscule), garder comme ça
-        pass
-    else:
-        # Pour les autres cas, convertir en minuscules
-        text = text.lower()
+    # Préserver les majuscules au début des mots
+    # Convertir en minuscules sauf la première lettre de chaque mot
+    if text:
+        # Diviser par les tirets et capitaliser chaque partie
+        parts = text.split('-')
+        capitalized_parts = []
+        for part in parts:
+            if part:
+                # Capitaliser la première lettre et mettre le reste en minuscules
+                capitalized_parts.append(part[0].upper() + part[1:].lower())
+        text = '-'.join(capitalized_parts)
     
-    return text or "dossier"
+    return text or "Dossier"
 
 def ensure_local_storage():
     """Crée le dossier de stockage local s'il n'existe pas"""

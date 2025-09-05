@@ -976,6 +976,71 @@ const CreationDevis = () => {
 
       if (response.data) {
         clearSavedState(); // Nettoyer l'état sauvegardé
+
+        // Si c'est un devis de chantier (appel d'offre), générer automatiquement le PDF
+        if (devisType === "chantier") {
+          try {
+            console.log(
+              "🚀 Génération automatique du PDF pour l'appel d'offre..."
+            );
+
+            // Récupérer l'ID de l'appel d'offres créé depuis la réponse
+            // Note: Il faudra peut-être adapter selon la structure de la réponse
+            const appelOffresId =
+              response.data.appel_offres_id || response.data.id;
+            const appelOffresName =
+              pendingChantierData.chantier.chantier_name.trim();
+
+            if (appelOffresId) {
+              // Récupérer l'ID du devis créé depuis la réponse
+              const devisId = response.data.id;
+
+              // Stocker les paramètres pour la génération PDF dans sessionStorage (pour compatibilité)
+              sessionStorage.setItem(
+                "pendingPDFGeneration",
+                JSON.stringify({
+                  type: "devis_marche",
+                  appelOffresId: appelOffresId,
+                  appelOffresName: appelOffresName,
+                  societeName: societeName,
+                  timestamp: Date.now(),
+                })
+              );
+
+              // Construire l'URL avec les paramètres pour le téléchargement automatique
+              const urlParams = new URLSearchParams({
+                autoDownload: "true",
+                devisId: devisId,
+                appelOffresId: appelOffresId,
+                appelOffresName: appelOffresName,
+                societeName: societeName,
+                devisType: "chantier",
+              });
+
+              // Message de succès et redirection avec paramètres
+              alert(
+                "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
+              );
+              window.location.href = `/ListeDevis?${urlParams.toString()}`;
+            } else {
+              console.warn(
+                "⚠️ Impossible de récupérer l'ID de l'appel d'offres pour la génération PDF"
+              );
+              alert("Devis créé avec succès !");
+              window.location.href = "/ListeDevis";
+            }
+          } catch (pdfError) {
+            console.error(
+              "❌ Erreur lors de la génération automatique du PDF:",
+              pdfError
+            );
+            // Ne pas faire échouer la création du devis à cause du PDF
+            alert(
+              "Devis créé avec succès, mais erreur lors de la génération du PDF. Vous pourrez le générer manuellement."
+            );
+          }
+        }
+
         alert("Devis créé avec succès!");
         window.location.href = "/ListeDevis";
       }

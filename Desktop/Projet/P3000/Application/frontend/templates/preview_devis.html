@@ -1,3 +1,4 @@
+{% load phone_filters %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -9,7 +10,7 @@
       body {
         font-family: Arial, Helvetica, sans-serif;
         font-size: 16px;
-        margin-left: 50px;
+        margin-left: 0px;
        
         {% comment %} max-width: 800px;  {% endcomment %}
         {% comment %} padding: 0px; {% endcomment %}
@@ -94,7 +95,7 @@
       }
       .designation {
         text-align: center; /* Alignement à gauche pour la désignation */
-        width: 480px;
+        width: 468px;
         font-size: 0.8rem;
         border: 2px solid black;
       }
@@ -114,15 +115,16 @@
       }
       .unitetableau {
         
-        {% comment %} text-align: center; {% endcomment %}
-        font-size: 12px;
-        margin-right: 2px;
-        width: 22px;
+        margin-left: -10px;
+        margin-right: 10px;
+        width: 33px;
         font-size: 0.8rem;
-        
+        text-align: center;
       }
+        
+      
       .quantite {
-        width: 78px;
+        width: 65px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
@@ -130,12 +132,12 @@
       .quantitetableau {
         
         text-align: center;
-        width: 87px;
+        width: 75px;
         font-size: 0.8rem;
         
       }
       .prix {
-        width: 58px;
+        width: 85px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
@@ -144,7 +146,7 @@
        
         text-align: center;
         font-size: 0.8rem;
-        width: 65px;
+        width: 85px;
         
       }
       .totalHt {
@@ -156,7 +158,7 @@
       .totalHttableau {
         
         text-align: right;
-        width: 110px;
+        width: 120px;
         font-size: 0.8rem;
         font-weight: 700;
       }
@@ -182,7 +184,7 @@
         right: 0;
         bottom: 0;
         display: grid;
-        grid-template-columns: 480px 27px 80px 60px 103px;;
+        grid-template-columns: 467px 30px 65px 85px 110px;;
         gap: 6px;
         pointer-events: none;
         height: calc(100% - 4px);
@@ -198,26 +200,26 @@
 
       .ghost-cell.text {
         grid-column: 1;
-        width: 481px;
+        width: 467px;
         
        
       }
 
       .ghost-cell.unite {
         grid-column: 2;
-        width: 27px;
+        width: 30px;
         
       }
 
       .ghost-cell.quantite {
         grid-column: 3;
-        width: 87px;
+        width: 65px;
         
       }
 
       .ghost-cell.prix {
         grid-column: 4;
-        width: 60px;
+        width: 85px;
         
       }
 
@@ -322,7 +324,7 @@
         font-weight: 500;
       }
       .p3000-container {
-        padding-top:45px;
+        padding-top:5px;
         padding-bottom: 20px;
         display: grid;
         grid-template-rows: 1fr;
@@ -556,7 +558,7 @@
         <p>{{ client.name }} {{ client.surname }}</p>
         <p class="client-mail">Mail: {{ client.client_mail }}</p>
         <p>
-          Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
+          Tél: {% if client.phone_Number %}{{ client.phone_Number|format_phone_simple }}{% endif %}
         </p>
       </div>
     </div>
@@ -622,7 +624,7 @@
             <td class="partie" colspan="5">
               {{ partie.titre }}
               <span style="float: right"
-                >{{ partie.total_partie|floatformat:2 }} €</span
+                >{{ partie.total_partie|format_montant_espace }}</span
               >
             </td>
           </tr>
@@ -635,9 +637,9 @@
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
                   {% if special_line.type != 'display' %}
-                  {{ special_line.montant|floatformat:2 }} €
+                  {{ special_line.montant|format_montant_espace }}
                   {% else %}
-                      {{ special_line.value|floatformat:2 }} €
+                      {{ special_line.value|format_montant_espace }}
                   {% endif %}
               </td>
           </tr>
@@ -648,7 +650,7 @@
             <td colspan="5">
               {{ sous_partie.description }}
               <span style="float: right"
-                >{{ sous_partie.total_sous_partie|floatformat:2 }} €</span
+                >{{ sous_partie.total_sous_partie|format_montant_espace }}</span
               >
             </td>
           </tr>
@@ -661,9 +663,9 @@
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
                   {% if special_line.type != 'display' %}
-                  {{ special_line.montant|floatformat:2 }} €
+                  {{ special_line.montant|format_montant_espace }}
                   {% else %}
-                      {{ special_line.value|floatformat:2 }} €
+                      {{ special_line.value|format_montant_espace }}
                   {% endif %}
               </td>
           </tr>
@@ -674,8 +676,8 @@
             <td class="ligne-details">{{ ligne.description }}</td>
             <td class="unitetableau">{{ ligne.unite }}</td>
             <td class="quantitetableau">{{ ligne.quantity }}</td>
-            <td class="prixtableau">{{ ligne.custom_price|floatformat:2 }} </td>
-            <td class="totalHttableau">{{ ligne.total|floatformat:2 }} €</td>
+            <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }} </td>
+            <td class="totalHttableau">{{ ligne.total|format_montant_espace }}</td>
           </tr>
           {% endfor %} {% endfor %} {% endfor %}
           {% for special_line in special_lines_global %}
@@ -687,9 +689,9 @@
               <td class="totalHttableau">
                   {% if special_line.type == 'reduction' %}-{% endif %}
                   {% if special_line.type != 'display' %}
-                  {{ special_line.montant|floatformat:2 }} €
+                  {{ special_line.montant|format_montant_espace }}
                   {% else %}
-                      {{ special_line.value|floatformat:2 }} €
+                      {{ special_line.value|format_montant_espace }}
                   {% endif %}
               </td>
           </tr>
@@ -701,7 +703,7 @@
                 MONTANT GLOBAL HT APRÈS FRAIS DIVERS & AUTRES
             </td>
             <td class="totalHttableau" style="padding-top: 15px;">
-                {{ total_ht|floatformat:2 }} €
+                {{ total_ht|format_montant_espace }}
             </td>
           </tr>
         </tbody>
@@ -717,7 +719,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- MONTANT GLOBAL HT</span>
-            <span class="montant">{{ total_ht|floatformat:2 }} €</span>
+            <span class="montant">{{ total_ht|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -725,7 +727,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- TVA ({{ devis.tva_rate|floatformat:2 }}%)</span>
-            <span class="montant">{{ tva|floatformat:2 }} €</span>
+            <span class="montant">{{ tva|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -733,7 +735,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- MONTANT TOTAL T.T.C.</span>
-            <span class="montant">{{ montant_ttc|floatformat:2 }} €</span>
+            <span class="montant">{{ montant_ttc|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -745,5 +747,30 @@
         Devis valable 1 mois après réception	
       </span>
     </div>
+    
+    <script>
+    // Script pour formater le numéro de téléphone au format simple (sans points)
+    document.addEventListener('DOMContentLoaded', function() {
+        // Trouver tous les éléments p et chercher celui qui contient "Tél:"
+        const allParagraphs = document.querySelectorAll('p');
+        allParagraphs.forEach(phoneElement => {
+            const phoneText = phoneElement.textContent;
+            if (phoneText.includes('Tél:')) {
+                const phoneMatch = phoneText.match(/Tél:\s*(\d+)/);
+                if (phoneMatch) {
+                    let phoneNumber = phoneMatch[1];
+                    // S'assurer qu'on a 10 chiffres
+                    if (phoneNumber.length === 9) {
+                        phoneNumber = '0' + phoneNumber;
+                    } else if (phoneNumber.length === 11 && phoneNumber.startsWith('33')) {
+                        phoneNumber = '0' + phoneNumber.substring(2);
+                    }
+                    // Remplacer le numéro formaté par le numéro simple
+                    phoneElement.innerHTML = phoneText.replace(/Tél:\s*\d+/, `Tél: ${phoneNumber}`);
+                }
+            }
+        });
+    });
+    </script>
   </body>
 </html>

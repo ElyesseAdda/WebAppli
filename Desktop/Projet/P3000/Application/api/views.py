@@ -2339,7 +2339,13 @@ def create_devis(request):
                     prix_unitaire=Decimal(str(ligne['custom_price']))
                 )
             
-            return Response({'id': devis.id}, status=201)
+            # Préparer la réponse avec l'ID du devis et de l'appel d'offres si applicable
+            response_data = {'id': devis.id}
+            if devis_chantier and appel_offres:
+                response_data['appel_offres_id'] = appel_offres.id
+                response_data['appel_offres_name'] = appel_offres.chantier_name
+            
+            return Response(response_data, status=201)
             
     except Exception as e:
         return Response({'error': str(e)}, status=400)
@@ -2475,6 +2481,7 @@ def get_chantier_relations(request):
     return Response(data)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def preview_saved_devis(request, devis_id):
     try:
         devis = get_object_or_404(Devis, id=devis_id)

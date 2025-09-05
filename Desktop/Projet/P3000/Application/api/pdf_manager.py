@@ -97,9 +97,14 @@ class PDFManager:
             return f"devis_travaux_{chantier_id}_{custom_slugify(chantier_name)}_{timestamp}.pdf"
         
         elif document_type == 'devis_marche':
-            appel_offres_name = kwargs.get('appel_offres_name', 'appel_offres')
-            appel_offres_id = kwargs.get('appel_offres_id', 'XXX')
-            return f"devis_marche_{appel_offres_id}_{custom_slugify(appel_offres_name)}_{timestamp}.pdf"
+            # Utiliser le nom du devis depuis la DB (sans timestamp ni ID)
+            devis_name = kwargs.get('devis_name', kwargs.get('appel_offres_name', 'devis_marche'))
+            print(f"🔍 DEBUG generate_pdf_filename - devis_name reçu: '{devis_name}'")
+            print(f"🔍 DEBUG generate_pdf_filename - kwargs: {kwargs}")
+            # Nettoyer le nom pour qu'il soit propre
+            clean_name = custom_slugify(devis_name)
+            print(f"🔍 DEBUG generate_pdf_filename - clean_name après custom_slugify: '{clean_name}'")
+            return f"{clean_name}.pdf"
         
         elif document_type == 'situation':
             chantier_name = kwargs.get('chantier_name', 'chantier')
@@ -144,8 +149,15 @@ class PDFManager:
                 # C'est un appel d'offres
                 appel_offres_name = kwargs['appel_offres_name']
                 appel_offres_id = kwargs['appel_offres_id']
-                appel_offres_slug = f"{appel_offres_id:03d}_{custom_slugify(appel_offres_name)}"
-                subfolder = self.document_type_folders.get(document_type, 'Devis')
+                # Utiliser seulement le nom de l'appel d'offres (sans ID devant)
+                appel_offres_slug = custom_slugify(appel_offres_name)
+                
+                # Pour les devis de marché, utiliser la structure Devis/Devis_Marche
+                if document_type == 'devis_marche':
+                    subfolder = 'Devis/Devis_Marche'
+                else:
+                    subfolder = self.document_type_folders.get(document_type, 'Devis')
+                
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
@@ -200,6 +212,7 @@ class PDFManager:
                              document_type: str, 
                              preview_url: str, 
                              societe_name: str,
+                             force_replace: bool = False,
                              **kwargs) -> Tuple[bool, str, str, bool]:
         """
         Génère un PDF et le stocke dans AWS S3 avec gestion des conflits
@@ -208,28 +221,17 @@ class PDFManager:
             document_type: Type de document
             preview_url: URL de prévisualisation HTML
             societe_name: Nom de la société
+            force_replace: Force le remplacement d'un fichier existant
             **kwargs: Paramètres spécifiques au type de document
         
         Returns:
             Tuple[bool, str, str, bool]: (succès, message, chemin_s3, conflit_détecté)
         """
-        """
-        Génère un PDF et le stocke dans AWS S3
-        
-        Args:
-            document_type: Type de document
-            preview_url: URL de prévisualisation HTML
-            societe_name: Nom de la société
-            **kwargs: Paramètres spécifiques au type de document
-        
-        Returns:
-            Tuple[bool, str, str]: (succès, message, chemin_s3)
-        """
         try:
             # 1. Vérifier les dépendances
             deps_ok, error_msg = self.check_dependencies()
             if not deps_ok:
-                return False, error_msg, ""
+                return False, error_msg, "", False
             
             # 2. Déterminer le script Node.js à utiliser
             if document_type in ['planning_hebdo', 'planning_mensuel']:
@@ -259,7 +261,7 @@ class PDFManager:
             )
             
             if not os.path.exists(temp_pdf_path):
-                return False, "Le fichier PDF n'a pas été généré par Puppeteer", ""
+                return False, "Le fichier PDF n'a pas été généré par Puppeteer", "", False
             
             print(f"✅ PDF généré avec succès: {temp_pdf_path}")
             
@@ -276,9 +278,31 @@ class PDFManager:
             
             if conflict_detected:
                 print(f"⚠️ Conflit détecté: {s3_file_path}")
-                # Retourner immédiatement avec l'information de conflit
-                # L'utilisateur devra confirmer avant de continuer
-                return False, "Conflit de fichier détecté - confirmation requise", s3_file_path, True
+                
+                if force_replace:
+                    print(f"🔄 Remplacement forcé activé - déplacement de l'ancien fichier vers l'historique")
+                    # Déplacer l'ancien fichier vers l'historique au lieu de le supprimer
+                    try:
+                        # Créer le dossier Historique à la racine du Drive
+                        historique_path = "Historique"
+                        create_s3_folder_recursive(historique_path)
+                        
+                        # Déplacer l'ancien fichier vers l'historique avec timestamp
+                        old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
+                        old_s3_path = f"{historique_path}/{old_filename}"
+                        
+                        print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
+                        self.move_file_in_s3(s3_file_path, old_s3_path)
+                        print(f"🗑️ Ancien fichier déplacé vers l'historique: {old_s3_path}")
+                        conflict_detected = False  # Plus de conflit après déplacement
+                    except Exception as e:
+                        print(f"❌ Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}")
+                        return False, f"Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}", "", False
+                else:
+                    # Retourner immédiatement avec l'information de conflit
+                    # L'utilisateur devra confirmer avant de continuer
+                    return False, "Conflit de fichier détecté - confirmation requise", s3_file_path, True
             
             # 7. Uploader le nouveau PDF dans S3 (seulement si pas de conflit)
             print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
@@ -297,9 +321,9 @@ class PDFManager:
             return True, "PDF généré et stocké avec succès", s3_file_path, conflict_detected
             
         except subprocess.TimeoutExpired:
-            return False, "Timeout lors de la génération du PDF (60 secondes)", ""
+            return False, "Timeout lors de la génération du PDF (60 secondes)", "", False
         except subprocess.CalledProcessError as e:
-            return False, f"Erreur lors de la génération du PDF: {str(e)}", ""
+            return False, f"Erreur lors de la génération du PDF: {str(e)}", "", False
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", "", False
 
@@ -491,7 +515,7 @@ class PDFManager:
             # 1. Vérifier les dépendances
             deps_ok, error_msg = self.check_dependencies()
             if not deps_ok:
-                return False, error_msg, ""
+                return False, error_msg, "", False
             
             # 2. Déterminer le script Node.js à utiliser
             if document_type in ['planning_hebdo', 'planning_mensuel']:
@@ -521,7 +545,7 @@ class PDFManager:
             )
             
             if not os.path.exists(temp_pdf_path):
-                return False, "Le fichier PDF n'a pas été généré par Puppeteer", ""
+                return False, "Le fichier PDF n'a pas été généré par Puppeteer", "", False
             
             print(f"✅ PDF généré avec succès: {temp_pdf_path}")
             

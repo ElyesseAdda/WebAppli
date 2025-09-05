@@ -33,6 +33,19 @@ async function generatePDF() {
       console.log("Viewport configuré");
 
       console.log("Tentative de chargement de la page:", previewUrl);
+
+      // Ajouter les cookies de session si disponibles
+      const cookies = process.env.SESSION_COOKIES;
+      if (cookies) {
+        try {
+          const cookieArray = JSON.parse(cookies);
+          await page.setCookie(...cookieArray);
+          console.log("Cookies de session ajoutés");
+        } catch (e) {
+          console.log("Impossible de parser les cookies:", e.message);
+        }
+      }
+
       const response = await page.goto(previewUrl, {
         waitUntil: ["load", "networkidle0"],
         timeout: 60000,

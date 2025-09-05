@@ -52,7 +52,7 @@ class DevisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'client', 'lignes', 'lignes_speciales', 'devis_chantier'
+            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'devis_chantier'
         ]
         read_only_fields = ['date_creation', 'client']
 
