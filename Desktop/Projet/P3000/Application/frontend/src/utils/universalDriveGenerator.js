@@ -32,6 +32,41 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du devis ${data.appelOffresName} vers le Drive...`,
   },
+
+  contrat_sous_traitance: {
+    apiEndpoint: "/generate-contrat-sous-traitance-pdf-drive/",
+    previewUrl: (data) => `/api/preview-contrat/${data.contratId}/`,
+    requiredFields: [
+      "contratId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "sousTraitantName",
+    ],
+    displayName: "Contrat Sous-traitance",
+    getDisplayName: (data) => `Contrat ${data.sousTraitantName}`,
+    getLoadingMessage: (data) =>
+      `Génération du contrat ${data.sousTraitantName} vers le Drive...`,
+  },
+
+  avenant_sous_traitance: {
+    apiEndpoint: "/generate-avenant-sous-traitance-pdf-drive/",
+    previewUrl: (data) => `/api/preview-avenant/${data.avenantId}/`,
+    requiredFields: [
+      "avenantId",
+      "contratId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "sousTraitantName",
+      "numeroAvenant",
+    ],
+    displayName: "Avenant Sous-traitance",
+    getDisplayName: (data) =>
+      `Avenant ${data.numeroAvenant} - ${data.sousTraitantName}`,
+    getLoadingMessage: (data) =>
+      `Génération de l'avenant ${data.numeroAvenant} vers le Drive...`,
+  },
   devis_normal: {
     apiEndpoint: "/generate-devis-travaux-pdf-drive/",
     previewUrl: (data) => `/api/preview-saved-devis/${data.devisId}/`,
@@ -190,6 +225,26 @@ const buildApiParams = (documentType, data) => {
         societe_name: data.societeName,
       };
 
+    case "contrat_sous_traitance":
+      return {
+        contrat_id: data.contratId,
+        chantier_id: data.chantierId,
+        chantier_name: data.chantierName,
+        societe_name: data.societeName,
+        sous_traitant_name: data.sousTraitantName,
+      };
+
+    case "avenant_sous_traitance":
+      return {
+        avenant_id: data.avenantId,
+        contrat_id: data.contratId,
+        chantier_id: data.chantierId,
+        chantier_name: data.chantierName,
+        societe_name: data.societeName,
+        sous_traitant_name: data.sousTraitantName,
+        numero_avenant: data.numeroAvenant,
+      };
+
     case "planning_hebdo":
       return {
         week: data.week,
@@ -297,6 +352,16 @@ const buildFileName = (documentType, data) => {
       // Utiliser le numéro du devis depuis la DB (ex: "DEV-008-25 - Test Chantier")
       return `${data.numero || data.devisId}.pdf`;
 
+    case "contrat_sous_traitance":
+      // Nom du fichier : "Contrat [SousTraitant] - [Chantier].pdf"
+      const contratName = `Contrat ${data.sousTraitantName} - ${data.chantierName}`;
+      return `${contratName}.pdf`;
+
+    case "avenant_sous_traitance":
+      // Nom du fichier : "Avenant [Numero] [SousTraitant] - [Chantier].pdf"
+      const avenantName = `Avenant ${data.numeroAvenant} ${data.sousTraitantName} - ${data.chantierName}`;
+      return `${avenantName}.pdf`;
+
     case "planning_hebdo":
       return `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
 
@@ -339,6 +404,18 @@ const buildFilePath = (documentType, data, fileName) => {
       const chantierSlug = customSlugify(data.chantierName);
       return `Chantiers/${societeNormalSlug}/${chantierSlug}/Devis/${fileName}`;
 
+    case "contrat_sous_traitance":
+      const societeContratSlug = customSlugify(data.societeName);
+      const chantierContratSlug = customSlugify(data.chantierName);
+      const entrepriseContratSlug = customSlugify(data.sousTraitantName);
+      return `Chantiers/${societeContratSlug}/${chantierContratSlug}/Sous_Traitant/${entrepriseContratSlug}/${fileName}`;
+
+    case "avenant_sous_traitance":
+      const societeAvenantSlug = customSlugify(data.societeName);
+      const chantierAvenantSlug = customSlugify(data.chantierName);
+      const entrepriseAvenantSlug = customSlugify(data.sousTraitantName);
+      return `Chantiers/${societeAvenantSlug}/${chantierAvenantSlug}/Sous_Traitant/${entrepriseAvenantSlug}/${fileName}`;
+
     case "planning_hebdo":
       return `Agents/Document_Generaux/PlanningHebdo/${data.year}/${fileName}`;
 
@@ -370,6 +447,26 @@ const getDocumentSpecificData = (documentType, data) => {
         chantierName: data.chantierName,
         devisId: data.devisId,
         numero: data.numero,
+      };
+
+    case "contrat_sous_traitance":
+      return {
+        contratId: data.contratId,
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
+        societeName: data.societeName,
+        sousTraitantName: data.sousTraitantName,
+      };
+
+    case "avenant_sous_traitance":
+      return {
+        avenantId: data.avenantId,
+        contratId: data.contratId,
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
+        societeName: data.societeName,
+        sousTraitantName: data.sousTraitantName,
+        numeroAvenant: data.numeroAvenant,
       };
 
     case "planning_hebdo":

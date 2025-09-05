@@ -644,3 +644,133 @@ def generate_devis_marche_auto(request):
                 'traceback': traceback.format_exc()
             }
         }, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def generate_contrat_sous_traitance_pdf_drive(request):
+    """
+    Vue pour générer le PDF du contrat de sous-traitance et le stocker dans AWS S3
+    """
+    try:
+        contrat_id = request.GET.get('contrat_id')
+        chantier_id = request.GET.get('chantier_id')
+        chantier_name = request.GET.get('chantier_name', 'Chantier')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        sous_traitant_name = request.GET.get('sous_traitant_name', 'Sous-traitant')
+        
+        if not contrat_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'contrat_id est requis pour générer le PDF'
+            }, status=400)
+        
+        # URL de prévisualisation pour les contrats de sous-traitance
+        preview_url = request.build_absolute_uri(f"/api/preview-contrat/{contrat_id}/")
+        
+        # Générer le nom du fichier
+        contrat_name = f"Contrat {sous_traitant_name} - {chantier_name}"
+        
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='contrat_sous_traitance',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            chantier_id=chantier_id,
+            chantier_name=chantier_name,
+            sous_traitant_name=sous_traitant_name,
+            contrat_name=contrat_name
+        )
+        
+        if success:
+            # Succès : retourner les informations du fichier stocké
+            return JsonResponse({
+                'success': True,
+                'message': f'PDF contrat {sous_traitant_name} généré et stocké avec succès dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'document_type': 'contrat_sous_traitance',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
+            })
+        else:
+            # Échec : retourner l'erreur
+            return JsonResponse({
+                'success': False,
+                'error': message
+            }, status=500)
+            
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def generate_avenant_sous_traitance_pdf_drive(request):
+    """
+    Vue pour générer le PDF de l'avenant de sous-traitance et le stocker dans AWS S3
+    """
+    try:
+        avenant_id = request.GET.get('avenant_id')
+        contrat_id = request.GET.get('contrat_id')
+        chantier_id = request.GET.get('chantier_id')
+        chantier_name = request.GET.get('chantier_name', 'Chantier')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        sous_traitant_name = request.GET.get('sous_traitant_name', 'Sous-traitant')
+        numero_avenant = request.GET.get('numero_avenant', '1')
+        
+        if not avenant_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'avenant_id est requis pour générer le PDF'
+            }, status=400)
+        
+        # URL de prévisualisation pour les avenants de sous-traitance
+        preview_url = request.build_absolute_uri(f"/api/preview-avenant/{avenant_id}/")
+        
+        # Générer le nom du fichier
+        avenant_name = f"Avenant {numero_avenant} {sous_traitant_name} - {chantier_name}"
+        
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='avenant_sous_traitance',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            chantier_id=chantier_id,
+            chantier_name=chantier_name,
+            sous_traitant_name=sous_traitant_name,
+            avenant_name=avenant_name
+        )
+        
+        if success:
+            # Succès : retourner les informations du fichier stocké
+            return JsonResponse({
+                'success': True,
+                'message': f'PDF avenant {numero_avenant} {sous_traitant_name} généré et stocké avec succès dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'document_type': 'avenant_sous_traitance',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
+            })
+        else:
+            # Échec : retourner l'erreur
+            return JsonResponse({
+                'success': False,
+                'error': message
+            }, status=500)
+            
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)

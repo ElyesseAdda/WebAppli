@@ -41,7 +41,9 @@ class PDFManager:
             'situation': 'Situation',
             'facture': 'Facture',
             'avenant': 'Avenant',
-            'rapport_chantier': 'Documents_Execution'
+            'rapport_chantier': 'Documents_Execution',
+            'contrat_sous_traitance': 'Contrats',
+            'avenant_sous_traitance': 'Avenants'
         }
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:
@@ -107,6 +109,18 @@ class PDFManager:
             print(f"🔍 DEBUG generate_pdf_filename - clean_name après custom_slugify: '{clean_name}'")
             return f"{clean_name}.pdf"
         
+        elif document_type == 'contrat_sous_traitance':
+            # Utiliser le nom du contrat depuis les paramètres
+            contrat_name = kwargs.get('contrat_name', 'contrat_sous_traitance')
+            print(f"🔍 DEBUG generate_pdf_filename - contrat_name reçu: '{contrat_name}'")
+            return f"{contrat_name}.pdf"
+        
+        elif document_type == 'avenant_sous_traitance':
+            # Utiliser le nom de l'avenant depuis les paramètres
+            avenant_name = kwargs.get('avenant_name', 'avenant_sous_traitance')
+            print(f"🔍 DEBUG generate_pdf_filename - avenant_name reçu: '{avenant_name}'")
+            return f"{avenant_name}.pdf"
+        
         elif document_type == 'situation':
             chantier_name = kwargs.get('chantier_name', 'chantier')
             chantier_id = kwargs.get('chantier_id', 'XXX')
@@ -160,6 +174,14 @@ class PDFManager:
                     subfolder = self.document_type_folders.get(document_type, 'Devis')
                 
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
+        
+        elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance']:
+            # Pour les contrats et avenants de sous-traitance
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            chantier_slug = custom_slugify(chantier_name)
+            sous_traitant_name = kwargs.get('sous_traitant_name', 'Sous_Traitant')
+            sous_traitant_slug = custom_slugify(sous_traitant_name)
+            return f"Chantiers/{societe_slug}/{chantier_slug}/Sous_Traitant/{sous_traitant_slug}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
             # Ces documents sont maintenant stockés dans Agents/Document_Generaux/

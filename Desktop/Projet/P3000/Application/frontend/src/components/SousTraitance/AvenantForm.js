@@ -20,8 +20,9 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
+import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 
-const AvenantForm = ({ open, onClose, contrat, onSave }) => {
+const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
   const [formData, setFormData] = useState({
     description: "",
     montant: "",
@@ -89,6 +90,43 @@ const AvenantForm = ({ open, onClose, contrat, onSave }) => {
       if (response.ok) {
         const data = await response.json();
         console.log("Avenant créé avec succès:", data);
+
+        // Téléchargement automatique vers le Drive après création de l'avenant
+        try {
+          console.log(
+            "🚀 Lancement du téléchargement automatique de l'avenant vers le Drive..."
+          );
+
+          const driveData = {
+            avenantId: data.id,
+            contratId: contrat.id,
+            chantierId: contrat.chantier,
+            chantierName:
+              chantier?.chantier_name ||
+              chantier?.nom ||
+              contrat.nom_operation ||
+              "Chantier",
+            societeName:
+              chantier?.societe?.nom_societe ||
+              chantier?.societe?.nom ||
+              "Société",
+            sousTraitantName:
+              contrat.sous_traitant_details?.entreprise || "Sous-traitant",
+            numeroAvenant: data.numero,
+          };
+
+          console.log("🔍 DEBUG AvenantForm - driveData:", driveData);
+
+          await generatePDFDrive("avenant_sous_traitance", driveData);
+          console.log("✅ Avenant téléchargé avec succès vers le Drive");
+        } catch (driveError) {
+          console.error(
+            "❌ Erreur lors du téléchargement vers le Drive:",
+            driveError
+          );
+          // Ne pas bloquer la création de l'avenant si le Drive échoue
+        }
+
         onSave(data);
         onClose();
       } else {

@@ -18,6 +18,7 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
+import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 
 const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
   const [formData, setFormData] = useState({
@@ -137,6 +138,32 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
       }
 
       const responseData = await response.json();
+
+      // Téléchargement automatique vers le Drive après création du contrat
+      try {
+        console.log(
+          "🚀 Lancement du téléchargement automatique du contrat vers le Drive..."
+        );
+
+        const driveData = {
+          contratId: responseData.id,
+          chantierId: chantier.id,
+          chantierName: chantier.chantier_name || chantier.nom,
+          societeName:
+            chantier.societe?.nom_societe || chantier.societe?.nom || "Société",
+          sousTraitantName: sousTraitant.entreprise,
+        };
+
+        await generatePDFDrive("contrat_sous_traitance", driveData);
+        console.log("✅ Contrat téléchargé avec succès vers le Drive");
+      } catch (driveError) {
+        console.error(
+          "❌ Erreur lors du téléchargement vers le Drive:",
+          driveError
+        );
+        // Ne pas bloquer la création du contrat si le Drive échoue
+      }
+
       onSave(responseData);
       onClose();
     } catch (error) {

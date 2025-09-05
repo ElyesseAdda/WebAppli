@@ -573,6 +573,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
         open={showAvenantForm}
         onClose={() => setShowAvenantForm(false)}
         contrat={selectedSousTraitant?.contrat || null}
+        chantier={chantier}
         onSave={handleAvenantSave}
       />
     </>

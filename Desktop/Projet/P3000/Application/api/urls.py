@@ -87,6 +87,8 @@ from .pdf_views import (
     generate_devis_travaux_pdf_drive,
     generate_devis_marche_pdf_drive,
     generate_devis_marche_auto,
+    generate_contrat_sous_traitance_pdf_drive,
+    generate_avenant_sous_traitance_pdf_drive,
     download_pdf_from_s3,
     download_file_from_drive,
     list_pdfs_in_drive,
@@ -350,6 +352,8 @@ urlpatterns += [
     path('generate-devis-travaux-pdf-drive/', generate_devis_travaux_pdf_drive, name='generate_devis_travaux_pdf_drive'),
     path('generate-devis-marche-pdf-drive/', generate_devis_marche_pdf_drive, name='generate_devis_marche_pdf_drive'),
     path('generate-devis-marche-auto/', generate_devis_marche_auto, name='generate_devis_marche_auto'),
+    path('generate-contrat-sous-traitance-pdf-drive/', generate_contrat_sous_traitance_pdf_drive, name='generate_contrat_sous_traitance_pdf_drive'),
+    path('generate-avenant-sous-traitance-pdf-drive/', generate_avenant_sous_traitance_pdf_drive, name='generate_avenant_sous_traitance_pdf_drive'),
     
     # Vue pour le remplacement après confirmation
     path('replace-file-after-confirmation/', replace_file_after_confirmation, name='replace_file_after_confirmation'),
