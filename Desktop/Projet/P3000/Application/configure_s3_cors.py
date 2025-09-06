@@ -32,6 +32,16 @@ def configure_s3_cors():
     ]
     
     try:
+        # Charger les variables d'environnement depuis le fichier .env
+        from pathlib import Path
+        env_file = Path(__file__).parent / '.env'
+        if env_file.exists():
+            with open(env_file, 'r') as f:
+                for line in f:
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.strip().split('=', 1)
+                        os.environ[key] = value.strip('"').strip("'")
+        
         # Créer le client S3
         s3_client = boto3.client(
             's3',
@@ -60,7 +70,7 @@ def configure_s3_cors():
 
 if __name__ == "__main__":
     # Charger les variables d'environnement Django
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Application.settings')
     
     try:
         import django
