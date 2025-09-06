@@ -385,9 +385,9 @@ class FactureSerializer(serializers.ModelSerializer):
         model = Facture
         fields = [
             'id', 'numero', 'date_creation', 'state_facture',
-            'date_echeance', 'date_paiement', 'mode_paiement', 'devis',
-            'price_ht', 'price_ttc', 'chantier', 'chantier_name',
-            'devis_numero', 'type_facture', 'designation'
+            'date_echeance', 'date_paiement', 'date_envoi', 'delai_paiement', 
+            'mode_paiement', 'devis', 'price_ht', 'price_ttc', 'chantier', 
+            'chantier_name', 'devis_numero', 'type_facture', 'designation'
         ]
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 

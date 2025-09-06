@@ -600,6 +600,8 @@ class Facture(models.Model):
     designation = models.CharField(max_length=255, blank=True)
     date_echeance = models.DateField(null=True, blank=True)
     date_paiement = models.DateField(null=True, blank=True)
+    date_envoi = models.DateField(null=True, blank=True, help_text="Date d'envoi de la facture")
+    delai_paiement = models.IntegerField(null=True, blank=True, help_text="Délai de paiement en jours")
     mode_paiement = models.CharField(max_length=50, default='virement')
     price_ht = models.FloatField()
     price_ttc = models.FloatField()

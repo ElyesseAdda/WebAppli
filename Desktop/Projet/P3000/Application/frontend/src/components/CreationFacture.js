@@ -1,4 +1,4 @@
-import { Box, Button, TextField } from "@mui/material";
+import { Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import axios from "axios";
@@ -22,11 +22,26 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     numero_facture: formatNumeroFacture(devis?.numero),
     adresse_facturation: "",
-    date_echeance: null,
+    date_envoi: new Date(),
+    delai_paiement: 45,
     mode_paiement: "virement",
   });
 
   const [societeData, setSocieteData] = useState(null);
+
+  // Fonction pour calculer la date d'échéance
+  const calculateDateEcheance = (dateEnvoi, delaiPaiement) => {
+    if (!dateEnvoi || !delaiPaiement) return null;
+    const dateEcheance = new Date(dateEnvoi);
+    dateEcheance.setDate(dateEcheance.getDate() + delaiPaiement);
+    return dateEcheance;
+  };
+
+  // Calculer la date d'échéance automatiquement
+  const dateEcheanceCalculee = calculateDateEcheance(
+    formData.date_envoi,
+    formData.delai_paiement
+  );
 
   useEffect(() => {
     const fetchSocieteData = async () => {
@@ -126,10 +141,15 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
         throw new Error("Aucun devis fourni");
       }
 
+      // Calculer la date d'échéance basée sur la date d'envoi et le délai
+      const dateEcheanceFormatted = dateEcheanceCalculee
+        ? dateEcheanceCalculee.toISOString().split("T")[0]
+        : null;
+
       const factureData = {
         numero: formData.numero_facture,
         devis: devis.id,
-        date_echeance: formData.date_echeance,
+        date_echeance: dateEcheanceFormatted,
         mode_paiement: formData.mode_paiement,
       };
 
@@ -166,16 +186,37 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
         />
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
           <DatePicker
-            label="Date d'échéance"
-            value={formData.date_echeance}
-            onChange={(date) =>
-              setFormData({ ...formData, date_echeance: date })
-            }
+            label="Date d'envoi"
+            value={formData.date_envoi}
+            onChange={(date) => setFormData({ ...formData, date_envoi: date })}
             renderInput={(params) => (
               <TextField {...params} fullWidth margin="normal" />
             )}
           />
         </LocalizationProvider>
+
+        <TextField
+          fullWidth
+          select
+          label="Délai de paiement"
+          name="delai_paiement"
+          value={formData.delai_paiement}
+          onChange={handleInputChange}
+          margin="normal"
+          required
+        >
+          <MenuItem value={45}>45 jours</MenuItem>
+          <MenuItem value={60}>60 jours</MenuItem>
+        </TextField>
+
+        {dateEcheanceCalculee && (
+          <Box sx={{ mt: 2, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Date de paiement prévue :</strong>{" "}
+              {dateEcheanceCalculee.toLocaleDateString("fr-FR")}
+            </Typography>
+          </Box>
+        )}
         <TextField
           fullWidth
           label="Mode de paiement"
