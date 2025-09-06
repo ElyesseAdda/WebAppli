@@ -23,7 +23,8 @@ def configure_s3_cors():
                 "http://localhost:8000", 
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
-                "https://votre-domaine.com"  # Remplacez par votre vrai domaine
+                "https://myp3000app.com",
+                "https://www.myp3000app.com"
             ],
             "ExposeHeaders": ["ETag", "x-amz-meta-custom-header"],
             "MaxAgeSeconds": 3000
