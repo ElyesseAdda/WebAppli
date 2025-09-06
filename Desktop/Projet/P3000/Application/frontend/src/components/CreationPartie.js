@@ -16,15 +16,31 @@ const CreationPartie = ({ refreshData }) => {
   const [parties, setParties] = useState([]);
   const [sousPartiesFiltered, setSousPartiesFiltered] = useState([]); // Sous-parties filtrées
 
-  const partieTypes = [
-    { value: "PEINTURE", label: "Peinture" },
-    { value: "FACADE", label: "Façade" },
-    { value: "TCE", label: "TCE" },
-  ];
+  // États pour la gestion dynamique des domaines
+  const [availableDomaines, setAvailableDomaines] = useState([]);
+  const [newDomaine, setNewDomaine] = useState("");
+  const [showNewDomaineInput, setShowNewDomaineInput] = useState(false);
 
   useEffect(() => {
+    loadDomaines();
     loadParties();
   }, []);
+
+  // Charger les domaines disponibles
+  const loadDomaines = () => {
+    axios
+      .get("/api/parties/domaines/")
+      .then((response) => {
+        setAvailableDomaines(response.data);
+        // Si aucun domaine n'est sélectionné, prendre le premier disponible
+        if (!selectedPartieType && response.data.length > 0) {
+          setSelectedPartieType(response.data[0]);
+        }
+      })
+      .catch((error) => {
+        console.error("Erreur lors du chargement des domaines", error);
+      });
+  };
 
   const loadParties = (type = null) => {
     const url = type ? `/api/parties/?type=${type}` : "/api/parties/";
@@ -64,6 +80,16 @@ const CreationPartie = ({ refreshData }) => {
     setLignesDetails(newLignesDetails);
   };
 
+  // Fonction pour ajouter un nouveau domaine
+  const handleAddNewDomaine = () => {
+    if (newDomaine.trim() && !availableDomaines.includes(newDomaine.trim())) {
+      setAvailableDomaines((prev) => [...prev, newDomaine.trim()].sort());
+      setSelectedPartieType(newDomaine.trim());
+      setNewDomaine("");
+      setShowNewDomaineInput(false);
+    }
+  };
+
   const handleCreationSubmit = () => {
     if (creationType === "partie") {
       if (!newPartie.trim()) {
@@ -101,10 +127,12 @@ const CreationPartie = ({ refreshData }) => {
                 });
 
                 refreshData(); // Rafraîchir les données dynamiquement après la création
+                loadDomaines(); // Recharger les domaines disponibles
                 resetForm();
               });
           } else {
             refreshData(); // Rafraîchir les données après la création de la partie seule
+            loadDomaines(); // Recharger les domaines disponibles
             resetForm();
           }
         })
@@ -190,6 +218,8 @@ const CreationPartie = ({ refreshData }) => {
     setSelectedPartieId("");
     setSelectedSousPartieId("");
     setLignesDetails([]);
+    setNewDomaine("");
+    setShowNewDomaineInput(false);
   };
 
   return (
@@ -235,13 +265,58 @@ const CreationPartie = ({ refreshData }) => {
                   value={selectedPartieType}
                   onChange={(e) => setSelectedPartieType(e.target.value)}
                 >
-                  {partieTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
+                  {availableDomaines.map((domaine) => (
+                    <option key={domaine} value={domaine}>
+                      {domaine}
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setShowNewDomaineInput(!showNewDomaineInput)}
+                  style={{ marginLeft: "10px", padding: "5px 10px" }}
+                >
+                  + Nouveau domaine
+                </button>
               </div>
+
+              {/* Input pour nouveau domaine */}
+              {showNewDomaineInput && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Nom du nouveau domaine"
+                    value={newDomaine}
+                    onChange={(e) => setNewDomaine(e.target.value)}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && handleAddNewDomaine()
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddNewDomaine}
+                    disabled={!newDomaine.trim()}
+                  >
+                    Ajouter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewDomaineInput(false);
+                      setNewDomaine("");
+                    }}
+                  >
+                    Annuler
+                  </button>
+                </div>
+              )}
               <div>
                 <label>Nouvelle Partie: </label>
                 <input
@@ -316,13 +391,58 @@ const CreationPartie = ({ refreshData }) => {
                     loadParties(e.target.value);
                   }}
                 >
-                  {partieTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
+                  {availableDomaines.map((domaine) => (
+                    <option key={domaine} value={domaine}>
+                      {domaine}
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setShowNewDomaineInput(!showNewDomaineInput)}
+                  style={{ marginLeft: "10px", padding: "5px 10px" }}
+                >
+                  + Nouveau domaine
+                </button>
               </div>
+
+              {/* Input pour nouveau domaine */}
+              {showNewDomaineInput && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Nom du nouveau domaine"
+                    value={newDomaine}
+                    onChange={(e) => setNewDomaine(e.target.value)}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && handleAddNewDomaine()
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddNewDomaine}
+                    disabled={!newDomaine.trim()}
+                  >
+                    Ajouter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewDomaineInput(false);
+                      setNewDomaine("");
+                    }}
+                  >
+                    Annuler
+                  </button>
+                </div>
+              )}
               <div>
                 <label>Associer à une Partie: </label>
                 <select
@@ -335,11 +455,7 @@ const CreationPartie = ({ refreshData }) => {
                   <option value="">-- Sélectionner une Partie --</option>
                   {parties.map((partie) => (
                     <option key={partie.id} value={partie.id}>
-                      {partie.titre} (
-                      {partie.get_type_display
-                        ? partie.get_type_display()
-                        : partie.type}
-                      )
+                      {partie.titre} ({partie.type})
                     </option>
                   ))}
                 </select>
@@ -412,13 +528,58 @@ const CreationPartie = ({ refreshData }) => {
                     loadParties(e.target.value);
                   }}
                 >
-                  {partieTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
+                  {availableDomaines.map((domaine) => (
+                    <option key={domaine} value={domaine}>
+                      {domaine}
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setShowNewDomaineInput(!showNewDomaineInput)}
+                  style={{ marginLeft: "10px", padding: "5px 10px" }}
+                >
+                  + Nouveau domaine
+                </button>
               </div>
+
+              {/* Input pour nouveau domaine */}
+              {showNewDomaineInput && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Nom du nouveau domaine"
+                    value={newDomaine}
+                    onChange={(e) => setNewDomaine(e.target.value)}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && handleAddNewDomaine()
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddNewDomaine}
+                    disabled={!newDomaine.trim()}
+                  >
+                    Ajouter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewDomaineInput(false);
+                      setNewDomaine("");
+                    }}
+                  >
+                    Annuler
+                  </button>
+                </div>
+              )}
               {/* Sélection de la Partie */}
               <div>
                 <label>Associer à une Partie: </label>
@@ -432,11 +593,7 @@ const CreationPartie = ({ refreshData }) => {
                   <option value="">-- Sélectionner une Partie --</option>
                   {parties.map((partie) => (
                     <option key={partie.id} value={partie.id}>
-                      {partie.titre} (
-                      {partie.get_type_display
-                        ? partie.get_type_display()
-                        : partie.type}
-                      )
+                      {partie.titre} ({partie.type})
                     </option>
                   ))}
                 </select>

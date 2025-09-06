@@ -19,10 +19,14 @@ Le système universel de génération PDF Drive est un système extensible qui p
 ### **🔧 Types de documents supportés**
 
 - ✅ **`devis_chantier`** : Devis de chantier avec appel d'offres
+- ✅ **`devis_normal`** : Devis normaux (devis_chantier = false)
+- ✅ **`contrat_sous_traitance`** : Contrats de sous-traitance
+- ✅ **`avenant_sous_traitance`** : Avenants de sous-traitance
+- ✅ **`situation`** : Situations de chantier
+- ✅ **`bon_commande`** : Bons de commande
 - ✅ **`planning_hebdo`** : Planning hebdomadaire des agents
 - ✅ **`rapport_agents`** : Rapport mensuel des agents
 - 🔄 **`facture`** : À implémenter
-- 🔄 **`situation`** : À implémenter
 - 🔄 **`rapport`** : À implémenter
 
 ## **📁 Fichiers créés/modifiés**
@@ -41,8 +45,15 @@ Le système universel de génération PDF Drive est un système extensible qui p
 - `frontend/src/components/PlanningHebdoAgent.js` - Migration vers le système universel
 - `frontend/src/components/CreationDevis.js` - Auto-download avec redirection
 - `frontend/src/components/GlobalConflictModal.js` - Support du nouveau système et gestion de l'historique
+- `frontend/src/components/SousTraitance/ContratForm.js` - Auto-download des contrats
+- `frontend/src/components/SousTraitance/AvenantForm.js` - Auto-download des avenants
+- `frontend/src/components/SousTraitance/SousTraitanceModal.js` - Support des données chantier
+- `frontend/src/components/CreationDocument/SituationCreationModal.js` - Auto-download des situations
+- `frontend/src/components/ProduitSelectionTable.js` - Auto-download des bons de commande
+- `frontend/src/components/chantier/ChantierInfoTab.js` - Bouton d'accès au Drive
 - `api/pdf_manager.py` - Support du paramètre `force_replace`, gestion de l'historique et nouveaux types
 - `api/pdf_views.py` - Support du paramètre `force_replace`, messages d'historique et nouveaux endpoints
+- `api/views.py` - Permissions AllowAny pour preview-saved-bon-commande
 
 ## **🚀 Utilisation**
 
@@ -90,6 +101,89 @@ await generatePDFDrive(
   {
     onSuccess: (response) => console.log("Rapport généré!", response),
     onError: (error) => console.error("Erreur rapport!", error),
+  }
+);
+
+// Génération normale - Devis normal
+await generatePDFDrive(
+  "devis_normal",
+  {
+    devisId: 21,
+    chantierId: 39,
+    chantierName: "TestCompletChantier",
+    societeName: "IMMOBILIERE DE LANFANT",
+    numero: "DEV-004-25 - TS N°003",
+  },
+  {
+    onSuccess: (response) => console.log("Devis normal généré!", response),
+    onError: (error) => console.error("Erreur devis normal!", error),
+  }
+);
+
+// Génération normale - Contrat sous-traitance
+await generatePDFDrive(
+  "contrat_sous_traitance",
+  {
+    contratId: 6,
+    chantierId: 39,
+    chantierName: "TestCompletChantier",
+    societeName: "IMMOBILIERE DE LANFANT",
+    sousTraitantName: "ABCONDUITE",
+  },
+  {
+    onSuccess: (response) => console.log("Contrat généré!", response),
+    onError: (error) => console.error("Erreur contrat!", error),
+  }
+);
+
+// Génération normale - Avenant sous-traitance
+await generatePDFDrive(
+  "avenant_sous_traitance",
+  {
+    avenantId: 10,
+    contratId: 6,
+    chantierId: 39,
+    chantierName: "TestCompletChantier",
+    societeName: "IMMOBILIERE DE LANFANT",
+    sousTraitantName: "ABCONDUITE",
+    numeroAvenant: 4,
+  },
+  {
+    onSuccess: (response) => console.log("Avenant généré!", response),
+    onError: (error) => console.error("Erreur avenant!", error),
+  }
+);
+
+// Génération normale - Situation
+await generatePDFDrive(
+  "situation",
+  {
+    situationId: 27,
+    chantierId: 39,
+    chantierName: "TestCompletChantier",
+    societeName: "IMMOBILIERE DE LANFANT",
+    numeroSituation: "FACT-002-25 - Situation n°02",
+  },
+  {
+    onSuccess: (response) => console.log("Situation générée!", response),
+    onError: (error) => console.error("Erreur situation!", error),
+  }
+);
+
+// Génération normale - Bon de commande
+await generatePDFDrive(
+  "bon_commande",
+  {
+    bonCommandeId: 22,
+    chantierId: 39,
+    chantierName: "TestCompletChantier",
+    societeName: "IMMOBILIERE DE LANFANT",
+    numeroBonCommande: "BC-0004",
+    fournisseurName: "UNIKALO",
+  },
+  {
+    onSuccess: (response) => console.log("Bon de commande généré!", response),
+    onError: (error) => console.error("Erreur bon de commande!", error),
   }
 );
 
@@ -164,6 +258,86 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du rapport mensuel agents ${data.month}/${data.year} vers le Drive...`,
   },
+  devis_normal: {
+    apiEndpoint: "/generate-devis-travaux-pdf-drive/",
+    previewUrl: (data) => `/api/preview-saved-devis/${data.devisId}/`,
+    requiredFields: [
+      "devisId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "numero",
+    ],
+    displayName: "Devis Normal",
+    getDisplayName: (data) => `Devis ${data.numero || data.devisId}`,
+    getLoadingMessage: (data) =>
+      `Génération du devis normal ${data.numero} vers le Drive...`,
+  },
+  contrat_sous_traitance: {
+    apiEndpoint: "/generate-contrat-sous-traitance-pdf-drive/",
+    previewUrl: (data) => `/api/preview-saved-contrat/${data.contratId}/`,
+    requiredFields: [
+      "contratId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "sousTraitantName",
+    ],
+    displayName: "Contrat Sous-traitance",
+    getDisplayName: (data) => `Contrat ${data.sousTraitantName}`,
+    getLoadingMessage: (data) =>
+      `Génération du contrat ${data.sousTraitantName} vers le Drive...`,
+  },
+  avenant_sous_traitance: {
+    apiEndpoint: "/generate-avenant-sous-traitance-pdf-drive/",
+    previewUrl: (data) => `/api/preview-saved-avenant/${data.avenantId}/`,
+    requiredFields: [
+      "avenantId",
+      "contratId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "sousTraitantName",
+      "numeroAvenant",
+    ],
+    displayName: "Avenant Sous-traitance",
+    getDisplayName: (data) =>
+      `Avenant ${data.numeroAvenant} - ${data.sousTraitantName}`,
+    getLoadingMessage: (data) =>
+      `Génération de l'avenant ${data.numeroAvenant} vers le Drive...`,
+  },
+  situation: {
+    apiEndpoint: "/generate-situation-pdf-drive/",
+    previewUrl: (data) => `/api/preview-situation/${data.situationId}/`,
+    requiredFields: [
+      "situationId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "numeroSituation",
+    ],
+    displayName: "Situation",
+    getDisplayName: (data) => `Situation ${data.numeroSituation}`,
+    getLoadingMessage: (data) =>
+      `Génération de la situation ${data.numeroSituation} vers le Drive...`,
+  },
+  bon_commande: {
+    apiEndpoint: "/generate-bon-commande-pdf-drive/",
+    previewUrl: (data) =>
+      `/api/preview-saved-bon-commande/${data.bonCommandeId}/`,
+    requiredFields: [
+      "bonCommandeId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "numeroBonCommande",
+      "fournisseurName",
+    ],
+    displayName: "Bon de Commande",
+    getDisplayName: (data) => `Bon de Commande ${data.numeroBonCommande}`,
+    getLoadingMessage: (data) =>
+      `Génération du bon de commande ${data.numeroBonCommande} vers le Drive...`,
+  },
 };
 ```
 
@@ -236,6 +410,26 @@ await generatePDFDrive(
 
 ```
 Drive/
+├── Appels_Offres/
+│   └── {Societe}/
+│       └── {AppelOffres}/
+│           └── Devis/
+│               └── Devis_Marche/
+│                   └── {numero_devis}.pdf
+├── Chantiers/
+│   └── {Societe}/
+│       └── {Chantier}/
+│           ├── Devis/
+│           │   └── {numero_devis}.pdf
+│           ├── Sous_Traitant/
+│           │   └── {Entreprise}/
+│           │       ├── Contrat {Entreprise} - {Chantier}.pdf
+│           │       └── Avenant {Numero} {Entreprise} - {Chantier}.pdf
+│           ├── Situation/
+│           │   └── {numero_situation}.pdf
+│           └── Bon_Commande/
+│               └── {Fournisseur}/
+│                   └── {numero_bon_commande}.pdf
 ├── Agents/
 │   └── Document_Generaux/
 │       ├── Rapport_mensuel/
@@ -252,6 +446,11 @@ Drive/
 ### **Types de documents supportés pour le remplacement**
 
 - ✅ **`devis_chantier`** : Remplacement avec historique
+- ✅ **`devis_normal`** : Remplacement avec historique
+- ✅ **`contrat_sous_traitance`** : Remplacement avec historique
+- ✅ **`avenant_sous_traitance`** : Remplacement avec historique
+- ✅ **`situation`** : Remplacement avec historique
+- ✅ **`bon_commande`** : Remplacement avec historique
 - ✅ **`planning_hebdo`** : Remplacement avec historique
 - ✅ **`rapport_agents`** : Remplacement avec historique
 - 🔄 **Autres types** : À implémenter selon les besoins
@@ -339,6 +538,11 @@ const checkAutoDownloadFromURL = () => {
 ### **Types de documents supportés pour l'auto-download**
 
 - ✅ **`devis_chantier`** : Auto-download lors de la création
+- ✅ **`devis_normal`** : Auto-download lors de la création
+- ✅ **`contrat_sous_traitance`** : Auto-download lors de la création
+- ✅ **`avenant_sous_traitance`** : Auto-download lors de la création
+- ✅ **`situation`** : Auto-download lors de la création
+- ✅ **`bon_commande`** : Auto-download lors de la création
 - 🔄 **`planning_hebdo`** : À implémenter si nécessaire
 - 🔄 **`rapport_agents`** : À implémenter si nécessaire
 - 🔄 **Autres types** : À implémenter selon les besoins
@@ -383,6 +587,41 @@ const checkAutoDownloadFromURL = () => {
 - **URL** : `/api/generate-monthly-agents-pdf-drive/`
 - **Méthode** : GET
 - **Paramètres** : `month`, `year`, `force_replace`
+- **Support** : ✅ Remplacement forcé, ✅ Historique
+
+#### **4. Devis normal**
+
+- **URL** : `/api/generate-devis-travaux-pdf-drive/`
+- **Méthode** : GET
+- **Paramètres** : `devis_id`, `chantier_id`, `chantier_name`, `societe_name`, `numero`, `force_replace`
+- **Support** : ✅ Remplacement forcé, ✅ Historique
+
+#### **5. Contrat sous-traitance**
+
+- **URL** : `/api/generate-contrat-sous-traitance-pdf-drive/`
+- **Méthode** : GET
+- **Paramètres** : `contrat_id`, `chantier_id`, `chantier_name`, `societe_name`, `sous_traitant_name`, `force_replace`
+- **Support** : ✅ Remplacement forcé, ✅ Historique
+
+#### **6. Avenant sous-traitance**
+
+- **URL** : `/api/generate-avenant-sous-traitance-pdf-drive/`
+- **Méthode** : GET
+- **Paramètres** : `avenant_id`, `contrat_id`, `chantier_id`, `chantier_name`, `societe_name`, `sous_traitant_name`, `numero_avenant`, `force_replace`
+- **Support** : ✅ Remplacement forcé, ✅ Historique
+
+#### **7. Situation**
+
+- **URL** : `/api/generate-situation-pdf-drive/`
+- **Méthode** : GET
+- **Paramètres** : `situation_id`, `chantier_id`, `chantier_name`, `societe_name`, `numero_situation`, `force_replace`
+- **Support** : ✅ Remplacement forcé, ✅ Historique
+
+#### **8. Bon de commande**
+
+- **URL** : `/api/generate-bon-commande-pdf-drive/`
+- **Méthode** : GET
+- **Paramètres** : `bon_commande_id`, `chantier_id`, `chantier_name`, `societe_name`, `numero_bon_commande`, `fournisseur_name`, `force_replace`
 - **Support** : ✅ Remplacement forcé, ✅ Historique
 
 ### **Structure des réponses**
@@ -596,6 +835,11 @@ await generatePDFDrive(
 - ✅ **`PlanningHebdoAgent.js`** : Migration vers le système universel
 - ✅ **`CreationDevis.js`** : Auto-download avec redirection
 - ✅ **`GlobalConflictModal.js`** : Support du nouveau système
+- ✅ **`ContratForm.js`** : Auto-download des contrats de sous-traitance
+- ✅ **`AvenantForm.js`** : Auto-download des avenants de sous-traitance
+- ✅ **`SituationCreationModal.js`** : Auto-download des situations
+- ✅ **`ProduitSelectionTable.js`** : Auto-download des bons de commande
+- ✅ **`ChantierInfoTab.js`** : Bouton d'accès au Drive du chantier
 
 ### **Compatibilité**
 
@@ -647,11 +891,12 @@ Le système universel de génération PDF Drive est maintenant **complètement o
 
 ### **État actuel**
 
-- ✅ **3 types de documents** : `devis_chantier`, `planning_hebdo`, `rapport_agents`
+- ✅ **8 types de documents** : `devis_chantier`, `devis_normal`, `contrat_sous_traitance`, `avenant_sous_traitance`, `situation`, `bon_commande`, `planning_hebdo`, `rapport_agents`
 - ✅ **Gestion des conflits** : Remplacement avec historique automatique
-- ✅ **Auto-download** : Génération automatique lors de la création de devis
+- ✅ **Auto-download** : Génération automatique lors de la création de tous les documents
 - ✅ **Migration complète** : Tous les composants principaux migrés
 - ✅ **Tests validés** : Système testé et fonctionnel
+- ✅ **Bouton Drive** : Accès direct au Drive du chantier depuis l'interface
 
 ### **Fonctionnalités clés**
 
@@ -660,6 +905,8 @@ Le système universel de génération PDF Drive est maintenant **complètement o
 - 📱 **Notifications unifiées** : Interface cohérente partout
 - 🎯 **Auto-download** : Génération automatique sans intervention
 - 🔧 **Extensibilité** : Facile d'ajouter de nouveaux types
+- 📁 **Structure Drive organisée** : Dossiers par société/chantier avec sous-dossiers spécialisés
+- 🎨 **Interface intuitive** : Bouton d'accès direct au Drive du chantier
 
 ### **Prochaines étapes**
 

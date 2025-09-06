@@ -266,10 +266,10 @@ class PartieSerializer(serializers.ModelSerializer):
                 nb_sous_parties = existing_partie.sous_parties.count()
                 total_lignes = sum(sp.lignes_details.count() for sp in existing_partie.sous_parties.all())
                 raise serializers.ValidationError({
-                    'titre': f'Cette partie existe déjà dans le domaine "{existing_partie.get_type_display()}". '
+                    'titre': f'Cette partie existe déjà dans le domaine "{existing_partie.type}". '
                             f'Détails de la partie existante : '
                             f'Titre: {existing_partie.titre}, '
-                            f'Type: {existing_partie.get_type_display()}, '
+                            f'Type: {existing_partie.type}, '
                             f'Nombre de sous-parties: {nb_sous_parties}, '
                             f'Nombre total de lignes: {total_lignes}'
                 })

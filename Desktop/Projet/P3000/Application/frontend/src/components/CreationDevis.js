@@ -94,11 +94,8 @@ const CreationDevis = () => {
   const [showCreationPartie, setShowCreationPartie] = useState(false); // État pour afficher ou masquer CreationPartie.js
   const [isPreviewed, setIsPreviewed] = useState(false);
 
-  const partieTypes = [
-    { value: "PEINTURE", label: "Peinture" },
-    { value: "FACADE", label: "Façade" },
-    { value: "TCE", label: "TCE" },
-  ]; // Nouvel état pour savoir si le devis a été prévisualisé
+  // États pour la gestion dynamique des domaines
+  const [availableDomaines, setAvailableDomaines] = useState([]);
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
   const [showClientForm, setShowClientForm] = useState(false);
   const [societeId, setSocieteId] = useState(null);
@@ -210,8 +207,41 @@ const CreationDevis = () => {
     }
   };
 
+  // Fonction pour charger les domaines disponibles
+  const loadDomaines = () => {
+    axios
+      .get("/api/parties/domaines/")
+      .then((response) => {
+        setAvailableDomaines(response.data);
+        // Si aucun domaine n'est sélectionné, prendre le premier disponible
+        if (!selectedPartieType && response.data.length > 0) {
+          setSelectedPartieType(response.data[0]);
+        }
+      })
+      .catch((error) => {
+        console.error("Erreur lors du chargement des domaines", error);
+      });
+  };
+
+  // Charger les domaines disponibles au démarrage
+  useEffect(() => {
+    loadDomaines();
+  }, []);
+
+  // Recharger les domaines quand la fenêtre reprend le focus (au cas où d'autres onglets ont créé des domaines)
+  useEffect(() => {
+    const handleFocus = () => {
+      loadDomaines();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, []);
+
   // Charger les parties filtrées par type
   useEffect(() => {
+    if (!selectedPartieType) return;
+
     setError(null);
     const params = { type: selectedPartieType };
     axios
@@ -1410,6 +1440,9 @@ const CreationDevis = () => {
           ...createdData.data.sous_parties,
         ]);
 
+        // Recharger les domaines disponibles après création d'une nouvelle partie
+        loadDomaines();
+
         // Mettre à jour les lignes de détail
         const allNewLignes = createdData.data.sous_parties.flatMap(
           (sp) => sp.lignes_details || []
@@ -2343,17 +2376,29 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
             </Typography>
             <FormControl fullWidth sx={{ mb: 2 }}>
               <Select
-                value={selectedPartieType}
+                value={selectedPartieType || ""}
                 onChange={(e) => setSelectedPartieType(e.target.value)}
                 displayEmpty
               >
-                {partieTypes.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
+                {availableDomaines.map((domaine) => (
+                  <MenuItem key={domaine} value={domaine}>
+                    {domaine}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
+
+            {/* Bouton pour rafraîchir les domaines */}
+            <Box sx={{ mb: 2 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={loadDomaines}
+                sx={{ fontSize: "0.75rem" }}
+              >
+                🔄 Rafraîchir les domaines
+              </Button>
+            </Box>
 
             <Typography variant="h6" gutterBottom>
               Parties ({selectedPartieType})

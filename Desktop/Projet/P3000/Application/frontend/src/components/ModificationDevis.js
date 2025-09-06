@@ -79,11 +79,8 @@ const ModificationDevis = () => {
   const [quantities, setQuantities] = useState({});
   const [customPrices, setCustomPrices] = useState({});
 
-  const partieTypes = [
-    { value: "PEINTURE", label: "Peinture" },
-    { value: "FACADE", label: "Façade" },
-    { value: "TCE", label: "TCE" },
-  ];
+  // États pour la gestion dynamique des domaines
+  const [availableDomaines, setAvailableDomaines] = useState([]);
 
   // Nouveaux états pour les coûts détaillés
   const [customCouts, setCustomCouts] = useState({});
@@ -145,6 +142,22 @@ const ModificationDevis = () => {
 
   // Ajout de l'état pour contrôler la visibilité de la box de résumé
   const [showSummaryBox, setShowSummaryBox] = useState(false);
+
+  // Fonction pour charger les domaines disponibles
+  const loadDomaines = () => {
+    axios
+      .get("/api/parties/domaines/")
+      .then((response) => {
+        setAvailableDomaines(response.data);
+        // Si aucun domaine n'est sélectionné, prendre le premier disponible
+        if (!selectedPartieType && response.data.length > 0) {
+          setSelectedPartieType(response.data[0]);
+        }
+      })
+      .catch((error) => {
+        console.error("Erreur lors du chargement des domaines", error);
+      });
+  };
 
   // Fonction utilitaire pour formater les prix
   const formatPrice = (value) => {
@@ -265,6 +278,17 @@ const ModificationDevis = () => {
   useEffect(() => {
     fetchChantiers();
     loadStateFromLocalStorage();
+    loadDomaines(); // Charger les domaines disponibles
+  }, []);
+
+  // Recharger les domaines quand la fenêtre reprend le focus
+  useEffect(() => {
+    const handleFocus = () => {
+      loadDomaines();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const fetchChantiers = async () => {
@@ -1090,6 +1114,9 @@ const ModificationDevis = () => {
           ]);
           setFilteredLignesDetails((prev) => [...prev, ...allNewLignes]);
         }
+
+        // Recharger les domaines après création d'une partie
+        loadDomaines();
         break;
 
       case "sousPartie":
@@ -1989,18 +2016,35 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
             />
           </Box>
           <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Type de domaine
-            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
+              <Typography variant="h6" gutterBottom>
+                Type de domaine
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={loadDomaines}
+                sx={{ fontSize: "0.75rem" }}
+              >
+                🔄 Rafraîchir les domaines
+              </Button>
+            </Box>
             <FormControl fullWidth sx={{ mb: 2 }}>
               <Select
                 value={selectedPartieType}
                 onChange={(e) => setSelectedPartieType(e.target.value)}
                 displayEmpty
               >
-                {partieTypes.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
+                {availableDomaines.map((domaine) => (
+                  <MenuItem key={domaine} value={domaine}>
+                    {domaine}
                   </MenuItem>
                 ))}
               </Select>

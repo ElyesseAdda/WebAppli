@@ -33,12 +33,36 @@ const CreatePartieModal = ({
   const [selectedPartieType, setSelectedPartieType] = useState("PEINTURE");
   const [defaultTauxFixe, setDefaultTauxFixe] = useState("20"); // Valeur par défaut temporaire
 
-  // Types de parties disponibles
-  const partieTypes = [
-    { value: "PEINTURE", label: "Peinture" },
-    { value: "FACADE", label: "Façade" },
-    { value: "TCE", label: "TCE" },
-  ];
+  // États pour la gestion dynamique des domaines
+  const [availableDomaines, setAvailableDomaines] = useState([]);
+  const [newDomaine, setNewDomaine] = useState("");
+  const [showNewDomaineInput, setShowNewDomaineInput] = useState(false);
+
+  // Fonction pour charger les domaines disponibles
+  const loadDomaines = () => {
+    axios
+      .get("/api/parties/domaines/")
+      .then((response) => {
+        setAvailableDomaines(response.data);
+        // Si aucun domaine n'est sélectionné, prendre le premier disponible
+        if (!selectedPartieType && response.data.length > 0) {
+          setSelectedPartieType(response.data[0]);
+        }
+      })
+      .catch((error) => {
+        console.error("Erreur lors du chargement des domaines", error);
+      });
+  };
+
+  // Fonction pour ajouter un nouveau domaine
+  const handleAddNewDomaine = () => {
+    if (newDomaine.trim() && !availableDomaines.includes(newDomaine.trim())) {
+      setAvailableDomaines((prev) => [...prev, newDomaine.trim()].sort());
+      setSelectedPartieType(newDomaine.trim());
+      setNewDomaine("");
+      setShowNewDomaineInput(false);
+    }
+  };
 
   // Charger le taux fixe et les unités existantes depuis le backend
   useEffect(() => {
@@ -80,6 +104,7 @@ const CreatePartieModal = ({
     if (open) {
       fetchTauxFixe();
       fetchExistingUnites();
+      loadDomaines(); // Charger les domaines disponibles
     }
   }, [open]);
 
@@ -431,6 +456,7 @@ const CreatePartieModal = ({
       }
 
       onPartieCreated(createdData);
+      loadDomaines(); // Recharger les domaines après création
       handleClose();
       resetForm();
     } catch (error) {
@@ -444,6 +470,8 @@ const CreatePartieModal = ({
     setSelectedPartieId("");
     setSelectedSousPartieId("");
     setSelectedPartieType("PEINTURE");
+    setNewDomaine("");
+    setShowNewDomaineInput(false);
     setSousParties([
       {
         description: "",
@@ -598,13 +626,62 @@ const CreatePartieModal = ({
                         value={selectedPartieType}
                         onChange={(e) => setSelectedPartieType(e.target.value)}
                       >
-                        {partieTypes.map((type) => (
-                          <MenuItem key={type.value} value={type.value}>
-                            {type.label}
+                        {availableDomaines.map((domaine) => (
+                          <MenuItem key={domaine} value={domaine}>
+                            {domaine}
                           </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
+
+                    {/* Bouton pour ajouter un nouveau domaine */}
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() =>
+                          setShowNewDomaineInput(!showNewDomaineInput)
+                        }
+                        sx={{ fontSize: "0.75rem" }}
+                      >
+                        + Nouveau domaine
+                      </Button>
+                    </Box>
+
+                    {/* Input pour nouveau domaine */}
+                    {showNewDomaineInput && (
+                      <Box
+                        sx={{ display: "flex", gap: 1, alignItems: "center" }}
+                      >
+                        <TextField
+                          size="small"
+                          placeholder="Nom du nouveau domaine"
+                          value={newDomaine}
+                          onChange={(e) => setNewDomaine(e.target.value)}
+                          onKeyPress={(e) =>
+                            e.key === "Enter" && handleAddNewDomaine()
+                          }
+                        />
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={handleAddNewDomaine}
+                          disabled={!newDomaine.trim()}
+                        >
+                          Ajouter
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => {
+                            setShowNewDomaineInput(false);
+                            setNewDomaine("");
+                          }}
+                        >
+                          Annuler
+                        </Button>
+                      </Box>
+                    )}
                   </>
                 )}
 

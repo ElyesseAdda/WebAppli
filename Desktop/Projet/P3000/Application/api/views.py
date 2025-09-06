@@ -597,6 +597,14 @@ class PartieViewSet(viewsets.ModelViewSet):
         if type_filter:
             queryset = queryset.filter(type=type_filter)
         return queryset
+    
+    @action(detail=False, methods=['get'])
+    def domaines(self, request):
+        """
+        Récupère la liste des types de domaines existants
+        """
+        domaines = Partie.objects.values_list('type', flat=True).distinct().order_by('type')
+        return Response(list(domaines))
 
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()
