@@ -830,9 +830,75 @@ const ListeDevis = () => {
       // Message de succès
       alert(`La facture ${response.data.numero} a été créée avec succès.`);
 
-      // Ouvrir la prévisualisation dans un nouvel onglet
-      const previewUrl = `/api/preview-facture/${response.data.id}/`;
-      window.open(previewUrl, "_blank");
+      // Auto-download de la facture dans le Drive
+      try {
+        console.log(
+          "🚀 Lancement de l'auto-download de la facture vers le Drive"
+        );
+
+        // Récupérer les données complètes de la facture créée
+        const factureResponse = await axios.get(
+          `/api/facture/${response.data.id}/`
+        );
+        const factureComplet = factureResponse.data;
+
+        console.log("📋 Données de la facture complète:", factureComplet);
+
+        // Récupérer les données de la société depuis le chantier
+        const chantierResponse = await axios.get(
+          `/api/chantier/${factureComplet.chantier}/`
+        );
+        const chantier = chantierResponse.data;
+
+        // Récupérer les données de la société
+        let societe;
+        if (typeof chantier.societe === "object" && chantier.societe.id) {
+          societe = chantier.societe;
+        } else {
+          const societeResponse = await axios.get(
+            `/api/societe/${chantier.societe}/`
+          );
+          societe = societeResponse.data;
+        }
+
+        console.log("🏢 Données de la société:", societe);
+
+        // Utiliser le système universel pour générer le PDF
+        await generatePDFDrive(
+          "facture",
+          {
+            factureId: factureComplet.id,
+            chantierId: factureComplet.chantier,
+            chantierName: factureComplet.chantier_name,
+            societeName: societe.nom_societe,
+            numero: factureComplet.numero,
+          },
+          {
+            onSuccess: (response) => {
+              console.log(
+                "✅ Facture générée avec succès dans le Drive:",
+                response
+              );
+              alert("✅ Facture téléchargée automatiquement dans le Drive !");
+            },
+            onError: (error) => {
+              console.error(
+                "❌ Erreur lors de la génération de la facture:",
+                error
+              );
+              alert(
+                `❌ Erreur lors de la génération automatique: ${error.message}`
+              );
+            },
+          }
+        );
+      } catch (autoDownloadError) {
+        console.error("❌ Erreur lors de l'auto-download:", autoDownloadError);
+        // Ne pas bloquer le processus principal si l'auto-download échoue
+        alert(
+          "⚠️ Facture créée mais erreur lors du téléchargement automatique. Vous pouvez le faire manuellement."
+        );
+      }
 
       handleFactureModalClose();
       fetchDevis();

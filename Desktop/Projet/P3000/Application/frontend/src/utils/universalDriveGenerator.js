@@ -136,8 +136,22 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du rapport mensuel agents ${data.month}/${data.year} vers le Drive...`,
   },
+  facture: {
+    apiEndpoint: "/generate-facture-pdf-drive/",
+    previewUrl: (data) => `/api/preview-facture/${data.factureId}/`,
+    requiredFields: [
+      "factureId",
+      "chantierId",
+      "chantierName",
+      "societeName",
+      "numero",
+    ],
+    displayName: "Facture",
+    getDisplayName: (data) => `Facture ${data.numero}`,
+    getLoadingMessage: (data) =>
+      `Génération de la facture ${data.numero} vers le Drive...`,
+  },
   // Autres types à ajouter plus tard :
-  // 'facture': { ... },
   // 'situation': { ... },
   // 'rapport': { ... }
 };

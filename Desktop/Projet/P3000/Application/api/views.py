@@ -2755,6 +2755,7 @@ def create_facture(request):
         }, status=500)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def preview_facture(request, facture_id):
     try:
         facture = Facture.objects.select_related(

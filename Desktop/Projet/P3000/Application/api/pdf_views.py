@@ -903,3 +903,68 @@ def generate_bon_commande_pdf_drive(request):
         error_msg = f'Erreur inattendue: {str(e)}'
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def generate_facture_pdf_drive(request):
+    """
+    Vue pour générer le PDF d'une facture et le stocker dans AWS S3
+    """
+    try:
+        # Récupérer les paramètres depuis la requête
+        facture_id = request.GET.get('facture_id') or request.GET.get('factureId')
+        chantier_id = request.GET.get('chantier_id') or request.GET.get('chantierId')
+        chantier_name = request.GET.get('chantier_name') or request.GET.get('chantierName', 'Chantier')
+        societe_name = request.GET.get('societe_name') or request.GET.get('societeName', 'Société par défaut')
+        numero = request.GET.get('numero', 'FACT-001')
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        
+        if not facture_id:
+            return JsonResponse({'error': 'facture_id est requis'}, status=400)
+        
+        # URL de prévisualisation
+        preview_url = request.build_absolute_uri(f"/api/preview-facture/{facture_id}/")
+        
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='facture',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            force_replace=force_replace,
+            facture_id=facture_id,
+            chantier_id=chantier_id,
+            chantier_name=chantier_name,
+            numero=numero
+        )
+        
+        if success:
+            response_data = {
+                'success': True,
+                'message': f'PDF facture {numero} généré et stocké avec succès dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'redirect_to': f"/drive?path={s3_file_path}&sidebar=closed&focus=file",
+                'document_type': 'facture',
+                'societe_name': societe_name,
+                'facture_id': facture_id,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'numero': numero,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected
+            }
+            
+            if conflict_detected:
+                response_data['conflict_message'] = f'Un fichier avec le même nom existait déjà. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
+                response_data['conflict_type'] = 'file_replaced'
+            
+            return JsonResponse(response_data)
+        else:
+            return JsonResponse({'success': False, 'error': message}, status=500)
+            
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
