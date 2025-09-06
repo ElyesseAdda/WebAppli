@@ -163,6 +163,23 @@ CSRF_EXEMPT_PATTERNS = [
     r'^/api/labor_costs/monthly_summary/$',
     r'^/api/preview-monthly-agents-report/$',
     r'^/api/generate-monthly-agents-pdf/$',
+    
+    # URLs PDF Drive avec stockage AWS S3
+    r'^/api/planning-hebdo-pdf-drive/$',
+    r'^/api/generate-monthly-agents-pdf-drive/$',
+    r'^/api/generate-devis-travaux-pdf-drive/$',
+    r'^/api/generate-devis-marche-pdf-drive/$',
+    r'^/api/generate-devis-marche-auto/$',
+    r'^/api/generate-contrat-sous-traitance-pdf-drive/$',
+    r'^/api/generate-avenant-sous-traitance-pdf-drive/$',
+    r'^/api/generate-situation-pdf-drive/$',
+    r'^/api/generate-bon-commande-pdf-drive/$',
+    r'^/api/generate-facture-pdf-drive/$',
+    r'^/api/replace-file-after-confirmation/$',
+    r'^/api/get-existing-file-name/$',
+    r'^/api/download-pdf-from-s3/$',
+    r'^/api/download-file-from-drive/$',
+    r'^/api/list-pdfs-in-drive/$',
 ]
 
 def is_csrf_exempt_url(path):
