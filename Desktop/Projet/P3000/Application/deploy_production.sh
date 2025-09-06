@@ -142,6 +142,32 @@ update_dependencies() {
     log_success "Dépendances Python mises à jour"
 }
 
+# Fonction d'installation de Node.js
+install_nodejs() {
+    log "📦 Vérification et installation de Node.js..."
+    
+    # Vérifier si Node.js est installé
+    if ! command -v node &> /dev/null; then
+        log "🔧 Installation de Node.js 18.x..."
+        
+        # Installer Node.js 18.x (LTS)
+        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+        apt-get install -y nodejs
+        
+        log_success "Node.js installé avec succès"
+    else
+        log_success "Node.js déjà installé: $(node --version)"
+    fi
+    
+    # Vérifier npm
+    if ! command -v npm &> /dev/null; then
+        log_error "npm non trouvé après installation de Node.js"
+        exit 1
+    else
+        log_success "npm disponible: $(npm --version)"
+    fi
+}
+
 # Fonction de build du frontend
 build_frontend() {
     log "🎨 Build du frontend..."
@@ -259,6 +285,7 @@ main() {
     deploy_code
     restore_production_env
     update_dependencies
+    install_nodejs
     build_frontend
     manage_django
     generate_deploy_version
