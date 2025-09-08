@@ -14,6 +14,7 @@ from .utils import (
     get_s3_client, 
     get_s3_bucket_name, 
     upload_file_to_s3,
+    upload_file_to_s3_robust,
     create_s3_folder_recursive,
     custom_slugify
 )
@@ -373,7 +374,7 @@ class PDFManager:
             
             # 7. Uploader le nouveau PDF dans S3 (seulement si pas de conflit)
             print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
-            success = upload_file_to_s3(temp_pdf_path, s3_file_path)
+            success = upload_file_to_s3_robust(temp_pdf_path, s3_file_path)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", "", False
             

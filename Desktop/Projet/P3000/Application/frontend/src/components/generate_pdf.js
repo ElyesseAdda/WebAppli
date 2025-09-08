@@ -85,6 +85,30 @@ async function generatePDF() {
       });
 
       console.log("PDF généré avec succès");
+
+      // Vérifier la taille du PDF généré
+      const fs = require("fs");
+      if (fs.existsSync(pdfPath)) {
+        const stats = fs.statSync(pdfPath);
+        console.log(
+          `📊 Taille du PDF généré: ${stats.size} octets (${(
+            stats.size /
+            (1024 * 1024)
+          ).toFixed(2)} MB)`
+        );
+
+        // Vérifier que le PDF n'est pas vide ou trop petit
+        if (stats.size < 1000) {
+          console.log(
+            "⚠️ ATTENTION: PDF très petit, possible problème de génération"
+          );
+        } else {
+          console.log("✅ PDF semble correctement généré");
+        }
+      } else {
+        console.log("❌ Le PDF n'existe pas !");
+      }
+
       await browser.close();
       console.log("Navigateur fermé");
       process.exit(0); // Sortie réussie
