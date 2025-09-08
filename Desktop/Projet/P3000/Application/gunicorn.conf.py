@@ -24,7 +24,7 @@ max_requests_jitter = 50
 # Logs
 accesslog = '/var/log/gunicorn/access.log'
 errorlog = '/var/log/gunicorn/error.log'
-loglevel = 'info'
+loglevel = 'debug'  # Activer les logs de debug
 
 # Process name
 proc_name = 'p3000_app'
