@@ -29,12 +29,12 @@ import {
   StyledTableContainer,
   StyledTextField,
 } from "../../styles/tableStyles";
+import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 import CreationSituation from "../CreationSituation";
 import FactureModal from "../FactureModal";
 import StatusChangeModal from "../StatusChangeModal";
 import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
-import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 
 const formatNumber = (number) =>
   number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -303,29 +303,37 @@ const ChantierListeDevis = ({
 
       // Auto-download de la facture dans le Drive
       try {
-        console.log("🚀 Lancement de l'auto-download de la facture vers le Drive");
-        
+        console.log(
+          "🚀 Lancement de l'auto-download de la facture vers le Drive"
+        );
+
         // Récupérer les données complètes de la facture créée
-        const factureResponse = await axios.get(`/api/facture/${response.data.id}/`);
+        const factureResponse = await axios.get(
+          `/api/facture/${response.data.id}/`
+        );
         const factureComplet = factureResponse.data;
-        
+
         console.log("📋 Données de la facture complète:", factureComplet);
-        
+
         // Récupérer les données de la société depuis le chantier
-        const chantierResponse = await axios.get(`/api/chantier/${factureComplet.chantier}/`);
+        const chantierResponse = await axios.get(
+          `/api/chantier/${factureComplet.chantier}/`
+        );
         const chantier = chantierResponse.data;
-        
+
         // Récupérer les données de la société
         let societe;
         if (typeof chantier.societe === "object" && chantier.societe.id) {
           societe = chantier.societe;
         } else {
-          const societeResponse = await axios.get(`/api/societe/${chantier.societe}/`);
+          const societeResponse = await axios.get(
+            `/api/societe/${chantier.societe}/`
+          );
           societe = societeResponse.data;
         }
-        
+
         console.log("🏢 Données de la société:", societe);
-        
+
         // Utiliser le système universel pour générer le PDF
         await generatePDFDrive(
           "facture",
@@ -338,19 +346,29 @@ const ChantierListeDevis = ({
           },
           {
             onSuccess: (response) => {
-              console.log("✅ Facture générée avec succès dans le Drive:", response);
+              console.log(
+                "✅ Facture générée avec succès dans le Drive:",
+                response
+              );
               alert("✅ Facture téléchargée automatiquement dans le Drive !");
             },
             onError: (error) => {
-              console.error("❌ Erreur lors de la génération de la facture:", error);
-              alert(`❌ Erreur lors de la génération automatique: ${error.message}`);
+              console.error(
+                "❌ Erreur lors de la génération de la facture:",
+                error
+              );
+              alert(
+                `❌ Erreur lors de la génération automatique: ${error.message}`
+              );
             },
           }
         );
       } catch (autoDownloadError) {
         console.error("❌ Erreur lors de l'auto-download:", autoDownloadError);
         // Ne pas bloquer le processus principal si l'auto-download échoue
-        alert("⚠️ Facture créée mais erreur lors du téléchargement automatique. Vous pouvez le faire manuellement.");
+        alert(
+          "⚠️ Facture créée mais erreur lors du téléchargement automatique. Vous pouvez le faire manuellement."
+        );
       }
 
       setFactureModalOpen(false);

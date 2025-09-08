@@ -83,14 +83,14 @@ def get_s3_client():
     Retourne un client S3 configuré ou utilise le stockage local
     """
     # Vérifier que les variables d'environnement sont définies
-    access_key = os.getenv('S3_ACCESS_KEY')
-    secret_key = os.getenv('S3_SECRET_KEY')
+    access_key = os.getenv('AWS_ACCESS_KEY_ID')
+    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     
-    # Forcer la région à eu-north-1 pour éviter les conflits
+    # Utiliser eu-north-1 comme demandé
     region = 'eu-north-1'
     
-    endpoint_url = os.getenv('S3_ENDPOINT_URL')
-    bucket_name = os.getenv('S3_BUCKET_NAME')
+    endpoint_url = os.getenv('S3_ENDPOINT_URL')  # Garder pour compatibilité
+    bucket_name = os.getenv('AWS_STORAGE_BUCKET_NAME')
     
     # Si S3 n'est pas configuré, utiliser le stockage local
     if not access_key or not secret_key or not bucket_name:
@@ -119,7 +119,7 @@ def get_s3_bucket_name():
     """
     Retourne le nom du bucket S3 avec vérification
     """
-    bucket_name = os.getenv('S3_BUCKET_NAME')
+    bucket_name = os.getenv('AWS_STORAGE_BUCKET_NAME')
     if not bucket_name:
         return None
     return bucket_name

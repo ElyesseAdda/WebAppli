@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "name": "Situation",
+    "path": "Chantiers/Immobiliere-De-Lanfant/Testcompletchantier/Situation",
+    "type": "folder"
+  },
+  {
+    "name": "Abconduite",
+    "path": "Chantiers/Immobiliere-De-Lanfant/Testcompletchantier/Sous_Traitant/Abconduite",
+    "type": "folder"
+  },
+  {
+    "name": "2025",
+    "path": "Agents/Document_Generaux/Rapport_mensuel/2025",
+    "type": "folder"
+  }
+]
