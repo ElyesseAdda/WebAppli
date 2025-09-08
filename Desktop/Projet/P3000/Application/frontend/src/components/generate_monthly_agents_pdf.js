@@ -46,12 +46,12 @@ async function generateMonthlyAgentsPDF() {
       console.log("Page chargée avec succès");
 
       // Attendre que le contenu soit complètement chargé
-      await page.waitForSelector("body", { timeout: 5000 });
+      await page.waitForSelector("body", { timeout: 10000 });
       console.log("Contenu de la page détecté");
 
-      // Attendre un peu pour que les styles soient appliqués
-      // Remplacer waitForTimeout par une promesse avec setTimeout
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Attendre que tous les éléments soient chargés pour les PDFs multi-pages
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      console.log("Attente terminée - prêt pour la génération PDF");
 
       console.log("Début de la génération du PDF vers:", pdfPath);
 
@@ -66,8 +66,10 @@ async function generateMonthlyAgentsPDF() {
           bottom: "20px",
           left: "20px",
         },
-        preferCSSPageSize: true,
+        preferCSSPageSize: false, // IMPORTANT: Désactiver pour les PDFs multi-pages
         scale: 1,
+        displayHeaderFooter: false,
+        pageRanges: "", // Inclure toutes les pages
       });
 
       console.log("PDF généré avec succès");
