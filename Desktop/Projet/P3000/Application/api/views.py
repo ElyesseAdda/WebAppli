@@ -5839,15 +5839,27 @@ def generate_situation_pdf(request):
             print(f"ERREUR: {error_msg}")
             return JsonResponse({'error': error_msg}, status=500)
         
-        # Vérifier si Node.js est disponible
-        try:
-            subprocess.run(['node', '--version'], check=True, capture_output=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        # Vérifier si Node.js est disponible avec plusieurs chemins
+        node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
+        node_found = False
+        node_path = 'node'
+        
+        for path in node_paths:
+            try:
+                result = subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
+                print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
+                node_found = True
+                node_path = path
+                break
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+        
+        if not node_found:
             error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
             print(f"ERREUR: {error_msg}")
             return JsonResponse({'error': error_msg}, status=500)
         
-        command = ['node', node_script_path, preview_url, pdf_path]
+        command = [node_path, node_script_path, preview_url, pdf_path]
         print(f"Commande exécutée: {' '.join(command)}")
         
         try:
@@ -6898,15 +6910,27 @@ def planning_hebdo_pdf(request):
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
     
-    # Vérifier si Node.js est disponible
-    try:
-        subprocess.run(['node', '--version'], check=True, capture_output=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    # Vérifier si Node.js est disponible avec plusieurs chemins
+    node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
+    node_found = False
+    node_path = 'node'
+    
+    for path in node_paths:
+        try:
+            result = subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
+            print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
+            node_found = True
+            node_path = path
+            break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+    
+    if not node_found:
         error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
     
-    command = ['node', node_script_path, preview_url, pdf_path]
+    command = [node_path, node_script_path, preview_url, pdf_path]
     print(f"Commande exécutée: {' '.join(command)}")
     
     try:
@@ -8174,15 +8198,27 @@ def generate_monthly_agents_pdf(request):
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
     
-    # Vérifier si Node.js est disponible
-    try:
-        subprocess.run(['node', '--version'], check=True, capture_output=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    # Vérifier si Node.js est disponible avec plusieurs chemins
+    node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
+    node_found = False
+    node_path = 'node'
+    
+    for path in node_paths:
+        try:
+            result = subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
+            print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
+            node_found = True
+            node_path = path
+            break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+    
+    if not node_found:
         error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
         print(f"ERREUR: {error_msg}")
         return JsonResponse({'error': error_msg}, status=500)
     
-    command = ['node', node_script_path, preview_url, pdf_path]
+    command = [node_path, node_script_path, preview_url, pdf_path]
     print(f"Commande exécutée: {' '.join(command)}")
     
     try:

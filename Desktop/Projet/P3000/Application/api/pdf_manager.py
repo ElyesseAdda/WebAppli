@@ -245,10 +245,20 @@ class PDFManager:
         Returns:
             Tuple[bool, str]: (succès, message d'erreur)
         """
-        # Vérifier Node.js
-        try:
-            subprocess.run(['node', '--version'], check=True, capture_output=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        # Vérifier Node.js avec plusieurs chemins possibles
+        node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
+        node_found = False
+        
+        for node_path in node_paths:
+            try:
+                result = subprocess.run([node_path, '--version'], check=True, capture_output=True, text=True)
+                print(f"✅ Node.js trouvé: {node_path} - Version: {result.stdout.strip()}")
+                node_found = True
+                break
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+        
+        if not node_found:
             return False, "Node.js n'est pas installé ou n'est pas accessible"
         
         # Vérifier Puppeteer
