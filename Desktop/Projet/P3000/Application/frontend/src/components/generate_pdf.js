@@ -10,7 +10,8 @@ async function generatePDF() {
 
   try {
     const browser = await puppeteer.launch({
-      headless: "new", // "new" est la nouvelle syntaxe recommandée
+      executablePath: "/usr/bin/chromium-browser", // chemin exact de Chromium
+      headless: true,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",

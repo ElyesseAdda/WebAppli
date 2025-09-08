@@ -11,7 +11,8 @@ async function generateMonthlyAgentsPDF() {
 
   try {
     const browser = await puppeteer.launch({
-      headless: "new",
+      executablePath: "/usr/bin/chromium-browser", // chemin exact de Chromium
+      headless: true,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
