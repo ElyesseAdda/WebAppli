@@ -550,7 +550,7 @@ class TauxFixe(models.Model):
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
     partie = models.ForeignKey('Partie', related_name='lignes_details', on_delete=models.CASCADE, null=True, blank=True)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=600)
     unite = models.CharField(max_length=10)
     # Nouveaux champs pour la décomposition du prix
     cout_main_oeuvre = models.DecimalField(max_digits=10, decimal_places=2, default=0)
