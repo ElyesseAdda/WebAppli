@@ -28,7 +28,9 @@ const DateEnvoiModal = ({ open, onClose, situation, onSubmit }) => {
 
   useEffect(() => {
     if (situation) {
-      setDateEnvoi(situation.date_envoi || "");
+      // Si la situation n'a pas de date d'envoi, préremplir avec la date du jour
+      const dateAujourdhui = new Date().toISOString().split("T")[0];
+      setDateEnvoi(situation.date_envoi || dateAujourdhui);
       setDelaiPaiement(situation.delai_paiement || 45);
     }
   }, [situation]);
@@ -81,8 +83,10 @@ const PaiementModal = ({ open, onClose, situation, onSubmit }) => {
 
   useEffect(() => {
     if (situation) {
+      // Si la situation n'a pas de date de paiement réelle, préremplir avec la date du jour
+      const dateAujourdhui = new Date().toISOString().split("T")[0];
       setMontantRecu(situation.montant_reel_ht || "");
-      setDatePaiementReel(situation.date_paiement_reel || "");
+      setDatePaiementReel(situation.date_paiement_reel || dateAujourdhui);
     }
   }, [situation]);
 
@@ -238,23 +242,52 @@ const TableauSuivi = () => {
   useEffect(() => {
     if (selectedChantierId) {
       setLoading(true);
-      Promise.all([
-        axios.get(`/api/chantier/${selectedChantierId}/`),
-        axios.get(`/api/devis-structure/${selectedChantierId}/structure/`),
-        axios.get(`/api/avenant_chantier/${selectedChantierId}/avenants/`),
-      ])
-        .then(([chantierRes, devisRes, avenantsRes]) => {
+
+      const loadChantierData = async () => {
+        try {
+          // D'abord récupérer le chantier et ses devis
+          const [chantierRes, devisRes, avenantsRes] = await Promise.all([
+            axios.get(`/api/chantier/${selectedChantierId}/`),
+            axios.get(`/api/devisa/?chantier=${selectedChantierId}`),
+            axios.get(`/api/avenant_chantier/${selectedChantierId}/avenants/`),
+          ]);
+
           setChantier(chantierRes.data);
-          setDevis(devisRes.data);
+
+          // Si il y a des devis, récupérer la structure du premier devis
+          if (devisRes.data && devisRes.data.length > 0) {
+            const premierDevis = devisRes.data[0];
+            setDevis(premierDevis);
+
+            // Récupérer la structure du devis
+            try {
+              const structureRes = await axios.get(
+                `/api/devis-structure/${premierDevis.id}/structure/`
+              );
+              // Mettre à jour le devis avec la structure
+              setDevis({ ...premierDevis, structure: structureRes.data });
+            } catch (structureError) {
+              console.warn(
+                "Erreur lors du chargement de la structure du devis:",
+                structureError
+              );
+              // Continuer même si la structure ne se charge pas
+            }
+          } else {
+            setDevis(null);
+          }
+
           if (avenantsRes.data.success) {
             setAvenants(avenantsRes.data.avenants);
           }
           setLoading(false);
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error("Erreur lors du chargement des données:", error);
           setLoading(false);
-        });
+        }
+      };
+
+      loadChantierData();
     }
   }, [selectedChantierId]);
 
@@ -363,7 +396,7 @@ const TableauSuivi = () => {
                         situations[0]?.montant_reel_ht
                       )
                     : formatNumberWithColor(
-                        avenants[rowIndex - 1]?.montant_total,
+                        avenants[rowIndex - 1]?.montant_total || 0,
                         situations[rowIndex - 1]?.montant_reel_ht
                       )}
                 </TableCell>
@@ -376,7 +409,7 @@ const TableauSuivi = () => {
                   sx={{ borderRight: "2px solid rgba(224, 224, 224, 1)" }}
                 >
                   {formatNumberWithColor(
-                    avenants[rowIndex + 4]?.montant_total,
+                    avenants[rowIndex + 4]?.montant_total || 0,
                     situations[rowIndex + 4]?.montant_reel_ht
                   )}
                 </TableCell>
@@ -387,7 +420,7 @@ const TableauSuivi = () => {
                 </TableCell>
                 <TableCell>
                   {formatNumberWithColor(
-                    avenants[rowIndex + 9]?.montant_total,
+                    avenants[rowIndex + 9]?.montant_total || 0,
                     situations[rowIndex + 9]?.montant_reel_ht
                   )}
                 </TableCell>
@@ -451,7 +484,8 @@ const TableauSuivi = () => {
     };
 
     const calculerEcartMois = (situation) => {
-      const montantHTSituation = parseFloat(situation.montant_ht_mois) || 0;
+      const montantHTSituation =
+        parseFloat(situation.montant_apres_retenues) || 0;
       const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
       const ecart = montantRecuHT - montantHTSituation;
 
@@ -462,8 +496,8 @@ const TableauSuivi = () => {
 
     const calculerCumulSituationHT = (situations, indexCourant) => {
       return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
-        // Utiliser le montant HT du mois (montant_ht_mois)
-        const montantHT = parseFloat(situation.montant_ht_mois) || 0;
+        // Utiliser le montant après retenues (montant_apres_retenues)
+        const montantHT = parseFloat(situation.montant_apres_retenues) || 0;
         return sum + montantHT;
       }, 0);
     };
@@ -481,11 +515,11 @@ const TableauSuivi = () => {
           return {
             montantHTSituation:
               totaux.montantHTSituation +
-              (parseFloat(situation.montant_ht_mois) || 0),
+              (parseFloat(situation.montant_apres_retenues) || 0),
             rg: totaux.rg + (parseFloat(situation.retenue_garantie) || 0),
             netAPayer:
               totaux.netAPayer +
-              ((parseFloat(situation.montant_ht_mois) || 0) +
+              ((parseFloat(situation.montant_apres_retenues) || 0) +
                 (parseFloat(situation.tva) || 0)),
             montantRecuHT:
               totaux.montantRecuHT +
@@ -493,7 +527,7 @@ const TableauSuivi = () => {
             ecartMois:
               totaux.ecartMois +
               (parseFloat(situation.montant_reel_ht || 0) -
-                parseFloat(situation.montant_ht_mois || 0)),
+                parseFloat(situation.montant_apres_retenues || 0)),
           };
         },
         {
@@ -507,18 +541,26 @@ const TableauSuivi = () => {
     };
 
     const calculerResteAPayer = () => {
-      const derniereSituation = situationsTriees[situationsTriees.length - 1];
-      if (!derniereSituation) return 0;
-      const montantTotalCumulHT =
-        parseFloat(derniereSituation.montant_total_cumul_ht) || 0;
+      // Calculer le montant total cumulé avec montant_apres_retenues
+      const montantTotalCumulHT = calculerCumulSituationHT(
+        situationsTriees,
+        situationsTriees.length - 1
+      );
       const totalMontantRecuHT = calculerTotaux().montantRecuHT;
       return montantTotalCumulHT - totalMontantRecuHT;
     };
 
     const calculerPourcentageAvancement = () => {
-      const derniereSituation = situationsTriees[situationsTriees.length - 1];
-      if (!derniereSituation) return 0;
-      return parseFloat(derniereSituation.pourcentage_avancement) || 0;
+      const montantTotalMarche = calculerMontantTotalMarche();
+      if (montantTotalMarche === 0) return 0;
+
+      // Calculer le montant total cumulé avec montant_apres_retenues
+      const montantTotalCumulHT = calculerCumulSituationHT(
+        situationsTriees,
+        situationsTriees.length - 1
+      );
+
+      return (montantTotalCumulHT / montantTotalMarche) * 100;
     };
 
     // Fonction pour obtenir toutes les lignes supplémentaires uniques
@@ -637,7 +679,7 @@ const TableauSuivi = () => {
                     </TableCell>
                     <TableCell>
                       {formatMontant(
-                        parseFloat(situation.montant_ht_mois) || 0
+                        parseFloat(situation.montant_apres_retenues) || 0
                       )}
                     </TableCell>
                     <TableCell>
@@ -706,7 +748,7 @@ const TableauSuivi = () => {
                         {situation.montant_reel_ht
                           ? formatNumberWithColor(
                               situation.montant_reel_ht,
-                              situation.montant_ht_mois
+                              situation.montant_apres_retenues
                             )
                           : "Définir paiement"}
                       </Button>
@@ -968,10 +1010,10 @@ const TableauSuivi = () => {
   const isMontantDifferent = (situationId, montantRecu) => {
     const situation = situations.find((s) => s.id === situationId);
     if (!situation || !montantRecu) return false;
-    // Comparer avec le montant HT du mois (ce qui est facturé)
+    // Comparer avec le montant après retenues (ce qui est facturé)
     return (
       Math.abs(
-        parseFloat(situation.montant_ht_mois) - parseFloat(montantRecu)
+        parseFloat(situation.montant_apres_retenues) - parseFloat(montantRecu)
       ) > 0.01
     );
   };
