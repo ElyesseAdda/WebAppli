@@ -51,9 +51,9 @@ const DevisModal = ({
 
         let newNumero = response.data.numero;
 
-        // Si c'est un devis de chantier et qu'on a le nom du chantier
-        if (devisData.devis_chantier && currentChantierName) {
-          newNumero = `${newNumero} - ${currentChantierName}`;
+        // Si c'est un devis de chantier, toujours utiliser "Devis travaux"
+        if (devisData.devis_chantier) {
+          newNumero = `${newNumero} - Devis travaux`;
         }
         // Si c'est un devis normal lié à un chantier existant (TS)
         else if (!devisData.devis_chantier && devisData.chantier !== -1) {

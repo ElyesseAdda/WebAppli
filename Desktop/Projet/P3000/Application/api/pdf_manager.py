@@ -137,7 +137,7 @@ class PDFManager:
         
         elif document_type == 'facture':
             # Utiliser le numéro de la facture depuis la DB (sans timestamp ni ID)
-            numero = kwargs.get('numero', 'FACT-001')
+            numero = kwargs.get('numero', 'FACT-001-25')
             print(f"🔍 DEBUG generate_pdf_filename - numero facture reçu: '{numero}'")
             return f"{numero}.pdf"
         

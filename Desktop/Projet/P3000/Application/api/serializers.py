@@ -392,9 +392,7 @@ class FactureSerializer(serializers.ModelSerializer):
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 
     def validate_numero(self, value):
-        if not value.startswith('FACT-'):
-            raise serializers.ValidationError("Le numéro de facture doit commencer par 'FACT-'")
-        
+        # Vérification de l'unicité du numéro de facture
         if Facture.objects.filter(numero=value).exists():
             raise serializers.ValidationError("Ce numéro de facture existe déjà")
             

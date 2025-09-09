@@ -2394,13 +2394,16 @@ def get_next_devis_number(request):
         chantier_id = request.GET.get('chantier_id')
         devis_chantier = request.GET.get('devis_chantier') == 'true'
         is_ts = request.GET.get('is_ts') == 'true'
+        prefix = request.GET.get('prefix', 'DEV')  # Préfixe personnalisable
         
         # Obtenir l'année en cours
         current_year = timezone.now().year
         year_suffix = str(current_year)[-2:]
         
-        # Récupérer le dernier devis créé (ordonné par ID décroissant)
-        last_devis = Devis.objects.all().order_by('-id').first()
+        # Récupérer le dernier devis créé avec le même préfixe (ordonné par ID décroissant)
+        last_devis = Devis.objects.filter(
+            numero__startswith=f"{prefix}-"
+        ).order_by('-id').first()
         
         if last_devis:
             try:
@@ -2412,8 +2415,8 @@ def get_next_devis_number(request):
         else:
             next_sequence = 1
             
-        # Formater le nouveau numéro
-        numero = f"DEV-{str(next_sequence).zfill(3)}-{year_suffix}"
+        # Formater le nouveau numéro avec le préfixe personnalisé
+        numero = f"{prefix}-{str(next_sequence).zfill(3)}-{year_suffix}"
         
         # Si c'est un TS, calculer le prochain numéro de TS
         next_ts = None
@@ -4994,23 +4997,34 @@ def get_factures_cie(request, chantier_id):
 
 class NumeroService:
     @staticmethod
-    def get_next_facture_number():
+    def get_next_facture_number(prefix="FACT"):
         """Génère le prochain numéro de facture unique pour toute l'application"""
         current_year = str(datetime.now().year)[-2:]
         
-        # Récupère le dernier numéro de facture de l'année
+        # Récupère le dernier numéro de facture de l'année avec le préfixe spécifié
         last_facture = Facture.objects.filter(
             numero__contains=f'-{current_year}'
         ).order_by('-numero').first()
         
         if last_facture:
-            # Extrait le numéro de séquence de FACT-001-25
-            last_num = int(last_facture.numero.split('-')[1])
-            next_num = last_num + 1
+            # Extrait le numéro de séquence (gère différents formats)
+            try:
+                # Format: PREFIX-001-25 ou PREFIX-001
+                parts = last_facture.numero.split('-')
+                if len(parts) >= 2:
+                    last_num = int(parts[1])
+                else:
+                    # Format alternatif sans tiret
+                    import re
+                    numbers = re.findall(r'\d+', last_facture.numero)
+                    last_num = int(numbers[0]) if numbers else 0
+                next_num = last_num + 1
+            except (IndexError, ValueError):
+                next_num = 1
         else:
             next_num = 1
             
-        return f"FACT-{next_num:03d}-{current_year}"
+        return f"{prefix}-{next_num:03d}-{current_year}"
 
     @staticmethod
     def get_next_situation_number(chantier_id):
@@ -5058,7 +5072,9 @@ def get_next_numero(request, chantier_id=None):
                 pass
         
         next_num = last_num + 1
-        base_numero = f"FACT-{next_num:03d}-{current_year}"
+        # Utilise le préfixe par défaut "FACT" mais peut être personnalisé
+        prefix = request.GET.get('prefix', 'FACT')
+        base_numero = f"{prefix}-{next_num:03d}-{current_year}"
             
         if chantier_id:
             # Pour une situation, on ajoute le numéro de situation
