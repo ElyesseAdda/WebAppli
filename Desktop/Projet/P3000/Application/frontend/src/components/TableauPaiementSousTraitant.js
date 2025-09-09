@@ -252,19 +252,26 @@ const FactureModal = ({
   const [annee, setAnnee] = useState(new Date().getFullYear());
   const [numeroFacture, setNumeroFacture] = useState("");
   const [montantFacture, setMontantFacture] = useState("");
-  const [dateReception, setDateReception] = useState("");
+  const [dateReception, setDateReception] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [delaiPaiement, setDelaiPaiement] = useState(45);
 
-  // Calculer le prochain numéro de facture
+  // Calculer le prochain numéro de facture et réinitialiser la date
   useEffect(() => {
-    if (open && factures.length > 0) {
-      const facturesDuMois = factures.filter(
-        (f) => f.mois === mois && f.annee === annee
-      );
-      const prochainNumero = facturesDuMois.length + 1;
-      setNumeroFacture(prochainNumero.toString());
-    } else if (open) {
-      setNumeroFacture("1");
+    if (open) {
+      // Réinitialiser la date de réception à la date du jour
+      setDateReception(new Date().toISOString().split("T")[0]);
+
+      if (factures.length > 0) {
+        const facturesDuMois = factures.filter(
+          (f) => f.mois === mois && f.annee === annee
+        );
+        const prochainNumero = facturesDuMois.length + 1;
+        setNumeroFacture(prochainNumero.toString());
+      } else {
+        setNumeroFacture("1");
+      }
     }
   }, [open, mois, annee, factures]);
 
@@ -389,7 +396,9 @@ const FactureModal = ({
 
 const PaiementFactureModal = ({ open, onClose, facture, onSubmit }) => {
   const [montantPaye, setMontantPaye] = useState("");
-  const [datePaiementReel, setDatePaiementReel] = useState("");
+  const [datePaiementReel, setDatePaiementReel] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [commentaire, setCommentaire] = useState("");
 
   // Calculer l'écart (montant restant à payer)
@@ -408,6 +417,19 @@ const PaiementFactureModal = ({ open, onClose, facture, onSubmit }) => {
   const isPremierPaiement =
     !facture?.paiements || facture.paiements.length === 0;
 
+  // Réinitialiser la date de paiement et préremplir le montant à chaque ouverture du modal
+  useEffect(() => {
+    if (open && facture) {
+      setDatePaiementReel(new Date().toISOString().split("T")[0]);
+
+      // Préremplir le montant payé avec le montant restant à payer
+      const montantRestant = Math.abs(ecartFacture);
+      if (montantRestant > 0) {
+        setMontantPaye(montantRestant.toString());
+      }
+    }
+  }, [open, facture, ecartFacture]);
+
   const handleSubmit = () => {
     if (facture) {
       onSubmit({
@@ -419,7 +441,6 @@ const PaiementFactureModal = ({ open, onClose, facture, onSubmit }) => {
       onClose();
       // Reset form
       setMontantPaye("");
-      setDatePaiementReel("");
       setCommentaire("");
     }
   };
@@ -478,6 +499,19 @@ const PaiementFactureModal = ({ open, onClose, facture, onSubmit }) => {
             sx={{ mb: 2 }}
             required
             inputProps={{ step: "0.01", min: "0" }}
+            placeholder={
+              ecartFacture > 0
+                ? `Montant restant: ${Math.abs(ecartFacture).toLocaleString(
+                    "fr-FR",
+                    { minimumFractionDigits: 2 }
+                  )} €`
+                : ""
+            }
+            helperText={
+              ecartFacture > 0
+                ? "Montant prérempli avec le montant restant à payer"
+                : ""
+            }
           />
 
           <TextField
@@ -526,6 +560,7 @@ const TableauRecapContratAvenants = ({
       String(c.chantier) === String(chantierId) &&
       String(c.sous_traitant) === String(sousTraitantId)
   );
+
   let types = [
     "CONTRAT",
     ...Array.from(
@@ -537,6 +572,7 @@ const TableauRecapContratAvenants = ({
   if (contratsFiltres.length > 0) {
     // Contrat initial
     montants[0] = Number(contratsFiltres[0].montant_operation);
+
     // Avenants
     if (contratsFiltres[0].avenants && contratsFiltres[0].avenants.length > 0) {
       contratsFiltres[0].avenants.forEach((avenant) => {
@@ -659,7 +695,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           setFactures(facturesRes.data);
           setLoading(false);
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error("Erreur lors du chargement des données:", error);
           setContrats([]);
           setFactures([]);
           setLoading(false);
@@ -882,6 +919,11 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   }, 0);
 
   const montantRestantCalcul = montantTotalMarche - montantTotalPaye;
+
+  // Calculer le total des montants facturés
+  const totalMontantFacture = factures.reduce((sum, facture) => {
+    return sum + (parseFloat(facture.montant_facture_ht) || 0);
+  }, 0);
 
   // Créer les lignes à afficher dans le tableau (factures + paiements)
   const lignesTableau = [];
@@ -1175,6 +1217,67 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                   </TableCell>
                 </TableRow>
               ))}
+
+              {/* Ligne de total des montants facturés */}
+              <TableRow
+                sx={{
+                  backgroundColor: "rgba(27, 120, 188, 0.1)",
+                  fontWeight: "bold",
+                  "& td": {
+                    fontWeight: "bold",
+                    color: "rgba(27, 120, 188, 1)",
+                  },
+                }}
+              >
+                <TableCell
+                  sx={{
+                    textAlign: "center",
+                    color: "black",
+                    fontSize: "0.8rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Total Facturé
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "right", fontWeight: "bold" }}>
+                  <Typography
+                    sx={{
+                      color: "rgba(27, 120, 188, 1)",
+                      fontWeight: 700,
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {totalMontantFacture.toLocaleString("fr-FR", {
+                      minimumFractionDigits: 2,
+                    })}{" "}
+                    €
+                  </Typography>
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+                <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
+                  -
+                </TableCell>
+              </TableRow>
 
               {/* Ligne pour ajouter une nouvelle facture */}
               <TableRow>

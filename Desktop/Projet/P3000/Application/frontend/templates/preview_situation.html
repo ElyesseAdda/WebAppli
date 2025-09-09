@@ -71,8 +71,20 @@
         background-clip: content-box;
         font-size: 0.9rem;
         padding-top: 20px;
-        height: 20px;
+        height: auto;
+        min-height: 20px;
         line-height: 25px;
+      }
+      
+      .partie-text {
+        display: inline-block;
+        max-width: 345px;
+        word-wrap: break-word;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.2;
+        vertical-align: top;
       }
       .sous-partie {
         background-color: rgb(157, 197, 226);
@@ -81,8 +93,20 @@
         text-align: left;
         font-weight: 600;
         font-size: 0.9rem;
-        height: 20px;
+        height: auto;
+        min-height: 20px;
         line-height: 20px;
+      }
+      
+      .sous-partie-text {
+        display: inline-block;
+        max-width: 345px;
+        word-wrap: break-word;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.2;
+        vertical-align: top;
       }
       .ligne-details {
         text-align: left;
@@ -156,7 +180,7 @@
         text-align: center;
         width: 100px;
         font-size: 0.8rem;
-        font-weight: 700;
+        font-weight: 500;
         
       }
       .pourcentage {
@@ -250,7 +274,7 @@
 
       .ghost-cell.montant {
         grid-column: 7;
-        width: 87px;
+        width: 90px;
         text-align: center;
         border: 2px solid black;
         font-size: 0.8rem;
@@ -548,7 +572,7 @@
         text-align: center;
         width: 65px;
         font-size: 0.8rem;
-        font-weight: 700;
+        font-weight: 500;
         transform: translateX(5px);
       }
 
@@ -556,7 +580,7 @@
         text-align: right;
         width: 110px;
         font-size: 0.8rem;
-        font-weight: 700;
+        font-weight: 500;
       }
 
     </style>
@@ -678,7 +702,7 @@
           {% for partie in parties %}
           <tr class="partie">
             <td class="partie" colspan="7">
-                {{ partie.titre }}
+                <span class="partie-text">{{ partie.titre }}</span>
                 <span style="float: right">
                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;;">{{ partie.montant_avancement|floatformat:2 }} € </span>
                     <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ partie.pourcentage|floatformat:2 }} % </span>
@@ -705,7 +729,7 @@
           {% if sous_partie.description != "Lignes directes" %}
           <tr class="sous-partie">
             <td colspan="7">
-                {{ sous_partie.description }}
+                <span class="sous-partie-text">{{ sous_partie.description }}</span>
                 <span style="float: right">
                   <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;;">{{ sous_partie.montant_avancement|floatformat:2 }} €</span>
                   <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;">{{ sous_partie.pourcentage|floatformat:2 }} % </span>
@@ -767,7 +791,7 @@
           <!-- Section Avenants -->
           <tr>
             <td colspan="7" class="partie">
-                Avenants
+                <span class="partie-text">Avenants</span>
                 <span style="float: right">
                     <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ montant_total_avenants|floatformat:2 }} € </span>
                     <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ pourcentage_total_avenants|floatformat:2 }} % </span>
@@ -778,7 +802,7 @@
                      {% for avenant in lignes_avenant %}
            <tr class="sous-partie">
              <td colspan="7">
-                 Avenant N°{{ avenant.numero }}
+                 <span class="sous-partie-text">Avenant N°{{ avenant.numero }}</span>
                  <span style="float: right">
                      <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|floatformat:2 }} €</span>
                      <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(5px);">{{ avenant.pourcentage_avenant|floatformat:2 }} % </span>
