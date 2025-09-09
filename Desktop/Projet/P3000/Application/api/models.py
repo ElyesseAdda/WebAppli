@@ -24,7 +24,7 @@ TYPE_CHOICES = [
 # Create your models here.
 
 class Client(models.Model):
-    name = models.CharField(max_length=25)
+    name = models.CharField(max_length=100)
     surname = models.CharField(max_length=25)
     client_mail = models.EmailField()
     phone_Number = models.IntegerField()
@@ -34,7 +34,7 @@ class Client(models.Model):
         return f"{self.name} {self.surname}"
     
 class Societe(models.Model):
-    nom_societe = models.CharField(max_length=25,)
+    nom_societe = models.CharField(max_length=100,)
     ville_societe = models.CharField(max_length=100,)
     rue_societe = models.CharField(max_length=100,)
     rue_societe = models.CharField(max_length=100,)
@@ -806,7 +806,7 @@ class Quitus(models.Model):
         return f"Quitus {self.id}"
 
 class Partie(models.Model):
-    titre = models.CharField(max_length=500, null=False, blank=False)
+    titre = models.CharField(max_length=600, null=False, blank=False)
     type = models.CharField(max_length=50, default='PEINTURE', help_text="Domaine d'activité de la partie (chaîne libre)")
 
     def __str__(self):
@@ -816,7 +816,7 @@ class Partie(models.Model):
 
 class SousPartie(models.Model):
     partie = models.ForeignKey(Partie, related_name='sous_parties', on_delete=models.CASCADE)
-    description = models.CharField(max_length=255, null=True, blank=True)
+    description = models.CharField(max_length=600, null=True, blank=True)
 
     def __str__(self):
         return f'{self.description} - {self.partie.titre}'
