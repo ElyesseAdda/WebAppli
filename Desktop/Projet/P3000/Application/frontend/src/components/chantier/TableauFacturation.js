@@ -380,7 +380,8 @@ const TableauFacturation = () => {
     };
 
     const calculerEcartMois = (situation) => {
-      const montantHTSituation = parseFloat(situation.montant_ht_mois) || 0;
+      const montantHTSituation =
+        parseFloat(situation.montant_apres_retenues) || 0;
       const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
       const ecart = montantRecuHT - montantHTSituation;
 
@@ -415,12 +416,12 @@ const TableauFacturation = () => {
       );
 
       if (currentIndex === -1) {
-        return parseFloat(situation.montant_ht_mois) || 0;
+        return parseFloat(situation.montant_apres_retenues) || 0;
       }
 
       // Calculer le cumul jusqu'à la situation actuelle (inclusive)
       return situationsTriees.slice(0, currentIndex + 1).reduce((sum, s) => {
-        const montantHT = parseFloat(s.montant_ht_mois) || 0;
+        const montantHT = parseFloat(s.montant_apres_retenues) || 0;
         return sum + montantHT;
       }, 0);
     };
@@ -431,14 +432,14 @@ const TableauFacturation = () => {
           return {
             montantHTSituation:
               totaux.montantHTSituation +
-              (parseFloat(situation.montant_ht_mois) || 0),
+              (parseFloat(situation.montant_apres_retenues) || 0),
             montantRecuHT:
               totaux.montantRecuHT +
               (parseFloat(situation.montant_reel_ht) || 0),
             ecartMois:
               totaux.ecartMois +
               (parseFloat(situation.montant_reel_ht || 0) -
-                parseFloat(situation.montant_ht_mois || 0)),
+                parseFloat(situation.montant_apres_retenues || 0)),
           };
         },
         {
@@ -475,7 +476,7 @@ const TableauFacturation = () => {
 
         // Ajouter une ligne de sous-total après chaque mois
         const sousTotalMois = situationsDuMois.reduce((total, situation) => {
-          return total + (parseFloat(situation.montant_ht_mois) || 0);
+          return total + (parseFloat(situation.montant_apres_retenues) || 0);
         }, 0);
 
         situationsAvecSousTotaux.push({
@@ -677,7 +678,7 @@ const TableauFacturation = () => {
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           {formatMontant(
-                            parseFloat(situation.montant_ht_mois) || 0
+                            parseFloat(situation.montant_apres_retenues) || 0
                           )}
                         </TableCell>
                         <TableCell
@@ -721,7 +722,7 @@ const TableauFacturation = () => {
                             {situation.montant_reel_ht
                               ? formatNumberWithColor(
                                   situation.montant_reel_ht,
-                                  situation.montant_ht_mois
+                                  situation.montant_apres_retenues
                                 )
                               : "Définir paiement"}
                           </Button>
@@ -981,7 +982,7 @@ const TableauFacturation = () => {
                       </TableCell>
                       <TableCell sx={commonBodyCellStyle}>
                         {formatMontant(
-                          parseFloat(situation.montant_ht_mois) || 0
+                          parseFloat(situation.montant_apres_retenues) || 0
                         )}
                       </TableCell>
 
@@ -1026,7 +1027,7 @@ const TableauFacturation = () => {
                           {situation.montant_reel_ht
                             ? formatNumberWithColor(
                                 situation.montant_reel_ht,
-                                situation.montant_ht_mois
+                                situation.montant_apres_retenues
                               )
                             : "Définir paiement"}
                         </Button>
