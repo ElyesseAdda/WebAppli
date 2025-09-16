@@ -801,6 +801,66 @@ const ListeDevis = () => {
     }
   };
 
+  const handleConvertToBonCommande = async (devis) => {
+    try {
+      // Récupérer le devis complet
+      const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
+      const devisComplet = devisResponse.data;
+      
+      // Vérifier que le devis est validé
+      if (devisComplet.status !== "Validé") {
+        alert("Seuls les devis validés peuvent être convertis en bon de commande");
+        return;
+      }
+
+      // Vérifier que le devis a des lignes
+      if (!devisComplet.lignes || devisComplet.lignes.length === 0) {
+        alert("Ce devis n'a pas de lignes à convertir");
+        return;
+      }
+
+      // Récupérer les informations du chantier
+      const chantierResponse = await axios.get(`/api/chantier/${devisComplet.chantier}/`);
+      const chantier = chantierResponse.data;
+
+      // Préparer les données pour le bon de commande
+      const bonCommandeData = {
+        numero: `BC-${devisComplet.numero}`,
+        fournisseur: "À définir", // L'utilisateur devra sélectionner le fournisseur
+        chantier: devisComplet.chantier,
+        emetteur: devisComplet.client || chantier.client,
+        statut: "En attente",
+        date_commande: new Date().toISOString().split('T')[0],
+        date_creation_personnalisee: new Date().toISOString().split('T')[0],
+        contact_type: "client",
+        contact_agent: null,
+        contact_sous_traitant: null,
+        lignes: devisComplet.lignes.map(ligne => ({
+          produit: ligne.ligne_detail,
+          designation: ligne.designation || "Produit du devis",
+          quantite: ligne.quantite,
+          prix_unitaire: ligne.prix_unitaire,
+          total: ligne.quantite * ligne.prix_unitaire
+        })),
+        montant_total: devisComplet.price_ht || 0,
+        devis_origine: devisComplet.id
+      };
+
+      // Rediriger vers la page de création de bon de commande avec les données pré-remplies
+      const queryParams = new URLSearchParams({
+        from_devis: 'true',
+        devis_id: devis.id,
+        chantier_id: devisComplet.chantier
+      });
+      
+      window.location.href = `/BonCommande?${queryParams.toString()}`;
+      
+    } catch (error) {
+      console.error("Erreur lors de la conversion en bon de commande:", error);
+      alert("Erreur lors de la conversion en bon de commande. Veuillez réessayer.");
+    }
+  };
+
   const handleTSModalClose = () => {
     setTsModalOpen(false);
     setSelectedDevisForTS(null);
@@ -1197,6 +1257,14 @@ const ListeDevis = () => {
           }}
         >
           Éditer en CIE
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleClose();
+            handleConvertToBonCommande(selectedDevis);
+          }}
+        >
+          Convertir en bon de commande
         </MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
         <MenuItem onClick={handleDeleteDevis} sx={{ color: "error.main" }}>

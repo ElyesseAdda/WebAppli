@@ -27,6 +27,7 @@ import Drive from "./Drive";
 import GestionAppelsOffres from "./GestionAppelsOffres";
 import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
+import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
@@ -305,6 +306,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <BonCommandeModif />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ListeBonCommande"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeBonCommande />
                 </Layout>
               </ProtectedRoute>
             }

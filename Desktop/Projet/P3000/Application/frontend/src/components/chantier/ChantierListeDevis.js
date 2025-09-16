@@ -257,6 +257,44 @@ const ChantierListeDevis = ({
     handleClose();
   };
 
+  const handleConvertToBonCommande = async () => {
+    try {
+      // Récupérer le devis complet
+      const devisResponse = await axios.get(`/api/devisa/${selectedDevis.id}/`);
+      const devisComplet = devisResponse.data;
+      
+      // Vérifier que le devis est validé
+      if (devisComplet.status !== "Validé") {
+        alert("Seuls les devis validés peuvent être convertis en bon de commande");
+        return;
+      }
+
+      // Vérifier que le devis a des lignes
+      if (!devisComplet.lignes || devisComplet.lignes.length === 0) {
+        alert("Ce devis n'a pas de lignes à convertir");
+        return;
+      }
+
+      // Récupérer les informations du chantier
+      const chantierResponse = await axios.get(`/api/chantier/${devisComplet.chantier}/`);
+      const chantier = chantierResponse.data;
+
+      // Rediriger vers la page de création de bon de commande avec les données pré-remplies
+      const queryParams = new URLSearchParams({
+        from_devis: 'true',
+        devis_id: selectedDevis.id,
+        chantier_id: devisComplet.chantier
+      });
+      
+      window.location.href = `/BonCommande?${queryParams.toString()}`;
+      
+    } catch (error) {
+      console.error("Erreur lors de la conversion en bon de commande:", error);
+      alert("Erreur lors de la conversion en bon de commande. Veuillez réessayer.");
+    }
+    handleClose();
+  };
+
   const handleChangeStatus = () => {
     setDevisToUpdate(selectedDevis);
     setShowStatusModal(true);
@@ -570,6 +608,7 @@ const ChantierListeDevis = ({
           <MenuItem onClick={handleEditTS}>Éditer en avenant</MenuItem>
         )}
         <MenuItem onClick={handleEditCIE}>Éditer en CIE</MenuItem>
+        <MenuItem onClick={handleConvertToBonCommande}>Convertir en bon de commande</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
       </Menu>
 
