@@ -312,6 +312,17 @@ function App() {
           />
 
           <Route
+            path="/ModificationBC/:id"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <BonCommandeModif />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/ListeBonCommande"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>

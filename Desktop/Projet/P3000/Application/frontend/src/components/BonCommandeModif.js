@@ -18,6 +18,7 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { useParams } from "react-router-dom";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const BonCommandeModif = () => {
   const { id } = useParams();
@@ -29,9 +30,13 @@ const BonCommandeModif = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [numeroBonCommande, setNumeroBonCommande] = useState("");
   const [codeRangeFilter, setCodeRangeFilter] = useState(""); // Nouveau filtre par plage de codes
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchBonCommande();
+    if (id) {
+      fetchBonCommande();
+    }
   }, [id]);
 
   // Fonction pour recharger les produits avec le filtre de plage
@@ -56,6 +61,15 @@ const BonCommandeModif = () => {
   }, [codeRangeFilter, bonCommande]);
 
   const fetchBonCommande = async () => {
+    // Vérifier que l'ID existe avant de faire l'appel API
+    if (!id) {
+      setError("ID du bon de commande manquant");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
     try {
       const response = await axios.get(`/api/detail-bon-commande/${id}/`);
       setBonCommande(response.data);
@@ -81,6 +95,9 @@ const BonCommandeModif = () => {
       setSelectedProducts(initialSelected);
     } catch (error) {
       console.error("Erreur lors du chargement:", error);
+      setError("Erreur lors du chargement du bon de commande. Vérifiez que l'ID est correct.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -168,7 +185,35 @@ const BonCommandeModif = () => {
       console.log("Données envoyées au serveur:", updatedBC);
 
       await axios.patch(`/api/update-bon-commande/${id}/`, updatedBC);
-      alert("Bon de commande mis à jour avec succès !");
+      
+      // Générer automatiquement le PDF et le stocker dans le Drive
+      try {
+        await generatePDFDrive(
+          "bon_commande",
+          {
+            bonCommandeId: id,
+            chantierId: bonCommande.chantier,
+            chantierName: bonCommande.chantier_name || "Chantier",
+            societeName: bonCommande.societe_name || "Société par défaut",
+            numeroBonCommande: numeroBonCommande,
+            fournisseurName: bonCommande.fournisseur,
+          },
+          {
+            onSuccess: (response) => {
+              console.log("✅ PDF généré et stocké dans le Drive:", response);
+              alert("Bon de commande mis à jour et PDF généré avec succès !");
+            },
+            onError: (error) => {
+              console.error("❌ Erreur lors de la génération du PDF:", error);
+              alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
+            },
+          }
+        );
+      } catch (pdfError) {
+        console.error("Erreur lors de la génération du PDF:", pdfError);
+        alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
+      }
+      
       window.location.href = "/BonCommande";
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
@@ -197,7 +242,35 @@ const BonCommandeModif = () => {
     );
   });
 
-  if (!bonCommande) return <div>Chargement...</div>;
+  // Affichage des états de chargement et d'erreur
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+        <Typography>Chargement du bon de commande...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '200px' }}>
+        <Typography color="error" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          ID reçu: {id || 'Aucun'}
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (!bonCommande) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+        <Typography>Aucun bon de commande trouvé</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, margin: "0 auto" }}>
@@ -337,6 +410,38 @@ const BonCommandeModif = () => {
               variant="outlined"
             >
               Annuler
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  await generatePDFDrive(
+                    "bon_commande",
+                    {
+                      bonCommandeId: id,
+                      chantierId: bonCommande.chantier,
+                      chantierName: bonCommande.chantier_name || "Chantier",
+                      societeName: bonCommande.societe_name || "Société par défaut",
+                      numeroBonCommande: numeroBonCommande,
+                      fournisseurName: bonCommande.fournisseur,
+                    },
+                    {
+                      onSuccess: (response) => {
+                        console.log("✅ PDF généré et stocké dans le Drive:", response);
+                      },
+                      onError: (error) => {
+                        console.error("❌ Erreur lors de la génération du PDF:", error);
+                      },
+                    }
+                  );
+                } catch (error) {
+                  console.error("Erreur lors de la génération du PDF:", error);
+                }
+              }}
+              variant="outlined"
+              color="secondary"
+              disabled={!bonCommande}
+            >
+              Générer PDF Drive
             </Button>
             <Button
               onClick={handleSave}

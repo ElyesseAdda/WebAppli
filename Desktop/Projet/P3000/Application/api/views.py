@@ -3712,7 +3712,7 @@ def get_bon_commande_detail(request, id):
             'numero': bon_commande.numero,
             'fournisseur': bon_commande.fournisseur,
             'chantier': bon_commande.chantier.id,
-            'agent': bon_commande.agent.id,
+            'agent': bon_commande.agent.id if bon_commande.agent else None,
             'montant_total': float(bon_commande.montant_total),
             'date_creation': bon_commande.date_creation,
             'lignes': lignes
