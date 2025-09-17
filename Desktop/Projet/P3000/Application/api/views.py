@@ -1823,7 +1823,7 @@ def copy_schedule(request):
                     week=target_week,
                     year=target_year,
                     hours_normal=hours,  # Toutes les heures sont considérées comme normales par défaut
-                    cost_normal=hours * agent.taux_Horaire
+                    cost_normal=hours * (agent.taux_journalier / 8 if agent.type_paiement == 'journalier' else agent.taux_Horaire or 0)
                 ))
             LaborCost.objects.bulk_create(labor_costs)
 
@@ -6856,7 +6856,11 @@ def labor_costs_monthly_summary(request):
         montant_samedi = 0
         montant_dimanche = 0
         montant_ferie = 0
-        taux_horaire = lc.agent.taux_Horaire or 0
+        # Utiliser le bon taux selon le type d'agent
+        if lc.agent.type_paiement == 'journalier':
+            taux_horaire = (lc.agent.taux_journalier or 0) / 8  # Convertir taux journalier en taux horaire
+        else:
+            taux_horaire = lc.agent.taux_Horaire or 0
         for j in filtered_majorations:
             if j['type'] == 'samedi':
                 heures_samedi += j.get('hours', 0)
@@ -7812,7 +7816,7 @@ def schedule_monthly_summary(request):
         else:
             # Pour les agents horaires : 1 créneau = 1h
             heures_increment = 1
-        taux_horaire = s.agent.taux_Horaire or 0
+            taux_horaire = s.agent.taux_Horaire or 0
 
         key = (agent_id, chantier_id)
         if key not in result:

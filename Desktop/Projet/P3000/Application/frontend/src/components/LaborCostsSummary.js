@@ -386,7 +386,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                     <Typography fontWeight="bold" mb={1}>
                       Jours majorés
                     </Typography>
-                    {chantier.jours_majoration.length === 0 ? (
+                    {groupMajorations(chantier.jours_majoration).length === 0 ? (
                       <Typography>Aucun jour majoré ce mois.</Typography>
                     ) : (
                       <Table size="small">
@@ -399,7 +399,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {chantier.jours_majoration.map((j, idx) => (
+                          {groupMajorations(chantier.jours_majoration).map((j, idx) => (
                             <TableRow key={idx}>
                               <TableCell>
                                 {dayjs(j.date).format("DD/MM/YY")}
