@@ -318,15 +318,18 @@ const CalendrierAgent = ({ agents }) => {
             };
           });
 
+          console.log(`🔍 DEBUG: Suppression des schedules pour l'agent ${selectedAgent} le ${currentDate.format("YYYY-MM-DD")}`);
+          console.log(`🔍 DEBUG: Données de suppression:`, deletions.slice(0, 3)); // Afficher seulement les 3 premiers pour éviter le spam
+
           try {
             // Appeler l'API pour supprimer les schedules
             await axios.post("/api/delete_schedule/", deletions);
             console.log(
-              `Schedules supprimés pour le ${currentDate.format("YYYY-MM-DD")}`
+              `✅ Schedules supprimés avec succès pour l'agent ${selectedAgent} le ${currentDate.format("YYYY-MM-DD")}`
             );
           } catch (error) {
             console.error(
-              "Erreur lors de la suppression des schedules:",
+              "❌ Erreur lors de la suppression des schedules:",
               error
             );
           }

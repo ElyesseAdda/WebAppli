@@ -1897,6 +1897,7 @@ def delete_schedule(request):
                         day=day,
                         hour=hour
                     )
+                    logger.info(f"🔍 Suppression du schedule: Agent {agent.name} ({agent.id}), Semaine {week}, Année {year}, {day} {hour}")
                     schedule.delete()
                 except Schedule.DoesNotExist:
                     logger.warning(f"Schedule inexistant à l'index {index}: {deletion}")
@@ -1921,12 +1922,14 @@ def save_labor_costs(request):
         costs = request.data.get('costs', [])
 
         agent = Agent.objects.get(id=agent_id)
+        # Définir days_of_week et fr_holidays pour tous les types d'agents
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        fr_holidays = holidays.country_holidays('FR', years=[int(year)])
+        
         if agent.type_paiement == 'journalier':
             taux_horaire = (agent.taux_journalier or 0) / 8  # Convertir taux journalier en taux horaire
         else:
             taux_horaire = agent.taux_Horaire or 0
-            fr_holidays = holidays.country_holidays('FR', years=[int(year)])
-            days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
         for cost_entry in costs:
             chantier_name = cost_entry['chantier_name']

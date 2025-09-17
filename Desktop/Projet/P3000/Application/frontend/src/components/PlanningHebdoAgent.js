@@ -212,11 +212,13 @@ const PlanningHebdoAgent = ({
 
           const eventsResponse = await axios.get("/api/events/", {
             params: {
-              agent: selectedAgentId,
+              agent_id: selectedAgentId,
               start_date: startOfWeek.format("YYYY-MM-DD"),
               end_date: endOfWeek.format("YYYY-MM-DD"),
             },
           });
+
+          console.log(`🔍 DEBUG: Événements récupérés pour l'agent ${selectedAgentId}:`, eventsResponse.data);
 
           // Remplacer le filtrage des événements par :
           const eventsData = eventsResponse.data.filter(
@@ -224,24 +226,33 @@ const PlanningHebdoAgent = ({
               event.event_type === "absence" || event.event_type === "conge"
           );
 
-          // Identifier les jours avec événements A ou C
+          console.log(`🔍 DEBUG: Événements d'absence/congé filtrés pour l'agent ${selectedAgentId}:`, eventsData);
+
+          // Identifier les jours avec événements A ou C pour cet agent spécifique
           const joursAvecEvents = eventsData.map((event) =>
             dayjs(event.start_date).format("DD/MM/YYYY")
           );
 
           // Supprimer les assignations pour les jours avec événements A ou C
-          joursAvecEvents.forEach((date) => {
-            daysOfWeek.forEach((day, index) => {
-              const dateOfDay = startOfWeek
-                .add(index, "day")
-                .format("DD/MM/YYYY");
-              if (dateOfDay === date) {
-                hours.forEach((hour) => {
-                  scheduleData[hour][day] = ""; // Supprimer l'assignation
-                });
-              }
+          // SEULEMENT pour l'agent sélectionné qui a ces événements
+          if (joursAvecEvents.length > 0) {
+            console.log(`Agent ${selectedAgentId} a des événements d'absence/congé pour les dates:`, joursAvecEvents);
+            joursAvecEvents.forEach((date) => {
+              daysOfWeek.forEach((day, index) => {
+                const dateOfDay = startOfWeek
+                  .add(index, "day")
+                  .format("DD/MM/YYYY");
+                if (dateOfDay === date) {
+                  console.log(`Suppression des horaires pour l'agent ${selectedAgentId} le ${date} (${day})`);
+                  hours.forEach((hour) => {
+                    scheduleData[hour][day] = ""; // Supprimer l'assignation
+                  });
+                }
+              });
             });
-          });
+          } else {
+            console.log(`Agent ${selectedAgentId} n'a pas d'événements d'absence/congé pour cette semaine`);
+          }
 
           // Mettre à jour le planning
           setSchedule((prevSchedule) => ({
