@@ -163,7 +163,6 @@ const PlanningHebdoAgent = ({
           });
 
           // Remplir scheduleData avec les données de l'API
-          console.log("DEBUG: Données reçues de l'API:", scheduleResponse.data);
           scheduleResponse.data.forEach((item, index) => {
             let formattedHour;
 
@@ -218,7 +217,6 @@ const PlanningHebdoAgent = ({
             },
           });
 
-          console.log(`🔍 DEBUG: Événements récupérés pour l'agent ${selectedAgentId}:`, eventsResponse.data);
 
           // Remplacer le filtrage des événements par :
           const eventsData = eventsResponse.data.filter(
@@ -226,7 +224,6 @@ const PlanningHebdoAgent = ({
               event.event_type === "absence" || event.event_type === "conge"
           );
 
-          console.log(`🔍 DEBUG: Événements d'absence/congé filtrés pour l'agent ${selectedAgentId}:`, eventsData);
 
           // Identifier les jours avec événements A ou C pour cet agent spécifique
           const joursAvecEvents = eventsData.map((event) =>
@@ -236,14 +233,12 @@ const PlanningHebdoAgent = ({
           // Supprimer les assignations pour les jours avec événements A ou C
           // SEULEMENT pour l'agent sélectionné qui a ces événements
           if (joursAvecEvents.length > 0) {
-            console.log(`Agent ${selectedAgentId} a des événements d'absence/congé pour les dates:`, joursAvecEvents);
             joursAvecEvents.forEach((date) => {
               daysOfWeek.forEach((day, index) => {
                 const dateOfDay = startOfWeek
                   .add(index, "day")
                   .format("DD/MM/YYYY");
                 if (dateOfDay === date) {
-                  console.log(`Suppression des horaires pour l'agent ${selectedAgentId} le ${date} (${day})`);
                   hours.forEach((hour) => {
                     scheduleData[hour][day] = ""; // Supprimer l'assignation
                   });

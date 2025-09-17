@@ -1897,7 +1897,6 @@ def delete_schedule(request):
                         day=day,
                         hour=hour
                     )
-                    logger.info(f"🔍 Suppression du schedule: Agent {agent.name} ({agent.id}), Semaine {week}, Année {year}, {day} {hour}")
                     schedule.delete()
                 except Schedule.DoesNotExist:
                     logger.warning(f"Schedule inexistant à l'index {index}: {deletion}")

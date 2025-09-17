@@ -117,9 +117,6 @@ const createEvent = async (event) => {
 // Fonction pour supprimer les événements existants pour un agent donné sur une période donnée
 const deleteEventsByAgentAndPeriod = async (agentId, startDate, endDate) => {
   try {
-    console.log(
-      `Suppression des événements pour l'agent ${agentId} entre ${startDate} et ${endDate}`
-    );
     await axios.delete("/api/delete_events_by_agent_and_period/", {
       params: {
         agent: agentId,
@@ -318,15 +315,10 @@ const CalendrierAgent = ({ agents }) => {
             };
           });
 
-          console.log(`🔍 DEBUG: Suppression des schedules pour l'agent ${selectedAgent} le ${currentDate.format("YYYY-MM-DD")}`);
-          console.log(`🔍 DEBUG: Données de suppression:`, deletions.slice(0, 3)); // Afficher seulement les 3 premiers pour éviter le spam
 
           try {
             // Appeler l'API pour supprimer les schedules
             await axios.post("/api/delete_schedule/", deletions);
-            console.log(
-              `✅ Schedules supprimés avec succès pour l'agent ${selectedAgent} le ${currentDate.format("YYYY-MM-DD")}`
-            );
           } catch (error) {
             console.error(
               "❌ Erreur lors de la suppression des schedules:",
@@ -338,8 +330,17 @@ const CalendrierAgent = ({ agents }) => {
         }
       }
 
-      await deleteEventsByAgentAndPeriod(selectedAgent, startDate, endDate);
+      // Supprimer les événements existants de la base de données
+      if (eventType === "presence") {
+        // Pour les événements de présence, supprimer les événements existants
+        // mais ne pas créer de nouvel événement en base
+        await deleteEventsByAgentAndPeriod(selectedAgent, startDate, endDate);
+      } else {
+        // Pour les autres types d'événements, supprimer et créer
+        await deleteEventsByAgentAndPeriod(selectedAgent, startDate, endDate);
+      }
 
+      // Supprimer les événements existants de l'affichage local
       setEvents((prevEvents) =>
         prevEvents.filter(
           (event) =>
@@ -371,28 +372,40 @@ const CalendrierAgent = ({ agents }) => {
         };
 
         try {
-          const response = await axios.post("/api/events/", newEvent);
-          console.log("Événement créé avec succès:", response.data);
-
           if (eventType === "presence") {
+            // Pour les événements de présence, ne pas créer d'événement
+            // Juste mettre à jour les jours de présence
             await axios.post("/api/update_days_present/", {
               agent_id: selectedAgent,
               month: formattedDate,
               increment: true,
             });
-          }
+            
+            // Ajouter un événement "P" (Présence) par défaut
+            newEvents.push({
+              id: `${newEvent.agent}-${newEvent.start_date}`,
+              resourceId: newEvent.agent.toString(),
+              start: newEvent.start_date,
+              end: newEvent.end_date,
+              title: "P",
+              color: getColorByStatus("presence", null),
+            });
+          } else {
+            // Pour les autres types d'événements, créer l'événement normalement
+            const response = await axios.post("/api/events/", newEvent);
 
-          newEvents.push({
-            id: `${newEvent.agent}-${newEvent.start_date}`,
-            resourceId: newEvent.agent.toString(),
-            start: newEvent.start_date,
-            end: newEvent.end_date,
-            title:
-              eventType === "modification_horaire"
-                ? `${hours}H`
-                : `${eventType}${subtype ? ` (${subtype})` : ""}`,
-            color: getColorByStatus(eventType, subtype),
-          });
+            newEvents.push({
+              id: `${newEvent.agent}-${newEvent.start_date}`,
+              resourceId: newEvent.agent.toString(),
+              start: newEvent.start_date,
+              end: newEvent.end_date,
+              title:
+                eventType === "modification_horaire"
+                  ? `${hours}H`
+                  : `${eventType}${subtype ? ` (${subtype})` : ""}`,
+              color: getColorByStatus(eventType, subtype),
+            });
+          }
         } catch (error) {
           console.error("Erreur lors de la création de l'événement:", error);
         }
@@ -401,6 +414,9 @@ const CalendrierAgent = ({ agents }) => {
       }
 
       setEvents((prevEvents) => [...prevEvents, ...newEvents]);
+      
+      // Fermer le modal après l'ajout d'événements
+      closeModal();
     } catch (error) {
       console.error("Erreur dans addEvent:", error);
     }
