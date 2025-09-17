@@ -3495,10 +3495,6 @@ def create_bon_commande(request):
         data = request.data
         
         # LOG: Données reçues du frontend
-        print("="*50)
-        print("DEBUG create_bon_commande - DONNÉES REÇUES:")
-        print(f"request.data complet: {data}")
-        print("="*50)
         
         # Récupérer l'émetteur depuis la base de données
         try:
@@ -3515,22 +3511,14 @@ def create_bon_commande(request):
             'emetteur_id': emetteur.id,  # Utiliser l'ID de l'émetteur
         }
         
-        print(f"DEBUG - Émetteur ID reçu: {data['emetteur']}")
-        print(f"DEBUG - Émetteur trouvé: {emetteur}")
         
-        # LOG: Données préparées pour BonCommande
-        print("DEBUG create_bon_commande - DONNÉES PRÉPARÉES BONCOMMANDE:")
-        print(f"bon_commande_data: {bon_commande_data}")
-        print("-"*30)
         
         # Ajouter les champs optionnels s'ils sont présents
         if data.get('date_creation_personnalisee'):
             bon_commande_data['date_creation_personnalisee'] = data['date_creation_personnalisee']
-            print(f"DEBUG - Ajout date_creation_personnalisee: {data['date_creation_personnalisee']}")
             
         if data.get('contact_type'):
             bon_commande_data['contact_type'] = data['contact_type']
-            print(f"DEBUG - Ajout contact_type: {data['contact_type']}")
             
         if data.get('contact_agent'):
             bon_commande_data['contact_agent_id'] = data['contact_agent']

@@ -1,5 +1,6 @@
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import ClearIcon from "@mui/icons-material/Clear";
+import DeleteIcon from "@mui/icons-material/Delete";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import {
   Button,
@@ -58,6 +59,24 @@ const PlanningHebdoAgent = ({
   const hours = isAgentJournalier
     ? ["Matin", "Après-midi"]
     : Array.from({ length: 17 }, (_, i) => `${i + 6}:00`); // Heures de 6h à 22h
+
+  // Fonction pour formater l'affichage des heures (uniquement pour l'affichage)
+  const formatHourDisplay = (hour) => {
+    if (isAgentJournalier) {
+      return hour; // "Matin" ou "Après-midi" restent inchangés
+    }
+    // Pour les agents horaires, convertir "6:00" en "6h-7h"
+    const hourNum = parseInt(hour.split(':')[0]);
+    return `${hourNum}h-${hourNum + 1}h`;
+  };
+
+  // Fonction pour vérifier si c'est l'heure de pause (12h-13h)
+  const isPauseHour = (hour) => {
+    if (isAgentJournalier) {
+      return false; // Pas de pause pour les agents journaliers
+    }
+    return hour === "12:00"; // Heure de pause pour tous les agents horaires
+  };
   const [events, setEvents] = useState([]);
   const [selectedCells, setSelectedCells] = useState([]);
   const [lastSelectedCell, setLastSelectedCell] = useState(null);
@@ -246,7 +265,6 @@ const PlanningHebdoAgent = ({
               });
             });
           } else {
-            console.log(`Agent ${selectedAgentId} n'a pas d'événements d'absence/congé pour cette semaine`);
           }
 
           // Mettre à jour le planning
@@ -285,7 +303,6 @@ const PlanningHebdoAgent = ({
   // Fonction pour calculer une plage de cellules
   const getCellRange = (startCell, endCell) => {
     if (!startCell || !endCell) {
-      console.warn("getCellRange: startCell ou endCell manquant");
       return [];
     }
 
@@ -301,12 +318,6 @@ const PlanningHebdoAgent = ({
       startDayIndex === -1 ||
       endDayIndex === -1
     ) {
-      console.warn("getCellRange: indices invalides", {
-        startHourIndex,
-        endHourIndex,
-        startDayIndex,
-        endDayIndex,
-      });
       return [endCell]; // Retourner au moins la cellule de fin
     }
 
@@ -335,11 +346,13 @@ const PlanningHebdoAgent = ({
     const newCell = { hour, day };
     setSelectedCells([newCell]);
     setLastSelectedCell(newCell);
+    
     openChantierModal();
   };
 
   // Gestionnaire pour onMouseDown pour capturer les modificateurs plus tôt
   const handleCellMouseDown = (hour, day, event) => {
+
     // Empêcher la sélection de texte
     event.preventDefault();
     event.stopPropagation();
@@ -360,6 +373,7 @@ const PlanningHebdoAgent = ({
 
   // Gestionnaire pour onMouseUp pour traiter la sélection
   const handleCellMouseUp = (hour, day, event) => {
+
     event.preventDefault();
     event.stopPropagation();
 
@@ -414,11 +428,7 @@ const PlanningHebdoAgent = ({
 
   // Fonction pour valider la sélection et ouvrir le modal
   const validateSelection = () => {
-    if (selectedCells.length > 0) {
-      openChantierModal();
-    } else {
-      alert("Veuillez sélectionner au moins une cellule.");
-    }
+    openChantierModal();
   };
 
   // Fonctions pour gérer le modal des chantiers
@@ -503,13 +513,32 @@ const PlanningHebdoAgent = ({
 
   // Fonction pour assigner un chantier aux cellules sélectionnées
   const assignChantier = async () => {
+    if (selectedCells.length === 0) {
+      alert("Veuillez sélectionner au moins une cellule.");
+      return;
+    }
+    
     if (!selectedChantier) {
       alert("Veuillez sélectionner un chantier.");
       return;
     }
 
     try {
-      const updates = selectedCells.map((cell) => {
+      // Filtrer les cellules pour exclure les heures de pause
+      const validCells = selectedCells.filter(cell => !isPauseHour(cell.hour));
+      const excludedPauseCells = selectedCells.filter(cell => isPauseHour(cell.hour));
+      
+      if (validCells.length === 0) {
+        alert("Aucune cellule valide sélectionnée (les heures de pause sont automatiquement exclues).");
+        return;
+      }
+
+      // Afficher un message informatif si des heures de pause ont été exclues
+      if (excludedPauseCells.length > 0) {
+        console.log(`ℹ️ ${excludedPauseCells.length} heure(s) de pause exclue(s) de l'assignation`);
+      }
+
+      const updates = validCells.map((cell) => {
         // Calculer la date réelle du créneau
         const startOfWeek = dayjs()
           .year(selectedYear)
@@ -566,10 +595,6 @@ const PlanningHebdoAgent = ({
         year,
         month,
       });
-
-      alert(
-        `Chantier "${selectedChantier.chantier_name}" assigné à ${selectedCells.length} cellule(s) avec succès !`
-      );
     } catch (error) {
       console.error("Erreur lors de l'assignation du chantier :", error);
       const errorMessage =
@@ -697,6 +722,11 @@ const PlanningHebdoAgent = ({
 
   // Fonction pour déterminer le style des cellules
   const getCellStyle = (hour, day, scheduleData) => {
+    // Vérifier si c'est une heure de pause
+    if (isPauseHour(hour)) {
+      return "#e8e8e8"; // Gris clair doux pour les heures de pause
+    }
+
     // Convertir le format de date pour la comparaison
     const startOfWeek = dayjs()
       .year(selectedYear)
@@ -805,9 +835,6 @@ const PlanningHebdoAgent = ({
   // Fonction pour générer le PDF de tous les agents pour la semaine sélectionnée et le stocker dans le Drive
   const handleGeneratePDF = async () => {
     try {
-      console.log(
-        `🚀 NOUVEAU: Génération du planning hebdomadaire semaine ${selectedWeek}/${selectedYear} vers le Drive...`
-      );
 
       // Utiliser le nouveau système universel
       await generatePDFDrive(
@@ -818,16 +845,8 @@ const PlanningHebdoAgent = ({
         },
         {
           onSuccess: (response) => {
-            console.log(
-              "✅ NOUVEAU: Planning hebdomadaire généré avec succès:",
-              response
-            );
           },
           onError: (error) => {
-            console.error(
-              "❌ NOUVEAU: Erreur lors de la génération du planning hebdomadaire:",
-              error
-            );
             alert(
               `❌ Erreur lors de la génération du planning hebdomadaire: ${error.message}`
             );
@@ -835,7 +854,6 @@ const PlanningHebdoAgent = ({
         }
       );
     } catch (error) {
-      console.error("❌ NOUVEAU: Erreur lors de la génération du PDF:", error);
       alert(`❌ Erreur lors de la génération du PDF: ${error.message}`);
     }
   };
@@ -1017,13 +1035,10 @@ const PlanningHebdoAgent = ({
                 </span>
               </Tooltip>
 
-              <Tooltip title="Effacer la sélection actuelle" arrow>
+              <Tooltip title="Supprimer les assignations sélectionnées" arrow>
                 <span>
                   <IconButton
-                    onClick={() => {
-                      setSelectedCells([]);
-                      setLastSelectedCell(null);
-                    }}
+                    onClick={deleteChantierAssignment}
                     disabled={selectedCells.length === 0}
                     sx={{
                       backgroundColor: "#f44336",
@@ -1042,7 +1057,7 @@ const PlanningHebdoAgent = ({
                       height: "36px",
                     }}
                   >
-                    <ClearIcon fontSize="small" />
+                    <DeleteIcon fontSize="small" />
                   </IconButton>
                 </span>
               </Tooltip>
@@ -1101,7 +1116,7 @@ const PlanningHebdoAgent = ({
               <tbody>
                 {hours.map((hour) => (
                   <tr key={hour}>
-                    <td className="hour-cell">{hour}</td>
+                    <td className="hour-cell">{formatHourDisplay(hour)}</td>
                     {daysOfWeek.map((day) => {
                       // Détermination de l'événement pour la cellule
                       const startOfWeek = dayjs()
@@ -1157,11 +1172,17 @@ const PlanningHebdoAgent = ({
                             )
                               ? "0 0 8px rgba(25, 118, 210, 0.5)"
                               : "none",
+                            cursor: "pointer",
                           }}
                         >
                           {cellEvent
                             ? getEventInitials(cellEvent)
                             : (() => {
+                                // Ne pas afficher le nom du chantier dans les heures de pause
+                                if (isPauseHour(hour)) {
+                                  return "";
+                                }
+
                                 const cellData =
                                   schedule[selectedAgentId]?.[hour]?.[day];
                                 if (!cellData) return "";
@@ -1327,19 +1348,6 @@ const PlanningHebdoAgent = ({
                 }}
               >
                 Assigner
-              </StyledButton>
-              <StyledButton
-                variant="contained"
-                onClick={deleteChantierAssignment}
-                disabled={selectedCells.length === 0}
-                sx={{
-                  backgroundColor: "red",
-                  "&:hover": {
-                    backgroundColor: "darkred",
-                  },
-                }}
-              >
-                Supprimer Assignation
               </StyledButton>
               <StyledButton
                 variant="contained"
