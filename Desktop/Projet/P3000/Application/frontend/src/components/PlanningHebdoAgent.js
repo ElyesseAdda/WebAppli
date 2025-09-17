@@ -166,7 +166,8 @@ const PlanningHebdoAgent = ({
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        if (selectedAgentId && selectedWeek && selectedYear) {
+        // Attendre que les chantiers soient chargés avant de charger le planning
+        if (selectedAgentId && selectedWeek && selectedYear && chantiers.length > 0) {
           // Récupérer le planning
           const scheduleResponse = await axios.get(
             `/api/get_schedule/?agent=${selectedAgentId}&week=${selectedWeek}&year=${selectedYear}`
@@ -287,7 +288,7 @@ const PlanningHebdoAgent = ({
     };
 
     fetchData();
-  }, [selectedAgentId, selectedWeek, selectedYear]);
+  }, [selectedAgentId, selectedWeek, selectedYear, chantiers]);
 
   // Fonction pour générer les dates de la semaine
   const getDatesOfWeek = (weekNumber) => {
@@ -1189,6 +1190,10 @@ const PlanningHebdoAgent = ({
 
                                 // Si c'est un objet (nouveau format)
                                 if (typeof cellData === "object") {
+                                  // Vérifier que les chantiers sont chargés avant d'afficher le nom
+                                  if (!chantiers || chantiers.length === 0) {
+                                    return "Chargement...";
+                                  }
                                   return (
                                     <span>
                                       {cellData.chantierName}
