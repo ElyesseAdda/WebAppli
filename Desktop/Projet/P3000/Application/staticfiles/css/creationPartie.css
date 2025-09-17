@@ -1,0 +1,57 @@
+body {
+  padding-left: 5%;
+  max-width: 1920px;
+}
+
+.add-button {
+  background-color: transparent;
+  color: rgba(27, 120, 188, 1);
+}
+
+.add-button:hover {
+  color: white;
+  background-color: transparent;
+}
+
+span {
+  font-size: large;
+}
+
+.creation-form {
+  background-color: white;
+  padding: 1rem;
+  border-radius: 10px;
+}
+
+.creation-form h2 {
+  color: rgba(27, 120, 188, 1);
+}
+
+.valider {
+  background-color: rgba(27, 120, 188, 1);
+  margin-right: 1rem;
+  width: auto;
+  min-width: 150px;
+}
+
+.supprimer {
+  background-color: rgb(255, 54, 54);
+  width: auto;
+  min-width: 150px;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-left: 10%;
+  }
+
+  .creation-form {
+    padding: 1rem;
+  }
+
+  .valider,
+  .supprimer {
+    width: 100%;
+    margin-right: 0;
+  }
+}

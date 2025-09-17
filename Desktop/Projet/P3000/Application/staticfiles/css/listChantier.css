@@ -1,0 +1,110 @@
+table {
+  border-collapse: collapse;
+  font-size: 1em;
+  font-family: "Roboto", sans-serif;
+  align-items: center;
+  width: 100%;
+  max-width: 1400px;
+  border: 2px solid rgba(80, 80, 80, 0.55);
+}
+
+table thead tr {
+  background-color: rgba(27, 120, 188, 1);
+  color: #ffffff;
+  text-align: left;
+  font-weight: bold;
+}
+
+table th,
+table td {
+  padding: 12px 1rem;
+  align-items: center;
+}
+
+table tbody tr {
+  border-bottom: 1px solid #dddddd;
+  font-family: "Roboto slab", sans-serif;
+}
+
+table tbody tr:nth-of-type(even) {
+  background-color: rgba(217, 217, 217, 0.5);
+}
+
+td {
+  color: rgba(0, 0, 0, 0.904);
+}
+
+.EnCours {
+  color: green;
+}
+
+.ListContainer {
+  background-color: #ffffff;
+  scroll-behavior: smooth;
+  width: 100%;
+  max-width: 1400px;
+  height: auto;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
+}
+
+.NewChantier {
+  position: absolute;
+  top: 20%;
+  left: 80%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(27, 120, 188, 1);
+  color: rgb(255, 255, 255);
+  border: none;
+  font-size: medium;
+  font-family: "Roboto", sans-serif;
+  font-weight: bold;
+}
+
+li {
+  list-style: none;
+  outline-style: none;
+}
+
+a {
+  position: relative;
+  color: rgba(27, 120, 188, 1);
+  text-decoration: none;
+  font-size: large;
+  font-weight: bold;
+}
+
+.En.Cours {
+  color: rgba(27, 120, 188, 1);
+}
+
+.En.Attente.Signature {
+  color: rgb(255, 123, 0);
+}
+
+.Terminer {
+  color: rgb(185, 0, 0);
+}
+
+.main-container {
+  height: auto;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .NewChantier {
+    left: 70%;
+    font-size: small;
+  }
+
+  table {
+    font-size: 0.9em;
+  }
+
+  .ListContainer {
+    padding: 1rem;
+  }
+}

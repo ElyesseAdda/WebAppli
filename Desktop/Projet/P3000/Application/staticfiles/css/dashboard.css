@@ -1,0 +1,231 @@
+/* html, body {
+    overflow-x: hidden ! important;
+} */
+
+.positive {
+    color: rgba(0, 194, 8, 1);
+}
+
+.negative {
+    color: rgba(255, 0, 0, 1);
+}
+
+
+.dashboard {
+    z-index: 1;
+    position: relative;
+    width: 700px;
+    left: 500px;
+    top: 100px;
+}
+.chantier-container {
+    background-color: white;
+    border-radius: 10px;
+    width: 615px;
+    height: 140px;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    font-family: 'Roboto' , sans-serif;
+    grid-column-gap: 0px;
+    grid-row-gap: 0px;
+    p{
+        font-size: medium;
+        font-weight: normal;
+        font-family: 'Roboto slab' , sans-serif;
+    }
+    h2{ 
+        margin-top: -15px;
+        font-size: large;
+    
+     }
+}
+.chantier { 
+    grid-area: 1 / 1 / 4 / 2; 
+    color: rgba(27, 120, 188, 1);
+    align-items: center;
+   
+
+    h1{ 
+        text-align: center;
+        font-size: 60px;
+        margin-top: 30px;
+    
+     }
+
+    p{ 
+        font-weight: bolder;
+        margin-top: -10px;
+     }
+}
+.total { grid-area: 1 / 2 / 2 / 3; }
+.marge-fourniture { grid-area: 1 / 3 / 2 / 4; }
+.marge-soustraitance { grid-area: 2 / 2 / 3 / 3; }
+.marge-chantier { grid-area: 2 / 3 / 3 / 4; }
+
+
+.element-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    grid-column-gap: 100px;
+    grid-row-gap: 0px;
+    }
+    
+    .devis-part { grid-area: 1 / 1 / 2 / 2; }
+    .facture-part { grid-area: 1 / 2 / 2 / 3; }
+    .ca-estime-part { grid-area: 2 / 1 / 3 / 2; }
+    .ca-reel-part { grid-area: 2 / 2 / 3 / 3; }
+    .ca-graph { grid-area: 3 / 1 / 4 / 2; }
+    .depense-graph { grid-area: 3 / 2 / 4 / 3; }
+
+
+.devis-container {
+    position: relative;
+    top: 120px;
+    left: 50px;
+    padding: 20px;
+    border-radius: 10px;
+    background-color: white;
+    width: 470px;
+    height: 100px;
+    align-content: center;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    grid-column-gap: 0px;
+    grid-row-gap: 0px;
+        p{
+            font-family: 'Roboto' , sans-serif; 
+            font-size: larger;
+            font-weight: bold;
+            
+        }
+        h2{
+            font-family: 'Roboto slab' , sans-serif;
+            font-size: large;
+            /* margin-top: -15px; */
+            text-align: center;
+            margin-top: -10px;
+        }
+        h3 {
+            font-family: 'Roboto slab' , sans-serif;
+            font-size: small;
+            margin-top: -15px;
+            text-align: center;
+            font-weight: bolder;
+        }
+    }
+    
+    .devis-title {
+        font-family: 'Roboto slab' , sans-serif;
+        padding-top: 10px;
+        padding-left: 15px;
+        font-size: 20px;
+        font-weight: bold;
+        grid-area: 1 / 1 / 2 / 4; 
+    }
+    .ndevis-en-cour { 
+        color: rgba(27, 120, 188, 1);
+        grid-area: 2 / 1 / 3 / 2; }
+    .ndevis-facturé { 
+        color: rgba(27, 188, 130, 1);
+        grid-area: 2 / 2 / 3 / 3; }
+    .ndevis-terminé { 
+        color: rgba(255, 72, 32, 1);
+        grid-area: 2 / 3 / 3 / 4; }
+    .devis-en-cour { 
+        color: rgba(27, 120, 188, 1);
+        grid-area: 3 / 1 / 4 / 2; }
+    .devis-facturé { 
+        color: rgba(27, 188, 130, 1);
+        grid-area: 3 / 2 / 4 / 3; }
+    .devis-terminé { 
+        color: rgba(255, 72, 32, 1);
+        grid-area: 3 / 3 / 4 / 4; }
+    .devis-total { 
+        h2{
+            padding-top: 30px;
+        }
+        padding-top: 20px;
+        grid-area: 1 / 4 / 2 / 5; 
+    }
+    .ntotal { 
+        h2{
+            padding-top: 15px;
+        }
+        color: rgba(27, 120, 188, 1);
+        grid-area: 2 / 4 / 4 / 5; 
+    }
+        
+    .facture-container {
+        position: relative;
+        top: 120px;
+        left: 50px;
+        padding: 20px;
+        border-radius: 10px;
+        background-color: white;
+        width: 470px;
+        height: 100px;
+        align-content: center;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        grid-column-gap: 0px;
+        grid-row-gap: 0px;
+            p{
+                font-family: 'Roboto' , sans-serif; 
+                font-size: larger;
+                font-weight: bold;
+                
+            }
+            h2{
+                font-family: 'Roboto slab' , sans-serif;
+                font-size: large;
+                /* margin-top: -15px; */
+                text-align: center;
+                margin-top: -10px;
+            }
+            h3 {
+                font-family: 'Roboto slab' , sans-serif;
+                font-size: small;
+                margin-top: -15px;
+                text-align: center;
+                font-weight: bolder;
+            }
+        }
+        
+        .facture-title {
+            font-family: 'Roboto slab' , sans-serif;
+            padding-top: 10px;
+            padding-left: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            grid-area: 1 / 1 / 2 / 4; 
+        }
+        .nfacture-en-cour { 
+            color: rgba(27, 120, 188, 1);
+            grid-area: 2 / 1 / 3 / 2; }
+        .nfacture-facturé { 
+            color: rgba(27, 188, 130, 1);
+            grid-area: 2 / 2 / 3 / 3; }
+        .nfacture-terminé { 
+            color: rgba(255, 72, 32, 1);
+            grid-area: 2 / 3 / 3 / 4; }
+        .facture-en-cour { 
+            color: rgba(27, 120, 188, 1);
+            grid-area: 3 / 1 / 4 / 2; }
+        .facture-facturé { 
+            color: rgba(27, 188, 130, 1);
+            grid-area: 3 / 2 / 4 / 3; }
+        .facture-terminé { 
+            color: rgba(255, 72, 32, 1);
+            grid-area: 3 / 3 / 4 / 4; }
+        .facture-total { 
+            h2{
+                padding-top: 30px;
+            }
+            padding-top: 20px;
+            grid-area: 1 / 4 / 2 / 5; 
+        }

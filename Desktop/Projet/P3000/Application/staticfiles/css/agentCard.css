@@ -1,0 +1,242 @@
+.agent-card {
+  min-width: 400px;
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 24px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(27, 120, 188, 0.12);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(27, 120, 188, 0.1);
+}
+
+.agent-name {
+  color: rgba(27, 120, 188, 1);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.month-selector {
+  margin: 16px 0 !important;
+}
+
+.month-selector .MuiSelect-select {
+  padding: 12px !important;
+  border: 2px solid rgba(27, 120, 188, 0.2) !important;
+  border-radius: 8px !important;
+  text-transform: uppercase !important;
+}
+
+.month-selector .MuiSelect-select:hover {
+  border-color: rgba(27, 120, 188, 0.5) !important;
+}
+
+.month-selector .MuiSelect-select:focus {
+  border-color: rgba(27, 120, 188, 1) !important;
+  box-shadow: 0 0 0 3px rgba(27, 120, 188, 0.1) !important;
+}
+
+.monthly-hours {
+  font-size: 18px;
+  color: rgba(27, 120, 188, 1);
+  font-weight: 500;
+  margin: 16px 0;
+  padding: 12px;
+  background-color: rgba(27, 120, 188, 0.05);
+  border-radius: 8px;
+}
+
+.monthly-cost {
+  font-size: 16px;
+  color: #666;
+  margin: 16px 0;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid rgba(27, 120, 188, 1);
+}
+
+.events-container {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 20px;
+  padding-right: 16px;
+}
+
+.events-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.events-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.events-container::-webkit-scrollbar-thumb {
+  background: rgba(27, 120, 188, 0.5);
+  border-radius: 4px;
+}
+
+.events-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(27, 120, 188, 0.7);
+}
+
+.event-item {
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: transform 0.2s ease;
+}
+
+.event-item:hover {
+  transform: translateX(5px);
+}
+
+.event-item.present {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2e7d32;
+}
+
+.event-item.absent {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #d32f2f;
+}
+
+.event-item.conge {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #7b1fa2;
+}
+
+.event-item.modified {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #ef6c00;
+}
+
+.no-events {
+  color: #666;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .agent-card {
+    min-width: 300px;
+    margin: 16px;
+    padding: 16px;
+  }
+
+  .agent-name {
+    font-size: 20px;
+  }
+
+  .monthly-hours {
+    font-size: 16px;
+  }
+}
+
+/* Styles pour la section des primes */
+.primes-section {
+  margin-top: 20px;
+  padding: 16px;
+  background-color: rgba(27, 120, 188, 0.05);
+  border-radius: 8px;
+}
+
+.primes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  h3 {
+    background-color: transparent;
+  }
+}
+
+.primes-header h3 {
+  margin: 0;
+  color: rgba(27, 120, 188, 1);
+  font-size: 18px;
+}
+
+.add-prime-button {
+  color: rgba(27, 120, 188, 1);
+  font-size: 1.2rem;
+}
+
+.add-prime-button:hover {
+  background-color: rgba(27, 120, 188, 0.1);
+  transform: scale(1.1);
+}
+
+.delete-prime-button {
+  color: #d32f2f;
+  font-size: 1rem;
+}
+
+.delete-prime-button:hover {
+  background-color: rgba(211, 47, 47, 0.1);
+  transform: scale(1.1);
+}
+
+.primes-list {
+  margin-bottom: 16px;
+}
+
+.prime-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 4px 0;
+  background-color: white;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.prime-item:hover {
+  background-color: rgba(27, 120, 188, 0.05);
+}
+
+.prime-item span {
+  flex-grow: 1;
+  margin-right: 12px;
+}
+
+.no-primes {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 12px;
+}
+
+.primes-total {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(27, 120, 188, 0.2);
+  font-size: 16px;
+  color: rgba(27, 120, 188, 1);
+}
+
+/* Style pour les boutons avec icônes */
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}

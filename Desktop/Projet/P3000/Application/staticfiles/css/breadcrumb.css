@@ -1,0 +1,168 @@
+.breadcrumb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  background: transparent; /* pas de fond, le layout est déjà bleu */
+  border-bottom: none;
+  width: 100%; /* Prend toute la largeur disponible */
+}
+
+.breadcrumb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.breadcrumb-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.breadcrumb-icon svg {
+  width: 22px;
+  height: 22px;
+  color: #ffffff; /* icône blanche sur fond bleu du layout */
+}
+
+.breadcrumb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Roboto", Arial, sans-serif;
+  font-size: 14px;
+  color: #ffffff; /* texte lisible sur fond bleu */
+}
+
+.breadcrumb-section {
+  font-weight: 700;
+  color: #ffffff;
+}
+.breadcrumb-page {
+  font-weight: 500;
+  color: #f3f4f6;
+}
+.breadcrumb-context {
+  font-weight: 500;
+  color: #e5e7eb;
+}
+.breadcrumb-sep {
+  color: #d1d5db;
+}
+
+/* Styles pour la section utilisateur et le bouton de déconnexion */
+.user-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 8px 15px;
+  border-radius: 25px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-name {
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(220, 53, 69, 0.9);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.logout-button:hover {
+  background-color: rgba(220, 53, 69, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.logout-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.logout-button svg {
+  transition: transform 0.2s ease;
+}
+
+.logout-button:hover svg {
+  transform: translateX(2px);
+}
+
+/* Responsive design pour le breadcrumb */
+@media (max-width: 768px) {
+  .breadcrumb-header {
+    padding: 8px 12px;
+  }
+
+  .breadcrumb-line {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .breadcrumb-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .user-section {
+    padding: 6px 12px;
+    gap: 10px;
+  }
+
+  .user-name {
+    font-size: 13px;
+  }
+
+  .logout-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .logout-button span {
+    display: none; /* Cache le texte sur mobile, garde juste l'icône */
+  }
+}
+
+@media (max-width: 480px) {
+  .breadcrumb-header {
+    padding: 6px 8px;
+  }
+
+  .breadcrumb-line {
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .breadcrumb-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .user-name {
+    display: none; /* Cache le nom d'utilisateur sur très petit écran */
+  }
+
+  .user-section {
+    padding: 8px;
+  }
+}
