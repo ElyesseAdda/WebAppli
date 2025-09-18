@@ -220,6 +220,9 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'frontend', 'static', 'frontend'),
 ]
 
+# Configuration des fichiers statiques avec hachage
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+
 # Configuration Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
