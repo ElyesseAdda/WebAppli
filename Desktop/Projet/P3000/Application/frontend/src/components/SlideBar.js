@@ -32,7 +32,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
       },
       {
         key: "agent_planning",
-        label: "Agent et planning",
+        label: "Agent & Planning",
         icon: MdEventAvailable,
         children: [
           { label: "Gestion agent", to: "/CalendrierAgentContainer" },

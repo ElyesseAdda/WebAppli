@@ -245,6 +245,29 @@ manage_django() {
     cd "$PROJECT_DIR"
     activate_venv
     
+    # Créer le dossier staticfiles s'il n'existe pas
+    if [ ! -d "staticfiles" ]; then
+        log "📁 Création du dossier staticfiles..."
+        mkdir -p staticfiles
+        log_success "Dossier staticfiles créé"
+    fi
+    
+    # Créer le sous-dossier staticfiles/frontend s'il n'existe pas
+    if [ ! -d "staticfiles/frontend" ]; then
+        log "📁 Création du dossier staticfiles/frontend..."
+        mkdir -p staticfiles/frontend
+        log_success "Dossier staticfiles/frontend créé"
+    fi
+    
+    # Vérifier et corriger les permissions du dossier staticfiles
+    log "🔐 Vérification des permissions du dossier staticfiles..."
+    chmod 755 staticfiles
+    chmod 755 staticfiles/frontend
+    if [ -d "staticfiles/frontend" ]; then
+        chmod -R 755 staticfiles/frontend
+    fi
+    log_success "Permissions du dossier staticfiles vérifiées"
+    
     # Vérifier que ManifestStaticFilesStorage est configuré
     export DJANGO_SETTINGS_MODULE=Application.settings_production
     if ! python -c "from django.conf import settings; print(settings.STATICFILES_STORAGE)" | grep -q "ManifestStaticFilesStorage"; then
@@ -254,7 +277,7 @@ manage_django() {
     # Collecter les fichiers statiques avec hachage
     log "📁 Collecte des fichiers statiques avec hachage..."
     export DJANGO_SETTINGS_MODULE=Application.settings_production
-    python manage.py collectstatic --noinput
+    python manage.py collectstatic --noinput --clear --verbosity 2
     
     # Vérifier que le manifest.json a été généré
     if [ ! -f "staticfiles/staticfiles.json" ]; then
