@@ -18,7 +18,7 @@
     {% if debug %}
     <link rel="stylesheet" href="{% static 'frontend/' %}{{ main_css_file }}" />
     {% else %}
-    <link rel="stylesheet" href="{% static 'css/main.css' %}" />
+    <link rel="stylesheet" href="{% static 'frontend/main.css' %}" />
     {% endif %}
   </head>
   <body>
@@ -33,9 +33,9 @@
     {% endif %}
     <script src="{% static 'frontend/' %}{{ main_js_file }}"></script>
     {% else %}
-    <script src="{% static 'js/runtime-main.js' %}"></script>
-    <script src="{% static 'js/vendors~main.js' %}"></script>
-    <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'frontend/runtime-main.js' %}"></script>
+    <script src="{% static 'frontend/vendors~main.js' %}"></script>
+    <script src="{% static 'frontend/main.js' %}"></script>
     {% endif %}
   </body>
 </html>

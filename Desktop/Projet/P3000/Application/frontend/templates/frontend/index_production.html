@@ -15,10 +15,10 @@
     <link rel="stylesheet" type="text/css" href="{% static 'css/index.css' %}" />
     
     <!-- React build CSS -->
-    <link rel="stylesheet" href="{% static 'css/main.css' %}" />
+    <link rel="stylesheet" href="{% static 'frontend/main.css' %}" />
     
     <!-- Preload critical resources -->
-    <link rel="preload" href="{% static 'js/main.js' %}" as="script" />
+    <link rel="preload" href="{% static 'frontend/main.js' %}" as="script" />
   </head>
   <body>
     <div id="main">
@@ -31,9 +31,9 @@
     </div>
 
     <!-- React build JS - attention à l'ordre -->
-    <script src="{% static 'js/runtime-main.js' %}"></script>
-    <script src="{% static 'js/vendors~main.js' %}"></script>
-    <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'frontend/runtime-main.js' %}"></script>
+    <script src="{% static 'frontend/vendors~main.js' %}"></script>
+    <script src="{% static 'frontend/main.js' %}"></script>
     
     <!-- Error handling -->
     <script>
