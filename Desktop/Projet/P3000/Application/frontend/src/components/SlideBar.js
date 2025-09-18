@@ -26,7 +26,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           { label: "Dashboard", to: "/" },
           { label: "Récap Chantier", to: "/ChantierDetail/1" },
           { label: "Tableau Facturation", to: "/TableauFacturation" },
-          { label: "Liste Appel offres", to: "/GestionAppelsOffres" },
+          { label: "Appel d'offres", to: "/GestionAppelsOffres" },
           { label: "Agence", to: "/AgencyExpenses" },
         ],
       },
@@ -41,7 +41,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
       },
       {
         key: "document",
-        label: "Document",
+        label: "Documents",
         icon: MdFolderOpen,
         children: [
           {
