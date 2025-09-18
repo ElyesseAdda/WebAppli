@@ -1,0 +1,74 @@
+{% load react_assets %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Assets React</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .warning { background: #fff3cd; color: #856404; }
+        .error { background: #f8d7da; color: #721c24; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Assets React</h1>
+    
+    {% react_manifest_info as manifest_info %}
+    
+    <div class="info {% if manifest_info.manifest_loaded %}success{% else %}error{% endif %}">
+        <h3>📊 État du Manifest</h3>
+        <p><strong>Manifest chargé:</strong> {{ manifest_info.manifest_loaded|yesno:"✅ Oui,❌ Non" }}</p>
+        <p><strong>Nombre de fichiers:</strong> {{ manifest_info.files_count }}</p>
+    </div>
+    
+    {% if manifest_info.files_count > 0 %}
+    <div class="info success">
+        <h3>📁 Fichiers détectés</h3>
+        <ul>
+            {% for file in manifest_info.files %}
+            <li><code>{{ file }}</code></li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="info">
+        <h3>🔗 URLs générées</h3>
+        <p><strong>main.css:</strong> <code>{% react_static 'main.css' %}</code></p>
+        <p><strong>main.js:</strong> <code>{% react_static 'main.js' %}</code></p>
+        <p><strong>runtime-main.js:</strong> <code>{% react_static 'runtime-main.js' %}</code></p>
+        <p><strong>vendors~main.js:</strong> <code>{% react_static 'vendors~main.js' %}</code></p>
+    </div>
+    
+    <div class="info">
+        <h3>✅ Vérifications d'existence</h3>
+        <p><strong>main.css existe:</strong> {% react_static_exists 'main.css' as has_main_css %}{{ has_main_css|yesno:"✅ Oui,❌ Non" }}</p>
+        <p><strong>main.js existe:</strong> {% react_static_exists 'main.js' as has_main_js %}{{ has_main_js|yesno:"✅ Oui,❌ Non" }}</p>
+        <p><strong>runtime-main.js existe:</strong> {% react_static_exists 'runtime-main.js' as has_runtime %}{{ has_runtime|yesno:"✅ Oui,❌ Non" }}</p>
+        <p><strong>vendors~main.js existe:</strong> {% react_static_exists 'vendors~main.js' as has_vendors %}{{ has_vendors|yesno:"✅ Oui,❌ Non" }}</p>
+    </div>
+    {% else %}
+    <div class="info error">
+        <h3>❌ Aucun fichier détecté</h3>
+        <p>Le système n'a trouvé aucun fichier React. Vérifiez que :</p>
+        <ul>
+            <li>Le build React a été exécuté (<code>npm run build</code>)</li>
+            <li>Les fichiers sont dans <code>frontend/static/frontend/</code></li>
+            <li>Le manifest <code>asset-manifest.json</code> existe (optionnel)</li>
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div class="info">
+        <h3>🛠️ Actions recommandées</h3>
+        <ol>
+            <li>Si aucun fichier n'est détecté : <code>./sync_react_assets.sh</code></li>
+            <li>Si les URLs sont vides : vérifiez les permissions des fichiers</li>
+            <li>Si tout fonctionne : supprimez ce template de debug</li>
+        </ol>
+    </div>
+</body>
+</html>

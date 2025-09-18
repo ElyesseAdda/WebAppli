@@ -1,4 +1,5 @@
 {% load static %}
+{% load react_static %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -14,11 +15,11 @@
     <!-- Django global CSS -->
     <link rel="stylesheet" href="{% static 'css/index.css' %}" />
 
-    <!-- React build CSS -->
+    <!-- React build CSS - automatique avec hash -->
     {% if debug %}
     <link rel="stylesheet" href="{% static 'frontend/' %}{{ main_css_file }}" />
     {% else %}
-    <link rel="stylesheet" href="{% static 'frontend/main.css' %}" />
+    <link rel="stylesheet" href="{% react_static 'main.css' %}" />
     {% endif %}
   </head>
   <body>
@@ -26,16 +27,25 @@
       <div id="app"></div>
     </div>
 
-    <!-- React build JS - attention à l'ordre -->
+    <!-- React build JS - automatique avec hash -->
     {% if debug %}
     {% if has_vendors %}
     <script src="{% static 'frontend/' %}{{ vendors_js_file }}"></script>
     {% endif %}
     <script src="{% static 'frontend/' %}{{ main_js_file }}"></script>
     {% else %}
-    <script src="{% static 'frontend/runtime-main.js' %}"></script>
-    <script src="{% static 'frontend/vendors~main.js' %}"></script>
-    <script src="{% static 'frontend/main.js' %}"></script>
+    <!-- Chargement automatique des fichiers React avec hash -->
+    {% react_static_exists 'runtime-main.js' as has_runtime %}
+    {% if has_runtime %}
+    <script src="{% react_static 'runtime-main.js' %}"></script>
+    {% endif %}
+    
+    {% react_static_exists 'vendors~main.js' as has_vendors %}
+    {% if has_vendors %}
+    <script src="{% react_static 'vendors~main.js' %}"></script>
+    {% endif %}
+    
+    <script src="{% react_static 'main.js' %}"></script>
     {% endif %}
   </body>
 </html>

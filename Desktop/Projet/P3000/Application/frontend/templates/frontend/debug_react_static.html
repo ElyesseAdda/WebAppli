@@ -1,0 +1,136 @@
+{% load static %}
+{% load react_static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Debug React Static - Template Tag</title>
+    <style>
+        body { 
+            font-family: 'Courier New', monospace; 
+            margin: 20px; 
+            background: #f5f5f5; 
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+        .success { color: #28a745; font-weight: bold; }
+        .warning { color: #ffc107; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+        .info { color: #17a2b8; }
+        pre { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 4px; 
+            overflow-x: auto; 
+            border-left: 4px solid #007bff;
+        }
+        .file-test {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .file-test.success { border-color: #28a745; background: #d4edda; }
+        .file-test.error { border-color: #dc3545; background: #f8d7da; }
+        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        h2 { color: #495057; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug React Static Template Tag</h1>
+        
+        <h2>📋 Informations du Manifest</h2>
+        {% react_manifest_debug as debug_info %}
+        <div class="info">
+            <p><strong>Chemin du manifest :</strong> {{ debug_info.manifest_path }}</p>
+            <p><strong>Manifest existe :</strong> 
+                <span class="{% if debug_info.manifest_exists %}success{% else %}error{% endif %}">
+                    {% if debug_info.manifest_exists %}✅ Oui{% else %}❌ Non{% endif %}
+                </span>
+            </p>
+            <p><strong>Nombre de fichiers :</strong> {{ debug_info.files_count }}</p>
+        </div>
+
+        <h2>📁 Fichiers dans le Manifest</h2>
+        {% if debug_info.files %}
+            <pre>{{ debug_info.files|join:", " }}</pre>
+        {% else %}
+            <p class="error">❌ Aucun fichier trouvé dans le manifest</p>
+        {% endif %}
+
+        <h2>🔗 Test des URLs Générées</h2>
+        
+        {% react_static_exists 'main.css' as has_main_css %}
+        <div class="file-test {% if has_main_css %}success{% else %}error{% endif %}">
+            <strong>main.css :</strong><br>
+            <span class="{% if has_main_css %}success{% else %}error{% endif %}">
+                {% react_static 'main.css' %}
+            </span>
+            <br><small>Existe: {% if has_main_css %}✅ Oui{% else %}❌ Non{% endif %}</small>
+        </div>
+
+        {% react_static_exists 'main.js' as has_main_js %}
+        <div class="file-test {% if has_main_js %}success{% else %}error{% endif %}">
+            <strong>main.js :</strong><br>
+            <span class="{% if has_main_js %}success{% else %}error{% endif %}">
+                {% react_static 'main.js' %}
+            </span>
+            <br><small>Existe: {% if has_main_js %}✅ Oui{% else %}❌ Non{% endif %}</small>
+        </div>
+
+        {% react_static_exists 'runtime-main.js' as has_runtime %}
+        <div class="file-test {% if has_runtime %}success{% else %}error{% endif %}">
+            <strong>runtime-main.js :</strong><br>
+            <span class="{% if has_runtime %}success{% else %}error{% endif %}">
+                {% react_static 'runtime-main.js' %}
+            </span>
+            <br><small>Existe: {% if has_runtime %}✅ Oui{% else %}❌ Non{% endif %}</small>
+        </div>
+
+        {% react_static_exists 'vendors~main.js' as has_vendors %}
+        <div class="file-test {% if has_vendors %}success{% else %}error{% endif %}">
+            <strong>vendors~main.js :</strong><br>
+            <span class="{% if has_vendors %}success{% else %}error{% endif %}">
+                {% react_static 'vendors~main.js' %}
+            </span>
+            <br><small>Existe: {% if has_vendors %}✅ Oui{% else %}❌ Non{% endif %}</small>
+        </div>
+
+        <h2>🧪 Test de Fallback</h2>
+        <div class="file-test error">
+            <strong>fichier-inexistant.js :</strong><br>
+            <span class="error">
+                {% react_static 'fichier-inexistant.js' %}
+            </span>
+            <br><small>Existe: ❌ Non (fallback activé)</small>
+        </div>
+
+        <h2>📊 Échantillon du Mapping</h2>
+        {% if debug_info.sample_mapping %}
+            <pre>{{ debug_info.sample_mapping|pprint }}</pre>
+        {% else %}
+            <p class="warning">⚠️ Aucun mapping disponible</p>
+        {% endif %}
+
+        <h2>🧪 Test de Fonctionnement</h2>
+        <p>Si tu vois des URLs avec des hash (ex: <code>main.a1b2c3d4.js</code>), le template tag fonctionne correctement !</p>
+        
+        <div style="margin-top: 30px; padding: 15px; background: #e9ecef; border-radius: 4px;">
+            <h3>💡 Instructions</h3>
+            <ol>
+                <li>Vérifie que les fichiers existent dans <code>frontend/static/frontend/</code></li>
+                <li>Assure-toi que <code>asset-manifest.json</code> est présent</li>
+                <li>Si le manifest n'existe pas, le template tag utilisera le fallback (scan du dossier)</li>
+                <li>Les URLs générées doivent pointer vers les fichiers hachés</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

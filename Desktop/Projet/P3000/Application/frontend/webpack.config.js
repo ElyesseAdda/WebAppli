@@ -1,6 +1,7 @@
 const path = require("path");
 const webpack = require("webpack");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const { WebpackManifestPlugin } = require("webpack-manifest-plugin");
 
 module.exports = {
   entry: "./src/index.js",
@@ -61,6 +62,21 @@ module.exports = {
     new MiniCssExtractPlugin({
       filename: "[name].[contenthash].css",
       chunkFilename: "[name].[contenthash].chunk.css",
+    }),
+    new WebpackManifestPlugin({
+      fileName: 'asset-manifest.json',
+      publicPath: '/static/frontend/',
+      generate: (seed, files, entrypoints) => {
+        const manifestFiles = files.reduce((manifest, file) => {
+          manifest[file.name] = file.path;
+          return manifest;
+        }, seed);
+        
+        return {
+          files: manifestFiles,
+          entrypoints: entrypoints
+        };
+      }
     }),
   ],
   devServer: {

@@ -1,4 +1,5 @@
 {% load static %}
+{% load react_static %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -14,11 +15,11 @@
     <!-- Static CSS files -->
     <link rel="stylesheet" type="text/css" href="{% static 'css/index.css' %}" />
     
-    <!-- React build CSS -->
-    <link rel="stylesheet" href="{% static 'frontend/main.css' %}" />
+    <!-- React build CSS - automatique avec hash -->
+    <link rel="stylesheet" href="{% react_static 'main.css' %}" />
     
     <!-- Preload critical resources -->
-    <link rel="preload" href="{% static 'frontend/main.js' %}" as="script" />
+    <link rel="preload" href="{% react_static 'main.js' %}" as="script" />
   </head>
   <body>
     <div id="main">
@@ -30,10 +31,18 @@
       </div>
     </div>
 
-    <!-- React build JS - attention à l'ordre -->
-    <script src="{% static 'frontend/runtime-main.js' %}"></script>
-    <script src="{% static 'frontend/vendors~main.js' %}"></script>
-    <script src="{% static 'frontend/main.js' %}"></script>
+    <!-- React build JS - automatique avec hash -->
+    {% react_static_exists 'runtime-main.js' as has_runtime %}
+    {% if has_runtime %}
+    <script src="{% react_static 'runtime-main.js' %}"></script>
+    {% endif %}
+    
+    {% react_static_exists 'vendors~main.js' as has_vendors %}
+    {% if has_vendors %}
+    <script src="{% react_static 'vendors~main.js' %}"></script>
+    {% endif %}
+    
+    <script src="{% react_static 'main.js' %}"></script>
     
     <!-- Error handling -->
     <script>

@@ -179,9 +179,9 @@ install_nodejs() {
     fi
 }
 
-# Fonction de build du frontend avec hachage
+# Fonction de build du frontend avec hachage et synchronisation
 build_frontend() {
-    log "🎨 Build du frontend avec hachage..."
+    log "🎨 Build du frontend avec hachage et synchronisation..."
     
     cd "$PROJECT_DIR/frontend"
     
@@ -198,17 +198,44 @@ build_frontend() {
     log "🔨 Build de production avec hachage..."
     npm run build
     
-    # Vérifier que les fichiers hashés ont été générés
-    if [ ! -d "static/frontend" ] || [ -z "$(ls -A static/frontend/*.js 2>/dev/null)" ]; then
-        log_error "Aucun fichier JS hashé généré"
+    # Vérifier que le build a généré les fichiers
+    if [ ! -d "build/static" ]; then
+        log_error "Le build React n'a pas généré le dossier build/static"
         exit 1
     fi
     
-    log_success "Fichiers React hashés générés:"
-    ls -la static/frontend/*.js static/frontend/*.css 2>/dev/null || true
+    log_success "Build React terminé"
+    
+    # --- Synchronisation des fichiers React vers Django ---
+    log "🔄 Synchronisation des fichiers React vers Django..."
+    
+    # Créer le répertoire de destination
+    STATIC_DEST="$PROJECT_DIR/frontend/static/frontend"
+    mkdir -p "$STATIC_DEST"
+    
+    # Copier les fichiers React vers Django
+    log "📁 Copie des fichiers React vers Django..."
+    cp -r build/static/* "$STATIC_DEST/"
+    
+    # Copier le manifest si il existe
+    if [ -f "build/asset-manifest.json" ]; then
+        log "📄 Copie du manifest React..."
+        cp build/asset-manifest.json "$STATIC_DEST/"
+    else
+        log_info "Aucun manifest React trouvé (optionnel)"
+    fi
+    
+    # Vérifier que les fichiers ont été copiés
+    if [ ! -d "$STATIC_DEST" ] || [ -z "$(ls -A "$STATIC_DEST"/*.js 2>/dev/null)" ]; then
+        log_error "Aucun fichier JS copié vers Django"
+        exit 1
+    fi
+    
+    log_success "Fichiers React synchronisés vers Django:"
+    ls -la "$STATIC_DEST"/*.js "$STATIC_DEST"/*.css 2>/dev/null || true
     
     cd "$PROJECT_DIR"
-    log_success "Frontend buildé avec succès et hachage"
+    log_success "Frontend buildé et synchronisé avec succès"
 }
 
 # Fonction de gestion de Django avec hachage
