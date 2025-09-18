@@ -219,12 +219,14 @@ manage_django() {
     activate_venv
     
     # Vérifier que ManifestStaticFilesStorage est configuré
+    export DJANGO_SETTINGS_MODULE=Application.settings_production
     if ! python -c "from django.conf import settings; print(settings.STATICFILES_STORAGE)" | grep -q "ManifestStaticFilesStorage"; then
         log_warning "ManifestStaticFilesStorage non configuré - le hachage Django ne fonctionnera pas"
     fi
     
     # Collecter les fichiers statiques avec hachage
     log "📁 Collecte des fichiers statiques avec hachage..."
+    export DJANGO_SETTINGS_MODULE=Application.settings_production
     python manage.py collectstatic --noinput
     
     # Vérifier que le manifest.json a été généré
@@ -253,6 +255,7 @@ manage_django() {
     
     # Appliquer les migrations
     log "🗄️ Application des migrations..."
+    export DJANGO_SETTINGS_MODULE=Application.settings_production
     python manage.py migrate
     
     log_success "Gestion Django terminée avec hachage"

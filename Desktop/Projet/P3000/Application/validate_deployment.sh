@@ -209,6 +209,7 @@ check_django_config() {
     cd "$PROJECT_DIR"
     
     # Vérifier que ManifestStaticFilesStorage est configuré
+    export DJANGO_SETTINGS_MODULE=Application.settings_production
     if python -c "from django.conf import settings; print(settings.STATICFILES_STORAGE)" | grep -q "ManifestStaticFilesStorage"; then
         log_info "ManifestStaticFilesStorage configuré"
     else

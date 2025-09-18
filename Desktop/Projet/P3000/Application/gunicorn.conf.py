@@ -1,6 +1,10 @@
 # Configuration Gunicorn pour la production
 
 import multiprocessing
+import os
+
+# Configuration Django pour la production
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Application.settings_production')
 
 # Nombre de workers
 workers = multiprocessing.cpu_count() * 2 + 1
