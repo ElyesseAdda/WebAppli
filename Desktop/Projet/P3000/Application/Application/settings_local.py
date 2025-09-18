@@ -47,13 +47,22 @@ CACHES = {
 }
 
 # Configuration pour les fichiers statiques en développement
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+# Utiliser StaticFilesStorage (sans hachage) pour le développement
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # Configuration pour les médias en développement
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Configuration CORS pour le développement React
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',  # React dev server
+    'http://127.0.0.1:3000',
+]
+
+# Configuration pour le développement React
+CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['X-CSRFToken']
 
 # Configuration pour le débogage des templates
 TEMPLATES[0]['OPTIONS']['debug'] = True

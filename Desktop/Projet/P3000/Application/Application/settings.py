@@ -215,6 +215,11 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# Configuration des répertoires statiques
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'frontend', 'static', 'frontend'),
+]
+
 # Configuration Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

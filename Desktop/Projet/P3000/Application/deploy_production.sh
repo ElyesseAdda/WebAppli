@@ -12,6 +12,9 @@ PROJECT_DIR="/var/www/p3000/Desktop/Projet/P3000/Application"
 VENV_PATH="/root/venv"
 ENV_BACKUP_DIR="/root/p3000-env-backup"
 PRODUCTION_ENV_FILE="$ENV_BACKUP_DIR/.env.production"
+STATIC_BACKUP_DIR="/var/backups/p3000-static"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+BACKUP_NAME="backup_${TIMESTAMP}"
 
 # Couleurs pour les logs
 RED='\033[0;31m'
@@ -23,6 +26,14 @@ NC='\033[0m' # No Color
 # Fonction de logging
 log() {
     echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
+}
+
+# Fonction pour activer l'environnement virtuel
+activate_venv() {
+    if [ -z "$VIRTUAL_ENV" ]; then
+        source "$VENV_PATH/bin/activate"
+        log "🐍 Environnement virtuel activé"
+    fi
 }
 
 log_success() {
@@ -134,7 +145,7 @@ update_dependencies() {
     log "📦 Mise à jour des dépendances Python..."
     
     cd "$PROJECT_DIR"
-    source "$VENV_PATH/bin/activate"
+    activate_venv
     
     pip install --upgrade pip
     pip install -r requirements.txt
@@ -168,46 +179,91 @@ install_nodejs() {
     fi
 }
 
-# Fonction de build du frontend
+# Fonction de build du frontend avec hachage
 build_frontend() {
-    log "🎨 Build du frontend..."
+    log "🎨 Build du frontend avec hachage..."
     
     cd "$PROJECT_DIR/frontend"
     
     # Installer les dépendances Node.js (y compris dev pour le build)
+    log "📦 Installation des dépendances npm..."
     npm install
     
-    # Build de production
+    # Vérifier que webpack est configuré pour le hachage
+    if ! grep -q "contenthash" webpack.config.js; then
+        log_warning "Webpack n'est pas configuré pour le hachage - les fichiers ne seront pas hashés"
+    fi
+    
+    # Build de production avec hachage
+    log "🔨 Build de production avec hachage..."
     npm run build
     
+    # Vérifier que les fichiers hashés ont été générés
+    if [ ! -d "static/frontend" ] || [ -z "$(ls -A static/frontend/*.js 2>/dev/null)" ]; then
+        log_error "Aucun fichier JS hashé généré"
+        exit 1
+    fi
+    
+    log_success "Fichiers React hashés générés:"
+    ls -la static/frontend/*.js static/frontend/*.css 2>/dev/null || true
+    
     cd "$PROJECT_DIR"
-    log_success "Frontend buildé avec succès"
+    log_success "Frontend buildé avec succès et hachage"
 }
 
-# Fonction de gestion de Django
+# Fonction de gestion de Django avec hachage
 manage_django() {
-    log "🗄️ Gestion Django..."
+    log "🗄️ Gestion Django avec hachage..."
     
     cd "$PROJECT_DIR"
-    source "$VENV_PATH/bin/activate"
+    activate_venv
     
-    # Collecter les fichiers statiques
-    log "📁 Collecte des fichiers statiques..."
+    # Vérifier que ManifestStaticFilesStorage est configuré
+    if ! python -c "from django.conf import settings; print(settings.STATICFILES_STORAGE)" | grep -q "ManifestStaticFilesStorage"; then
+        log_warning "ManifestStaticFilesStorage non configuré - le hachage Django ne fonctionnera pas"
+    fi
+    
+    # Collecter les fichiers statiques avec hachage
+    log "📁 Collecte des fichiers statiques avec hachage..."
     python manage.py collectstatic --noinput
+    
+    # Vérifier que le manifest.json a été généré
+    if [ ! -f "staticfiles/staticfiles.json" ]; then
+        log_error "Manifest staticfiles.json non généré"
+        exit 1
+    fi
+    
+    log_success "Manifest généré avec $(python -c "import json; print(len(json.load(open('staticfiles/staticfiles.json'))))") fichiers"
+    
+    # Vérifier que les fichiers référencés dans le template existent
+    TEMPLATE_FILE="frontend/templates/frontend/index.html"
+    if [ -f "$TEMPLATE_FILE" ]; then
+        log "🔍 Vérification des fichiers référencés dans le template..."
+        STATIC_FILES=$(grep -o "{% static '[^']*' %}" "$TEMPLATE_FILE" | sed "s/{% static '//g" | sed "s/' %}//g")
+        
+        for file in $STATIC_FILES; do
+            if [ ! -f "staticfiles/$file" ]; then
+                log_error "Fichier statique manquant: $file"
+                exit 1
+            fi
+        done
+        
+        log_success "Tous les fichiers référencés dans le template existent"
+    fi
     
     # Appliquer les migrations
     log "🗄️ Application des migrations..."
     python manage.py migrate
     
-    log_success "Gestion Django terminée"
+    log_success "Gestion Django terminée avec hachage"
 }
 
 # Fonction de génération de version de déploiement
 generate_deploy_version() {
     log "🔄 Génération de la version de déploiement..."
     
-    cd "$PROJECT_DIR"
-    source "$VENV_PATH/bin/activate"
+    # On est déjà dans PROJECT_DIR depuis manage_django()
+    # L'environnement virtuel est déjà activé
     
     # Exécuter le script de génération de version
     if [ -f "deploy_version.py" ]; then
@@ -234,7 +290,7 @@ restart_services() {
     log "🚀 Démarrage de Gunicorn..."
     systemctl start gunicorn
     
-    # Vérifier le statut
+    # Vérifier le statut de Gunicorn
     if systemctl is-active --quiet gunicorn; then
         log_success "Gunicorn redémarré avec succès"
     else
@@ -243,9 +299,77 @@ restart_services() {
         exit 1
     fi
     
-    # Redémarrer Nginx si nécessaire
+    # Recharger Nginx (pas de restart complet nécessaire)
     log "🔄 Rechargement de Nginx..."
-    systemctl reload nginx || log_warning "Nginx non rechargé"
+    if systemctl reload nginx; then
+        log_success "Nginx rechargé avec succès"
+    else
+        log_warning "Échec du rechargement de Nginx"
+        # Essayer un restart complet en cas d'échec
+        log "🔄 Tentative de restart complet de Nginx..."
+        systemctl restart nginx
+    fi
+}
+
+# Fonction de sauvegarde des fichiers statiques
+backup_static_files() {
+    log "💾 Sauvegarde des fichiers statiques..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Créer le répertoire de sauvegarde
+    mkdir -p "$STATIC_BACKUP_DIR/$BACKUP_NAME"
+    
+    # Sauvegarder les fichiers statiques existants
+    if [ -d "staticfiles" ]; then
+        cp -r staticfiles "$STATIC_BACKUP_DIR/$BACKUP_NAME/"
+        log_success "Fichiers statiques sauvegardés"
+    fi
+    
+    # Sauvegarder les templates
+    if [ -d "frontend/templates" ]; then
+        cp -r frontend/templates "$STATIC_BACKUP_DIR/$BACKUP_NAME/"
+        log_success "Templates sauvegardés"
+    fi
+    
+    log_success "Sauvegarde créée: $BACKUP_NAME"
+}
+
+# Fonction de rollback
+rollback_deployment() {
+    log_error "Erreur détectée, démarrage du rollback..."
+    
+    if [ -d "$STATIC_BACKUP_DIR/$BACKUP_NAME" ]; then
+        log "🔄 Restauration de la sauvegarde $BACKUP_NAME"
+        
+        cd "$PROJECT_DIR"
+        
+        # Restaurer les fichiers statiques
+        if [ -d "$STATIC_BACKUP_DIR/$BACKUP_NAME/staticfiles" ]; then
+            rm -rf staticfiles
+            cp -r "$STATIC_BACKUP_DIR/$BACKUP_NAME/staticfiles" .
+            log_success "Fichiers statiques restaurés"
+        fi
+        
+        # Restaurer les templates
+        if [ -d "$STATIC_BACKUP_DIR/$BACKUP_NAME/templates" ]; then
+            rm -rf frontend/templates
+            cp -r "$STATIC_BACKUP_DIR/$BACKUP_NAME/templates" frontend/
+            log_success "Templates restaurés"
+        fi
+        
+        # Redémarrer les services (restart complet pour le rollback)
+        log "🔄 Redémarrage des services après rollback..."
+        systemctl restart gunicorn
+        systemctl restart nginx
+        log_success "Services redémarrés après rollback"
+        
+        log_warning "Rollback terminé. Vérifiez l'application."
+    else
+        log_error "Aucune sauvegarde trouvée pour le rollback"
+    fi
+    
+    exit 1
 }
 
 # Fonction de vérification post-déploiement
@@ -265,6 +389,25 @@ post_deployment_check() {
         log_warning "⚠️ Nginx n'est pas actif"
     fi
     
+    # Test de connectivité
+    log "🌐 Test de connectivité..."
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000 | grep -q "200"; then
+        log_success "Application accessible"
+    else
+        log_warning "Application non accessible, vérifiez les logs"
+    fi
+    
+    # Test des fichiers statiques
+    STATIC_TEST_FILE=$(find staticfiles -name "*.js" | head -1)
+    if [ -n "$STATIC_TEST_FILE" ]; then
+        STATIC_URL="/static/${STATIC_TEST_FILE#staticfiles/}"
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$STATIC_URL" | grep -q "200"; then
+            log_success "Fichiers statiques accessibles"
+        else
+            log_warning "Problème d'accès aux fichiers statiques"
+        fi
+    fi
+    
     # Afficher les logs récents en cas de problème
     log "📊 Statut des services:"
     systemctl status gunicorn --no-pager -l
@@ -274,7 +417,7 @@ post_deployment_check() {
 
 # Fonction principale
 main() {
-    log "🚀 Début du déploiement P3000 Production v2.0"
+    log "🚀 Début du déploiement P3000 Production v2.0 avec hachage"
     
     # Donner les permissions d'exécution à ce script
     chmod +x "$0"
@@ -282,6 +425,7 @@ main() {
     # Étapes du déploiement
     check_prerequisites
     backup_production_env
+    backup_static_files
     deploy_code
     restore_production_env
     update_dependencies
@@ -292,12 +436,33 @@ main() {
     restart_services
     post_deployment_check
     
+    # Nettoyage des anciennes sauvegardes (garder les 5 dernières)
+    log "🧹 Nettoyage des anciennes sauvegardes..."
+    cd "$STATIC_BACKUP_DIR"
+    ls -t | tail -n +6 | xargs -r rm -rf
+    log_success "Anciennes sauvegardes nettoyées"
+    
+    # Validation post-déploiement
+    log "🔍 Validation post-déploiement..."
+    if [ -f "validate_deployment.sh" ]; then
+        chmod +x validate_deployment.sh
+        if ./validate_deployment.sh; then
+            log_success "Validation post-déploiement réussie"
+        else
+            log_warning "Validation post-déploiement échouée - vérifiez manuellement"
+        fi
+    else
+        log_warning "Script de validation non trouvé - validation manuelle recommandée"
+    fi
+    
     log_success "✅ Déploiement terminé avec succès!"
     log "📝 Logs disponibles dans les journaux système (journalctl -u gunicorn)"
+    log "💾 Sauvegarde créée: $BACKUP_NAME"
+    log "🔍 Validation: ./validate_deployment.sh"
 }
 
-# Gestion des erreurs
-trap 'log_error "Erreur détectée à la ligne $LINENO. Arrêt du déploiement."; exit 1' ERR
+# Gestion des erreurs avec rollback
+trap 'rollback_deployment' ERR
 
 # Exécution du script principal
 main "$@"

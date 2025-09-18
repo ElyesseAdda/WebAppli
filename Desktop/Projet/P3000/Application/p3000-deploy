@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Alias pour le script de déploiement P3000
+# Usage: ./p3000-deploy
+
+# Chemin vers le script principal
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAIN_SCRIPT="$SCRIPT_DIR/deploy_production.sh"
+
+# Vérifier que le script principal existe
+if [ ! -f "$MAIN_SCRIPT" ]; then
+    echo "❌ Script de déploiement principal non trouvé: $MAIN_SCRIPT"
+    exit 1
+fi
+
+# Exécuter le script principal
+echo "🚀 Lancement du déploiement P3000..."
+exec "$MAIN_SCRIPT" "$@"

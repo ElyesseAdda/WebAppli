@@ -76,7 +76,17 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
-# Configuration AWS S3 pour les fichiers statiques et médias (optionnel)
+# Configuration des fichiers statiques avec hachage (locaux)
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Configuration des répertoires statiques
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend' / 'static' / 'frontend',
+]
+
+# Configuration AWS S3 pour les médias uniquement (uploads utilisateurs)
 if os.getenv('AWS_ACCESS_KEY_ID'):
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -88,13 +98,13 @@ if os.getenv('AWS_ACCESS_KEY_ID'):
         'CacheControl': 'max-age=86400',
     }
     
-    # Configuration pour les fichiers statiques
-    STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
-    
-    # Configuration pour les médias
+    # Configuration pour les médias uniquement (pas les fichiers statiques)
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+else:
+    # Fallback local pour les médias si AWS n'est pas configuré
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 # Configuration de sécurité supplémentaire
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
