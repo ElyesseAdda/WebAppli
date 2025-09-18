@@ -199,8 +199,8 @@ build_frontend() {
     npm run build
     
     # Vérifier que le build a généré les fichiers
-    if [ ! -d "build/static" ]; then
-        log_error "Le build React n'a pas généré le dossier build/static"
+    if [ ! -d "static/frontend" ]; then
+        log_error "Le build React n'a pas généré le dossier static/frontend"
         exit 1
     fi
     
@@ -213,14 +213,14 @@ build_frontend() {
     STATIC_DEST="$PROJECT_DIR/frontend/static/frontend"
     mkdir -p "$STATIC_DEST"
     
-    # Copier les fichiers React vers Django
+    # Copier les fichiers React vers Django (ils sont déjà dans static/frontend)
     log "📁 Copie des fichiers React vers Django..."
-    cp -r build/static/* "$STATIC_DEST/"
+    cp -r static/frontend/* "$STATIC_DEST/"
     
     # Copier le manifest si il existe
-    if [ -f "build/asset-manifest.json" ]; then
+    if [ -f "static/frontend/asset-manifest.json" ]; then
         log "📄 Copie du manifest React..."
-        cp build/asset-manifest.json "$STATIC_DEST/"
+        cp static/frontend/asset-manifest.json "$STATIC_DEST/"
     else
         log_info "Aucun manifest React trouvé (optionnel)"
     fi
