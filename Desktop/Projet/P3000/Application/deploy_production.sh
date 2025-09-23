@@ -245,28 +245,23 @@ manage_django() {
     cd "$PROJECT_DIR"
     activate_venv
     
-    # Créer le dossier staticfiles s'il n'existe pas
-    if [ ! -d "staticfiles" ]; then
-        log "📁 Création du dossier staticfiles..."
-        mkdir -p staticfiles
-        log_success "Dossier staticfiles créé"
-    fi
+    # Créer les dossiers staticfiles et staticfiles/frontend
+    log "📁 Création des dossiers staticfiles..."
+    mkdir -p staticfiles/frontend
+    log_success "Dossiers staticfiles et staticfiles/frontend créés"
     
-    # Créer le sous-dossier staticfiles/frontend s'il n'existe pas
-    if [ ! -d "staticfiles/frontend" ]; then
-        log "📁 Création du dossier staticfiles/frontend..."
-        mkdir -p staticfiles/frontend
-        log_success "Dossier staticfiles/frontend créé"
-    fi
-    
-    # Vérifier et corriger les permissions du dossier staticfiles
-    log "🔐 Vérification des permissions du dossier staticfiles..."
+    # Vérifier et corriger les permissions et propriétaire du dossier staticfiles
+    log "🔐 Vérification des permissions et propriétaire du dossier staticfiles..."
     chmod 755 staticfiles
     chmod 755 staticfiles/frontend
     if [ -d "staticfiles/frontend" ]; then
         chmod -R 755 staticfiles/frontend
     fi
-    log_success "Permissions du dossier staticfiles vérifiées"
+    
+    # Définir le bon propriétaire pour les dossiers staticfiles
+    log "👤 Définition du propriétaire www-data pour staticfiles..."
+    sudo chown -R www-data:www-data staticfiles/
+    log_success "Permissions et propriétaire du dossier staticfiles vérifiés"
     
     # Vérifier que ManifestStaticFilesStorage est configuré
     export DJANGO_SETTINGS_MODULE=Application.settings_production
@@ -284,8 +279,25 @@ manage_django() {
         log_error "Manifest staticfiles.json non généré"
         exit 1
     fi
-    
+
     log_success "Manifest généré avec $(python -c "import json; print(len(json.load(open('staticfiles/staticfiles.json'))))") fichiers"
+    
+    # Vérifier que les dossiers staticfiles existent et ont les bonnes permissions
+    log "🔍 Vérification finale des dossiers staticfiles..."
+    if [ ! -d "staticfiles" ]; then
+        log_error "Dossier staticfiles manquant après collectstatic"
+        exit 1
+    fi
+    
+    if [ ! -d "staticfiles/frontend" ]; then
+        log_error "Dossier staticfiles/frontend manquant après collectstatic"
+        exit 1
+    fi
+    
+    # Vérifier les permissions finales
+    sudo chown -R www-data:www-data staticfiles/
+    chmod -R 755 staticfiles/
+    log_success "Dossiers staticfiles vérifiés et permissions corrigées"
     
     # Vérifier que les fichiers référencés dans le template existent
     TEMPLATE_FILE="frontend/templates/frontend/index.html"

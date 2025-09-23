@@ -218,6 +218,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Configuration des répertoires statiques
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'frontend', 'static'),
+    os.path.join(BASE_DIR, 'frontend', 'src', 'img'),
 ]
 
 # Configuration des fichiers statiques avec hachage

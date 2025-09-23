@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -116,7 +117,7 @@
   </head>
   <body>
     <div class="logo">
-      <img src="/static/frontend/src/img/logo.png" alt="Logo P3000" />
+      <img src="{% static 'logo.png' %}" alt="Logo P3000" />
     </div>
 
     <div class="content-wrapper">
@@ -382,7 +383,7 @@
     </div>
 
     <div class="print-footer">
-      <img src="/static/frontend/src/img/Info p3000.png" alt="Tampon Info P3000" />
+      <img src="{% static 'Info p3000.png' %}" alt="Tampon Info P3000" />
     </div>
 
   </body>

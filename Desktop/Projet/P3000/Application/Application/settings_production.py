@@ -84,6 +84,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Configuration des répertoires statiques
 STATICFILES_DIRS = [
     BASE_DIR / 'frontend' / 'static' / 'frontend',
+    BASE_DIR / 'frontend' / 'src' / 'img',
 ]
 
 # Configuration AWS S3 pour les médias uniquement (uploads utilisateurs)

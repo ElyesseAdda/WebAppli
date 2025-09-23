@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -560,7 +561,7 @@
   <body>
     <div class="p3000-container">
       <div class="logo-container">
-        <img class="logo" src="/static/frontend/src/img/logo.png" alt="" />
+        <img class="logo" src="{% static 'logo.png' %}" alt="" />
       </div>
       <div class="P3000-info">
         <h2>SARL PEINTURE 3000</h2>
