@@ -740,7 +740,7 @@ class SituationLigne(models.Model):
                                 related_name='lignes',
                                 on_delete=models.CASCADE)
     ligne_devis = models.ForeignKey('DevisLigne', on_delete=models.CASCADE, null=True, blank=True)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=600)
     quantite = models.DecimalField(max_digits=10, decimal_places=2)
     prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
     total_ht = models.DecimalField(max_digits=10, decimal_places=2)
@@ -770,7 +770,7 @@ class SituationLigneSupplementaire(models.Model):
     situation = models.ForeignKey('Situation',
                                 related_name='lignes_supplementaires',
                                 on_delete=models.CASCADE)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=600)
     montant = models.DecimalField(max_digits=10, decimal_places=2)
     type = models.CharField(max_length=20, choices=[('deduction', 'Déduction'), ('ajout', 'Ajout')], default='deduction')
     
@@ -781,7 +781,7 @@ class SituationLigneSpeciale(models.Model):
     situation = models.ForeignKey('Situation',
                                 related_name='lignes_speciales',
                                 on_delete=models.CASCADE)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=600)
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
     value = models.DecimalField(max_digits=10, decimal_places=2)
     value_type = models.CharField(max_length=20, choices=[('fixed', 'Montant fixe'), ('percentage', 'Pourcentage')], default='fixed')

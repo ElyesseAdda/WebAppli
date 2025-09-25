@@ -327,6 +327,9 @@ urlpatterns += [
     path('drive-complete/preview-file/', DriveCompleteViewSet.as_view({
         'get': 'preview_file'
     }), name='drive-complete-preview-file'),
+    path('drive-complete/page-preview/', DriveCompleteViewSet.as_view({
+        'get': 'get_page_preview'
+    }), name='drive-complete-page-preview'),
     path('drive-complete/upload-url/', DriveCompleteViewSet.as_view({
         'post': 'get_upload_url'
     }), name='drive-complete-upload-url'),

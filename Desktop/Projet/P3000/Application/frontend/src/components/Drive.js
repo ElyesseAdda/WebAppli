@@ -16,6 +16,7 @@ import {
   Language as LanguageIcon,
   NavigateNext as NavigateNextIcon,
   PictureAsPdf as PdfIcon,
+  Refresh as RefreshIcon,
   Search as SearchIcon,
   CloudUpload as UploadIcon,
   VideoFile as VideoIcon,
@@ -270,19 +271,19 @@ const Drive = () => {
 
   // Fonctions utilitaires
   const formatFileName = (fileName) => {
-    // Transformer les underscores en espaces pour un affichage plus lisible
+    // Transformer les underscores et tirets en espaces pour un affichage plus lisible
     // Garder l'extension intacte
     if (!fileName) return fileName;
 
     const lastDotIndex = fileName.lastIndexOf(".");
     if (lastDotIndex === -1) {
-      // Pas d'extension, remplacer tous les underscores
-      return fileName.replace(/_/g, " ");
+      // Pas d'extension, remplacer tous les underscores et tirets
+      return fileName.replace(/[_-]/g, " ");
     } else {
-      // Garder l'extension intacte, remplacer les underscores dans le nom
+      // Garder l'extension intacte, remplacer les underscores et tirets dans le nom
       const name = fileName.substring(0, lastDotIndex);
       const extension = fileName.substring(lastDotIndex);
-      return name.replace(/_/g, " ") + extension;
+      return name.replace(/[_-]/g, " ") + extension;
     }
   };
 
@@ -696,6 +697,19 @@ const Drive = () => {
     }
   };
 
+  // Rafraîchir le contenu du dossier actuel
+  const refreshCurrentFolder = async () => {
+    try {
+      setLoading(true);
+      await fetchFolderContent(currentPath);
+      showSnackbar("Contenu rafraîchi", "success");
+    } catch (error) {
+      showSnackbar("Erreur lors du rafraîchissement", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Upload de fichiers
   const uploadFile = async (file) => {
     try {
@@ -763,23 +777,48 @@ const Drive = () => {
         return;
       }
 
-      // Pour les PDFs, utiliser Puppeteer pour la prévisualisation
+      // Pour les PDFs, utiliser le système de pagination
       if (fileName.toLowerCase().endsWith(".pdf")) {
-        const previewUrl = `/api/drive-complete/preview-file/?file_path=${encodeURIComponent(
-          filePath
-        )}`;
-
-        // Ouvrir dans un nouvel onglet avec gestion d'erreur
-        const newWindow = window.open(previewUrl, "_blank");
-
-        // Vérifier si la fenêtre s'est ouverte
-        if (newWindow) {
-          showSnackbar("Prévisualisation PDF générée", "success");
-        } else {
-          showSnackbar(
-            "Erreur lors de l'ouverture de la prévisualisation",
-            "error"
+        try {
+          // D'abord, obtenir les informations de pagination
+          const previewInfoResponse = await fetch(
+            `/api/drive-complete/preview-file/?file_path=${encodeURIComponent(
+              filePath
+            )}`
           );
+
+          if (!previewInfoResponse.ok) {
+            throw new Error("Erreur lors de la récupération des informations du PDF");
+          }
+
+          const previewInfo = await previewInfoResponse.json();
+
+          if (previewInfo.preview_type === "paginated") {
+            // Ouvrir le visualiseur de PDF avec pagination
+            setFileViewerData({
+              filePath: filePath,
+              fileName: fileName,
+              contentType: "application/pdf",
+              totalPages: previewInfo.total_pages,
+              isPaginated: true,
+            });
+            setFileViewerOpen(true);
+            showSnackbar(`PDF ouvert avec ${previewInfo.total_pages} page(s)`, "success");
+          } else {
+            // Fallback pour les PDFs simples
+            const previewUrl = `/api/drive-complete/preview-file/?file_path=${encodeURIComponent(
+              filePath
+            )}`;
+            const newWindow = window.open(previewUrl, "_blank");
+            if (newWindow) {
+              showSnackbar("Prévisualisation PDF générée", "success");
+            } else {
+              showSnackbar("Erreur lors de l'ouverture de la prévisualisation", "error");
+            }
+          }
+        } catch (error) {
+          console.error("Erreur ouverture PDF:", error);
+          showSnackbar("Erreur lors de l'ouverture du PDF", "error");
         }
       } else {
         // Pour les autres fichiers, utiliser la page dédiée
@@ -951,6 +990,7 @@ const Drive = () => {
 
   const handleDragOver = (event) => {
     event.preventDefault();
+    event.stopPropagation();
 
     // Nettoyer le timeout précédent
     if (dragTimeout) {
@@ -962,6 +1002,7 @@ const Drive = () => {
 
   const handleDragLeave = (event) => {
     event.preventDefault();
+    event.stopPropagation();
 
     // Nettoyer le timeout précédent
     if (dragTimeout) {
@@ -993,6 +1034,7 @@ const Drive = () => {
 
   const handleDrop = (event) => {
     event.preventDefault();
+    event.stopPropagation();
     setIsDragOver(false);
 
     const files = Array.from(event.dataTransfer.files);
@@ -1006,6 +1048,9 @@ const Drive = () => {
     if (selectedFiles.length === 0) return;
 
     setUploading(true);
+    let successCount = 0;
+    let errorCount = 0;
+
     try {
       for (const file of selectedFiles) {
         if (file.size > MAX_FILE_SIZE) {
@@ -1015,16 +1060,43 @@ const Drive = () => {
             )} dépasse la taille maximale de 100 MB`,
             "error"
           );
+          errorCount++;
           continue;
         }
 
-        await uploadFile(file);
+        try {
+          await uploadFile(file);
+          successCount++;
+        } catch (error) {
+          showSnackbar(
+            `Erreur lors de l'upload de ${formatFileName(file.name)}: ${error.message}`,
+            "error"
+          );
+          errorCount++;
+        }
       }
 
-      showSnackbar("Upload terminé avec succès", "success");
+      // Afficher le résumé
+      if (successCount > 0) {
+        showSnackbar(
+          `Upload terminé: ${successCount} fichier(s) uploadé(s) avec succès`,
+          "success"
+        );
+      }
+
+      if (errorCount > 0) {
+        showSnackbar(
+          `${errorCount} fichier(s) n'ont pas pu être uploadé(s)`,
+          "warning"
+        );
+      }
+
       setUploadDialogOpen(false);
       setSelectedFiles([]);
-      fetchFolderContent(currentPath); // Recharger pour voir les nouveaux fichiers
+      
+      // Recharger le contenu du dossier pour voir les nouveaux fichiers
+      await fetchFolderContent(currentPath);
+      
     } catch (error) {
       showSnackbar("Erreur lors de l'upload", "error");
     } finally {
@@ -1161,6 +1233,22 @@ const Drive = () => {
             sx={{ minWidth: 200 }}
           />
 
+          {/* Bouton de rafraîchissement */}
+          <Tooltip title="Rafraîchir le contenu">
+            <IconButton
+              onClick={refreshCurrentFolder}
+              disabled={loading}
+              sx={{ 
+                color: "primary.main",
+                "&:hover": {
+                  backgroundColor: "primary.light + 20"
+                }
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+
           {/* Boutons d'action */}
           <Button
             variant="outlined"
@@ -1181,66 +1269,66 @@ const Drive = () => {
       </DriveHeader>
 
       {/* Content */}
-      <DriveContent>
+      <DriveContent
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        sx={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          minHeight: "calc(100vh - 200px)",
+        }}
+      >
+        {/* Zone de drag & drop invisible qui couvre tout l'écran */}
         <Box
           sx={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            minHeight: "calc(100vh - 200px)",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: isDragOver ? 10 : -1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: isDragOver
+              ? "rgba(25, 118, 210, 0.1)"
+              : "transparent",
+            transition: "all 0.2s ease-in-out",
+            pointerEvents: isDragOver ? "auto" : "none",
           }}
         >
-          {/* Zone de drag & drop invisible qui couvre tout l'écran */}
-          <Box
-            sx={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: isDragOver ? 10 : -1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: isDragOver
-                ? "rgba(25, 118, 210, 0.1)"
-                : "transparent",
-              transition: "all 0.2s ease-in-out",
-            }}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {/* Zone de drop visible au centre */}
-            {isDragOver && (
-              <Box
-                sx={{
-                  border: "3px dashed",
-                  borderColor: "primary.main",
-                  borderRadius: 3,
-                  padding: 6,
-                  backgroundColor: "primary.light + 20",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 300,
-                  minHeight: 200,
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                }}
-              >
-                <UploadIcon
-                  sx={{ fontSize: 64, color: "primary.main", mb: 2 }}
-                />
-                <Typography variant="h6" color="primary.main" gutterBottom>
-                  Déposez vos fichiers ici
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Glissez-déposez vos fichiers pour les uploader
-                </Typography>
-              </Box>
-            )}
-          </Box>
+          {/* Zone de drop visible au centre */}
+          {isDragOver && (
+            <Box
+              sx={{
+                border: "3px dashed",
+                borderColor: "primary.main",
+                borderRadius: 3,
+                padding: 6,
+                backgroundColor: "primary.light + 20",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 300,
+                minHeight: 200,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+              }}
+            >
+              <UploadIcon
+                sx={{ fontSize: 64, color: "primary.main", mb: 2 }}
+              />
+              <Typography variant="h6" color="primary.main" gutterBottom>
+                Déposez vos fichiers ici
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Glissez-déposez vos fichiers pour les uploader
+              </Typography>
+            </Box>
+          )}
+        </Box>
 
           {/* Contenu normal */}
           <Box
@@ -1322,9 +1410,6 @@ const Drive = () => {
             ) : (
               <Box
                 sx={{ p: 2, width: "100%" }}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
               >
                 {/* En-tête de la liste */}
                 <Paper sx={{ mb: 2, width: "100%" }}>
@@ -1559,7 +1644,7 @@ const Drive = () => {
               </Box>
             )}
           </Box>
-        </Box>
+        
       </DriveContent>
 
       {/* Dialog d'upload */}
@@ -1893,6 +1978,8 @@ const Drive = () => {
           filePath={fileViewerData.filePath}
           fileName={fileViewerData.fileName}
           onClose={() => setFileViewerOpen(false)}
+          totalPages={fileViewerData.totalPages}
+          isPaginated={fileViewerData.isPaginated}
         />
       )}
 

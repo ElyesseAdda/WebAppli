@@ -1,43 +1,90 @@
-import { ArrowBack as ArrowBackIcon } from "@mui/icons-material";
+import { 
+  ArrowBack as ArrowBackIcon,
+  NavigateBefore as NavigateBeforeIcon,
+  NavigateNext as NavigateNextIcon,
+} from "@mui/icons-material";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
   Typography,
+  IconButton,
+  Paper,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
 
-const FileViewer = ({ filePath, fileName, onClose }) => {
+const FileViewer = ({ filePath, fileName, onClose, totalPages, isPaginated }) => {
   const [fileUrl, setFileUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageImage, setPageImage] = useState(null);
+
+  // Fonction pour charger une page spécifique
+  const fetchPageImage = async (pageNumber) => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `/api/drive-complete/page-preview/?file_path=${encodeURIComponent(
+          filePath
+        )}&page=${pageNumber}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Erreur lors du chargement de la page");
+      }
+
+      // Convertir la réponse en blob URL
+      const blob = await response.blob();
+      const imageUrl = URL.createObjectURL(blob);
+      setPageImage(imageUrl);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchFileUrl = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(
-          `/api/drive-complete/display-url/?file_path=${encodeURIComponent(
-            filePath
-          )}`
-        );
+    if (isPaginated && totalPages) {
+      // Charger la première page pour les PDFs paginés
+      fetchPageImage(0);
+    } else {
+      // Logique normale pour les autres fichiers
+      const fetchFileUrl = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(
+            `/api/drive-complete/display-url/?file_path=${encodeURIComponent(
+              filePath
+            )}`
+          );
 
-        if (!response.ok) {
-          throw new Error("Erreur lors de la génération du lien d'affichage");
+          if (!response.ok) {
+            throw new Error("Erreur lors de la génération du lien d'affichage");
+          }
+
+          const data = await response.json();
+          setFileUrl(data.display_url);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
         }
+      };
 
-        const data = await response.json();
-        setFileUrl(data.display_url);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+      fetchFileUrl();
+    }
+  }, [filePath, isPaginated, totalPages]);
 
-    fetchFileUrl();
-  }, [filePath]);
+  // Fonction pour changer de page
+  const handlePageChange = (newPage) => {
+    if (newPage >= 0 && newPage < totalPages) {
+      setCurrentPage(newPage);
+      fetchPageImage(newPage);
+    }
+  };
 
   const getFileType = (fileName) => {
     const extension = fileName.split(".").pop()?.toLowerCase();
@@ -56,15 +103,60 @@ const FileViewer = ({ filePath, fileName, onClose }) => {
 
     switch (fileType) {
       case "pdf":
-        return (
-          <iframe
-            src={fileUrl}
-            width="100%"
-            height="100%"
-            style={{ border: "none" }}
-            title={fileName}
-          />
-        );
+        if (isPaginated && pageImage) {
+          return (
+            <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              {/* Contrôles de pagination */}
+              <Paper sx={{ p: 2, mb: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Typography variant="h6">
+                  {fileName} - Page {currentPage + 1} sur {totalPages}
+                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <IconButton
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 0}
+                    color="primary"
+                  >
+                    <NavigateBeforeIcon />
+                  </IconButton>
+                  <Typography variant="body2">
+                    {currentPage + 1} / {totalPages}
+                  </Typography>
+                  <IconButton
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= totalPages - 1}
+                    color="primary"
+                  >
+                    <NavigateNextIcon />
+                  </IconButton>
+                </Box>
+              </Paper>
+              
+              {/* Image de la page */}
+              <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                <img
+                  src={pageImage}
+                  alt={`Page ${currentPage + 1}`}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "100%",
+                    objectFit: "contain",
+                  }}
+                />
+              </Box>
+            </Box>
+          );
+        } else {
+          return (
+            <iframe
+              src={fileUrl}
+              width="100%"
+              height="100%"
+              style={{ border: "none" }}
+              title={fileName}
+            />
+          );
+        }
 
       case "image":
         return (

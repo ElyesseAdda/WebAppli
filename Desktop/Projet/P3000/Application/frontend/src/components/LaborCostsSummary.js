@@ -29,7 +29,8 @@ import { FaTimes } from "react-icons/fa";
 import "./../../static/css/laborCostSummary.css";
 
 const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
-  const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
+  const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1); // 1-12
+  const [selectedYear, setSelectedYear] = useState(dayjs().year());
   const [summary, setSummary] = useState([]); // Résumé planning réel
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -59,11 +60,35 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
     return labelBase;
   };
 
+  // Fonction pour vérifier si un chantier a des agents journaliers
+  const hasJournalierAgents = (chantier) => {
+    return chantier.details.some(agent => agent.agent_type_paiement === "journalier");
+  };
+
+  // Fonction pour formater les heures dans la section chantier
+  const formatChantierHeures = (heures, chantier) => {
+    if (hasJournalierAgents(chantier)) {
+      const jours = heures / 7;
+      return jours === 1 ? "1j" : `${jours.toFixed(1)}j`;
+    }
+    return `${heures}h`;
+  };
+
+  // Fonction pour formater les heures d'un agent spécifique dans la section chantier
+  const formatAgentHeures = (heures, agentTypePaiement) => {
+    if (agentTypePaiement === "journalier") {
+      const jours = heures / 7;
+      return jours === 1 ? "1j" : `${jours.toFixed(1)}j`;
+    }
+    return `${heures}h`;
+  };
+
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
       setError("");
-      let url = `/api/schedule/monthly_summary/?month=${selectedMonth}`;
+      const monthStr = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}`;
+      let url = `/api/schedule/monthly_summary/?month=${monthStr}`;
       if (agentId) url += `&agent_id=${agentId}`;
       if (chantierId) url += `&chantier_id=${chantierId}`;
       axios
@@ -82,7 +107,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
         })
         .finally(() => setLoading(false));
     }
-  }, [selectedMonth, isOpen, agentId, chantierId]);
+  }, [selectedMonth, selectedYear, isOpen, agentId, chantierId]);
 
   if (!isOpen) return null;
 
@@ -91,13 +116,29 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
   };
 
   const getSelectableMonths = () => {
-    const months = [];
-    let d = dayjs().subtract(12, "month");
-    for (let i = 0; i < 25; i++) {
-      months.push(d.format("YYYY-MM"));
-      d = d.add(1, "month");
+    return [
+      { value: 1, label: "Janvier" },
+      { value: 2, label: "Février" },
+      { value: 3, label: "Mars" },
+      { value: 4, label: "Avril" },
+      { value: 5, label: "Mai" },
+      { value: 6, label: "Juin" },
+      { value: 7, label: "Juillet" },
+      { value: 8, label: "Août" },
+      { value: 9, label: "Septembre" },
+      { value: 10, label: "Octobre" },
+      { value: 11, label: "Novembre" },
+      { value: 12, label: "Décembre" }
+    ];
+  };
+
+  const getSelectableYears = () => {
+    const years = [];
+    const currentYear = dayjs().year();
+    for (let i = currentYear - 2; i <= currentYear + 1; i++) {
+      years.push(i);
     }
-    return months;
+    return years;
   };
 
   // Agrégation par agent côté frontend
@@ -197,10 +238,24 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
             size="small"
+            sx={{ minWidth: 120 }}
           >
-            {getSelectableMonths().map((m) => (
-              <MenuItem key={m} value={m}>
-                {dayjs(m + "-01").format("MMMM YYYY")}
+            {getSelectableMonths().map((month) => (
+              <MenuItem key={month.value} value={month.value}>
+                {month.label}
+              </MenuItem>
+            ))}
+          </Select>
+          <Typography variant="body1">Année :</Typography>
+          <Select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+            size="small"
+            sx={{ minWidth: 100 }}
+          >
+            {getSelectableYears().map((year) => (
+              <MenuItem key={year} value={year}>
+                {year}
               </MenuItem>
             ))}
           </Select>
@@ -230,10 +285,10 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                       <Box display="flex" gap={3} mt={1} alignItems="center">
                         <Box>
                           <Typography fontWeight="bold">
-                            Heures normales
+                            {hasJournalierAgents(chantier) ? "Jours normaux" : "Heures normales"}
                           </Typography>
                           <Typography>
-                            {chantier.total_heures_normal}h
+                            {formatChantierHeures(chantier.total_heures_normal, chantier)}
                           </Typography>
                           <Typography color="textSecondary">
                             Montant : {chantier.total_montant_normal.toFixed(2)}{" "}
@@ -245,7 +300,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             Samedi (125%)
                           </Typography>
                           <Typography>
-                            {chantier.total_heures_samedi}h
+                            {formatChantierHeures(chantier.total_heures_samedi, chantier)}
                           </Typography>
                           <Typography color="textSecondary">
                             Montant : {chantier.total_montant_samedi.toFixed(2)}{" "}
@@ -257,7 +312,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             Dimanche (150%)
                           </Typography>
                           <Typography>
-                            {chantier.total_heures_dimanche}h
+                            {formatChantierHeures(chantier.total_heures_dimanche, chantier)}
                           </Typography>
                           <Typography color="textSecondary">
                             Montant :{" "}
@@ -269,7 +324,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             Férié (150%)
                           </Typography>
                           <Typography>
-                            {chantier.total_heures_ferie}h
+                            {formatChantierHeures(chantier.total_heures_ferie, chantier)}
                           </Typography>
                           <Typography color="textSecondary">
                             Montant : {chantier.total_montant_ferie.toFixed(2)}{" "}
@@ -289,11 +344,13 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                               fontWeight: 700,
                             }}
                           >
-                            {chantier.total_heures_normal +
-                              chantier.total_heures_samedi +
-                              chantier.total_heures_dimanche +
-                              chantier.total_heures_ferie}
-                            h
+                            {formatChantierHeures(
+                              chantier.total_heures_normal +
+                                chantier.total_heures_samedi +
+                                chantier.total_heures_dimanche +
+                                chantier.total_heures_ferie,
+                              chantier
+                            )}
                           </Typography>
                           <Typography
                             color="textSecondary"
@@ -337,31 +394,31 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                           <TableRow key={idx}>
                             <TableCell>{agent.agent_nom}</TableCell>
                             <TableCell>
-                              {formatHeures(
+                              {formatAgentHeures(
                                 agent.heures_normal,
                                 agent.agent_type_paiement
                               )}
                             </TableCell>
                             <TableCell>
-                              {formatHeures(
+                              {formatAgentHeures(
                                 agent.heures_samedi,
                                 agent.agent_type_paiement
                               )}
                             </TableCell>
                             <TableCell>
-                              {formatHeures(
+                              {formatAgentHeures(
                                 agent.heures_dimanche,
                                 agent.agent_type_paiement
                               )}
                             </TableCell>
                             <TableCell>
-                              {formatHeures(
+                              {formatAgentHeures(
                                 agent.heures_ferie,
                                 agent.agent_type_paiement
                               )}
                             </TableCell>
                             <TableCell>
-                              {formatHeures(
+                              {formatAgentHeures(
                                 agent.heures_normal +
                                   agent.heures_samedi +
                                   agent.heures_dimanche +

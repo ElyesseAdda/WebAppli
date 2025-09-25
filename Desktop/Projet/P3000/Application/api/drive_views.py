@@ -320,8 +320,72 @@ class DriveCompleteViewSet(viewsets.ViewSet):
                 # Ouvrir le PDF avec PyMuPDF
                 pdf_document = fitz.open(stream=response.content, filetype="pdf")
                 
-                # Prendre la première page
-                page = pdf_document[0]
+                # Obtenir le nombre total de pages
+                total_pages = len(pdf_document)
+                
+                # Retourner les informations de pagination
+                pdf_document.close()
+                
+                return Response({
+                    'total_pages': total_pages,
+                    'file_path': file_path,
+                    'file_name': os.path.basename(file_path),
+                    'preview_type': 'paginated'
+                })
+
+            except Exception as e:
+                # En cas d'erreur, retourner l'URL directe du PDF
+                return Response({
+                    'error': f'Erreur lors de la génération de la prévisualisation: {str(e)}',
+                    'fallback_url': file_url,
+                    'message': 'Utilisez le lien de fallback pour voir le PDF directement'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'error': f'Erreur lors de la prévisualisation: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def get_page_preview(self, request):
+        """
+        Génère une prévisualisation d'une page spécifique d'un PDF
+        """
+        try:
+            file_path = request.query_params.get('file_path')
+            page_number = int(request.query_params.get('page', 0))
+            
+            if not file_path:
+                return Response({'error': 'Chemin du fichier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Vérifier que c'est un fichier PDF
+            if not file_path.lower().endswith('.pdf'):
+                return Response({'error': 'Seuls les fichiers PDF sont supportés'}, status=status.HTTP_400_BAD_REQUEST)
+
+            from .utils import generate_presigned_url
+            from django.http import HttpResponse
+            import os
+            import requests
+            from io import BytesIO
+            from PIL import Image
+            import fitz  # PyMuPDF
+
+            # Obtenir l'URL du fichier
+            file_url = generate_presigned_url('get_object', file_path, expires_in=3600)
+
+            try:
+                # Télécharger le PDF depuis S3
+                response = requests.get(file_url, timeout=30)
+                response.raise_for_status()
+                
+                # Ouvrir le PDF avec PyMuPDF
+                pdf_document = fitz.open(stream=response.content, filetype="pdf")
+                
+                # Vérifier que la page existe
+                if page_number >= len(pdf_document) or page_number < 0:
+                    pdf_document.close()
+                    return Response({'error': 'Numéro de page invalide'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Obtenir la page spécifique
+                page = pdf_document[page_number]
                 
                 # Convertir en image avec une résolution élevée
                 mat = fitz.Matrix(2.0, 2.0)  # Zoom 2x pour une meilleure qualité
@@ -341,7 +405,7 @@ class DriveCompleteViewSet(viewsets.ViewSet):
                 
                 # Retourner l'image
                 response = HttpResponse(img_buffer.getvalue(), content_type='image/png')
-                response['Content-Disposition'] = f'inline; filename="preview_{os.path.basename(file_path)}.png"'
+                response['Content-Disposition'] = f'inline; filename="page_{page_number + 1}_{os.path.basename(file_path)}.png"'
                 response['Cache-Control'] = 'public, max-age=3600'  # Cache pendant 1 heure
                 return response
 
