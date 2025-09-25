@@ -50,10 +50,13 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import React, { useCallback, useEffect, useState } from "react";
 import FileViewer from "./FileViewer";
+import MobileDrive from "./MobileDrive";
 
 // Styles personnalisés
 const DriveContainer = styled(Box)(({ theme }) => ({
@@ -76,6 +79,12 @@ const DriveHeader = styled(Paper)(({ theme }) => ({
   gap: theme.spacing(2),
   borderRadius: theme.spacing(1.5),
   boxShadow: theme.shadows[4],
+  flexDirection: { xs: "column", sm: "row" },
+  alignItems: { xs: "stretch", sm: "center" },
+  "@media (max-width: 600px)": {
+    padding: theme.spacing(1),
+    gap: theme.spacing(1),
+  },
 }));
 
 const DriveContent = styled(Box)(({ theme }) => ({
@@ -92,6 +101,20 @@ const FileGrid = styled(Grid)(({ theme }) => ({
   flex: 1,
   overflow: "auto",
   padding: theme.spacing(2),
+  display: "grid",
+  gridTemplateColumns: {
+    xs: "1fr", // Mobile : 1 colonne
+    sm: "repeat(2, 1fr)", // Tablette : 2 colonnes
+    md: "repeat(3, 1fr)", // Desktop : 3 colonnes
+    lg: "repeat(4, 1fr)", // Large : 4 colonnes
+    xl: "repeat(5, 1fr)", // Extra large : 5 colonnes
+  },
+  gap: theme.spacing(2),
+  "@media (max-width: 600px)": {
+    gridTemplateColumns: "1fr",
+    gap: theme.spacing(1),
+    padding: theme.spacing(1),
+  },
 }));
 
 const FileCard = styled(Card)(({ theme }) => ({
@@ -100,9 +123,16 @@ const FileCard = styled(Card)(({ theme }) => ({
   flexDirection: "column",
   cursor: "pointer",
   transition: "all 0.2s ease-in-out",
+  minHeight: { xs: "120px", sm: "140px", md: "160px" },
   "&:hover": {
     transform: "translateY(-2px)",
     boxShadow: theme.shadows[8],
+  },
+  "@media (max-width: 600px)": {
+    minHeight: "100px",
+    "&:hover": {
+      transform: "none", // Désactiver l'animation sur mobile
+    },
   },
 }));
 
@@ -125,6 +155,9 @@ const UploadArea = styled(Box)(({ theme, isDragOver }) => ({
 }));
 
 const Drive = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   // États de base
   const [currentPath, setCurrentPath] = useState("");
   const [folderContent, setFolderContent] = useState({
@@ -132,7 +165,25 @@ const Drive = () => {
     files: [],
   });
   const [loading, setLoading] = useState(false);
+  
+  // États de pagination
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    totalItems: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false
+  });
+  const [sorting, setSorting] = useState({
+    sortBy: 'name',
+    sortOrder: 'asc'
+  });
   const [uploading, setUploading] = useState(false);
+  
+  // États WebSocket
+  const [websocket, setWebsocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState({
     folders: [],
@@ -507,12 +558,122 @@ const Drive = () => {
     return localAppExtensions.includes(extension);
   };
 
-  // Charger le contenu du dossier actuel
-  const fetchFolderContent = useCallback(async (folderPath = "") => {
+  // Gestion WebSocket (seulement en production)
+  const connectWebSocket = useCallback((folderPath) => {
+    // Désactiver WebSockets en local
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('WebSockets désactivés en local');
+      setIsConnected(false);
+      return;
+    }
+    
+    if (websocket) {
+      websocket.close();
+    }
+    
+    const wsUrl = `ws://${window.location.host}/ws/drive/${encodeURIComponent(folderPath || '')}/`;
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log('WebSocket connecté');
+      setIsConnected(true);
+      setWebsocket(ws);
+    };
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      handleWebSocketMessage(data);
+    };
+    
+    ws.onclose = () => {
+      console.log('WebSocket déconnecté');
+      setIsConnected(false);
+      setWebsocket(null);
+    };
+    
+    ws.onerror = (error) => {
+      console.error('Erreur WebSocket:', error);
+      setIsConnected(false);
+    };
+  }, [websocket]);
+  
+  const handleWebSocketMessage = useCallback((data) => {
+    switch (data.type) {
+      case 'file_added':
+        if (data.folder_path === currentPath) {
+          setFolderContent(prev => ({
+            ...prev,
+            files: [...prev.files, data.file]
+          }));
+          showSnackbar(`Nouveau fichier: ${data.file.name}`, "info");
+        }
+        break;
+        
+      case 'file_deleted':
+        if (data.folder_path === currentPath) {
+          setFolderContent(prev => ({
+            ...prev,
+            files: prev.files.filter(file => file.path !== data.file_path)
+          }));
+          showSnackbar("Fichier supprimé", "info");
+        }
+        break;
+        
+      case 'file_renamed':
+        if (data.folder_path === currentPath) {
+          setFolderContent(prev => ({
+            ...prev,
+            files: prev.files.map(file => 
+              file.path === data.old_path 
+                ? { ...file, path: data.new_path, name: data.new_path.split('/').pop() }
+                : file
+            )
+          }));
+          showSnackbar("Fichier renommé", "info");
+        }
+        break;
+        
+      case 'folder_added':
+        if (data.folder_path === currentPath) {
+          setFolderContent(prev => ({
+            ...prev,
+            folders: [...prev.folders, data.folder]
+          }));
+          showSnackbar(`Nouveau dossier: ${data.folder.name}`, "info");
+        }
+        break;
+        
+      case 'cache_invalidated':
+        if (data.folder_path === currentPath) {
+          showSnackbar("Contenu mis à jour", "info");
+          // Optionnel: recharger automatiquement
+          // fetchFolderContent(currentPath, pagination.page, sorting.sortBy, sorting.sortOrder);
+        }
+        break;
+        
+      default:
+        console.log('Événement WebSocket non géré:', data);
+    }
+  }, [currentPath, pagination.page, sorting.sortBy, sorting.sortOrder]);
+  
+  const disconnectWebSocket = useCallback(() => {
+    if (websocket) {
+      websocket.close();
+      setWebsocket(null);
+      setIsConnected(false);
+    }
+  }, [websocket]);
+
+  // Charger le contenu du dossier actuel avec pagination
+  const fetchFolderContent = useCallback(async (folderPath = "", page = 1, sortBy = 'name', sortOrder = 'asc') => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (folderPath) params.append("folder_path", folderPath);
+      params.append("page", page.toString());
+      params.append("limit", pagination.limit.toString());
+      params.append("sort_by", sortBy);
+      params.append("sort_order", sortOrder);
 
       const response = await fetch(
         `/api/drive-complete/list-content/?${params}`
@@ -525,13 +686,36 @@ const Drive = () => {
         files: data.files || [],
       });
       setCurrentPath(folderPath);
+      
+      // Mettre à jour la pagination
+      if (data.pagination) {
+        setPagination({
+          page: data.pagination.page,
+          limit: data.pagination.limit,
+          totalItems: data.pagination.total_items,
+          totalPages: data.pagination.total_pages,
+          hasNext: data.pagination.has_next,
+          hasPrevious: data.pagination.has_previous
+        });
+      }
+      
+      // Mettre à jour le tri
+      if (data.sorting) {
+        setSorting({
+          sortBy: data.sorting.sort_by,
+          sortOrder: data.sorting.sort_order
+        });
+      }
+      
+      // Connecter le WebSocket pour ce dossier
+      connectWebSocket(folderPath);
     } catch (error) {
       console.error("Erreur lors du chargement du contenu:", error);
       showSnackbar("Erreur lors du chargement du contenu", "error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pagination.limit]);
 
   // Créer un nouveau dossier
   const handleCreateFolder = async () => {
@@ -701,13 +885,31 @@ const Drive = () => {
   const refreshCurrentFolder = async () => {
     try {
       setLoading(true);
-      await fetchFolderContent(currentPath);
+      await fetchFolderContent(currentPath, pagination.page, sorting.sortBy, sorting.sortOrder);
       showSnackbar("Contenu rafraîchi", "success");
     } catch (error) {
       showSnackbar("Erreur lors du rafraîchissement", "error");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Navigation entre les pages
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      fetchFolderContent(currentPath, newPage, sorting.sortBy, sorting.sortOrder);
+    }
+  };
+
+  // Changer le tri
+  const handleSortChange = (newSortBy) => {
+    let newSortOrder = 'asc';
+    if (newSortBy === sorting.sortBy) {
+      // Si c'est le même critère, inverser l'ordre
+      newSortOrder = sorting.sortOrder === 'asc' ? 'desc' : 'asc';
+    }
+    setSorting({ sortBy: newSortBy, sortOrder: newSortOrder });
+    fetchFolderContent(currentPath, 1, newSortBy, newSortOrder); // Retourner à la page 1
   };
 
   // Upload de fichiers
@@ -757,6 +959,23 @@ const Drive = () => {
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
         throw new Error("Erreur lors de l'upload vers S3");
+      }
+
+      // Confirmer l'upload et invalider le cache
+      try {
+        await fetch("/api/drive-complete/confirm-upload/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify({
+            file_path: requestBody.file_path + "/" + file.name,
+          }),
+        });
+      } catch (error) {
+        console.warn("Erreur lors de la confirmation de l'upload:", error);
+        // Ne pas faire échouer l'upload pour cette erreur
       }
 
       return true;
@@ -1142,10 +1361,25 @@ const Drive = () => {
     return breadcrumb;
   };
 
+  // Redirection mobile
+  useEffect(() => {
+    if (isMobile) {
+      // Rediriger vers la version mobile
+      window.location.href = '/drive?mobile=true';
+    }
+  }, [isMobile]);
+
   // Effet pour charger le contenu initial
   useEffect(() => {
     fetchFolderContent("");
   }, [fetchFolderContent]);
+  
+  // Nettoyer le WebSocket lors du démontage
+  useEffect(() => {
+    return () => {
+      disconnectWebSocket();
+    };
+  }, [disconnectWebSocket]);
 
   // Effet pour interpréter les paramètres d'URL au chargement
   useEffect(() => {
@@ -1233,6 +1467,96 @@ const Drive = () => {
             sx={{ minWidth: 200 }}
           />
 
+          {/* Contrôles de tri - Responsive */}
+          <Box sx={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 1,
+            flexWrap: { xs: "wrap", sm: "nowrap" },
+            flexDirection: { xs: "column", sm: "row" },
+            width: { xs: "100%", sm: "auto" }
+          }}>
+            <Typography variant="body2" color="text.secondary" sx={{ 
+              display: { xs: "none", sm: "block" },
+              minWidth: "fit-content"
+            }}>
+              Trier par:
+            </Typography>
+            <Box sx={{ 
+              display: "flex", 
+              gap: 1, 
+              flexWrap: "wrap",
+              justifyContent: { xs: "center", sm: "flex-start" },
+              width: { xs: "100%", sm: "auto" }
+            }}>
+              <Button
+                size="small"
+                variant={sorting.sortBy === 'name' ? 'contained' : 'outlined'}
+                onClick={() => handleSortChange('name')}
+                sx={{ 
+                  minWidth: { xs: "60px", sm: "auto" },
+                  px: { xs: 1, sm: 1 },
+                  fontSize: { xs: "0.75rem", sm: "0.875rem" }
+                }}
+              >
+                <Box sx={{ display: { xs: "none", sm: "inline" } }}>Nom</Box>
+                <Box sx={{ display: { xs: "inline", sm: "none" } }}>A-Z</Box>
+                {sorting.sortBy === 'name' && (sorting.sortOrder === 'asc' ? '↑' : '↓')}
+              </Button>
+              <Button
+                size="small"
+                variant={sorting.sortBy === 'size' ? 'contained' : 'outlined'}
+                onClick={() => handleSortChange('size')}
+                sx={{ 
+                  minWidth: { xs: "60px", sm: "auto" },
+                  px: { xs: 1, sm: 1 },
+                  fontSize: { xs: "0.75rem", sm: "0.875rem" }
+                }}
+              >
+                <Box sx={{ display: { xs: "none", sm: "inline" } }}>Taille</Box>
+                <Box sx={{ display: { xs: "inline", sm: "none" } }}>Size</Box>
+                {sorting.sortBy === 'size' && (sorting.sortOrder === 'asc' ? '↑' : '↓')}
+              </Button>
+              <Button
+                size="small"
+                variant={sorting.sortBy === 'date' ? 'contained' : 'outlined'}
+                onClick={() => handleSortChange('date')}
+                sx={{ 
+                  minWidth: { xs: "60px", sm: "auto" },
+                  px: { xs: 1, sm: 1 },
+                  fontSize: { xs: "0.75rem", sm: "0.875rem" }
+                }}
+              >
+                <Box sx={{ display: { xs: "none", sm: "inline" } }}>Date</Box>
+                <Box sx={{ display: { xs: "inline", sm: "none" } }}>Date</Box>
+                {sorting.sortBy === 'date' && (sorting.sortOrder === 'asc' ? '↑' : '↓')}
+              </Button>
+            </Box>
+          </Box>
+
+          {/* Indicateur de connexion WebSocket */}
+          <Tooltip title={isConnected ? "Synchronisation temps réel active" : "Synchronisation temps réel inactive"}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: isConnected ? "success.main" : "error.main",
+                  animation: isConnected ? "pulse 2s infinite" : "none",
+                  "@keyframes pulse": {
+                    "0%": { opacity: 1 },
+                    "50%": { opacity: 0.5 },
+                    "100%": { opacity: 1 }
+                  }
+                }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                {isConnected ? "Temps réel" : "Hors ligne"}
+              </Typography>
+            </Box>
+          </Tooltip>
+
           {/* Bouton de rafraîchissement */}
           <Tooltip title="Rafraîchir le contenu">
             <IconButton
@@ -1249,22 +1573,39 @@ const Drive = () => {
             </IconButton>
           </Tooltip>
 
-          {/* Boutons d'action */}
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateFolderDialogOpen(true)}
-          >
-            Nouveau dossier
-          </Button>
+          {/* Boutons d'action - Responsive */}
+          <Box sx={{ 
+            display: "flex", 
+            gap: 1,
+            flexDirection: { xs: "column", sm: "row" },
+            width: { xs: "100%", sm: "auto" }
+          }}>
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateFolderDialogOpen(true)}
+              sx={{ 
+                minWidth: { xs: "100%", sm: "auto" },
+                fontSize: { xs: "0.75rem", sm: "0.875rem" }
+              }}
+            >
+              <Box sx={{ display: { xs: "none", sm: "inline" } }}>Nouveau dossier</Box>
+              <Box sx={{ display: { xs: "inline", sm: "none" } }}>Dossier</Box>
+            </Button>
 
-          <Button
-            variant="contained"
-            startIcon={<UploadIcon />}
-            onClick={() => setUploadDialogOpen(true)}
-          >
-            Upload
-          </Button>
+            <Button
+              variant="contained"
+              startIcon={<UploadIcon />}
+              onClick={() => setUploadDialogOpen(true)}
+              sx={{ 
+                minWidth: { xs: "100%", sm: "auto" },
+                fontSize: { xs: "0.75rem", sm: "0.875rem" }
+              }}
+            >
+              <Box sx={{ display: { xs: "none", sm: "inline" } }}>Upload</Box>
+              <Box sx={{ display: { xs: "inline", sm: "none" } }}>Ajouter</Box>
+            </Button>
+          </Box>
         </Box>
       </DriveHeader>
 
@@ -1642,6 +1983,92 @@ const Drive = () => {
                   ))}
                 </List>
               </Box>
+            )}
+
+            {/* Contrôles de pagination - Responsive */}
+            {pagination.totalPages > 1 && (
+              <Paper sx={{ 
+                p: { xs: 1, sm: 2 }, 
+                mt: 2, 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "space-between",
+                flexDirection: { xs: "column", sm: "row" },
+                gap: { xs: 2, sm: 0 }
+              }}>
+                <Typography variant="body2" color="text.secondary" sx={{
+                  textAlign: { xs: "center", sm: "left" },
+                  fontSize: { xs: "0.75rem", sm: "0.875rem" }
+                }}>
+                  Page {pagination.page} sur {pagination.totalPages} ({pagination.totalItems} éléments)
+                </Typography>
+                <Box sx={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: { xs: 0.5, sm: 1 },
+                  flexWrap: "wrap",
+                  justifyContent: { xs: "center", sm: "flex-end" }
+                }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handlePageChange(1)}
+                    disabled={!pagination.hasPrevious}
+                    sx={{ 
+                      display: { xs: "none", sm: "inline-flex" },
+                      minWidth: "auto",
+                      px: { xs: 1, sm: 2 }
+                    }}
+                  >
+                    Première
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handlePageChange(pagination.page - 1)}
+                    disabled={!pagination.hasPrevious}
+                    sx={{ 
+                      minWidth: { xs: "60px", sm: "auto" },
+                      px: { xs: 1, sm: 2 }
+                    }}
+                  >
+                    <Box sx={{ display: { xs: "none", sm: "inline" } }}>Précédent</Box>
+                    <Box sx={{ display: { xs: "inline", sm: "none" } }}>‹</Box>
+                  </Button>
+                  <Typography variant="body2" sx={{ 
+                    mx: { xs: 1, sm: 2 },
+                    fontSize: { xs: "0.75rem", sm: "0.875rem" }
+                  }}>
+                    {pagination.page}
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handlePageChange(pagination.page + 1)}
+                    disabled={!pagination.hasNext}
+                    sx={{ 
+                      minWidth: { xs: "60px", sm: "auto" },
+                      px: { xs: 1, sm: 2 }
+                    }}
+                  >
+                    <Box sx={{ display: { xs: "none", sm: "inline" } }}>Suivant</Box>
+                    <Box sx={{ display: { xs: "inline", sm: "none" } }}>›</Box>
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handlePageChange(pagination.totalPages)}
+                    disabled={!pagination.hasNext}
+                    sx={{ 
+                      display: { xs: "none", sm: "inline-flex" },
+                      minWidth: "auto",
+                      px: { xs: 1, sm: 2 }
+                    }}
+                  >
+                    Dernière
+                  </Button>
+                </Box>
+              </Paper>
             )}
           </Box>
         

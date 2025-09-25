@@ -18,19 +18,41 @@ class DriveCompleteViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def list_folder_content(self, request):
         """
-        Liste le contenu d'un dossier spécifique (fichiers + sous-dossiers)
+        Liste le contenu d'un dossier spécifique (fichiers + sous-dossiers) avec pagination
         """
         try:
             folder_path = request.query_params.get('folder_path', '')
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 50))
+            sort_by = request.query_params.get('sort_by', 'name')  # name, size, date
+            sort_order = request.query_params.get('sort_order', 'asc')  # asc, desc
             
-            # Lister le contenu complet du dossier
-            from .utils import list_s3_folder_content
-            content = list_s3_folder_content(folder_path)
+            # Lister le contenu du dossier avec pagination
+            from .utils import list_s3_folder_content_paginated
+            content = list_s3_folder_content_paginated(
+                folder_path, 
+                page=page, 
+                limit=limit, 
+                sort_by=sort_by, 
+                sort_order=sort_order
+            )
             
             return Response({
                 'folders': content['folders'],
                 'files': content['files'],
-                'current_path': folder_path
+                'current_path': folder_path,
+                'pagination': {
+                    'page': page,
+                    'limit': limit,
+                    'total_items': content['total_items'],
+                    'total_pages': content['total_pages'],
+                    'has_next': content['has_next'],
+                    'has_previous': content['has_previous']
+                },
+                'sorting': {
+                    'sort_by': sort_by,
+                    'sort_order': sort_order
+                }
             })
 
         except Exception as e:
@@ -55,10 +77,24 @@ class DriveCompleteViewSet(viewsets.ViewSet):
                 folder_path = custom_slugify(folder_name)
 
             # Créer le dossier de manière récursive
-            from .utils import create_s3_folder_recursive
+            from .utils import create_s3_folder_recursive, invalidate_folder_cache
             success = create_s3_folder_recursive(folder_path)
 
             if success:
+                # Invalider le cache du dossier parent
+                invalidate_folder_cache(parent_path)
+                
+                # Envoyer un événement WebSocket
+                from .consumers import send_drive_event_sync
+                send_drive_event_sync(parent_path, 'folder_added', {
+                    'folder': {
+                        'name': folder_name,
+                        'path': folder_path,
+                        'type': 'folder'
+                    },
+                    'folder_path': parent_path
+                })
+                
                 return Response({
                     'message': 'Dossier créé avec succès',
                     'folder_path': folder_path,
@@ -169,6 +205,38 @@ class DriveCompleteViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['post'])
+    def confirm_upload(self, request):
+        """
+        Confirme qu'un upload a été effectué et invalide le cache
+        """
+        try:
+            file_path = request.data.get('file_path')
+            
+            if not file_path:
+                return Response({'error': 'Chemin du fichier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Invalider le cache du dossier parent
+            from .utils import invalidate_folder_cache
+            parent_path = '/'.join(file_path.split('/')[:-1])
+            invalidate_folder_cache(parent_path)
+            
+            # Envoyer un événement WebSocket
+            from .consumers import send_drive_event_sync
+            send_drive_event_sync(parent_path, 'file_added', {
+                'file': {
+                    'name': file_path.split('/')[-1],
+                    'path': file_path,
+                    'type': 'file'
+                },
+                'folder_path': parent_path
+            })
+            
+            return Response({'message': 'Upload confirmé et cache invalidé'})
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['get'])
     def search_files(self, request):
         """
@@ -228,10 +296,22 @@ class DriveCompleteViewSet(viewsets.ViewSet):
             if not old_path or not new_name:
                 return Response({'error': 'Ancien chemin et nouveau nom requis'}, status=status.HTTP_400_BAD_REQUEST)
 
-            from .utils import rename_s3_item
+            from .utils import rename_s3_item, invalidate_folder_cache
             success, new_path = rename_s3_item(old_path, new_name)
 
             if success:
+                # Invalider le cache du dossier parent
+                parent_path = '/'.join(old_path.split('/')[:-1])
+                invalidate_folder_cache(parent_path)
+                
+                # Envoyer un événement WebSocket
+                from .consumers import send_drive_event_sync
+                send_drive_event_sync(parent_path, 'file_renamed', {
+                    'old_path': old_path,
+                    'new_path': new_path,
+                    'folder_path': parent_path
+                })
+                
                 return Response({
                     'message': 'Élément renommé avec succès',
                     'new_path': new_path
@@ -253,10 +333,21 @@ class DriveCompleteViewSet(viewsets.ViewSet):
             if not file_path:
                 return Response({'error': 'Chemin du fichier requis'}, status=status.HTTP_400_BAD_REQUEST)
 
-            from .utils import delete_s3_file
+            from .utils import delete_s3_file, invalidate_folder_cache
             success = delete_s3_file(file_path)
 
             if success:
+                # Invalider le cache du dossier parent
+                parent_path = '/'.join(file_path.split('/')[:-1])
+                invalidate_folder_cache(parent_path)
+                
+                # Envoyer un événement WebSocket
+                from .consumers import send_drive_event_sync
+                send_drive_event_sync(parent_path, 'file_deleted', {
+                    'file_path': file_path,
+                    'folder_path': parent_path
+                })
+                
                 return Response({'message': 'Fichier supprimé avec succès'})
             else:
                 return Response({'error': 'Erreur lors de la suppression du fichier'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -1,0 +1,1459 @@
+/*!**********************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/app.css ***!
+  \**********************************************************************/
+@import url(https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Slab:wght@400;700&display=swap);
+/*!**************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/app.css (1) ***!
+  \**************************************************************************/
+/* Animations pour la détection mobile */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Styles pour l'interface mobile */
+.mobile-drive-container {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.mobile-drive-fab {
+  position: fixed;
+  bottom: 80px;
+  right: 16px;
+  z-index: 1000;
+}
+
+.mobile-drive-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:hover {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:visited {
+  color: inherit;
+}
+
+a:active {
+  color: inherit;
+}
+
+li {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  margin: 0;
+}
+
+/*!****************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/agentCard.css ***!
+  \****************************************************************************/
+.agent-card {
+  min-width: 400px;
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 24px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(27, 120, 188, 0.12);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(27, 120, 188, 0.1);
+}
+
+.agent-name {
+  color: rgba(27, 120, 188, 1);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.month-selector {
+  margin: 16px 0 !important;
+}
+
+.month-selector .MuiSelect-select {
+  padding: 12px !important;
+  border: 2px solid rgba(27, 120, 188, 0.2) !important;
+  border-radius: 8px !important;
+  text-transform: uppercase !important;
+}
+
+.month-selector .MuiSelect-select:hover {
+  border-color: rgba(27, 120, 188, 0.5) !important;
+}
+
+.month-selector .MuiSelect-select:focus {
+  border-color: rgba(27, 120, 188, 1) !important;
+  box-shadow: 0 0 0 3px rgba(27, 120, 188, 0.1) !important;
+}
+
+.monthly-hours {
+  font-size: 18px;
+  color: rgba(27, 120, 188, 1);
+  font-weight: 500;
+  margin: 16px 0;
+  padding: 12px;
+  background-color: rgba(27, 120, 188, 0.05);
+  border-radius: 8px;
+}
+
+.monthly-cost {
+  font-size: 16px;
+  color: #666;
+  margin: 16px 0;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid rgba(27, 120, 188, 1);
+}
+
+.events-container {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 20px;
+  padding-right: 16px;
+}
+
+.events-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.events-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.events-container::-webkit-scrollbar-thumb {
+  background: rgba(27, 120, 188, 0.5);
+  border-radius: 4px;
+}
+
+.events-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(27, 120, 188, 0.7);
+}
+
+.event-item {
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: transform 0.2s ease;
+}
+
+.event-item:hover {
+  transform: translateX(5px);
+}
+
+.event-item.present {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2e7d32;
+}
+
+.event-item.absent {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #d32f2f;
+}
+
+.event-item.conge {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #7b1fa2;
+}
+
+.event-item.modified {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #ef6c00;
+}
+
+.no-events {
+  color: #666;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .agent-card {
+    min-width: 300px;
+    margin: 16px;
+    padding: 16px;
+  }
+
+  .agent-name {
+    font-size: 20px;
+  }
+
+  .monthly-hours {
+    font-size: 16px;
+  }
+}
+
+/* Styles pour la section des primes */
+.primes-section {
+  margin-top: 20px;
+  padding: 16px;
+  background-color: rgba(27, 120, 188, 0.05);
+  border-radius: 8px;
+}
+
+.primes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  h3 {
+    background-color: transparent;
+  }
+}
+
+.primes-header h3 {
+  margin: 0;
+  color: rgba(27, 120, 188, 1);
+  font-size: 18px;
+}
+
+.add-prime-button {
+  color: rgba(27, 120, 188, 1);
+  font-size: 1.2rem;
+}
+
+.add-prime-button:hover {
+  background-color: rgba(27, 120, 188, 0.1);
+  transform: scale(1.1);
+}
+
+.delete-prime-button {
+  color: #d32f2f;
+  font-size: 1rem;
+}
+
+.delete-prime-button:hover {
+  background-color: rgba(211, 47, 47, 0.1);
+  transform: scale(1.1);
+}
+
+.primes-list {
+  margin-bottom: 16px;
+}
+
+.prime-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 4px 0;
+  background-color: white;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.prime-item:hover {
+  background-color: rgba(27, 120, 188, 0.05);
+}
+
+.prime-item span {
+  flex-grow: 1;
+  margin-right: 12px;
+}
+
+.no-primes {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 12px;
+}
+
+.primes-total {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(27, 120, 188, 0.2);
+  font-size: 16px;
+  color: rgba(27, 120, 188, 1);
+}
+
+/* Style pour les boutons avec icônes */
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+/*!**********************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/calendrierAgent.css ***!
+  \**********************************************************************************/
+/* ===== STYLE CALENDRIER AGENT MODERNE ===== */
+
+/* Container principal */
+.fc-media-screen {
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* En-tête du calendrier */
+.fc-toolbar {
+  background: white;
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.fc-toolbar-title {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #2c3e50 !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Boutons de navigation */
+.fc-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+}
+
+.fc-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+}
+
+/* Zone des ressources (noms des agents) */
+.fc-datagrid {
+  background: white;
+  border-radius: 10px 0 0 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.fc-datagrid-cell-frame {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  padding: 12px 15px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.3s ease;
+}
+
+.fc-datagrid-cell-frame:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  cursor: pointer;
+  transform: scale(1.02);
+}
+
+/* En-tête des colonnes de dates */
+.fc-timeline-slot {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.3s ease;
+}
+
+.fc-timeline-slot:hover {
+  background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%) !important;
+}
+
+.fc-timeline-slot-cushion {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  padding: 8px 4px !important;
+}
+
+.fc-timeline-slot-inner {
+  color: white !important;
+}
+
+/* Événements - Style moderne avec badges */
+.fc-timeline-event {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  height: 85% !important;
+  margin: 2px 1px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
+  transition: all 0.3s ease !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.fc-timeline-event:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+  z-index: 10 !important;
+}
+
+/* Couleurs personnalisées pour les événements */
+.fc-event[style*="green"] {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%) !important;
+}
+
+.fc-event[style*="red"] {
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%) !important;
+}
+
+.fc-event[style*="orange"] {
+  background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%) !important;
+}
+
+.fc-event[style*="purple"] {
+  background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%) !important;
+}
+
+.fc-event[style*="blue"] {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%) !important;
+}
+
+.fc-event[style*="yellow"] {
+  background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%) !important;
+  color: #2c3e50 !important;
+}
+
+.fc-event[style*="grey"] {
+  background: linear-gradient(135deg, #b2bec3 0%, #636e72 100%) !important;
+}
+
+/* Ligne de grille plus subtile */
+.fc-timeline-lane {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+.fc-timeline-lane:nth-child(even) {
+  background: rgba(255, 255, 255, 0.5) !important;
+}
+
+.fc-timeline-lane:nth-child(odd) {
+  background: rgba(248, 249, 250, 0.8) !important;
+}
+
+/* Scrollbar personnalisée */
+.fc-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.fc-scroller::-webkit-scrollbar-track {
+  background: #f1f2f6;
+  border-radius: 10px;
+}
+
+.fc-scroller::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+}
+
+.fc-scroller::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+/* Animation d'apparition */
+.fc-timeline-event {
+  animation: slideInEvent 0.3s ease-out;
+}
+
+@keyframes slideInEvent {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .fc-toolbar-title {
+    font-size: 18px !important;
+  }
+
+  .fc-timeline-event {
+    font-size: 10px !important;
+  }
+
+  .fc-datagrid-cell-frame {
+    font-size: 12px !important;
+    padding: 8px 10px !important;
+  }
+}
+
+/*!*********************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/creationPartie.css ***!
+  \*********************************************************************************/
+body {
+  padding-left: 5%;
+  max-width: 1920px;
+}
+
+.add-button {
+  background-color: transparent;
+  color: rgba(27, 120, 188, 1);
+}
+
+.add-button:hover {
+  color: white;
+  background-color: transparent;
+}
+
+span {
+  font-size: large;
+}
+
+.creation-form {
+  background-color: white;
+  padding: 1rem;
+  border-radius: 10px;
+}
+
+.creation-form h2 {
+  color: rgba(27, 120, 188, 1);
+}
+
+.valider {
+  background-color: rgba(27, 120, 188, 1);
+  margin-right: 1rem;
+  width: auto;
+  min-width: 150px;
+}
+
+.supprimer {
+  background-color: rgb(255, 54, 54);
+  width: auto;
+  min-width: 150px;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-left: 10%;
+  }
+
+  .creation-form {
+    padding: 1rem;
+  }
+
+  .valider,
+  .supprimer {
+    width: 100%;
+    margin-right: 0;
+  }
+}
+
+/*!*************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/layout.css ***!
+  \*************************************************************************/
+.layout {
+  display: flex; /* Utiliser flexbox pour aligner les éléments */
+}
+
+.main-content {
+  transition: margin-left 0.5s ease; /* Transition fluide */
+  margin-left: 0; /* Valeur par défaut */
+  width: 100%; /* Prendre toute la largeur disponible */
+}
+
+.sidebar-visible .main-content {
+  margin-left: 250px; /* Décalage lorsque la barre latérale est visible */
+}
+
+.sidebar-hidden .main-content {
+  margin-left: 0; /* Pas de décalage lorsque la barre latérale est cachée */
+}
+
+/*!*****************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/breadcrumb.css ***!
+  \*****************************************************************************/
+.breadcrumb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  background: transparent; /* pas de fond, le layout est déjà bleu */
+  border-bottom: none;
+  width: 100%; /* Prend toute la largeur disponible */
+}
+
+.breadcrumb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.breadcrumb-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.breadcrumb-icon svg {
+  width: 22px;
+  height: 22px;
+  color: #ffffff; /* icône blanche sur fond bleu du layout */
+}
+
+.breadcrumb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Roboto", Arial, sans-serif;
+  font-size: 14px;
+  color: #ffffff; /* texte lisible sur fond bleu */
+}
+
+.breadcrumb-section {
+  font-weight: 700;
+  color: #ffffff;
+}
+.breadcrumb-page {
+  font-weight: 500;
+  color: #f3f4f6;
+}
+.breadcrumb-context {
+  font-weight: 500;
+  color: #e5e7eb;
+}
+.breadcrumb-sep {
+  color: #d1d5db;
+}
+
+/* Styles pour la section utilisateur et le bouton de déconnexion */
+.user-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 8px 15px;
+  border-radius: 25px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-name {
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(220, 53, 69, 0.9);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.logout-button:hover {
+  background-color: rgba(220, 53, 69, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.logout-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.logout-button svg {
+  transition: transform 0.2s ease;
+}
+
+.logout-button:hover svg {
+  transform: translateX(2px);
+}
+
+/* Responsive design pour le breadcrumb */
+@media (max-width: 768px) {
+  .breadcrumb-header {
+    padding: 8px 12px;
+  }
+
+  .breadcrumb-line {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .breadcrumb-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .user-section {
+    padding: 6px 12px;
+    gap: 10px;
+  }
+
+  .user-name {
+    font-size: 13px;
+  }
+
+  .logout-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .logout-button span {
+    display: none; /* Cache le texte sur mobile, garde juste l'icône */
+  }
+}
+
+@media (max-width: 480px) {
+  .breadcrumb-header {
+    padding: 6px 8px;
+  }
+
+  .breadcrumb-line {
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .breadcrumb-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .user-name {
+    display: none; /* Cache le nom d'utilisateur sur très petit écran */
+  }
+
+  .user-section {
+    padding: 8px;
+  }
+}
+
+/*!*************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/header.css ***!
+  \*************************************************************************/
+.header {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  height: 350px;
+  width: 100%;
+  background-color: rgba(27, 120, 188, 1);
+  box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
+  -webkit-box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
+  -moz-box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
+  z-index: -10;
+}
+
+/*!***************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/slideBar.css ***!
+  \***************************************************************************/
+/* Palette et variables utiles */
+:root {
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #1f2937; /* gray-800 */
+  --sidebar-muted: #6b7280; /* gray-500 */
+  --sidebar-border: #e5e7eb; /* gray-200 */
+  --sidebar-hover: #f3f4f6; /* gray-100 */
+  --sidebar-active-bg: #eaf2ff; /* primary tint */
+  --primary: #1976d2; /* MUI primary */
+}
+
+/* Reset minimal pour éviter les styles globaux parasites */
+body {
+  margin: 0;
+}
+html {
+  margin: 0;
+}
+
+.slide-bar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 280px;
+  padding: 16px 14px;
+  background: var(--sidebar-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-right: 1px solid var(--sidebar-border);
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+  transform: translateX(0);
+  transition: transform 0.35s ease;
+  z-index: 900;
+  overflow-y: auto;
+}
+
+.slide-bar.hidden {
+  transform: translateX(-100%);
+}
+
+.slide-bar .logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 20px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.slide-bar .logo {
+  width: 140px;
+  height: auto;
+  object-fit: contain;
+}
+
+.slide-bar .link-container {
+  padding-top: 12px;
+  min-height: 400px;
+}
+
+.slide-bar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* S'assure que chaque item occupe toute la largeur disponible */
+.slide-bar .link-container > ul > li {
+  display: block;
+  width: 100%;
+}
+/* Séparateur horizontal entre sections (items de premier niveau) */
+.slide-bar .link-container > ul > li:not(:last-child)::after {
+  content: "";
+  display: block;
+  height: 1px;
+  background: var(--sidebar-border);
+  margin: 8px 0 10px 0;
+}
+/* S'assure que le li n'impose pas une largeur intrinsèque à son premier enfant */
+.slide-bar .link-container > ul > li > * {
+  display: flex;
+  width: 100%;
+}
+
+/* Lien simple (Accueil, Drive) */
+.slide-bar .link-container > ul > li > a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px; /* aligné sur les catégories */
+  min-height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  border-radius: 10px;
+  font-family: "Roboto", Arial, sans-serif;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.slide-bar .link-container > ul > li > a:hover {
+  background: var(--sidebar-hover);
+}
+
+.slide-bar .link-container > ul > li > a.active {
+  background: var(--sidebar-active-bg);
+  color: var(--primary);
+}
+
+/* Icônes */
+.slide-bar .link-container svg {
+  width: 24px;
+  height: 24px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Boutons catégorie (accordéon) */
+.slide-bar .category-button {
+  min-width: 251px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: 44px;
+  margin: 4px 0;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--sidebar-text);
+  font-family: "Roboto", Arial, sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  box-sizing: border-box;
+}
+
+/* Spécificité accrue: garantit 100% de largeur sur le bouton catégorie */
+.slide-bar .link-container > ul > li > .category-button {
+  display: flex;
+  width: 100%;
+}
+
+.slide-bar .category-button:hover {
+  background: var(--sidebar-hover);
+}
+
+.slide-bar .category-button.active {
+  background: var(--sidebar-active-bg);
+  color: var(--primary);
+}
+
+.slide-bar .category-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1; /* Laisse le texte prendre plus de place */
+  min-width: 0; /* permet l'ellipse */
+}
+
+.slide-bar .category-right {
+  color: var(--sidebar-muted);
+  display: flex;
+  align-items: center;
+  display: none; /* icône accordéon supprimée */
+}
+
+/* Forcer le libellé sur une seule ligne avec ellipse si trop long */
+.slide-bar .category-left {
+  white-space: nowrap;
+}
+.slide-bar .category-left span,
+.slide-bar .category-left .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sous-menu */
+.slide-bar .submenu {
+  margin: 4px 0 8px 0;
+  padding-left: 0;
+  border-left: none; /* pleine largeur sans recul visuel */
+}
+
+/* Sous-groupes dans Document */
+.slide-bar .submenu-group {
+  margin: 8px 0 10px 0;
+}
+.slide-bar .submenu-group-label {
+  color: var(--sidebar-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 8px 0 4px 0;
+}
+.slide-bar .submenu-group-links {
+  margin: 0;
+  padding: 0; /* aligné avec pleine largeur */
+  list-style: none;
+}
+
+.slide-bar .submenu li a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  min-height: 40px;
+  margin: 2px 0;
+  color: #374151; /* gray-700 */
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Indicateur gauche (petit rectangle horizontal arrondi) */
+.slide-bar .submenu li a::before {
+  content: "";
+  width: 4px; /* vertical */
+  height: 18px; /* barre plus haute */
+  background: var(--sidebar-border);
+  border-radius: 9999px;
+  flex-shrink: 0;
+  transition: background 0.2s ease, height 0.2s ease;
+}
+
+.slide-bar .submenu li a.active::before {
+  background: var(--primary);
+}
+
+.slide-bar .submenu li a:hover {
+  background: var(--sidebar-hover);
+  color: var(--primary);
+}
+
+.slide-bar .submenu li a.active {
+  background: var(--sidebar-active-bg);
+  color: var(--primary);
+}
+
+/* Animation (optionnelle si on supprime display:none en JS) */
+.slide-bar .submenu.collapsed {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+.slide-bar .submenu.expanded {
+  max-height: 600px; /* suffisamment grand pour contenir les items */
+  transition: max-height 0.3s ease;
+}
+
+/* Boutons d’ouverture/fermeture */
+.burger-button,
+.close-button {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--sidebar-border);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 1000;
+  color: var(--sidebar-text);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* S'assure que le bouton burger reste visible quand la sidebar est masquée */
+.slide-bar.hidden + .burger-button,
+body .burger-button {
+  display: inline-flex;
+}
+
+/* Agrandir l'icône des catégories aussi */
+.slide-bar .category-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.burger-button:focus,
+.close-button:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .slide-bar {
+    width: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .slide-bar {
+    width: 88vw;
+  }
+}
+
+/*!***********************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/laborCostSummary.css ***!
+  \***********************************************************************************/
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  min-width: 400px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.summary-table th,
+.summary-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.summary-table th {
+  background-color: rgba(27, 120, 188, 1);
+  color: white;
+}
+
+/*!********************************************************************************!*\
+  !*** css ./node_modules/css-loader/dist/cjs.js!./static/css/planningHebdo.css ***!
+  \********************************************************************************/
+/* Style pour le conteneur principal */
+.planning-table-container {
+  margin: 20px;
+  overflow-x: auto;
+  padding-right: 50px;
+}
+
+/* Style du tableau principal */
+.planning-table {
+  width: 90%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  margin: 20px;
+  font-size: 14px;
+  background-color: white;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* En-têtes */
+.planning-table th {
+  background-color: rgba(27, 120, 188, 1);
+  color: white;
+  font-weight: bold;
+  padding: 12px;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+.planning-table .date-header {
+  min-width: 120px;
+}
+
+.planning-table .hours-header {
+  width: 80px;
+  background-color: rgba(27, 120, 188, 0.9);
+}
+
+/* Cellules */
+.planning-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+/* Colonne des heures */
+.planning-table .hour-cell {
+  background-color: rgba(27, 120, 188, 0.1);
+  font-weight: bold;
+  color: #333;
+}
+
+/* Cellules du planning */
+.planning-table .schedule-cell {
+  cursor: pointer;
+  height: 40px;
+  position: relative;
+  font-weight: 500;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  transition: all 0.2s ease;
+}
+
+.planning-table .schedule-cell:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+/* Style pour les cellules sélectionnées */
+.planning-table .schedule-cell.selected {
+  border: 3px solid #1976d2 !important;
+  box-shadow: 0 0 8px rgba(25, 118, 210, 0.5) !important;
+  transform: scale(1.02);
+  z-index: 2;
+}
+
+/* Animation pour la sélection */
+.planning-table .schedule-cell.selected::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #1976d2, #42a5f5);
+  border-radius: 4px;
+  z-index: -1;
+  opacity: 0.1;
+}
+
+/* Style pour les informations de sélection */
+.selection-info {
+  font-weight: 600;
+  color: #1976d2;
+  font-size: 16px;
+}
+
+/* Styles pour les boutons d'action avec icônes */
+.MuiIconButton-root {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.MuiIconButton-root:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Style pour l'icône d'information */
+.info-icon-tooltip {
+  color: #1976d2;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.info-icon-tooltip:hover {
+  color: #1565c0;
+  transform: scale(1.1);
+}
+
+/* Style pour les cellules assignées */
+.planning-table .schedule-cell[style*="background-color: lightgreen"] {
+  color: #1b5e20;
+  font-weight: bold;
+}
+
+/* Style pour les cellules avec événements */
+.planning-table .schedule-cell[style*="background-color: red"],
+.planning-table .schedule-cell[style*="background-color: purple"] {
+  color: white;
+  font-weight: bold;
+}
+
+/* État de chargement */
+.planning-table.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Responsive design */
+@media screen and (max-width: 1024px) {
+  .planning-table {
+    font-size: 12px;
+  }
+
+  .planning-table td,
+  .planning-table th {
+    padding: 6px;
+  }
+
+  .planning-table .date-header {
+    min-width: 100px;
+  }
+}
+
+/* Style pour les boutons de contrôle */
+.controls-container {
+  margin: 20px 0;
+  display: flex;
+  gap: 10px;
+}
+
+.btn-calculate,
+.btn-toggle-summary {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.3s;
+}
+
+.btn-calculate {
+  background-color: rgba(27, 120, 188, 1);
+  color: white;
+}
+
+.btn-toggle-summary {
+  background-color: #4caf50;
+  color: white;
+}
+
+/* Style pour les messages d'erreur */
+.error-message {
+  color: #d32f2f;
+  margin: 10px 0;
+  padding: 8px;
+  background-color: #ffebee;
+  border-radius: 4px;
+}
+
+/* Style amélioré pour la modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  width: 450px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
+  animation: modalAppear 0.3s ease-out;
+}
+
+@keyframes modalAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-content h2 {
+  color: rgba(27, 120, 188, 1);
+  margin: 0 0 20px 0;
+  font-size: 24px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.modal-content select {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0 20px 0;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  color: #333;
+  transition: border-color 0.3s ease;
+  background-color: #f8f9fa;
+}
+
+.modal-content select:focus {
+  border-color: rgba(27, 120, 188, 0.8);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(27, 120, 188, 0.1);
+}
+
+.modal-content select:hover {
+  border-color: rgba(27, 120, 188, 0.5);
+}
+
+.modal-content option {
+  padding: 12px;
+}
+
+.modal-content .button-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.modal-content button {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  min-width: 120px;
+}
+
+.modal-content button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-content button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+

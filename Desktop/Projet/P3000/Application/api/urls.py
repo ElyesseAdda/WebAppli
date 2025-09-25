@@ -333,6 +333,9 @@ urlpatterns += [
     path('drive-complete/upload-url/', DriveCompleteViewSet.as_view({
         'post': 'get_upload_url'
     }), name='drive-complete-upload-url'),
+    path('drive-complete/confirm-upload/', DriveCompleteViewSet.as_view({
+        'post': 'confirm_upload'
+    }), name='drive-complete-confirm-upload'),
     path('drive-complete/delete-file/', DriveCompleteViewSet.as_view({
         'delete': 'delete_file'
     }), name='drive-complete-delete-file'),

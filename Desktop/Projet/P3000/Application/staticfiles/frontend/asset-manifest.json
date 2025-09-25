@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/static/frontend/main.e499a98fc8b8a6c134a3.css",
-    "main.js": "/static/frontend/main.fc22f70739db5b7bf790.js",
+    "main.css": "/static/frontend/main.d2b0cad6335ff5cd5661.css",
+    "main.js": "/static/frontend/main.f5189d72087b67e4acce.js",
     "src/img/logo.png": "/static/frontend/src/img/logo.png"
   },
   "entrypoints": {
     "main": [
-      "main.e499a98fc8b8a6c134a3.css",
-      "main.fc22f70739db5b7bf790.js"
+      "main.d2b0cad6335ff5cd5661.css",
+      "main.f5189d72087b67e4acce.js"
     ]
   }
 }

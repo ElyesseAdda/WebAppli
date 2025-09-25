@@ -24,6 +24,7 @@ import CreationDevis from "./CreationDevis";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Drive from "./Drive";
+import DriveWrapper from "./DriveWrapper";
 import GestionAppelsOffres from "./GestionAppelsOffres";
 import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
@@ -393,7 +394,7 @@ function App() {
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
-                  <Drive />
+                  <DriveWrapper />
                 </Layout>
               </ProtectedRoute>
             }

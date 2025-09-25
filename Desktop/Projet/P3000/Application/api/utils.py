@@ -541,6 +541,172 @@ def list_s3_folder_content(folder_path=""):
         return {'folders': [], 'files': []}
 
 
+def list_s3_folder_content_paginated(folder_path="", page=1, limit=50, sort_by='name', sort_order='asc'):
+    """
+    Liste le contenu d'un dossier avec pagination et tri (avec cache)
+    
+    Args:
+        folder_path: chemin du dossier à lister
+        page: numéro de page (commence à 1)
+        limit: nombre d'éléments par page
+        sort_by: critère de tri (name, size, date)
+        sort_order: ordre de tri (asc, desc)
+        
+    Returns:
+        dict: contenu paginé avec métadonnées de pagination
+    """
+    from django.core.cache import cache
+    
+    # Clé de cache pour ce dossier
+    cache_key = f"folder_content_{folder_path}_{sort_by}_{sort_order}"
+    
+    # Vérifier le cache d'abord
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        # Appliquer la pagination sur les données en cache
+        all_items = cached_data.get('all_items', [])
+        total_items = len(all_items)
+        total_pages = (total_items + limit - 1) // limit
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        
+        paginated_items = all_items[start_index:end_index]
+        page_folders = [item for item in paginated_items if item['type'] == 'folder']
+        page_files = [item for item in paginated_items if item['type'] == 'file']
+        
+        return {
+            'folders': page_folders,
+            'files': page_files,
+            'total_items': total_items,
+            'total_pages': total_pages,
+            'has_next': page < total_pages,
+            'has_previous': page > 1
+        }
+    
+    if not is_s3_available():
+        return list_local_folder_content_paginated(folder_path, page, limit, sort_by, sort_order)
+    
+    s3_client = get_s3_client()
+    bucket_name = get_s3_bucket_name()
+    
+    try:
+        # Lister tous les objets avec le préfixe
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=folder_path,
+            Delimiter='/'
+        )
+        
+        folders = []
+        files = []
+        
+        # Traiter les dossiers (CommonPrefixes)
+        if 'CommonPrefixes' in response:
+            for obj in response['CommonPrefixes']:
+                folder_name = obj['Prefix'].split('/')[-2]
+                folders.append({
+                    'name': folder_name,
+                    'path': obj['Prefix'],
+                    'type': 'folder',
+                    'size': 0,  # Les dossiers n'ont pas de taille
+                    'last_modified': None
+                })
+        
+        # Traiter les fichiers (Contents)
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                # Ignorer les objets qui se terminent par '/' (dossiers)
+                # ET ignorer les fichiers .keep
+                if obj['Key'].endswith('/') or obj['Key'].endswith('/.keep'):
+                    continue
+                if not obj['Key'].endswith('/') and obj['Key'] != folder_path:
+                    file_name = obj['Key'].split('/')[-1]
+                    files.append({
+                        'name': file_name,
+                        'path': obj['Key'],
+                        'size': obj['Size'],
+                        'last_modified': obj['LastModified'],
+                        'type': 'file'
+                    })
+        
+        # Combiner tous les éléments
+        all_items = folders + files
+        
+        # Trier les éléments
+        if sort_by == 'name':
+            all_items.sort(key=lambda x: x['name'].lower(), reverse=(sort_order == 'desc'))
+        elif sort_by == 'size':
+            all_items.sort(key=lambda x: x.get('size', 0), reverse=(sort_order == 'desc'))
+        elif sort_by == 'date':
+            all_items.sort(key=lambda x: x.get('last_modified') or datetime.min, reverse=(sort_order == 'desc'))
+        
+        # Calculer la pagination
+        total_items = len(all_items)
+        total_pages = (total_items + limit - 1) // limit
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        
+        # Extraire les éléments de la page
+        paginated_items = all_items[start_index:end_index]
+        
+        # Séparer les dossiers et fichiers
+        page_folders = [item for item in paginated_items if item['type'] == 'folder']
+        page_files = [item for item in paginated_items if item['type'] == 'file']
+        
+        # Mettre en cache toutes les données (pas seulement la page actuelle)
+        cache_data = {
+            'all_items': all_items,
+            'cached_at': datetime.now().isoformat()
+        }
+        cache.set(cache_key, cache_data, 900)  # Cache pendant 15 minutes
+        
+        return {
+            'folders': page_folders,
+            'files': page_files,
+            'total_items': total_items,
+            'total_pages': total_pages,
+            'has_next': page < total_pages,
+            'has_previous': page > 1
+        }
+        
+    except Exception as e:
+        print(f"Erreur lors de la liste paginée du contenu S3: {e}")
+        return {
+            'folders': [],
+            'files': [],
+            'total_items': 0,
+            'total_pages': 0,
+            'has_next': False,
+            'has_previous': False
+        }
+
+
+def invalidate_folder_cache(folder_path=""):
+    """
+    Invalide le cache pour un dossier spécifique
+    """
+    from django.core.cache import cache
+    
+    # Invalider toutes les clés de cache pour ce dossier
+    cache_patterns = [
+        f"folder_content_{folder_path}_name_asc",
+        f"folder_content_{folder_path}_name_desc", 
+        f"folder_content_{folder_path}_size_asc",
+        f"folder_content_{folder_path}_size_desc",
+        f"folder_content_{folder_path}_date_asc",
+        f"folder_content_{folder_path}_date_desc"
+    ]
+    
+    for pattern in cache_patterns:
+        cache.delete(pattern)
+    
+    # Invalider aussi le cache du dossier parent
+    if folder_path:
+        parent_path = '/'.join(folder_path.split('/')[:-1])
+        if parent_path:
+            invalidate_folder_cache(parent_path)
+
+
 def list_local_folder_content(folder_path=""):
     """Liste le contenu d'un dossier dans le stockage local"""
     try:
@@ -585,6 +751,89 @@ def list_local_folder_content(folder_path=""):
     except Exception as e:
         print(f"Erreur lors de la liste du contenu local: {e}")
         return {'folders': [], 'files': []}
+
+
+def list_local_folder_content_paginated(folder_path="", page=1, limit=50, sort_by='name', sort_order='asc'):
+    """Liste le contenu d'un dossier dans le stockage local avec pagination"""
+    try:
+        ensure_local_storage()
+        folders = []
+        files = []
+        
+        # Lire le fichier de métadonnées
+        metadata_file = os.path.join(LOCAL_STORAGE_PATH, 'folders.json')
+        
+        if os.path.exists(metadata_file):
+            with open(metadata_file, 'r') as f:
+                all_folders = json.load(f)
+            
+            # Filtrer les dossiers du niveau actuel
+            for folder in all_folders:
+                if folder['path'].startswith(folder_path) and folder['path'] != folder_path:
+                    # Vérifier si c'est un sous-dossier direct
+                    relative_path = folder['path'][len(folder_path):].strip('/')
+                    if '/' not in relative_path:
+                        folder['size'] = 0
+                        folder['last_modified'] = None
+                        folders.append(folder)
+        
+        # Lister les fichiers dans le dossier
+        full_path = os.path.join(LOCAL_STORAGE_PATH, folder_path)
+        if os.path.exists(full_path):
+            for item in os.listdir(full_path):
+                item_path = os.path.join(full_path, item)
+                if os.path.isfile(item_path) and item != '.keep':
+                    files.append({
+                        'name': item,
+                        'path': f"{folder_path}/{item}",
+                        'size': os.path.getsize(item_path),
+                        'last_modified': datetime.fromtimestamp(os.path.getmtime(item_path)),
+                        'type': 'file'
+                    })
+        
+        # Combiner tous les éléments
+        all_items = folders + files
+        
+        # Trier les éléments
+        if sort_by == 'name':
+            all_items.sort(key=lambda x: x['name'].lower(), reverse=(sort_order == 'desc'))
+        elif sort_by == 'size':
+            all_items.sort(key=lambda x: x.get('size', 0), reverse=(sort_order == 'desc'))
+        elif sort_by == 'date':
+            all_items.sort(key=lambda x: x.get('last_modified') or datetime.min, reverse=(sort_order == 'desc'))
+        
+        # Calculer la pagination
+        total_items = len(all_items)
+        total_pages = (total_items + limit - 1) // limit
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        
+        # Extraire les éléments de la page
+        paginated_items = all_items[start_index:end_index]
+        
+        # Séparer les dossiers et fichiers
+        page_folders = [item for item in paginated_items if item['type'] == 'folder']
+        page_files = [item for item in paginated_items if item['type'] == 'file']
+        
+        return {
+            'folders': page_folders,
+            'files': page_files,
+            'total_items': total_items,
+            'total_pages': total_pages,
+            'has_next': page < total_pages,
+            'has_previous': page > 1
+        }
+        
+    except Exception as e:
+        print(f"Erreur lors de la liste paginée du contenu local: {e}")
+        return {
+            'folders': [],
+            'files': [],
+            'total_items': 0,
+            'total_pages': 0,
+            'has_next': False,
+            'has_previous': False
+        }
 
 
 def create_s3_folder_recursive(folder_path):

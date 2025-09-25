@@ -56,7 +56,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'frontend.apps.FrontendConfig',
     'corsheaders',
-    
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -108,6 +108,27 @@ CACHES = {
         }
     }
 }
+
+# Configuration ASGI pour WebSockets
+ASGI_APPLICATION = 'Application.asgi.application'
+
+# Configuration Channels (seulement en production)
+if not DEBUG:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [('127.0.0.1', 6379)],
+            },
+        },
+    }
+else:
+    # En local, pas de WebSockets
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 # Configuration des cookies de sécurité
 SECURE_BROWSER_XSS_FILTER = True
