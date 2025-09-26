@@ -366,9 +366,48 @@ const CreationDevis = () => {
     setQuantities({ ...quantities, [ligneId]: quantity });
   };
 
+  // Fonction pour calculer la marge à partir du prix unitaire
+  const calculateMargeFromPrice = (ligneId, prixUnitaire) => {
+    const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+    if (!ligne || !prixUnitaire || prixUnitaire === "") return 0;
+
+    const coutMainOeuvre = parseFloat(
+      customCouts[ligneId]?.main_oeuvre || ligne.cout_main_oeuvre || 0
+    );
+    const coutMateriel = parseFloat(
+      customCouts[ligneId]?.materiel || ligne.cout_materiel || 0
+    );
+    const tauxFixe = parseFloat(
+      customTauxFixes[ligneId] || ligne.taux_fixe || 0
+    );
+
+    // Calculer le coût de base (main d'œuvre + matériel)
+    const base = coutMainOeuvre + coutMateriel;
+    if (base === 0) return 0;
+
+    // Calculer le sous-total avec taux fixe
+    const montantTauxFixe = base * (tauxFixe / 100);
+    const sousTotal = base + montantTauxFixe;
+
+    // Calculer la marge nécessaire pour atteindre le prix unitaire
+    const prixFinal = parseFloat(prixUnitaire);
+    if (sousTotal === 0) return 0;
+
+    const marge = ((prixFinal - sousTotal) / sousTotal) * 100;
+    return parseFloat(marge.toFixed(2));
+  };
+
   const handlePriceChange = (ligneId, price) => {
     setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
     setCustomPrices({ ...customPrices, [ligneId]: price });
+  };
+
+  // Fonction pour calculer la marge quand l'utilisateur quitte le champ prix
+  const handlePriceBlur = (ligneId, price) => {
+    if (price && price !== "") {
+      const margeCalculee = calculateMargeFromPrice(ligneId, price);
+      setCustomMarges({ ...customMarges, [ligneId]: margeCalculee });
+    }
   };
 
   // Nouvelles fonctions pour gérer les coûts détaillés
@@ -396,10 +435,47 @@ const CreationDevis = () => {
     setCustomTauxFixes({ ...customTauxFixes, [ligneId]: value });
   };
 
+  // Fonction pour calculer le prix à partir de la marge
+  const calculatePriceFromMarge = (ligneId, marge) => {
+    const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+    if (!ligne || !marge || marge === "") return 0;
+
+    const coutMainOeuvre = parseFloat(
+      customCouts[ligneId]?.main_oeuvre || ligne.cout_main_oeuvre || 0
+    );
+    const coutMateriel = parseFloat(
+      customCouts[ligneId]?.materiel || ligne.cout_materiel || 0
+    );
+    const tauxFixe = parseFloat(
+      customTauxFixes[ligneId] || ligne.taux_fixe || 0
+    );
+
+    // Calculer le coût de base (main d'œuvre + matériel)
+    const base = coutMainOeuvre + coutMateriel;
+    if (base === 0) return 0;
+
+    // Calculer le sous-total avec taux fixe
+    const montantTauxFixe = base * (tauxFixe / 100);
+    const sousTotal = base + montantTauxFixe;
+
+    // Calculer le prix final avec la marge
+    const margeDecimal = parseFloat(marge) / 100;
+    const prixFinal = sousTotal * (1 + margeDecimal);
+    return parseFloat(prixFinal.toFixed(2));
+  };
+
   const handleMargeChange = (ligneId, marge) => {
     setIsPreviewed(false);
     const value = marge === "" ? "" : marge;
     setCustomMarges({ ...customMarges, [ligneId]: value });
+  };
+
+  // Fonction pour calculer le prix quand l'utilisateur quitte le champ marge
+  const handleMargeBlur = (ligneId, marge) => {
+    if (marge && marge !== "") {
+      const prixCalcule = calculatePriceFromMarge(ligneId, marge);
+      setCustomPrices({ ...customPrices, [ligneId]: prixCalcule });
+    }
   };
 
   // Fonction pour réinitialiser les coûts personnalisés d'une ligne
@@ -2925,6 +3001,9 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                                     isNaN(parseFloat(value))
                                   ) {
                                     handlePriceChange(ligne.id, "");
+                                  } else {
+                                    // Calculer la marge automatiquement quand l'utilisateur quitte le champ
+                                    handlePriceBlur(ligne.id, value);
                                   }
                                 }}
                                 size="small"
@@ -3077,6 +3156,9 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                                       isNaN(parseFloat(value))
                                     ) {
                                       handleMargeChange(ligne.id, "");
+                                    } else {
+                                      // Calculer le prix automatiquement quand l'utilisateur quitte le champ
+                                      handleMargeBlur(ligne.id, value);
                                     }
                                   }}
                                   size="small"
@@ -3092,8 +3174,7 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
 
                               {/* Indicateur de modification non sauvegardée */}
                               {(customCouts[ligne.id] ||
-                                customTauxFixes[ligne.id] ||
-                                customMarges[ligne.id]) && (
+                                customTauxFixes[ligne.id]) && (
                                 <Box
                                   sx={{
                                     backgroundColor: "warning.main",
@@ -3112,8 +3193,7 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
 
                             {/* Affichage du détail du calcul */}
                             {(customCouts[ligne.id] ||
-                              customTauxFixes[ligne.id] ||
-                              customMarges[ligne.id]) && (
+                              customTauxFixes[ligne.id]) && (
                               <Box
                                 sx={{
                                   backgroundColor: "#f8f9fa",

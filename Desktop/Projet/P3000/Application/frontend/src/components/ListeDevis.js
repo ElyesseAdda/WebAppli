@@ -569,11 +569,6 @@ const ListeDevis = () => {
 
   const handleModifyDevis = () => {
     if (selectedDevis) {
-      if (selectedDevis.status !== "En attente") {
-        alert("Seuls les devis en attente peuvent être modifiés");
-        handleClose();
-        return;
-      }
       window.location.href = `/ModificationDevis/${selectedDevis.id}`;
     }
     handleClose();
