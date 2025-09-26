@@ -17,6 +17,7 @@ const DevisModal = ({
   handleSubmit,
   handleChange,
   pendingChantierData,
+  isModification = false, // Nouvelle prop pour détecter si c'est une modification
 }) => {
   const [fullNumero, setFullNumero] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -24,6 +25,19 @@ const DevisModal = ({
   const [chantierName, setChantierName] = useState("");
 
   useEffect(() => {
+    console.log("🔍 DEVISMODAL - isModification:", isModification);
+    console.log("🔍 DEVISMODAL - open:", open);
+    console.log("🔍 DEVISMODAL - devisData.numero:", devisData.numero);
+    console.log("🔍 DEVISMODAL - devisData complet:", devisData);
+    
+    // Si c'est une modification, utiliser le numéro existant
+    if (isModification && open && devisData.numero) {
+      console.log("🔍 DEVISMODAL - Utilisation du numéro existant:", devisData.numero);
+      setFullNumero(devisData.numero);
+      return;
+    }
+
+    // Si c'est une création, générer un nouveau numéro
     const getFullNumero = async () => {
       try {
         // Récupérer le nom du chantier selon le contexte
@@ -91,7 +105,7 @@ const DevisModal = ({
     } else if (devisData.numero) {
       setFullNumero(devisData.numero);
     }
-  }, [open, devisData.chantier, devisData.devis_chantier, pendingChantierData]);
+  }, [open, devisData.chantier, devisData.devis_chantier, pendingChantierData, isModification]);
 
   // Reset lastRequestTime when modal closes
   useEffect(() => {

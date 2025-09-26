@@ -1651,6 +1651,9 @@ const ModificationDevis = () => {
         const devisData = response.data;
 
         console.log("Données du devis récupérées:", devisData);
+        console.log("🔍 NUMÉRO DU DEVIS RÉCUPÉRÉ:", devisData.numero);
+        console.log("🔍 TYPE DU NUMÉRO:", typeof devisData.numero);
+        console.log("🔍 NUMÉRO VIDE ?", devisData.numero === "" || devisData.numero === null || devisData.numero === undefined);
 
         // Pré-remplir les états avec les données du devis
         setSelectedChantierId(devisData.chantier);
@@ -1709,12 +1712,20 @@ const ModificationDevis = () => {
 
         setTvaRate(devisData.tva_rate || 20);
         setNatureTravaux(devisData.nature_travaux || "");
-        setDevisModalData((prev) => ({
-          ...prev,
-          numero: devisData.numero || "",
-          description: devisData.description || "",
-          montant_ttc: devisData.price_ttc || "",
-        }));
+        
+        console.log("🔍 AVANT SETDEVISMODALDATA - numero:", devisData.numero);
+        console.log("🔍 AVANT SETDEVISMODALDATA - numero || '':", devisData.numero || "");
+        
+        setDevisModalData((prev) => {
+          const newData = {
+            ...prev,
+            numero: devisData.numero || "",
+            description: devisData.description || "",
+            montant_ttc: devisData.price_ttc || "",
+          };
+          console.log("🔍 APRÈS SETDEVISMODALDATA - nouveau numero:", newData.numero);
+          return newData;
+        });
       } catch (error) {
         console.error("Erreur lors du chargement des données:", error);
         alert("Erreur lors du chargement des données du devis");
@@ -3114,6 +3125,7 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
               })
             }
             handleSubmit={handleDevisModalSubmit}
+            isModification={true}
           />
 
           <CreatePartieModal
