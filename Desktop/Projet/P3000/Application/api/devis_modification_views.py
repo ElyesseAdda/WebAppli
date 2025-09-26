@@ -20,10 +20,14 @@ def regenerate_devis_pdf(request, devis_id):
     Régénère le PDF d'un devis existant et le remplace dans le Drive
     """
     try:
+        logger.info(f"🔄 Début de la régénération du PDF pour le devis {devis_id}")
+        
         # Récupérer le devis existant
         try:
             devis = Devis.objects.get(id=devis_id)
+            logger.info(f"✅ Devis trouvé: {devis.numero}, devis_chantier: {devis.devis_chantier}")
         except Devis.DoesNotExist:
+            logger.error(f"❌ Devis {devis_id} non trouvé")
             return Response({
                 'error': 'Devis non trouvé'
             }, status=status.HTTP_404_NOT_FOUND)
@@ -31,15 +35,19 @@ def regenerate_devis_pdf(request, devis_id):
         # Récupérer les données associées
         societe = devis.societe if hasattr(devis, 'societe') else None
         societe_name = societe.name if societe else "Société par défaut"
+        logger.info(f"📊 Société: {societe_name}")
         
         # Déterminer le type de devis et préparer les données
         if devis.devis_chantier:
+            logger.info("📋 Type: Devis de chantier")
             # Devis de chantier - récupérer les données du chantier
             try:
                 chantier = Chantier.objects.get(id=devis.chantier)
                 chantier_name = chantier.chantier_name
                 chantier_id = chantier.id
+                logger.info(f"✅ Chantier trouvé: {chantier_name} (ID: {chantier_id})")
             except Chantier.DoesNotExist:
+                logger.error(f"❌ Chantier {devis.chantier} non trouvé pour le devis de chantier")
                 return Response({
                     'error': 'Chantier non trouvé pour ce devis de chantier'
                 }, status=status.HTTP_404_NOT_FOUND)
@@ -55,8 +63,10 @@ def regenerate_devis_pdf(request, devis_id):
             
             # URL de prévisualisation
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis.id}/")
+            logger.info(f"🔗 URL de prévisualisation: {preview_url}")
             
             # Générer le PDF avec le PDF Manager
+            logger.info("🚀 Début de la génération du PDF...")
             pdf_manager = PDFManager()
             success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
                 document_type='devis_marche',
@@ -68,14 +78,18 @@ def regenerate_devis_pdf(request, devis_id):
                 chantier_name=chantier_name,
                 numero=devis.numero
             )
+            logger.info(f"📄 Résultat génération PDF: success={success}, message={message}")
             
         else:
+            logger.info("📋 Type: Devis normal")
             # Devis normal - récupérer les données du chantier
             try:
                 chantier = Chantier.objects.get(id=devis.chantier)
                 chantier_name = chantier.chantier_name
                 chantier_id = chantier.id
+                logger.info(f"✅ Chantier trouvé: {chantier_name} (ID: {chantier_id})")
             except Chantier.DoesNotExist:
+                logger.error(f"❌ Chantier {devis.chantier} non trouvé pour le devis normal")
                 return Response({
                     'error': 'Chantier non trouvé pour ce devis'
                 }, status=status.HTTP_404_NOT_FOUND)
@@ -91,8 +105,10 @@ def regenerate_devis_pdf(request, devis_id):
             
             # URL de prévisualisation
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis.id}/")
+            logger.info(f"🔗 URL de prévisualisation: {preview_url}")
             
             # Générer le PDF avec le PDF Manager
+            logger.info("🚀 Début de la génération du PDF...")
             pdf_manager = PDFManager()
             success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
                 document_type='devis_travaux',
@@ -104,6 +120,7 @@ def regenerate_devis_pdf(request, devis_id):
                 chantier_name=chantier_name,
                 numero=devis.numero
             )
+            logger.info(f"📄 Résultat génération PDF: success={success}, message={message}")
         
         if success:
             response_data = {
@@ -125,15 +142,16 @@ def regenerate_devis_pdf(request, devis_id):
                 response_data['conflict_message'] = f'Un fichier avec le même nom existait déjà. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
                 response_data['conflict_type'] = 'file_replaced'
             
-            logger.info(f"PDF régénéré avec succès pour le devis {devis.id}: {s3_file_path}")
+            logger.info(f"✅ PDF régénéré avec succès pour le devis {devis.id}: {s3_file_path}")
             return JsonResponse(response_data)
         else:
-            logger.error(f"Erreur lors de la génération du PDF pour le devis {devis.id}: {message}")
+            logger.error(f"❌ Erreur lors de la génération du PDF pour le devis {devis.id}: {message}")
             return JsonResponse({'success': False, 'error': message}, status=500)
             
     except Exception as e:
         error_msg = f'Erreur inattendue lors de la régénération du PDF: {str(e)}'
-        logger.error(error_msg)
+        logger.error(f"❌ {error_msg}")
+        logger.error(f"❌ Traceback: {str(e)}", exc_info=True)
         return JsonResponse({'error': error_msg}, status=500)
 
 
