@@ -167,7 +167,12 @@ class PDFManager:
                 chantier_name = kwargs['chantier_name']
                 chantier_slug = custom_slugify(chantier_name)
                 subfolder = self.document_type_folders.get(document_type, 'Devis')
-                return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
+                
+                # Pour les devis de chantier, ajouter le dossier Devis/
+                if document_type == 'devis_marche':
+                    return f"Chantiers/{societe_slug}/{chantier_slug}/Devis/Devis_Marche/{subfolder}"
+                else:
+                    return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
             else:
                 # C'est un appel d'offres
                 appel_offres_name = kwargs['appel_offres_name']
