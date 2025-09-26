@@ -36,6 +36,7 @@ import SelectSocieteModal from "./SelectSocieteModal";
 import SocieteInfoModal from "./SocieteInfoModal";
 import SpecialLineModal from "./SpecialLineModal";
 import SpecialLinesOverview from "./SpecialLinesOverview";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const ModificationDevis = () => {
   const { devisId } = useParams();
@@ -888,6 +889,30 @@ const ModificationDevis = () => {
             console.error("❌ Erreur lors du recalcul des coûts estimés:", recalcError);
             // Ne pas bloquer la sauvegarde du devis si le recalcul échoue
           }
+        }
+
+        // Remplacement automatique du PDF dans le Drive
+        try {
+          console.log("🔄 Remplacement automatique du PDF dans le Drive...");
+          await generatePDFDrive(
+            "devis", // Type générique - le système déterminera automatiquement le sous-type
+            response.data, // Toutes les données du devis
+            {
+              onSuccess: (response) => {
+                console.log("✅ Devis remplacé dans le Drive:", response);
+                console.log("📁 Chemin du fichier:", response.file_path);
+              },
+              onError: (error) => {
+                console.error("❌ Erreur lors du remplacement dans le Drive:", error);
+                // Ne pas bloquer la sauvegarde du devis si le remplacement échoue
+              }
+            },
+            true // forceReplace = true pour remplacer automatiquement le fichier existant
+          );
+          console.log("✅ Remplacement automatique du PDF terminé");
+        } catch (replaceError) {
+          console.error("❌ Erreur lors de l'appel du système universel:", replaceError);
+          // Ne pas bloquer la sauvegarde du devis si le remplacement échoue
         }
         
         clearSavedState();
