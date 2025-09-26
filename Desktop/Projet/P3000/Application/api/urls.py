@@ -81,6 +81,12 @@ from .views import (
     PaiementFactureSousTraitantViewSet,
 )
 
+# Import des vues de modification de devis
+from .devis_modification_views import (
+    regenerate_devis_pdf,
+    get_devis_modification_info,
+)
+
 # Import des nouvelles vues PDF avec stockage AWS S3
 from .pdf_views import (
     planning_hebdo_pdf_drive,
@@ -375,4 +381,8 @@ urlpatterns += [
     
     # Recalcul des coûts estimés
     path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='recalculer-couts-estimes'),
+    
+    # Modification de devis
+    path('devis/<int:devis_id>/regenerate-pdf/', regenerate_devis_pdf, name='regenerate-devis-pdf'),
+    path('devis/<int:devis_id>/modification-info/', get_devis_modification_info, name='get-devis-modification-info'),
 ]

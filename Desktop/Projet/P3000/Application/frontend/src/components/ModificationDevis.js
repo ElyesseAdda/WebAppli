@@ -36,7 +36,6 @@ import SelectSocieteModal from "./SelectSocieteModal";
 import SocieteInfoModal from "./SocieteInfoModal";
 import SpecialLineModal from "./SpecialLineModal";
 import SpecialLinesOverview from "./SpecialLinesOverview";
-import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const ModificationDevis = () => {
   const { devisId } = useParams();
@@ -893,48 +892,24 @@ const ModificationDevis = () => {
 
         // Remplacement automatique du PDF dans le Drive
         try {
-          console.log("🔄 Remplacement automatique du PDF dans le Drive...");
+          console.log("🔄 Régénération automatique du PDF du devis modifié...");
           
-          // Déterminer le type de devis selon les données
-          const documentType = response.data.devis_chantier ? "devis_chantier" : "devis_normal";
-          console.log("📋 Type de devis détecté:", documentType);
+          const regenerateResponse = await axios.post(`/api/devis/${devisId}/regenerate-pdf/`);
           
-          // Préparer les données selon le type de devis
-          const documentData = response.data.devis_chantier ? {
-            devisId: response.data.id,
-            appelOffresId: response.data.appel_offres,
-            appelOffresName: response.data.appel_offres_name,
-            societeName: response.data.societe_name,
-            numero: response.data.numero
-          } : {
-            devisId: response.data.id,
-            chantierId: response.data.chantier,
-            chantierName: response.data.chantier_name,
-            societeName: response.data.societe_name,
-            numero: response.data.numero
-          };
-          
-          console.log("📊 Données préparées pour le système universel:", documentData);
-          
-          await generatePDFDrive(
-            documentType, // Type spécifique selon le devis
-            documentData, // Données préparées selon le type
-            {
-              onSuccess: (response) => {
-                console.log("✅ Devis remplacé dans le Drive:", response);
-                console.log("📁 Chemin du fichier:", response.file_path);
-              },
-              onError: (error) => {
-                console.error("❌ Erreur lors du remplacement dans le Drive:", error);
-                // Ne pas bloquer la sauvegarde du devis si le remplacement échoue
-              }
-            },
-            true // forceReplace = true pour remplacer automatiquement le fichier existant
-          );
-          console.log("✅ Remplacement automatique du PDF terminé");
+          if (regenerateResponse.data.success) {
+            console.log("✅ PDF régénéré et remplacé dans le Drive:", regenerateResponse.data);
+            console.log("📁 Chemin du fichier:", regenerateResponse.data.file_path);
+            
+            // Optionnel : afficher une notification de succès avec lien vers le Drive
+            if (regenerateResponse.data.conflict_detected) {
+              console.log("📝 Historique:", regenerateResponse.data.conflict_message);
+            }
+          } else {
+            console.error("❌ Erreur lors de la régénération:", regenerateResponse.data.error);
+          }
         } catch (replaceError) {
-          console.error("❌ Erreur lors de l'appel du système universel:", replaceError);
-          // Ne pas bloquer la sauvegarde du devis si le remplacement échoue
+          console.error("❌ Erreur lors de la régénération du PDF:", replaceError);
+          // Ne pas bloquer la sauvegarde du devis si la régénération échoue
         }
         
         clearSavedState();
