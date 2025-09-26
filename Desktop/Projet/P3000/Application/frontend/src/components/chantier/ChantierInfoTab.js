@@ -64,6 +64,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
 
   // État pour stocker les informations complètes du chantier
   const [fullChantierData, setFullChantierData] = useState(null);
+  
+  // État pour gérer le rechargement des coûts estimés
+  const [lastCoutsUpdate, setLastCoutsUpdate] = useState(null);
 
   // Récupérer les informations complètes du chantier
   useEffect(() => {
@@ -97,6 +100,36 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         });
     }
   }, [chantierData?.id]);
+
+  // Détecter les changements dans les coûts estimés et recharger les données
+  useEffect(() => {
+    if (chantierData?.id && chantierData?.cout_estime_main_oeuvre !== undefined) {
+      const currentCouts = {
+        main_oeuvre: chantierData.cout_estime_main_oeuvre,
+        materiel: chantierData.cout_estime_materiel,
+        marge: chantierData.marge_estimee
+      };
+      
+      // Vérifier si les coûts ont changé
+      if (lastCoutsUpdate && 
+          (lastCoutsUpdate.main_oeuvre !== currentCouts.main_oeuvre ||
+           lastCoutsUpdate.materiel !== currentCouts.materiel ||
+           lastCoutsUpdate.marge !== currentCouts.marge)) {
+        
+        console.log("🔄 ChantierInfoTab - Détection de changement dans les coûts estimés");
+        console.log("Ancien:", lastCoutsUpdate);
+        console.log("Nouveau:", currentCouts);
+        
+        // Recharger les données du chantier
+        if (onUpdate) {
+          console.log("🔄 ChantierInfoTab - Déclenchement du rechargement via onUpdate");
+          onUpdate();
+        }
+      }
+      
+      setLastCoutsUpdate(currentCouts);
+    }
+  }, [chantierData?.cout_estime_main_oeuvre, chantierData?.cout_estime_materiel, chantierData?.marge_estimee, onUpdate]);
 
   // State local pour tout ce qui n'a pas besoin d'être global
   const [tauxFacturationData, setTauxFacturationData] = React.useState(null);

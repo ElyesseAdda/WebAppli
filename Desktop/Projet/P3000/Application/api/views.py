@@ -8922,3 +8922,83 @@ def force_version_update(request):
             'error': f'Erreur lors de la mise à jour de version: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['POST'])
+def recalculer_couts_estimes(request, chantier_id):
+    """
+    Recalcule les coûts estimés (main d'œuvre et matériel) d'un chantier
+    basé sur le devis de chantier associé.
+    """
+    try:
+        from decimal import Decimal
+        
+        # Récupérer le chantier
+        try:
+            chantier = Chantier.objects.get(id=chantier_id)
+        except Chantier.DoesNotExist:
+            return Response({
+                'error': 'Chantier non trouvé'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Récupérer le devis de chantier associé
+        try:
+            devis_chantier = Devis.objects.get(
+                chantier=chantier,
+                devis_chantier=True
+            )
+        except Devis.DoesNotExist:
+            return Response({
+                'error': 'Aucun devis de chantier trouvé pour ce chantier'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Récupérer les lignes du devis
+        lignes_devis = DevisLigne.objects.filter(devis=devis_chantier)
+        
+        # Initialiser les totaux
+        cout_main_oeuvre_total = Decimal('0')
+        cout_materiel_total = Decimal('0')
+        
+        # Calculer les coûts à partir des lignes du devis
+        for ligne in lignes_devis:
+            try:
+                # Récupérer les détails de la ligne
+                ligne_detail = ligne.ligne_detail
+                quantite = Decimal(str(ligne.quantite or 0))
+                
+                # Calculer les coûts pour cette ligne
+                cout_main_oeuvre_ligne = Decimal(str(ligne_detail.cout_main_oeuvre or 0)) * quantite
+                cout_materiel_ligne = Decimal(str(ligne_detail.cout_materiel or 0)) * quantite
+                
+                cout_main_oeuvre_total += cout_main_oeuvre_ligne
+                cout_materiel_total += cout_materiel_ligne
+                
+            except Exception as e:
+                print(f"Erreur lors du calcul de la ligne {ligne.id}: {e}")
+                continue
+        
+        # Mettre à jour le chantier avec les nouveaux coûts estimés
+        chantier.cout_estime_main_oeuvre = cout_main_oeuvre_total
+        chantier.cout_estime_materiel = cout_materiel_total
+        
+        # Calculer la marge estimée (prix total - coûts totaux)
+        prix_total_devis = Decimal(str(devis_chantier.price_ht or 0))
+        couts_totaux = cout_main_oeuvre_total + cout_materiel_total
+        marge_estimee = prix_total_devis - couts_totaux
+        chantier.marge_estimee = marge_estimee
+        
+        chantier.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Coûts estimés recalculés avec succès',
+            'cout_estime_main_oeuvre': float(cout_main_oeuvre_total),
+            'cout_estime_materiel': float(cout_materiel_total),
+            'marge_estimee': float(marge_estimee),
+            'lignes_traitees': len(lignes_devis)
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors du recalcul des coûts estimés: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

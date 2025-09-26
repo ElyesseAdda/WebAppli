@@ -878,6 +878,18 @@ const ModificationDevis = () => {
       const response = await axios.put(`/api/devisa/${devisId}/`, devisData);
 
       if (response.data) {
+        // Vérifier si c'est un devis de chantier et recalculer les coûts estimés
+        if (response.data.devis_chantier && selectedChantierId) {
+          try {
+            console.log("🔄 Recalcul des coûts estimés pour le chantier:", selectedChantierId);
+            await axios.post(`/api/chantier/${selectedChantierId}/recalculer-couts-estimes/`);
+            console.log("✅ Coûts estimés recalculés avec succès");
+          } catch (recalcError) {
+            console.error("❌ Erreur lors du recalcul des coûts estimés:", recalcError);
+            // Ne pas bloquer la sauvegarde du devis si le recalcul échoue
+          }
+        }
+        
         clearSavedState();
         alert("Devis modifié avec succès!");
         window.location.href = "/ListeDevis";
@@ -1651,9 +1663,6 @@ const ModificationDevis = () => {
         const devisData = response.data;
 
         console.log("Données du devis récupérées:", devisData);
-        console.log("🔍 NUMÉRO DU DEVIS RÉCUPÉRÉ:", devisData.numero);
-        console.log("🔍 TYPE DU NUMÉRO:", typeof devisData.numero);
-        console.log("🔍 NUMÉRO VIDE ?", devisData.numero === "" || devisData.numero === null || devisData.numero === undefined);
 
         // Pré-remplir les états avec les données du devis
         setSelectedChantierId(devisData.chantier);
@@ -1712,20 +1721,12 @@ const ModificationDevis = () => {
 
         setTvaRate(devisData.tva_rate || 20);
         setNatureTravaux(devisData.nature_travaux || "");
-        
-        console.log("🔍 AVANT SETDEVISMODALDATA - numero:", devisData.numero);
-        console.log("🔍 AVANT SETDEVISMODALDATA - numero || '':", devisData.numero || "");
-        
-        setDevisModalData((prev) => {
-          const newData = {
-            ...prev,
-            numero: devisData.numero || "",
-            description: devisData.description || "",
-            montant_ttc: devisData.price_ttc || "",
-          };
-          console.log("🔍 APRÈS SETDEVISMODALDATA - nouveau numero:", newData.numero);
-          return newData;
-        });
+        setDevisModalData((prev) => ({
+          ...prev,
+          numero: devisData.numero || "",
+          description: devisData.description || "",
+          montant_ttc: devisData.price_ttc || "",
+        }));
       } catch (error) {
         console.error("Erreur lors du chargement des données:", error);
         alert("Erreur lors du chargement des données du devis");

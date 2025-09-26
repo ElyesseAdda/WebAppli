@@ -28,6 +28,7 @@ from .views import (
     create_facture_ts,
     create_facture_cie,
     SituationViewSet,
+    recalculer_couts_estimes,
     SituationLigneViewSet,
     SituationLigneSupplementaireViewSet,
     get_devis_structure,
@@ -371,4 +372,7 @@ urlpatterns += [
     path('download-pdf-from-s3/', download_pdf_from_s3, name='download_pdf_from_s3'),
     path('download-file-from-drive/', download_file_from_drive, name='download_file_from_drive'),
     path('list-pdfs-in-drive/', list_pdfs_in_drive, name='list_pdfs_in_drive'),
+    
+    # Recalcul des coûts estimés
+    path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='recalculer-couts-estimes'),
 ]

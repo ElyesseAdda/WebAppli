@@ -25,14 +25,8 @@ const DevisModal = ({
   const [chantierName, setChantierName] = useState("");
 
   useEffect(() => {
-    console.log("🔍 DEVISMODAL - isModification:", isModification);
-    console.log("🔍 DEVISMODAL - open:", open);
-    console.log("🔍 DEVISMODAL - devisData.numero:", devisData.numero);
-    console.log("🔍 DEVISMODAL - devisData complet:", devisData);
-    
     // Si c'est une modification, utiliser le numéro existant
     if (isModification && open && devisData.numero) {
-      console.log("🔍 DEVISMODAL - Utilisation du numéro existant:", devisData.numero);
       setFullNumero(devisData.numero);
       return;
     }
