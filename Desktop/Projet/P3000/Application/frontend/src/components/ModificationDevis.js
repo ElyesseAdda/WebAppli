@@ -894,9 +894,31 @@ const ModificationDevis = () => {
         // Remplacement automatique du PDF dans le Drive
         try {
           console.log("🔄 Remplacement automatique du PDF dans le Drive...");
+          
+          // Déterminer le type de devis selon les données
+          const documentType = response.data.devis_chantier ? "devis_chantier" : "devis_normal";
+          console.log("📋 Type de devis détecté:", documentType);
+          
+          // Préparer les données selon le type de devis
+          const documentData = response.data.devis_chantier ? {
+            devisId: response.data.id,
+            appelOffresId: response.data.appel_offres,
+            appelOffresName: response.data.appel_offres_name,
+            societeName: response.data.societe_name,
+            numero: response.data.numero
+          } : {
+            devisId: response.data.id,
+            chantierId: response.data.chantier,
+            chantierName: response.data.chantier_name,
+            societeName: response.data.societe_name,
+            numero: response.data.numero
+          };
+          
+          console.log("📊 Données préparées pour le système universel:", documentData);
+          
           await generatePDFDrive(
-            "devis", // Type générique - le système déterminera automatiquement le sous-type
-            response.data, // Toutes les données du devis
+            documentType, // Type spécifique selon le devis
+            documentData, // Données préparées selon le type
             {
               onSuccess: (response) => {
                 console.log("✅ Devis remplacé dans le Drive:", response);
