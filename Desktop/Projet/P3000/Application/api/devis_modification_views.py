@@ -33,9 +33,9 @@ def regenerate_devis_pdf(request, devis_id):
             }, status=status.HTTP_404_NOT_FOUND)
         
         # Récupérer les données associées
-        societe = devis.societe if hasattr(devis, 'societe') else None
-        societe_name = societe.name if societe else "Société par défaut"
-        logger.info(f"📊 Société: {societe_name}")
+        # Pour les devis, la société est généralement associée au chantier
+        societe_name = "Société par défaut"
+        logger.info(f"📊 Société initiale: {societe_name}")
         
         # Déterminer le type de devis et préparer les données
         if devis.devis_chantier:
@@ -54,6 +54,14 @@ def regenerate_devis_pdf(request, devis_id):
                     chantier_name = chantier.chantier_name
                     chantier_id = chantier.id
                 logger.info(f"✅ Chantier trouvé: {chantier_name} (ID: {chantier_id})")
+                
+                # Récupérer la société du chantier
+                if hasattr(chantier, 'societe') and chantier.societe:
+                    societe_name = chantier.societe.name
+                    logger.info(f"📊 Société du chantier: {societe_name}")
+                else:
+                    logger.warning("⚠️ Aucune société trouvée pour le chantier, utilisation de la société par défaut")
+                    
             except Chantier.DoesNotExist:
                 logger.error(f"❌ Chantier {devis.chantier} non trouvé pour le devis de chantier")
                 return Response({
@@ -61,10 +69,23 @@ def regenerate_devis_pdf(request, devis_id):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             # Données pour devis de chantier
+            # Pour les devis de chantier, nous devons passer les données de l'appel d'offres
+            # Récupérer l'appel d'offres du devis
+            try:
+                appel_offres = AppelOffres.objects.get(id=devis.appel_offres)
+                appel_offres_name = appel_offres.name
+                appel_offres_id = appel_offres.id
+                logger.info(f"✅ Appel d'offres trouvé: {appel_offres_name} (ID: {appel_offres_id})")
+            except AppelOffres.DoesNotExist:
+                logger.error(f"❌ Appel d'offres {devis.appel_offres} non trouvé pour le devis de chantier")
+                return Response({
+                    'error': 'Appel d\'offres non trouvé pour ce devis de chantier'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             document_data = {
                 'devis_id': devis.id,
-                'chantier_id': chantier_id,
-                'chantier_name': chantier_name,
+                'appel_offres_id': appel_offres_id,
+                'appel_offres_name': appel_offres_name,
                 'societe_name': societe_name,
                 'numero': devis.numero
             }
@@ -82,8 +103,8 @@ def regenerate_devis_pdf(request, devis_id):
                 societe_name=societe_name,
                 force_replace=True,  # Toujours remplacer pour les modifications
                 devis_id=devis.id,
-                chantier_id=chantier_id,
-                chantier_name=chantier_name,
+                appel_offres_id=appel_offres_id,
+                appel_offres_name=appel_offres_name,
                 numero=devis.numero
             )
             logger.info(f"📄 Résultat génération PDF: success={success}, message={message}")
@@ -104,6 +125,14 @@ def regenerate_devis_pdf(request, devis_id):
                     chantier_name = chantier.chantier_name
                     chantier_id = chantier.id
                 logger.info(f"✅ Chantier trouvé: {chantier_name} (ID: {chantier_id})")
+                
+                # Récupérer la société du chantier
+                if hasattr(chantier, 'societe') and chantier.societe:
+                    societe_name = chantier.societe.name
+                    logger.info(f"📊 Société du chantier: {societe_name}")
+                else:
+                    logger.warning("⚠️ Aucune société trouvée pour le chantier, utilisation de la société par défaut")
+                    
             except Chantier.DoesNotExist:
                 logger.error(f"❌ Chantier {devis.chantier} non trouvé pour le devis normal")
                 return Response({
