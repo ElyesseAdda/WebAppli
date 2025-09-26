@@ -2982,8 +2982,7 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                                 step="0.10"
                                 value={
                                   customCouts[ligne.id] ||
-                                  customTauxFixes[ligne.id] ||
-                                  customMarges[ligne.id]
+                                  customTauxFixes[ligne.id]
                                     ? formatPrice(
                                         calculatePriceFromCosts(ligne)
                                       )
@@ -3010,21 +3009,18 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                                 InputProps={{
                                   readOnly:
                                     customCouts[ligne.id] ||
-                                    customTauxFixes[ligne.id] ||
-                                    customMarges[ligne.id],
+                                    customTauxFixes[ligne.id],
                                   style: {
                                     backgroundColor:
                                       customCouts[ligne.id] ||
-                                      customTauxFixes[ligne.id] ||
-                                      customMarges[ligne.id]
+                                      customTauxFixes[ligne.id]
                                         ? "#f5f5f5"
                                         : "white",
                                   },
                                 }}
                                 helperText={
                                   customCouts[ligne.id] ||
-                                  customTauxFixes[ligne.id] ||
-                                  customMarges[ligne.id]
+                                  customTauxFixes[ligne.id]
                                     ? "Prix calculé automatiquement"
                                     : ""
                                 }
