@@ -42,9 +42,17 @@ def regenerate_devis_pdf(request, devis_id):
             logger.info("📋 Type: Devis de chantier")
             # Devis de chantier - récupérer les données du chantier
             try:
-                chantier = Chantier.objects.get(id=devis.chantier)
-                chantier_name = chantier.chantier_name
-                chantier_id = chantier.id
+                # Vérifier si devis.chantier est déjà un objet ou un ID
+                if hasattr(devis.chantier, 'id'):
+                    # C'est déjà un objet Chantier
+                    chantier = devis.chantier
+                    chantier_name = chantier.chantier_name
+                    chantier_id = chantier.id
+                else:
+                    # C'est un ID, faire la requête
+                    chantier = Chantier.objects.get(id=devis.chantier)
+                    chantier_name = chantier.chantier_name
+                    chantier_id = chantier.id
                 logger.info(f"✅ Chantier trouvé: {chantier_name} (ID: {chantier_id})")
             except Chantier.DoesNotExist:
                 logger.error(f"❌ Chantier {devis.chantier} non trouvé pour le devis de chantier")
@@ -84,9 +92,17 @@ def regenerate_devis_pdf(request, devis_id):
             logger.info("📋 Type: Devis normal")
             # Devis normal - récupérer les données du chantier
             try:
-                chantier = Chantier.objects.get(id=devis.chantier)
-                chantier_name = chantier.chantier_name
-                chantier_id = chantier.id
+                # Vérifier si devis.chantier est déjà un objet ou un ID
+                if hasattr(devis.chantier, 'id'):
+                    # C'est déjà un objet Chantier
+                    chantier = devis.chantier
+                    chantier_name = chantier.chantier_name
+                    chantier_id = chantier.id
+                else:
+                    # C'est un ID, faire la requête
+                    chantier = Chantier.objects.get(id=devis.chantier)
+                    chantier_name = chantier.chantier_name
+                    chantier_id = chantier.id
                 logger.info(f"✅ Chantier trouvé: {chantier_name} (ID: {chantier_id})")
             except Chantier.DoesNotExist:
                 logger.error(f"❌ Chantier {devis.chantier} non trouvé pour le devis normal")
@@ -191,7 +207,13 @@ def get_devis_modification_info(request, devis_id):
         if devis.devis_chantier:
             # Devis de chantier - récupérer les données du chantier
             try:
-                chantier = Chantier.objects.get(id=devis.chantier)
+                # Vérifier si devis.chantier est déjà un objet ou un ID
+                if hasattr(devis.chantier, 'id'):
+                    # C'est déjà un objet Chantier
+                    chantier = devis.chantier
+                else:
+                    # C'est un ID, faire la requête
+                    chantier = Chantier.objects.get(id=devis.chantier)
                 response_data.update({
                     'chantier_id': chantier.id,
                     'chantier_name': chantier.chantier_name
@@ -202,7 +224,13 @@ def get_devis_modification_info(request, devis_id):
         else:
             # Devis normal - récupérer les données du chantier
             try:
-                chantier = Chantier.objects.get(id=devis.chantier)
+                # Vérifier si devis.chantier est déjà un objet ou un ID
+                if hasattr(devis.chantier, 'id'):
+                    # C'est déjà un objet Chantier
+                    chantier = devis.chantier
+                else:
+                    # C'est un ID, faire la requête
+                    chantier = Chantier.objects.get(id=devis.chantier)
                 response_data.update({
                     'chantier_id': chantier.id,
                     'chantier_name': chantier.chantier_name
