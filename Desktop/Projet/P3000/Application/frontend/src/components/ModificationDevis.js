@@ -2,6 +2,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Button,
   Card,
@@ -17,6 +18,7 @@ import {
   Radio,
   RadioGroup,
   Select,
+  Snackbar,
   TextField,
   Typography,
 } from "@mui/material";
@@ -142,6 +144,14 @@ const ModificationDevis = () => {
 
   // Ajout de l'état pour contrôler la visibilité de la box de résumé
   const [showSummaryBox, setShowSummaryBox] = useState(false);
+
+  // État pour la notification de succès
+  const [notification, setNotification] = useState({
+    open: false,
+    message: '',
+    severity: 'success',
+    action: null
+  });
 
   // Fonction pour charger les domaines disponibles
   const loadDomaines = () => {
@@ -900,21 +910,52 @@ const ModificationDevis = () => {
             console.log("✅ PDF régénéré et remplacé dans le Drive:", regenerateResponse.data);
             console.log("📁 Chemin du fichier:", regenerateResponse.data.file_path);
             
-            // Optionnel : afficher une notification de succès avec lien vers le Drive
+            // Afficher une notification de succès avec lien vers le Drive
+            const driveUrl = regenerateResponse.data.drive_url || regenerateResponse.data.redirect_to;
+            setNotification({
+              open: true,
+              message: `✅ Devis modifié avec succès ! PDF mis à jour dans le Drive.`,
+              severity: 'success',
+              action: {
+                label: 'Voir le fichier',
+                onClick: () => {
+                  if (driveUrl) {
+                    window.open(driveUrl, '_blank');
+                  }
+                }
+              }
+            });
+
+            // Optionnel : afficher un message d'historique si conflit détecté
             if (regenerateResponse.data.conflict_detected) {
               console.log("📝 Historique:", regenerateResponse.data.conflict_message);
             }
           } else {
             console.error("❌ Erreur lors de la régénération:", regenerateResponse.data.error);
+            setNotification({
+              open: true,
+              message: `❌ Erreur lors de la régénération du PDF: ${regenerateResponse.data.error}`,
+              severity: 'error',
+              action: null
+            });
           }
         } catch (replaceError) {
           console.error("❌ Erreur lors de la régénération du PDF:", replaceError);
+          setNotification({
+            open: true,
+            message: `❌ Erreur lors de la régénération du PDF: ${replaceError.message}`,
+            severity: 'error',
+            action: null
+          });
           // Ne pas bloquer la sauvegarde du devis si la régénération échoue
         }
         
         clearSavedState();
-        alert("Devis modifié avec succès!");
-        window.location.href = "/ListeDevis";
+        
+        // Redirection après 5 secondes pour laisser le temps à la notification de s'afficher
+        setTimeout(() => {
+          window.location.href = "/ListeDevis";
+        }, 5000);
       }
     } catch (error) {
       console.error("Erreur détaillée lors de la modification du devis:", {
@@ -3225,6 +3266,33 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
           onDelete={handleDeleteSpecialLineFromOverview}
         />
       </Box>
+      {/* Notification de succès/erreur */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={5000}
+        onClose={() => setNotification({ ...notification, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setNotification({ ...notification, open: false })}
+          severity={notification.severity}
+          sx={{ width: '100%' }}
+          action={
+            notification.action ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={notification.action.onClick}
+                sx={{ textTransform: 'none' }}
+              >
+                {notification.action.label}
+              </Button>
+            ) : null
+          }
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

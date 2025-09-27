@@ -102,12 +102,12 @@ class PDFManager:
             return f"{devis_numero}.pdf"
         
         elif document_type == 'devis_marche':
-            # Utiliser le nom du devis depuis la DB (sans timestamp ni ID)
-            devis_name = kwargs.get('devis_name', kwargs.get('appel_offres_name', 'devis_marche'))
-            print(f"🔍 DEBUG generate_pdf_filename - devis_name reçu: '{devis_name}'")
+            # Utiliser le numéro du devis depuis la DB (sans timestamp ni ID)
+            devis_numero = kwargs.get('numero', kwargs.get('devis_name', 'devis_marche'))
+            print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
             print(f"🔍 DEBUG generate_pdf_filename - kwargs: {kwargs}")
             # Nettoyer le nom pour qu'il soit propre
-            clean_name = custom_slugify(devis_name)
+            clean_name = custom_slugify(devis_numero)
             print(f"🔍 DEBUG generate_pdf_filename - clean_name après custom_slugify: '{clean_name}'")
             return f"{clean_name}.pdf"
         
@@ -170,7 +170,7 @@ class PDFManager:
                 
                 # Pour les devis de chantier, ajouter le dossier Devis/
                 if document_type == 'devis_marche':
-                    return f"Chantiers/{societe_slug}/{chantier_slug}/Devis/Devis_Marche/{subfolder}"
+                    return f"Chantiers/{societe_slug}/{chantier_slug}/Devis/{subfolder}"
                 else:
                     return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
             else:
