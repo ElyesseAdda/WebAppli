@@ -591,24 +591,59 @@ class PartieViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # Filtrer les parties non supprimées (is_deleted=False ou NULL)
+        queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
         type_filter = self.request.query_params.get('type')
         
         if type_filter:
             queryset = queryset.filter(type=type_filter)
         return queryset
     
+    def destroy(self, request, *args, **kwargs):
+        """Suppression logique en cascade"""
+        instance = self.get_object()
+        
+        # Supprimer logiquement la partie
+        instance.is_deleted = True
+        instance.save()
+        
+        # Supprimer logiquement toutes les sous-parties de cette partie
+        SousPartie.objects.filter(partie=instance).update(is_deleted=True)
+        
+        # Supprimer logiquement toutes les lignes de détail de cette partie
+        LigneDetail.objects.filter(partie=instance).update(is_deleted=True)
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
     @action(detail=False, methods=['get'])
     def domaines(self, request):
         """
         Récupère la liste des types de domaines existants
         """
-        domaines = Partie.objects.values_list('type', flat=True).distinct().order_by('type')
+        # Filtrer aussi les domaines des parties non supprimées
+        domaines = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True)).values_list('type', flat=True).distinct().order_by('type')
         return Response(list(domaines))
 
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()
     serializer_class = SousPartieSerializer
+
+    def get_queryset(self):
+        # Filtrer les sous-parties non supprimées (is_deleted=False ou NULL)
+        return SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+    
+    def destroy(self, request, *args, **kwargs):
+        """Suppression logique en cascade"""
+        instance = self.get_object()
+        
+        # Supprimer logiquement la sous-partie
+        instance.is_deleted = True
+        instance.save()
+        
+        # Supprimer logiquement toutes les lignes de détail de cette sous-partie
+        LigneDetail.objects.filter(sous_partie=instance).update(is_deleted=True)
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
@@ -1108,9 +1143,37 @@ class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()
     serializer_class = SousPartieSerializer
 
+    def get_queryset(self):
+        # Filtrer les sous-parties non supprimées (is_deleted=False ou NULL)
+        return SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+    
+    def destroy(self, request, *args, **kwargs):
+        """Suppression logique en cascade"""
+        instance = self.get_object()
+        
+        # Supprimer logiquement la sous-partie
+        instance.is_deleted = True
+        instance.save()
+        
+        # Supprimer logiquement toutes les lignes de détail de cette sous-partie
+        LigneDetail.objects.filter(sous_partie=instance).update(is_deleted=True)
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 class LigneDetailViewSet(viewsets.ModelViewSet):
     queryset = LigneDetail.objects.all()
     serializer_class = LigneDetailSerializer
+
+    def get_queryset(self):
+        # Filtrer les lignes de détail non supprimées (is_deleted=False ou NULL)
+        return LigneDetail.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+    
+    def destroy(self, request, *args, **kwargs):
+        """Suppression logique simple"""
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         try:

@@ -24,7 +24,7 @@ import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
 import { FaEyeSlash } from "react-icons/fa";
 import { FiPlusCircle } from "react-icons/fi";
-import { RiPencilFill } from "react-icons/ri";
+import { RiPencilFill, RiDeleteBin6Line } from "react-icons/ri";
 import { useLocation } from "react-router-dom";
 import axiosInstance from "../utils/axios";
 import ChantierForm from "./ChantierForm";
@@ -1591,6 +1591,102 @@ const CreationDevis = () => {
     setEditModalOpen(true);
   };
 
+  // Fonction pour recharger les parties
+  const reloadParties = () => {
+    if (!selectedPartieType) return;
+    const params = { type: selectedPartieType };
+    axios
+      .get("/api/parties/", { params })
+      .then((response) => {
+        setParties(response.data);
+      })
+      .catch((error) => {
+        console.error("Erreur lors du rechargement des parties", error);
+      });
+  };
+
+  // Fonction pour recharger les sous-parties
+  const reloadSousParties = () => {
+    axios
+      .get("/api/sous-parties/")
+      .then((response) => {
+        setSousParties(response.data);
+      })
+      .catch((error) => {
+        console.error("Erreur lors du rechargement des sous-parties", error);
+      });
+  };
+
+  // Fonction pour recharger les lignes de détail
+  const reloadLignesDetails = () => {
+    if (selectedSousParties.length > 0) {
+      axios
+        .get("/api/sous-parties/", {
+          params: {
+            id__in: selectedSousParties.join(","),
+          },
+        })
+        .then((response) => {
+          const allLignes = response.data.flatMap((sp) => sp.lignes_details || []);
+          setAllLignesDetails(allLignes);
+          // Mettre à jour aussi les lignes filtrées
+          const filtered = allLignes.filter((ligne) => {
+            return selectedSousParties.includes(ligne.sous_partie);
+          });
+          setFilteredLignesDetails(filtered);
+        })
+        .catch((error) => {
+          console.error("Erreur lors du rechargement des lignes de détail", error);
+        });
+    } else {
+      setAllLignesDetails([]);
+      setFilteredLignesDetails([]);
+    }
+  };
+
+  const handleDeletePartie = async (partie) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la partie "${partie.titre}" ?`)) {
+      try {
+        await axiosInstance.delete(`parties/${partie.id}/`);
+        // Recharger les données après suppression
+        loadDomaines();
+        reloadParties();
+        reloadSousParties();
+        reloadLignesDetails();
+      } catch (error) {
+        console.error("Erreur lors de la suppression de la partie:", error);
+        alert("Erreur lors de la suppression de la partie");
+      }
+    }
+  };
+
+  const handleDeleteSousPartie = async (sousPartie) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la sous-partie "${sousPartie.description}" ?`)) {
+      try {
+        await axiosInstance.delete(`sous-parties/${sousPartie.id}/`);
+        // Recharger les données après suppression
+        reloadSousParties();
+        reloadLignesDetails();
+      } catch (error) {
+        console.error("Erreur lors de la suppression de la sous-partie:", error);
+        alert("Erreur lors de la suppression de la sous-partie");
+      }
+    }
+  };
+
+  const handleDeleteLigne = async (ligne) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la ligne "${ligne.description}" ?`)) {
+      try {
+        await axiosInstance.delete(`ligne-details/${ligne.id}/`);
+        // Recharger les données après suppression
+        reloadLignesDetails();
+      } catch (error) {
+        console.error("Erreur lors de la suppression de la ligne:", error);
+        alert("Erreur lors de la suppression de la ligne");
+      }
+    }
+  };
+
   const handleAddSpecialLine = (type, id) => {
     // Assurons-nous que le type est correctement défini
     const targetType = type === "parties" ? "parties" : "sousParties";
@@ -2593,8 +2689,26 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                         <button
                           style={{
                             backgroundColor: "transparent",
-                            color: "#f44336",
+                            color: "#f44336", // Rouge pour suppression
                             border: "2px solid #f44336",
+                            borderRadius: "4px",
+                            padding: "2px",
+                            cursor: "pointer",
+                            height: "24px",
+                            width: "24px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          onClick={() => handleDeletePartie(partie)}
+                        >
+                          <RiDeleteBin6Line size={16} />
+                        </button>
+                        <button
+                          style={{
+                            backgroundColor: "transparent",
+                            color: "#ff9800", // Orange pour masquer
+                            border: "2px solid #ff9800",
                             borderRadius: "4px",
                             padding: "2px",
                             cursor: "pointer",
@@ -2709,6 +2823,26 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                             }}
                           >
                             <RiPencilFill size={16} />
+                          </button>
+                          <button
+                            style={{
+                              backgroundColor: "transparent",
+                              color: "#ff9800",
+                              border: "2px solid #ff9800",
+                              borderRadius: "4px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              padding: "2px",
+                              marginRight: "4px",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSousPartie(sousPartie);
+                            }}
+                          >
+                            <RiDeleteBin6Line size={16} />
                           </button>
                           <button
                             style={{
@@ -2872,6 +3006,24 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                                     onClick={() => handleEditLigne(ligne)}
                                   >
                                     <RiPencilFill size={16} />
+                                  </button>
+                                  <button
+                                    style={{
+                                      backgroundColor: "transparent",
+                                      color: "#ff9800",
+                                      border: "2px solid #ff9800",
+                                      borderRadius: "4px",
+                                      padding: "2px",
+                                      cursor: "pointer",
+                                      height: "24px",
+                                      width: "24px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                    onClick={() => handleDeleteLigne(ligne)}
+                                  >
+                                    <RiDeleteBin6Line size={16} />
                                   </button>
                                   <button
                                     style={{

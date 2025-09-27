@@ -32,6 +32,7 @@ import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
+import ListeFournisseurs from "./ListeFournisseurs";
 import Login from "./Login";
 import ModificationDevis from "./ModificationDevis";
 import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
@@ -339,6 +340,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeSituation />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ListeFournisseurs"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeFournisseurs />
                 </Layout>
               </ProtectedRoute>
             }

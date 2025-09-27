@@ -558,6 +558,16 @@ class LigneDetail(models.Model):
     taux_fixe = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
     marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
     prix = models.DecimalField(max_digits=10, decimal_places=2)
+    is_deleted = models.BooleanField(default=False, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sous_partie', 'description', 'unite'],
+                condition=models.Q(is_deleted=False),
+                name='unique_ligne_detail_active'
+            )
+        ]
 
     def calculer_prix(self):
         base = self.cout_main_oeuvre + self.cout_materiel
@@ -808,6 +818,16 @@ class Quitus(models.Model):
 class Partie(models.Model):
     titre = models.CharField(max_length=600, null=False, blank=False)
     type = models.CharField(max_length=50, default='PEINTURE', help_text="Domaine d'activité de la partie (chaîne libre)")
+    is_deleted = models.BooleanField(default=False, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['titre', 'type'],
+                condition=models.Q(is_deleted=False),
+                name='unique_partie_active'
+            )
+        ]
 
     def __str__(self):
         # Assurez-vous que "titre" n'est pas None avant de l'afficher
@@ -817,6 +837,16 @@ class Partie(models.Model):
 class SousPartie(models.Model):
     partie = models.ForeignKey(Partie, related_name='sous_parties', on_delete=models.CASCADE)
     description = models.CharField(max_length=600, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['partie', 'description'],
+                condition=models.Q(is_deleted=False),
+                name='unique_sous_partie_active'
+            )
+        ]
 
     def __str__(self):
         return f'{self.description} - {self.partie.titre}'

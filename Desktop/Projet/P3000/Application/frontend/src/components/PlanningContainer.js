@@ -302,7 +302,7 @@ const PlanningContainer = () => {
               <MenuItem value="">--Sélectionner un agent--</MenuItem>
               {agents.map((agent) => (
                 <MenuItem key={agent.id} value={agent.id}>
-                  {agent.name}
+                  {agent.name} {agent.surname}
                 </MenuItem>
               ))}
             </Select>
@@ -477,7 +477,7 @@ const PlanningContainer = () => {
                 .filter((agent) => agent.id !== selectedAgentId)
                 .map((agent) => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.name}
+                    {agent.name} {agent.surname}
                   </option>
                 ))}
             </select>

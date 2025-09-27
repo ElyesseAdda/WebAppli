@@ -165,10 +165,11 @@ class LigneDetailSerializer(serializers.ModelSerializer):
         sous_partie = data.get('sous_partie')
         
         if description and sous_partie:
-            # Vérifie si une ligne avec la même description existe dans la sous-partie
+            # Vérifie si une ligne avec la même description existe dans la sous-partie (non supprimée)
             existing_ligne = LigneDetail.objects.filter(
                 Q(description__iexact=description) &
-                Q(sous_partie=sous_partie)
+                Q(sous_partie=sous_partie) &
+                Q(is_deleted=False)
             ).first()
             
             if existing_ligne:
@@ -206,7 +207,8 @@ class SousPartieSerializer(serializers.ModelSerializer):
             if description == "Lignes directes":
                 existing_sous_partie = SousPartie.objects.filter(
                     description="Lignes directes",
-                    partie=partie
+                    partie=partie,
+                    is_deleted=False
                 ).first()
                 
                 if existing_sous_partie:
@@ -217,10 +219,11 @@ class SousPartieSerializer(serializers.ModelSerializer):
                                      f'Vous pouvez ajouter des lignes supplémentaires à cette sous-partie existante.'
                     })
             else:
-                # Vérifie si une sous-partie avec la même description existe dans la partie
+                # Vérifie si une sous-partie avec la même description existe dans la partie (non supprimée)
                 existing_sous_partie = SousPartie.objects.filter(
                     Q(description__iexact=description) &
-                    Q(partie=partie)
+                    Q(partie=partie) &
+                    Q(is_deleted=False)
                 ).first()
                 
                 if existing_sous_partie:
@@ -256,10 +259,11 @@ class PartieSerializer(serializers.ModelSerializer):
         type_partie = data.get('type')
         
         if titre and type_partie:
-            # Vérifie si une partie avec le même titre existe dans le même type
+            # Vérifie si une partie avec le même titre existe dans le même type (non supprimée)
             existing_partie = Partie.objects.filter(
                 titre__iexact=titre,
-                type=type_partie
+                type=type_partie,
+                is_deleted=False
             ).first()
             
             if existing_partie:

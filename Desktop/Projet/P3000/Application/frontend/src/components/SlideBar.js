@@ -6,6 +6,7 @@ import {
   MdCreateNewFolder,
   MdEventAvailable,
   MdFolderOpen,
+  MdBusiness,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { NavLink, useLocation } from "react-router-dom";
@@ -64,6 +65,14 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         ],
       },
 
+      {
+        key: "fournisseurs",
+        label: "Fournisseurs",
+        icon: MdBusiness,
+        children: [
+          { label: "Liste Fournisseurs", to: "/ListeFournisseurs" },
+        ],
+      },
       {
         key: "drive",
         label: "Drive",
