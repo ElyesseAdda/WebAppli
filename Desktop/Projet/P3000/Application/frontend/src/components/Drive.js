@@ -16,6 +16,7 @@ import {
   Language as LanguageIcon,
   NavigateNext as NavigateNextIcon,
   PictureAsPdf as PdfIcon,
+  Refresh as RefreshIcon,
   Search as SearchIcon,
   CloudUpload as UploadIcon,
   VideoFile as VideoIcon,
@@ -270,19 +271,19 @@ const Drive = () => {
 
   // Fonctions utilitaires
   const formatFileName = (fileName) => {
-    // Transformer les underscores en espaces pour un affichage plus lisible
+    // Transformer les underscores et tirets en espaces pour un affichage plus lisible
     // Garder l'extension intacte
     if (!fileName) return fileName;
 
     const lastDotIndex = fileName.lastIndexOf(".");
     if (lastDotIndex === -1) {
-      // Pas d'extension, remplacer tous les underscores
-      return fileName.replace(/_/g, " ");
+      // Pas d'extension, remplacer tous les underscores et tirets
+      return fileName.replace(/[_-]/g, " ");
     } else {
-      // Garder l'extension intacte, remplacer les underscores dans le nom
+      // Garder l'extension intacte, remplacer les underscores et tirets dans le nom
       const name = fileName.substring(0, lastDotIndex);
       const extension = fileName.substring(lastDotIndex);
-      return name.replace(/_/g, " ") + extension;
+      return name.replace(/[_-]/g, " ") + extension;
     }
   };
 
@@ -1168,6 +1169,16 @@ const Drive = () => {
             onClick={() => setCreateFolderDialogOpen(true)}
           >
             Nouveau dossier
+          </Button>
+
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => fetchFolderContent(currentPath)}
+            disabled={loading}
+            title="Recharger le contenu du dossier"
+          >
+            Recharger
           </Button>
 
           <Button
