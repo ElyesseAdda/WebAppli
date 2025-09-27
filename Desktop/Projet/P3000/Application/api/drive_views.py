@@ -307,7 +307,7 @@ class DriveCompleteViewSet(viewsets.ViewSet):
             import requests
             from io import BytesIO
             from PIL import Image
-            import fitz  # PyMuPDF
+            import fitz  # PyMuPDF  
 
             # Obtenir l'URL du fichier
             file_url = generate_presigned_url('get_object', file_path, expires_in=3600)
