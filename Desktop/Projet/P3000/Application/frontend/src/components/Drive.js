@@ -567,6 +567,13 @@ const Drive = () => {
           folders: [...prev.folders, newFolder],
         }));
 
+        // Naviguer automatiquement vers le nouveau dossier créé
+        const newPath = data.folder_path.endsWith('/') ? data.folder_path : data.folder_path + '/';
+        setCurrentPath(newPath);
+        
+        // Recharger le contenu du nouveau dossier
+        await fetchFolderContent(newPath);
+
         setNewFolderName("");
         setCreateFolderDialogOpen(false);
         showSnackbar("Dossier créé avec succès", "success");
@@ -700,17 +707,18 @@ const Drive = () => {
   // Upload de fichiers
   const uploadFile = async (file) => {
     try {
-      // Vérifier que le fichier a un nom
+      // Vérification du nom de fichier
       if (!file.name) {
         throw new Error("Le fichier n'a pas de nom");
       }
-
-      // 1. Obtenir l'URL d'upload
+      
+      // Construction du chemin correct
       const requestBody = {
-        file_path: currentPath || "",
+        file_path: currentPath || "", // ← Chemin actuel du dossier
         file_name: file.name,
       };
 
+      // 1. Obtenir l'URL d'upload
       const uploadUrlResponse = await fetch("/api/drive-complete/upload-url/", {
         method: "POST",
         headers: {
@@ -748,7 +756,7 @@ const Drive = () => {
 
       return true;
     } catch (error) {
-      throw error;
+      throw error; // Propagation de l'erreur
     }
   };
 
@@ -1007,25 +1015,46 @@ const Drive = () => {
     if (selectedFiles.length === 0) return;
 
     setUploading(true);
+    let successCount = 0;
+    let errorCount = 0;
+
     try {
       for (const file of selectedFiles) {
-        if (file.size > MAX_FILE_SIZE) {
-          showSnackbar(
-            `Le fichier ${formatFileName(
-              file.name
-            )} dépasse la taille maximale de 100 MB`,
-            "error"
-          );
-          continue;
-        }
+        try {
+          if (file.size > MAX_FILE_SIZE) {
+            showSnackbar(
+              `Le fichier ${formatFileName(
+                file.name
+              )} dépasse la taille maximale de 100 MB`,
+              "error"
+            );
+            errorCount++;
+            continue;
+          }
 
-        await uploadFile(file);
+          await uploadFile(file);
+          successCount++;
+        } catch (error) {
+          // Gestion individuelle des erreurs
+          showSnackbar(`Erreur pour ${file.name}: ${error.message}`, "error");
+          errorCount++;
+        }
       }
 
-      showSnackbar("Upload terminé avec succès", "success");
+      // Feedback utilisateur détaillé
+      if (successCount > 0) {
+        showSnackbar(`${successCount} fichier(s) uploadé(s)`, "success");
+      }
+      
+      if (errorCount > 0) {
+        showSnackbar(`${errorCount} fichier(s) en erreur`, "warning");
+      }
+
+      // Rechargement automatique
+      await fetchFolderContent(currentPath);
+      
       setUploadDialogOpen(false);
       setSelectedFiles([]);
-      fetchFolderContent(currentPath); // Recharger pour voir les nouveaux fichiers
     } catch (error) {
       showSnackbar("Erreur lors de l'upload", "error");
     } finally {
@@ -1230,7 +1259,7 @@ const Drive = () => {
                   borderColor: "primary.main",
                   borderRadius: 3,
                   padding: 6,
-                  backgroundColor: "primary.light + 20",
+                  backgroundColor: "rgba(25, 118, 210, 0.1)",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -1238,6 +1267,12 @@ const Drive = () => {
                   minWidth: 300,
                   minHeight: 200,
                   boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                  animation: "pulse 1.5s ease-in-out infinite",
+                  "@keyframes pulse": {
+                    "0%": { transform: "scale(1)" },
+                    "50%": { transform: "scale(1.02)" },
+                    "100%": { transform: "scale(1)" },
+                  },
                 }}
               >
                 <UploadIcon
@@ -1247,7 +1282,10 @@ const Drive = () => {
                   Déposez vos fichiers ici
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Glissez-déposez vos fichiers pour les uploader
+                  Glissez-déposez vos fichiers pour les uploader dans le dossier actuel
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  Dossier: {currentPath || "Racine"}
                 </Typography>
               </Box>
             )}
@@ -1320,7 +1358,7 @@ const Drive = () => {
                   (searchResults.folders.length > 0 ||
                     searchResults.files.length > 0)
                     ? `Aucun fichier ou dossier ne correspond à "${searchTerm}"`
-                    : "Glissez-déposez des fichiers ici"}
+                    : `Glissez-déposez des fichiers ici dans ${currentPath || "la racine"}`}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {searchTerm.trim() &&
@@ -1333,9 +1371,6 @@ const Drive = () => {
             ) : (
               <Box
                 sx={{ p: 2, width: "100%" }}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
               >
                 {/* En-tête de la liste */}
                 <Paper sx={{ mb: 2, width: "100%" }}>

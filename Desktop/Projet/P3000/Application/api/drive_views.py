@@ -153,7 +153,10 @@ class DriveCompleteViewSet(viewsets.ViewSet):
             if file_path:
                 # Nettoyer le chemin pour éviter les doubles slashes
                 clean_path = file_path.rstrip('/')
-                full_path = f"{clean_path}/{custom_slugify(file_name)}"
+                # S'assurer que le chemin se termine par un slash pour les dossiers
+                if clean_path:
+                    clean_path += '/'
+                full_path = f"{clean_path}{custom_slugify(file_name)}"
             else:
                 full_path = custom_slugify(file_name)
 

@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/static/frontend/main.e499a98fc8b8a6c134a3.css",
-    "main.js": "/static/frontend/main.afa4cc4492856faa1835.js",
+    "main.js": "/static/frontend/main.c0b3f9ebda64cd09a9f1.js",
     "src/img/logo.png": "/static/frontend/src/img/logo.png"
   },
   "entrypoints": {
     "main": [
       "main.e499a98fc8b8a6c134a3.css",
-      "main.afa4cc4492856faa1835.js"
+      "main.c0b3f9ebda64cd09a9f1.js"
     ]
   }
 }
