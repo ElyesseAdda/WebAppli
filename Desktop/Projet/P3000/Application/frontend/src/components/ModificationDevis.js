@@ -474,7 +474,7 @@ const ModificationDevis = () => {
     if (selectedSousParties.length > 0) {
       // Récupérer les sous-parties sélectionnées avec leurs lignes de détail
       const params = {
-        id__in: selectedSousParties.join(","),
+            id__in: selectedSousParties.join(","),
         // En mode modification de devis, inclure les éléments supprimés
         ...(devisId && { devis_id: devisId, include_deleted: 'true' })
       };
