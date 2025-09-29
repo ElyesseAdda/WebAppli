@@ -232,10 +232,9 @@ const ModificationDevis = () => {
 
   // Fonction pour sauvegarder les coûts personnalisés
   const saveCustomCostsToDatabase = async (ligneId) => {
-    let ligne = null;
     try {
       setError(null);
-      ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
       if (!ligne) {
         throw new Error(`Ligne avec l'ID ${ligneId} non trouvée`);
       }
@@ -389,15 +388,19 @@ const ModificationDevis = () => {
   // Charger les parties filtrées par type
   useEffect(() => {
     setError(null);
-    const params = { 
-      type: selectedPartieType,
-      // En mode modification de devis, inclure les éléments supprimés
-      ...(devisId && { devis_id: devisId, include_deleted: 'true' })
-    };
+    
+    // En mode modification de devis, utiliser l'endpoint qui inclut les éléments supprimés
+    const endpoint = devisId ? "/api/parties/all_including_deleted/" : "/api/parties/";
+    const params = devisId ? {} : { type: selectedPartieType };
+    
     axios
-      .get("/api/parties/", { params })
+      .get(endpoint, { params })
       .then((response) => {
-        setParties(response.data);
+        // Filtrer par type côté client si on utilise l'endpoint all_including_deleted
+        const filteredParties = devisId 
+          ? response.data.filter(partie => partie.type === selectedPartieType)
+          : response.data;
+        setParties(filteredParties);
       })
       .catch((error) => {
         console.error("Erreur lors du chargement des parties", error);
@@ -414,12 +417,12 @@ const ModificationDevis = () => {
   // Charger toutes les sous-parties
   useEffect(() => {
     setError(null);
-    const params = {
-      // En mode modification de devis, inclure les éléments supprimés
-      ...(devisId && { devis_id: devisId, include_deleted: 'true' })
-    };
+    
+    // En mode modification de devis, utiliser l'endpoint qui inclut les éléments supprimés
+    const endpoint = devisId ? "/api/sous-parties/all_including_deleted/" : "/api/sous-parties/";
+    
     axios
-      .get("/api/sous-parties/", { params })
+      .get(endpoint)
       .then((response) => {
         setSousParties(response.data);
       })
@@ -472,36 +475,47 @@ const ModificationDevis = () => {
   // Charger les lignes de détail basées sur les sous-parties sélectionnées
   useEffect(() => {
     if (selectedSousParties.length > 0) {
-      // Récupérer les sous-parties sélectionnées avec leurs lignes de détail
-      const params = {
-            id__in: selectedSousParties.join(","),
-        // En mode modification de devis, inclure les éléments supprimés
-        ...(devisId && { devis_id: devisId, include_deleted: 'true' })
-      };
-      
-      axios
-        .get("/api/sous-parties/", { params })
-        .then((response) => {
-          // Extraire toutes les lignes de détail des sous-parties
-          const allLignes = response.data.reduce((acc, sousPartie) => {
-            const lignesWithSousPartie = sousPartie.lignes_details.map(
-              (ligne) => ({
-                ...ligne,
-                sous_partie: sousPartie.id,
-              })
+      // En mode modification de devis, utiliser l'endpoint qui inclut les éléments supprimés
+      if (devisId) {
+        // Récupérer toutes les lignes de détail y compris supprimées, puis filtrer
+        axios
+          .get("/api/ligne-details/all_including_deleted/")
+          .then((response) => {
+            // Filtrer les lignes qui appartiennent aux sous-parties sélectionnées
+            const filteredLignes = response.data.filter(ligne => 
+              selectedSousParties.includes(ligne.sous_partie)
             );
-            return [...acc, ...lignesWithSousPartie];
-          }, []);
+            setAllLignesDetails(filteredLignes);
+            setFilteredLignesDetails(filteredLignes);
+          })
+          .catch((error) => {
+            console.error("Erreur lors du chargement des lignes de détail", error);
+          });
+      } else {
+        // Mode création normal : récupérer via les sous-parties
+        const params = { id__in: selectedSousParties.join(",") };
+        
+        axios
+          .get("/api/sous-parties/", { params })
+          .then((response) => {
+            // Extraire toutes les lignes de détail des sous-parties
+            const allLignes = response.data.reduce((acc, sousPartie) => {
+              const lignesWithSousPartie = sousPartie.lignes_details.map(
+                (ligne) => ({
+                  ...ligne,
+                  sous_partie: sousPartie.id,
+                })
+              );
+              return [...acc, ...lignesWithSousPartie];
+            }, []);
 
-          setAllLignesDetails(allLignes);
-          setFilteredLignesDetails(allLignes);
-        })
-        .catch((error) => {
-          console.error(
-            "Erreur lors du chargement des lignes de détail",
-            error
-          );
-        });
+            setAllLignesDetails(allLignes);
+            setFilteredLignesDetails(allLignes);
+          })
+          .catch((error) => {
+            console.error("Erreur lors du chargement des lignes de détail", error);
+          });
+      }
     } else {
       setAllLignesDetails([]);
       setFilteredLignesDetails([]);
@@ -1758,17 +1772,27 @@ const ModificationDevis = () => {
 
               // Récupérer la sous-partie correspondante
               try {
-                const ligneDetailResponse = await axios.get(
-                  `/api/ligne-details/${ligne.ligne_detail}/`
-                );
-                const sousPartieId = ligneDetailResponse.data.sous_partie;
+                // En mode modification, utiliser l'endpoint qui inclut les supprimés
+                const endpoint = `/api/ligne-details/all_including_deleted/`;
+                const allLignesResponse = await axios.get(endpoint);
+                const ligneDetail = allLignesResponse.data.find(l => l.id === ligne.ligne_detail);
+                
+                if (!ligneDetail) {
+                  console.warn(`Ligne de détail ${ligne.ligne_detail} non trouvée`);
+                  continue;
+                }
+                const sousPartieId = ligneDetail.sous_partie;
                 selectedSousPartieIds.add(sousPartieId);
 
                 // Récupérer la partie correspondante
-                const sousPartieResponse = await axios.get(
-                  `/api/sous-parties/${sousPartieId}/`
-                );
-                const partieId = sousPartieResponse.data.partie;
+                const allSousPartiesResponse = await axios.get('/api/sous-parties/all_including_deleted/');
+                const sousPartie = allSousPartiesResponse.data.find(sp => sp.id === sousPartieId);
+                
+                if (!sousPartie) {
+                  console.warn(`Sous-partie ${sousPartieId} non trouvée`);
+                  continue;
+                }
+                const partieId = sousPartie.partie;
                 selectedPartieIds.add(partieId);
               } catch (error) {
                 console.error(

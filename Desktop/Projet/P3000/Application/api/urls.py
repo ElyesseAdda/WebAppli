@@ -78,7 +78,6 @@ from .views import (
     PaiementGlobalSousTraitantViewSet,
     FactureSousTraitantViewSet,
     PaiementFactureSousTraitantViewSet,
-    recalculer_couts_estimes,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -251,7 +250,6 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
     path('fournisseurs/', fournisseurs, name='fournisseurs'),
-    path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='recalculer-couts-estimes'),
 ]
 
 urlpatterns += [
