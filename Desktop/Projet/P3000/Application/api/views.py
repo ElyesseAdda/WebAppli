@@ -591,10 +591,39 @@ class PartieViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 
     def get_queryset(self):
-        # Filtrer les parties non supprimées (is_deleted=False ou NULL)
-        queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
-        type_filter = self.request.query_params.get('type')
+        # Vérifier si on est en mode modification de devis
+        devis_id = self.request.query_params.get('devis_id')
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() == 'true'
         
+        if devis_id and include_deleted:
+            # En mode modification de devis, inclure les éléments supprimés
+            # mais seulement ceux qui étaient présents dans le devis original
+            queryset = Partie.objects.all()
+            
+            # Récupérer les parties présentes dans le devis original
+            try:
+                devis = Devis.objects.get(id=devis_id)
+                devis_lignes = DevisLigne.objects.filter(devis=devis)
+                partie_ids = set()
+                
+                for ligne in devis_lignes:
+                    if ligne.ligne_detail and ligne.ligne_detail.partie:
+                        partie_ids.add(ligne.ligne_detail.partie.id)
+                
+                # Filtrer pour ne montrer que les parties du devis original
+                if partie_ids:
+                    queryset = queryset.filter(id__in=partie_ids)
+                else:
+                    # Si aucune partie trouvée, retourner un queryset vide
+                    queryset = Partie.objects.none()
+            except (Devis.DoesNotExist, Exception) as e:
+                # Si le devis n'existe pas ou erreur, revenir au comportement normal
+                queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        else:
+            # Comportement normal : filtrer les parties non supprimées
+            queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        type_filter = self.request.query_params.get('type')
         if type_filter:
             queryset = queryset.filter(type=type_filter)
         return queryset
@@ -629,8 +658,39 @@ class SousPartieViewSet(viewsets.ModelViewSet):
     serializer_class = SousPartieSerializer
 
     def get_queryset(self):
-        # Filtrer les sous-parties non supprimées (is_deleted=False ou NULL)
-        return SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        # Vérifier si on est en mode modification de devis
+        devis_id = self.request.query_params.get('devis_id')
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() == 'true'
+        
+        if devis_id and include_deleted:
+            # En mode modification de devis, inclure les éléments supprimés
+            # mais seulement ceux qui étaient présents dans le devis original
+            queryset = SousPartie.objects.all()
+            
+            # Récupérer les sous-parties présentes dans le devis original
+            try:
+                devis = Devis.objects.get(id=devis_id)
+                devis_lignes = DevisLigne.objects.filter(devis=devis)
+                sous_partie_ids = set()
+                
+                for ligne in devis_lignes:
+                    if ligne.ligne_detail and ligne.ligne_detail.sous_partie:
+                        sous_partie_ids.add(ligne.ligne_detail.sous_partie.id)
+                
+                # Filtrer pour ne montrer que les sous-parties du devis original
+                if sous_partie_ids:
+                    queryset = queryset.filter(id__in=sous_partie_ids)
+                else:
+                    # Si aucune sous-partie trouvée, retourner un queryset vide
+                    queryset = SousPartie.objects.none()
+            except (Devis.DoesNotExist, Exception) as e:
+                # Si le devis n'existe pas ou erreur, revenir au comportement normal
+                queryset = SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        else:
+            # Comportement normal : filtrer les sous-parties non supprimées
+            queryset = SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        return queryset
     
     def destroy(self, request, *args, **kwargs):
         """Suppression logique en cascade"""
@@ -1144,8 +1204,39 @@ class SousPartieViewSet(viewsets.ModelViewSet):
     serializer_class = SousPartieSerializer
 
     def get_queryset(self):
-        # Filtrer les sous-parties non supprimées (is_deleted=False ou NULL)
-        return SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        # Vérifier si on est en mode modification de devis
+        devis_id = self.request.query_params.get('devis_id')
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() == 'true'
+        
+        if devis_id and include_deleted:
+            # En mode modification de devis, inclure les éléments supprimés
+            # mais seulement ceux qui étaient présents dans le devis original
+            queryset = SousPartie.objects.all()
+            
+            # Récupérer les sous-parties présentes dans le devis original
+            try:
+                devis = Devis.objects.get(id=devis_id)
+                devis_lignes = DevisLigne.objects.filter(devis=devis)
+                sous_partie_ids = set()
+                
+                for ligne in devis_lignes:
+                    if ligne.ligne_detail and ligne.ligne_detail.sous_partie:
+                        sous_partie_ids.add(ligne.ligne_detail.sous_partie.id)
+                
+                # Filtrer pour ne montrer que les sous-parties du devis original
+                if sous_partie_ids:
+                    queryset = queryset.filter(id__in=sous_partie_ids)
+                else:
+                    # Si aucune sous-partie trouvée, retourner un queryset vide
+                    queryset = SousPartie.objects.none()
+            except (Devis.DoesNotExist, Exception) as e:
+                # Si le devis n'existe pas ou erreur, revenir au comportement normal
+                queryset = SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        else:
+            # Comportement normal : filtrer les sous-parties non supprimées
+            queryset = SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        return queryset
     
     def destroy(self, request, *args, **kwargs):
         """Suppression logique en cascade"""
@@ -1165,8 +1256,43 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
     serializer_class = LigneDetailSerializer
 
     def get_queryset(self):
-        # Filtrer les lignes de détail non supprimées (is_deleted=False ou NULL)
-        return LigneDetail.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        # Vérifier si on est en mode modification de devis
+        devis_id = self.request.query_params.get('devis_id')
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() == 'true'
+        
+        # Pour les opérations de modification (PUT, PATCH, DELETE), permettre l'accès aux lignes supprimées
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return LigneDetail.objects.all()
+        
+        if devis_id and include_deleted:
+            # En mode modification de devis, inclure les éléments supprimés
+            # mais seulement ceux qui étaient présents dans le devis original
+            queryset = LigneDetail.objects.all()
+            
+            # Récupérer les lignes présentes dans le devis original
+            try:
+                devis = Devis.objects.get(id=devis_id)
+                devis_lignes = DevisLigne.objects.filter(devis=devis)
+                ligne_detail_ids = set()
+                
+                for ligne in devis_lignes:
+                    if ligne.ligne_detail:
+                        ligne_detail_ids.add(ligne.ligne_detail.id)
+                
+                # Filtrer pour ne montrer que les lignes du devis original
+                if ligne_detail_ids:
+                    queryset = queryset.filter(id__in=ligne_detail_ids)
+                else:
+                    # Si aucune ligne trouvée, retourner un queryset vide
+                    queryset = LigneDetail.objects.none()
+            except (Devis.DoesNotExist, Exception) as e:
+                # Si le devis n'existe pas ou erreur, revenir au comportement normal
+                queryset = LigneDetail.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        else:
+            # Comportement normal : filtrer les lignes non supprimées
+            queryset = LigneDetail.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        return queryset
     
     def destroy(self, request, *args, **kwargs):
         """Suppression logique simple"""
@@ -9014,7 +9140,7 @@ def recalculer_couts_estimes(request, chantier_id):
                 'error': 'Aucun devis de chantier trouvé pour ce chantier'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Récupérer les lignes du devis
+        # Récupérer les lignes du devis (inclure les lignes supprimées)
         lignes_devis = DevisLigne.objects.filter(devis=devis_chantier)
         
         # Initialiser les totaux
@@ -9024,16 +9150,23 @@ def recalculer_couts_estimes(request, chantier_id):
         # Calculer les coûts à partir des lignes du devis
         for ligne in lignes_devis:
             try:
-                # Récupérer les détails de la ligne
+                # Récupérer les détails de la ligne (même si supprimée)
                 ligne_detail = ligne.ligne_detail
+                if not ligne_detail:
+                    print(f"Ligne détail non trouvée pour la ligne {ligne.id}")
+                    continue
+                    
                 quantite = Decimal(str(ligne.quantite or 0))
                 
-                # Calculer les coûts pour cette ligne
+                # Calculer les coûts pour cette ligne (même si la ligne est supprimée)
                 cout_main_oeuvre_ligne = Decimal(str(ligne_detail.cout_main_oeuvre or 0)) * quantite
                 cout_materiel_ligne = Decimal(str(ligne_detail.cout_materiel or 0)) * quantite
                 
                 cout_main_oeuvre_total += cout_main_oeuvre_ligne
                 cout_materiel_total += cout_materiel_ligne
+                
+                # Log pour debug
+                print(f"Ligne {ligne.id} (supprimée: {ligne_detail.is_deleted}): MO={cout_main_oeuvre_ligne}, Mat={cout_materiel_ligne}")
                 
             except Exception as e:
                 print(f"Erreur lors du calcul de la ligne {ligne.id}: {e}")

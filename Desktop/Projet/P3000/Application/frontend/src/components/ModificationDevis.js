@@ -232,9 +232,10 @@ const ModificationDevis = () => {
 
   // Fonction pour sauvegarder les coûts personnalisés
   const saveCustomCostsToDatabase = async (ligneId) => {
+    let ligne = null;
     try {
       setError(null);
-      const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+      ligne = filteredLignesDetails.find((l) => l.id === ligneId);
       if (!ligne) {
         throw new Error(`Ligne avec l'ID ${ligneId} non trouvée`);
       }
@@ -388,7 +389,11 @@ const ModificationDevis = () => {
   // Charger les parties filtrées par type
   useEffect(() => {
     setError(null);
-    const params = { type: selectedPartieType };
+    const params = { 
+      type: selectedPartieType,
+      // En mode modification de devis, inclure les éléments supprimés
+      ...(devisId && { devis_id: devisId, include_deleted: 'true' })
+    };
     axios
       .get("/api/parties/", { params })
       .then((response) => {
@@ -404,13 +409,17 @@ const ModificationDevis = () => {
           timestamp: new Date().toISOString(),
         });
       });
-  }, [selectedPartieType]);
+  }, [selectedPartieType, devisId]);
 
   // Charger toutes les sous-parties
   useEffect(() => {
     setError(null);
+    const params = {
+      // En mode modification de devis, inclure les éléments supprimés
+      ...(devisId && { devis_id: devisId, include_deleted: 'true' })
+    };
     axios
-      .get("/api/sous-parties/")
+      .get("/api/sous-parties/", { params })
       .then((response) => {
         setSousParties(response.data);
       })
@@ -424,7 +433,7 @@ const ModificationDevis = () => {
           timestamp: new Date().toISOString(),
         });
       });
-  }, []);
+  }, [devisId]);
 
   // Filtrer les sous-parties en fonction des parties sélectionnées
   useEffect(() => {
@@ -464,12 +473,14 @@ const ModificationDevis = () => {
   useEffect(() => {
     if (selectedSousParties.length > 0) {
       // Récupérer les sous-parties sélectionnées avec leurs lignes de détail
+      const params = {
+        id__in: selectedSousParties.join(","),
+        // En mode modification de devis, inclure les éléments supprimés
+        ...(devisId && { devis_id: devisId, include_deleted: 'true' })
+      };
+      
       axios
-        .get("/api/sous-parties/", {
-          params: {
-            id__in: selectedSousParties.join(","),
-          },
-        })
+        .get("/api/sous-parties/", { params })
         .then((response) => {
           // Extraire toutes les lignes de détail des sous-parties
           const allLignes = response.data.reduce((acc, sousPartie) => {
@@ -495,7 +506,7 @@ const ModificationDevis = () => {
       setAllLignesDetails([]);
       setFilteredLignesDetails([]);
     }
-  }, [selectedSousParties]);
+  }, [selectedSousParties, devisId]);
 
   const handleQuantityChange = (ligneId, quantity) => {
     setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
@@ -2283,7 +2294,26 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                               },
                             }}
                           />
-                          <Typography variant="h6">{partie.titre}</Typography>
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              color: partie.is_deleted ? '#f44336' : 'inherit',
+                              textDecoration: partie.is_deleted ? 'line-through' : 'none',
+                              opacity: partie.is_deleted ? 0.7 : 1
+                            }}
+                          >
+                            {partie.titre}
+                            {partie.is_deleted && (
+                              <span style={{ 
+                                marginLeft: '8px', 
+                                fontSize: '0.8em', 
+                                color: '#f44336',
+                                fontWeight: 'bold'
+                              }}>
+                                (SUPPRIMÉ)
+                              </span>
+                            )}
+                          </Typography>
                         </Box>
                         <Button
                           size="small"
@@ -2507,8 +2537,25 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                     />
                   </Box>
                   <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                    <Typography variant="subtitle1">
+                    <Typography 
+                      variant="subtitle1"
+                      sx={{ 
+                        color: sousPartie.is_deleted ? '#f44336' : 'inherit',
+                        textDecoration: sousPartie.is_deleted ? 'line-through' : 'none',
+                        opacity: sousPartie.is_deleted ? 0.7 : 1
+                      }}
+                    >
                       {sousPartie.description}
+                      {sousPartie.is_deleted && (
+                        <span style={{ 
+                          marginLeft: '8px', 
+                          fontSize: '0.8em', 
+                          color: '#f44336',
+                          fontWeight: 'bold'
+                        }}>
+                          (SUPPRIMÉ)
+                        </span>
+                      )}
                     </Typography>
                     <Button
                       size="small"
@@ -2672,7 +2719,25 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
                                 alignItems: "center",
                               }}
                             >
-                              <Typography>{ligne.description}</Typography>
+                              <Typography
+                                sx={{ 
+                                  color: ligne.is_deleted ? '#f44336' : 'inherit',
+                                  textDecoration: ligne.is_deleted ? 'line-through' : 'none',
+                                  opacity: ligne.is_deleted ? 0.7 : 1
+                                }}
+                              >
+                                {ligne.description}
+                                {ligne.is_deleted && (
+                                  <span style={{ 
+                                    marginLeft: '8px', 
+                                    fontSize: '0.8em', 
+                                    color: '#f44336',
+                                    fontWeight: 'bold'
+                                  }}>
+                                    (SUPPRIMÉ)
+                                  </span>
+                                )}
+                              </Typography>
                             </Box>
                           </Box>
                           <Typography

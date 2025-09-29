@@ -154,7 +154,8 @@ class LigneDetailSerializer(serializers.ModelSerializer):
             'taux_fixe',
             'marge',
             'prix',
-            'sous_partie'
+            'sous_partie',
+            'is_deleted'
         ]
 
     def validate(self, data):
