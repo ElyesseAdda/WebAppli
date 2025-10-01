@@ -68,6 +68,9 @@ from .views import (
     PaiementFournisseurMaterielAPIView,
     fournisseurs,
     FournisseurViewSet,
+    get_decomposition_couts,
+    recalculer_couts_devis,
+    recalculer_couts_estimes,
     BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
@@ -249,6 +252,9 @@ urlpatterns = [
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
+    path('chantier/<int:chantier_id>/decomposition-couts/', get_decomposition_couts, name='chantier-decomposition-couts'),
+    path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='chantier-recalculer-couts-estimes'),
+    path('devis/<int:devis_id>/recalculer-couts/', recalculer_couts_devis, name='devis-recalculer-couts'),
     path('fournisseurs/', fournisseurs, name='fournisseurs'),
 ]
 

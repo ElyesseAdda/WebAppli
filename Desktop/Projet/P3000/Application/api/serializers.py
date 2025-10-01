@@ -52,7 +52,8 @@ class DevisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'devis_chantier'
+            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'devis_chantier',
+            'cout_estime_main_oeuvre', 'cout_estime_materiel'
         ]
         read_only_fields = ['date_creation', 'client']
 
@@ -392,7 +393,8 @@ class FactureSerializer(serializers.ModelSerializer):
             'id', 'numero', 'date_creation', 'state_facture',
             'date_echeance', 'date_paiement', 'date_envoi', 'delai_paiement', 
             'mode_paiement', 'devis', 'price_ht', 'price_ttc', 'chantier', 
-            'chantier_name', 'devis_numero', 'type_facture', 'designation'
+            'chantier_name', 'devis_numero', 'type_facture', 'designation',
+            'cout_estime_main_oeuvre', 'cout_estime_materiel'
         ]
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 

@@ -174,10 +174,66 @@ class DevisViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(devis)
         return Response(serializer.data)
     
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        if response.status_code == 201:
+            # Calculer les coûts du nouveau devis
+            calculer_couts_devis(response.data['id'])
+            
+            # Si c'est un devis de chantier, mettre à jour le chantier
+            if response.data.get('devis_chantier') and response.data.get('chantier'):
+                recalculer_couts_estimes_chantier(response.data['chantier'])
+        return response
+    
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == 200:
+            # Recalculer les coûts du devis modifié
+            calculer_couts_devis(response.data['id'])
+            
+            # Si c'est un devis de chantier, mettre à jour le chantier
+            if response.data.get('devis_chantier') and response.data.get('chantier'):
+                recalculer_couts_estimes_chantier(response.data['chantier'])
+        return response
+    
 class FactureViewSet(viewsets.ModelViewSet):
     queryset = Facture.objects.all()
     serializer_class = FactureSerializer
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
+    
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        if response.status_code == 201:
+            # Calculer les coûts de la nouvelle facture
+            calculer_couts_facture(response.data['id'])
+            
+            # Mettre à jour le chantier
+            if response.data.get('chantier'):
+                recalculer_couts_estimes_chantier(response.data['chantier'])
+        return response
+    
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == 200:
+            # Recalculer les coûts de la facture modifiée
+            calculer_couts_facture(response.data['id'])
+            
+            # Mettre à jour le chantier
+            if response.data.get('chantier'):
+                recalculer_couts_estimes_chantier(response.data['chantier'])
+        return response
+    
+    def destroy(self, request, *args, **kwargs):
+        # Récupérer le chantier avant suppression
+        facture = self.get_object()
+        chantier_id = facture.chantier.id if facture.chantier else None
+        
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code == 204:
+            # Mettre à jour le chantier après suppression
+            if chantier_id:
+                recalculer_couts_estimes_chantier(chantier_id)
+        return response
 
 
 def dashboard_data(request):
@@ -809,11 +865,6 @@ class DevisViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(devis)
         return Response(serializer.data)
     
-class FactureViewSet(viewsets.ModelViewSet):
-    queryset = Facture.objects.all()
-    serializer_class = FactureSerializer
-
-
 def dashboard_data(request):
     # Récupérer les paramètres de filtrage
     month = request.GET.get('month', datetime.now().month)
@@ -9084,7 +9135,148 @@ def force_version_update(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def calculer_couts_devis(devis_id):
+    """
+    Calcule et sauvegarde les coûts totaux d'un devis
+    Gère les deux systèmes : DevisLigne (modèle) et lignes (JSON)
+    """
+    from decimal import Decimal
+    
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        cout_main_oeuvre_total = Decimal('0')
+        cout_materiel_total = Decimal('0')
+        
+        # Vérifier si le devis a des lignes DevisLigne
+        lignes = DevisLigne.objects.filter(devis=devis)
+        
+        if lignes.exists():
+            print(f"🔍 Devis {devis_id} utilise le système DevisLigne avec {lignes.count()} lignes")
+            
+            for ligne in lignes:
+                try:
+                    # Récupérer ligne_detail (même si is_deleted=True)
+                    ligne_detail = LigneDetail._base_manager.get(id=ligne.ligne_detail_id)
+                    
+                    quantite = Decimal(str(ligne.quantite or 0))
+                    cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
+                    cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
+                    
+                    cout_main_oeuvre_total += cout_mo * quantite
+                    cout_materiel_total += cout_mat * quantite
+                    
+                    print(f"  Ligne {ligne.id}: {quantite} x (MO:{cout_mo} + Mat:{cout_mat}) = MO:{cout_mo * quantite}, Mat:{cout_mat * quantite}")
+                    
+                except Exception as e:
+                    print(f"Erreur ligne {ligne.id}: {e}")
+                    continue
+        else:
+            print(f"🔍 Devis {devis_id} n'a pas de lignes DevisLigne")
+        
+        # Sauvegarder dans le devis
+        devis.cout_estime_main_oeuvre = cout_main_oeuvre_total
+        devis.cout_estime_materiel = cout_materiel_total
+        devis.save(update_fields=['cout_estime_main_oeuvre', 'cout_estime_materiel'])
+        
+        print(f"✅ Coûts calculés pour devis {devis_id}: MO={cout_main_oeuvre_total}, Mat={cout_materiel_total}")
+        
+        return {
+            'cout_estime_main_oeuvre': float(cout_main_oeuvre_total),
+            'cout_estime_materiel': float(cout_materiel_total)
+        }
+        
+    except Exception as e:
+        print(f"❌ Erreur calcul coûts devis {devis_id}: {e}")
+        return None
+
+
+def calculer_couts_facture(facture_id):
+    """
+    Calcule et sauvegarde les coûts totaux d'une facture
+    """
+    from decimal import Decimal
+    
+    try:
+        facture = Facture.objects.get(id=facture_id)
+        lignes = FactureLigne.objects.filter(facture=facture)
+        
+        cout_main_oeuvre_total = Decimal('0')
+        cout_materiel_total = Decimal('0')
+        
+        for ligne in lignes:
+            try:
+                ligne_detail = LigneDetail._base_manager.get(id=ligne.ligne_detail_id)
+                
+                quantite = Decimal(str(ligne.quantite or 0))
+                cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
+                cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
+                
+                cout_main_oeuvre_total += cout_mo * quantite
+                cout_materiel_total += cout_mat * quantite
+                
+            except Exception as e:
+                print(f"Erreur ligne {ligne.id}: {e}")
+                continue
+        
+        # Sauvegarder dans la facture
+        facture.cout_estime_main_oeuvre = cout_main_oeuvre_total
+        facture.cout_estime_materiel = cout_materiel_total
+        facture.save(update_fields=['cout_estime_main_oeuvre', 'cout_estime_materiel'])
+        
+        return {
+            'cout_estime_main_oeuvre': float(cout_main_oeuvre_total),
+            'cout_estime_materiel': float(cout_materiel_total)
+        }
+        
+    except Exception as e:
+        print(f"Erreur calcul coûts facture {facture_id}: {e}")
+        return None
+
+
+def recalculer_couts_estimes_chantier(chantier_id):
+    """
+    Recalcule les coûts totaux du chantier en sommant
+    les coûts du devis de chantier + toutes les factures
+    """
+    from decimal import Decimal
+    
+    try:
+        chantier = Chantier.objects.get(id=chantier_id)
+        
+        cout_main_oeuvre_total = Decimal('0')
+        cout_materiel_total = Decimal('0')
+        
+        # 1. Coûts du devis de chantier
+        try:
+            devis_chantier = Devis.objects.get(chantier=chantier, devis_chantier=True)
+            cout_main_oeuvre_total += Decimal(str(devis_chantier.cout_estime_main_oeuvre or 0))
+            cout_materiel_total += Decimal(str(devis_chantier.cout_estime_materiel or 0))
+        except Devis.DoesNotExist:
+            pass
+        
+        # 2. Coûts de toutes les factures
+        factures = Facture.objects.filter(chantier=chantier)
+        for facture in factures:
+            cout_main_oeuvre_total += Decimal(str(facture.cout_estime_main_oeuvre or 0))
+            cout_materiel_total += Decimal(str(facture.cout_estime_materiel or 0))
+        
+        # 3. Sauvegarder dans le chantier
+        chantier.cout_estime_main_oeuvre = cout_main_oeuvre_total
+        chantier.cout_estime_materiel = cout_materiel_total
+        chantier.save(update_fields=['cout_estime_main_oeuvre', 'cout_estime_materiel'])
+        
+        return {
+            'cout_estime_main_oeuvre': float(cout_main_oeuvre_total),
+            'cout_estime_materiel': float(cout_materiel_total)
+        }
+        
+    except Exception as e:
+        print(f"Erreur recalcul chantier {chantier_id}: {e}")
+        return None
+
+
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def recalculer_couts_estimes(request, chantier_id):
     """
     Recalcule les coûts estimés (main d'œuvre et matériel) d'un chantier
@@ -9175,4 +9367,108 @@ def recalculer_couts_estimes(request, chantier_id):
         return Response({
             'error': f'Erreur lors du recalcul des coûts estimés: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_decomposition_couts(request, chantier_id):
+    """
+    Retourne la décomposition des coûts du chantier
+    """
+    from decimal import Decimal
+    
+    try:
+        chantier = Chantier.objects.get(id=chantier_id)
+        
+        decomposition = {
+            'devis': {
+                'cout_main_oeuvre': 0,
+                'cout_materiel': 0
+            },
+            'factures': {
+                'cout_main_oeuvre': 0,
+                'cout_materiel': 0,
+                'nombre_factures': 0,
+                'detail': []
+            },
+            'total': {
+                'cout_main_oeuvre': 0,
+                'cout_materiel': 0,
+                'cout_total': 0
+            }
+        }
+        
+        # 1. Devis de chantier
+        try:
+            devis = Devis.objects.get(chantier=chantier, devis_chantier=True)
+            decomposition['devis'] = {
+                'cout_main_oeuvre': float(devis.cout_estime_main_oeuvre or 0),
+                'cout_materiel': float(devis.cout_estime_materiel or 0)
+            }
+        except Devis.DoesNotExist:
+            pass
+        
+        # 2. Factures
+        factures = Facture.objects.filter(chantier=chantier)
+        decomposition['factures']['nombre_factures'] = factures.count()
+        
+        for facture in factures:
+            cout_mo = float(facture.cout_estime_main_oeuvre or 0)
+            cout_mat = float(facture.cout_estime_materiel or 0)
+            
+            decomposition['factures']['cout_main_oeuvre'] += cout_mo
+            decomposition['factures']['cout_materiel'] += cout_mat
+            
+            decomposition['factures']['detail'].append({
+                'numero': facture.numero,
+                'type': facture.type_facture,
+                'cout_main_oeuvre': cout_mo,
+                'cout_materiel': cout_mat
+            })
+        
+        # 3. Totaux
+        decomposition['total']['cout_main_oeuvre'] = (
+            decomposition['devis']['cout_main_oeuvre'] + 
+            decomposition['factures']['cout_main_oeuvre']
+        )
+        decomposition['total']['cout_materiel'] = (
+            decomposition['devis']['cout_materiel'] + 
+            decomposition['factures']['cout_materiel']
+        )
+        decomposition['total']['cout_total'] = (
+            decomposition['total']['cout_main_oeuvre'] + 
+            decomposition['total']['cout_materiel']
+        )
+        
+        return Response(decomposition)
+        
+    except Chantier.DoesNotExist:
+        return Response({
+            'error': 'Chantier non trouvé'
+        }, status=status.HTTP_404_NOT_FOUND)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors de la récupération de la décomposition: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def recalculer_couts_devis(request, devis_id):
+    """
+    Force le recalcul des coûts d'un devis spécifique
+    """
+    try:
+        result = calculer_couts_devis(devis_id)
+        if result:
+            return Response({
+                'success': True,
+                'devis_id': devis_id,
+                'cout_estime_main_oeuvre': result['cout_estime_main_oeuvre'],
+                'cout_estime_materiel': result['cout_estime_materiel']
+            })
+        else:
+            return Response({'error': 'Erreur lors du calcul'}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 

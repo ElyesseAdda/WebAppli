@@ -516,6 +516,24 @@ class Devis(models.Model):
     lignes_speciales = models.JSONField(default=dict, blank=True)
     lignes_display = models.JSONField(default=dict, blank=True)  # Lignes spéciales de type 'display' uniquement
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
+    
+    # NOUVEAUX CHAMPS pour les coûts estimés
+    cout_estime_main_oeuvre = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        default=0,
+        verbose_name="Coût estimé main d'œuvre"
+    )
+    cout_estime_materiel = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        default=0,
+        verbose_name="Coût estimé matériel"
+    )
 
     def save_special_lines(self, special_lines_data):
         self.lignes_speciales = {
@@ -620,6 +638,24 @@ class Facture(models.Model):
     # Champs spécifiques pour les factures CIE
     mois_situation = models.IntegerField(null=True, blank=True)  # 1-12 pour le mois
     annee_situation = models.IntegerField(null=True, blank=True)  # année de la situation
+    
+    # NOUVEAUX CHAMPS pour les coûts estimés
+    cout_estime_main_oeuvre = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        default=0,
+        verbose_name="Coût estimé main d'œuvre"
+    )
+    cout_estime_materiel = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        default=0,
+        verbose_name="Coût estimé matériel"
+    )
 
     class Meta:
         constraints = [

@@ -48,6 +48,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     openSituationModal = false,
     filters = {},
     openAccordions = {},
+    showDecomposition = false,
   } = state;
   const setOpenSousTraitance = (val) =>
     setState({ ...state, openSousTraitance: val });
@@ -67,6 +68,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   
   // État pour gérer le rechargement des coûts estimés
   const [lastCoutsUpdate, setLastCoutsUpdate] = useState(null);
+  
+  // État pour la décomposition des coûts
+  const [decompositionData, setDecompositionData] = useState(null);
+  const [loadingDecomposition, setLoadingDecomposition] = useState(false);
 
   // Récupérer les informations complètes du chantier
   useEffect(() => {
@@ -130,6 +135,28 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       setLastCoutsUpdate(currentCouts);
     }
   }, [chantierData?.cout_estime_main_oeuvre, chantierData?.cout_estime_materiel, chantierData?.marge_estimee, onUpdate]);
+
+  // Fonction pour récupérer la décomposition des coûts
+  const fetchDecomposition = async () => {
+    if (!chantierData?.id) return;
+    
+    setLoadingDecomposition(true);
+    try {
+      const response = await axios.get(`/api/chantier/${chantierData.id}/decomposition-couts/`);
+      setDecompositionData(response.data);
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la décomposition:", error);
+    } finally {
+      setLoadingDecomposition(false);
+    }
+  };
+
+  // Effet pour récupérer la décomposition quand showDecomposition devient true
+  useEffect(() => {
+    if (showDecomposition && !decompositionData) {
+      fetchDecomposition();
+    }
+  }, [showDecomposition, chantierData?.id]);
 
   // State local pour tout ce qui n'a pas besoin d'être global
   const [tauxFacturationData, setTauxFacturationData] = React.useState(null);
@@ -1323,8 +1350,156 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                           (chantierData?.cout_sous_traitance || 0)
                       )}
                     </Typography>
+                    {/* Icône discrète pour la décomposition */}
+                    <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+                      <Tooltip title={state.showDecomposition ? "Masquer décomposition" : "Voir décomposition"}>
+                        <Box
+                          onClick={() => setState({ ...state, showDecomposition: !state.showDecomposition })}
+                          sx={{
+                            cursor: "pointer",
+                            color: "#999",
+                            fontSize: "1.2rem",
+                            padding: "4px",
+                            borderRadius: "50%",
+                            transition: "all 0.2s ease",
+                            "&:hover": {
+                              color: "#1976d2",
+                              backgroundColor: "rgba(25, 118, 210, 0.1)",
+                            },
+                          }}
+                        >
+                          {state.showDecomposition ? "🔍" : "ℹ️"}
+                        </Box>
+                      </Tooltip>
+                    </Box>
                   </CardContent>
                 </Card>
+                
+                {/* Composant de décomposition des coûts */}
+                {showDecomposition && (
+                  <Card
+                    sx={{
+                      borderRadius: "10px",
+                      backgroundColor: "#f8f9fa",
+                      boxShadow: 2,
+                      border: "1px solid #e0e0e0",
+                    }}
+                  >
+                    <CardContent>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 600,
+                          color: "#1976d2",
+                          fontFamily: "Roboto, Arial, sans-serif",
+                          mb: 2,
+                        }}
+                      >
+                        Décomposition des Coûts Prévisionnels
+                      </Typography>
+                      
+                      {loadingDecomposition ? (
+                        <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                          <LinearProgress sx={{ width: "100%" }} />
+                        </Box>
+                      ) : decompositionData ? (
+                        <Box>
+                          {/* Devis principal */}
+                          {decompositionData.devis && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: "#388e3c",
+                                  mb: 1,
+                                }}
+                              >
+                                📋 Devis Principal
+                              </Typography>
+                              <Box sx={{ pl: 2 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Main d'œuvre: {formatMontant(decompositionData.devis.cout_main_oeuvre)}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Matériel: {formatMontant(decompositionData.devis.cout_materiel)}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+                          
+                          {/* Factures */}
+                          {decompositionData.factures && decompositionData.factures.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: "#d32f2f",
+                                  mb: 1,
+                                }}
+                              >
+                                🧾 Factures ({decompositionData.factures.length})
+                              </Typography>
+                              {decompositionData.factures.map((facture, index) => (
+                                <Box key={index} sx={{ pl: 2, mb: 1 }}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {facture.numero} - Main d'œuvre: {formatMontant(facture.main_oeuvre)}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {facture.numero} - Matériel: {formatMontant(facture.materiel)}
+                                  </Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          )}
+                          
+                          {/* Totaux */}
+                          <Box
+                            sx={{
+                              borderTop: "1px solid #e0e0e0",
+                              pt: 2,
+                              backgroundColor: "#fff",
+                              borderRadius: 1,
+                              p: 2,
+                            }}
+                          >
+                            <Typography
+                              variant="subtitle1"
+                              sx={{
+                                fontWeight: 600,
+                                color: "#1976d2",
+                                mb: 1,
+                              }}
+                            >
+                              📊 Totaux
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Main d'œuvre totale: {formatMontant(decompositionData.total.cout_main_oeuvre)}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Matériel total: {formatMontant(decompositionData.total.cout_materiel)}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 600,
+                                color: "#1976d2",
+                                mt: 1,
+                              }}
+                            >
+                              Total: {formatMontant(decompositionData.total.cout_total)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Aucune donnée disponible
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </Box>
             </Grid>
             {/* Bloc Réel */}
