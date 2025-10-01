@@ -23,6 +23,25 @@
           margin: 10mm;
           scale: 70%;
         }
+        
+        /* Masquer les informations du navigateur lors de l'impression */
+        @media print {
+          @page {
+            margin: 20px;
+            size: A4;
+          }
+          
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          
+          /* Masquer l'URL et les informations du navigateur */
+          body::before,
+          body::after {
+            display: none !important;
+          }
+        }
         .bold {
           font-weight: 700;
         }
