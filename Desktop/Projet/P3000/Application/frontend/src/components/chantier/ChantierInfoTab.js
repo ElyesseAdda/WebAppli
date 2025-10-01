@@ -1429,7 +1429,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                           )}
                           
                           {/* Factures */}
-                          {decompositionData.factures && decompositionData.factures.length > 0 && (
+                          {decompositionData.factures && decompositionData.factures.detail && decompositionData.factures.detail.length > 0 && (
                             <Box sx={{ mb: 2 }}>
                               <Typography
                                 variant="subtitle1"
@@ -1439,18 +1439,54 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                                   mb: 1,
                                 }}
                               >
-                                🧾 Factures ({decompositionData.factures.length})
+                                🧾 Factures ({decompositionData.factures.nombre_factures})
                               </Typography>
-                              {decompositionData.factures.map((facture, index) => (
+                              {decompositionData.factures.detail.map((facture, index) => (
                                 <Box key={index} sx={{ pl: 2, mb: 1 }}>
-                                  <Typography variant="body2" color="text.secondary">
-                                    {facture.numero} - Main d'œuvre: {formatMontant(facture.main_oeuvre)}
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontWeight: 500, 
+                                      color: "#1976d2",
+                                      mb: 0.5 
+                                    }}
+                                  >
+                                    {facture.numero}
                                   </Typography>
-                                  <Typography variant="body2" color="text.secondary">
-                                    {facture.numero} - Matériel: {formatMontant(facture.materiel)}
-                                  </Typography>
+                                  <Box sx={{ pl: 1 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Main d'œuvre: {formatMontant(facture.cout_main_oeuvre)}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Matériel: {formatMontant(facture.cout_materiel)}
+                                    </Typography>
+                                  </Box>
                                 </Box>
                               ))}
+                            </Box>
+                          )}
+                          
+                          {/* Résumé des factures */}
+                          {decompositionData.factures && decompositionData.factures.nombre_factures > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: "#ff9800",
+                                  mb: 1,
+                                }}
+                              >
+                                📊 Résumé Factures
+                              </Typography>
+                              <Box sx={{ pl: 2 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Main d'œuvre: {formatMontant(decompositionData.factures.cout_main_oeuvre)}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Matériel: {formatMontant(decompositionData.factures.cout_materiel)}
+                                </Typography>
+                              </Box>
                             </Box>
                           )}
                           

@@ -864,7 +864,7 @@ class DevisViewSet(viewsets.ModelViewSet):
         devis = self.get_object()
         serializer = self.get_serializer(devis)
         return Response(serializer.data)
-    
+
 def dashboard_data(request):
     # Récupérer les paramètres de filtrage
     month = request.GET.get('month', datetime.now().month)
@@ -2956,6 +2956,9 @@ def create_facture(request):
             # price_ht = devis.price_ht
             # price_ttc = devis.price_ttc
             # chantier = devis.chantier
+            # Transférer les coûts estimés du devis
+            cout_estime_main_oeuvre=devis.cout_estime_main_oeuvre,
+            cout_estime_materiel=devis.cout_estime_materiel
         )
 
         # Sérialiser la réponse
@@ -4311,7 +4314,10 @@ def create_facture_ts(request):
             price_ht=devis.price_ht,
             price_ttc=devis.price_ttc,
             designation=designation,
-            avenant_id=avenant_id
+            avenant_id=avenant_id,
+            # Transférer les coûts estimés du devis
+            cout_estime_main_oeuvre=devis.cout_estime_main_oeuvre,
+            cout_estime_materiel=devis.cout_estime_materiel
         )
 
         return Response({
@@ -4383,7 +4389,10 @@ def create_facture_cie(request):
             price_ttc=devis.price_ttc,
             designation=designation,
             mois_situation=mois,
-            annee_situation=annee
+            annee_situation=annee,
+            # Transférer les coûts estimés du devis
+            cout_estime_main_oeuvre=devis.cout_estime_main_oeuvre,
+            cout_estime_materiel=devis.cout_estime_materiel
         )
 
         return Response({
@@ -9171,7 +9180,29 @@ def calculer_couts_devis(devis_id):
                     print(f"Erreur ligne {ligne.id}: {e}")
                     continue
         else:
-            print(f"🔍 Devis {devis_id} n'a pas de lignes DevisLigne")
+            # Système JSON pour les devis normaux
+            print(f"🔍 Devis {devis_id} utilise le système JSON")
+            if devis.lignes and isinstance(devis.lignes, list):
+                for ligne_data in devis.lignes:
+                    try:
+                        ligne_detail_id = ligne_data.get('ligne_detail')
+                        quantite = Decimal(str(ligne_data.get('quantite', 0)))
+                        
+                        if ligne_detail_id:
+                            ligne_detail = LigneDetail._base_manager.get(id=ligne_detail_id)
+                            cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
+                            cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
+                            
+                            cout_main_oeuvre_total += cout_mo * quantite
+                            cout_materiel_total += cout_mat * quantite
+                            
+                            print(f"  Ligne JSON: {quantite} x (MO:{cout_mo} + Mat:{cout_mat}) = MO:{cout_mo * quantite}, Mat:{cout_mat * quantite}")
+                            
+                    except Exception as e:
+                        print(f"Erreur ligne JSON: {e}")
+                        continue
+            else:
+                print(f"🔍 Devis {devis_id} n'a pas de lignes JSON")
         
         # Sauvegarder dans le devis
         devis.cout_estime_main_oeuvre = cout_main_oeuvre_total
@@ -9193,35 +9224,95 @@ def calculer_couts_devis(devis_id):
 def calculer_couts_facture(facture_id):
     """
     Calcule et sauvegarde les coûts totaux d'une facture
+    Utilise les lignes du devis associé si pas de FactureLigne
     """
     from decimal import Decimal
     
     try:
         facture = Facture.objects.get(id=facture_id)
-        lignes = FactureLigne.objects.filter(facture=facture)
-        
         cout_main_oeuvre_total = Decimal('0')
         cout_materiel_total = Decimal('0')
         
-        for ligne in lignes:
-            try:
-                ligne_detail = LigneDetail._base_manager.get(id=ligne.ligne_detail_id)
+        # Essayer d'abord avec les FactureLigne
+        lignes_facture = FactureLigne.objects.filter(facture=facture)
+        
+        if lignes_facture.exists():
+            print(f"🔍 Facture {facture_id} utilise le système FactureLigne avec {lignes_facture.count()} lignes")
+            
+            for ligne in lignes_facture:
+                try:
+                    ligne_detail = LigneDetail._base_manager.get(id=ligne.ligne_detail_id)
+                    
+                    quantite = Decimal(str(ligne.quantite or 0))
+                    cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
+                    cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
+                    
+                    cout_main_oeuvre_total += cout_mo * quantite
+                    cout_materiel_total += cout_mat * quantite
+                    
+                    print(f"  Ligne {ligne.id}: {quantite} x (MO:{cout_mo} + Mat:{cout_mat}) = MO:{cout_mo * quantite}, Mat:{cout_mat * quantite}")
+                    
+                except Exception as e:
+                    print(f"Erreur ligne {ligne.id}: {e}")
+                    continue
+        else:
+            # Utiliser les lignes du devis associé
+            print(f"🔍 Facture {facture_id} utilise les lignes du devis {facture.devis.id}")
+            
+            if facture.devis:
+                # Vérifier si le devis a des lignes DevisLigne
+                lignes_devis = DevisLigne.objects.filter(devis=facture.devis)
                 
-                quantite = Decimal(str(ligne.quantite or 0))
-                cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
-                cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
-                
-                cout_main_oeuvre_total += cout_mo * quantite
-                cout_materiel_total += cout_mat * quantite
-                
-            except Exception as e:
-                print(f"Erreur ligne {ligne.id}: {e}")
-                continue
+                if lignes_devis.exists():
+                    print(f"🔍 Devis {facture.devis.id} utilise le système DevisLigne avec {lignes_devis.count()} lignes")
+                    
+                    for ligne in lignes_devis:
+                        try:
+                            ligne_detail = LigneDetail._base_manager.get(id=ligne.ligne_detail_id)
+                            
+                            quantite = Decimal(str(ligne.quantite or 0))
+                            cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
+                            cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
+                            
+                            cout_main_oeuvre_total += cout_mo * quantite
+                            cout_materiel_total += cout_mat * quantite
+                            
+                            print(f"  Ligne {ligne.id}: {quantite} x (MO:{cout_mo} + Mat:{cout_mat}) = MO:{cout_mo * quantite}, Mat:{cout_mat * quantite}")
+                            
+                        except Exception as e:
+                            print(f"Erreur ligne {ligne.id}: {e}")
+                            continue
+                else:
+                    # Système JSON pour les devis normaux
+                    print(f"🔍 Devis {facture.devis.id} utilise le système JSON")
+                    if facture.devis.lignes and isinstance(facture.devis.lignes, list):
+                        for ligne_data in facture.devis.lignes:
+                            try:
+                                ligne_detail_id = ligne_data.get('ligne_detail')
+                                quantite = Decimal(str(ligne_data.get('quantite', 0)))
+                                
+                                if ligne_detail_id:
+                                    ligne_detail = LigneDetail._base_manager.get(id=ligne_detail_id)
+                                    cout_mo = Decimal(str(ligne_detail.cout_main_oeuvre or 0))
+                                    cout_mat = Decimal(str(ligne_detail.cout_materiel or 0))
+                                    
+                                    cout_main_oeuvre_total += cout_mo * quantite
+                                    cout_materiel_total += cout_mat * quantite
+                                    
+                                    print(f"  Ligne JSON: {quantite} x (MO:{cout_mo} + Mat:{cout_mat}) = MO:{cout_mo * quantite}, Mat:{cout_mat * quantite}")
+                                    
+                            except Exception as e:
+                                print(f"Erreur ligne JSON: {e}")
+                                continue
+                    else:
+                        print(f"🔍 Devis {facture.devis.id} n'a pas de lignes JSON")
         
         # Sauvegarder dans la facture
         facture.cout_estime_main_oeuvre = cout_main_oeuvre_total
         facture.cout_estime_materiel = cout_materiel_total
         facture.save(update_fields=['cout_estime_main_oeuvre', 'cout_estime_materiel'])
+        
+        print(f"✅ Coûts calculés pour facture {facture_id}: MO={cout_main_oeuvre_total}, Mat={cout_materiel_total}")
         
         return {
             'cout_estime_main_oeuvre': float(cout_main_oeuvre_total),
@@ -9229,7 +9320,7 @@ def calculer_couts_facture(facture_id):
         }
         
     except Exception as e:
-        print(f"Erreur calcul coûts facture {facture_id}: {e}")
+        print(f"❌ Erreur calcul coûts facture {facture_id}: {e}")
         return None
 
 
@@ -9369,7 +9460,45 @@ def recalculer_couts_estimes(request, chantier_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def recalculer_couts_facture(request, facture_id):
+    """
+    Force le recalcul des coûts estimés d'une facture
+    """
+    try:
+        facture = Facture.objects.get(id=facture_id)
+        
+        # Recalculer les coûts de la facture
+        result = calculer_couts_facture(facture_id)
+        
+        if result:
+            return Response({
+                'success': True,
+                'message': 'Coûts estimés de la facture recalculés avec succès',
+                'cout_estime_main_oeuvre': float(result['cout_estime_main_oeuvre']),
+                'cout_estime_materiel': float(result['cout_estime_materiel'])
+            })
+        else:
+            return Response({
+                'success': False,
+                'message': 'Erreur lors du recalcul des coûts de la facture'
+            }, status=500)
+            
+    except Facture.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': 'Facture non trouvée'
+        }, status=404)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }, status=500)
+
+
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_decomposition_couts(request, chantier_id):
     """
     Retourne la décomposition des coûts du chantier

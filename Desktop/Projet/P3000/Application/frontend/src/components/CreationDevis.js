@@ -1081,6 +1081,18 @@ const CreationDevis = () => {
       const response = await axios.post("/api/create-devis/", devisData);
 
       if (response.data) {
+        // Recalculer automatiquement les coûts du devis créé (pour les devis normaux uniquement)
+        if (devisType !== "chantier") {
+          try {
+            console.log("🔄 Recalcul automatique des coûts du devis normal:", response.data.id);
+            await axios.post(`/api/devis/${response.data.id}/recalculer-couts/`);
+            console.log("✅ Coûts du devis normal recalculés avec succès");
+          } catch (recalcError) {
+            console.error("❌ Erreur lors du recalcul des coûts:", recalcError);
+            // Ne pas bloquer la création du devis si le recalcul échoue
+          }
+        }
+
         clearSavedState(); // Nettoyer l'état sauvegardé
 
         // Si c'est un devis de chantier (appel d'offre), préparer le téléchargement automatique
@@ -1144,6 +1156,9 @@ const CreationDevis = () => {
             const devisId = response.data.id;
 
             if (devisId && chantierIdToUse) {
+              // Note: Les devis normaux ne doivent PAS affecter le prévisionnel du chantier
+              // Seuls les devis de chantier et les factures sont inclus dans le prévisionnel
+              
               // Récupérer les informations du chantier
               const chantierResponse = await axios.get(
                 `/api/chantier/${chantierIdToUse}/`

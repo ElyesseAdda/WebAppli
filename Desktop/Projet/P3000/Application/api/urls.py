@@ -71,6 +71,7 @@ from .views import (
     get_decomposition_couts,
     recalculer_couts_devis,
     recalculer_couts_estimes,
+    recalculer_couts_facture,
     BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
@@ -255,6 +256,7 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/decomposition-couts/', get_decomposition_couts, name='chantier-decomposition-couts'),
     path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='chantier-recalculer-couts-estimes'),
     path('devis/<int:devis_id>/recalculer-couts/', recalculer_couts_devis, name='devis-recalculer-couts'),
+    path('facture/<int:facture_id>/recalculer-couts/', recalculer_couts_facture, name='facture-recalculer-couts'),
     path('fournisseurs/', fournisseurs, name='fournisseurs'),
 ]
 
