@@ -177,7 +177,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
             }}
             fournisseur={selectedData?.fournisseurName}
             onValidate={handleValidate}
-            numeroBC={numeroBC}
+            numeroBC={selectedData.numero_bon_commande || numeroBC}
             selectedData={selectedData}
           />
         );

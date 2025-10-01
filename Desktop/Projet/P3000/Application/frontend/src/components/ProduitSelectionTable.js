@@ -46,9 +46,109 @@ function ProduitSelectionTable({
   });
   const [editedProducts, setEditedProducts] = useState({});
   const [chantierInfo, setChantierInfo] = useState(null);
+  const [error, setError] = useState(null);
+  const [suggestedNumber, setSuggestedNumber] = useState(null);
+  const [currentNumber, setCurrentNumber] = useState(numeroBC);
 
   const handleOpenNewProductModal = () => setOpenNewProductModal(true);
   const handleCloseNewProductModal = () => setOpenNewProductModal(false);
+  
+  // Synchroniser le numéro quand il change depuis le parent
+  useEffect(() => {
+    setCurrentNumber(numeroBC);
+  }, [numeroBC]);
+  
+  const handleClose = () => {
+    setError(null); // Effacer l'erreur lors de la fermeture
+    setSuggestedNumber(null); // Effacer le numéro suggéré
+    onClose();
+  };
+
+  const handleUseSuggestedNumber = async () => {
+    if (suggestedNumber) {
+      try {
+        // Mettre à jour le numéro actuel avec le numéro suggéré
+        setCurrentNumber(suggestedNumber);
+        
+        // Effacer l'erreur et le numéro suggéré
+        setError(null);
+        setSuggestedNumber(null);
+        
+        // Recréer les données avec le nouveau numéro
+        const selectedItems = products
+          .filter((product) => selectedProducts[product.id])
+          .map((product) => ({
+            produit: product.id,
+            designation: product.designation,
+            quantite: parseInt(quantities[product.id]) || 0,
+            prix_unitaire: parseFloat(product.prix_unitaire),
+            total: parseFloat(
+              (quantities[product.id] || 0) * product.prix_unitaire
+            ),
+          }))
+          .filter((item) => item.quantite > 0);
+
+        const bonCommandeData = {
+          numero: suggestedNumber, // Utiliser le numéro suggéré
+          fournisseur: fournisseur,
+          chantier: selectedData.chantier,
+          emetteur: selectedData.emetteur,
+          statut: selectedData.statut,
+          date_commande: selectedData.date_commande,
+          date_creation_personnalisee: selectedData.date_creation_personnalisee,
+          contact_type: selectedData.contact_type,
+          contact_agent: selectedData.contact_agent,
+          contact_sous_traitant: selectedData.contact_sous_traitant,
+          lignes: selectedItems,
+          montant_total: parseFloat(
+            selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)
+          ),
+        };
+
+        console.log("Données envoyées avec numéro suggéré:", bonCommandeData);
+
+        // Créer le bon de commande avec le numéro suggéré
+        const bonCommande = await bonCommandeService.createBonCommande(
+          bonCommandeData
+        );
+
+        // Téléchargement automatique vers le Drive
+        setTimeout(async () => {
+          try {
+            const driveData = {
+              bonCommandeId: bonCommande.id,
+              chantierId: selectedData.chantier,
+              chantierName:
+                chantierInfo?.chantier_name || chantierInfo?.nom || "Chantier",
+              societeName:
+                chantierInfo?.societe?.nom_societe ||
+                chantierInfo?.societe?.nom ||
+                "Société",
+              numeroBonCommande: bonCommande.numero,
+              fournisseurName: selectedData.fournisseurName,
+            };
+
+            await generatePDFDrive("bon_commande", driveData);
+            console.log("✅ Bon de commande téléchargé avec succès vers le Drive");
+          } catch (driveError) {
+            console.error("❌ Erreur lors du téléchargement automatique:", driveError);
+          }
+        }, 1000);
+
+        // Valider et fermer
+        if (onValidate) {
+          onValidate(bonCommande);
+        }
+        
+        // Fermer la modal
+        onClose();
+        
+      } catch (retryError) {
+        console.error("Erreur lors de la création avec le numéro suggéré:", retryError);
+        setError(retryError.message);
+      }
+    }
+  };
 
   // Récupérer les informations du chantier
   useEffect(() => {
@@ -147,6 +247,10 @@ function ProduitSelectionTable({
 
   const handleSave = async () => {
     try {
+      // Effacer l'erreur précédente et le numéro suggéré
+      setError(null);
+      setSuggestedNumber(null);
+      
       if (!selectedData.emetteur) {
         throw new Error("Veuillez sélectionner un émetteur");
       }
@@ -175,7 +279,7 @@ function ProduitSelectionTable({
       }
 
       const bonCommandeData = {
-        numero: numeroBC,
+        numero: currentNumber,
         fournisseur: fournisseur,
         chantier: selectedData.chantier,
         emetteur: selectedData.emetteur,
@@ -248,6 +352,15 @@ function ProduitSelectionTable({
       // window.location.reload();
     } catch (error) {
       console.error("Erreur lors de la création du bon de commande:", error);
+      
+      // Extraire le numéro suggéré du message d'erreur
+      const match = error.message.match(/Le prochain numéro disponible est (BC-\d+)/);
+      if (match) {
+        setSuggestedNumber(match[1]);
+      }
+      
+      setError(error.message);
+      // Ne pas fermer la modal en cas d'erreur pour que l'utilisateur puisse corriger
       throw error;
     }
   };
@@ -300,7 +413,7 @@ function ProduitSelectionTable({
   }, [fournisseur, codeRangeFilter]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
       <DialogTitle
         sx={{
           display: "flex",
@@ -309,7 +422,27 @@ function ProduitSelectionTable({
           pb: 1,
         }}
       >
-        <Typography variant="h6">Sélection des produits</Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography variant="h6">Sélection des produits</Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Numéro BC:
+            </Typography>
+            <TextField
+              size="small"
+              value={currentNumber}
+              onChange={(e) => setCurrentNumber(e.target.value)}
+              variant="outlined"
+              sx={{ 
+                width: "120px",
+                "& .MuiOutlinedInput-root": {
+                  fontSize: "0.875rem",
+                  height: "32px"
+                }
+              }}
+            />
+          </Box>
+        </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <TextField
             size="small"
@@ -353,6 +486,71 @@ function ProduitSelectionTable({
           </Button>
         </Box>
       </DialogTitle>
+      {error && (
+        <Box sx={{ px: 3, py: 2 }}>
+          <Box sx={{ 
+            backgroundColor: '#ffebee', 
+            padding: 2, 
+            borderRadius: 1,
+            border: '1px solid #f44336',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography color="error" variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                {error}
+              </Typography>
+              {suggestedNumber && (
+                <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="primary"
+                    onClick={handleUseSuggestedNumber}
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    ✅ Utiliser {suggestedNumber} et créer
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    onClick={() => {
+                      setCurrentNumber(suggestedNumber);
+                      setError(null);
+                      setSuggestedNumber(null);
+                    }}
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    📝 Remplir {suggestedNumber}
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => {
+                      setError(null);
+                      setSuggestedNumber(null);
+                      // Le champ de numéro est maintenant visible et modifiable
+                    }}
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    ✏️ Modifier manuellement
+                  </Button>
+                </Box>
+              )}
+            </Box>
+            <Button 
+              size="small" 
+              onClick={() => setError(null)}
+              sx={{ minWidth: 'auto', padding: '4px 8px' }}
+            >
+              ✕
+            </Button>
+          </Box>
+        </Box>
+      )}
       <DialogContent>
         <TableContainer sx={{ maxHeight: 440 }}>
           <Table stickyHeader>

@@ -51,8 +51,8 @@ const ListeBonCommande = () => {
     montant_paye: "",
     reste_a_payer: "",
   });
-  const [orderBy, setOrderBy] = useState("date");
-  const [order, setOrder] = useState("desc");
+  const [orderBy, setOrderBy] = useState("numero");
+  const [order, setOrder] = useState("asc");
   const [anchorEl, setAnchorEl] = useState(null);
   const [statusAnchorEl, setStatusAnchorEl] = useState(null);
   const [selectedBC, setSelectedBC] = useState(null);
@@ -71,8 +71,28 @@ const ListeBonCommande = () => {
     try {
       setIsLoading(true);
       const response = await axios.get("/api/bons-commande/");
-      setBonsCommande(response.data);
-      setFilteredBonsCommande(response.data);
+      
+      // Trier les données par numéro (ascendant) par défaut
+      const sortedData = response.data.sort((a, b) => {
+        const aNumero = a.numero || "";
+        const bNumero = b.numero || "";
+        
+        // Extraire les numéros de séquence (ex: "BC-0026" -> 26)
+        const aMatch = aNumero.match(/BC-(\d+)/);
+        const bMatch = bNumero.match(/BC-(\d+)/);
+        
+        if (aMatch && bMatch) {
+          const aSeq = parseInt(aMatch[1]);
+          const bSeq = parseInt(bMatch[1]);
+          return aSeq - bSeq; // Tri ascendant
+        }
+        
+        // Fallback pour tri alphabétique si le format ne correspond pas
+        return aNumero.localeCompare(bNumero);
+      });
+      
+      setBonsCommande(sortedData);
+      setFilteredBonsCommande(sortedData);
     } catch (error) {
       console.error("Erreur lors du chargement des bons de commande:", error);
     } finally {
@@ -132,7 +152,36 @@ const ListeBonCommande = () => {
       });
     });
 
-    setFilteredBonsCommande(filtered);
+    // Appliquer le tri après le filtrage
+    const sortedFiltered = filtered.sort((a, b) => {
+      if (orderBy === "numero") {
+        const aNumero = a.numero || "";
+        const bNumero = b.numero || "";
+        
+        const aMatch = aNumero.match(/BC-(\d+)/);
+        const bMatch = bNumero.match(/BC-(\d+)/);
+        
+        if (aMatch && bMatch) {
+          const aSeq = parseInt(aMatch[1]);
+          const bSeq = parseInt(bMatch[1]);
+          return order === "asc" ? aSeq - bSeq : bSeq - aSeq;
+        }
+        
+        return order === "asc" ? aNumero.localeCompare(bNumero) : bNumero.localeCompare(aNumero);
+      }
+      
+      if (orderBy === "date_creation") {
+        return order === "asc" 
+          ? new Date(a[orderBy]) - new Date(b[orderBy])
+          : new Date(b[orderBy]) - new Date(a[orderBy]);
+      }
+      
+      return order === "asc" 
+        ? (a[orderBy] < b[orderBy] ? -1 : 1)
+        : (b[orderBy] < a[orderBy] ? -1 : 1);
+    });
+    
+    setFilteredBonsCommande(sortedFiltered);
   };
 
   const handleSort = (property) => {
@@ -146,6 +195,27 @@ const ListeBonCommande = () => {
           (isAsc ? 1 : -1) * (new Date(a[property]) - new Date(b[property]))
         );
       }
+      
+      // Tri spécial pour les numéros de bon de commande
+      if (property === "numero") {
+        const aNumero = a[property] || "";
+        const bNumero = b[property] || "";
+        
+        // Extraire les numéros de séquence (ex: "BC-0026" -> 26)
+        const aMatch = aNumero.match(/BC-(\d+)/);
+        const bMatch = bNumero.match(/BC-(\d+)/);
+        
+        if (aMatch && bMatch) {
+          const aSeq = parseInt(aMatch[1]);
+          const bSeq = parseInt(bMatch[1]);
+          return (isAsc ? 1 : -1) * (aSeq - bSeq);
+        }
+        
+        // Fallback pour tri alphabétique si le format ne correspond pas
+        return (isAsc ? 1 : -1) * (aNumero.localeCompare(bNumero));
+      }
+      
+      // Tri standard pour les autres propriétés
       return (isAsc ? 1 : -1) * (a[property] < b[property] ? -1 : 1);
     });
 
