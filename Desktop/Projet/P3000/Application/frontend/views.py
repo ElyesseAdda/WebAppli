@@ -32,9 +32,14 @@ class FrontendAppView(TemplateView):
         """
         context = super().get_context_data(**kwargs)
         
-        # En mode développement, trouver les fichiers avec hash
+        # En mode développement, trouver les fichiers avec hash directement dans frontend/static
         if settings.DEBUG:
-            static_frontend_dir = os.path.join(settings.STATIC_ROOT, 'frontend')
+            # Chercher d'abord dans frontend/static/frontend/ (source directe)
+            static_frontend_dir = os.path.join(settings.BASE_DIR, 'frontend', 'static', 'frontend')
+            if not os.path.exists(static_frontend_dir):
+                # Fallback vers staticfiles/frontend/ si nécessaire
+                static_frontend_dir = os.path.join(settings.STATIC_ROOT, 'frontend')
+            
             if os.path.exists(static_frontend_dir):
                 # Trouver le fichier CSS principal (le plus récent)
                 css_files = [f for f in os.listdir(static_frontend_dir) if f.startswith('main.') and f.endswith('.css')]

@@ -18,9 +18,16 @@ def _load_manifest():
     if _ASSET_MANIFEST_CACHE is not None:
         return _ASSET_MANIFEST_CACHE
 
-    manifest_path = os.path.join(
-        settings.BASE_DIR, 'frontend', 'static', 'frontend', 'asset-manifest.json'
-    )
+    # En développement, chercher d'abord dans frontend/static/frontend/
+    if settings.DEBUG:
+        manifest_path = os.path.join(
+            settings.BASE_DIR, 'frontend', 'static', 'frontend', 'asset-manifest.json'
+        )
+    else:
+        # En production, utiliser le manifest dans staticfiles
+        manifest_path = os.path.join(
+            settings.STATIC_ROOT, 'frontend', 'asset-manifest.json'
+        )
 
     if os.path.exists(manifest_path):
         try:
@@ -41,7 +48,13 @@ def _scan_frontend_files():
     et créer un manifest virtuel.
     """
     manifest = {'files': {}}
-    frontend_dir = os.path.join(settings.BASE_DIR, 'frontend', 'static', 'frontend')
+    
+    # En développement, chercher dans frontend/static/frontend/
+    if settings.DEBUG:
+        frontend_dir = os.path.join(settings.BASE_DIR, 'frontend', 'static', 'frontend')
+    else:
+        # En production, chercher dans staticfiles/frontend/
+        frontend_dir = os.path.join(settings.STATIC_ROOT, 'frontend')
     
     if os.path.exists(frontend_dir):
         for filename in os.listdir(frontend_dir):
@@ -102,9 +115,16 @@ def react_manifest_debug():
     Utile pour le développement et le debugging.
     """
     manifest = _load_manifest()
-    manifest_path = os.path.join(
-        settings.BASE_DIR, 'frontend', 'static', 'frontend', 'asset-manifest.json'
-    )
+    
+    # Utiliser le même chemin que _load_manifest()
+    if settings.DEBUG:
+        manifest_path = os.path.join(
+            settings.BASE_DIR, 'frontend', 'static', 'frontend', 'asset-manifest.json'
+        )
+    else:
+        manifest_path = os.path.join(
+            settings.STATIC_ROOT, 'frontend', 'asset-manifest.json'
+        )
     
     files = manifest.get('files', {})
     return {

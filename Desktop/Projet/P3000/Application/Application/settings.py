@@ -222,7 +222,11 @@ STATICFILES_DIRS = [
 ]
 
 # Configuration des fichiers statiques avec hachage
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+# En développement, utiliser StaticFilesStorage pour éviter collectstatic
+if DEBUG:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
 # Configuration Django REST Framework
 REST_FRAMEWORK = {
