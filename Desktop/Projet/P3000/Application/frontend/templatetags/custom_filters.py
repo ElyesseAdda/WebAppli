@@ -32,3 +32,10 @@ def get_date(dates_list, index):
     if index < len(dates_list):
         return dates_list[index]
     return None
+
+@register.filter
+def get_item(dictionary, key):
+    """
+    Retourne la valeur d'une clé dans un dictionnaire
+    """
+    return dictionary.get(key, '#ffffff')

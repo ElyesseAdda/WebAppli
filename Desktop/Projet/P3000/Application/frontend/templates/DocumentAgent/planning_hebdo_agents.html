@@ -1,5 +1,6 @@
 <!-- prettier-ignore -->
 {% load dict_access %}
+{% load custom_filters %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -139,6 +140,12 @@
     </style>
   </head>
   <body>
+    <!-- DEBUG: Affichage des agents reçus -->
+    <div style="display: none;">
+      <!-- DEBUG: Nombre d'agents: {{ agents|length }} -->
+      <!-- DEBUG: Agents: {% for agent in agents %}{{ agent.id }}:{{ agent.name }} {{ agent.surname }}; {% endfor %} -->
+    </div>
+    
     {% for agent in agents %}
     <div class="page">
       <div class="header">
@@ -165,8 +172,8 @@
             {% for hour in agent_hours_map|dict_get:agent.id %}
             <tr>
               <td class="hour-cell">{{ hour }}</td>
-              {% for day in days_of_week %} 
-              {% with cell_rendered=False %} 
+              {% for day_info in days_with_dates %} 
+              {% with day=day_info.name cell_rendered=False %} 
               {% for chantier, start_hour, span in planning_rowspan|dict_get:agent.id|dict_get:day %} 
               {% if start_hour == hour %}
               <td
@@ -192,7 +199,7 @@
       <div class="legend">
         <div class="legend-title">Légende chantiers :</div>
         {% for chantier, color in chantier_colors.items %}
-        <span class="legend-item" style="background:{{ color }}; color:#222;">
+        <span class="legend-item" style="background-color: {{ color }}; color: #222;">
           {{ chantier }}
         </span>
         {% endfor %}

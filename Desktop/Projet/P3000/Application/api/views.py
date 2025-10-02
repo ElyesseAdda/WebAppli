@@ -7224,19 +7224,32 @@ def preview_planning_hebdo(request):
     week = int(request.GET.get('week'))
     year = int(request.GET.get('year'))
     
+    print(f"🔍 [PREVIEW] Début de preview_planning_hebdo - Semaine: {week}, Année: {year}")
+    print(f"🔍 [PREVIEW] Paramètres reçus: {dict(request.GET)}")
+    
     # NOUVEAU : Récupérer la liste des agents sélectionnés
     agent_ids = request.GET.get('agent_ids')
+    print(f"🔍 [PREVIEW] agent_ids brut reçu: '{agent_ids}'")
+    
     if agent_ids:
         # Parser la liste des IDs (format: "1,2,3")
         try:
             agent_ids_list = [int(id.strip()) for id in agent_ids.split(',') if id.strip().isdigit()]
+            print(f"🔍 [PREVIEW] agent_ids_list parsé: {agent_ids_list}")
             agents = Agent.objects.filter(id__in=agent_ids_list)
-        except (ValueError, TypeError):
+            print(f"🔍 [PREVIEW] Nombre d'agents filtrés: {agents.count()}")
+            print(f"🔍 [PREVIEW] Agents filtrés: {[f'{a.id}:{a.name} {a.surname}' for a in agents]}")
+        except (ValueError, TypeError) as e:
+            print(f"❌ [PREVIEW] Erreur lors du parsing des agent_ids: {e}")
             # En cas d'erreur, utiliser tous les agents
             agents = Agent.objects.all()
+            print(f"🔍 [PREVIEW] Utilisation de tous les agents (fallback): {agents.count()}")
     else:
         # Si aucun agent spécifié, utiliser tous les agents (comportement par défaut)
         agents = Agent.objects.all()
+        print(f"🔍 [PREVIEW] Aucun agent_ids fourni, utilisation de tous les agents: {agents.count()}")
+    
+    print(f"🔍 [PREVIEW] Agents finaux pour le template: {[f'{a.id}:{a.name} {a.surname}' for a in agents]}")
     
     days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
