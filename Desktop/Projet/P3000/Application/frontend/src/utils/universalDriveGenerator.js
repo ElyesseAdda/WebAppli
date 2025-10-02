@@ -583,6 +583,7 @@ const getDocumentSpecificData = (documentType, data) => {
       return {
         week: data.week,
         year: data.year,
+        agent_ids: data.agent_ids, // NOUVEAU : Conserver les agent_ids
       };
 
     case "rapport_agents":
