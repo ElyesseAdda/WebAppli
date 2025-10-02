@@ -94,6 +94,7 @@ const ModificationDevis = () => {
   const [error, setError] = useState(null);
   const [errorDetails, setErrorDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDevisData, setIsLoadingDevisData] = useState(false);
 
   const [showCreationPartie, setShowCreationPartie] = useState(false);
   const [isPreviewed, setIsPreviewed] = useState(false);
@@ -464,8 +465,17 @@ const ModificationDevis = () => {
     setIsPreviewed(false); // Annuler l'état de prévisualisation si des modifications sont faites
     const isSelected = selectedSousParties.includes(sousPartieId);
     if (isSelected) {
+      // Désélectionner la sous-partie
       setSelectedSousParties(
         selectedSousParties.filter((id) => id !== sousPartieId)
+      );
+      
+      // Désélectionner automatiquement toutes les lignes de détail de cette sous-partie
+      const lignesToRemove = filteredLignesDetails
+        .filter((ligne) => ligne.sous_partie === sousPartieId)
+        .map((ligne) => ligne.id);
+      setSelectedLignes((prev) => 
+        prev.filter((id) => !lignesToRemove.includes(id))
       );
     } else {
       setSelectedSousParties([...selectedSousParties, sousPartieId]);
@@ -857,6 +867,8 @@ const ModificationDevis = () => {
         tva_rate: parseFloat(tvaRate),
         description: devisModalData.description,
         nature_travaux: natureTravaux,
+        parties: selectedParties,
+        sous_parties: selectedSousParties,
         lignes: selectedLignes.map((ligneId) => {
           const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
           return {
@@ -866,6 +878,14 @@ const ModificationDevis = () => {
               customPrices[ligneId] || ligne?.prix || 0
             ).toFixed(2),
             taux_fixe: ligne?.taux_fixe || tauxFixe || 20,
+          };
+        }),
+        lignes_details: selectedLignes.map((ligneId) => {
+          const ligne = filteredLignesDetails.find((l) => l.id === ligneId);
+          return {
+            id: ligneId,
+            quantity: quantities[ligneId] || 0,
+            custom_price: customPrices[ligneId] || ligne?.prix || 0,
           };
         }),
         lignes_speciales: {
@@ -1758,6 +1778,7 @@ const ModificationDevis = () => {
       }
 
       try {
+        setIsLoadingDevisData(true);
         console.log("Récupération des données pour le devis ID:", devisId);
         const response = await axios.get(`/api/devisa/${devisId}/`);
         const devisData = response.data;
@@ -1839,7 +1860,16 @@ const ModificationDevis = () => {
         }));
       } catch (error) {
         console.error("Erreur lors du chargement des données:", error);
-        alert("Erreur lors du chargement des données du devis");
+        setError("Impossible de charger les données du devis");
+        setErrorDetails({
+          message: "Erreur lors du chargement des données du devis",
+          details: error.response?.data?.detail || error.message,
+          code: error.response?.status,
+          devisId: devisId,
+          timestamp: new Date().toISOString(),
+        });
+      } finally {
+        setIsLoadingDevisData(false);
       }
     };
 
@@ -2115,7 +2145,7 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
         </Box>
       )}
 
-      {/* Indicateur de chargement */}
+      {/* Indicateur de chargement pour la sauvegarde */}
       {isLoading && (
         <Box
           sx={{
@@ -2150,7 +2180,42 @@ Pour rapporter cette erreur, copiez ce texte et envoyez-le au développeur.
         </Box>
       )}
 
-      <Box sx={{ mt: 4, mb: 4 }}>
+      {/* Indicateur de chargement pour les données du devis */}
+      {isLoadingDevisData && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9997,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100vh",
+          }}
+        >
+          <Paper
+            elevation={8}
+            sx={{
+              p: 4,
+              textAlign: "center",
+              backgroundColor: "white",
+              borderRadius: 2,
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              📄 Chargement du devis...
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Récupération des données du devis et des éléments associés.
+            </Typography>
+          </Paper>
+        </Box>
+      )}
+
+      <Box sx={{ mt: 4, mb: 4, opacity: isLoadingDevisData ? 0.5 : 1, pointerEvents: isLoadingDevisData ? 'none' : 'auto' }}>
         <Paper elevation={3} sx={{ p: 3 }}>
           <FormControl fullWidth sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>
