@@ -25,8 +25,20 @@ def planning_hebdo_pdf_drive(request):
         year = int(request.GET.get('year'))
         force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
         
-        # URL de prévisualisation
-        preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}")
+        # NOUVEAU : Récupérer la liste des agents sélectionnés
+        agent_ids_param = request.GET.get('agent_ids')
+        if agent_ids_param:
+            # Parser la liste des IDs (format: "1,2,3" ou "1")
+            try:
+                agent_ids = [int(id.strip()) for id in agent_ids_param.split(',') if id.strip().isdigit()]
+                agent_ids_str = ','.join(map(str, agent_ids))
+                preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}&agent_ids={agent_ids_str}")
+            except (ValueError, TypeError):
+                # En cas d'erreur, utiliser tous les agents
+                preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}")
+        else:
+            # Si aucun agent spécifié, utiliser tous les agents (comportement par défaut)
+            preview_url = request.build_absolute_uri(f"/api/preview-planning-hebdo/?week={week}&year={year}")
         
         # Récupérer la société (à adapter selon votre logique)
         # Pour l'instant, utiliser une société par défaut

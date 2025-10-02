@@ -7223,7 +7223,21 @@ def get_color_for_chantier(chantier_name, palette):
 def preview_planning_hebdo(request):
     week = int(request.GET.get('week'))
     year = int(request.GET.get('year'))
-    agents = Agent.objects.all()
+    
+    # NOUVEAU : Récupérer la liste des agents sélectionnés
+    agent_ids = request.GET.get('agent_ids')
+    if agent_ids:
+        # Parser la liste des IDs (format: "1,2,3")
+        try:
+            agent_ids_list = [int(id.strip()) for id in agent_ids.split(',') if id.strip().isdigit()]
+            agents = Agent.objects.filter(id__in=agent_ids_list)
+        except (ValueError, TypeError):
+            # En cas d'erreur, utiliser tous les agents
+            agents = Agent.objects.all()
+    else:
+        # Si aucun agent spécifié, utiliser tous les agents (comportement par défaut)
+        agents = Agent.objects.all()
+    
     days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
     planning_data = {}
@@ -7284,11 +7298,40 @@ def preview_planning_hebdo(request):
             if prev_chantier and prev_chantier != '':
                 planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
 
+    # Calculer les dates de la semaine pour l'affichage
+    from datetime import datetime, timedelta
+    
+    # Calculer le premier jour de la semaine ISO
+    jan4 = datetime(year, 1, 4)
+    jan4_weekday = jan4.weekday()  # 0 = lundi, 6 = dimanche
+    week1_start = jan4 - timedelta(days=jan4_weekday)
+    
+    # Calculer le début de la semaine demandée
+    week_start = week1_start + timedelta(weeks=week-1)
+    
+    # Calculer les 7 jours de la semaine
+    week_dates = []
+    for i in range(7):
+        week_dates.append(week_start + timedelta(days=i))
+    
+    # Créer les en-têtes avec dates
+    days_with_dates = []
+    for i, day in enumerate(days_of_week):
+        date = week_dates[i]
+        days_with_dates.append({
+            'name': day,
+            'short_name': day[0],  # Première lettre
+            'date': date.strftime('%d/%m'),
+            'full_date': date
+        })
+
     return render(request, 'DocumentAgent/planning_hebdo_agents.html', {
         'week': week,
         'year': year,
         'agents': agents,
         'days_of_week': days_of_week,
+        'days_with_dates': days_with_dates,
+        'week_dates': week_dates,
         'agent_hours_map': agent_hours_map,
         'planning_data': planning_data,
         'chantier_colors': chantier_colors,

@@ -39,6 +39,7 @@ const PlanningHebdoAgent = ({
   onCopyClick,
   setSelectedAgentId,
   onSelectionChange,
+  onGeneratePDFClick,
 }) => {
   const [agents, setAgents] = useState([]);
   const daysOfWeek = [
@@ -833,29 +834,10 @@ const PlanningHebdoAgent = ({
       setIsLoading(false);
     }
   };
-  // Fonction pour générer le PDF de tous les agents pour la semaine sélectionnée et le stocker dans le Drive
-  const handleGeneratePDF = async () => {
-    try {
-
-      // Utiliser le nouveau système universel
-      await generatePDFDrive(
-        "planning_hebdo",
-        {
-          week: selectedWeek,
-          year: selectedYear,
-        },
-        {
-          onSuccess: (response) => {
-          },
-          onError: (error) => {
-            alert(
-              `❌ Erreur lors de la génération du planning hebdomadaire: ${error.message}`
-            );
-          },
-        }
-      );
-    } catch (error) {
-      alert(`❌ Erreur lors de la génération du PDF: ${error.message}`);
+  // Fonction pour ouvrir le modal de sélection des agents
+  const handleGeneratePDF = () => {
+    if (onGeneratePDFClick) {
+      onGeneratePDFClick();
     }
   };
 

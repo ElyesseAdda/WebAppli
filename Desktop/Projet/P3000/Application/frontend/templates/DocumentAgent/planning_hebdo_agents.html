@@ -6,67 +6,197 @@
     <meta charset="UTF-8" />
     <title>Planning hebdomadaire - Semaine {{ week }} / {{ year }}</title>
     <style>
+      @page {
+        size: A4 landscape;
+        margin: 1cm;
+      }
+      
       body {
         font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
       }
-      h1,
+      
+      .page {
+        width: 100%;
+        height: 100vh;
+        page-break-after: always;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .page:last-child {
+        page-break-after: avoid;
+      }
+      
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+      }
+      
+      .week-info {
+        font-size: 18px;
+        font-weight: bold;
+        color: #1976d2;
+        margin-bottom: 5px;
+      }
+      
+      .agent-name {
+        font-size: 24px;
+        font-weight: bold;
+        margin: 10px 0;
+        color: #333;
+      }
+      
+      .calendar-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      h1 {
+        margin-bottom: 0.5em;
+        text-align: center;
+        color: #1976d2;
+      }
+      
       h2 {
         margin-bottom: 0.5em;
+        text-align: center;
+        color: #333;
       }
+      
       table {
         border-collapse: collapse;
         width: 100%;
         margin-bottom: 2em;
+        font-size: 12px;
       }
+      
       th,
       td {
         border: 1px solid #333;
-        padding: 4px 8px;
+        padding: 6px 4px;
         text-align: center;
+        vertical-align: middle;
       }
+      
       th {
         background: #f0f0f0;
+        font-weight: bold;
+        font-size: 11px;
+      }
+      
+      .hour-cell {
+        background: #f8f9fa;
+        font-weight: bold;
+        width: 60px;
+      }
+      
+      .day-header {
+        background: #e3f2fd;
+        font-weight: bold;
+        font-size: 11px;
+        padding: 8px 4px;
+      }
+      
+      .chantier-cell {
+        font-size: 10px;
+        font-weight: 500;
+        line-height: 1.2;
+        word-wrap: break-word;
+        overflow: hidden;
+      }
+      
+      .legend {
+        margin-top: 15px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        font-size: 10px;
+      }
+      
+      .legend-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      
+      .legend-item {
+        display: inline-block;
+        margin: 2px 4px 2px 0;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 9px;
+      }
+      
+      .date-info {
+        font-size: 10px;
+        color: #666;
+        margin-top: 5px;
       }
     </style>
   </head>
   <body>
-    <h1>Planning hebdomadaire - Semaine {{ week }} / {{ year }}</h1>
     {% for agent in agents %}
-    <h2>{{ agent.name }} {{ agent.surname }}</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Heure</th>
-          {% for day in days_of_week %}
-          <th>{{ day }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for hour in agent_hours_map|dict_get:agent.id %}
-        <tr>
-          <td>{{ hour }}</td>
-          {% for day in days_of_week %} {% with cell_rendered=False %} {% for chantier, start_hour, span in planning_rowspan|dict_get:agent.id|dict_get:day %} {% if start_hour == hour %}
-          <td
-            rowspan="{{ span }}"
-            style="background-color: {{ chantier_colors|dict_get:chantier }}; color: #222;" >
-            {{ chantier }}
-          </td>
-          {% with cell_rendered=True %}{% endwith %} {% endif %} {% endfor %} {% if not cell_rendered and planning_data|dict_get:agent.id|dict_get:hour|dict_get:day == '' %}
-          <td></td>
-          {% endif %} {% endwith %} {% endfor %}
-        </tr>
+    <div class="page">
+      <div class="header">
+        <div class="week-info">Semaine {{ week }} - {{ year }}</div>
+        <div class="agent-name">{{ agent.name }} {{ agent.surname }}</div>
+        <div class="date-info">
+          Du {{ week_dates.0|date:"d/m/Y" }} au {{ week_dates.6|date:"d/m/Y" }}
+        </div>
+      </div>
+      
+      <div class="calendar-container">
+        <table>
+          <thead>
+            <tr>
+              <th class="hour-cell">Heure</th>
+              {% for day_info in days_with_dates %}
+              <th class="day-header">
+                {{ day_info.short_name }}{{ day_info.date }}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for hour in agent_hours_map|dict_get:agent.id %}
+            <tr>
+              <td class="hour-cell">{{ hour }}</td>
+              {% for day in days_of_week %} 
+              {% with cell_rendered=False %} 
+              {% for chantier, start_hour, span in planning_rowspan|dict_get:agent.id|dict_get:day %} 
+              {% if start_hour == hour %}
+              <td
+                rowspan="{{ span }}"
+                class="chantier-cell"
+                style="background-color: {{ chantier_colors|dict_get:chantier }}; color: #222;" >
+                {{ chantier }}
+              </td>
+              {% with cell_rendered=True %}{% endwith %} 
+              {% endif %} 
+              {% endfor %} 
+              {% if not cell_rendered and planning_data|dict_get:agent.id|dict_get:hour|dict_get:day == '' %}
+              <td class="chantier-cell"></td>
+              {% endif %} 
+              {% endwith %} 
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="legend">
+        <div class="legend-title">Légende chantiers :</div>
+        {% for chantier, color in chantier_colors.items %}
+        <span class="legend-item" style="background:{{ color }}; color:#222;">
+          {{ chantier }}
+        </span>
         {% endfor %}
-      </tbody>
-    </table>
-    <div style="margin-bottom: 1em">
-      <strong>Légende chantiers :</strong>
-      {% for chantier, color in chantier_colors.items %}
-      <span
-        style="display:inline-block; background:{{ color }}; color:#222; padding:2px 8px; margin-right:8px; border-radius:4px;"
-        >{{ chantier }}</span
-      >
-      {% endfor %}
+      </div>
     </div>
     {% endfor %}
   </body>

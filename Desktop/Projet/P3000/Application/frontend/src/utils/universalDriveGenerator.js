@@ -313,10 +313,15 @@ const buildApiParams = (documentType, data) => {
       };
 
     case "planning_hebdo":
-      return {
+      const params = {
         week: data.week,
         year: data.year,
       };
+      // NOUVEAU : Ajouter les agent_ids si fournis (en tant que chaîne)
+      if (data.agent_ids && data.agent_ids.length > 0) {
+        params.agent_ids = data.agent_ids.join(',');
+      }
+      return params;
 
     case "rapport_agents":
       return {

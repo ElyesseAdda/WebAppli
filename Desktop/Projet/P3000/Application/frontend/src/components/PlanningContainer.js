@@ -12,6 +12,7 @@ import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import LaborCostsSummary from "./LaborCostsSummary";
 import PlanningHebdoAgent from "./PlanningHebdoAgent";
+import AgentSelectionModal from "./AgentSelectionModal";
 
 const StyledFormControl = styled(FormControl)({
   minWidth: 150,
@@ -58,6 +59,10 @@ const PlanningContainer = () => {
   const [isCopying, setIsCopying] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
   const [selectedReportYear, setSelectedReportYear] = useState(dayjs().year());
+  
+  // États pour le modal de sélection des agents
+  const [isAgentSelectionModalOpen, setIsAgentSelectionModalOpen] = useState(false);
+  const [selectedAgentsForPDF, setSelectedAgentsForPDF] = useState([]);
 
   useEffect(() => {
     const fetchAgents = async () => {
@@ -151,6 +156,55 @@ const PlanningContainer = () => {
       );
       alert(
         `❌ Erreur lors de la génération du rapport mensuel: ${error.message}`
+      );
+    }
+  };
+
+  // Fonction pour ouvrir le modal de sélection des agents
+  const handleOpenAgentSelection = () => {
+    setIsAgentSelectionModalOpen(true);
+  };
+
+  // Fonction pour confirmer la sélection des agents et générer le PDF
+  const handleConfirmAgentSelection = async (selectedAgentIds) => {
+    try {
+      console.log(
+        `🚀 Génération du planning hebdomadaire avec ${selectedAgentIds.length} agents sélectionnés...`
+      );
+
+      // Utiliser le nouveau système universel avec la liste des agents
+      await generatePDFDrive(
+        "planning_hebdo",
+        {
+          week: selectedWeek,
+          year: selectedYear,
+          agent_ids: selectedAgentIds, // NOUVEAU : Liste des agents sélectionnés
+        },
+        {
+          onSuccess: (response) => {
+            console.log(
+              "✅ Planning hebdomadaire généré avec succès:",
+              response
+            );
+          },
+          onError: (error) => {
+            console.error(
+              "❌ Erreur lors de la génération du planning hebdomadaire:",
+              error
+            );
+            alert(
+              `❌ Erreur lors de la génération du planning hebdomadaire: ${error.message}`
+            );
+          },
+        }
+      );
+    } catch (error) {
+      console.error(
+        "❌ Erreur lors de la génération du planning hebdomadaire:",
+        error
+      );
+      alert(
+        `❌ Erreur lors de la génération du planning hebdomadaire: ${error.message}`
       );
     }
   };
@@ -444,6 +498,7 @@ const PlanningContainer = () => {
         setSelectedAgentId={setSelectedAgentId}
         onCopyClick={() => setIsCopyModalOpen(true)}
         onSelectionChange={handleSelectionChange}
+        onGeneratePDFClick={handleOpenAgentSelection}
       />
 
       <LaborCostsSummary
@@ -548,6 +603,18 @@ const PlanningContainer = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de sélection des agents pour le PDF */}
+      <AgentSelectionModal
+        isOpen={isAgentSelectionModalOpen}
+        onClose={() => setIsAgentSelectionModalOpen(false)}
+        onConfirm={handleConfirmAgentSelection}
+        agents={agents}
+        selectedAgents={selectedAgentsForPDF}
+        setSelectedAgents={setSelectedAgentsForPDF}
+        week={selectedWeek}
+        year={selectedYear}
+      />
     </div>
   );
 };
