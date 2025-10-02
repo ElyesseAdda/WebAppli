@@ -213,6 +213,7 @@ const GlobalConflictModal = () => {
           documentData = {
             week: conflictData.week,
             year: conflictData.year,
+            agent_ids: conflictData.agent_ids, // NOUVEAU : Conserver les agent_ids
           };
         } else if (conflictData.documentType === "rapport_agents") {
           documentData = {
