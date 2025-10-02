@@ -936,19 +936,14 @@ const ModificationDevis = () => {
         // Vérifier si c'est un devis de chantier et recalculer les coûts estimés
         if (response.data.devis_chantier && selectedChantierId) {
           try {
-            console.log("🔄 Recalcul des coûts estimés pour le devis:", devisId);
             // D'abord recalculer les coûts du devis lui-même
             await axios.post(`/api/devis/${devisId}/recalculer-couts/`);
-            console.log("✅ Coûts du devis recalculés avec succès");
             
             // Ensuite recalculer les coûts du chantier
-            console.log("🔄 Recalcul des coûts estimés pour le chantier:", selectedChantierId);
             await axios.post(`/api/chantier/${selectedChantierId}/recalculer-couts-estimes/`);
-            console.log("✅ Coûts estimés du chantier recalculés avec succès");
             
             // Déclencher le rechargement des données du chantier dans le parent
             if (onUpdate) {
-              console.log("🔄 Déclenchement du rechargement des données du chantier");
               onUpdate();
             }
           } catch (recalcError) {
@@ -959,13 +954,10 @@ const ModificationDevis = () => {
 
         // Remplacement automatique du PDF dans le Drive
         try {
-          console.log("🔄 Régénération automatique du PDF du devis modifié...");
           
           const regenerateResponse = await axios.post(`/api/devis/${devisId}/regenerate-pdf/`);
           
           if (regenerateResponse.data.success) {
-            console.log("✅ PDF régénéré et remplacé dans le Drive:", regenerateResponse.data);
-            console.log("📁 Chemin du fichier:", regenerateResponse.data.file_path);
             
             // Afficher une notification de succès avec lien vers le Drive
             const driveUrl = regenerateResponse.data.drive_url || regenerateResponse.data.redirect_to;

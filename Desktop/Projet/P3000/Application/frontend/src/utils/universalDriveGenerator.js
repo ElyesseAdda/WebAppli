@@ -171,7 +171,6 @@ export const generatePDFDrive = async (
   forceReplace = false
 ) => {
   try {
-    console.log(`🚀 Génération PDF Drive - Type: ${documentType}`, data);
 
     // 1. Validation du type de document
     const documentConfig = DOCUMENT_TYPES[documentType];
@@ -214,11 +213,9 @@ export const generatePDFDrive = async (
 
     // 5. Traitement de la réponse
     if (response.data.success) {
-      console.log(`✅ PDF généré et stocké avec succès dans le Drive`);
 
       // Vérifier s'il y a un conflit détecté
       if (response.data.conflict_detected) {
-        console.log(`⚠️ Conflit de fichier détecté pour ${documentType}`);
         return handleConflict(documentType, data, response.data, callbacks);
       }
 
@@ -806,7 +803,6 @@ const showSuccessNotification = (message, driveUrl) => {
       viewButton.disabled = false;
       viewButton.style.opacity = "1";
       viewButton.innerHTML = "📁 Voir dans le Drive";
-      console.log("✅ Bouton réactivé après 3 secondes de synchronisation");
     }
   }, 1000);
 
@@ -818,14 +814,12 @@ const showSuccessNotification = (message, driveUrl) => {
       const filePath = urlParams.get("path");
 
       if (filePath) {
-        console.log("🔍 Début de la vérification du fichier...");
 
         try {
           // Vérifier que le fichier existe dans S3
           const fileExists = await waitForFileToExist(filePath, 10, 1000);
 
           if (fileExists) {
-            console.log("✅ Fichier confirmé dans S3");
           } else {
             console.log("⚠️ Fichier non trouvé, attente supplémentaire...");
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -851,7 +845,6 @@ const showSuccessNotification = (message, driveUrl) => {
               );
 
               if (parentResponse.status === 200) {
-                console.log("✅ Dossier parent confirmé");
                 driveUrl = driveUrl.replace(
                   `path=${filePath}`,
                   `path=${parentPath}`
@@ -865,7 +858,6 @@ const showSuccessNotification = (message, driveUrl) => {
                 );
               }
             } catch (error) {
-              console.log("❌ Erreur, redirection vers le dossier racine");
               const rootPath = "Appels_Offres";
               driveUrl = driveUrl.replace(
                 `path=${filePath}`,
@@ -943,33 +935,22 @@ const showSuccessNotification = (message, driveUrl) => {
       );
 
       if (driveWindow) {
-        console.log("✅ Fenêtre Drive créée avec succès");
         setTimeout(() => {
           try {
-            console.log("🔄 Navigation vers l'URL du Drive...");
             driveWindow.location.replace(enhancedDriveUrl);
-            console.log("✅ Navigation forcée vers:", enhancedDriveUrl);
             driveWindow.focus();
           } catch (error) {
-            console.log("❌ Erreur lors de la navigation:", error);
             try {
               driveWindow.location.href = enhancedDriveUrl;
               driveWindow.focus();
             } catch (fallbackError) {
-              console.log("❌ Échec du fallback:", fallbackError);
             }
           }
         }, 300);
       } else {
-        console.log("❌ Échec de la création de la fenêtre Drive");
-        console.log("🔄 Fallback: Redirection dans la fenêtre actuelle...");
         try {
           window.location.href = enhancedDriveUrl;
         } catch (error) {
-          console.log(
-            "❌ Échec de la redirection dans la fenêtre actuelle:",
-            error
-          );
         }
       }
     }
@@ -1077,11 +1058,9 @@ const showErrorNotification = (message) => {
  * Vérifie si un fichier existe dans S3 avant de rediriger
  */
 const waitForFileToExist = async (filePath, maxAttempts = 10, delay = 1000) => {
-  console.log(`🔍 Vérification de l'existence du fichier: ${filePath}`);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      console.log(`🔄 Tentative ${attempt}/${maxAttempts}`);
 
       const response = await axios.head(
         `${API_BASE_URL}/download-pdf-from-s3/`,
@@ -1093,13 +1072,9 @@ const waitForFileToExist = async (filePath, maxAttempts = 10, delay = 1000) => {
       );
 
       if (response.status === 200) {
-        console.log(`✅ Fichier trouvé après ${attempt} tentative(s)`);
         return true;
       }
     } catch (error) {
-      console.log(
-        `⏳ Tentative ${attempt}/${maxAttempts} - Fichier pas encore disponible`
-      );
     }
 
     if (attempt < maxAttempts) {
@@ -1122,7 +1097,6 @@ const waitForFileToExist = async (filePath, maxAttempts = 10, delay = 1000) => {
  */
 export const addDocumentType = (typeName, config) => {
   DOCUMENT_TYPES[typeName] = config;
-  console.log(`✅ Type de document ajouté: ${typeName}`);
 };
 
 /**

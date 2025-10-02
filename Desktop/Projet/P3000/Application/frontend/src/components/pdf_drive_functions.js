@@ -168,7 +168,6 @@ export const generateDevisTravauxPDFDrive = async (
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
 
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
@@ -220,11 +219,9 @@ export const generateDevisMarchePDFDrive = async (
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
 
       // Vérifier s'il y a un conflit détecté
       if (response.data.conflict_detected) {
-        console.log("⚠️ Conflit de fichier détecté pour l'appel d'offres");
 
         // Émettre un événement personnalisé pour ouvrir le modal de conflit
         const conflictId = `appel_offres_${appelOffresId}_${Date.now()}`;
@@ -380,7 +377,6 @@ export const downloadPDFFromDrive = async (s3Path) => {
     link.remove();
     window.URL.revokeObjectURL(url);
 
-    console.log("✅ PDF téléchargé avec succès");
   } catch (error) {
     console.error("❌ Erreur lors du téléchargement:", error);
     showErrorNotification(`Erreur de téléchargement: ${error.message}`);
@@ -470,16 +466,9 @@ const hideLoadingNotification = () => {
  * Vérifie si un fichier existe dans S3 avant de rediriger
  */
 const waitForFileToExist = async (filePath, maxAttempts = 10, delay = 1000) => {
-  console.log(`🔍 Vérification de l'existence du fichier: ${filePath}`);
-  console.log(
-    `⏰ Début de la vérification à: ${new Date().toLocaleTimeString()}`
-  );
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      console.log(
-        `🔄 Tentative ${attempt}/${maxAttempts} - ${new Date().toLocaleTimeString()}`
-      );
 
       // Faire une requête HEAD pour vérifier l'existence du fichier
       const response = await axios.head(
@@ -622,7 +611,6 @@ const showSuccessNotification = (message, driveUrl) => {
       viewButton.disabled = false;
       viewButton.style.opacity = "1";
       viewButton.innerHTML = "📁 Voir dans le Drive";
-      console.log("✅ Bouton réactivé après 3 secondes de synchronisation");
     }
   }, 1000);
 
@@ -635,41 +623,25 @@ const showSuccessNotification = (message, driveUrl) => {
 
       if (filePath) {
         // Le bouton est déjà désactivé pendant 3 secondes, pas besoin de le redésactiver
-        console.log("🔍 Début de la vérification du fichier...");
 
         try {
           // PREMIÈRE REQUÊTE : Vérifier que le fichier existe dans S3
-          console.log("🔍 Première vérification de l'existence du fichier...");
           const fileExists = await waitForFileToExist(filePath, 10, 1000); // 10 tentatives, 1 seconde entre chaque
 
           if (fileExists) {
-            console.log(
-              "✅ Fichier confirmé dans S3 après première vérification"
-            );
           } else {
-            console.log(
-              "⚠️ Fichier non trouvé après première vérification, attente supplémentaire..."
-            );
             // Attendre 2 secondes supplémentaires pour la synchronisation
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
 
           // DEUXIÈME REQUÊTE : Vérification finale avant redirection
-          console.log("🔍 Deuxième vérification finale...");
           const finalCheck = await waitForFileToExist(filePath, 5, 500); // 5 tentatives, 0.5 seconde entre chaque
 
           if (finalCheck) {
-            console.log(
-              "✅ Fichier confirmé dans S3 après deuxième vérification"
-            );
           } else {
-            console.log(
-              "⚠️ Fichier non trouvé après deuxième vérification, vérification du dossier parent..."
-            );
 
             // Vérifier si le dossier parent existe
             const parentPath = filePath.substring(0, filePath.lastIndexOf("/"));
-            console.log(`🔍 Vérification du dossier parent: ${parentPath}`);
 
             try {
               // Faire une requête HEAD sur le dossier parent
@@ -767,11 +739,9 @@ const showSuccessNotification = (message, driveUrl) => {
       try {
         const existingWindow = window.open("", "drive_window");
         if (existingWindow && !existingWindow.closed) {
-          console.log("🗑️ Fermeture de la fenêtre Drive existante");
           existingWindow.close();
         }
       } catch (error) {
-        console.log("⚠️ Impossible de fermer la fenêtre existante:", error);
       }
 
       // Attendre un court délai avant de créer la nouvelle fenêtre
@@ -804,13 +774,7 @@ const showSuccessNotification = (message, driveUrl) => {
           }
         }
         keysToRemove.forEach((key) => sessionStorage.removeItem(key));
-        console.log(
-          "🧹 Cache local nettoyé:",
-          keysToRemove.length,
-          "éléments supprimés"
-        );
       } catch (error) {
-        console.log("⚠️ Impossible de nettoyer le cache local:", error);
       }
 
       // SOLUTION ROBUSTE: Créer d'abord une fenêtre vide, puis naviguer
@@ -821,17 +785,14 @@ const showSuccessNotification = (message, driveUrl) => {
       );
 
       if (driveWindow) {
-        console.log("✅ Fenêtre Drive créée avec succès");
 
         // Attendre que la fenêtre soit prête, puis naviguer
         setTimeout(() => {
           try {
-            console.log("🔄 Navigation vers l'URL du Drive...");
 
             // Utiliser location.replace pour forcer la navigation
             driveWindow.location.replace(enhancedDriveUrl);
 
-            console.log("✅ Navigation forcée vers:", enhancedDriveUrl);
             driveWindow.focus();
 
             // Vérification supplémentaire après 1 seconde
@@ -855,30 +816,21 @@ const showSuccessNotification = (message, driveUrl) => {
               }
             }, 1000);
           } catch (error) {
-            console.log("❌ Erreur lors de la navigation:", error);
 
             // Fallback: Essayer avec location.href
             try {
-              console.log("🔄 Tentative de fallback avec location.href...");
               driveWindow.location.href = enhancedDriveUrl;
               driveWindow.focus();
             } catch (fallbackError) {
-              console.log("❌ Échec du fallback:", fallbackError);
             }
           }
         }, 300); // Délai pour s'assurer que la fenêtre est prête
       } else {
-        console.log("❌ Échec de la création de la fenêtre Drive");
 
         // SOLUTION DE FALLBACK: Redirection dans la fenêtre actuelle
-        console.log("🔄 Fallback: Redirection dans la fenêtre actuelle...");
         try {
           window.location.href = enhancedDriveUrl;
         } catch (error) {
-          console.log(
-            "❌ Échec de la redirection dans la fenêtre actuelle:",
-            error
-          );
         }
       }
     }

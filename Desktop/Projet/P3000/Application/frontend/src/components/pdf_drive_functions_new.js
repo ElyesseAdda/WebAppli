@@ -28,7 +28,6 @@ export const generatePlanningHebdoDrive = async (week, year) => {
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
 
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
@@ -62,7 +61,6 @@ export const generateMonthlyAgentsPDFDrive = async (month, year) => {
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
 
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
@@ -99,7 +97,6 @@ export const generateDevisTravauxPDFDrive = async (
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
 
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
@@ -139,7 +136,6 @@ export const generateDevisMarchePDFDrive = async (
     );
 
     if (response.data.success) {
-      console.log("✅ PDF généré et stocké avec succès dans le Drive");
 
       // Afficher une notification de succès avec bouton de redirection
       showSuccessNotification(response.data.message, response.data.drive_url);
@@ -178,7 +174,6 @@ export const downloadPDFFromDrive = async (s3Path) => {
     link.remove();
     window.URL.revokeObjectURL(url);
 
-    console.log("✅ PDF téléchargé avec succès");
   } catch (error) {
     console.error("❌ Erreur lors du téléchargement:", error);
     showErrorNotification(`Erreur de téléchargement: ${error.message}`);

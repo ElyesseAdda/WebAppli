@@ -158,9 +158,6 @@ const GlobalConflictModal = () => {
         drive_url: `/drive?path=${fullPath}&sidebar=closed&focus=file&_t=${Date.now()}`,
       };
 
-      console.log("📋 Données du conflit mises à jour:", updatedData);
-      console.log("📋 Nom du fichier existant:", fileName);
-      console.log("📋 Chemin du fichier:", fullPath);
 
       setConflictData(updatedData);
       setOpen(true);
@@ -228,7 +225,6 @@ const GlobalConflictModal = () => {
           documentData,
           {
             onSuccess: (response) => {
-              console.log("✅ NOUVEAU: Fichier remplacé avec succès", response);
 
               // Afficher une notification de succès
               const successEvent = new CustomEvent("showNotification", {
