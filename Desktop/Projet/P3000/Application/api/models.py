@@ -66,6 +66,8 @@ class Chantier(models.Model):
         blank=True,
         null=True
     )
+    is_system_chantier = models.BooleanField(default=False)
+    chantier_type = models.CharField(max_length=20, default='normal')
     
     # Champs existants pour les coûts réels
     cout_materiel = models.FloatField(null=True)
@@ -399,6 +401,7 @@ EVENT_TYPE_CHOICES = [
     ('absence', 'Absence'),
     ('conge', 'Congé'),
     ('modification_horaire', 'Horaire Modifié'),
+    ('ecole', 'École'),
 ]
 
 EVENT_SUBTYPE_CHOICES = [
@@ -1208,6 +1211,9 @@ class AgencyExpense(models.Model):
     date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     category = models.CharField(max_length=50)
+    agent = models.ForeignKey('Agent', on_delete=models.CASCADE, null=True, blank=True)
+    is_ecole_expense = models.BooleanField(default=False)
+    ecole_hours = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

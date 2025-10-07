@@ -178,19 +178,26 @@ const CalendrierAgent = ({ agents }) => {
     let adaptedEvents = [];
 
     if (loadedEvents && loadedEvents.length > 0) {
-      adaptedEvents = loadedEvents.map((event) => ({
-        id: event.id,
-        resourceId: event.agent.toString(),
-        start: event.start_date,
-        end: event.end_date,
-        title:
-          event.event_type === "modification_horaire"
-            ? `${event.hours_modified}H`
-            : `${event.event_type}${
-                event.subtype ? ` (${event.subtype})` : ""
-              }`,
-        color: getColorByStatus(event.event_type, event.subtype),
-      }));
+      adaptedEvents = loadedEvents.map((event) => {
+        // Pour FullCalendar, la date de fin doit être le jour SUIVANT le dernier jour d'affichage
+        const endDate = dayjs(event.end_date).add(1, 'day').format('YYYY-MM-DD');
+        
+        return {
+          id: event.id,
+          resourceId: event.agent.toString(),
+          start: event.start_date,
+          end: endDate,
+          title:
+            event.event_type === "modification_horaire"
+              ? `${event.hours_modified}H`
+              : event.event_type === "ecole"
+              ? "École"
+              : `${event.event_type}${
+                  event.subtype ? ` (${event.subtype})` : ""
+                }`,
+          color: getColorByStatus(event.event_type, event.subtype),
+        };
+      });
     }
 
     if (agentsWithWorkDays.length > 0) {
@@ -204,6 +211,27 @@ const CalendrierAgent = ({ agents }) => {
         dimanche: 0,
       };
 
+      // OPTIMISATION : Créer un index des événements existants par agent et date
+      const eventsByAgentAndDate = new Map();
+      adaptedEvents.forEach((event) => {
+        const agentId = event.resourceId;
+        const eventStartDate = dayjs(event.start);
+        const eventEndDate = dayjs(event.end).subtract(1, 'day'); // Ajuster pour la vraie date de fin
+        
+        // Pour chaque jour de l'événement, marquer comme occupé
+        let currentDate = eventStartDate;
+        while (currentDate.isBefore(eventEndDate) || currentDate.isSame(eventEndDate)) {
+          const dateKey = `${agentId}-${currentDate.format("YYYY-MM-DD")}`;
+          eventsByAgentAndDate.set(dateKey, true);
+          currentDate = currentDate.add(1, 'day');
+        }
+      });
+
+      // OPTIMISATION : Afficher 12 mois (6 mois en arrière + 6 mois en avant)
+      const today = dayjs();
+      const startDate = today.subtract(6, 'month').startOf('month');
+      const endDate = today.add(6, 'month').endOf('month');
+
       agentsWithWorkDays.forEach((agent) => {
         const workDays = agent.jours_travail
           ? agent.jours_travail
@@ -211,44 +239,32 @@ const CalendrierAgent = ({ agents }) => {
               .map((day) => dayMapping[day.trim().toLowerCase()])
           : [1, 2, 3, 4, 5];
 
-        const currentYear = dayjs().year();
-        const nextYear = currentYear + 1;
+        // Générer les jours uniquement pour la période visible
+        let currentDate = startDate;
+        while (currentDate.isBefore(endDate) || currentDate.isSame(endDate)) {
+          const dayOfWeek = currentDate.day();
+          const formattedDate = currentDate.format("YYYY-MM-DD");
+          const dateKey = `${agent.id}-${formattedDate}`;
 
-        [currentYear, nextYear].forEach((year) => {
-          for (let month = 0; month < 12; month++) {
-            const daysInMonth = dayjs().year(year).month(month).daysInMonth();
-            const monthDays = Array.from({ length: daysInMonth }, (_, i) =>
-              dayjs()
-                .year(year)
-                .month(month)
-                .date(i + 1)
-            );
+          // Vérification optimisée via l'index
+          const eventExists = eventsByAgentAndDate.has(dateKey);
 
-            monthDays.forEach((date) => {
-              const dayOfWeek = date.day();
-              const formattedDate = date.format("YYYY-MM-DD");
+          // Ne créer l'événement P que si aucun autre événement n'existe
+          if (!eventExists) {
+            const isWorkDay = workDays.includes(dayOfWeek);
 
-              const eventExists = adaptedEvents.some(
-                (event) =>
-                  event.resourceId === agent.id.toString() &&
-                  event.start === formattedDate
-              );
-
-              if (!eventExists) {
-                const isWorkDay = workDays.includes(dayOfWeek);
-
-                adaptedEvents.push({
-                  id: `${agent.id}-${formattedDate}`,
-                  resourceId: agent.id.toString(),
-                  start: formattedDate,
-                  end: formattedDate,
-                  title: isWorkDay ? "P" : " ",
-                  color: isWorkDay ? "green" : "grey",
-                });
-              }
+            adaptedEvents.push({
+              id: `${agent.id}-${formattedDate}`,
+              resourceId: agent.id.toString(),
+              start: formattedDate,
+              end: formattedDate,
+              title: isWorkDay ? "P" : " ",
+              color: isWorkDay ? "green" : "grey",
             });
           }
-        });
+          
+          currentDate = currentDate.add(1, 'day');
+        }
       });
     }
 
@@ -269,6 +285,38 @@ const CalendrierAgent = ({ agents }) => {
     setModalIsOpen(false);
   };
 
+  const handleEventClick = async (clickInfo) => {
+    const event = clickInfo.event;
+    
+    // Ne pas permettre la suppression des événements "P" (présence par défaut)
+    if (event.title === "P" || event.title === " ") {
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Voulez-vous supprimer cet événement "${event.title}" ?`);
+    
+    if (confirmDelete) {
+      try {
+        // Supprimer l'événement de la base de données
+        const eventId = event.id;
+        const agentId = event.getResources()[0].id;
+        const startDate = dayjs(event.start).format("YYYY-MM-DD");
+        const endDate = dayjs(event.end).subtract(1, 'day').format("YYYY-MM-DD"); // Soustraire 1 jour car FullCalendar ajoute +1
+        
+        // Utiliser l'endpoint qui gère la suppression des assignations
+        await deleteEventsByAgentAndPeriod(agentId, startDate, endDate);
+        
+        // Recharger les événements
+        await loadEvents();
+        
+        alert("Événement supprimé avec succès !");
+      } catch (error) {
+        console.error("Erreur lors de la suppression de l'événement:", error);
+        alert("Erreur lors de la suppression de l'événement");
+      }
+    }
+  };
+
   const addEvent = async (hours = 0) => {
     try {
       if (!selectedDate || !selectedAgent || !eventType) {
@@ -287,6 +335,69 @@ const CalendrierAgent = ({ agents }) => {
       const endDate = dayjs(selectedEndDate || selectedDate).format(
         "YYYY-MM-DD"
       );
+
+      // Gestion spéciale pour l'événement "École"
+      if (eventType === "ecole") {
+        try {
+          // Supprimer d'abord les schedules existants pour la période
+          let currentDate = dayjs(startDate);
+          const finalDate = dayjs(endDate);
+
+          while (
+            currentDate.isBefore(finalDate, "day") ||
+            currentDate.isSame(finalDate, "day")
+          ) {
+            const weekNumber = currentDate.isoWeek();
+            const year = currentDate.year();
+            const dayName = currentDate.locale("fr").format("dddd");
+            const dayNameCapitalized =
+              dayName.charAt(0).toUpperCase() + dayName.slice(1);
+
+            // Créer un tableau de toutes les heures à supprimer
+            const deletions = Array.from({ length: 17 }, (_, i) => {
+              const hour = `${i + 6}:00`;
+              return {
+                agentId: selectedAgent,
+                week: weekNumber,
+                year: year,
+                day: dayNameCapitalized,
+                hour: hour,
+              };
+            });
+
+            try {
+              // Appeler l'API pour supprimer les schedules
+              await axios.post("/api/delete_schedule/", deletions);
+            } catch (error) {
+              console.error(
+                "❌ Erreur lors de la suppression des schedules:",
+                error
+              );
+            }
+
+            currentDate = currentDate.add(1, "day");
+          }
+
+          // Créer l'événement école et les assignations
+          const response = await axios.post("/api/ecole/create/", {
+            agent_id: selectedAgent,
+            start_date: startDate,
+            end_date: endDate
+          });
+          
+          if (response.data.success) {
+            alert(`Événement école créé avec ${response.data.assignments_created} assignations automatiques !`);
+            // Recharger les événements
+            loadEvents();
+            closeModal();
+            return;
+          }
+        } catch (error) {
+          console.error("Erreur lors de la création de l'événement école:", error);
+          alert("Erreur lors de la création de l'événement école");
+          return;
+        }
+      }
 
       // Si c'est un événement A ou C, supprimer d'abord les schedules
       if (eventType === "absence" || eventType === "conge") {
@@ -447,6 +558,7 @@ const CalendrierAgent = ({ agents }) => {
       return "purple";
     }
     if (eventType === "modification_horaire") return "orange";
+    if (eventType === "ecole") return "#9c27b0"; // violet pour école
     return "grey";
   };
 
@@ -474,6 +586,7 @@ const CalendrierAgent = ({ agents }) => {
         editable={true}
         selectable={true}
         select={handleResourceClick}
+        eventClick={handleEventClick}
         resourceAreaWidth="300px"
         height="auto"
         resourceLabelContent={(arg) => (
@@ -535,6 +648,7 @@ const CalendrierAgent = ({ agents }) => {
             <MenuItem value="presence">Présence</MenuItem>
             <MenuItem value="absence">Absence</MenuItem>
             <MenuItem value="conge">Congé</MenuItem>
+            <MenuItem value="ecole">École</MenuItem>
             <MenuItem value="modification_horaire">Horaire Modifié</MenuItem>
           </Select>
 

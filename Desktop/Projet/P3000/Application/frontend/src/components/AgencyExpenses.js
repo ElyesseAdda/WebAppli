@@ -85,6 +85,7 @@ const AgencyExpenses = () => {
     "Équipement",
     "Assurance",
     "Services",
+    "Formation",
     "Autres",
   ];
 

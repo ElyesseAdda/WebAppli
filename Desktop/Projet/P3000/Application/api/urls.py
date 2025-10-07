@@ -82,6 +82,10 @@ from .views import (
     PaiementGlobalSousTraitantViewSet,
     FactureSousTraitantViewSet,
     PaiementFactureSousTraitantViewSet,
+    create_ecole_event,
+    delete_ecole_event,
+    get_ecole_hours,
+    recalculate_ecole_expenses,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -258,6 +262,12 @@ urlpatterns = [
     path('devis/<int:devis_id>/recalculer-couts/', recalculer_couts_devis, name='devis-recalculer-couts'),
     path('facture/<int:facture_id>/recalculer-couts/', recalculer_couts_facture, name='facture-recalculer-couts'),
     path('fournisseurs/', fournisseurs, name='fournisseurs'),
+    
+    # ===== URLs POUR L'ÉVÉNEMENT "ÉCOLE" =====
+    path('ecole/create/', create_ecole_event, name='create_ecole_event'),
+    path('ecole/delete/<int:event_id>/', delete_ecole_event, name='delete_ecole_event'),
+    path('ecole/hours/<int:agent_id>/', get_ecole_hours, name='get_ecole_hours'),
+    path('ecole/recalculate-expenses/', recalculate_ecole_expenses, name='recalculate_ecole_expenses'),
 ]
 
 urlpatterns += [

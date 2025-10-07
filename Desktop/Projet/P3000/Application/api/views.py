@@ -47,6 +47,14 @@ from .models import (
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
+from .ecole_utils import (
+    get_or_create_ecole_chantier,
+    create_ecole_assignments,
+    calculate_ecole_hours_for_agent,
+    create_ecole_expense_for_agent,
+    recalculate_all_ecole_expenses_for_month,
+    delete_ecole_assignments
+)
 import logging
 from django.db import transaction, models
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -809,6 +817,14 @@ from .models import (
     AgencyExpenseAggregate,
 )
 from .models import compute_agency_expense_aggregate_for_month
+from .ecole_utils import (
+    get_or_create_ecole_chantier,
+    create_ecole_assignments,
+    calculate_ecole_hours_for_agent,
+    create_ecole_expense_for_agent,
+    recalculate_all_ecole_expenses_for_month,
+    delete_ecole_assignments
+)
 import logging
 from django.db import transaction, models
 from rest_framework.permissions import IsAdminUser, AllowAny
@@ -1549,16 +1565,40 @@ def delete_events_by_agent_and_period(request):
         return Response({'error': f'Erreur de format de date: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        current_date = start_date
-        while current_date <= end_date:
-            events = Event.objects.filter(
-                agent_id=agent_id,
-                start_date=current_date
-            )
-            if events.exists():
-                logger.info(f'Found events for agent {agent_id} on {current_date}. Deleting...')
-                events.delete()
-            current_date += timedelta(days=1)
+        # Récupérer tous les événements dans la période (y compris ceux qui couvrent plusieurs jours)
+        events = Event.objects.filter(
+            agent_id=agent_id,
+            start_date__lte=end_date,
+            end_date__gte=start_date
+        )
+        
+        # Pour chaque événement, supprimer les assignations associées si c'est un événement école
+        for event in events:
+            if event.event_type == 'ecole':
+                logger.info(f'Deleting école assignments for agent {agent_id} from {event.start_date} to {event.end_date}')
+                # Importer la fonction de suppression
+                from api.ecole_utils import delete_ecole_assignments
+                delete_ecole_assignments(agent_id, event.start_date, event.end_date)
+                
+                # Recalculer les dépenses après suppression
+                from api.ecole_utils import create_ecole_expense_for_agent
+                current_date = event.start_date
+                while current_date <= event.end_date:
+                    month = current_date.month
+                    year = current_date.year
+                    create_ecole_expense_for_agent(agent_id, month, year)
+                    
+                    # Passer au mois suivant
+                    if current_date.month == 12:
+                        current_date = date(current_date.year + 1, 1, 1)
+                    else:
+                        current_date = date(current_date.year, current_date.month + 1, 1)
+        
+        # Supprimer les événements
+        events_count = events.count()
+        if events_count > 0:
+            logger.info(f'Deleting {events_count} events for agent {agent_id}')
+            events.delete()
 
         logger.info("Events deleted successfully")
         return Response({'message': 'Événements supprimés avec succès.'}, status=status.HTTP_204_NO_CONTENT)
@@ -9624,6 +9664,161 @@ def get_decomposition_couts(request, chantier_id):
             'error': f'Erreur lors de la récupération de la décomposition: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# ===== ENDPOINTS POUR L'ÉVÉNEMENT "ÉCOLE" =====
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_ecole_event(request):
+    """
+    Crée un événement "École" et assigne automatiquement les créneaux
+    """
+    try:
+        data = request.data
+        agent_id = data.get('agent_id')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not all([agent_id, start_date, end_date]):
+            return Response({
+                'error': 'agent_id, start_date et end_date sont requis'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Convertir les dates
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        
+        # Créer les assignations automatiques (qui crée aussi l'événement)
+        assignments_created = create_ecole_assignments(agent_id, start_date, end_date)
+        
+        # Créer les dépenses pour chaque mois concerné
+        current_date = start_date
+        while current_date <= end_date:
+            month = current_date.month
+            year = current_date.year
+            create_ecole_expense_for_agent(agent_id, month, year)
+            
+            # Passer au mois suivant
+            if current_date.month == 12:
+                current_date = date(current_date.year + 1, 1, 1)
+            else:
+                current_date = date(current_date.year, current_date.month + 1, 1)
+        
+        return Response({
+            'success': True,
+            'assignments_created': assignments_created,
+            'message': f'Événement école créé avec {assignments_created} assignations'
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors de la création de l\'événement école: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def delete_ecole_event(request, event_id):
+    """
+    Supprime un événement "École" et ses assignations
+    """
+    try:
+        event = Event.objects.get(id=event_id, event_type='ecole')
+        
+        # Supprimer les assignations d'école
+        assignments_deleted = delete_ecole_assignments(
+            event.agent_id, 
+            event.start_date, 
+            event.end_date
+        )
+        
+        # Recalculer les dépenses pour chaque mois concerné
+        current_date = event.start_date
+        while current_date <= event.end_date:
+            month = current_date.month
+            year = current_date.year
+            create_ecole_expense_for_agent(event.agent_id, month, year)
+            
+            # Passer au mois suivant
+            if current_date.month == 12:
+                current_date = date(current_date.year + 1, 1, 1)
+            else:
+                current_date = date(current_date.year, current_date.month + 1, 1)
+        
+        # Supprimer l'événement
+        event.delete()
+        
+        return Response({
+            'success': True,
+            'assignments_deleted': assignments_deleted,
+            'message': f'Événement école supprimé avec {assignments_deleted} assignations'
+        })
+        
+    except Event.DoesNotExist:
+        return Response({
+            'error': 'Événement école non trouvé'
+        }, status=status.HTTP_404_NOT_FOUND)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors de la suppression de l\'événement école: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_ecole_hours(request, agent_id):
+    """
+    Récupère les heures d'école pour un agent sur une période
+    """
+    try:
+        month = request.GET.get('month')
+        year = request.GET.get('year')
+        
+        if not month or not year:
+            return Response({
+                'error': 'month et year sont requis'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        ecole_hours = calculate_ecole_hours_for_agent(agent_id, int(month), int(year))
+        
+        return Response({
+            'agent_id': agent_id,
+            'month': int(month),
+            'year': int(year),
+            'ecole_hours': ecole_hours
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors du calcul des heures d\'école: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def recalculate_ecole_expenses(request):
+    """
+    Recalcule toutes les dépenses d'école pour un mois donné
+    """
+    try:
+        data = request.data
+        month = data.get('month')
+        year = data.get('year')
+        
+        if not month or not year:
+            return Response({
+                'error': 'month et year sont requis'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        recalculate_all_ecole_expenses_for_month(int(month), int(year))
+        
+        return Response({
+            'success': True,
+            'message': f'Dépenses école recalculées pour {month}/{year}'
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Erreur lors du recalcul des dépenses école: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
