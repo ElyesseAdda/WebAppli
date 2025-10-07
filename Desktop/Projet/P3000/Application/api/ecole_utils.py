@@ -144,14 +144,37 @@ def calculate_ecole_hours_for_agent(agent_id, month, year):
         agent = Agent.objects.get(id=agent_id)
         
         # Récupérer toutes les assignations "École" pour cet agent ce mois
+        # Calculer les semaines ISO qui font partie de ce mois
+        from datetime import datetime, timedelta
+        from calendar import monthrange
+        
+        # Obtenir le premier et dernier jour du mois
+        first_day = datetime(year, month, 1)
+        last_day_num = monthrange(year, month)[1]
+        last_day = datetime(year, month, last_day_num)
+        
+        # Obtenir toutes les semaines ISO qui touchent ce mois
+        weeks_in_month = set()
+        current = first_day
+        while current <= last_day:
+            week_iso = current.isocalendar()[1]
+            year_iso = current.isocalendar()[0]
+            weeks_in_month.add((week_iso, year_iso))
+            current += timedelta(days=1)
+        
+        # Récupérer UNIQUEMENT les assignations des semaines de ce mois
+        from django.db.models import Q
+        query = Q()
+        for week_num, year_num in weeks_in_month:
+            query |= Q(week=week_num, year=year_num)
+        
         assignments = Schedule.objects.filter(
             agent_id=agent_id,
-            chantier_id=ecole_chantier.id,
-            # Filtrer par mois/année en utilisant les dates calculées
-        )
+            chantier_id=ecole_chantier.id
+        ).filter(query)
         
         # Pour les agents horaires : 1 assignation = 1h
-        total_hours = len(assignments)
+        total_hours = assignments.count()
         
         logger.info(f"Heures d'école calculées pour l'agent {agent_id}: {total_hours}h")
         return total_hours
@@ -191,7 +214,7 @@ def create_ecole_expense_for_agent(agent_id, month, year):
                 defaults={
                     'description': f"École - {agent.name} {agent.surname} - {month:02d}/{year}",
                     'amount': amount,
-                    'type': 'fixed',
+                    'type': 'punctual',  # Dépense ponctuelle, spécifique à ce mois
                     'date': date(year, month, 1),
                     'category': 'Formation',
                     'ecole_hours': ecole_hours

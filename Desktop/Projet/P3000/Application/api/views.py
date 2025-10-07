@@ -2105,6 +2105,13 @@ def delete_schedule(request):
         return Response({'error': 'Les données doivent être une liste d\'objets.'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
+        # Importer les fonctions de recalcul école
+        from api.ecole_utils import get_or_create_ecole_chantier, create_ecole_expense_for_agent
+        
+        # Garder trace des agents concernés et des mois à recalculer
+        agents_to_recalculate = set()
+        months_to_recalculate = {}  # {agent_id: [(month, year), ...]}
+        
         with transaction.atomic():
             for index, deletion in enumerate(deletions):
                 # Vérifiez que chaque mise à jour est un dictionnaire
@@ -2149,10 +2156,36 @@ def delete_schedule(request):
                         day=day,
                         hour=hour
                     )
+                    
+                    # Vérifier si c'est une assignation école
+                    ecole_chantier = get_or_create_ecole_chantier()
+                    if schedule.chantier_id == ecole_chantier.id:
+                        # Calculer le mois à partir de la semaine ISO
+                        from datetime import datetime
+                        # Obtenir le premier jour de la semaine ISO
+                        first_day = datetime.strptime(f'{year}-W{int(week):02d}-1', "%Y-W%W-%w")
+                        month = first_day.month
+                        
+                        # Marquer cet agent et ce mois pour recalcul
+                        if agent_id not in months_to_recalculate:
+                            months_to_recalculate[agent_id] = set()
+                        months_to_recalculate[agent_id].add((month, year))
+                        
+                        logger.info(f"Suppression d'une assignation école pour l'agent {agent_id}, semaine {week}/{year}")
+                    
                     schedule.delete()
                 except Schedule.DoesNotExist:
                     logger.warning(f"Schedule inexistant à l'index {index}: {deletion}")
                     continue
+        
+        # Recalculer les dépenses école pour les agents concernés
+        for agent_id, months in months_to_recalculate.items():
+            for month, year in months:
+                try:
+                    create_ecole_expense_for_agent(agent_id, month, year)
+                    logger.info(f"✅ Dépenses école recalculées pour l'agent {agent_id} - {month:02d}/{year}")
+                except Exception as e:
+                    logger.error(f"❌ Erreur lors du recalcul des dépenses école pour l'agent {agent_id}: {e}")
 
         logger.info("Horaires supprimés avec succès.")
         return Response({'message': 'Horaires supprimés avec succès.'}, status=status.HTTP_200_OK)
