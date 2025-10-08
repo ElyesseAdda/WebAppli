@@ -43,7 +43,7 @@ from .models import (
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgencyExpenseAggregate,
+    AgencyExpenseAggregate, AgentPrime,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -8495,6 +8495,25 @@ def preview_monthly_agents_report(request):
         total_overtime_hours = agent_data['heures_samedi'] + agent_data['heures_dimanche'] + agent_data['heures_ferie']
         total_hours = total_normal_hours + total_overtime_hours
         
+        # Récupérer les primes de l'agent pour ce mois
+        primes = AgentPrime.objects.filter(
+            agent=agent,
+            mois=month,
+            annee=year
+        ).select_related('chantier')
+        
+        primes_data = []
+        total_primes = 0
+        
+        for prime in primes:
+            primes_data.append({
+                'description': prime.description,
+                'montant': float(prime.montant),
+                'type_affectation': prime.type_affectation,
+                'chantier_nom': prime.chantier.chantier_name if prime.chantier else None
+            })
+            total_primes += float(prime.montant)
+        
         # Préparer les données pour le template
         agents_data.append({
             'agent': agent,
@@ -8504,7 +8523,9 @@ def preview_monthly_agents_report(request):
                 'total_hours': total_hours
             },
             'overtime_details': overtime_details,
-            'events': events_data
+            'events': events_data,
+            'primes': primes_data,
+            'total_primes': total_primes
         })
     
     # Préparer le contexte pour le template
@@ -9872,4 +9893,63 @@ def recalculer_couts_devis(request, devis_id):
             return Response({'error': 'Erreur lors du calcul'}, status=400)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
+# ===== VIEWSET POUR LES PRIMES AGENTS =====
+
+class AgentPrimeViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les primes des agents
+    
+    Endpoints disponibles:
+    - GET    /api/agent-primes/                    # Liste avec filtres
+    - POST   /api/agent-primes/                    # Créer
+    - GET    /api/agent-primes/{id}/               # Détail
+    - PUT    /api/agent-primes/{id}/               # Modifier
+    - PATCH  /api/agent-primes/{id}/               # Modifier partiellement
+    - DELETE /api/agent-primes/{id}/               # Supprimer
+    """
+    queryset = AgentPrime.objects.all()
+    serializer_class = AgentPrimeSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        """Filtrer selon les paramètres de requête"""
+        queryset = AgentPrime.objects.select_related('agent', 'chantier', 'created_by')
+        
+        # Filtre par mois
+        mois = self.request.query_params.get('mois')
+        if mois:
+            queryset = queryset.filter(mois=int(mois))
+        
+        # Filtre par année
+        annee = self.request.query_params.get('annee')
+        if annee:
+            queryset = queryset.filter(annee=int(annee))
+        
+        # Filtre par agent
+        agent_id = self.request.query_params.get('agent_id')
+        if agent_id:
+            queryset = queryset.filter(agent_id=int(agent_id))
+        
+        # Filtre par chantier
+        chantier_id = self.request.query_params.get('chantier_id')
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=int(chantier_id))
+        
+        # Filtre par type d'affectation
+        type_affectation = self.request.query_params.get('type_affectation')
+        if type_affectation:
+            queryset = queryset.filter(type_affectation=type_affectation)
+        
+        return queryset.order_by('-annee', '-mois', 'agent__name')
+    
+    def perform_create(self, serializer):
+        """Sauvegarder avec l'utilisateur connecté"""
+        serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Surcharge pour log la suppression"""
+        instance = self.get_object()
+        print(f"🗑️  Suppression de la prime: {instance}")
+        return super().destroy(request, *args, **kwargs)
 

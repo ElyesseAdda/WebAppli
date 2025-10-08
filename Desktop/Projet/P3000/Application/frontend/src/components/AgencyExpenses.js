@@ -47,6 +47,7 @@ const AgencyExpenses = () => {
   const [filters, setFilters] = useState({
     description: "",
     category: "Tous",
+    commentaire: "",
     type: "Tous",
     date: "",
     end_date: "",
@@ -80,6 +81,7 @@ const AgencyExpenses = () => {
   // Catégories de dépenses
   const categories = [
     "Salaire",
+    "Prime",
     "Loyer",
     "Fournitures",
     "Équipement",
@@ -368,6 +370,38 @@ const AgencyExpenses = () => {
     return yearlyTotal;
   };
 
+  // Fonction helper pour extraire le commentaire d'une dépense (description de la prime)
+  const getExpenseCommentaire = (expense) => {
+    if (expense.category === "Prime" && expense.description) {
+      // Format: "Prime - Nom Prenom - Description [PRIME_ID:X]" ou "[ID:X]"
+      const parts = expense.description.split(" - ");
+      if (parts.length >= 3) {
+        // Récupérer la description (tout après "Prime - Nom Prenom -")
+        let description = parts.slice(2).join(" - ");
+        // Retirer tous les IDs cachés possibles [PRIME_ID:X] ou [ID:X]
+        description = description.replace(/\s*\[(PRIME_)?ID:\d+\]\s*$/g, "").trim();
+        return description || "-";
+      }
+    }
+    return "-";
+  };
+
+  // Fonction helper pour extraire la description courte (sans la description de la prime)
+  const getExpenseDescriptionCourte = (expense) => {
+    if (expense.category === "Prime" && expense.description) {
+      // Format: "Prime - Nom Prenom - Description [PRIME_ID:X]"
+      const parts = expense.description.split(" - ");
+      if (parts.length >= 2) {
+        // Retourner seulement "Prime - Nom Prenom"
+        return `${parts[0]} - ${parts[1]}`;
+      }
+    }
+    // Pour les autres catégories, retourner la description normale
+    return expense.current_override
+      ? expense.current_override.description
+      : expense.description;
+  };
+
   const handleFilterChange = (field) => (event) => {
     const newFilters = {
       ...filters,
@@ -391,6 +425,14 @@ const AgencyExpenses = () => {
         expense.category !== newFilters.category
       ) {
         return false;
+      }
+
+      // Filtre commentaire (pour les primes, extrait la description)
+      if (newFilters.commentaire) {
+        const commentaire = getExpenseCommentaire(expense);
+        if (!commentaire.toLowerCase().includes(newFilters.commentaire.toLowerCase())) {
+          return false;
+        }
       }
 
       if (
@@ -536,6 +578,15 @@ const AgencyExpenses = () => {
               </FilterCell>
               <FilterCell>
                 <StyledTextField
+                  size="small"
+                  fullWidth
+                  value={filters.commentaire || ""}
+                  onChange={handleFilterChange("commentaire")}
+                  placeholder="Commentaire..."
+                />
+              </FilterCell>
+              <FilterCell>
+                <StyledTextField
                   select
                   size="small"
                   fullWidth
@@ -638,11 +689,23 @@ const AgencyExpenses = () => {
                       color: "rgba(27, 120, 188, 1)",
                     }}
                   >
-                    {expense.current_override
-                      ? expense.current_override.description
-                      : expense.description}
+                    {getExpenseDescriptionCourte(expense)}
                   </TableCell>
                   <TableCell align="center">{expense.category}</TableCell>
+                  <TableCell 
+                    align="left"
+                    sx={{
+                      fontStyle: expense.category === "Prime" ? "normal" : "italic",
+                      color: expense.category === "Prime" ? "#2e7d32" : "#666",
+                      maxWidth: "200px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={getExpenseCommentaire(expense)}
+                  >
+                    {getExpenseCommentaire(expense)}
+                  </TableCell>
                   <TableCell align="center">
                     {expense.type === ExpenseTypes.FIXED
                       ? "Mensuel"
@@ -689,7 +752,7 @@ const AgencyExpenses = () => {
                 </TableRow>
               ))}
             <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell colSpan={5} sx={{ fontWeight: "bold" }}>
+              <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
                 Total Mensuel
               </TableCell>
               <TableCell

@@ -86,6 +86,7 @@ from .views import (
     delete_ecole_event,
     get_ecole_hours,
     recalculate_ecole_expenses,
+    AgentPrimeViewSet,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -150,6 +151,7 @@ router.register(r'paiements-facture-sous-traitant', PaiementFactureSousTraitantV
 router.register(r'fournisseurs', FournisseurViewSet)
 router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 router.register(r'drive', DriveViewSet, basename='drive')
+router.register(r'agent-primes', AgentPrimeViewSet, basename='agent-primes')
 
 # URLs d'authentification
 auth_urlpatterns = [

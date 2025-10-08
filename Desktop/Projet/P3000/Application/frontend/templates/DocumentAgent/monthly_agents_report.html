@@ -105,6 +105,44 @@
             margin-top: 5px;
         }
         
+        .primes-table {
+            background-color: #f9fbe7;
+            border: 2px solid #cddc39;
+        }
+        
+        .primes-table th {
+            background-color: #cddc39;
+            color: #33691e;
+        }
+        
+        .primes-table th, .primes-table td {
+            text-align: left;
+        }
+        
+        .prime-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .prime-agence {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .prime-chantier {
+            background-color: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .prime-total {
+            background-color: #c8e6c9;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+        
         @media print {
             .agent-section {
                 page-break-inside: avoid;
@@ -178,6 +216,43 @@
                 </tr>
             </tbody>
         </table>
+
+        <!-- Section Primes -->
+        {% if agent_data.primes %}
+        <h3>Primes du mois</h3>
+        <table class="primes-table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Affectation</th>
+                    <th style="text-align: right;">Montant</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for prime in agent_data.primes %}
+                <tr>
+                    <td>{{ prime.description }}</td>
+                    <td>
+                        {% if prime.type_affectation == 'agence' %}
+                            <span class="prime-badge prime-agence">📍 Agence</span>
+                        {% else %}
+                            <span class="prime-badge prime-chantier">🏗️ {{ prime.chantier_nom }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right; font-weight: bold; color: #2e7d32;">
+                        {{ prime.montant|floatformat:2 }} €
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr class="prime-total">
+                    <td colspan="2"><strong>TOTAL PRIMES</strong></td>
+                    <td style="text-align: right;">
+                        <strong>{{ agent_data.total_primes|floatformat:2 }} €</strong>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        {% endif %}
 
         <!-- Tableau des événements -->
         <h3>Événements du mois</h3>

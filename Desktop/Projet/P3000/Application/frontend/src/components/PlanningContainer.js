@@ -13,6 +13,7 @@ import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import LaborCostsSummary from "./LaborCostsSummary";
 import PlanningHebdoAgent from "./PlanningHebdoAgent";
 import AgentSelectionModal from "./AgentSelectionModal";
+import PrimeModal from "./PrimeModal";
 
 const StyledFormControl = styled(FormControl)({
   minWidth: 150,
@@ -63,6 +64,9 @@ const PlanningContainer = () => {
   // États pour le modal de sélection des agents
   const [isAgentSelectionModalOpen, setIsAgentSelectionModalOpen] = useState(false);
   const [selectedAgentsForPDF, setSelectedAgentsForPDF] = useState([]);
+  
+  // État pour le modal de gestion des primes
+  const [isPrimeModalOpen, setIsPrimeModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchAgents = async () => {
@@ -484,6 +488,19 @@ const PlanningContainer = () => {
           >
             Générer Rapport Mensuel PDF
           </Button>
+          <Button
+            variant="contained"
+            onClick={() => setIsPrimeModalOpen(true)}
+            sx={{
+              backgroundColor: "#ff9800",
+              "&:hover": {
+                backgroundColor: "#f57c00",
+              },
+              marginLeft: "10px",
+            }}
+          >
+            Gérer les Primes
+          </Button>
         </ButtonGroup>
       </ControlsContainer>
 
@@ -614,6 +631,14 @@ const PlanningContainer = () => {
         setSelectedAgents={setSelectedAgentsForPDF}
         week={selectedWeek}
         year={selectedYear}
+      />
+
+      {/* Modal de gestion des primes */}
+      <PrimeModal
+        isOpen={isPrimeModalOpen}
+        onClose={() => setIsPrimeModalOpen(false)}
+        month={selectedMonth}
+        year={selectedReportYear}
       />
     </div>
   );
