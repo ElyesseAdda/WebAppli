@@ -14,6 +14,7 @@ import {
 import axios from "axios";
 import React from "react";
 import { FaTimes } from "react-icons/fa";
+import { useRecapFinancier } from "./RecapFinancierContext";
 
 const RecapCategoryDetails = ({
   open,
@@ -25,6 +26,13 @@ const RecapCategoryDetails = ({
   periode,
   refreshRecap,
 }) => {
+  // Récupérer le contexte pour accéder au mode global
+  const { global } = useRecapFinancier();
+  
+  // État pour stocker les primes du chantier
+  const [primes, setPrimes] = React.useState([]);
+  const [loadingPrimes, setLoadingPrimes] = React.useState(false);
+
   // Fonction pour définir dynamiquement les colonnes selon la catégorie
   function getColumnsForCategory(cat) {
     switch (cat) {
@@ -33,6 +41,7 @@ const RecapCategoryDetails = ({
           { label: "Agent", key: "agent" },
           { label: "Mois", key: "mois" },
           { label: "Heures", key: "heures" },
+          { label: "Prime", key: "prime" },
           { label: "Montant", key: "montant" },
         ];
       case "materiel":
@@ -62,31 +71,127 @@ const RecapCategoryDetails = ({
 
   const columns = getColumnsForCategory(category);
 
-  // Pour main_oeuvre : regrouper par agent et mois
-  let displayDocuments = documents;
-  if (category === "main_oeuvre" && documents && documents.length > 0) {
-    // Regrouper par agent/mois
-    const grouped = {};
-    documents.forEach((doc) => {
-      if (!doc.agent) return;
-      // Extraire le mois/année à partir de la date
-      let mois = "-";
-      if (doc.date) {
-        const d = new Date(doc.date);
-        mois = ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear();
+  // Charger les primes du chantier pour la catégorie main_oeuvre
+  React.useEffect(() => {
+    if (category === "main_oeuvre" && open && chantierId) {
+      loadChantierPrimes();
+    }
+    // eslint-disable-next-line
+  }, [category, open, chantierId, periode, global]);
+
+  const loadChantierPrimes = async () => {
+    setLoadingPrimes(true);
+    try {
+      const params = {
+        chantier_id: chantierId,
+        type_affectation: "chantier",
+      };
+      
+      // En mode période, filtrer par mois/année
+      // En mode global, récupérer TOUTES les primes du chantier
+      if (!global) {
+        params.mois = periode.mois;
+        params.annee = periode.annee;
       }
-      const key = doc.agent + "_" + mois;
+      
+      const response = await axios.get("/api/agent-primes/", { params });
+      setPrimes(response.data || []);
+    } catch (error) {
+      console.error("Erreur lors du chargement des primes:", error);
+      setPrimes([]);
+    } finally {
+      setLoadingPrimes(false);
+    }
+  };
+
+  // Pour main_oeuvre : regrouper par agent et mois (ou par agent si global)
+  let displayDocuments = documents;
+  if (category === "main_oeuvre") {
+    const grouped = {};
+    
+    // Regrouper les documents (heures travaillées)
+    if (documents && documents.length > 0) {
+      documents.forEach((doc) => {
+        if (!doc.agent) return;
+        
+        let key;
+        let mois = "-";
+        let moisNum = null;
+        let anneeNum = null;
+        
+        if (global) {
+          // Mode global : TOUJOURS regrouper par agent uniquement (ignorer la date)
+          key = doc.agent;
+          mois = "-";
+        } else {
+          // Mode période : regrouper par agent + mois
+          if (doc.date) {
+            const d = new Date(doc.date);
+            moisNum = d.getMonth() + 1;
+            anneeNum = d.getFullYear();
+            mois = ("0" + moisNum).slice(-2) + "/" + anneeNum;
+            key = doc.agent + "_" + mois;
+          } else {
+            // Si pas de date en mode période, utiliser juste l'agent
+            key = doc.agent + "_-";
+            mois = "-";
+          }
+        }
+        
+        if (!grouped[key]) {
+          grouped[key] = {
+            agent: doc.agent,
+            mois: mois,
+            moisNum,
+            anneeNum,
+            heures: 0,
+            montant: 0,
+            primes: [],
+            totalPrimes: 0,
+          };
+        }
+        grouped[key].heures += doc.heures || 0;
+        grouped[key].montant += doc.montant || 0;
+      });
+    }
+
+    // Ajouter les primes dans les groupes correspondants
+    primes.forEach((prime) => {
+      const agentName = `${prime.agent_name} ${prime.agent_surname}`;
+      
+      let key;
+      if (global) {
+        // Mode global : regrouper par agent uniquement (TOUTES les primes de l'agent)
+        key = agentName;
+      } else {
+        // Mode période : regrouper par agent + mois spécifique
+        const mois = ("0" + prime.mois).slice(-2) + "/" + prime.annee;
+        key = agentName + "_" + mois;
+      }
+      
+      // Si le groupe n'existe pas (agent n'a pas travaillé ce mois mais a une prime)
       if (!grouped[key]) {
         grouped[key] = {
-          agent: doc.agent,
-          mois,
+          agent: agentName,
+          mois: global ? "-" : ("0" + prime.mois).slice(-2) + "/" + prime.annee,
+          moisNum: prime.mois,
+          anneeNum: prime.annee,
           heures: 0,
           montant: 0,
+          primes: [],
+          totalPrimes: 0,
         };
       }
-      grouped[key].heures += doc.heures || 0;
-      grouped[key].montant += doc.montant || 0;
+      
+      grouped[key].primes.push({
+        description: prime.description,
+        montant: parseFloat(prime.montant),
+        mois: prime.mois,
+        annee: prime.annee,
+      });
+      grouped[key].totalPrimes += parseFloat(prime.montant);
     });
+
     displayDocuments = Object.values(grouped);
   }
 
@@ -268,21 +373,86 @@ const RecapCategoryDetails = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {documents && documents.length > 0 ? (
+                {(documents && documents.length > 0) || (category === "main_oeuvre" && displayDocuments.length > 0) ? (
                   displayDocuments.map((doc, idx) => (
                     <TableRow key={doc.id || idx}>
                       {columns.map((col) => (
                         <TableCell key={col.key}>
                           {col.key === "montant" && doc.montant !== undefined
-                            ? Number(doc.montant).toLocaleString("fr-FR", {
-                                minimumFractionDigits: 2,
-                              }) +
-                              " €" +
-                              (doc.retard && doc.retard > 0
-                                ? ` (${doc.retard}j retard)`
-                                : doc.retard && doc.retard < 0
-                                ? ` (${Math.abs(doc.retard)}j avance)`
-                                : "")
+                            ? (() => {
+                                // Pour main_oeuvre, ajouter les primes au montant total
+                                const montantBase = Number(doc.montant);
+                                const montantTotal = category === "main_oeuvre" 
+                                  ? montantBase + (doc.totalPrimes || 0)
+                                  : montantBase;
+                                
+                                return (
+                                  Number(montantTotal).toLocaleString("fr-FR", {
+                                    minimumFractionDigits: 2,
+                                  }) +
+                                  " €" +
+                                  (doc.retard && doc.retard > 0
+                                    ? ` (${doc.retard}j retard)`
+                                    : doc.retard && doc.retard < 0
+                                    ? ` (${Math.abs(doc.retard)}j avance)`
+                                    : "")
+                                );
+                              })()
+                            : col.key === "prime"
+                            ? (() => {
+                                // Afficher les primes pour cet agent/mois
+                                if (!doc.primes || doc.primes.length === 0) {
+                                  return "-";
+                                }
+                                
+                                if (doc.primes.length === 1) {
+                                  // Une seule prime : afficher montant + description + mois en tooltip
+                                  const tooltipText = global 
+                                    ? `${doc.primes[0].description} (${doc.primes[0].mois}/${doc.primes[0].annee})`
+                                    : doc.primes[0].description;
+                                  
+                                  return (
+                                    <Box
+                                      sx={{
+                                        color: "#2e7d32",
+                                        fontWeight: "bold",
+                                        cursor: "pointer",
+                                      }}
+                                      title={tooltipText}
+                                    >
+                                      {doc.primes[0].montant.toFixed(2)} €
+                                    </Box>
+                                  );
+                                }
+                                
+                                // Plusieurs primes : afficher le total + détails en tooltip
+                                const details = doc.primes
+                                  .map((p) => 
+                                    global 
+                                      ? `${p.description} (${p.mois}/${p.annee}): ${p.montant.toFixed(2)}€`
+                                      : `${p.description}: ${p.montant.toFixed(2)}€`
+                                  )
+                                  .join("\n");
+                                
+                                return (
+                                  <Box
+                                    sx={{
+                                      color: "#2e7d32",
+                                      fontWeight: "bold",
+                                      cursor: "pointer",
+                                    }}
+                                    title={details}
+                                  >
+                                    {doc.totalPrimes.toFixed(2)} €
+                                    <Typography
+                                      variant="caption"
+                                      sx={{ display: "block", color: "#666" }}
+                                    >
+                                      ({doc.primes.length} primes)
+                                    </Typography>
+                                  </Box>
+                                );
+                              })()
                             : col.key === "heures" && doc.heures !== undefined
                             ? (() => {
                                 // Pour les agents journaliers, convertir les heures en jours

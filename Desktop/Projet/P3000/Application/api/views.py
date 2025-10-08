@@ -7783,7 +7783,23 @@ class RecapFinancierChantierAPIView(APIView):
                 # Pour les agents horaires, garder l'affichage en heures
                 agent_data['heures_affichage'] = f"{int(agent_data['heures'])}h"
         
+        # Calculer le total de la main d'œuvre (heures travaillées)
         main_oeuvre_total = sum(a['montant'] for a in agent_map.values())
+        
+        # Ajouter les primes du chantier au total de la main d'œuvre
+        primes_chantier = AgentPrime.objects.filter(
+            chantier=chantier,
+            type_affectation='chantier'
+        )
+        
+        # Si période définie, filtrer les primes par mois/année
+        if mois and annee:
+            primes_chantier = primes_chantier.filter(mois=int(mois), annee=int(annee))
+        
+        # Ajouter le montant total des primes au total main d'œuvre
+        total_primes = sum(float(p.montant) for p in primes_chantier)
+        main_oeuvre_total += total_primes
+        
         main_oeuvre_documents = list(agent_map.values())
         main_oeuvre = {
             'total': main_oeuvre_total,

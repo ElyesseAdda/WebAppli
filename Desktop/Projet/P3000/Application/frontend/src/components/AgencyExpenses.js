@@ -731,22 +731,37 @@ const AgencyExpenses = () => {
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: "flex", gap: 1 }}>
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => handleEditExpense(expense)}
-                        disabled={loading}
-                      >
-                        <FaEdit />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => openDeleteConfirm(expense)}
-                        disabled={loading}
-                      >
-                        <FaTrash />
-                      </IconButton>
+                      {expense.category === "Prime" ? (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#666",
+                            fontStyle: "italic",
+                            padding: "8px",
+                          }}
+                        >
+                          Gérer via "Gérer les Primes"
+                        </Typography>
+                      ) : (
+                        <>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleEditExpense(expense)}
+                            disabled={loading}
+                          >
+                            <FaEdit />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => openDeleteConfirm(expense)}
+                            disabled={loading}
+                          >
+                            <FaTrash />
+                          </IconButton>
+                        </>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>

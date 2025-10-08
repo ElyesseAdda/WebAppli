@@ -1669,20 +1669,56 @@ class SituationDateEnvoi(models.Model):
 
 # Adapter le signal update_chantier_cout_main_oeuvre
 @receiver([post_save, post_delete], sender=LaborCost)
-def update_chantier_cout_main_oeuvre(sender, instance, **kwargs):
+def update_chantier_cout_main_oeuvre_signal(sender, instance, **kwargs):
     chantier = instance.chantier
-    total = LaborCost.objects.filter(chantier=chantier).aggregate(
+    # Calculer le total des LaborCost
+    total_labor = LaborCost.objects.filter(chantier=chantier).aggregate(
         total=Sum('cost_normal') + Sum('cost_samedi') + Sum('cost_dimanche') + Sum('cost_ferie')
     )['total'] or 0
-    chantier.cout_main_oeuvre = total
+    
+    # Ajouter les primes du chantier
+    total_primes = AgentPrime.objects.filter(
+        chantier=chantier,
+        type_affectation='chantier'
+    ).aggregate(total=Sum('montant'))['total'] or 0
+    
+    chantier.cout_main_oeuvre = float(total_labor) + float(total_primes)
     chantier.save(update_fields=['cout_main_oeuvre'])
 
+# Signal pour mettre à jour le cout_main_oeuvre quand une prime chantier change
+@receiver([post_save, post_delete], sender=AgentPrime)
+def update_chantier_cout_main_oeuvre_from_prime(sender, instance, **kwargs):
+    """Met à jour le coût main d'œuvre du chantier quand une prime chantier est créée/modifiée/supprimée"""
+    if instance.type_affectation == 'chantier' and instance.chantier:
+        chantier = instance.chantier
+        # Calculer le total des LaborCost
+        total_labor = LaborCost.objects.filter(chantier=chantier).aggregate(
+            total=Sum('cost_normal') + Sum('cost_samedi') + Sum('cost_dimanche') + Sum('cost_ferie')
+        )['total'] or 0
+        
+        # Ajouter les primes du chantier
+        total_primes = AgentPrime.objects.filter(
+            chantier=chantier,
+            type_affectation='chantier'
+        ).aggregate(total=Sum('montant'))['total'] or 0
+        
+        chantier.cout_main_oeuvre = float(total_labor) + float(total_primes)
+        chantier.save(update_fields=['cout_main_oeuvre'])
+
 def update_chantier_cout_main_oeuvre(chantier):
-    from .models import LaborCost  # Import local pour éviter les problèmes de circularité
-    total = LaborCost.objects.filter(chantier=chantier).aggregate(
+    """Fonction helper pour recalculer le coût main d'œuvre (inclut les primes)"""
+    # Calculer le total des LaborCost
+    total_labor = LaborCost.objects.filter(chantier=chantier).aggregate(
         total=Sum('cost_normal') + Sum('cost_samedi') + Sum('cost_dimanche') + Sum('cost_ferie')
     )['total'] or 0
-    chantier.cout_main_oeuvre = total
+    
+    # Ajouter les primes du chantier
+    total_primes = AgentPrime.objects.filter(
+        chantier=chantier,
+        type_affectation='chantier'
+    ).aggregate(total=Sum('montant'))['total'] or 0
+    
+    chantier.cout_main_oeuvre = float(total_labor) + float(total_primes)
     chantier.save(update_fields=['cout_main_oeuvre'])
 
 class PaiementSousTraitant(models.Model):
