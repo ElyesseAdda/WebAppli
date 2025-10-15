@@ -461,6 +461,10 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   documentData={{
                                     ...sousTraitant.contrat,
                                     chantier: chantier,
+                                    sous_traitant: {
+                                      id: sousTraitant.id,
+                                      entreprise: sousTraitant.entreprise,
+                                    },
                                   }}
                                   size="small"
                                   color="primary"
@@ -536,7 +540,14 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                         documentType={DOCUMENT_TYPES.AVENANT_SOUS_TRAITANCE}
                                         documentData={{
                                           ...avenant,
-                                          contrat: sousTraitant.contrat,
+                                          contrat: {
+                                            ...sousTraitant.contrat,
+                                            sous_traitant: {
+                                              id: sousTraitant.id,
+                                              entreprise: sousTraitant.entreprise,
+                                            },
+                                            chantier: chantier,
+                                          },
                                           chantier: chantier,
                                         }}
                                         size="small"

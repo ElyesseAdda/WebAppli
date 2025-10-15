@@ -681,10 +681,8 @@ def generate_contrat_sous_traitance_pdf_drive(request):
         # URL de prévisualisation pour les contrats de sous-traitance
         preview_url = request.build_absolute_uri(f"/api/preview-contrat/{contrat_id}/")
         
-        # Générer le nom du fichier
-        contrat_name = f"Contrat {sous_traitant_name} - {chantier_name}"
-        
         # Générer le PDF et le stocker dans AWS S3
+        # Le nom sera généré automatiquement au format: Contrat_NomSousTraitant_NomChantier.pdf
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='contrat_sous_traitance',
             preview_url=preview_url,
@@ -692,7 +690,7 @@ def generate_contrat_sous_traitance_pdf_drive(request):
             chantier_id=chantier_id,
             chantier_name=chantier_name,
             sous_traitant_name=sous_traitant_name,
-            contrat_name=contrat_name
+            force_replace=request.GET.get('force_replace', 'false').lower() == 'true'
         )
         
         if success:
@@ -747,10 +745,8 @@ def generate_avenant_sous_traitance_pdf_drive(request):
         # URL de prévisualisation pour les avenants de sous-traitance
         preview_url = request.build_absolute_uri(f"/api/preview-avenant/{avenant_id}/")
         
-        # Générer le nom du fichier
-        avenant_name = f"Avenant {numero_avenant} {sous_traitant_name} - {chantier_name}"
-        
         # Générer le PDF et le stocker dans AWS S3
+        # Le nom sera généré automatiquement au format: Avenant_Numero_NomSousTraitant_NomChantier.pdf
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='avenant_sous_traitance',
             preview_url=preview_url,
@@ -758,7 +754,8 @@ def generate_avenant_sous_traitance_pdf_drive(request):
             chantier_id=chantier_id,
             chantier_name=chantier_name,
             sous_traitant_name=sous_traitant_name,
-            avenant_name=avenant_name
+            avenant_numero=numero_avenant,
+            force_replace=request.GET.get('force_replace', 'false').lower() == 'true'
         )
         
         if success:
