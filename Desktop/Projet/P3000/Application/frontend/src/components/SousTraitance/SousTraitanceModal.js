@@ -37,6 +37,8 @@ import { useNavigate } from "react-router-dom";
 import AvenantForm from "./AvenantForm";
 import ContratForm from "./ContratForm";
 import SousTraitantForm from "./SousTraitantForm";
+import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
+import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [sousTraitants, setSousTraitants] = useState([]);
@@ -453,6 +455,22 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                 €
                               </TableCell>
                               <TableCell align="center">
+                                {/* Bouton de régénération du contrat dans le Drive */}
+                                <RegeneratePDFIconButton
+                                  documentType={DOCUMENT_TYPES.CONTRAT_SOUS_TRAITANCE}
+                                  documentData={{
+                                    ...sousTraitant.contrat,
+                                    chantier: chantier,
+                                  }}
+                                  size="small"
+                                  color="primary"
+                                  tooltipPlacement="top"
+                                  onSuccess={() => {
+                                    console.log('✅ Contrat régénéré avec succès');
+                                  }}
+                                />
+                                
+                                {/* Bouton de suppression */}
                                 <Tooltip
                                   title="Supprimer le contrat et tous ses avenants"
                                   arrow
@@ -513,6 +531,23 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                       €
                                     </TableCell>
                                     <TableCell align="center">
+                                      {/* Bouton de régénération de l'avenant dans le Drive */}
+                                      <RegeneratePDFIconButton
+                                        documentType={DOCUMENT_TYPES.AVENANT_SOUS_TRAITANCE}
+                                        documentData={{
+                                          ...avenant,
+                                          contrat: sousTraitant.contrat,
+                                          chantier: chantier,
+                                        }}
+                                        size="small"
+                                        color="primary"
+                                        tooltipPlacement="top"
+                                        onSuccess={() => {
+                                          console.log('✅ Avenant régénéré avec succès');
+                                        }}
+                                      />
+                                      
+                                      {/* Bouton de suppression */}
                                       <Tooltip
                                         title="Supprimer l'avenant"
                                         arrow

@@ -35,6 +35,8 @@ import {
   StyledTextField,
 } from "../styles/tableStyles";
 import BonCommandeForm from "./BonCommandeForm";
+import { useRegeneratePDF } from "../hooks/useRegeneratePDF";
+import { DOCUMENT_TYPES } from "../config/documentTypeConfig";
 
 const ListeBonCommande = () => {
   const [bonsCommande, setBonsCommande] = useState([]);
@@ -65,6 +67,9 @@ const ListeBonCommande = () => {
   const [paymentStatusAnchorEl, setPaymentStatusAnchorEl] = useState(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
+  
+  // Hook pour la régénération de PDF
+  const { regenerate: regenerateBonCommande } = useRegeneratePDF(DOCUMENT_TYPES.BON_COMMANDE);
 
   const fetchBonsCommande = async () => {
     if (isLoading) return;
@@ -320,6 +325,19 @@ const ListeBonCommande = () => {
         alert("Erreur lors de la suppression du bon de commande");
       }
     }
+  };
+
+  const handleRegenerateDrive = async () => {
+    if (!selectedBC) return;
+    
+    handleClose(); // Fermer le menu
+    
+    await regenerateBonCommande(selectedBC, {
+      showConfirm: true,
+      onSuccess: () => {
+        console.log('✅ Bon de commande régénéré avec succès dans le Drive');
+      },
+    });
   };
 
   const handlePaymentMenuOpen = () => {
@@ -615,6 +633,9 @@ const ListeBonCommande = () => {
         <MenuItem onClick={handleModifyBC}>Modifier BC</MenuItem>
         <MenuItem onClick={handleStatusMenuOpen}>Modifier le statut</MenuItem>
         <MenuItem onClick={handlePaymentMenuOpen}>Gérer le paiement</MenuItem>
+        <MenuItem onClick={handleRegenerateDrive} sx={{ color: "#1976d2" }}>
+          Régénérer dans le Drive
+        </MenuItem>
         <MenuItem onClick={handleDeleteBC} sx={{ color: "red" }}>
           Supprimer BC
         </MenuItem>

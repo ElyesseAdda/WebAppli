@@ -32,6 +32,8 @@ import {
   StyledTableContainer,
   StyledTextField,
 } from "../styles/tableStyles";
+import { RegeneratePDFIconButton } from "./shared/RegeneratePDFButton";
+import { DOCUMENT_TYPES } from "../config/documentTypeConfig";
 
 const formatNumber = (number) => {
   return number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -377,6 +379,26 @@ const ListeSituation = () => {
                     {situation.statut}
                   </StatusCell>
                   <CenteredTableCell>
+                    {/* Bouton de régénération dans le Drive */}
+                    <RegeneratePDFIconButton
+                      documentType={DOCUMENT_TYPES.SITUATION}
+                      documentData={{
+                        ...situation,
+                        chantier: {
+                          id: selectedChantierId,
+                          chantier_name: chantiers.find(c => c.id === selectedChantierId)?.chantier_name,
+                          societe: chantiers.find(c => c.id === selectedChantierId)?.societe,
+                        },
+                      }}
+                      size="small"
+                      color="primary"
+                      tooltipPlacement="top"
+                      onSuccess={() => {
+                        console.log('✅ Situation régénérée avec succès');
+                      }}
+                    />
+                    
+                    {/* Bouton de suppression */}
                     <IconButton
                       onClick={() => handleDeleteClick(situation)}
                       sx={{

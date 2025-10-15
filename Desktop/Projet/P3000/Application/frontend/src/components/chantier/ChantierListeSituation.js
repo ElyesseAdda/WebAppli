@@ -22,6 +22,8 @@ import {
   StyledTableContainer,
   StyledTextField,
 } from "../../styles/tableStyles";
+import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
+import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const formatNumber = (number) =>
   number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -287,6 +289,18 @@ const ChantierListeSituation = ({
                     ))}
                   </StyledSelect>
                 </FilterCell>
+                <FilterCell>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "white",
+                      fontWeight: "bold",
+                      textAlign: "center",
+                    }}
+                  >
+                    Actions
+                  </Typography>
+                </FilterCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -318,6 +332,22 @@ const ChantierListeSituation = ({
                   <StatusCell status={situation.statut}>
                     {situation.statut}
                   </StatusCell>
+                  <CenteredTableCell>
+                    {/* Bouton de régénération dans le Drive */}
+                    <RegeneratePDFIconButton
+                      documentType={DOCUMENT_TYPES.SITUATION}
+                      documentData={{
+                        ...situation,
+                        chantier: chantierData,
+                      }}
+                      size="small"
+                      color="primary"
+                      tooltipPlacement="top"
+                      onSuccess={() => {
+                        console.log('✅ Situation régénérée avec succès');
+                      }}
+                    />
+                  </CenteredTableCell>
                 </TableRow>
               ))}
             </TableBody>
