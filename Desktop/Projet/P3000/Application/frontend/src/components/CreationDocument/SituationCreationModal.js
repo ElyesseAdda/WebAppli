@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Collapse,
@@ -911,6 +912,7 @@ const SituationCreationModal = ({
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
+  const [numeroSituation, setNumeroSituation] = useState("");
 
   useEffect(() => {
     if (devis?.id) {
@@ -1109,11 +1111,21 @@ const SituationCreationModal = ({
 
           if (situations.length > 0) {
             const currentSituation = situations[0];
+            
+            // IMPORTANT: Charger le numéro de la situation existante EN PREMIER
+            // pour éviter le problème de synchronisation
+            if (currentSituation.numero_situation) {
+              setNumeroSituation(currentSituation.numero_situation);
+            } else {
+              setNumeroSituation("");
+            }
+            
+            // Marquer qu'une situation existe pour ce mois (pour afficher un avertissement)
             setExistingSituation(currentSituation);
 
             // Pré-remplir les champs avec les données existantes
-            setTauxProrata(currentSituation.taux_prorata);
-            setRetenueCIE(currentSituation.retenue_cie);
+            setTauxProrata(currentSituation.taux_prorata || 2.5);
+            setRetenueCIE(currentSituation.retenue_cie || 0);
 
             // Mettre à jour la structure avec les pourcentages existants
             const newStructure = structure.map((partie) => ({
@@ -1296,8 +1308,16 @@ const SituationCreationModal = ({
               // Réinitialiser le montant HT du mois à 0
               setMontantHTMois(0);
               setExistingSituation(null);
+              
+              // Marquer qu'il n'y a pas de situation existante pour ce mois
+              setExistingSituation(null);
+              
+              // Réinitialiser le numéro pour qu'il soit régénéré automatiquement
+              setNumeroSituation("");
             } else {
               setLastSituation(null);
+              setExistingSituation(null);
+              setNumeroSituation("");
               resetSituationData();
             }
           }
@@ -1573,6 +1593,24 @@ const SituationCreationModal = ({
     }
   };
 
+  // Charger le numéro auto-généré pour une nouvelle situation
+  useEffect(() => {
+    // Générer un nouveau numéro UNIQUEMENT si :
+    // - Le modal est ouvert
+    // - On a un chantier
+    // - Il n'y a PAS de situation existante pour ce mois
+    // - ET le numéro est vide (évite de régénérer en boucle)
+    if (open && chantier?.id && !existingSituation && numeroSituation === "") {
+      getNextSituationNumber()
+        .then((numero) => {
+          setNumeroSituation(numero);
+        })
+        .catch((error) => {
+          console.error("Erreur lors du chargement du numéro:", error);
+        });
+    }
+  }, [open, chantier, existingSituation, mois, annee, numeroSituation]);
+
   // Fonction de calcul existante
   const calculateMontants = () => {
     if (!structure.length) return;
@@ -1716,21 +1754,23 @@ const SituationCreationModal = ({
         throw new Error("Les calculs ne sont pas disponibles");
       }
 
+      // Vérifier que le numéro de situation est défini
+      if (!numeroSituation) {
+        throw new Error("Le numéro de situation est requis");
+      }
+
       // Fonction helper pour formater les nombres
       const formatNumber = (num) => {
         if (num === null || num === undefined) return "0.00";
         return parseFloat(num).toFixed(2);
       };
 
-      // Récupérer le prochain numéro de situation
-      const situationNumero = await getNextSituationNumber();
-
       const situationData = {
         chantier: chantier.id,
         devis: devis.id,
         mois: parseInt(mois),
         annee: parseInt(annee),
-        numero_situation: situationNumero, // Extrait le numéro de situation
+        numero_situation: numeroSituation, // Numéro modifiable par l'utilisateur
         lignes: structure.flatMap((partie) =>
           partie.sous_parties.flatMap((sousPartie) =>
             sousPartie.lignes.map((ligne) => ({
@@ -1821,7 +1861,7 @@ const SituationCreationModal = ({
               chantier.societe?.nom_societe ||
               chantier.societe?.nom ||
               "Société",
-            numeroSituation: response.data.numero_situation,
+            numeroSituation: numeroSituation, // Utiliser le numéro du state
           };
 
           console.log(
@@ -2000,9 +2040,15 @@ const SituationCreationModal = ({
     );
   };
 
+  // Initialiser le mois actuel uniquement à l'ouverture du modal
   useEffect(() => {
     if (open) {
       setMois(new Date().getMonth() + 1);
+      setAnnee(new Date().getFullYear());
+      // Réinitialiser les états au cas où on réouvre le modal
+      // Note: Le numéro sera chargé automatiquement par fetchSituationData
+      setExistingSituation(null);
+      // Ne pas réinitialiser numeroSituation ici, il sera géré par fetchSituationData
     }
   }, [open]);
 
@@ -2066,7 +2112,7 @@ const SituationCreationModal = ({
           </Box>
         </Box>
 
-        <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
+        <Box sx={{ mb: 3, display: "flex", gap: 2, flexWrap: "wrap" }}>
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Mois</InputLabel>
             <Select
@@ -2086,18 +2132,35 @@ const SituationCreationModal = ({
             type="number"
             value={annee}
             onChange={(e) => setAnnee(e.target.value)}
+            sx={{ width: 120 }}
           />
         </Box>
 
-        <TextField
-          fullWidth
-          label="Taux compte prorata (%)"
-          type="number"
-          value={tauxProrata}
-          onChange={(e) => setTauxProrata(e.target.value)}
-          inputProps={{ step: "0.01", min: "0", max: "100" }}
-          sx={{ mb: 3, width: "200px" }}
-        />
+        {existingSituation && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Une situation existe déjà pour {new Date(0, mois - 1).toLocaleString("default", { month: "long" })} {annee}.
+            Vous êtes en mode modification. Changez de mois pour créer une nouvelle situation.
+          </Alert>
+        )}
+
+        <Box sx={{ mb: 3, display: "flex", gap: 2, alignItems: "flex-start" }}>
+          <TextField
+            label="Numéro de situation"
+            value={numeroSituation}
+            onChange={(e) => setNumeroSituation(e.target.value)}
+            helperText="Vous pouvez personnaliser le numéro de la situation"
+            sx={{ flex: 1, maxWidth: 400 }}
+            required
+          />
+          <TextField
+            label="Taux compte prorata (%)"
+            type="number"
+            value={tauxProrata}
+            onChange={(e) => setTauxProrata(e.target.value)}
+            inputProps={{ step: "0.01", min: "0", max: "100" }}
+            sx={{ width: "200px" }}
+          />
+        </Box>
 
         <TableContainer
           component={Paper}

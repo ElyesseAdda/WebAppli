@@ -4839,7 +4839,7 @@ def update_situation(request, pk):
         situation.lignes_speciales.all().delete()
 
         # Mise à jour des champs de base
-        for field in ['mois', 'annee', 'montant_ht_mois', 'cumul_precedent', 
+        for field in ['mois', 'annee', 'numero_situation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
                      'pourcentage_avancement', 'taux_prorata']:
@@ -5345,17 +5345,20 @@ def get_next_numero(request, chantier_id=None):
         last_num = 0
         if last_facture_numero:
             try:
-                last_num = max(last_num, int(last_facture_numero.numero.split('-')[1]))
+                num = int(last_facture_numero.numero.split('-')[1])
+                last_num = max(last_num, num)
             except (IndexError, ValueError):
                 pass
                 
         if last_situation_numero:
             try:
-                last_num = max(last_num, int(last_situation_numero.numero_situation.split('-')[1]))
+                num = int(last_situation_numero.numero_situation.split('-')[1])
+                last_num = max(last_num, num)
             except (IndexError, ValueError):
                 pass
         
         next_num = last_num + 1
+        
         # Utilise le préfixe par défaut "FACT" mais peut être personnalisé
         prefix = request.GET.get('prefix', 'FACT')
         base_numero = f"{prefix}-{next_num:03d}-{current_year}"
@@ -5373,7 +5376,7 @@ def get_next_numero(request, chantier_id=None):
                     next_sit_num = current_sit_num + 1
                 except (IndexError, ValueError):
                     next_sit_num = 1
-                    
+            
             numero = f"{base_numero} - Situation n°{next_sit_num:02d}"
         else:
             numero = base_numero
