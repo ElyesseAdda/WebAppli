@@ -113,6 +113,31 @@
           margin: 2cm;
         }
       }
+      .signature-cases {
+        display: flex;
+        justify-content: space-between;
+        
+        gap: 20px;
+      }
+      .signature-case {
+        width: 100%;
+        height: 180px;
+        border: 1px solid black;
+        padding: 20px;
+        padding-top: 5px;
+        box-sizing: border-box;
+        position: relative;
+      }
+      .signature-case-left {
+        text-align: left;
+      }
+      .signature-case-right {
+        text-align: left;
+      }
+      
+      .signature-approval {
+        margin-bottom: 20px;
+      }
     </style>
   </head>
   <body>
@@ -346,7 +371,7 @@
         <p>L'entrepreneur principal s'engage à fournir au sous-traitant toutes les informations et documentations, ainsi que toute l'assistance raisonnablement nécessaire pour lui permettre d'exécuter dans les bonnes conditions les prestations objets du présent contrat.  En particulier, l'entrepreneur principal s'engage à transmettre dès réception au sous-traitant les comptes rendus des réunions de chantier qui le concernent. Il oblige à tenir compte de toutes les observations qui pourraient être formulées par le sous-traitant. L'entrepreneur principal s'oblige à informer le sous-traitant de toute nouvelle commande, le cas échant, dans un délai raisonnable en tenant compte des délais de réalisation des nouveaux travaux demandés. </p>
         <p>Tout évènement échappant au contrôle des Paries, qui ne peuvent être raisonnablement prévue lors de la conclusion du contrat et dont les effets ne peuvent être évité par des mesures appropriées, est considéré comme empêchant l'exécution de son obligation par le débiteur et entraine la suspension du contrat. </p>
         <p>La partie qui invoque les circonstances visées ci-dessus doit avertir immédiatement l'autre partie de leur survenance, ainsi que de leur disparition. </p>
-        <p>Dans le cas où les circonstances visées ci-dessus se prolongent plus de trois (3) mois, chaque Partie peut demander la résiliation du contrat.  </p>
+        <p>Dans le cas où les circonstances visées ci-dessus se prolongent plus de 3 mois, chaque Partie peut demander la résiliation du contrat.  </p>
         <p>Si l'empêchement est définitif, le contrat est résolu de plein droit et les parties sont libérées de leurs obligations dans les circonstances prévues aux articles 1351 et 1351-1 du Code civil. </p>
         <p>Aucune des deux parties ne sera tenue responsable du retard constaté en raison des évènements de force majeure. </p>
         
@@ -369,6 +394,18 @@
           <p>Le sous-traitant<br>
           La société <span style="color:black; font-weight: bold">{{ contrat.sous_traitant.entreprise }}</span><br>
           Représenté par <span style="color: black; font-weight: bold">{{ contrat.sous_traitant.representant }}</span><br></p>    
+        </div>
+        
+      </div>
+      <div class="signature-cases">
+        <div class="signature-case signature-case-left">
+          <div class="signature-label">TAMPON + SIGNATURE :</div>
+        </div>
+        <div class="signature-case signature-case-right">
+          <div class="signature-label">TAMPON + SIGNATURE :</div>
+          <div class="signature-approval">
+            Précédé de la mention "Lu et approuvé"
+          </div>
         </div>
       </div>
       <div class="section-annexes"> ANNEXES AU PRESENT CONTRAT</div>
