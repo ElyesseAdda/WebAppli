@@ -12,10 +12,9 @@
         font-size: 16px;
         margin-left: 0px;
        
-        {% comment %} max-width: 800px;  {% endcomment %}
-        {% comment %} padding: 0px; {% endcomment %}
+       
         width: 210mm;     /* Largeur A4 */
-        {% comment %} height: 297mm;    /* Hauteur A4 */ {% endcomment %}
+        
         margin-right: 90px;
         margin-top: 10px;
     
@@ -34,13 +33,7 @@
       }
 
       /* Style du tableau */
-      table {
-        {% comment %} width: 100%; {% endcomment %}
-        
-      }
-      th {
-        
-      }
+      
 
       /* Colonnes Désignation et Total */
       
@@ -653,7 +646,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; ">
                 <strong style="text-decoration: underline 2px black;">Montant total des travaux HT</strong>
-                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: center;width: 150px;">{{ total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: right;width: 150px;padding-right: 5px;">{{ total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
             </div>
         </div>
     </div>
@@ -828,7 +821,7 @@
                                            <!-- Ligne du montant global (existante) -->
             <tr style="margin-top: 20px;">
               <td colspan="7" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
-                  <span style="max-width: 300px; word-wrap: break-word; display: inline-block;">MONTANT GLOBAL HT APRÈS FRAIS DIVERS & AUTRES</span>
+                  <span style="max-width: 300px; word-wrap: break-word; display: inline-block; padding-left: 100px;">MONTANT GLOBAL HT</span>
                   <span style="float: right; margin-left: 20px;">
                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ situation.montant_total_cumul_ht|floatformat:2 }} € </span>
                     <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ situation.pourcentage_avancement|floatformat:2 }} % </span>
@@ -862,6 +855,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
@@ -870,6 +864,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
@@ -878,6 +873,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <!-- RG 5% -->
       <tr class="tva-row">
         <td colspan="2">
@@ -887,7 +883,9 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <!-- Compte prorata -->
+      {% if situation.montant_prorata != 0 %}
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
@@ -896,6 +894,8 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
+      {% endif %}
       {% for ligne in lignes_supplementaires %}
       <tr class="tva-row">
         <td colspan="2">
@@ -908,6 +908,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       {% endfor %}
       <!-- Retenue CIE -->
       {% if situation.retenue_cie != 0 %}
@@ -919,6 +920,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       {% endif %}
       <tr class="total-row">
         <td colspan="2">
@@ -928,15 +930,17 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <!-- TVA -->
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label">- TVA (20%)</span>
+            <span class="label">- TVA 20%</span>
             <span class="montanta">{{ situation.tva|floatformat:2 }} €</span>
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <!-- Montant TTC -->
       <tr class="total-row">
         <td colspan="2">
