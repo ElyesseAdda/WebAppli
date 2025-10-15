@@ -112,16 +112,25 @@ class PDFManager:
             return f"{clean_name}.pdf"
         
         elif document_type == 'contrat_sous_traitance':
-            # Utiliser le nom du contrat depuis les paramètres
-            contrat_name = kwargs.get('contrat_name', 'contrat_sous_traitance')
-            print(f"🔍 DEBUG generate_pdf_filename - contrat_name reçu: '{contrat_name}'")
-            return f"{contrat_name}.pdf"
+            # Format: Contrat_NomSousTraitant_NomChantier.pdf
+            sous_traitant_name = kwargs.get('sous_traitant_name', 'SousTraitant')
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            sous_traitant_slug = custom_slugify(sous_traitant_name)
+            chantier_slug = custom_slugify(chantier_name)
+            filename = f"Contrat_{sous_traitant_slug}_{chantier_slug}.pdf"
+            print(f"🔍 DEBUG generate_pdf_filename - Contrat ST: '{filename}'")
+            return filename
         
         elif document_type == 'avenant_sous_traitance':
-            # Utiliser le nom de l'avenant depuis les paramètres
-            avenant_name = kwargs.get('avenant_name', 'avenant_sous_traitance')
-            print(f"🔍 DEBUG generate_pdf_filename - avenant_name reçu: '{avenant_name}'")
-            return f"{avenant_name}.pdf"
+            # Format: Avenant_NumeroAvenant_NomSousTraitant_NomChantier.pdf
+            avenant_numero = kwargs.get('avenant_numero', '1')
+            sous_traitant_name = kwargs.get('sous_traitant_name', 'SousTraitant')
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            sous_traitant_slug = custom_slugify(sous_traitant_name)
+            chantier_slug = custom_slugify(chantier_name)
+            filename = f"Avenant_{avenant_numero}_{sous_traitant_slug}_{chantier_slug}.pdf"
+            print(f"🔍 DEBUG generate_pdf_filename - Avenant ST: '{filename}'")
+            return filename
         
         elif document_type == 'situation':
             # Utiliser le numero_situation depuis la DB (sans timestamp ni ID)
@@ -190,11 +199,11 @@ class PDFManager:
         
         elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance']:
             # Pour les contrats et avenants de sous-traitance
+            # Chemin: Chantiers/{Societe}/{Chantier}/Contrats/ ou Avenants/
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             chantier_slug = custom_slugify(chantier_name)
-            sous_traitant_name = kwargs.get('sous_traitant_name', 'Sous_Traitant')
-            sous_traitant_slug = custom_slugify(sous_traitant_name)
-            return f"Chantiers/{societe_slug}/{chantier_slug}/Sous_Traitant/{sous_traitant_slug}"
+            subfolder = self.document_type_folders.get(document_type, 'Sous_Traitant')
+            return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
             # Ces documents sont maintenant stockés dans Agents/Document_Generaux/
