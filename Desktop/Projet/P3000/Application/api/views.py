@@ -5304,92 +5304,118 @@ def get_factures_cie(request, chantier_id):
 class NumeroService:
     @staticmethod
     def get_next_facture_number(prefix="FACT"):
-        """Génère le prochain numéro de facture unique pour toute l'application"""
+        """Génère le prochain numéro de facture unique pour toute l'application (recommence à 001 chaque année)"""
         current_year = str(datetime.now().year)[-2:]
         
-        # Récupère le dernier numéro de facture de l'année avec le préfixe spécifié
-        last_facture = Facture.objects.filter(
-            numero__contains=f'-{current_year}'
-        ).order_by('-numero').first()
+        # Récupérer toutes les factures ET situations de l'année en cours uniquement
+        all_factures = Facture.objects.filter(
+            numero__endswith=f'-{current_year}'  # Filtre plus précis : se termine par -25, -26, etc.
+        ).order_by('-id')
         
-        if last_facture:
-            # Extrait le numéro de séquence (gère différents formats)
+        all_situations = Situation.objects.filter(
+            numero_situation__contains=f'-{current_year} -'  # Format: FACT-XXX-25 - Situation
+        ).order_by('-id')
+        
+        # Trouver le dernier numéro de séquence utilisé pour l'année en cours
+        last_num = 0
+        
+        # Vérifier toutes les factures de l'année
+        for facture in all_factures:
             try:
-                # Format: PREFIX-001-25 ou PREFIX-001
-                parts = last_facture.numero.split('-')
-                if len(parts) >= 2:
-                    last_num = int(parts[1])
-                else:
-                    # Format alternatif sans tiret
-                    import re
-                    numbers = re.findall(r'\d+', last_facture.numero)
-                    last_num = int(numbers[0]) if numbers else 0
-                next_num = last_num + 1
+                # Format attendu: FACT-001-25
+                parts = facture.numero.split('-')
+                if len(parts) >= 3 and parts[2] == current_year:
+                    num = int(parts[1])
+                    last_num = max(last_num, num)
             except (IndexError, ValueError):
-                next_num = 1
-        else:
-            next_num = 1
-            
+                pass
+        
+        # Vérifier toutes les situations de l'année
+        for situation in all_situations:
+            try:
+                # Format attendu: FACT-001-25 - Situation n°01
+                parts = situation.numero_situation.split('-')
+                if len(parts) >= 3 and parts[2].split(' ')[0] == current_year:
+                    num = int(parts[1])
+                    last_num = max(last_num, num)
+            except (IndexError, ValueError):
+                pass
+        
+        # Incrémenter pour l'année en cours (recommence à 001 chaque année)
+        next_num = last_num + 1
         return f"{prefix}-{next_num:03d}-{current_year}"
 
     @staticmethod
     def get_next_situation_number(chantier_id):
         """Génère le prochain numéro de situation pour un chantier spécifique"""
-        # Récupérer la dernière situation du chantier
+        # Récupérer la dernière situation du chantier (tri par ID pour éviter les problèmes de tri alphabétique)
         last_situation = Situation.objects.filter(
             chantier_id=chantier_id
-        ).order_by('-numero_situation').first()
+        ).order_by('-id').first()
         
-        # Déterminer le prochain numéro de situation
-        next_sit_num = 1 if not last_situation else last_situation.numero_situation + 1
+        # Déterminer le prochain numéro de situation spécifique au chantier
+        next_sit_num = 1
+        if last_situation and last_situation.numero_situation:
+            try:
+                current_sit_num = int(last_situation.numero_situation.split('n°')[1])
+                next_sit_num = current_sit_num + 1
+            except (IndexError, ValueError):
+                next_sit_num = 1
             
-        # Générer le numéro de facture de base
+        # Générer le numéro de facture de base (unique et incrémental)
         base_numero = NumeroService.get_next_facture_number()
         
         return f"{base_numero} - Situation n°{next_sit_num:02d}"
 
 @api_view(['GET'])
 def get_next_numero(request, chantier_id=None):
-    """Récupère le prochain numéro de facture ou situation"""
+    """Récupère le prochain numéro de facture ou situation (recommence à 001 chaque année)"""
     try:
         current_year = str(datetime.now().year)[-2:]
         
-        # Récupérer le dernier numéro utilisé (factures ET situations)
-        last_facture_numero = Facture.objects.filter(
-            numero__contains=f'-{current_year}'
-        ).order_by('-numero').first()
-        
-        last_situation_numero = Situation.objects.filter(
-            numero_situation__contains=f'-{current_year}'
-        ).order_by('-numero_situation').first()
-        
-        # Déterminer le dernier numéro utilisé
-        last_num = 0
-        if last_facture_numero:
-            try:
-                num = int(last_facture_numero.numero.split('-')[1])
-                last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-                
-        if last_situation_numero:
-            try:
-                num = int(last_situation_numero.numero_situation.split('-')[1])
-                last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        next_num = last_num + 1
-        
-        # Utilise le préfixe par défaut "FACT" mais peut être personnalisé
+        # Récupérer toutes les factures et situations de l'année en cours uniquement
         prefix = request.GET.get('prefix', 'FACT')
+        
+        all_factures = Facture.objects.filter(
+            numero__endswith=f'-{current_year}'
+        ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
+        
+        all_situations = Situation.objects.filter(
+            numero_situation__contains=f'-{current_year} -'
+        ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
+        
+        # Trouver le dernier numéro de séquence utilisé pour l'année en cours
+        last_num = 0
+        
+        # Vérifier toutes les factures de l'année
+        for facture in all_factures:
+            try:
+                parts = facture.numero.split('-')
+                if len(parts) >= 3 and parts[2] == current_year:
+                    num = int(parts[1])
+                    last_num = max(last_num, num)
+            except (IndexError, ValueError):
+                pass
+        
+        # Vérifier toutes les situations de l'année
+        for situation in all_situations:
+            try:
+                parts = situation.numero_situation.split('-')
+                if len(parts) >= 3 and parts[2].split(' ')[0] == current_year:
+                    num = int(parts[1])
+                    last_num = max(last_num, num)
+            except (IndexError, ValueError):
+                pass
+        
+        # Incrémenter pour obtenir le prochain numéro (recommence à 001 chaque année)
+        next_num = last_num + 1
         base_numero = f"{prefix}-{next_num:03d}-{current_year}"
             
         if chantier_id:
-            # Pour une situation, on ajoute le numéro de situation
+            # Pour une situation, on ajoute le numéro de situation spécifique au chantier
             last_situation = Situation.objects.filter(
                 chantier_id=chantier_id
-            ).order_by('-numero_situation').first()
+            ).order_by('-id').first()  # Tri par ID au lieu de numero_situation
             
             next_sit_num = 1
             if last_situation and last_situation.numero_situation:
