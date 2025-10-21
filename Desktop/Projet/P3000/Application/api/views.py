@@ -3071,11 +3071,26 @@ def preview_facture(request, facture_id):
         lignes_speciales = devis.lignes_speciales or {}
         lignes_display = devis.lignes_display or {}
 
-        # Traiter les parties et leurs lignes
-        for partie in Partie.objects.filter(
+        # Fonction de tri naturel pour les parties
+        def natural_sort_key(titre):
+            import re
+            # Extraire le numéro au début du titre (ex: "1-", "11-", "21-")
+            match = re.match(r'^(\d+)-', titre)
+            if match:
+                # Retourner un tuple (numéro, titre) pour un tri correct
+                return (int(match.group(1)), titre)
+            # Si pas de numéro, retourner (0, titre) pour mettre en premier
+            return (0, titre)
+
+        # Récupérer et trier les parties
+        parties_to_process = list(Partie.objects.filter(
             id__in=[ligne.ligne_detail.sous_partie.partie.id 
                    for ligne in devis.lignes.all()]
-        ).distinct():
+        ).distinct())
+        parties_to_process.sort(key=lambda p: natural_sort_key(p.titre))
+
+        # Traiter les parties et leurs lignes
+        for partie in parties_to_process:
             sous_parties_data = []
             total_partie = Decimal('0')
 
@@ -3084,11 +3099,15 @@ def preview_facture(request, facture_id):
             # Récupérer les lignes display pour cette partie
             display_lines_partie = lignes_display.get('parties', {}).get(str(partie.id), [])
 
-            for sous_partie in SousPartie.objects.filter(
+            # Récupérer et trier les sous-parties
+            sous_parties_to_process = list(SousPartie.objects.filter(
                 partie=partie, 
                 id__in=[ligne.ligne_detail.sous_partie.id 
                        for ligne in devis.lignes.all()]
-            ).distinct():
+            ).distinct())
+            sous_parties_to_process.sort(key=lambda sp: natural_sort_key(sp.description))
+
+            for sous_partie in sous_parties_to_process:
                 lignes_details_data = []
                 total_sous_partie = Decimal('0')
 
@@ -5711,23 +5730,39 @@ def preview_situation(request, situation_id):
         total_ht = Decimal('0')
         parties_data = []
 
-        # Obtenir toutes les parties uniques du devis
-        parties = Partie.objects.filter(
+        # Fonction de tri naturel pour les parties
+        def natural_sort_key(titre):
+            import re
+            # Extraire le numéro au début du titre (ex: "1-", "11-", "21-")
+            match = re.match(r'^(\d+)-', titre)
+            if match:
+                # Retourner un tuple (numéro, titre) pour un tri correct
+                return (int(match.group(1)), titre)
+            # Si pas de numéro, retourner (0, titre) pour mettre en premier
+            return (0, titre)
+
+        # Obtenir toutes les parties uniques du devis et les trier
+        parties_to_process = list(Partie.objects.filter(
             id__in=[ligne.ligne_detail.sous_partie.partie.id 
                    for ligne in devis.lignes.all()]
-        ).distinct()
+        ).distinct())
+        parties_to_process.sort(key=lambda p: natural_sort_key(p.titre))
 
         # Parcourir les parties
-        for partie in parties:
+        for partie in parties_to_process:
             sous_parties_data = []
             total_partie = Decimal('0')
             total_avancement_partie = Decimal('0')
 
-            for sous_partie in SousPartie.objects.filter(
+            # Récupérer et trier les sous-parties
+            sous_parties_to_process = list(SousPartie.objects.filter(
                 partie=partie,
                 id__in=[ligne.ligne_detail.sous_partie.id 
                        for ligne in devis.lignes.all()]
-            ).distinct():
+            ).distinct())
+            sous_parties_to_process.sort(key=lambda sp: natural_sort_key(sp.description))
+
+            for sous_partie in sous_parties_to_process:
                 lignes_details_data = []
                 total_sous_partie = Decimal('0')
                 total_avancement_sous_partie = Decimal('0')
@@ -5872,7 +5907,7 @@ def preview_situation(request, situation_id):
         for partie_data in parties_data:
             partie_id = None
             # Trouver l'ID de la partie correspondante
-            for partie in parties:
+            for partie in parties_to_process:
                 if partie.titre == partie_data['titre']:
                     partie_id = str(partie.id)
                     break
@@ -5918,7 +5953,7 @@ def preview_situation(request, situation_id):
             for sous_partie_data in partie_data['sous_parties']:
                 sous_partie_id = None
                 # Trouver l'ID de la sous-partie correspondante
-                for partie in parties:
+                for partie in parties_to_process:
                     for sous_partie in SousPartie.objects.filter(partie=partie):
                         if sous_partie.description == sous_partie_data['description']:
                             sous_partie_id = str(sous_partie.id)
