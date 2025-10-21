@@ -5253,11 +5253,12 @@ def get_factures_cie(request, chantier_id):
         annee = int(request.GET.get('annee'))
         
         # Récupérer toutes les factures CIE du mois pour ce chantier
+        # Utiliser mois_situation et annee_situation au lieu de date_creation
         factures_cie = Facture.objects.filter(
             chantier_id=chantier_id,
             type_facture='cie',
-            date_creation__month=mois,
-            date_creation__year=annee
+            mois_situation=mois,
+            annee_situation=annee
         )
         
         # Calculer le total
@@ -5270,7 +5271,9 @@ def get_factures_cie(request, chantier_id):
             'factures': [{
                 'id': f.id,
                 'numero': f.numero,
-                'montant_ht': float(f.price_ht)
+                'montant_ht': float(f.price_ht),
+                'designation': f.designation or '',
+                'date_creation': f.date_creation.strftime('%d/%m/%Y') if f.date_creation else ''
             } for f in factures_cie]
         })
         
@@ -6037,11 +6040,16 @@ def preview_situation(request, situation_id):
         # Calculer les montants en utilisant les valeurs stockées en DB
         montant_ht_mois = situation.montant_ht_mois
         retenue_garantie = situation.retenue_garantie
+        taux_retenue_garantie = situation.taux_retenue_garantie or Decimal('5.00')
         montant_prorata = situation.montant_prorata
         retenue_cie = situation.retenue_cie
+        type_retenue_cie = situation.type_retenue_cie or 'deduction'
+        
+        # Calculer la retenue CIE selon le type (déduction ou ajout)
+        retenue_cie_calculee = retenue_cie if type_retenue_cie == 'deduction' else -retenue_cie
         
         # Calculer le montant après retenues en tenant compte des lignes supplémentaires
-        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie
+        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie_calculee
         
         # Ajouter l'impact des lignes supplémentaires
         for ligne_suppl in lignes_supplementaires_data:
@@ -6065,6 +6073,7 @@ def preview_situation(request, situation_id):
                 'rue': societe.rue_societe,
             },
             'client': {
+                'civilite': client.civilite if hasattr(client, 'civilite') else '',
                 'nom': client.name,
                 'prenom': client.surname,
                 'client_mail': client.client_mail,
@@ -6085,9 +6094,11 @@ def preview_situation(request, situation_id):
                 'montant_total': situation.montant_total,
                 'pourcentage_avancement': situation.pourcentage_avancement,
                 'retenue_garantie': retenue_garantie,
+                'taux_retenue_garantie': taux_retenue_garantie,
                 'montant_prorata': montant_prorata,
                 'taux_prorata': situation.taux_prorata,
                 'retenue_cie': retenue_cie,
+                'type_retenue_cie': type_retenue_cie,
                 'date_creation': situation.date_creation,
                 'montant_total_devis': situation.montant_total_devis,
                 'montant_total_travaux': situation.montant_total_travaux,

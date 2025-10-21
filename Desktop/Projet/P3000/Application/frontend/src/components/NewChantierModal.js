@@ -24,6 +24,7 @@ const NewChantierModal = ({ open, onClose, onSuccess }) => {
     useState(false);
   const [chantierBasicData, setChantierBasicData] = useState(null);
   const [clientData, setClientData] = useState({
+    civilite: "",
     name: "",
     surname: "",
     client_mail: "",
@@ -61,6 +62,7 @@ const NewChantierModal = ({ open, onClose, onSuccess }) => {
       });
 
       let clientInfo = {
+        civilite: clientData.civilite || "",
         name: clientData.name,
         surname: clientData.surname,
         client_mail: clientData.client_mail,
@@ -73,6 +75,7 @@ const NewChantierModal = ({ open, onClose, onSuccess }) => {
       ) {
         const existingClient = clientResponse.data[0];
         clientInfo = {
+          civilite: existingClient.civilite || "",
           name: existingClient.name,
           surname: existingClient.surname,
           client_mail: existingClient.client_mail,

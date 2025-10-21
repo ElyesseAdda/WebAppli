@@ -12,10 +12,9 @@
         font-size: 16px;
         margin-left: 0px;
        
-        {% comment %} max-width: 800px;  {% endcomment %}
-        {% comment %} padding: 0px; {% endcomment %}
+       
         width: 210mm;     /* Largeur A4 */
-        {% comment %} height: 297mm;    /* Hauteur A4 */ {% endcomment %}
+        
         margin-right: 90px;
         margin-top: 10px;
         overflow-x: hidden;
@@ -33,13 +32,7 @@
       }
 
       /* Style du tableau */
-      table {
-        {% comment %} width: 100%; {% endcomment %}
-        
-      }
-      th {
-        
-      }
+     
 
       /* Colonnes Désignation et Total */
       
@@ -119,6 +112,7 @@
         margin-right: 2px;
         width: 22px;
         font-size: 0.8rem;
+        transform: translateX(-5px);
         
       }
       .quantite {
@@ -158,7 +152,6 @@
         text-align: right;
         width: 110px;
         font-size: 0.8rem;
-        font-weight: 700;
       }
       .bordertitre {
         border: solid 2px black;
@@ -168,11 +161,11 @@
         border: solid 2px black;
         padding: 2px;
       }
-      {% comment %} .header,
+    .header,
       .footer {
         text-align: center;
         margin-bottom: 10px;
-      } {% endcomment %}
+      }
       .ghost-container {
         position: relative;
         margin: 0;
@@ -583,10 +576,10 @@
 
              <div class="contact-info">
          <h3>Contact:</h3>
-         <p>{{ client.name }} {{ client.surname }}</p>
+         <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.name }} {{ client.surname }}</p>
          <p class="client-mail">Mail: {{ client.client_mail }}</p>
          <p>
-           Tél: {% if client.phone_Number %}0{{ client.phone_Number }}{% endif %}
+           Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
          </p>
        </div>
     </div>
@@ -747,7 +740,7 @@
           {% endfor %}
           <tr style="margin-top: 20px;">
             <td colspan="4" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
-                MONTANT GLOBAL HT APRÈS FRAIS DIVERS & AUTRES
+                MONTANT GLOBAL HT 
             </td>
             <td class="totalHttableau" style="padding-top: 15px;">
                 {{ total_ht|floatformat:2 }} €
@@ -769,6 +762,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
@@ -777,6 +771,7 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <tr class="total-row">
         <td colspan="2">
           <div class="recap-line">
@@ -794,6 +789,30 @@
       <div class="cachet-box">
         <div class="cachet-title">Cachet de l'entreprise</div>
         <div class="cachet-content">
-
+        </div>
+      </div>
+    </div>
+    
+    <script>
+    // Script pour formater le numéro de téléphone avec des points
+    document.addEventListener('DOMContentLoaded', function() {
+        // Formater le numéro de téléphone
+        const phoneElement = document.getElementById('phone-number');
+        if (phoneElement && phoneElement.textContent.trim()) {
+            const phoneNumber = phoneElement.textContent.trim();
+            if (phoneNumber.length === 9) {
+                // Ajouter un 0 devant pour passer à 10 chiffres
+                const phoneWithZero = '0' + phoneNumber;
+                // Format: 06.13.26.34.34 pour 10 chiffres
+                const formatted = phoneWithZero.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                phoneElement.textContent = formatted;
+            } else if (phoneNumber.length >= 10) {
+                // Format: 06.13.26.34.34 pour 10 chiffres ou plus
+                const formatted = phoneNumber.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                phoneElement.textContent = formatted;
+            }
+        }
+    });
+    </script>
   </body>
 </html>

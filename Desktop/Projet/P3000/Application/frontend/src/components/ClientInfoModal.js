@@ -4,12 +4,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   TextField,
 } from "@mui/material";
 import React, { useState } from "react";
 
 const ClientInfoModal = ({ open, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
+    civilite: "",
     name: "",
     surname: "",
     client_mail: "",
@@ -36,6 +41,20 @@ const ClientInfoModal = ({ open, onClose, onSubmit }) => {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Informations Client</DialogTitle>
       <DialogContent>
+        <FormControl fullWidth margin="normal">
+          <InputLabel>Civilité</InputLabel>
+          <Select
+            name="civilite"
+            value={formData.civilite}
+            onChange={handleChange}
+            label="Civilité"
+          >
+            <MenuItem value="">Aucune</MenuItem>
+            <MenuItem value="M.">Monsieur</MenuItem>
+            <MenuItem value="Mme">Madame</MenuItem>
+            <MenuItem value="Mlle">Mademoiselle</MenuItem>
+          </Select>
+        </FormControl>
         <TextField
           fullWidth
           margin="normal"

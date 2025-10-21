@@ -1,4 +1,5 @@
 {% load static %}
+{% load phone_filters %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -604,7 +605,7 @@
 
              <div class="contact-info">
          <h3>Contact:</h3>
-         <p>{{ client.nom }} {{ client.prenom }}</p>
+         <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.nom }} {{ client.prenom }}</p>
          <p class="client-mail">Mail: {{ client.client_mail }}</p>
                    <p>
             Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
@@ -632,21 +633,21 @@
         <div style="width: 50%;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 2px black;">Montant du marché HT:</strong>
-                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;">{{ total_marche_ht|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;">{{ total_marche_ht|format_montant_espace }}</span>
             </div>
             {% if total_avenants != 0 %}
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 2px black;">Avenant HT:</strong>
-                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;">{{ total_avenants|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;">{{ total_avenants|format_montant_espace }}</span>
             </div>
             {% endif %}
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 2px black;">% Avancement:</strong>
-                <span class="pourcentagetableau" style="font-size: 0.9rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|floatformat:2 }}%</span>
+                <span class="pourcentagetableau" style="font-size: 0.9rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|format_montant_espace }}%</span>
             </div>
             <div style="display: flex; justify-content: space-between; ">
                 <strong style="text-decoration: underline 2px black;">Montant total des travaux HT</strong>
-                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: right;width: 150px;padding-right: 5px;">{{ total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
+                <span class="montanta" style="font-size: 0.9rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: right;width: 150px;padding-right: 5px;">{{ total_marche_ht|add:total_avenants|format_montant_espace }}</span>
             </div>
         </div>
     </div>
@@ -698,9 +699,9 @@
             <td class="partie" colspan="7">
                 <span class="partie-text">{{ partie.titre }}</span>
                 <span style="float: right">
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;;">{{ partie.montant_avancement|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;;">{{ partie.montant_avancement|format_montant_espace }} </span>
                     <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ partie.pourcentage|floatformat:2 }} % </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ partie.total_partie|floatformat:2 }} €</span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ partie.total_partie|format_montant_espace }}</span>
                 </span>
             </td>
           </tr>
@@ -711,11 +712,11 @@
                <td class="unitetableau"></td>
                <td class="quantitetableau"></td>
                <td class="prixtableau"></td>
-               <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
+               <td class="totalHttableau">{{ special_line.value|format_montant_espace }}</td>
                <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
                <td class="montanttableau">
                    {% if special_line.type == 'reduction' %}-{% endif %}
-                   {{ special_line.montant|floatformat:2 }} €
+                   {{ special_line.montant|format_montant_espace }}
                </td>
            </tr>
            {% endfor %}
@@ -725,9 +726,9 @@
             <td colspan="7">
                 <span class="sous-partie-text">{{ sous_partie.description }}</span>
                 <span style="float: right">
-                  <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;;">{{ sous_partie.montant_avancement|floatformat:2 }} €</span>
+                  <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;;">{{ sous_partie.montant_avancement|format_montant_espace }}</span>
                   <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;">{{ sous_partie.pourcentage|floatformat:2 }} % </span>
-                  <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ sous_partie.total_sous_partie|floatformat:2 }} € </span>
+                  <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ sous_partie.total_sous_partie|format_montant_espace }} </span>
                 </span>
             </td>
           </tr>
@@ -738,11 +739,11 @@
                <td class="unitetableau"></td>
                <td class="quantitetableau"></td>
                <td class="prixtableau"></td>
-               <td class="totalHttableau">{{ special_line.value|floatformat:2 }} €</td>
+               <td class="totalHttableau">{{ special_line.value|format_montant_espace }}</td>
                <td class="pourcentagetableau">{{ special_line.pourcentage_actuel|floatformat:2 }} %</td>
                <td class="montanttableau">
                    {% if special_line.type == 'reduction' %}-{% endif %}
-                   {{ special_line.montant|floatformat:2 }} €
+                   {{ special_line.montant|format_montant_espace }}
                </td>
            </tr>
            {% endfor %}
@@ -752,10 +753,10 @@
             <td class="ligne-details">{{ ligne.description }}</td>
             <td class="unitetableau">{{ ligne.unite }}</td>
             <td class="quantitetableau">{{ ligne.quantity }}</td>
-            <td class="prixtableau">{{ ligne.custom_price|floatformat:2 }} </td>
-            <td class="totalHttableau">{{ ligne.total_ht|floatformat:2 }} €</td>
+            <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }} </td>
+            <td class="totalHttableau">{{ ligne.total_ht|format_montant_espace }}</td>
             <td class="pourcentagetableau">{{ ligne.pourcentage|floatformat:2 }} %</td>
-            <td class="montanttableau">{{ ligne.montant_situation|floatformat:2 }} €</td>
+            <td class="montanttableau">{{ ligne.montant_situation|format_montant_espace }}</td>
           </tr>
           {% endfor %} {% endfor %} {% endfor %}
           {% comment %}
@@ -771,11 +772,11 @@
                <td class="unitetableau"></td>
                <td class="quantitetableau"></td>
                <td class="prixtableau"></td>
-               <td class="totalHttableau">{{ ligne_speciale.value|floatformat:2 }} €</td>
+               <td class="totalHttableau">{{ ligne_speciale.value|format_montant_espace }}</td>
                <td class="pourcentagetableau">{{ ligne_speciale.pourcentage_actuel|floatformat:2 }} %</td>
                <td class="montanttableau">
                    {% if ligne_speciale.type == 'reduction' %}-{% endif %}
-                   {{ ligne_speciale.montant|floatformat:2 }} €
+                   {{ ligne_speciale.montant|format_montant_espace }}
                </td>
            </tr>
            {% endfor %}
@@ -787,9 +788,9 @@
             <td colspan="7" class="partie">
                 <span class="partie-text">Avenants</span>
                 <span style="float: right">
-                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ montant_total_avenants|floatformat:2 }} € </span>
+                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ montant_total_avenants|format_montant_espace }} </span>
                     <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ pourcentage_total_avenants|floatformat:2 }} % </span>
-                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ total_avenants|floatformat:2 }} €</span>
+                    <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ total_avenants|format_montant_espace }}</span>
                 </span>
             </td>
           </tr>
@@ -798,9 +799,9 @@
              <td colspan="7">
                  <span class="sous-partie-text">Avenant N°{{ avenant.numero }}</span>
                  <span style="float: right">
-                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|floatformat:2 }} €</span>
+                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|format_montant_espace }}</span>
                      <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(5px);">{{ avenant.pourcentage_avenant|floatformat:2 }} % </span>
-                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ avenant.total_avenant|floatformat:2 }} € </span>
+                     <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ avenant.total_avenant|format_montant_espace }} </span>
                  </span>
              </td>
            </tr>
@@ -809,10 +810,10 @@
             <td class="ligne-details">{{ ligne.devis_numero }}</td>
             <td class="unitetableau" style="font-size: 0.7rem;">Forf</td>
             <td class="quantitetableau">1,00</td>
-            <td class="prixtableau">{{ ligne.montant_ht|floatformat:2 }}</td>
-            <td class="totalHttableau">{{ ligne.montant_ht|floatformat:2 }} €</td>
+            <td class="prixtableau">{{ ligne.montant_ht|format_montant_espace }}</td>
+            <td class="totalHttableau">{{ ligne.montant_ht|format_montant_espace }}</td>
             <td class="pourcentagetableau">{{ ligne.pourcentage_actuel|floatformat:2 }} %</td>
-            <td class="montanttableau">{{ ligne.montant|floatformat:2 }} €</td>
+            <td class="montanttableau">{{ ligne.montant|format_montant_espace }}</td>
           </tr>
           {% endfor %}
           {% endfor %}
@@ -823,9 +824,9 @@
               <td colspan="7" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
                   <span style="max-width: 300px; word-wrap: break-word; display: inline-block; padding-left: 100px;">MONTANT GLOBAL HT</span>
                   <span style="float: right; margin-left: 20px;">
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ situation.montant_total_cumul_ht|floatformat:2 }} € </span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ situation.montant_total_cumul_ht|format_montant_espace }} </span>
                     <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ situation.pourcentage_avancement|floatformat:2 }} % </span>
-                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;transform: translateX(10px)">{{total_marche_ht|add:total_avenants|floatformat:2 }} €</span>
+                    <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;transform: translateX(10px)">{{total_marche_ht|add:total_avenants|format_montant_espace }}</span>
                   </span>
               </td>
             </tr>
@@ -851,7 +852,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant total cumul HT</span>
-            <span class="montanta">{{ situation.montant_total_cumul_ht|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_total_cumul_ht|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -860,7 +861,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Cumuls mois précédents HT</span>
-            <span class="montanta">{{ situation.cumul_precedent|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.cumul_precedent|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -869,28 +870,30 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant du mois HT</span>
-            <span class="montanta">{{ situation.montant_ht_mois|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.montant_ht_mois|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
       <tr class="special-line-spacer"><td colspan="2"></td></tr>
-      <!-- RG 5% -->
+      <!-- RG (Retenue de Garantie) - Affichée uniquement si montant > 0 -->
+      {% if situation.retenue_garantie > 0 %}
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label" style="color: red;">- RG 5% HT du mois </span>
-            <span class="montanta" style="color: red;">-{{ situation.retenue_garantie|floatformat:2 }} €</span>
+            <span class="label" style="color: red;">- RG {{ situation.taux_retenue_garantie|format_taux_propre }}% HT du mois </span>
+            <span class="montanta" style="color: red;">-{{ situation.retenue_garantie|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
       <tr class="special-line-spacer"><td colspan="2"></td></tr>
+      {% endif %}
       <!-- Compte prorata -->
       {% if situation.montant_prorata != 0 %}
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
             <span class="label" style="color: red;">- Compte prorata {{ situation.taux_prorata }}% HT du mois</span>
-            <span class="montanta" style="color: red;">-{{ situation.montant_prorata|floatformat:2 }} €</span>
+            <span class="montanta" style="color: red;">-{{ situation.montant_prorata|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -903,7 +906,7 @@
             <span class="label" style="color: red;">- {{ ligne.description }}</span>
             <span class="montanta" style="color: red;">
               {% if ligne.type == 'deduction' %}-{% endif %}
-              {{ ligne.montant|floatformat:2 }} €
+              {{ ligne.montant|format_montant_espace }}
             </span>
           </div>
         </td>
@@ -915,8 +918,10 @@
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label" style="color: red;">- Retenue CIE HT du mois</span>
-            <span class="montanta" style="color: red;">-{{ situation.retenue_cie|floatformat:2 }} €</span>
+            <span class="label" style="color: red;">- CIE HT du mois</span>
+            <span class="montanta" style="color: red;">
+              {% if situation.type_retenue_cie == 'deduction' %}-{% endif %}{{ situation.retenue_cie|format_montant_espace }}
+            </span>
           </div>
         </td>
       </tr>
@@ -925,8 +930,8 @@
       <tr class="total-row">
         <td colspan="2">
           <div class="recap-line" style="background-color: rgba(27, 120, 188, 1); color: white;">
-            <span class="label">- Montant total du mois HT après retenues</span>
-            <span class="montanta">{{ situation.montant_apres_retenues|floatformat:2 }} €</span>
+            <span class="label" style="font-weight: bold;">- Montant total du mois HT après retenues</span>
+            <span class="montanta" style="font-weight: bold;">{{ situation.montant_apres_retenues|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -936,7 +941,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- TVA 20%</span>
-            <span class="montanta">{{ situation.tva|floatformat:2 }} €</span>
+            <span class="montanta">{{ situation.tva|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -946,7 +951,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- Montant total T.T.C. à payer</span>
-            <span class="montanta">{{ montant_ttc|floatformat:2 }} €</span>
+            <span class="montanta">{{ montant_ttc|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -1013,6 +1018,7 @@
               }
           }
      });
+     
     </script>
   </body>
 </html>

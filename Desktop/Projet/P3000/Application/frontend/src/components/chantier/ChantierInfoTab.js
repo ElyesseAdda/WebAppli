@@ -203,12 +203,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       rue: "",
       code_postal: "",
     },
-    client: {
-      nom: "",
-      prenom: "",
-      email: "",
-      telephone: "",
-    },
+      client: {
+        civilite: "",
+        nom: "",
+        prenom: "",
+        email: "",
+        telephone: "",
+      },
   });
 
   const hasLoadedTaux = useRef(false);
@@ -537,6 +538,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       societeData?.client_name ||
       societeData?.client ||
       {};
+    const clientCivilite = clientData.civilite || "";
     const clientNom = clientData.name || "";
     const clientPrenom = clientData.surname || "";
 
@@ -559,6 +561,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           dataToUse?.adresse?.code_postal || dataToUse?.code_postal || "",
       },
       client: {
+        civilite: clientCivilite,
         nom: clientNom,
         prenom: clientPrenom,
         email: clientData.client_mail || "",
@@ -588,6 +591,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         const clientData = {};
 
         // Récupérer les données actuelles du client
+        const currentCivilite = currentClient.civilite || "";
         const currentNom = currentClient.name || "";
         const currentPrenom = currentClient.surname || "";
         const currentEmail = currentClient.client_mail || "";
@@ -595,12 +599,14 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
 
         console.log("=== COMPARAISON CLIENT ===");
         console.log("Actuel:", {
+          civilite: currentCivilite,
           nom: currentNom,
           prenom: currentPrenom,
           email: currentEmail,
           telephone: currentTelephone,
         });
         console.log("Nouveau:", {
+          civilite: editData.client.civilite,
           nom: editData.client.nom,
           prenom: editData.client.prenom,
           email: editData.client.email,
@@ -608,6 +614,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         });
 
         // Vérifier les changements et construire les données à envoyer
+        if (editData.client.civilite !== currentCivilite) {
+          console.log("Civilité client modifiée:", editData.client.civilite);
+          clientData.civilite = editData.client.civilite || "";
+        }
+
         if (editData.client.nom && editData.client.nom.trim() !== currentNom) {
           console.log("Nom client modifié:", editData.client.nom);
           clientData.name = editData.client.nom;
@@ -2241,6 +2252,26 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               Informations du client
             </Typography>
             <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Civilité</InputLabel>
+                  <Select
+                    value={editData.client.civilite}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        client: { ...editData.client, civilite: e.target.value },
+                      })
+                    }
+                    label="Civilité"
+                  >
+                    <MenuItem value="">Aucune</MenuItem>
+                    <MenuItem value="M.">Monsieur</MenuItem>
+                    <MenuItem value="Mme">Madame</MenuItem>
+                    <MenuItem value="Mlle">Mademoiselle</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth

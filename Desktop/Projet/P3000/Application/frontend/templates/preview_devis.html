@@ -159,7 +159,7 @@
         text-align: right;
         width: 120px;
         font-size: 0.8rem;
-        font-weight: 700;
+        
       }
       .bordertitre {
         border: solid 2px black;
@@ -548,10 +548,10 @@
 
       <div class="contact-info">
         <h3>Contact:</h3>
-        <p>{{ client.name }} {{ client.surname }}</p>
+        <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.name }} {{ client.surname }}</p>
         <p class="client-mail">Mail: {{ client.client_mail }}</p>
         <p>
-          Tél: {% if client.phone_Number %}{{ client.phone_Number|format_phone_simple }}{% endif %}
+          Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
         </p>
       </div>
     </div>
@@ -693,7 +693,7 @@
           <!-- Nouvelle ligne pour le montant global -->
           <tr style="margin-top: 20px;">
             <td colspan="4" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
-                MONTANT GLOBAL HT APRÈS FRAIS DIVERS & AUTRES
+                MONTANT GLOBAL HT 
             </td>
             <td class="totalHttableau" style="padding-top: 15px;">
                 {{ total_ht|format_montant_espace }}
@@ -716,14 +716,16 @@
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label">- TVA ({{ devis.tva_rate|floatformat:2 }}%)</span>
+            <span class="label">- TVA {{ devis.tva_rate|floatformat:2 }}%</span>
             <span class="montant">{{ tva|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
+      <tr class="special-line-spacer"><td colspan="2"></td></tr>
       <tr class="total-row">
         <td colspan="2">
           <div class="recap-line">
@@ -742,27 +744,24 @@
     </div>
     
     <script>
-    // Script pour formater le numéro de téléphone au format simple (sans points)
+    // Script pour formater le numéro de téléphone avec des points
     document.addEventListener('DOMContentLoaded', function() {
-        // Trouver tous les éléments p et chercher celui qui contient "Tél:"
-        const allParagraphs = document.querySelectorAll('p');
-        allParagraphs.forEach(phoneElement => {
-            const phoneText = phoneElement.textContent;
-            if (phoneText.includes('Tél:')) {
-                const phoneMatch = phoneText.match(/Tél:\s*(\d+)/);
-                if (phoneMatch) {
-                    let phoneNumber = phoneMatch[1];
-                    // S'assurer qu'on a 10 chiffres
-                    if (phoneNumber.length === 9) {
-                        phoneNumber = '0' + phoneNumber;
-                    } else if (phoneNumber.length === 11 && phoneNumber.startsWith('33')) {
-                        phoneNumber = '0' + phoneNumber.substring(2);
-                    }
-                    // Remplacer le numéro formaté par le numéro simple
-                    phoneElement.innerHTML = phoneText.replace(/Tél:\s*\d+/, `Tél: ${phoneNumber}`);
-                }
+        // Formater le numéro de téléphone
+        const phoneElement = document.getElementById('phone-number');
+        if (phoneElement && phoneElement.textContent.trim()) {
+            const phoneNumber = phoneElement.textContent.trim();
+            if (phoneNumber.length === 9) {
+                // Ajouter un 0 devant pour passer à 10 chiffres
+                const phoneWithZero = '0' + phoneNumber;
+                // Format: 06.13.26.34.34 pour 10 chiffres
+                const formatted = phoneWithZero.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                phoneElement.textContent = formatted;
+            } else if (phoneNumber.length >= 10) {
+                // Format: 06.13.26.34.34 pour 10 chiffres ou plus
+                const formatted = phoneNumber.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                phoneElement.textContent = formatted;
             }
-        });
+        }
     });
     </script>
   </body>

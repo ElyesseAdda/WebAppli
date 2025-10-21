@@ -117,3 +117,27 @@ def format_montant_espace(montant):
         return f"{montant_formatted} €"
     except (ValueError, TypeError):
         return "0,00 €"
+
+@register.filter
+def format_taux_propre(taux):
+    """
+    Formate un taux en enlevant les décimales inutiles
+    
+    Exemples:
+    - 5.00 → 5
+    - 3.50 → 3.5
+    - 0.00 → 0
+    - 2.75 → 2.75
+    """
+    if taux is None:
+        return "0"
+    
+    try:
+        taux_float = float(taux)
+        # Si le nombre est entier, afficher sans décimales
+        if taux_float == int(taux_float):
+            return str(int(taux_float))
+        # Sinon, formater avec décimales mais enlever les zéros inutiles
+        return str(taux_float).rstrip('0').rstrip('.')
+    except (ValueError, TypeError):
+        return str(taux)

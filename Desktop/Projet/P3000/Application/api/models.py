@@ -24,6 +24,14 @@ TYPE_CHOICES = [
 # Create your models here.
 
 class Client(models.Model):
+    CIVILITE_CHOICES = [
+        ('', ''),
+        ('M.', 'Monsieur'),
+        ('Mme', 'Madame'),
+        ('Mlle', 'Mademoiselle'),
+    ]
+    
+    civilite = models.CharField(max_length=10, choices=CIVILITE_CHOICES, blank=True, default='', verbose_name="Civilité")
     name = models.CharField(max_length=100)
     surname = models.CharField(max_length=25)
     client_mail = models.EmailField()
@@ -31,7 +39,8 @@ class Client(models.Model):
     
 
     def __str__(self):
-        return f"{self.name} {self.surname}"
+        civilite_display = f"{self.civilite} " if self.civilite else ""
+        return f"{civilite_display}{self.name} {self.surname}"
     
 class Societe(models.Model):
     nom_societe = models.CharField(max_length=100,)
@@ -758,9 +767,16 @@ class Situation(models.Model):
     
     # Déductions standard
     retenue_garantie = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    taux_retenue_garantie = models.DecimalField(max_digits=5, decimal_places=2, default=5.00, verbose_name="Taux retenue de garantie (%)")
     taux_prorata = models.DecimalField(max_digits=5, decimal_places=2, default=2.50)
     montant_prorata = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     retenue_cie = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    type_retenue_cie = models.CharField(
+        max_length=20,
+        choices=[('deduction', 'Déduction'), ('ajout', 'Ajout')],
+        default='deduction',
+        verbose_name="Type de retenue CIE"
+    )
     total_avancement = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     # Traçabilité

@@ -904,11 +904,13 @@ const SituationCreationModal = ({
   const [avenants, setAvenants] = useState([]);
   const [montantTotalAvenants, setMontantTotalAvenants] = useState(0);
   const [tauxProrata, setTauxProrata] = useState(2.5);
+  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(5.0);
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
   const [lignesSpeciales, setLignesSpeciales] = useState([]);
   const [retenueCIE, setRetenueCIE] = useState(0);
+  const [typeRetenueCIE, setTypeRetenueCIE] = useState('deduction');
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
@@ -1125,7 +1127,9 @@ const SituationCreationModal = ({
 
             // Pré-remplir les champs avec les données existantes
             setTauxProrata(currentSituation.taux_prorata || 2.5);
+            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie || 5.0);
             setRetenueCIE(currentSituation.retenue_cie || 0);
+            setTypeRetenueCIE(currentSituation.type_retenue_cie || 'deduction');
 
             // Mettre à jour la structure avec les pourcentages existants
             const newStructure = structure.map((partie) => ({
@@ -1202,22 +1206,14 @@ const SituationCreationModal = ({
               setLignesSpeciales(newLignesSpeciales);
             }
           } else {
-            let moisPrecedent = parseInt(mois) - 1;
-            let anneePrecedente = parseInt(annee);
-            if (moisPrecedent === 0) {
-              moisPrecedent = 12;
-              anneePrecedente--;
-            }
-
+            // Charger la dernière situation créée (peu importe le mois)
+            // au lieu de chercher uniquement le mois précédent
             const responsePrecedent = await axios.get(
-              `/api/chantier/${chantier.id}/situations/by-month/`,
-              {
-                params: { mois: moisPrecedent, annee: anneePrecedente },
-              }
+              `/api/chantier/${chantier.id}/last-situation/`
             );
 
-            if (responsePrecedent.data.length > 0) {
-              const situationPrecedente = responsePrecedent.data[0];
+            if (responsePrecedent.data) {
+              const situationPrecedente = responsePrecedent.data;
 
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
@@ -1433,14 +1429,19 @@ const SituationCreationModal = ({
     if (situation.retenue_cie) {
       setRetenueCIE(parseFloat(situation.retenue_cie));
     }
+    if (situation.type_retenue_cie) {
+      setTypeRetenueCIE(situation.type_retenue_cie);
+    }
   };
 
   // Fonction pour réinitialiser les données
   const resetSituationData = () => {
     setTauxProrata(2.5); // Valeur par défaut
+    setTauxRetenueGarantie(5.0); // Valeur par défaut
     setLastSituation(null);
     setLignesSupplementaires([]);
     setRetenueCIE(0);
+    setTypeRetenueCIE('deduction');
 
     // Réinitialiser la structure avec des pourcentages à 0
     const newStructure = structure.map((partie) => ({
@@ -1628,7 +1629,7 @@ const SituationCreationModal = ({
     });
 
     const cumulPrecedent = calculerCumulPrecedent();
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     const montantApresRetenues =
       montantHtMois -
@@ -1789,11 +1790,13 @@ const SituationCreationModal = ({
         montant_ht_mois: formatNumber(calculerMontantHTMois()),
         cumul_precedent: formatNumber(calculerCumulPrecedent()),
         montant_total_cumul_ht: formatNumber(calculerMontantTotalCumul()),
-        retenue_garantie: formatNumber(calculerMontantHTMois() * 0.05),
+        retenue_garantie: formatNumber(calculerMontantHTMois() * (tauxRetenueGarantie / 100)),
+        taux_retenue_garantie: formatNumber(tauxRetenueGarantie),
         montant_prorata: formatNumber(
           calculerMontantHTMois() * (tauxProrata / 100)
         ),
         retenue_cie: formatNumber(retenueCIE),
+        type_retenue_cie: typeRetenueCIE,
         montant_apres_retenues: formatNumber(calculerTotalNet()),
         tva: formatNumber(calculerTotalNet() * 0.2),
         montant_ttc: formatNumber(calculerTotalNet() * 1.2),
@@ -1915,18 +1918,19 @@ const SituationCreationModal = ({
   const calculerTotalNet = () => {
     const montantHtMois = calculerMontantHTMois();
 
-    // Retenue de garantie (5%)
-    const retenueGarantie = montantHtMois * 0.05;
+    // Retenue de garantie (taux configurable)
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
 
     // Compte prorata (calculé sur le montant HT du mois)
     const compteProrata = montantHtMois * (tauxProrata / 100);
 
-    // Retenue CIE
+    // Retenue CIE (peut être positive ou négative selon le type)
     const retenueCIEValue = parseFloat(retenueCIE || 0);
+    const retenueCIECalculee = typeRetenueCIE === 'deduction' ? retenueCIEValue : -retenueCIEValue;
 
     // Montant après retenues
     let total =
-      montantHtMois - retenueGarantie - compteProrata - retenueCIEValue;
+      montantHtMois - retenueGarantie - compteProrata - retenueCIECalculee;
 
     // Lignes supplémentaires
     lignesSupplementaires.forEach((ligne) => {
@@ -1948,13 +1952,18 @@ const SituationCreationModal = ({
     const montantHtMois = calculerMontantHTMois();
     const montantTotalTravaux = totalHT + montantTotalAvenants;
 
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
+    
+    // Retenue CIE calculée selon le type
+    const retenueCIEValue = parseFloat(retenueCIE || 0);
+    const retenueCIECalculee = typeRetenueCIE === 'deduction' ? retenueCIEValue : -retenueCIEValue;
+    
     let montantApresRetenues =
       montantHtMois -
       retenueGarantie -
       montantProrata -
-      parseFloat(retenueCIE || 0);
+      retenueCIECalculee;
 
     // Ajouter l'impact des lignes supplémentaires
     lignesSupplementaires.forEach((ligne) => {
@@ -1990,7 +1999,9 @@ const SituationCreationModal = ({
     structure,
     avenants,
     tauxProrata,
+    tauxRetenueGarantie,
     retenueCIE,
+    typeRetenueCIE,
     lignesSupplementaires,
     lignesSpeciales,
   ]);
@@ -2326,17 +2337,6 @@ const SituationCreationModal = ({
             <TableBody>
               {/* Montant HT du mois */}
 
-              {/* Cumul mois précédent */}
-              <TableRow>
-                <TableCell>Cumul mois précédent</TableCell>
-                <TableCell align="right">
-                  {calculerCumulPrecedent()
-                    .toFixed(2)
-                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                  €
-                </TableCell>
-              </TableRow>
-
               {/* Montant total cumul HT */}
               <TableRow>
                 <TableCell>Montant total cumul HT</TableCell>
@@ -2352,6 +2352,17 @@ const SituationCreationModal = ({
                   €
                 </TableCell>
               </TableRow>
+
+              {/* Cumul mois précédent */}
+              <TableRow>
+                <TableCell>Cumul mois précédent</TableCell>
+                <TableCell align="right">
+                  {calculerCumulPrecedent()
+                    .toFixed(2)
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                  €
+                </TableCell>
+              </TableRow>
               <TableRow>
                 <TableCell>Montant HT du mois</TableCell>
                 <TableCell align="right">
@@ -2364,10 +2375,23 @@ const SituationCreationModal = ({
 
               {/* Retenue de garantie */}
               <TableRow>
-                <TableCell>Retenue de garantie (5% HT du mois)</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Retenue de garantie (
+                    <TextField
+                      type="number"
+                      value={tauxRetenueGarantie}
+                      onChange={(e) => setTauxRetenueGarantie(parseFloat(e.target.value) || 0)}
+                      inputProps={{ step: "0.1", min: "0", max: "100" }}
+                      size="small"
+                      sx={{ width: 80 }}
+                    />
+                    % HT du mois)
+                  </Box>
+                </TableCell>
                 <TableCell align="right" sx={{ color: "error.main" }}>
                   -
-                  {(calculerMontantHTMois() * 0.05)
+                  {(calculerMontantHTMois() * (tauxRetenueGarantie / 100))
                     .toFixed(2)
                     .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
                   €
@@ -2392,33 +2416,45 @@ const SituationCreationModal = ({
               <TableRow>
                 <TableCell>Retenue CIE HT du mois</TableCell>
                 <TableCell align="right">
-                  <Box>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <FormControl size="small" sx={{ minWidth: 130 }}>
+                      <InputLabel>Type</InputLabel>
+                      <Select
+                        value={typeRetenueCIE}
+                        onChange={(e) => setTypeRetenueCIE(e.target.value)}
+                        label="Type"
+                      >
+                        <MenuItem value="deduction">Déduction</MenuItem>
+                        <MenuItem value="ajout">Ajout</MenuItem>
+                      </Select>
+                    </FormControl>
                     <TextField
                       type="number"
                       value={retenueCIE}
                       onChange={(e) => setRetenueCIE(e.target.value)}
-                      inputProps={{ step: "0.01" }}
+                      inputProps={{ step: "0.01", min: "0" }}
                       size="small"
+                      sx={{ width: 150 }}
                     />
-                    {facturesCIE.length > 0 && (
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        sx={{ mt: 1, color: "text.secondary" }}
-                      >
-                        Factures incluses :
-                        {facturesCIE.map((f) => (
-                          <div key={f.id}>
-                            {f.numero}:{" "}
-                            {parseFloat(f.montant_ht)
-                              .toFixed(2)
-                              .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}
-                            €
-                          </div>
-                        ))}
-                      </Typography>
-                    )}
                   </Box>
+                  {facturesCIE.length > 0 && (
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{ mt: 1, color: "text.secondary", textAlign: "right" }}
+                    >
+                      Factures incluses :
+                      {facturesCIE.map((f) => (
+                        <div key={f.id}>
+                          {f.numero}:{" "}
+                          {parseFloat(f.montant_ht)
+                            .toFixed(2)
+                            .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}
+                          €
+                        </div>
+                      ))}
+                    </Typography>
+                  )}
                 </TableCell>
               </TableRow>
 
@@ -2485,11 +2521,14 @@ const SituationCreationModal = ({
                 <TableCell>Montant total du mois HT après retenues</TableCell>
                 <TableCell align="right">
                   {(() => {
+                    const retenueCIEValue = parseFloat(retenueCIE || 0);
+                    const retenueCIECalculee = typeRetenueCIE === 'deduction' ? retenueCIEValue : -retenueCIEValue;
+                    
                     let montantTotal =
                       calculerMontantHTMois() -
-                      calculerMontantHTMois() * 0.05 -
+                      calculerMontantHTMois() * (tauxRetenueGarantie / 100) -
                       calculerMontantHTMois() * (tauxProrata / 100) -
-                      parseFloat(retenueCIE || 0);
+                      retenueCIECalculee;
 
                     // Appliquer les lignes supplémentaires
                     lignesSupplementaires.forEach((ligne) => {
@@ -2513,11 +2552,14 @@ const SituationCreationModal = ({
                 <TableCell>TVA (20%)</TableCell>
                 <TableCell align="right">
                   {(() => {
+                    const retenueCIEValue = parseFloat(retenueCIE || 0);
+                    const retenueCIECalculee = typeRetenueCIE === 'deduction' ? retenueCIEValue : -retenueCIEValue;
+                    
                     let montantBase =
                       calculerMontantHTMois() -
-                      calculerMontantHTMois() * 0.05 -
+                      calculerMontantHTMois() * (tauxRetenueGarantie / 100) -
                       calculerMontantHTMois() * (tauxProrata / 100) -
-                      parseFloat(retenueCIE || 0);
+                      retenueCIECalculee;
 
                     // Appliquer les lignes supplémentaires
                     lignesSupplementaires.forEach((ligne) => {
@@ -2541,11 +2583,14 @@ const SituationCreationModal = ({
                 <TableCell>Montant total TTC à payer</TableCell>
                 <TableCell align="right">
                   {(() => {
+                    const retenueCIEValue = parseFloat(retenueCIE || 0);
+                    const retenueCIECalculee = typeRetenueCIE === 'deduction' ? retenueCIEValue : -retenueCIEValue;
+                    
                     let montantBase =
                       calculerMontantHTMois() -
-                      calculerMontantHTMois() * 0.05 -
+                      calculerMontantHTMois() * (tauxRetenueGarantie / 100) -
                       calculerMontantHTMois() * (tauxProrata / 100) -
-                      parseFloat(retenueCIE || 0);
+                      retenueCIECalculee;
 
                     // Appliquer les lignes supplémentaires
                     lignesSupplementaires.forEach((ligne) => {
