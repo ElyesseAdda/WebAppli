@@ -5310,16 +5310,17 @@ def get_factures_cie(request, chantier_id):
 class NumeroService:
     @staticmethod
     def get_next_facture_number(prefix="FACT"):
-        """Génère le prochain numéro de facture unique pour toute l'application (recommence à 001 chaque année)"""
-        current_year = str(datetime.now().year)[-2:]
+        """Génère le prochain numéro de facture unique pour toute l'application (recommence à 01 chaque année)"""
+        current_year = str(datetime.now().year)
+        current_month = str(datetime.now().month).zfill(2)
         
         # Récupérer toutes les factures ET situations de l'année en cours uniquement
         all_factures = Facture.objects.filter(
-            numero__endswith=f'-{current_year}'  # Filtre plus précis : se termine par -25, -26, etc.
+            numero__contains=f'.{current_year}'  # Filtre pour le nouveau format: XX.2025
         ).order_by('-id')
         
         all_situations = Situation.objects.filter(
-            numero_situation__contains=f'-{current_year} -'  # Format: FACT-XXX-25 - Situation
+            numero_situation__contains=f'.{current_year} -'  # Format: Facture n°XX.2025 - Situation
         ).order_by('-id')
         
         # Trouver le dernier numéro de séquence utilisé pour l'année en cours
@@ -5328,10 +5329,11 @@ class NumeroService:
         # Vérifier toutes les factures de l'année
         for facture in all_factures:
             try:
-                # Format attendu: FACT-001-25
-                parts = facture.numero.split('-')
-                if len(parts) >= 3 and parts[2] == current_year:
-                    num = int(parts[1])
+                # Format attendu: Facture n°08.2025
+                if 'Facture n°' in facture.numero and f'.{current_year}' in facture.numero:
+                    # Extraire le numéro avant le point
+                    numero_part = facture.numero.split('Facture n°')[1].split('.')[0]
+                    num = int(numero_part)
                     last_num = max(last_num, num)
             except (IndexError, ValueError):
                 pass
@@ -5339,17 +5341,18 @@ class NumeroService:
         # Vérifier toutes les situations de l'année
         for situation in all_situations:
             try:
-                # Format attendu: FACT-001-25 - Situation n°01
-                parts = situation.numero_situation.split('-')
-                if len(parts) >= 3 and parts[2].split(' ')[0] == current_year:
-                    num = int(parts[1])
+                # Format attendu: Facture n°08.2025 - Situation n°01
+                if 'Facture n°' in situation.numero_situation and f'.{current_year}' in situation.numero_situation:
+                    # Extraire le numéro avant le point
+                    numero_part = situation.numero_situation.split('Facture n°')[1].split('.')[0]
+                    num = int(numero_part)
                     last_num = max(last_num, num)
             except (IndexError, ValueError):
                 pass
         
-        # Incrémenter pour l'année en cours (recommence à 001 chaque année)
+        # Incrémenter pour l'année en cours (recommence à 01 chaque année)
         next_num = last_num + 1
-        return f"{prefix}-{next_num:03d}-{current_year}"
+        return f"Facture n°{next_num:02d}.{current_year}"
 
     @staticmethod
     def get_next_situation_number(chantier_id):
@@ -5375,19 +5378,19 @@ class NumeroService:
 
 @api_view(['GET'])
 def get_next_numero(request, chantier_id=None):
-    """Récupère le prochain numéro de facture ou situation (recommence à 001 chaque année)"""
+    """Récupère le prochain numéro de facture ou situation (recommence à 01 chaque année)"""
     try:
-        current_year = str(datetime.now().year)[-2:]
+        current_year = str(datetime.now().year)
         
         # Récupérer toutes les factures et situations de l'année en cours uniquement
         prefix = request.GET.get('prefix', 'FACT')
         
         all_factures = Facture.objects.filter(
-            numero__endswith=f'-{current_year}'
+            numero__contains=f'.{current_year}'
         ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
         
         all_situations = Situation.objects.filter(
-            numero_situation__contains=f'-{current_year} -'
+            numero_situation__contains=f'.{current_year} -'
         ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
         
         # Trouver le dernier numéro de séquence utilisé pour l'année en cours
@@ -5396,9 +5399,11 @@ def get_next_numero(request, chantier_id=None):
         # Vérifier toutes les factures de l'année
         for facture in all_factures:
             try:
-                parts = facture.numero.split('-')
-                if len(parts) >= 3 and parts[2] == current_year:
-                    num = int(parts[1])
+                # Format attendu: Facture n°08.2025
+                if 'Facture n°' in facture.numero and f'.{current_year}' in facture.numero:
+                    # Extraire le numéro avant le point
+                    numero_part = facture.numero.split('Facture n°')[1].split('.')[0]
+                    num = int(numero_part)
                     last_num = max(last_num, num)
             except (IndexError, ValueError):
                 pass
@@ -5406,16 +5411,18 @@ def get_next_numero(request, chantier_id=None):
         # Vérifier toutes les situations de l'année
         for situation in all_situations:
             try:
-                parts = situation.numero_situation.split('-')
-                if len(parts) >= 3 and parts[2].split(' ')[0] == current_year:
-                    num = int(parts[1])
+                # Format attendu: Facture n°08.2025 - Situation n°01
+                if 'Facture n°' in situation.numero_situation and f'.{current_year}' in situation.numero_situation:
+                    # Extraire le numéro avant le point
+                    numero_part = situation.numero_situation.split('Facture n°')[1].split('.')[0]
+                    num = int(numero_part)
                     last_num = max(last_num, num)
             except (IndexError, ValueError):
                 pass
         
-        # Incrémenter pour obtenir le prochain numéro (recommence à 001 chaque année)
+        # Incrémenter pour obtenir le prochain numéro (recommence à 01 chaque année)
         next_num = last_num + 1
-        base_numero = f"{prefix}-{next_num:03d}-{current_year}"
+        base_numero = f"Facture n°{next_num:02d}.{current_year}"
             
         if chantier_id:
             # Pour une situation, on ajoute le numéro de situation spécifique au chantier

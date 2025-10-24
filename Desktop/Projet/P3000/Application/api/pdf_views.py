@@ -927,7 +927,7 @@ def generate_facture_pdf_drive(request):
         chantier_id = request.GET.get('chantier_id') or request.GET.get('chantierId')
         chantier_name = request.GET.get('chantier_name') or request.GET.get('chantierName', 'Chantier')
         societe_name = request.GET.get('societe_name') or request.GET.get('societeName', 'Société par défaut')
-        numero = request.GET.get('numero', 'FACT-001-25')
+        numero = request.GET.get('numero', 'Facture n°01.2025')
         force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
         
         if not facture_id:
