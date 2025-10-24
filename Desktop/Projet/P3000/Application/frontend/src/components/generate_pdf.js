@@ -18,6 +18,11 @@ async function generatePDF() {
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--window-size=1920,1080",
+        "--font-render-hinting=none",
+        "--disable-font-subpixel-positioning",
+        "--disable-features=FontAccess",
+        "--enable-font-antialiasing",
+        "--force-device-scale-factor=1",
       ], // Ajout de paramètres pour Puppeteer
     });
     console.log("Navigateur lancé");
@@ -32,6 +37,18 @@ async function generatePDF() {
         deviceScaleFactor: 1,
       });
       console.log("Viewport configuré");
+
+      // Injecter les polices système pour assurer la compatibilité
+      await page.evaluateOnNewDocument(() => {
+        const style = document.createElement('style');
+        style.textContent = `
+          @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+          * {
+            font-family: Arial, Helvetica, "Roboto", sans-serif !important;
+          }
+        `;
+        document.head.appendChild(style);
+      });
 
       console.log("Tentative de chargement de la page:", previewUrl);
 
