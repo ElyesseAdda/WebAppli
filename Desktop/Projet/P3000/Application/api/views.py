@@ -6138,6 +6138,7 @@ def preview_situation(request, situation_id):
                 'nom': societe.nom_societe,
                 'ville': societe.ville_societe,
                 'rue': societe.rue_societe,
+                'codepostal_societe': societe.codepostal_societe,
             },
             'client': {
                 'civilite': client.civilite if hasattr(client, 'civilite') else '',
