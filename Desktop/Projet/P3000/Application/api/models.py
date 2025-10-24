@@ -36,6 +36,7 @@ class Client(models.Model):
     surname = models.CharField(max_length=25)
     client_mail = models.EmailField()
     phone_Number = models.IntegerField()
+    poste = models.CharField(max_length=100, blank=True, default='', verbose_name="Poste")
     
 
     def __str__(self):
@@ -743,7 +744,7 @@ class Situation(models.Model):
     banque = models.ForeignKey('Banque', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Banque de paiement")
     mois = models.IntegerField()
     annee = models.IntegerField()
-    date_creation = models.DateTimeField(auto_now_add=True)
+    date_creation = models.DateTimeField(null=True, blank=True, verbose_name="Date de création")
     date_validation = models.DateTimeField(null=True, blank=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
     date_envoi = models.DateField(null=True, blank=True)

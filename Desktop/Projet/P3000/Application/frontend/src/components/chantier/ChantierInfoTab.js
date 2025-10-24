@@ -209,6 +209,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         prenom: "",
         email: "",
         telephone: "",
+        poste: "",
       },
   });
 
@@ -541,6 +542,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     const clientCivilite = clientData.civilite || "";
     const clientNom = clientData.name || "";
     const clientPrenom = clientData.surname || "";
+    const clientPoste = clientData.poste || "";
 
     // Charger les données actuelles dans le formulaire
     setEditData({
@@ -566,6 +568,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         prenom: clientPrenom,
         email: clientData.client_mail || "",
         telephone: clientData.phone_Number?.toString() || "",
+        poste: clientPoste,
       },
     });
     setOpenEditModal(true);
@@ -596,6 +599,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         const currentPrenom = currentClient.surname || "";
         const currentEmail = currentClient.client_mail || "";
         const currentTelephone = currentClient.phone_Number?.toString() || "";
+        const currentPoste = currentClient.poste || "";
 
         console.log("=== COMPARAISON CLIENT ===");
         console.log("Actuel:", {
@@ -604,6 +608,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           prenom: currentPrenom,
           email: currentEmail,
           telephone: currentTelephone,
+          poste: currentPoste,
         });
         console.log("Nouveau:", {
           civilite: editData.client.civilite,
@@ -611,6 +616,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           prenom: editData.client.prenom,
           email: editData.client.email,
           telephone: editData.client.telephone,
+          poste: editData.client.poste,
         });
 
         // Vérifier les changements et construire les données à envoyer
@@ -646,6 +652,14 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         ) {
           console.log("Téléphone client modifié:", editData.client.telephone);
           clientData.phone_Number = parseInt(editData.client.telephone) || 0;
+        }
+
+        if (
+          editData.client.poste &&
+          editData.client.poste.trim() !== currentPoste
+        ) {
+          console.log("Poste client modifié:", editData.client.poste);
+          clientData.poste = editData.client.poste;
         }
 
         // Envoyer la requête seulement s'il y a des changements
@@ -2325,6 +2339,20 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                     setEditData({
                       ...editData,
                       client: { ...editData.client, telephone: e.target.value },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Poste"
+                  value={editData.client.poste}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client: { ...editData.client, poste: e.target.value },
                     })
                   }
                   sx={{ mb: 2 }}

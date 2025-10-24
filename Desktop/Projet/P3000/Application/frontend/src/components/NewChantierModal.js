@@ -29,6 +29,7 @@ const NewChantierModal = ({ open, onClose, onSuccess }) => {
     surname: "",
     client_mail: "",
     phone_Number: "",
+    poste: "",
     societe: {
       nom_societe: "",
       ville_societe: "",
@@ -207,6 +208,7 @@ const NewChantierModal = ({ open, onClose, onSuccess }) => {
       surname: "",
       client_mail: "",
       phone_Number: "",
+      poste: "",
       societe: {
         nom_societe: "",
         ville_societe: "",

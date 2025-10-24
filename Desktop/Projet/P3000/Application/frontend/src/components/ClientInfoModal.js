@@ -19,6 +19,7 @@ const ClientInfoModal = ({ open, onClose, onSubmit }) => {
     surname: "",
     client_mail: "",
     phone_Number: "",
+    poste: "",
   });
 
   const handleChange = (e) => {
@@ -119,6 +120,14 @@ const ClientInfoModal = ({ open, onClose, onSubmit }) => {
             pattern: "[0-9]*",
           }}
           required
+        />
+        <TextField
+          fullWidth
+          margin="normal"
+          name="poste"
+          label="Poste"
+          value={formData.poste}
+          onChange={handleChange}
         />
       </DialogContent>
       <DialogActions>

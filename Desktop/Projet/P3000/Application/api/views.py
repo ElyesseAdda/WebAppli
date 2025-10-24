@@ -4742,6 +4742,12 @@ def create_situation(request):
 
         # Créer la situation
         situation = serializer.save()
+        
+        # Si aucune date de création n'est fournie, utiliser la date actuelle
+        if not situation.date_creation:
+            from django.utils import timezone
+            situation.date_creation = timezone.now()
+            situation.save()
 
         # Créer les lignes de situation
         for ligne_data in data.get('lignes', []):
@@ -4858,7 +4864,7 @@ def update_situation(request, pk):
         situation.lignes_speciales.all().delete()
 
         # Mise à jour des champs de base
-        for field in ['mois', 'annee', 'numero_situation', 'montant_ht_mois', 'cumul_precedent', 
+        for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
                      'pourcentage_avancement', 'taux_prorata']:
@@ -6139,6 +6145,7 @@ def preview_situation(request, situation_id):
                 'prenom': client.surname,
                 'client_mail': client.client_mail,
                 'phone_Number': client.phone_Number,
+                'poste': client.poste if hasattr(client, 'poste') else '',
             },
             'devis': {
                 'numero': devis.numero,

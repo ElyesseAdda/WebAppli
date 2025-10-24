@@ -915,6 +915,7 @@ const SituationCreationModal = ({
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
   const [numeroSituation, setNumeroSituation] = useState("");
+  const [dateCreation, setDateCreation] = useState("");
 
   useEffect(() => {
     if (devis?.id) {
@@ -1130,6 +1131,14 @@ const SituationCreationModal = ({
             setTauxRetenueGarantie(currentSituation.taux_retenue_garantie || 5.0);
             setRetenueCIE(currentSituation.retenue_cie || 0);
             setTypeRetenueCIE(currentSituation.type_retenue_cie || 'deduction');
+            
+            // Charger la date de création
+            if (currentSituation.date_creation) {
+              setDateCreation(currentSituation.date_creation.split('T')[0]);
+            } else {
+              // Si aucune date de création n'est définie, utiliser la date du jour
+              setDateCreation(new Date().toISOString().split('T')[0]);
+            }
 
             // Mettre à jour la structure avec les pourcentages existants
             const newStructure = structure.map((partie) => ({
@@ -1772,6 +1781,7 @@ const SituationCreationModal = ({
         mois: parseInt(mois),
         annee: parseInt(annee),
         numero_situation: numeroSituation, // Numéro modifiable par l'utilisateur
+        date_creation: dateCreation, // Date de création modifiable par l'utilisateur
         lignes: structure.flatMap((partie) =>
           partie.sous_parties.flatMap((sousPartie) =>
             sousPartie.lignes.map((ligne) => ({
@@ -2056,6 +2066,8 @@ const SituationCreationModal = ({
     if (open) {
       setMois(new Date().getMonth() + 1);
       setAnnee(new Date().getFullYear());
+      // Initialiser la date de création avec la date du jour
+      setDateCreation(new Date().toISOString().split('T')[0]);
       // Réinitialiser les états au cas où on réouvre le modal
       // Note: Le numéro sera chargé automatiquement par fetchSituationData
       setExistingSituation(null);
@@ -2162,6 +2174,15 @@ const SituationCreationModal = ({
             helperText="Vous pouvez personnaliser le numéro de la situation"
             sx={{ flex: 1, maxWidth: 400 }}
             required
+          />
+          <TextField
+            label="Date de création"
+            type="date"
+            value={dateCreation}
+            onChange={(e) => setDateCreation(e.target.value)}
+            helperText="Date qui apparaîtra sur le document"
+            sx={{ flex: 1, maxWidth: 200 }}
+            InputLabelProps={{ shrink: true }}
           />
           <TextField
             label="Taux compte prorata (%)"
