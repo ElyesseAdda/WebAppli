@@ -1503,7 +1503,17 @@ const ModificationDevis = () => {
         }
       }
 
-      const response = await axios.put(endpoint, dataToSend);
+      // En mode modification de devis, ajouter les paramètres nécessaires
+      let finalEndpoint = endpoint;
+      if (devisId) {
+        const params = new URLSearchParams({
+          devis_id: devisId,
+          include_deleted: 'true'
+        });
+        finalEndpoint = `${endpoint}?${params.toString()}`;
+      }
+
+      const response = await axios.put(finalEndpoint, dataToSend);
 
       // Mettre à jour les données locales
       if (editedData.type === "partie") {

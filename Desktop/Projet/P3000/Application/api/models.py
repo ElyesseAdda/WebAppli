@@ -503,19 +503,19 @@ class Fournisseur(models.Model):
     name = models.CharField(max_length=25)
     Fournisseur_mail = models.EmailField(blank=True, null=True)
     phone_Number = models.CharField(max_length=15, blank=True, null=True)
-    description_fournisseur = models.CharField(max_length=250, blank=True, null=True)
+    description_fournisseur = models.CharField(max_length=500, blank=True, null=True)
     magasin = models.CharField(max_length=250, blank=True, null=True)
 
 
 class Materiel_produit(models.Model):
     name_produit = models.CharField(max_length=25,)
-    description_produit = models.CharField(max_length=250,)
+    description_produit = models.CharField(max_length=500,)
     price_ht = models.FloatField()
     name_fournisseur = models.CharField(max_length=25,)
 
 
 class Devis(models.Model):
-    numero = models.CharField(max_length=50, unique=True)
+    numero = models.CharField(max_length=100, unique=True)
     date_creation = models.DateTimeField(auto_now_add=True)
     price_ht = models.FloatField()
     price_ttc = models.FloatField()
@@ -581,7 +581,7 @@ class TauxFixe(models.Model):
 class LigneDetail(models.Model):
     sous_partie = models.ForeignKey('SousPartie', related_name='lignes_details', on_delete=models.CASCADE)
     partie = models.ForeignKey('Partie', related_name='lignes_details', on_delete=models.CASCADE, null=True, blank=True)
-    description = models.CharField(max_length=600)
+    description = models.CharField(max_length=1000)
     unite = models.CharField(max_length=10)
     # Nouveaux champs pour la décomposition du prix
     cout_main_oeuvre = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -632,7 +632,7 @@ class Facture(models.Model):
         ('cie', 'CIE')  # Ajout du type CIE
     ]
 
-    numero = models.CharField(max_length=50, unique=True)
+    numero = models.CharField(max_length=100, unique=True)
     date_creation = models.DateTimeField(auto_now_add=True)
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='factures')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='factures')
@@ -739,8 +739,8 @@ class Situation(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE)
     devis = models.ForeignKey('Devis', on_delete=models.CASCADE)
     numero = models.IntegerField(default=1,null=True,blank=True)
-    numero_situation = models.CharField(max_length=50)
-    numero_cp = models.CharField(max_length=50, blank=True, null=True, verbose_name="Numéro CP")
+    numero_situation = models.CharField(max_length=100)
+    numero_cp = models.CharField(max_length=100, blank=True, null=True, verbose_name="Numéro CP")
     banque = models.ForeignKey('Banque', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Banque de paiement")
     mois = models.IntegerField()
     annee = models.IntegerField()
@@ -866,7 +866,7 @@ class Quitus(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='quitus', null=True)
     client = models.ManyToManyField(Client, related_name='quitus', blank=True)  # Modification ici
     state_quitus = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
-    description_quitus = models.CharField(max_length=250)
+    description_quitus = models.CharField(max_length=500)
 
     def __str__(self):
         return f"Quitus {self.id}"
@@ -1146,7 +1146,7 @@ class FournisseurMagasin(models.Model):
 class Parametres(models.Model):
     code = models.CharField(max_length=50, unique=True)
     valeur = models.DecimalField(max_digits=5, decimal_places=2)
-    description = models.CharField(max_length=255, blank=True)
+    description = models.CharField(max_length=500, blank=True)
     date_modification = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -1205,7 +1205,7 @@ class FactureTS(models.Model):
 
 class ChantierLigneSupplementaire(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='lignes_supplementaires_default')
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=500)
     montant = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     class Meta:
@@ -1222,7 +1222,7 @@ class AgencyExpense(models.Model):
         ('punctual', 'Ponctuel')
     ]
     
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=500)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     type = models.CharField(max_length=10, choices=EXPENSE_TYPES)
     date = models.DateField()
@@ -1244,7 +1244,7 @@ class AgencyExpenseOverride(models.Model):
     expense = models.ForeignKey(AgencyExpense, on_delete=models.CASCADE, related_name='overrides')
     month = models.IntegerField()
     year = models.IntegerField()
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=500)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
