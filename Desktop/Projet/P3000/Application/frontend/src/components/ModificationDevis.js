@@ -1503,9 +1503,15 @@ const ModificationDevis = () => {
         }
       }
 
-      // En mode modification de devis, ajouter les paramètres nécessaires
+      // En mode modification de devis, utiliser l'endpoint général pour les parties
+      // pour permettre la modification de toutes les parties supprimées
       let finalEndpoint = endpoint;
-      if (devisId) {
+      if (devisId && editedData.type === "partie") {
+        // Pour les parties, utiliser l'endpoint direct (sans paramètres de devis)
+        // Cela permet de modifier toutes les parties supprimées via le modal
+        finalEndpoint = `/api/parties/${editedData.id}/`;
+      } else if (devisId) {
+        // Pour les sous-parties et lignes, utiliser les paramètres de devis
         const params = new URLSearchParams({
           devis_id: devisId,
           include_deleted: 'true'
