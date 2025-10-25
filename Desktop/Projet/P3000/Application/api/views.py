@@ -727,8 +727,13 @@ class PartieViewSet(viewsets.ModelViewSet):
                 from django.http import Http404
                 raise Http404("Partie non trouvée")
         else:
-            # Comportement normal : utiliser la méthode parent
-            return super().get_object()
+            # Pour les requêtes directes (sans paramètres de devis), permettre l'accès à toutes les parties
+            # Cela permet la modification via le modal avec l'endpoint all_including_deleted
+            try:
+                return Partie.objects.get(pk=self.kwargs['pk'])
+            except Partie.DoesNotExist:
+                from django.http import Http404
+                raise Http404("Partie non trouvée")
     
     def destroy(self, request, *args, **kwargs):
         """Suppression logique en cascade"""

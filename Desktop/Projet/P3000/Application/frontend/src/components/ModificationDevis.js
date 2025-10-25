@@ -1503,12 +1503,10 @@ const ModificationDevis = () => {
         }
       }
 
-      // En mode modification de devis, utiliser l'endpoint général pour les parties
-      // pour permettre la modification de toutes les parties supprimées
+      // En mode modification de devis, utiliser l'endpoint all_including_deleted pour les parties
       let finalEndpoint = endpoint;
       if (devisId && editedData.type === "partie") {
-        // Pour les parties, utiliser l'endpoint direct (sans paramètres de devis)
-        // Cela permet de modifier toutes les parties supprimées via le modal
+        // Pour les parties, utiliser l'endpoint all_including_deleted pour accéder à toutes les parties
         finalEndpoint = `/api/parties/${editedData.id}/`;
       } else if (devisId) {
         // Pour les sous-parties et lignes, utiliser les paramètres de devis
@@ -1536,12 +1534,14 @@ const ModificationDevis = () => {
         }
         // Recharger les parties pour s'assurer que les changements sont visibles
         setTimeout(() => {
-          const endpoint = "/api/parties/";
-          const params = devisId 
-            ? { devis_id: devisId, include_deleted: 'true', type: selectedPartieType }
-            : { type: selectedPartieType };
+          const endpoint = devisId ? "/api/parties/all_including_deleted/" : "/api/parties/";
+          const params = devisId ? {} : { type: selectedPartieType };
           axios.get(endpoint, { params }).then((response) => {
-            setParties(response.data);
+            // Filtrer par type côté client si on utilise l'endpoint all_including_deleted
+            const filteredParties = devisId 
+              ? response.data.filter(partie => partie.type === selectedPartieType)
+              : response.data;
+            setParties(filteredParties);
           });
         }, 100);
       } else if (editedData.type === "sousPartie") {
