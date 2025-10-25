@@ -692,6 +692,44 @@ class PartieViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(type=type_filter)
         return queryset
     
+    def get_object(self):
+        """
+        Surcharger get_object pour permettre l'accès aux éléments supprimés
+        en mode modification de devis
+        """
+        # Vérifier si on est en mode modification de devis
+        devis_id = self.request.query_params.get('devis_id')
+        include_deleted = self.request.query_params.get('include_deleted', 'false').lower() == 'true'
+        
+        if devis_id and include_deleted:
+            # En mode modification, permettre l'accès aux éléments supprimés
+            # mais seulement ceux qui étaient présents dans le devis original
+            try:
+                devis = Devis.objects.get(id=devis_id)
+                devis_lignes = DevisLigne.objects.filter(devis=devis)
+                partie_ids = set()
+                
+                for ligne in devis_lignes:
+                    if ligne.ligne_detail and ligne.ligne_detail.partie:
+                        partie_ids.add(ligne.ligne_detail.partie.id)
+                
+                # Récupérer l'objet même s'il est supprimé
+                obj = Partie.objects.get(pk=self.kwargs['pk'])
+                
+                # Vérifier que l'objet fait partie du devis original
+                if obj.id in partie_ids:
+                    return obj
+                else:
+                    from django.http import Http404
+                    raise Http404("Partie non trouvée dans ce devis")
+                    
+            except (Devis.DoesNotExist, Partie.DoesNotExist, Exception) as e:
+                from django.http import Http404
+                raise Http404("Partie non trouvée")
+        else:
+            # Comportement normal : utiliser la méthode parent
+            return super().get_object()
+    
     def destroy(self, request, *args, **kwargs):
         """Suppression logique en cascade"""
         instance = self.get_object()

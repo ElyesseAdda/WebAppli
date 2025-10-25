@@ -1520,9 +1520,33 @@ const ModificationDevis = () => {
         setParties(
           parties.map((p) => (p.id === editedData.id ? response.data : p))
         );
+        // Mettre à jour aussi les sous-parties si elles sont filtrées
+        if (filteredSousParties.length > 0) {
+          setFilteredSousParties(
+            filteredSousParties.map((sp) =>
+              sp.id === editedData.id ? response.data : sp
+            )
+          );
+        }
+        // Recharger les parties pour s'assurer que les changements sont visibles
+        setTimeout(() => {
+          const endpoint = "/api/parties/";
+          const params = devisId 
+            ? { devis_id: devisId, include_deleted: 'true', type: selectedPartieType }
+            : { type: selectedPartieType };
+          axios.get(endpoint, { params }).then((response) => {
+            setParties(response.data);
+          });
+        }, 100);
       } else if (editedData.type === "sousPartie") {
         setSousParties(
           sousParties.map((sp) =>
+            sp.id === editedData.id ? response.data : sp
+          )
+        );
+        // Mettre à jour aussi les sous-parties filtrées
+        setFilteredSousParties(
+          filteredSousParties.map((sp) =>
             sp.id === editedData.id ? response.data : sp
           )
         );
@@ -1532,6 +1556,29 @@ const ModificationDevis = () => {
             l.id === editedData.id ? response.data : l
           )
         );
+        // Mettre à jour aussi les lignes filtrées
+        setFilteredLignesDetails(
+          filteredLignesDetails.map((l) =>
+            l.id === editedData.id ? response.data : l
+          )
+        );
+        // Recharger les lignes de détail pour s'assurer que les changements sont visibles
+        if (selectedSousParties.length > 0) {
+          setTimeout(() => {
+            const endpoint = "/api/ligne-details/";
+            const params = devisId 
+              ? { 
+                  devis_id: devisId, 
+                  include_deleted: 'true',
+                  id__in: selectedSousParties.join(",")
+                }
+              : { id__in: selectedSousParties.join(",") };
+            axios.get(endpoint, { params }).then((response) => {
+              setAllLignesDetails(response.data);
+              setFilteredLignesDetails(response.data);
+            });
+          }, 100);
+        }
       }
     } catch (error) {
       console.error("Erreur lors de la modification:", error);
