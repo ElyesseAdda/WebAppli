@@ -1933,6 +1933,7 @@ def assign_chantier(request):
                 hour_str = update.get('hour')
                 chantier_id = update.get('chantierId')
                 is_sav = update.get('isSav', False)  # Par défaut False si non fourni
+                overtime_hours = update.get('overtimeHours', 0)  # Par défaut 0 si non fourni
 
                 # Validation des données
                 if not all([agent_id, week, year, day, hour_str, chantier_id]):
@@ -1988,7 +1989,8 @@ def assign_chantier(request):
                     day=day,
                     hour=hour,
                     chantier=chantier,
-                    is_sav=is_sav
+                    is_sav=is_sav,
+                    overtime_hours=overtime_hours
                 )
 
         logger.info("Chantiers assignés avec succès.")
@@ -8304,50 +8306,75 @@ def schedule_monthly_summary(request):
                 'heures_samedi': 0,
                 'heures_dimanche': 0,
                 'heures_ferie': 0,
+                'heures_overtime': 0,
                 'montant_normal': 0,
                 'montant_samedi': 0,
                 'montant_dimanche': 0,
                 'montant_ferie': 0,
+                'montant_overtime': 0,
                 'jours_majoration': []
             }
+
+        # Vérifier si cette case a des heures supplémentaires
+        has_overtime = s.overtime_hours and s.overtime_hours > 0
 
         # Déterminer le type de jour
         if is_journalier:
             # Pour les agents journaliers : toujours taux normal, peu importe le jour
-            result[key]['heures_normal'] += heures_increment
-            result[key]['montant_normal'] += taux_horaire * heures_increment
-        else:
-            # Pour les agents horaires : appliquer les majorations
-            if date_creneau in fr_holidays:
-                result[key]['heures_ferie'] += heures_increment
-                result[key]['montant_ferie'] += taux_horaire * heures_increment * 1.5
-                result[key]['jours_majoration'].append({
-                    'date': date_creneau.strftime("%Y-%m-%d"),
-                    'type': 'ferie',
-                    'hours': heures_increment,
-                    'taux': 1.5
-                })
-            elif s.day == "Samedi":
-                result[key]['heures_samedi'] += heures_increment
-                result[key]['montant_samedi'] += taux_horaire * heures_increment * 1.25
-                result[key]['jours_majoration'].append({
-                    'date': date_creneau.strftime("%Y-%m-%d"),
-                    'type': 'samedi',
-                    'hours': heures_increment,
-                    'taux': 1.25
-                })
-            elif s.day == "Dimanche":
-                result[key]['heures_dimanche'] += heures_increment
-                result[key]['montant_dimanche'] += taux_horaire * heures_increment * 1.5
-                result[key]['jours_majoration'].append({
-                    'date': date_creneau.strftime("%Y-%m-%d"),
-                    'type': 'dimanche',
-                    'hours': heures_increment,
-                    'taux': 1.5
-                })
-            else:
+            # SAUF si il y a des heures supplémentaires -> alors pas d'heures normales
+            if not has_overtime:
                 result[key]['heures_normal'] += heures_increment
                 result[key]['montant_normal'] += taux_horaire * heures_increment
+        else:
+            # Pour les agents horaires : appliquer les majorations
+            # SAUF si il y a des heures supplémentaires -> alors pas d'heures normales/majorées
+            if not has_overtime:
+                if date_creneau in fr_holidays:
+                    result[key]['heures_ferie'] += heures_increment
+                    result[key]['montant_ferie'] += taux_horaire * heures_increment * 1.5
+                    result[key]['jours_majoration'].append({
+                        'date': date_creneau.strftime("%Y-%m-%d"),
+                        'type': 'ferie',
+                        'hours': heures_increment,
+                        'taux': 1.5
+                    })
+                elif s.day == "Samedi":
+                    result[key]['heures_samedi'] += heures_increment
+                    result[key]['montant_samedi'] += taux_horaire * heures_increment * 1.25
+                    result[key]['jours_majoration'].append({
+                        'date': date_creneau.strftime("%Y-%m-%d"),
+                        'type': 'samedi',
+                        'hours': heures_increment,
+                        'taux': 1.25
+                    })
+                elif s.day == "Dimanche":
+                    result[key]['heures_dimanche'] += heures_increment
+                    result[key]['montant_dimanche'] += taux_horaire * heures_increment * 1.5
+                    result[key]['jours_majoration'].append({
+                        'date': date_creneau.strftime("%Y-%m-%d"),
+                        'type': 'dimanche',
+                        'hours': heures_increment,
+                        'taux': 1.5
+                    })
+                else:
+                    result[key]['heures_normal'] += heures_increment
+                    result[key]['montant_normal'] += taux_horaire * heures_increment
+                        
+        # Ajouter les heures supplémentaires (toujours à +25%, indépendamment du jour)
+        if has_overtime:
+            overtime_hours = float(s.overtime_hours)
+            result[key]['heures_overtime'] += overtime_hours
+            result[key]['montant_overtime'] += taux_horaire * overtime_hours * 1.25  # +25%
+            
+            # Créer une entrée spécifique pour les heures supplémentaires
+            if not is_journalier:  # Pas de majoration spéciale pour les journaliers
+                result[key]['jours_majoration'].append({
+                    'date': date_creneau.strftime("%Y-%m-%d"),
+                    'type': 'overtime',
+                    'hours': 0,  # Pas d'heures normales majorées
+                    'overtime_hours': overtime_hours,
+                    'taux': 1.25
+                })
 
     # Regrouper par chantier pour l'affichage
     chantier_map = {}
@@ -8361,10 +8388,12 @@ def schedule_monthly_summary(request):
                 'total_heures_samedi': 0,
                 'total_heures_dimanche': 0,
                 'total_heures_ferie': 0,
+                'total_heures_overtime': 0,
                 'total_montant_normal': 0,
                 'total_montant_samedi': 0,
                 'total_montant_dimanche': 0,
                 'total_montant_ferie': 0,
+                'total_montant_overtime': 0,
                 'jours_majoration': []
             }
         chantier_map[chantier_id]['details'].append(data)
@@ -8372,10 +8401,12 @@ def schedule_monthly_summary(request):
         chantier_map[chantier_id]['total_heures_samedi'] += data['heures_samedi']
         chantier_map[chantier_id]['total_heures_dimanche'] += data['heures_dimanche']
         chantier_map[chantier_id]['total_heures_ferie'] += data['heures_ferie']
+        chantier_map[chantier_id]['total_heures_overtime'] += data['heures_overtime']
         chantier_map[chantier_id]['total_montant_normal'] += data['montant_normal']
         chantier_map[chantier_id]['total_montant_samedi'] += data['montant_samedi']
         chantier_map[chantier_id]['total_montant_dimanche'] += data['montant_dimanche']
         chantier_map[chantier_id]['total_montant_ferie'] += data['montant_ferie']
+        chantier_map[chantier_id]['total_montant_overtime'] += data['montant_overtime']
         chantier_map[chantier_id]['jours_majoration'].extend(data['jours_majoration'])
 
     return Response(list(chantier_map.values()), status=200)
@@ -8388,9 +8419,15 @@ def preview_monthly_agents_report(request):
     from calendar import monthrange
     from datetime import date, timedelta as td
     import holidays
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     month = int(request.GET.get('month'))
     year = int(request.GET.get('year'))
+    
+    # print(f"🔍 DEBUG PREVIEW PDF - Mois: {month}/{year}")
+    # print(f"🔍 URL appelée: {request.get_full_path()}")
     
     # Calculer les dates de début et fin du mois
     start_date = date(year, month, 1)
@@ -8399,121 +8436,200 @@ def preview_monthly_agents_report(request):
     else:
         end_date = date(year, month + 1, 1) - timedelta(days=1)
     
-    # Utiliser l'endpoint schedule_monthly_summary pour récupérer les données
+    # UTILISER EXACTEMENT LA MÊME API QUE LaborCostsSummary.js
+    # pour garantir la cohérence des données
     month_str = f"{year}-{month:02d}"
     
-    # Utiliser directement la logique de schedule_monthly_summary au lieu de l'appeler
-    from calendar import monthrange
-    from datetime import date, timedelta as td
-    import holidays
+    # APPEL DIRECT DE LA LOGIQUE MÉTIER (sans passer par l'authentification REST)
+    # Reproduire exactement la logique de schedule_monthly_summary
     
-    first_day = date(year, month, 1)
-    last_day = date(year, month, monthrange(year, month)[1])
-    fr_holidays = holidays.country_holidays('FR', years=[year])
-
-    # Fonction utilitaire pour obtenir la date réelle d'un Schedule
-    def get_date_from_week(year, week, day_name):
-        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
-        day_index = days_of_week.index(day_name)
-        from datetime import datetime as dt
-        lundi = dt.strptime(f'{year}-W{int(week):02d}-1', "%G-W%V-%u")
-        return (lundi + td(days=day_index)).date()
-
-    # Récupérer tous les Schedule du mois (toutes semaines qui touchent le mois)
-    weeks = set()
-    d = first_day
-    while d <= last_day:
-        weeks.add(d.isocalendar()[1])
-        d += td(days=1)
-
-    schedules = Schedule.objects.filter(year=year, week__in=list(weeks)).select_related('agent', 'chantier')
-
-    # Agrégation par agent et chantier (même logique que schedule_monthly_summary)
-    result = {}
-    for s in schedules:
-        if not s.chantier:
-            continue  # On ignore les créneaux sans chantier assigné
-        date_creneau = get_date_from_week(s.year, s.week, s.day)
-        if date_creneau.year != year or date_creneau.month != month:
-            continue  # On ne garde que les créneaux du mois demandé
-
-        agent_id = s.agent.id
-        chantier_id = s.chantier.id
+    try:
+        from datetime import datetime
+        # Récupération des labor costs pour le mois spécifié
+        # IMPORTANT: Exclure les agents journaliers pour cohérence avec le filtrage des agents
+        labor_costs_candidates = LaborCost.objects.filter(
+            year=year, 
+            week__gte=start_date.isocalendar()[1],
+            week__lte=end_date.isocalendar()[1]
+        ).exclude(agent__type_paiement='journalier').select_related('agent', 'chantier')
         
-        # Gestion des agents journaliers vs horaires
-        is_journalier = s.agent.type_paiement == 'journalier'
-        if is_journalier:
-            # Pour les agents journaliers : 0.5 jour = 4h équivalent
-            heures_increment = 4
-            taux_horaire = (s.agent.taux_journalier or 0) / 2  # Demi-journée
-        else:
-            # Pour les agents horaires : 1 créneau = 1h
-            heures_increment = 1
-            taux_horaire = s.agent.taux_Horaire or 0
-
-        key = (agent_id, chantier_id)
-        if key not in result:
-            result[key] = {
-                'agent_id': agent_id,
-                'agent_nom': f"{s.agent.name} {s.agent.surname}",
-                'chantier_id': chantier_id,
-                'chantier_nom': s.chantier.chantier_name,
-                'type_paiement': s.agent.type_paiement,
-                'heures_normal': 0,
-                'heures_samedi': 0,
-                'heures_dimanche': 0,
-                'heures_ferie': 0,
-                'montant_normal': 0,
-                'montant_samedi': 0,
-                'montant_dimanche': 0,
-                'montant_ferie': 0,
-                'jours_majoration': [],
-                'chantiers': set()
-            }
-
-        # Déterminer le type de jour
-        if date_creneau in fr_holidays:
-            result[key]['heures_ferie'] += heures_increment
-            result[key]['montant_ferie'] += taux_horaire * 1.5
-        elif s.day == "Samedi":
-            result[key]['heures_samedi'] += heures_increment
-            result[key]['montant_samedi'] += taux_horaire * 1.25
-        elif s.day == "Dimanche":
-            result[key]['heures_dimanche'] += heures_increment
-            result[key]['montant_dimanche'] += taux_horaire * 1.5
-        else:
-            result[key]['heures_normal'] += heures_increment
-            result[key]['montant_normal'] += taux_horaire
-
-    # Regrouper par chantier pour l'affichage
-    chantier_map = {}
-    for (agent_id, chantier_id), data in result.items():
-        if chantier_id not in chantier_map:
-            chantier_map[chantier_id] = {
-                'chantier_id': chantier_id,
-                'chantier_nom': data['chantier_nom'],
-                'details': [],
-                'total_heures_normal': 0,
-                'total_heures_samedi': 0,
-                'total_heures_dimanche': 0,
-                'total_heures_ferie': 0,
-                'total_montant_normal': 0,
-                'total_montant_samedi': 0,
-                'total_montant_dimanche': 0,
-                'total_montant_ferie': 0,
-                'jours_majoration': []
-            }
-        chantier_map[chantier_id]['details'].append(data)
-        chantier_map[chantier_id]['total_heures_normal'] += data['heures_normal']
-        chantier_map[chantier_id]['total_heures_samedi'] += data['heures_samedi']
-        chantier_map[chantier_id]['total_heures_dimanche'] += data['heures_dimanche']
-        chantier_map[chantier_id]['total_heures_ferie'] += data['heures_ferie']
-        chantier_map[chantier_id]['total_montant_normal'] += data['montant_normal']
-        chantier_map[chantier_id]['total_montant_samedi'] += data['montant_samedi']
-        chantier_map[chantier_id]['total_montant_dimanche'] += data['montant_dimanche']
-        chantier_map[chantier_id]['total_montant_ferie'] += data['montant_ferie']
-
-    schedule_data = list(chantier_map.values())
+        # FILTRAGE SUPPLÉMENTAIRE : Ne garder que les LaborCost qui ont au moins un jour dans le mois
+        labor_costs = []
+        for lc in labor_costs_candidates:
+            # Vérifier si cette semaine a des jours dans le mois demandé
+            week_has_days_in_month = False
+            
+            # Tester tous les jours de la semaine
+            for day_name in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']:
+                try:
+                    date_jour = get_date_from_week(lc.year, lc.week, day_name)
+                    if date_jour.year == year and date_jour.month == month:
+                        week_has_days_in_month = True
+                        break
+                except:
+                    continue
+            
+            if week_has_days_in_month:
+                # Vérifier si la semaine chevauche plusieurs mois (problème potentiel)
+                days_in_current_month = 0
+                days_in_other_months = 0
+                
+                for day_name in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']:
+                    try:
+                        date_jour = get_date_from_week(lc.year, lc.week, day_name)
+                        if date_jour.year == year and date_jour.month == month:
+                            days_in_current_month += 1
+                        else:
+                            days_in_other_months += 1
+                    except:
+                        continue
+                
+                labor_costs.append(lc)
+        
+        # Grouper par chantier
+        chantiers_data = {}
+        
+        for lc in labor_costs:
+            chantier_id = lc.chantier_id
+            if chantier_id not in chantiers_data:
+                chantiers_data[chantier_id] = {
+                    'chantier_id': chantier_id,
+                    'chantier_nom': lc.chantier.chantier_name if lc.chantier else f'Chantier {chantier_id}',
+                    'total_hours': 0,
+                    'total_cost': 0,
+                    'details': []
+                }
+            
+            # Calculer les totaux pour cet agent/chantier
+            total_hours = (
+                (lc.hours_normal or 0) +
+                (lc.hours_samedi or 0) +
+                (lc.hours_dimanche or 0) +
+                (lc.hours_ferie or 0) +
+                (lc.hours_overtime or 0)
+            )
+            
+            total_cost = (
+                (lc.cost_normal or 0) +
+                (lc.cost_samedi or 0) +
+                (lc.cost_dimanche or 0) +
+                (lc.cost_ferie or 0) +
+                (lc.cost_overtime or 0)
+            )
+            
+            # APPROCHE HYBRIDE : Combiner les deux sources de données
+            # 1. LaborCost.details_majoration pour les jours majorés normaux (weekend, fériés)
+            # 2. Schedule.overtime_hours pour les heures supplémentaires
+            jours_majoration = []
+            
+            # PARTIE 1: Récupérer les jours majorés depuis LaborCost.details_majoration avec regroupement
+            labor_cost_majorations = {}  # Pour regrouper par date + type
+            
+            if lc.details_majoration:
+                for detail in lc.details_majoration:
+                    # Normaliser le format de date vers DD/MM/YYYY pour cohérence avec LaborCostsSummary.js
+                    date_str = detail.get('date', '')
+                    normalized_date = date_str
+                    
+                    # Convertir YYYY-MM-DD vers DD/MM/YYYY si nécessaire
+                    if date_str and '-' in date_str and len(date_str) == 10:
+                        try:
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+                            normalized_date = date_obj.strftime('%d/%m/%Y')
+                        except:
+                            pass  # Garder la date originale si la conversion échoue
+                    
+                    # Ignorer les heures supplémentaires de details_majoration (seront traitées par Schedule)
+                    detail_type = detail.get('type', '').lower()
+                    if detail_type not in ['heures sup', 'overtime']:
+                        # Clé pour regroupement : date + type
+                        key = f"{normalized_date}_{detail_type}"
+                        
+                        if key not in labor_cost_majorations:
+                            # Normaliser le taux au format +XX%
+                            taux_raw = detail.get('taux', '')
+                            if isinstance(taux_raw, (int, float)):
+                                if taux_raw == 1.25:
+                                    taux_display = '+25%'
+                                elif taux_raw == 1.5:
+                                    taux_display = '+50%'
+                                else:
+                                    taux_display = f'+{int((taux_raw - 1) * 100)}%'
+                            else:
+                                taux_display = str(taux_raw)
+                            
+                            labor_cost_majorations[key] = {
+                                'date': normalized_date,
+                                'type': detail.get('type', ''),
+                                'hours': 0,
+                                'overtime_hours': detail.get('overtime_hours', 0),
+                                'taux': taux_display
+                            }
+                        
+                        # Sommer les heures pour cette date/type
+                        labor_cost_majorations[key]['hours'] += detail.get('hours', 0)
+                
+                # Ajouter les données regroupées
+                for grouped_data in labor_cost_majorations.values():
+                    jours_majoration.append(grouped_data)
+            
+            # PARTIE 2: Ajouter les heures supplémentaires depuis Schedule
+            # Récupérer tous les créneaux Schedule pour cet agent/chantier/semaine
+            schedules_for_lc = Schedule.objects.filter(
+                agent_id=lc.agent_id,
+                chantier_id=lc.chantier_id,
+                year=year,
+                week=lc.week
+            )
+            
+            for schedule in schedules_for_lc:
+                date_creneau = get_date_from_week(schedule.year, schedule.week, schedule.day)
+                if date_creneau.year != year or date_creneau.month != month:
+                    continue
+                
+                # Vérifier si cette case a des heures supplémentaires
+                has_overtime = schedule.overtime_hours and schedule.overtime_hours > 0
+                is_journalier = schedule.agent.type_paiement == 'journalier'
+                
+                if has_overtime and not is_journalier:
+                    # EXACTEMENT comme dans schedule_monthly_summary lignes 8371-8377
+                    jours_majoration.append({
+                        'date': date_creneau.strftime("%d/%m/%Y"),  # Format DD/MM/YYYY
+                        'jour': schedule.day,
+                        'type': 'Heures sup',
+                        'hours': 0,  # Pas d'heures normales majorées
+                        'overtime_hours': float(schedule.overtime_hours),
+                        'taux': '+25%'
+                    })
+            
+            chantiers_data[chantier_id]['details'].append({
+                'agent_id': lc.agent_id,
+                'agent_nom': f"{lc.agent.name} {lc.agent.surname}" if lc.agent else f'Agent {lc.agent_id}',
+                'chantier_nom': lc.chantier.chantier_name if lc.chantier else f'Chantier {chantier_id}',
+                'heures_normal': float(lc.hours_normal or 0),
+                'heures_samedi': float(lc.hours_samedi or 0),
+                'heures_dimanche': float(lc.hours_dimanche or 0),
+                'heures_ferie': float(lc.hours_ferie or 0),
+                'heures_overtime': float(lc.hours_overtime or 0),
+                'montant_normal': float(lc.cost_normal or 0),
+                'montant_samedi': float(lc.cost_samedi or 0),
+                'montant_dimanche': float(lc.cost_dimanche or 0),
+                'montant_ferie': float(lc.cost_ferie or 0),
+                'montant_overtime': float(lc.cost_overtime or 0),
+                'jours_majoration': jours_majoration
+            })
+            
+            chantiers_data[chantier_id]['total_hours'] += total_hours
+            chantiers_data[chantier_id]['total_cost'] += total_cost
+        
+        # Convertir en liste
+        schedule_data = list(chantiers_data.values())
+        
+    except Exception as e:
+        schedule_data = []
+    
+    # Skip le calcul manuel - utiliser directement les données de l'API
+    # Données récupérées directement de l'API - plus de calcul manuel
     
     # Récupérer tous les agents SAUF les agents journaliers (exclus des rapports mensuels)
     agents = Agent.objects.exclude(type_paiement='journalier')
@@ -8527,7 +8643,7 @@ def preview_monthly_agents_report(request):
     # Agrégation par agent (même logique que LaborCostsSummary.js)
     agent_map = {}
     
-    # Traiter les données de schedule_monthly_summary
+    # Traiter les données construites directement (même logique que LaborCostsSummary.js)
     for chantier_data in schedule_data:
         for detail in chantier_data['details']:
             agent_id = detail['agent_id']
@@ -8540,10 +8656,12 @@ def preview_monthly_agents_report(request):
                     'heures_samedi': 0,
                     'heures_dimanche': 0,
                     'heures_ferie': 0,
+                    'heures_overtime': 0,
                     'montant_normal': 0,
                     'montant_samedi': 0,
                     'montant_dimanche': 0,
                     'montant_ferie': 0,
+                    'montant_overtime': 0,
                     'jours_majoration': [],
                     'chantiers': set()
                 }
@@ -8552,28 +8670,38 @@ def preview_monthly_agents_report(request):
             agent_map[agent_id]['heures_samedi'] += detail['heures_samedi']
             agent_map[agent_id]['heures_dimanche'] += detail['heures_dimanche']
             agent_map[agent_id]['heures_ferie'] += detail['heures_ferie']
+            agent_map[agent_id]['heures_overtime'] += detail.get('heures_overtime', 0)
             agent_map[agent_id]['montant_normal'] += detail['montant_normal']
             agent_map[agent_id]['montant_samedi'] += detail['montant_samedi']
             agent_map[agent_id]['montant_dimanche'] += detail['montant_dimanche']
             agent_map[agent_id]['montant_ferie'] += detail['montant_ferie']
+            agent_map[agent_id]['montant_overtime'] += detail.get('montant_overtime', 0)
             agent_map[agent_id]['jours_majoration'].extend(detail['jours_majoration'])
             agent_map[agent_id]['chantiers'].add(detail['chantier_nom'])
     
     agents_data = []
     
+    # print(f"🔍 TRAITEMENT DE {agents.count()} AGENTS (agents non-journaliers)")
+    
     for agent in agents:
+        # print(f"🔍 === TRAITEMENT AGENT: {agent.name} {agent.surname} ===")
+        
         agent_data = agent_map.get(agent.id, {
             'heures_normal': 0,
             'heures_samedi': 0,
             'heures_dimanche': 0,
             'heures_ferie': 0,
+            'heures_overtime': 0,
             'montant_normal': 0,
             'montant_samedi': 0,
             'montant_dimanche': 0,
             'montant_ferie': 0,
+            'montant_overtime': 0,
             'jours_majoration': [],
             'chantiers': set()
         })
+        
+        # Agent data loaded successfully
         
         # Regrouper les jours majorés par date et type
         overtime_grouped = {}
@@ -8641,8 +8769,62 @@ def preview_monthly_agents_report(request):
         
         # Calculer les totaux
         total_normal_hours = agent_data['heures_normal']
-        total_overtime_hours = agent_data['heures_samedi'] + agent_data['heures_dimanche'] + agent_data['heures_ferie']
-        total_hours = total_normal_hours + total_overtime_hours
+        total_samedi_hours = agent_data['heures_samedi']
+        total_dimanche_hours = agent_data['heures_dimanche']
+        total_ferie_hours = agent_data['heures_ferie']
+        total_overtime_hours = agent_data['heures_overtime']
+        total_hours = total_normal_hours + total_samedi_hours + total_dimanche_hours + total_ferie_hours + total_overtime_hours
+        
+        # UTILISER LES MÊMES DONNÉES QUE LaborCostsSummary.js
+        # Les details_majoration viennent de schedule_data (via schedule_monthly_summary)
+        details_majoration = []
+        
+        # Convertir les jours_majoration de l'agent pour le template PDF
+        for i, jour in enumerate(agent_data['jours_majoration']):
+            try:
+                # Conversion de date pour le template
+                date_str = jour['date']
+                if isinstance(date_str, str):
+                    # Essayer plusieurs formats
+                    try:
+                        if '/' in date_str:
+                            parts = date_str.split('/')
+                            if len(parts) == 3:
+                                detail_date = date(int(parts[2]), int(parts[1]), int(parts[0]))
+                        else:
+                            detail_date = date.fromisoformat(date_str)
+                    except Exception as e:
+                        continue
+                else:
+                    detail_date = date_str
+                
+                # Vérifier que c'est le bon mois
+                if detail_date.year == year and detail_date.month == month:
+                    details_majoration.append({
+                        'date': jour['date'],
+                        'jour': jour.get('jour', ''),
+                        'type': jour.get('type', ''),
+                        'hours': jour.get('hours', 0),
+                        'overtime_hours': jour.get('overtime_hours', 0),
+                        'taux': jour.get('taux', '')
+                    })
+            except Exception as e:
+                continue
+        
+        # Trier par date
+        def parse_date_for_sort(date_str):
+            if isinstance(date_str, date):
+                return date_str
+            if '/' in str(date_str):
+                parts = str(date_str).split('/')
+                if len(parts) == 3:
+                    return date(int(parts[2]), int(parts[1]), int(parts[0]))
+            try:
+                return date.fromisoformat(str(date_str))
+            except:
+                return date.min
+        
+        details_majoration.sort(key=lambda x: parse_date_for_sort(x['date']))
         
         # Récupérer les primes de l'agent pour ce mois
         primes = AgentPrime.objects.filter(
@@ -8668,10 +8850,14 @@ def preview_monthly_agents_report(request):
             'agent': agent,
             'monthly_hours': {
                 'normal_hours': total_normal_hours,
+                'samedi_hours': total_samedi_hours,
+                'dimanche_hours': total_dimanche_hours,
+                'ferie_hours': total_ferie_hours,
                 'overtime_hours': total_overtime_hours,
                 'total_hours': total_hours
             },
             'overtime_details': overtime_details,
+            'details_majoration': details_majoration,
             'events': events_data,
             'primes': primes_data,
             'total_primes': total_primes
@@ -8690,6 +8876,7 @@ def preview_monthly_agents_report(request):
         'end_date': end_date,
         'agents_data': agents_data
     }
+    
     
     return render(request, 'DocumentAgent/monthly_agents_report.html', context)
 

@@ -1,6 +1,7 @@
 import {
   Button,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -162,6 +163,14 @@ const PlanningContainer = () => {
         `❌ Erreur lors de la génération du rapport mensuel: ${error.message}`
       );
     }
+  };
+
+  const handlePreviewMonthlyReport = () => {
+    // Construire l'URL de prévisualisation
+    const previewUrl = `/api/preview-monthly-agents-report/?month=${selectedMonth}&year=${selectedReportYear}`;
+    
+    // Ouvrir dans une nouvelle fenêtre/onglet
+    window.open(previewUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
   };
 
   // Fonction pour ouvrir le modal de sélection des agents
@@ -501,6 +510,21 @@ const PlanningContainer = () => {
           >
             Gérer les Primes
           </Button>
+          <IconButton
+            onClick={handlePreviewMonthlyReport}
+            sx={{
+              backgroundColor: "#f5f5f5",
+              color: "#333",
+              marginLeft: "8px",
+              border: "1px solid #ddd",
+              "&:hover": {
+                backgroundColor: "#e0e0e0",
+              },
+            }}
+            title="Prévisualiser le rapport mensuel"
+          >
+            👀
+          </IconButton>
         </ButtonGroup>
       </ControlsContainer>
 

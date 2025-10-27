@@ -85,6 +85,7 @@ const PlanningHebdoAgent = ({
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
   const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
+  const [overtimeHours, setOvertimeHours] = useState(0); // État pour les heures supplémentaires
 
   // Nouvel état pour le modal de copie
   const [targetAgentId, setTargetAgentId] = useState(null);
@@ -218,6 +219,7 @@ const PlanningHebdoAgent = ({
                 ? {
                     chantierName: getChantierName(item.chantier_id),
                     isSav: item.is_sav || false,
+                    overtimeHours: item.overtime_hours || 0,
                   }
                 : "";
             }
@@ -444,6 +446,7 @@ const PlanningHebdoAgent = ({
     setSelectedCells([]); // Réinitialiser la sélection des cellules
     setLastSelectedCell(null); // Réinitialiser la dernière cellule sélectionnée
     setIsSav(false); // Réinitialiser la checkbox SAV
+    setOvertimeHours(0); // Réinitialiser les heures supplémentaires
   };
 
   // Fonction pour gérer le changement d'agent
@@ -559,6 +562,7 @@ const PlanningHebdoAgent = ({
           hour: cell.hour,
           chantierId: selectedChantier.id,
           isSav: isSav, // Ajouter le paramètre SAV
+          overtimeHours: overtimeHours, // Ajouter les heures supplémentaires
         };
 
         return update;
@@ -580,6 +584,7 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId][cell.hour][cell.day] = {
             chantierName: selectedChantier.chantier_name,
             isSav: isSav,
+            overtimeHours: overtimeHours,
           };
         });
 
@@ -1191,6 +1196,24 @@ const PlanningHebdoAgent = ({
                                           ⚠️
                                         </span>
                                       )}
+                                      {cellData.overtimeHours > 0 && (
+                                        <div
+                                          style={{
+                                            marginTop: "2px",
+                                            fontSize: "12px",
+                                            color: "#ffffff",
+                                            fontWeight: "bold",
+                                            backgroundColor: "#ff5722",
+                                            padding: "2px 6px",
+                                            borderRadius: "4px",
+                                            border: "2px solid #d32f2f",
+                                            textAlign: "center",
+                                            boxShadow: "0 2px 4px rgba(255, 87, 34, 0.3)",
+                                          }}
+                                        >
+                                          ⏰ +{cellData.overtimeHours}h SUP
+                                        </div>
+                                      )}
                                     </span>
                                   );
                                 }
@@ -1230,10 +1253,89 @@ const PlanningHebdoAgent = ({
               ))}
             </select>
 
-            {/* Checkbox SAV Modernisée */}
+            {/* Champ Heures Supplémentaires */}
             <div
               style={{
                 marginTop: "20px",
+                marginBottom: "15px",
+                padding: "16px",
+                backgroundColor: "#f0f8ff",
+                borderRadius: "12px",
+                border: "2px solid #2196f3",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: "#1976d2",
+                  marginBottom: "8px",
+                  gap: "8px",
+                }}
+              >
+                <span style={{ fontSize: "18px" }}>⏰</span>
+                <span>Heures supplémentaires (+25%)</span>
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginTop: "8px",
+                }}
+              >
+                <input
+                  type="number"
+                  min="0"
+                  max="12"
+                  step="0.5"
+                  value={overtimeHours}
+                  onChange={(e) => setOvertimeHours(parseFloat(e.target.value) || 0)}
+                  style={{
+                    width: "80px",
+                    padding: "8px 12px",
+                    border: "2px solid #2196f3",
+                    borderRadius: "8px",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    textAlign: "center",
+                    backgroundColor: "white",
+                    color: "#1976d2",
+                  }}
+                  placeholder="0"
+                />
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "#1976d2",
+                    fontWeight: "500",
+                  }}
+                >
+                  heure(s)
+                </span>
+                {overtimeHours > 0 && (
+                  <div
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      backgroundColor: "#4caf50",
+                      color: "white",
+                    }}
+                  >
+                    +25% = {(overtimeHours * 1.25).toFixed(2)}h payées
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Checkbox SAV Modernisée */}
+            <div
+              style={{
+                marginTop: "10px",
                 marginBottom: "20px",
                 padding: "16px",
                 backgroundColor: isSav ? "#fff3e0" : "#f8f9fa",

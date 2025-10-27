@@ -113,10 +113,12 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
             heures_samedi: 0,
             heures_dimanche: 0,
             heures_ferie: 0,
+            heures_overtime: 0,
             montant_normal: 0,
             montant_samedi: 0,
             montant_dimanche: 0,
             montant_ferie: 0,
+            montant_overtime: 0,
             jours_majoration: [],
             chantiers: new Set(),
           };
@@ -125,13 +127,16 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
         agentMap[detail.agent_id].heures_samedi += detail.heures_samedi;
         agentMap[detail.agent_id].heures_dimanche += detail.heures_dimanche;
         agentMap[detail.agent_id].heures_ferie += detail.heures_ferie;
+        agentMap[detail.agent_id].heures_overtime += detail.heures_overtime || 0;
         agentMap[detail.agent_id].montant_normal += detail.montant_normal;
         agentMap[detail.agent_id].montant_samedi += detail.montant_samedi;
         agentMap[detail.agent_id].montant_dimanche += detail.montant_dimanche;
         agentMap[detail.agent_id].montant_ferie += detail.montant_ferie;
-        agentMap[detail.agent_id].jours_majoration.push(
-          ...(detail.jours_majoration || [])
-        );
+        agentMap[detail.agent_id].montant_overtime += detail.montant_overtime || 0;
+        // Ajouter les jours majoration en préservant les overtime_hours
+        (detail.jours_majoration || []).forEach(jour => {
+          agentMap[detail.agent_id].jours_majoration.push({ ...jour });
+        });
         agentMap[detail.agent_id].chantiers.add(chantier.chantier_nom);
       });
     });
@@ -151,6 +156,10 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
         grouped[key] = { ...j };
       } else {
         grouped[key].hours += j.hours;
+        // Pour les heures supplémentaires, sommer aussi overtime_hours
+        if (j.type === 'overtime' && j.overtime_hours) {
+          grouped[key].overtime_hours = (grouped[key].overtime_hours || 0) + j.overtime_hours;
+        }
       }
     });
     // Trie par date croissante
@@ -277,6 +286,18 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                           </Typography>
                         </Box>
                         <Box>
+                          <Typography fontWeight="bold">
+                            Heures Sup (125%)
+                          </Typography>
+                          <Typography>
+                            {chantier.total_heures_overtime || 0}h
+                          </Typography>
+                          <Typography color="textSecondary">
+                            Montant : {(chantier.total_montant_overtime || 0).toFixed(2)}{" "}
+                            €
+                          </Typography>
+                        </Box>
+                        <Box>
                           <Typography
                             fontWeight="bold"
                             style={{ color: "rgba(27, 120, 188, 1)" }}
@@ -292,7 +313,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             {chantier.total_heures_normal +
                               chantier.total_heures_samedi +
                               chantier.total_heures_dimanche +
-                              chantier.total_heures_ferie}
+                              chantier.total_heures_ferie +
+                              (chantier.total_heures_overtime || 0)}
                             h
                           </Typography>
                           <Typography
@@ -307,7 +329,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                               chantier.total_montant_normal +
                               chantier.total_montant_samedi +
                               chantier.total_montant_dimanche +
-                              chantier.total_montant_ferie
+                              chantier.total_montant_ferie +
+                              (chantier.total_montant_overtime || 0)
                             ).toFixed(2)}{" "}
                             €
                           </Typography>
@@ -328,6 +351,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                           <TableCell>Samedi</TableCell>
                           <TableCell>Dimanche</TableCell>
                           <TableCell>Férié</TableCell>
+                          <TableCell>Heures Sup</TableCell>
                           <TableCell>Total</TableCell>
                           <TableCell>Montant</TableCell>
                         </TableRow>
@@ -362,10 +386,17 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             </TableCell>
                             <TableCell>
                               {formatHeures(
+                                agent.heures_overtime || 0,
+                                agent.agent_type_paiement
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatHeures(
                                 agent.heures_normal +
                                   agent.heures_samedi +
                                   agent.heures_dimanche +
-                                  agent.heures_ferie,
+                                  agent.heures_ferie +
+                                  (agent.heures_overtime || 0),
                                 agent.agent_type_paiement
                               )}
                             </TableCell>
@@ -374,7 +405,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                                 agent.montant_normal +
                                 agent.montant_samedi +
                                 agent.montant_dimanche +
-                                agent.montant_ferie
+                                agent.montant_ferie +
+                                (agent.montant_overtime || 0)
                               ).toFixed(2)}{" "}
                               €
                             </TableCell>
@@ -404,8 +436,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                               <TableCell>
                                 {dayjs(j.date).format("DD/MM/YY")}
                               </TableCell>
-                              <TableCell>{j.type}</TableCell>
-                              <TableCell>{j.hours}</TableCell>
+                              <TableCell>{j.type === 'overtime' ? 'heures supp' : j.type}</TableCell>
+                              <TableCell>{j.type === 'overtime' ? (j.overtime_hours || 0) : j.hours}</TableCell>
                               <TableCell>{j.taux}</TableCell>
                             </TableRow>
                           ))}
@@ -493,6 +525,18 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         </Typography>
                       </Box>
                       <Box>
+                        <Typography fontWeight="bold">Heures Sup (125%)</Typography>
+                        <Typography>
+                          {formatHeures(
+                            agent.heures_overtime || 0,
+                            agent.agent_type_paiement
+                          )}
+                        </Typography>
+                        <Typography color="textSecondary">
+                          Montant : {(agent.montant_overtime || 0).toFixed(2)} €
+                        </Typography>
+                      </Box>
+                      <Box>
                         <Typography
                           fontWeight="bold"
                           style={{ color: "rgba(27, 120, 188, 1)" }}
@@ -509,7 +553,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             agent.heures_normal +
                               agent.heures_samedi +
                               agent.heures_dimanche +
-                              agent.heures_ferie,
+                              agent.heures_ferie +
+                              (agent.heures_overtime || 0),
                             agent.agent_type_paiement
                           )}
                         </Typography>
@@ -525,7 +570,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                             agent.montant_normal +
                             agent.montant_samedi +
                             agent.montant_dimanche +
-                            agent.montant_ferie
+                            agent.montant_ferie +
+                            (agent.montant_overtime || 0)
                           ).toFixed(2)}{" "}
                           €
                         </Typography>
@@ -557,8 +603,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                               <TableCell>
                                 {dayjs(j.date).format("DD/MM/YY")}
                               </TableCell>
-                              <TableCell>{j.type}</TableCell>
-                              <TableCell>{j.hours}</TableCell>
+                              <TableCell>{j.type === 'overtime' ? 'heures supp' : j.type}</TableCell>
+                              <TableCell>{j.type === 'overtime' ? (j.overtime_hours || 0) : j.hours}</TableCell>
                               <TableCell>{j.taux}</TableCell>
                             </TableRow>
                           )
