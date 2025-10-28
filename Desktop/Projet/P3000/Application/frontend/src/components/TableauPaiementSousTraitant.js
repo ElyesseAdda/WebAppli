@@ -162,6 +162,79 @@ const MontantFactureModal = ({ open, onClose, paiement, onSubmit }) => {
   );
 };
 
+const RetenueModal = ({ open, onClose, facture, onSubmit }) => {
+  const [montantRetenue, setMontantRetenue] = useState("");
+
+  useEffect(() => {
+    if (facture) {
+      setMontantRetenue(facture.montant_retenue || "");
+    }
+  }, [facture]);
+
+  const handleSubmit = () => {
+    onSubmit(facture.id, { montantRetenue: parseFloat(montantRetenue) || 0 });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Montant de retenue - Facture {facture?.numero_facture}</DialogTitle>
+      <DialogContent>
+        <Box sx={{ p: 2 }}>
+          {facture && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: "grey.100", borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Facture n° {facture.numero_facture}</strong> -{" "}
+                {facture.mois_annee}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                Montant facturé :{" "}
+                {parseFloat(facture.montant_facture_ht).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                €
+              </Typography>
+              <Typography variant="body2">
+                Montant de retenue actuel :{" "}
+                {(parseFloat(facture.montant_retenue) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                €
+              </Typography>
+            </Box>
+          )}
+
+          <TextField
+            type="number"
+            label="Montant de retenue (€)"
+            value={montantRetenue}
+            onChange={(e) => setMontantRetenue(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            inputProps={{ step: "0.01", min: "0" }}
+            helperText="Montant de retenue à déduire du montant facturé"
+          />
+
+          <Typography variant="body2" color="text.secondary">
+            💡 <strong>Note :</strong> La retenue sera déduite du montant facturé pour le calcul de l'écart.
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={montantRetenue === ""}
+        >
+          Enregistrer la retenue
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const AjouterPaiementModal = ({
   open,
   onClose,
@@ -676,6 +749,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   const [openPaiementModal, setOpenPaiementModal] = useState(false);
   const [openModifierPaiementModal, setOpenModifierPaiementModal] =
     useState(false);
+  const [openRetenueModal, setOpenRetenueModal] = useState(false);
+  const [selectedFactureRetenue, setSelectedFactureRetenue] = useState(null);
   const [montantRestant, setMontantRestant] = useState(0);
 
   // Chargement contrats et factures (Promise.all)
@@ -803,15 +878,42 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     }
   };
 
+  // Handler mise à jour retenue
+  const handleMettreAJourRetenue = async (factureId, { montantRetenue }) => {
+    try {
+      await axios.patch(`/api/factures-sous-traitant/${factureId}/`, {
+        montant_retenue: montantRetenue,
+      });
+
+      // Mettre à jour la facture avec la nouvelle retenue
+      setFactures((prev) =>
+        prev.map((f) =>
+          f.id === factureId
+            ? { ...f, montant_retenue: montantRetenue }
+            : f
+        )
+      );
+    } catch (error) {
+      alert("Erreur lors de la mise à jour de la retenue.");
+      if (error.response) {
+        console.error("Erreur backend:", error.response.data);
+      }
+    }
+  };
+
   // Fonctions utilitaires pour les calculs
   const calculerEcartFacture = (facture) => {
     const montantFacture = parseFloat(facture.montant_facture_ht) || 0;
+    const montantRetenue = parseFloat(facture.montant_retenue) || 0;
     const montantTotalPaye =
       facture.paiements?.reduce(
         (sum, p) => sum + (parseFloat(p.montant_paye) || 0),
         0
       ) || 0;
-    return montantTotalPaye - montantFacture;
+    
+    // L'écart est calculé comme : montant payé - (montant facturé - retenue)
+    const montantNetFacture = montantFacture - montantRetenue;
+    return montantTotalPaye - montantNetFacture;
   };
 
   const calculerJoursRetard = (datePrevue, dateReelle) => {
@@ -918,12 +1020,22 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     return sum + montantFacturePaye;
   }, 0);
 
-  const montantRestantCalcul = montantTotalMarche - montantTotalPaye;
-
   // Calculer le total des montants facturés
   const totalMontantFacture = factures.reduce((sum, facture) => {
     return sum + (parseFloat(facture.montant_facture_ht) || 0);
   }, 0);
+
+  // Calculer le total des retenues
+  const totalRetenues = factures.reduce((sum, facture) => {
+    return sum + (parseFloat(facture.montant_retenue) || 0);
+  }, 0);
+
+  // Calculer le montant net (facturé - retenues)
+  const montantNetFacture = totalMontantFacture - totalRetenues;
+
+  // Le montant restant doit tenir compte des retenues
+  // Montant restant = Montant du marché - Montant payé - Total des retenues
+  const montantRestantCalcul = montantTotalMarche - montantTotalPaye - totalRetenues;
 
   // Créer les lignes à afficher dans le tableau (factures + paiements)
   const lignesTableau = [];
@@ -1014,6 +1126,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                   Facture n°
                 </TableCell>
                 <TableCell sx={{ color: "white" }}>Montant facturé</TableCell>
+                <TableCell sx={{ color: "white" }}>Retenue</TableCell>
                 <TableCell sx={{ color: "white" }}>Date de réception</TableCell>
                 <TableCell sx={{ color: "white" }}>Date de paiement</TableCell>
                 <TableCell sx={{ color: "white" }}>Montant payé</TableCell>
@@ -1061,6 +1174,47 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                         })}{" "}
                         €
                       </Typography>
+                    ) : (
+                      ""
+                    )}
+                  </TableCell>
+
+                  {/* Retenue - affiché seulement sur la première ligne de la facture */}
+                  <TableCell>
+                    {ligne.isFirstForFacture ? (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography
+                          sx={{ 
+                            color: "rgb(255, 152, 0)", 
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            "&:hover": {
+                              textDecoration: "underline",
+                            },
+                          }}
+                          onClick={() => {
+                            setSelectedFactureRetenue(ligne.facture);
+                            setOpenRetenueModal(true);
+                          }}
+                        >
+                          {(parseFloat(ligne.facture.montant_retenue) || 0).toLocaleString("fr-FR", {
+                            minimumFractionDigits: 2,
+                          })}{" "}
+                          €
+                        </Typography>
+                        <Tooltip title="Modifier la retenue">
+                          <IconButton
+                            size="small"
+                            color="warning"
+                            onClick={() => {
+                              setSelectedFactureRetenue(ligne.facture);
+                              setOpenRetenueModal(true);
+                            }}
+                          >
+                            <PaymentIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     ) : (
                       ""
                     )}
@@ -1256,6 +1410,20 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                     €
                   </Typography>
                 </TableCell>
+                <TableCell sx={{ textAlign: "right", fontWeight: "bold" }}>
+                  <Typography
+                    sx={{
+                      color: "rgb(255, 152, 0)",
+                      fontWeight: 700,
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {factures.reduce((sum, f) => sum + (parseFloat(f.montant_retenue) || 0), 0).toLocaleString("fr-FR", {
+                      minimumFractionDigits: 2,
+                    })}{" "}
+                    €
+                  </Typography>
+                </TableCell>
                 <TableCell sx={{ textAlign: "center", fontWeight: "bold" }}>
                   -
                 </TableCell>
@@ -1281,7 +1449,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
 
               {/* Ligne pour ajouter une nouvelle facture */}
               <TableRow>
-                <TableCell colSpan={10} align="center">
+                <TableCell colSpan={11} align="center">
                   <Button
                     variant="outlined"
                     color="primary"
@@ -1313,6 +1481,27 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           <Typography sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)" }}>
             Montant total du marché :{" "}
             {montantTotalMarche.toLocaleString("fr-FR", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            €
+          </Typography>
+          <Typography sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)" }}>
+            Montant total facturé :{" "}
+            {totalMontantFacture.toLocaleString("fr-FR", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            €
+          </Typography>
+          <Typography sx={{ fontWeight: 700, color: "rgb(255, 152, 0)" }}>
+            Total des retenues :{" "}
+            {totalRetenues.toLocaleString("fr-FR", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            €
+          </Typography>
+          <Typography sx={{ fontWeight: 700, color: "rgb(156, 39, 176)" }}>
+            Montant net facturé :{" "}
+            {montantNetFacture.toLocaleString("fr-FR", {
               minimumFractionDigits: 2,
             })}{" "}
             €
@@ -1369,6 +1558,12 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         onClose={() => setOpenPaiementModal(false)}
         facture={selectedFacture}
         onSubmit={handleAjouterPaiement}
+      />
+      <RetenueModal
+        open={openRetenueModal}
+        onClose={() => setOpenRetenueModal(false)}
+        facture={selectedFactureRetenue}
+        onSubmit={handleMettreAJourRetenue}
       />
     </Box>
   );

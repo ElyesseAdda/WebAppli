@@ -974,6 +974,7 @@ class FactureSousTraitantSerializer(serializers.ModelSerializer):
             'annee',
             'numero_facture',
             'montant_facture_ht',
+            'montant_retenue',
             'date_reception',
             'delai_paiement',
             'date_paiement_prevue',

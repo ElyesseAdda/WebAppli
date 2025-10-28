@@ -1971,6 +1971,7 @@ class FactureSousTraitant(models.Model):
     annee = models.IntegerField()  # Année de la facture
     numero_facture = models.CharField(max_length=50)  # Numéro de facture (auto-incrémenté ou manuel)
     montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2)  # Montant facturé
+    montant_retenue = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # Montant de retenue
     
     # Gestion des échéances
     date_reception = models.DateField()  # Date de réception de la facture

@@ -10,6 +10,7 @@ import {
   DialogTitle,
   FormControl,
   IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Paper,
@@ -20,6 +21,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -42,10 +44,14 @@ import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [sousTraitants, setSousTraitants] = useState([]);
+  const [sousTraitantsAvecContrat, setSousTraitantsAvecContrat] = useState([]);
+  const [sousTraitantsSansContrat, setSousTraitantsSansContrat] = useState([]);
   const [selectedSousTraitant, setSelectedSousTraitant] = useState(null);
   const [showSousTraitantForm, setShowSousTraitantForm] = useState(false);
   const [showContratForm, setShowContratForm] = useState(false);
   const [showAvenantForm, setShowAvenantForm] = useState(false);
+  const [showSelectSousTraitant, setShowSelectSousTraitant] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [chantier, setChantier] = useState(null);
   const [typeFilter, setTypeFilter] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
@@ -89,20 +95,33 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       }
       const contratsData = await contratsResponse.json();
 
-      // Associer uniquement les contrats spécifiques au chantier
-      const sousTraitantsWithContrats = sousTraitantsData.map(
-        (sousTraitant) => {
-          const contrat = contratsData.find(
-            (c) => c.sous_traitant === sousTraitant.id
-          );
-          return {
-            ...sousTraitant,
-            contrat: contrat || null,
-          };
-        }
-      );
+      // Séparer les sous-traitants avec et sans contrat pour ce chantier
+      const sousTraitantsAvecContrat = [];
+      const sousTraitantsSansContrat = [];
 
-      setSousTraitants(sousTraitantsWithContrats);
+      sousTraitantsData.forEach((sousTraitant) => {
+        const contrat = contratsData.find(
+          (c) => c.sous_traitant === sousTraitant.id
+        );
+        
+        if (contrat) {
+          // Sous-traitant avec contrat pour ce chantier
+          sousTraitantsAvecContrat.push({
+            ...sousTraitant,
+            contrat: contrat,
+          });
+        } else {
+          // Sous-traitant sans contrat pour ce chantier
+          sousTraitantsSansContrat.push({
+            ...sousTraitant,
+            contrat: null,
+          });
+        }
+      });
+
+      setSousTraitantsAvecContrat(sousTraitantsAvecContrat);
+      setSousTraitantsSansContrat(sousTraitantsSansContrat);
+      setSousTraitants(sousTraitantsAvecContrat); // Pour la compatibilité avec le reste du code
     } catch (error) {
       console.error(
         "Erreur lors de la récupération des sous-traitants:",
@@ -124,6 +143,47 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const handleCreateContrat = (sousTraitant) => {
     setSelectedSousTraitant(sousTraitant);
     setShowContratForm(true);
+  };
+
+  const handleSelectExistingSousTraitant = () => {
+    setSearchTerm(""); // Réinitialiser la recherche
+    setShowSelectSousTraitant(true);
+  };
+
+  const handleSelectSousTraitantForContrat = (sousTraitant) => {
+    setSelectedSousTraitant(sousTraitant);
+    setShowSelectSousTraitant(false);
+    setShowContratForm(true);
+  };
+
+  // Fonction de filtrage des sous-traitants par recherche
+  const getFilteredSousTraitantsSansContrat = () => {
+    return sousTraitantsSansContrat.filter((sousTraitant) => {
+      const matchesType = !typeFilter || sousTraitant.type === typeFilter;
+      const matchesSearch = !searchTerm || 
+        sousTraitant.entreprise.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sousTraitant.numero_rcs.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sousTraitant.ville.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (sousTraitant.representant && sousTraitant.representant.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      return matchesType && matchesSearch;
+    });
+  };
+
+  // Fonction pour mettre en évidence les termes de recherche
+  const highlightSearchTerm = (text, searchTerm) => {
+    if (!searchTerm || !text) return text;
+    
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <span key={index} style={{ backgroundColor: '#ffeb3b', fontWeight: 'bold' }}>
+          {part}
+        </span>
+      ) : part
+    );
   };
 
   const handleCreateAvenant = (sousTraitant) => {
@@ -248,17 +308,37 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
             alignItems="center"
           >
             <Typography variant="h6">Gestion des sous-traitants</Typography>
-            <Button
-              startIcon={<FaPlus />}
-              variant="contained"
-              color="primary"
-              onClick={handleCreateSousTraitant}
-            >
-              Nouveau sous-traitant
-            </Button>
+            <Box display="flex" gap={1}>
+              <Button
+                startIcon={<FaPlus />}
+                variant="outlined"
+                color="primary"
+                onClick={handleSelectExistingSousTraitant}
+              >
+                Sélectionner un sous-traitant existant
+              </Button>
+              <Button
+                startIcon={<FaPlus />}
+                variant="contained"
+                color="primary"
+                onClick={handleCreateSousTraitant}
+              >
+                Nouveau sous-traitant
+              </Button>
+            </Box>
           </Box>
         </DialogTitle>
         <DialogContent>
+          {/* Message informatif */}
+          <Box sx={{ mb: 2, p: 2, backgroundColor: "rgba(25, 118, 210, 0.04)", borderRadius: 1 }}>
+            <Typography variant="body2" color="primary" sx={{ fontWeight: 500 }}>
+              📋 Affichage des sous-traitants avec contrat pour ce chantier uniquement
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Pour ajouter un sous-traitant existant, utilisez le bouton "Sélectionner un sous-traitant existant"
+            </Typography>
+          </Box>
+
           {/* Filtre par type */}
           <Box sx={{ mb: 2 }}>
             <FormControl fullWidth>
@@ -279,11 +359,36 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
             </FormControl>
           </Box>
 
-          {sousTraitants
-            .filter(
-              (sousTraitant) => !typeFilter || sousTraitant.type === typeFilter
-            )
-            .map((sousTraitant) => (
+          {sousTraitantsAvecContrat.length === 0 ? (
+            <Box sx={{ textAlign: "center", py: 4 }}>
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                Aucun sous-traitant avec contrat
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Ce chantier n'a pas encore de sous-traitants associés.
+              </Typography>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleSelectExistingSousTraitant}
+                sx={{ mr: 1 }}
+              >
+                Sélectionner un sous-traitant existant
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleCreateSousTraitant}
+              >
+                Créer un nouveau sous-traitant
+              </Button>
+            </Box>
+          ) : (
+            sousTraitantsAvecContrat
+              .filter(
+                (sousTraitant) => !typeFilter || sousTraitant.type === typeFilter
+              )
+              .map((sousTraitant) => (
               <Accordion key={sousTraitant.id}>
                 <AccordionSummary
                   expandIcon={<FaChevronDown />}
@@ -593,7 +698,8 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                   )}
                 </AccordionDetails>
               </Accordion>
-            ))}
+            ))
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleModalClose}>Fermer</Button>
@@ -622,6 +728,162 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
         chantier={chantier}
         onSave={handleAvenantSave}
       />
+
+      {/* Modal de sélection des sous-traitants existants */}
+      <Dialog 
+        open={showSelectSousTraitant} 
+        onClose={() => setShowSelectSousTraitant(false)} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>Sélectionner un sous-traitant existant</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Choisissez un sous-traitant existant pour créer un contrat avec ce chantier.
+          </Typography>
+          
+          {/* Barre de recherche */}
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              fullWidth
+              label="Rechercher un sous-traitant"
+              placeholder="Nom de l'entreprise, RCS, ville, représentant..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    🔍
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '&:hover fieldset': {
+                    borderColor: '#1976d2',
+                  },
+                },
+              }}
+            />
+          </Box>
+          
+          {/* Filtre par type pour la sélection */}
+          <Box sx={{ mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Filtrer par type</InputLabel>
+              <Select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                label="Filtrer par type"
+              >
+                <MenuItem value="">
+                  <em>Tous les types</em>
+                </MenuItem>
+                <MenuItem value="NETTOYAGE">Nettoyage</MenuItem>
+                <MenuItem value="BTP">BTP</MenuItem>
+                <MenuItem value="TCE">TCE</MenuItem>
+                <MenuItem value="AUTRE">Autre</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Compteur de résultats */}
+          {getFilteredSousTraitantsSansContrat().length > 0 && (
+            <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="body2" color="text.secondary">
+                {getFilteredSousTraitantsSansContrat().length} sous-traitant{getFilteredSousTraitantsSansContrat().length > 1 ? 's' : ''} trouvé{getFilteredSousTraitantsSansContrat().length > 1 ? 's' : ''}
+                {searchTerm && (
+                  <span> pour "{searchTerm}"</span>
+                )}
+              </Typography>
+              {(searchTerm || typeFilter) && (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setTypeFilter("");
+                  }}
+                  sx={{ textTransform: "none" }}
+                >
+                  Effacer les filtres
+                </Button>
+              )}
+            </Box>
+          )}
+
+          {/* Liste des sous-traitants sans contrat */}
+          {getFilteredSousTraitantsSansContrat().map((sousTraitant) => (
+              <Paper 
+                key={sousTraitant.id} 
+                sx={{ 
+                  p: 2, 
+                  mb: 1, 
+                  cursor: "pointer",
+                  "&:hover": {
+                    backgroundColor: "rgba(25, 118, 210, 0.04)",
+                  },
+                }}
+                onClick={() => handleSelectSousTraitantForContrat(sousTraitant)}
+              >
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {highlightSearchTerm(sousTraitant.entreprise, searchTerm)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {highlightSearchTerm(sousTraitant.numero_rcs, searchTerm)} • {highlightSearchTerm(sousTraitant.ville, searchTerm)}
+                    </Typography>
+                    {sousTraitant.representant && (
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                        Représentant: {highlightSearchTerm(sousTraitant.representant, searchTerm)}
+                      </Typography>
+                    )}
+                    {sousTraitant.type && (
+                      <Typography variant="caption" color="primary">
+                        Type: {sousTraitant.type}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectSousTraitantForContrat(sousTraitant);
+                    }}
+                  >
+                    Sélectionner
+                  </Button>
+                </Box>
+              </Paper>
+            ))}
+          
+          {getFilteredSousTraitantsSansContrat().length === 0 && (
+            <Box sx={{ textAlign: "center", py: 4 }}>
+              {sousTraitantsSansContrat.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Aucun sous-traitant disponible sans contrat pour ce chantier.
+                </Typography>
+              ) : (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Aucun sous-traitant trouvé avec les critères de recherche.
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Essayez de modifier votre recherche ou de changer le filtre de type.
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowSelectSousTraitant(false)}>
+            Annuler
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
