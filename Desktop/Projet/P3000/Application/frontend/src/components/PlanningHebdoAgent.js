@@ -135,9 +135,8 @@ const PlanningHebdoAgent = ({
     try {
       const response = await axios.get("/api/agent/");
       setAgents(response.data);
-      if (response.data.length > 0) {
-        setSelectedAgentId(response.data[0].id);
-      }
+      // Ne pas sélectionner automatiquement un agent ici
+      // La sélection est gérée par le composant parent (PlanningContainer)
     } catch (error) {
       console.error("Erreur lors de la récupération des agents :", error);
     } finally {

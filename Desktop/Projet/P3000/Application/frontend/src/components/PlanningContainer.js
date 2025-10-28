@@ -53,6 +53,7 @@ const PlanningContainer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showCostsSummary, setShowCostsSummary] = useState(false);
   const [agents, setAgents] = useState([]);
+  const [filteredAgents, setFilteredAgents] = useState([]);
   const [isLaborCostsSummaryOpen, setIsLaborCostsSummaryOpen] = useState(false);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [targetAgentId, setTargetAgentId] = useState(null);
@@ -69,13 +70,78 @@ const PlanningContainer = () => {
   // État pour le modal de gestion des primes
   const [isPrimeModalOpen, setIsPrimeModalOpen] = useState(false);
 
+  // Fonction utilitaire pour convertir semaine/année en date de début de semaine
+  const getWeekStartDate = (week, year) => {
+    return dayjs().year(year).isoWeek(week).startOf('isoWeek').toDate();
+  };
+
+  // Fonction pour filtrer les agents selon la période (logique précise jour par jour)
+  const getFilteredAgents = (agentsList, week, year) => {
+    if (!week || !year) {
+      return agentsList.filter(agent => agent.is_active);
+    }
+    
+    const weekStartDate = getWeekStartDate(week, year);
+    
+    return agentsList.filter(agent => {
+      // Agent actif OU désactivé après le début de la semaine
+      return agent.is_active || 
+             (agent.date_desactivation && new Date(agent.date_desactivation) > weekStartDate);
+    });
+  };
+
+  // Fonction pour vérifier si un agent est visible pour la période actuelle
+  const isAgentVisibleForPeriod = (agent, week, year) => {
+    if (!week || !year) {
+      return agent.is_active;
+    }
+    
+    const weekStartDate = getWeekStartDate(week, year);
+    return agent.is_active || 
+           (agent.date_desactivation && new Date(agent.date_desactivation) > weekStartDate);
+  };
+
+  // Fonction pour filtrer les agents selon le mois/année (pour les rapports mensuels)
+  const getFilteredAgentsForMonth = (agentsList, month, year) => {
+    if (!month || !year) {
+      return agentsList.filter(agent => agent.is_active);
+    }
+    
+    const monthStartDate = dayjs().year(year).month(month - 1).startOf('month').toDate();
+    
+    return agentsList.filter(agent => {
+      // Agent actif OU désactivé après le début du mois
+      return agent.is_active || 
+             (agent.date_desactivation && new Date(agent.date_desactivation) > monthStartDate);
+    });
+  };
+
   useEffect(() => {
     const fetchAgents = async () => {
       try {
-        const response = await axios.get("/api/agent/");
+        // Récupérer tous les agents (actifs et inactifs) pour la logique temporelle
+        const response = await axios.get("/api/agent/?include_inactive=true");
         setAgents(response.data);
-        if (response.data.length > 0) {
-          setSelectedAgentId(response.data[0].id); // Sélectionner le premier agent par défaut
+        
+        // Filtrer selon la période actuelle
+        const filtered = getFilteredAgents(response.data, selectedWeek, selectedYear);
+        setFilteredAgents(filtered);
+        
+        if (filtered.length > 0) {
+          // Si aucun agent n'est sélectionné, sélectionner le premier agent disponible
+          if (!selectedAgentId) {
+            setSelectedAgentId(filtered[0].id);
+          } else {
+            // Vérifier si l'agent actuellement sélectionné est toujours visible
+            const currentAgentStillVisible = filtered.some(agent => agent.id === selectedAgentId);
+            if (!currentAgentStillVisible) {
+              // Si l'agent sélectionné n'est plus visible, garder la sélection
+              // (il sera affiché avec un message informatif)
+            }
+          }
+        } else {
+          // Si aucun agent n'est visible pour cette période, garder la sélection actuelle
+          // (l'agent sera affiché avec un message informatif)
         }
       } catch (error) {
         console.error("Erreur lors de la récupération des agents :", error);
@@ -83,7 +149,7 @@ const PlanningContainer = () => {
     };
 
     fetchAgents();
-  }, []);
+  }, [selectedWeek, selectedYear]);
 
   const handleSelectionChange = (agentId, week, year) => {
     setSelectedAgentId(agentId);
@@ -128,6 +194,10 @@ const PlanningContainer = () => {
       console.log(
         `🚀 NOUVEAU: Génération du rapport mensuel agents ${selectedMonth}/${selectedReportYear} vers le Drive...`
       );
+
+      // Filtrer les agents pour le mois sélectionné
+      const agentsForReport = getFilteredAgentsForMonth(agents, selectedMonth, selectedReportYear);
+      console.log(`Agents inclus dans le rapport: ${agentsForReport.length}`);
 
       // Utiliser le nouveau système universel
       await generatePDFDrive(
@@ -367,11 +437,30 @@ const PlanningContainer = () => {
               label="Agent"
             >
               <MenuItem value="">--Sélectionner un agent--</MenuItem>
-              {agents.map((agent) => (
-                <MenuItem key={agent.id} value={agent.id}>
-                  {agent.name} {agent.surname}
-                </MenuItem>
-              ))}
+              {agents
+                .filter((agent) => {
+                  // Afficher seulement les agents visibles pour cette période
+                  return isAgentVisibleForPeriod(agent, selectedWeek, selectedYear);
+                })
+                .map((agent) => {
+                  const isActive = agent.is_active;
+                  return (
+                    <MenuItem 
+                      key={agent.id} 
+                      value={agent.id}
+                      sx={{
+                        color: isActive ? 'inherit' : 'text.secondary',
+                        fontStyle: isActive ? 'normal' : 'italic'
+                      }}
+                    >
+                      {isActive ? (
+                        `${agent.surname} ${agent.name}`
+                      ) : (
+                        `${agent.surname} ${agent.name} (Retiré de l'effectif le ${agent.date_desactivation ? new Date(agent.date_desactivation).toLocaleDateString('fr-FR') : 'N/A'})`
+                      )}
+                    </MenuItem>
+                  );
+                })}
             </Select>
           </StyledFormControl>
 
@@ -528,6 +617,87 @@ const PlanningContainer = () => {
         </ButtonGroup>
       </ControlsContainer>
 
+      {selectedAgentId ? (
+        (() => {
+          const selectedAgent = agents.find(agent => agent.id === selectedAgentId);
+          const isAgentVisible = selectedAgent ? isAgentVisibleForPeriod(selectedAgent, selectedWeek, selectedYear) : false;
+          
+          if (!isAgentVisible && selectedAgent) {
+            // Trouver la dernière semaine où l'agent était visible
+            const findLastVisibleWeek = () => {
+              if (!selectedAgent.date_desactivation) return null;
+              
+              const desactivationDate = dayjs(selectedAgent.date_desactivation);
+              let currentDate = dayjs().year(selectedYear).isoWeek(selectedWeek);
+              
+              // Chercher en remontant jusqu'à 10 semaines en arrière
+              for (let i = 0; i < 10; i++) {
+                const weekStartDate = currentDate.startOf('isoWeek').toDate();
+                if (desactivationDate.isAfter(weekStartDate)) {
+                  return {
+                    week: currentDate.isoWeek(),
+                    year: currentDate.year()
+                  };
+                }
+                currentDate = currentDate.subtract(1, 'week');
+              }
+              return null;
+            };
+            
+            const lastVisibleWeek = findLastVisibleWeek();
+            
+            const handleGoToLastVisibleWeek = () => {
+              if (lastVisibleWeek) {
+                setSelectedWeek(lastVisibleWeek.week);
+                setSelectedYear(lastVisibleWeek.year);
+              }
+            };
+            
+            return (
+              <div style={{
+                padding: '40px',
+                textAlign: 'center',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '8px',
+                border: '2px dashed #ccc',
+                margin: '20px 0'
+              }}>
+                <h3 style={{ color: '#666', marginBottom: '16px' }}>
+                  Agent non disponible pour cette période
+                </h3>
+                <p style={{ color: '#888', fontSize: '16px', marginBottom: '8px' }}>
+                  <strong>{selectedAgent.surname} {selectedAgent.name}</strong>
+                </p>
+                <p style={{ color: '#888', fontSize: '14px' }}>
+                  Retiré de l'effectif le {selectedAgent.date_desactivation ? new Date(selectedAgent.date_desactivation).toLocaleDateString('fr-FR') : 'N/A'}
+                </p>
+                <p style={{ color: '#999', fontSize: '12px', marginTop: '16px', marginBottom: '24px' }}>
+                  Cet agent n'était plus dans l'effectif au début de la semaine {selectedWeek} de {selectedYear}
+                </p>
+                {lastVisibleWeek ? (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleGoToLastVisibleWeek}
+                    sx={{
+                      backgroundColor: '#1976d2',
+                      '&:hover': {
+                        backgroundColor: '#1565c0',
+                      },
+                    }}
+                  >
+                    ← Retour à la semaine {lastVisibleWeek.week} de {lastVisibleWeek.year}
+                  </Button>
+                ) : (
+                  <p style={{ color: '#999', fontSize: '12px', fontStyle: 'italic' }}>
+                    Aucune semaine précédente trouvée où cet agent était visible
+                  </p>
+                )}
+              </div>
+            );
+          }
+          
+          return (
       <PlanningHebdoAgent
         schedule={schedule}
         selectedAgentId={selectedAgentId}
@@ -541,6 +711,22 @@ const PlanningContainer = () => {
         onSelectionChange={handleSelectionChange}
         onGeneratePDFClick={handleOpenAgentSelection}
       />
+          );
+        })()
+      ) : (
+        <div style={{
+          padding: '40px',
+          textAlign: 'center',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '8px',
+          border: '2px dashed #ccc',
+          margin: '20px 0'
+        }}>
+          <h3 style={{ color: '#666' }}>
+            Sélectionnez un agent pour voir son planning
+          </h3>
+        </div>
+      )}
 
       <LaborCostsSummary
         schedule={schedule}
@@ -569,11 +755,11 @@ const PlanningContainer = () => {
               style={{ width: "100%", padding: "8px", marginTop: "10px" }}
             >
               <option value="">--Sélectionner un agent cible--</option>
-              {agents
+              {filteredAgents
                 .filter((agent) => agent.id !== selectedAgentId)
                 .map((agent) => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.name} {agent.surname}
+                    {agent.surname} {agent.name}
                   </option>
                 ))}
             </select>
@@ -650,7 +836,7 @@ const PlanningContainer = () => {
         isOpen={isAgentSelectionModalOpen}
         onClose={() => setIsAgentSelectionModalOpen(false)}
         onConfirm={handleConfirmAgentSelection}
-        agents={agents}
+        agents={filteredAgents}
         selectedAgents={selectedAgentsForPDF}
         setSelectedAgents={setSelectedAgentsForPDF}
         week={selectedWeek}

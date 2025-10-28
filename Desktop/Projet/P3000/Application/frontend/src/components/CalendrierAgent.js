@@ -148,7 +148,7 @@ const congeSubtypes = [
   { value: "paternite", label: "Paternité" },
 ];
 
-const CalendrierAgent = ({ agents }) => {
+const CalendrierAgent = ({ agents, onPeriodChange }) => {
   const [events, setEvents] = useState([]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -589,6 +589,14 @@ const CalendrierAgent = ({ agents }) => {
         eventClick={handleEventClick}
         resourceAreaWidth="300px"
         height="auto"
+        datesSet={(dateInfo) => {
+          // Notifier le parent quand la période change
+          if (onPeriodChange) {
+            const startDate = dayjs(dateInfo.start);
+            const endDate = dayjs(dateInfo.end);
+            onPeriodChange(startDate, endDate);
+          }
+        }}
         resourceLabelContent={(arg) => (
           <div
             style={{ position: "relative", width: "100%", height: "100%" }}

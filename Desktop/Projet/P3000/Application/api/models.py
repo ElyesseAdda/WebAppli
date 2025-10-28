@@ -340,6 +340,10 @@ class Agent(models.Model):
     heure_pause_debut = models.TimeField(null=True, blank=True)  # Heure de début de pause
     heure_pause_fin = models.TimeField(null=True, blank=True)  # Heure de fin de pause
     jours_travail = models.CharField(max_length=255, null=True, blank=True)  # Jours de travail sous forme de liste ou chaîne
+    
+    # Champs pour la gestion de l'effectif
+    is_active = models.BooleanField(default=True, help_text="Agent actif dans l'effectif")
+    date_desactivation = models.DateField(null=True, blank=True, help_text="Date de retrait de l'effectif")
 
     def __str__(self):
         return f'{self.name} {self.surname}'

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.utils.text import slugify
+from datetime import datetime, timedelta
 import os
 
 from .models import Document, Societe, Chantier
@@ -1459,6 +1460,144 @@ class AgentViewSet(viewsets.ModelViewSet):
     serializer_class = AgentSerializer
     permission_classes = [AllowAny]
 
+    def get_queryset(self):
+        """Filtrer les agents selon leur statut d'effectif et la période"""
+        queryset = Agent.objects.all()
+        
+        # Paramètres pour la logique temporelle
+        week = self.request.query_params.get('week')
+        year = self.request.query_params.get('year')
+        month = self.request.query_params.get('month')
+        year_param = self.request.query_params.get('year')
+        
+        # Paramètre pour récupérer tous les agents (actifs et inactifs)
+        # Utile pour la logique temporelle côté frontend
+        include_inactive = self.request.query_params.get('include_inactive', 'false').lower() == 'true'
+        
+        # Si on demande tous les agents (actifs et inactifs), les retourner sans filtre
+        if include_inactive:
+            return queryset
+        
+        # Si on a des paramètres de période, appliquer la logique temporelle
+        if week and year:
+            from datetime import datetime
+            import calendar
+            
+            # Convertir semaine/année en date de début de semaine
+            try:
+                # Utiliser dayjs-like logic pour calculer le début de semaine
+                year_int = int(year)
+                week_int = int(week)
+                
+                # Calculer le premier jour de l'année
+                jan_1 = datetime(year_int, 1, 1)
+                # Trouver le premier lundi de l'année
+                first_monday = jan_1 + timedelta(days=(7 - jan_1.weekday()) % 7)
+                # Calculer le début de la semaine demandée
+                week_start = first_monday + timedelta(weeks=week_int - 1)
+                
+                # Filtrer : agent actif OU désactivé après le début de la semaine
+                queryset = queryset.filter(
+                    Q(is_active=True) | 
+                    Q(date_desactivation__gt=week_start)
+                )
+            except (ValueError, TypeError):
+                # En cas d'erreur de conversion, retourner tous les agents actifs
+                queryset = queryset.filter(is_active=True)
+                
+        elif month and year_param:
+            # Pour les rapports mensuels
+            try:
+                year_int = int(year_param)
+                month_int = int(month)
+                month_start = datetime(year_int, month_int, 1)
+                
+                # Filtrer : agent actif OU désactivé après le début du mois
+                queryset = queryset.filter(
+                    Q(is_active=True) | 
+                    Q(date_desactivation__gt=month_start)
+                )
+            except (ValueError, TypeError):
+                queryset = queryset.filter(is_active=True)
+        else:
+            # Par défaut, ne montrer que les agents actifs
+            queryset = queryset.filter(is_active=True)
+            
+        return queryset
+
+    @action(detail=True, methods=['post'])
+    def desactiver(self, request, pk=None):
+        """Désactiver un agent (le retirer de l'effectif)"""
+        agent = self.get_object()
+        date_desactivation = request.data.get('date_desactivation')
+        
+        if not date_desactivation:
+            return Response(
+                {'error': 'La date de désactivation est requise'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            agent.is_active = False
+            agent.date_desactivation = date_desactivation
+            agent.save()
+            
+            return Response({
+                'message': f'Agent {agent.name} {agent.surname} retiré de l\'effectif',
+                'agent': {
+                    'id': agent.id,
+                    'name': agent.name,
+                    'surname': agent.surname,
+                    'is_active': agent.is_active,
+                    'date_desactivation': agent.date_desactivation
+                }
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de la désactivation: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def reactiver(self, request, pk=None):
+        """Réactiver un agent (le remettre dans l'effectif)"""
+        # Récupérer l'agent directement depuis la base de données, 
+        # sans passer par get_queryset() qui filtre les agents inactifs
+        try:
+            agent = Agent.objects.get(pk=pk)
+        except Agent.DoesNotExist:
+            return Response(
+                {'error': 'Agent non trouvé'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            agent.is_active = True
+            agent.date_desactivation = None
+            agent.save()
+            
+            return Response({
+                'message': f'Agent {agent.name} {agent.surname} remis dans l\'effectif',
+                'agent': {
+                    'id': agent.id,
+                    'name': agent.name,
+                    'surname': agent.surname,
+                    'is_active': agent.is_active,
+                    'date_desactivation': agent.date_desactivation
+                }
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de la réactivation: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def inactifs(self, request):
+        """Récupérer la liste des agents inactifs"""
+        queryset = Agent.objects.filter(is_active=False).order_by('-date_desactivation')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     def create(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -8632,7 +8771,12 @@ def preview_monthly_agents_report(request):
     # Données récupérées directement de l'API - plus de calcul manuel
     
     # Récupérer tous les agents SAUF les agents journaliers (exclus des rapports mensuels)
-    agents = Agent.objects.exclude(type_paiement='journalier')
+    # Appliquer la logique temporelle : agent actif OU désactivé après le début du mois
+    month_start_date = start_date
+    agents = Agent.objects.exclude(type_paiement='journalier').filter(
+        Q(is_active=True) | 
+        Q(date_desactivation__gt=month_start_date)
+    )
     
     # Récupérer les événements du mois
     events = Event.objects.filter(
