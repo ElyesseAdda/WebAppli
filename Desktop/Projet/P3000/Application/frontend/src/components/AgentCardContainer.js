@@ -7,12 +7,25 @@ const AgentCardContainer = () => {
   const [agents, setAgents] = useState([]);
   const [currentAgentIndex, setCurrentAgentIndex] = useState(0);
   const [events, setEvents] = useState([]);
+  const [sortedAgents, setSortedAgents] = useState([]);
 
   useEffect(() => {
     axios
       .get("/api/agent/")
       .then((response) => {
         setAgents(response.data);
+        
+        // Créer un tableau trié avec les index originaux
+        const sortedWithIndex = response.data
+          .map((agent, originalIndex) => ({ agent, originalIndex }))
+          .sort((a, b) => {
+            const nameA = `${a.agent.surname} ${a.agent.name}`.toLowerCase();
+            const nameB = `${b.agent.surname} ${b.agent.name}`.toLowerCase();
+            return nameA.localeCompare(nameB, 'fr');
+          });
+        
+        setSortedAgents(sortedWithIndex);
+        
         if (response.data.length > 0) {
           fetchEvents(response.data[0].id);
         }
@@ -39,7 +52,9 @@ const AgentCardContainer = () => {
   const handleSelectChange = (event) => {
     const selectedIndex = event.target.value;
     setCurrentAgentIndex(selectedIndex);
-    fetchEvents(agents[selectedIndex].id);
+    if (sortedAgents[selectedIndex]) {
+      fetchEvents(sortedAgents[selectedIndex].agent.id);
+    }
   };
 
   return (
@@ -47,7 +62,7 @@ const AgentCardContainer = () => {
       {agents.length > 0 && (
         <>
           <AgentCard
-            agent={agents[currentAgentIndex]}
+            agent={sortedAgents[currentAgentIndex]?.agent || agents[currentAgentIndex]}
             events={events}
             onSelectChange={handleSelectChange}
             agentsList={agents}
@@ -60,11 +75,11 @@ const AgentCardContainer = () => {
             gap={2}
           >
             <Select value={currentAgentIndex} onChange={handleSelectChange}>
-              {agents.map((agent, index) => (
+              {sortedAgents.map((item, index) => (
                 <MenuItem
-                  key={agent.id}
+                  key={item.agent.id}
                   value={index}
-                >{`${agent.name} ${agent.surname}`}</MenuItem>
+                >{`${item.agent.surname} ${item.agent.name}`}</MenuItem>
               ))}
             </Select>
           </Box>

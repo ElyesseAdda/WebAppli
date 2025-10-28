@@ -161,10 +161,17 @@ const ReactivateAgentModal = ({
           </Box>
         ) : (
           <List>
-            {filteredAgents.map((agent) => (
+            {filteredAgents
+              .sort((a, b) => {
+                // Trier par nom de famille puis par prénom
+                const nameA = `${a.surname} ${a.name}`.toLowerCase();
+                const nameB = `${b.surname} ${b.name}`.toLowerCase();
+                return nameA.localeCompare(nameB, 'fr');
+              })
+              .map((agent) => (
               <ListItem key={agent.id} divider>
                 <ListItemText
-                  primary={`${agent.name} ${agent.surname}`}
+                  primary={`${agent.surname} ${agent.name}`}
                   secondary={
                     <Box>
                       <Typography variant="body2" color="textSecondary">

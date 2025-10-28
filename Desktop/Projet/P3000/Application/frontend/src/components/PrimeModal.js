@@ -304,7 +304,14 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
                 Aucun agent disponible. Veuillez d'abord créer des agents.
               </Alert>
             ) : (
-              agents.map((agent) => {
+              agents
+                .sort((a, b) => {
+                  // Trier par nom de famille puis par prénom
+                  const nameA = `${a.surname} ${a.name}`.toLowerCase();
+                  const nameB = `${b.surname} ${b.name}`.toLowerCase();
+                  return nameA.localeCompare(nameB, 'fr');
+                })
+                .map((agent) => {
               const agentPrimes = existingPrimes[agent.id] || [];
               const totalPrimes = getTotalPrimesAgent(agent.id);
 

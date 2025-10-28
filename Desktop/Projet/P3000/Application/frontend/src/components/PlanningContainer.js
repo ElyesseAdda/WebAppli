@@ -442,6 +442,12 @@ const PlanningContainer = () => {
                   // Afficher seulement les agents visibles pour cette période
                   return isAgentVisibleForPeriod(agent, selectedWeek, selectedYear);
                 })
+                .sort((a, b) => {
+                  // Trier par nom de famille puis par prénom
+                  const nameA = `${a.surname} ${a.name}`.toLowerCase();
+                  const nameB = `${b.surname} ${b.name}`.toLowerCase();
+                  return nameA.localeCompare(nameB, 'fr');
+                })
                 .map((agent) => {
                   const isActive = agent.is_active;
                   return (

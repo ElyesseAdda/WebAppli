@@ -58,11 +58,18 @@ const PresenceForm = () => {
           <label>Agent:</label>
           <select value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)}>
             <option value="">-- Sélectionner un Agent --</option>
-            {agents.map(agent => (
-              <option key={agent.id} value={agent.id}>
-                {agent.prenom} {agent.nom}
-              </option>
-            ))}
+            {agents
+              .sort((a, b) => {
+                // Trier par nom de famille puis par prénom
+                const nameA = `${a.nom} ${a.prenom}`.toLowerCase();
+                const nameB = `${b.nom} ${b.prenom}`.toLowerCase();
+                return nameA.localeCompare(nameB, 'fr');
+              })
+              .map(agent => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.nom} {agent.prenom}
+                </option>
+              ))}
           </select>
         </div>
         <div>
