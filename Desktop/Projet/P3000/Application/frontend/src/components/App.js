@@ -21,6 +21,7 @@ import ChantierInfo from "./ChantierInfo";
 import ChantiersDashboard from "./ChantiersDashboard";
 import ChantierTabs from "./ChantierTabs";
 import CreationDevis from "./CreationDevis";
+import DevisAvance from "./DevisAvance";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Drive from "./Drive";
@@ -186,6 +187,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <CreationDevis />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/DevisAvance"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <DevisAvance />
                 </Layout>
               </ProtectedRoute>
             }
