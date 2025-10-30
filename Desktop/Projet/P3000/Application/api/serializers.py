@@ -45,6 +45,7 @@ class FournisseurSerializer(serializers.ModelSerializer):
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
     lignes_speciales = serializers.JSONField(required=False)
+    parties_metadata = serializers.JSONField(required=False)
     client = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     chantier = serializers.PrimaryKeyRelatedField(queryset=Chantier.objects.all())
 
@@ -53,7 +54,7 @@ class DevisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'devis_chantier',
+            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel'
         ]
         read_only_fields = ['date_creation', 'client']

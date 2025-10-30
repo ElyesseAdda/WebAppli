@@ -41,6 +41,8 @@ import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
 import Test from "./Test";
+import TestDragDrop from "./TestDragDrop";
+import TestDragSimple from "./TestDragSimple";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -429,6 +431,28 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <Test />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/test-drag-drop"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TestDragDrop />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/test-drag-simple"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TestDragSimple />
                 </Layout>
               </ProtectedRoute>
             }

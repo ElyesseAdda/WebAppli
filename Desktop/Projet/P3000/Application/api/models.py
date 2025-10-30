@@ -532,6 +532,7 @@ class Devis(models.Model):
     client = models.ManyToManyField(Client, related_name='devis', blank=True)
     lignes_speciales = models.JSONField(default=dict, blank=True)
     lignes_display = models.JSONField(default=dict, blank=True)  # Lignes spéciales de type 'display' uniquement
+    parties_metadata = models.JSONField(default=dict, blank=True)  # Métadonnées des parties (numéros, ordre, etc.)
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
     
     # NOUVEAUX CHAMPS pour les coûts estimés

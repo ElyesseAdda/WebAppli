@@ -13,119 +13,37 @@ import ChantierForm from './ChantierForm';
 const DevisAvance = () => {
   // États pour les données du devis
   const [devisData, setDevisData] = useState({
-    numero: 'DEV-2024-001',
+    numero: '',
     date_creation: new Date().toISOString().split('T')[0],
-    nature_travaux: 'Peinture intérieure et extérieure',
+    nature_travaux: '',
     tva_rate: 20,
     price_ht: 0,
     price_ttc: 0
   });
 
   const [client, setClient] = useState({
-    name: 'Dupont',
-    surname: 'Jean',
-    civilite: 'M.',
-    poste: 'Directeur',
-    client_mail: 'jean.dupont@example.com',
-    phone_Number: '0612345678'
+    name: '',
+    surname: '',
+    civilite: '',
+    poste: '',
+    client_mail: '',
+    phone_Number: ''
   });
 
   const [societe, setSociete] = useState({
-    nom_societe: 'Entreprise ABC',
-    rue_societe: '123 Rue de la Paix',
-    codepostal_societe: '75001',
-    ville_societe: 'Paris'
+    nom_societe: '',
+    rue_societe: '',
+    codepostal_societe: '',
+    ville_societe: ''
   });
 
   const [chantier, setChantier] = useState({
-    chantier_name: 'Rénovation appartement',
-    rue: '456 Avenue des Champs',
-    code_postal: '75008',
-    ville: 'Paris'
+    chantier_name: '',
+    rue: '',
+    code_postal: '',
+    ville: ''
   });
 
-  const [parties, setParties] = useState([
-    {
-      id: 1,
-      titre: 'PREPARATION',
-      total_partie: 1500.00,
-      special_lines: [],
-      sous_parties: [
-        {
-          id: 1,
-          description: 'Préparation des supports',
-          total_sous_partie: 800.00,
-          special_lines: [],
-          lignes_details: [
-            {
-              id: 1,
-              description: 'Ponçage des murs',
-              unite: 'm²',
-              quantity: 50,
-              custom_price: 8.00,
-              total: 400.00
-            },
-            {
-              id: 2,
-              description: 'Rebouchage des fissures',
-              unite: 'm²',
-              quantity: 20,
-              custom_price: 20.00,
-              total: 400.00
-            }
-          ]
-        },
-        {
-          id: 2,
-          description: 'Protection des sols',
-          total_sous_partie: 700.00,
-          special_lines: [],
-          lignes_details: [
-            {
-              id: 3,
-              description: 'Pose de bâches de protection',
-              unite: 'm²',
-              quantity: 100,
-              custom_price: 7.00,
-              total: 700.00
-            }
-          ]
-        }
-      ]
-    },
-    {
-      id: 2,
-      titre: 'PEINTURE',
-      total_partie: 2500.00,
-      special_lines: [],
-      sous_parties: [
-        {
-          id: 3,
-          description: 'Peinture intérieure',
-          total_sous_partie: 2500.00,
-          special_lines: [],
-          lignes_details: [
-            {
-              id: 4,
-              description: 'Sous-couche d\'accrochage',
-              unite: 'm²',
-              quantity: 50,
-              custom_price: 15.00,
-              total: 750.00
-            },
-            {
-              id: 5,
-              description: 'Peinture acrylique satinée',
-              unite: 'm²',
-              quantity: 50,
-              custom_price: 35.00,
-              total: 1750.00
-            }
-          ]
-        }
-      ]
-    }
-  ]);
 
   const [special_lines_global, setSpecialLinesGlobal] = useState([]);
   const [total_ht, setTotalHt] = useState(4000.00);
@@ -142,6 +60,12 @@ const DevisAvance = () => {
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
   const [nextTsNumber, setNextTsNumber] = useState(null);
+
+  // États pour la gestion des parties
+  const [availableParties, setAvailableParties] = useState([]);
+  const [selectedParties, setSelectedParties] = useState([]);
+  const [isLoadingParties, setIsLoadingParties] = useState(false);
+  const [partiesToCreate, setPartiesToCreate] = useState([]); // Nouvelles parties à créer
 
   // Fonction pour formater les montants avec espaces
   const formatMontantEspace = (montant) => {
@@ -345,18 +269,412 @@ const DevisAvance = () => {
     }
   };
 
+  // Fonction pour charger les parties depuis l'API
+  const loadParties = async (searchQuery = '') => {
+    try {
+      setIsLoadingParties(true);
+      const response = await axios.get('/api/parties/');
+      const allParties = response.data;
+      
+      // Filtrer les parties si une recherche est spécifiée
+      let filteredParties = allParties;
+      if (searchQuery) {
+        filteredParties = allParties.filter(partie => 
+          partie.titre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          partie.type.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      
+      setAvailableParties(allParties);
+      return filteredParties;
+    } catch (error) {
+      console.error('Erreur lors du chargement des parties:', error);
+      return [];
+    } finally {
+      setIsLoadingParties(false);
+    }
+  };
+
+  // Fonction pour rechercher les parties via l'endpoint dédié
+  const searchPartiesAPI = async (searchQuery = '') => {
+    try {
+      setIsLoadingParties(true);
+      const params = {};
+      if (searchQuery) {
+        params.q = searchQuery;
+      }
+      
+      const response = await axios.get('/api/parties/search/', { params });
+      return response.data.options;
+    } catch (error) {
+      console.error('Erreur lors de la recherche des parties:', error);
+      return [];
+    } finally {
+      setIsLoadingParties(false);
+    }
+  };
+
+  // Fonction pour rechercher les parties (pour React Select)
+  const searchParties = async (inputValue) => {
+    try {
+      console.log('🔍 Recherche de parties avec inputValue:', inputValue);
+      // Utiliser le nouvel endpoint dédié
+      const results = await searchPartiesAPI(inputValue);
+      console.log('📋 Résultats trouvés:', results.length, 'parties');
+      return results;
+    } catch (error) {
+      console.error('❌ Erreur lors de la recherche des parties:', error);
+      return [];
+    }
+  };
+
+  // Fonction pour gérer la sélection d'une partie
+  const handlePartieSelect = (selectedOption) => {
+    if (selectedOption && !selectedParties.find(p => p.id === selectedOption.value)) {
+      const newPartie = { ...selectedOption.data, selectedSousParties: [] };
+      setSelectedParties(prev => [...prev, newPartie]);
+    }
+  };
+
+  // Fonction pour créer une nouvelle partie
+  const handlePartieCreate = async (inputValue) => {
+    try {
+      console.log('🆕 Création d\'une nouvelle partie:', inputValue);
+      
+      // Créer la partie en base de données
+      const response = await axios.post('/api/parties/', {
+        titre: inputValue,
+        type: 'PEINTURE',
+        is_deleted: false
+      });
+      
+      const newPartie = {
+        id: response.data.id,
+        titre: response.data.titre,
+        type: response.data.type,
+        domaine: response.data.type,
+        total_partie: 0,
+        special_lines: [],
+        sous_parties: [],
+        selectedSousParties: [],
+        isNew: true
+      };
+      
+      // Ajouter à la liste des parties à créer (pour référence)
+      setPartiesToCreate(prev => [...prev, newPartie]);
+      
+      // Ajouter à la sélection
+      setSelectedParties(prev => [...prev, newPartie]);
+      
+      // Recharger la liste des parties disponibles
+      await loadParties();
+      
+      console.log('✅ Partie créée avec succès:', newPartie);
+      
+      return {
+        value: newPartie.id,
+        label: newPartie.titre,
+        data: newPartie
+      };
+    } catch (error) {
+      console.error('❌ Erreur lors de la création de la partie:', error);
+      
+      // En cas d'erreur, créer une partie temporaire
+      const tempPartie = {
+        id: `temp_${Date.now()}`,
+        titre: inputValue,
+        type: 'PEINTURE',
+        domaine: 'PEINTURE',
+        total_partie: 0,
+        special_lines: [],
+        sous_parties: [],
+        isNew: true,
+        isTemp: true
+      };
+      
+      setPartiesToCreate(prev => [...prev, tempPartie]);
+      setSelectedParties(prev => [...prev, tempPartie]);
+      
+      return {
+        value: tempPartie.id,
+        label: tempPartie.titre,
+        data: tempPartie
+      };
+    }
+  };
+
+  // Fonction pour supprimer une partie sélectionnée
+  const handlePartieRemove = (partieId) => {
+    setSelectedParties(prev => prev.filter(p => p.id !== partieId));
+    
+    // Si c'était une nouvelle partie, la retirer de la liste à créer
+    setPartiesToCreate(prev => prev.filter(p => p.id !== partieId));
+  };
+
+  // Fonction pour éditer une partie sélectionnée
+  const handlePartieEdit = (partieId) => {
+    const partie = selectedParties.find(p => p.id === partieId);
+    if (partie) {
+      const newTitre = prompt('Modifier le titre de la partie:', partie.titre);
+      if (newTitre && newTitre.trim() !== partie.titre) {
+        setSelectedParties(prev => 
+          prev.map(p => 
+            p.id === partieId 
+              ? { ...p, titre: newTitre.trim() }
+              : p
+          )
+        );
+        
+        // Si c'est une partie existante, mettre à jour en base de données
+        if (!partie.isNew && !partie.isTemp) {
+          updatePartieInDB(partieId, newTitre.trim());
+        }
+      }
+    }
+  };
+
+  // Fonction pour mettre à jour une partie en base de données
+  const updatePartieInDB = async (partieId, newTitre) => {
+    try {
+      await axios.patch(`/api/parties/${partieId}/`, {
+        titre: newTitre
+      });
+      console.log('✅ Partie mise à jour en base de données');
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour de la partie:', error);
+    }
+  };
+
+  // Fonction pour modifier le numéro d'une partie
+  // Le numéro est stocké dans l'état local de la partie
+  // Lors de la sauvegarde du devis, ces numéros seront envoyés dans parties_metadata
+  const handlePartieNumeroChange = (partieId, newNumero) => {
+    setSelectedParties(prev => 
+      prev.map(p => 
+        p.id === partieId 
+          ? { ...p, numero: newNumero }
+          : p
+      )
+    );
+    
+    // Le parties_metadata sera construit lors de la sauvegarde du devis avec la structure :
+    // { parties: { [partieId]: { numero: newNumero, ordre: index } } }
+  };
+
+  // Fonction pour gérer la réorganisation des parties via drag & drop
+  const handlePartiesReorder = (reorderedParties) => {
+    // Après la réorganisation des parties, mettre à jour les numéros des sous-parties
+    const updatedParties = reorderedParties.map(partie => {
+      const oldNumero = selectedParties.find(p => p.id === partie.id)?.numero;
+      const newNumero = partie.numero;
+      
+      // Si le numéro de la partie a changé (drag & drop), mettre à jour les sous-parties
+      if (oldNumero && newNumero && oldNumero !== newNumero && /^\d+$/.test(oldNumero) && /^\d+$/.test(newNumero)) {
+        // Récupérer les sous-parties
+        const updatedSousParties = (partie.selectedSousParties || []).map(sp => {
+          if (!sp.numero) {
+            return sp; // Pas de numéro, on laisse vide
+          }
+          
+          // Si la sous-partie a un numéro avec l'ancien préfixe (ex: "1.2")
+          const regex = new RegExp('^' + oldNumero + '\\.(\\d+)$');
+          if (regex.test(sp.numero)) {
+            // Remplacer l'ancien préfixe par le nouveau (ex: "1.2" devient "2.2")
+            const match = sp.numero.match(regex);
+            const suffix = match ? match[1] : '';
+            return { ...sp, numero: `${newNumero}.${suffix}` };
+          }
+          
+          // Sinon, garder le numéro tel quel
+          return sp;
+        });
+        
+        return {
+          ...partie,
+          selectedSousParties: updatedSousParties
+        };
+      }
+      
+      // Aucune mise à jour nécessaire pour les sous-parties
+      return partie;
+    });
+    
+    setSelectedParties(updatedParties);
+    console.log('🔄 Parties réorganisées avec sous-parties mises à jour:', updatedParties);
+  };
+
+  // ========== HANDLERS POUR SOUS-PARTIES ==========
+  
+  // Sélectionner une sous-partie existante
+  const handleSousPartieSelect = (partieId, sousPartie) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id === partieId) {
+        const updatedSousParties = [...(p.selectedSousParties || []), sousPartie];
+        return { ...p, selectedSousParties: updatedSousParties };
+      }
+      return p;
+    }));
+  };
+
+  // Créer une nouvelle sous-partie
+  const handleSousPartieCreate = async (partieId, description) => {
+    try {
+      const response = await axios.post('/api/sous-parties/', {
+        partie: partieId,
+        description: description
+      });
+      
+      if (response.data) {
+        handleSousPartieSelect(partieId, {
+          ...response.data,
+          numero: ''
+        });
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création de la sous-partie:', error);
+    }
+  };
+
+  // Supprimer une sous-partie
+  const handleSousPartieRemove = (partieId, sousPartieId) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id === partieId) {
+        return {
+          ...p,
+          selectedSousParties: (p.selectedSousParties || []).filter(sp => sp.id !== sousPartieId)
+        };
+      }
+      return p;
+    }));
+  };
+
+  // Éditer une sous-partie
+  const handleSousPartieEdit = async (partieId, sousPartieId) => {
+    const partie = selectedParties.find(p => p.id === partieId);
+    if (!partie) return;
+    
+    const sousPartie = partie.selectedSousParties.find(sp => sp.id === sousPartieId);
+    if (!sousPartie) return;
+    
+    const newDescription = prompt('Modifier la description:', sousPartie.description);
+    if (newDescription && newDescription.trim()) {
+      try {
+        await axios.patch(`/api/sous-parties/${sousPartieId}/`, {
+          description: newDescription.trim()
+        });
+        
+        setSelectedParties(prev => prev.map(p => {
+          if (p.id === partieId) {
+            return {
+              ...p,
+              selectedSousParties: p.selectedSousParties.map(sp => 
+                sp.id === sousPartieId ? { ...sp, description: newDescription.trim() } : sp
+              )
+            };
+          }
+          return p;
+        }));
+      } catch (error) {
+        console.error('Erreur lors de la modification de la sous-partie:', error);
+      }
+    }
+  };
+
+  // Changer le numéro d'une sous-partie (prend en compte le préfixe de la partie si numérique)
+  const handleSousPartieNumeroChange = (partieId, sousPartieId, newNumero) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id !== partieId) return p;
+
+      const parentNumero = p.numero;
+      const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
+
+      // Si on enlève le numéro
+      if (newNumero === '') {
+        return {
+          ...p,
+          selectedSousParties: (p.selectedSousParties || []).map(sp =>
+            sp.id === sousPartieId ? { ...sp, numero: '' } : sp
+          )
+        };
+      }
+
+      // Si on attribue un numéro automatique, s'assurer du format
+      let finalNumero = newNumero;
+      if (isParentNumeric) {
+        // Si newNumero est juste un index (ex: "1"), préfixer
+        if (/^\d+$/.test(newNumero)) {
+          finalNumero = `${parentNumero}.${newNumero}`;
+        }
+      }
+
+      return {
+        ...p,
+        selectedSousParties: (p.selectedSousParties || []).map(sp =>
+          sp.id === sousPartieId ? { ...sp, numero: finalNumero } : sp
+        )
+      };
+    }));
+  };
+
+  // Réorganiser les sous-parties via drag & drop
+  const handleSousPartiesReorder = (partieId, result) => {
+    const partie = selectedParties.find(p => p.id === partieId);
+    if (!partie) return;
+    
+    const newSousParties = Array.from(partie.selectedSousParties);
+    const [reorderedItem] = newSousParties.splice(result.source.index, 1);
+    newSousParties.splice(result.destination.index, 0, reorderedItem);
+    
+    // Préfixe parent si numérique
+    const parentNumero = partie.numero;
+    const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
+
+    // Mise à jour des numéros automatiques pour les sous-parties numérotées
+    const updatedSousParties = newSousParties.map((sp, index) => {
+      if (!sp.numero) {
+        return { ...sp, ordre: index };
+      }
+
+      if (isParentNumeric) {
+        // Renuméroter seulement celles qui suivent le pattern "parent.idx"
+        const regex = new RegExp('^' + parentNumero + '\\.(\\d+)$');
+        if (regex.test(sp.numero)) {
+          const before = newSousParties.slice(0, index).filter(s => s.numero && regex.test(s.numero));
+          const newIdx = before.length + 1;
+          return { ...sp, numero: `${parentNumero}.${newIdx}`, ordre: index };
+        }
+        // Garder les custom numbers non conformes
+        return { ...sp, ordre: index };
+      } else {
+        // Fallback: renumérotation simple 1,2,3 uniquement pour les numéros simples
+        if (/^\d+$/.test(sp.numero)) {
+          const before = newSousParties.slice(0, index).filter(s => s.numero && /^\d+$/.test(s.numero));
+          const newIdx = before.length + 1;
+          return { ...sp, numero: String(newIdx), ordre: index };
+        }
+        return { ...sp, ordre: index };
+      }
+    });
+    
+    setSelectedParties(prev => prev.map(p => 
+      p.id === partieId ? { ...p, selectedSousParties: updatedSousParties } : p
+    ));
+  };
+
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();
     // Générer le numéro initial avec le format "Devis travaux" (nouveau chantier)
     generateDevisNumber(null);
+    // Charger les parties initiales
+    loadParties();
   }, []);
 
   return (
     <div style={{
       padding: '20px 10px',
       marginRight: '150px', // Espace pour la sidebar
-      minHeight: '100vh',
+      minHeight: 'auto', // Changé de 100vh à auto
       backgroundColor: '#f5f5f5',
       borderRadius: '10px',
     }}>
@@ -366,12 +684,11 @@ const DevisAvance = () => {
         maxWidth: '1200px',
         margin: '0 150px 0 150px',
         padding: '20px 10px',
-        
-        minHeight: '100vh',
+        minHeight: 'auto', // Changé de 100vh à auto
         backgroundColor: 'rgb(255 255 255)',
         borderRadius: '10px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        overflow: 'hidden'
+        overflow: 'visible' // Changé de hidden à visible
       }}>
         <DevisStyles />
         
@@ -570,11 +887,26 @@ const DevisAvance = () => {
             
             <DevisTable 
               devisData={devisData}
-              parties={parties}
+              parties={availableParties}
+              selectedParties={selectedParties}
               special_lines_global={special_lines_global}
               total_ht={total_ht}
               formatMontantEspace={formatMontantEspace}
               onNatureTravauxChange={(value) => setDevisData(prev => ({ ...prev, nature_travaux: value }))}
+              onPartieSelect={handlePartieSelect}
+              onPartieCreate={handlePartieCreate}
+              onPartieRemove={handlePartieRemove}
+              onPartieEdit={handlePartieEdit}
+              onPartieNumeroChange={handlePartieNumeroChange}
+              onPartiesReorder={handlePartiesReorder}
+              searchParties={searchParties}
+              isLoadingParties={isLoadingParties}
+              onSousPartieSelect={handleSousPartieSelect}
+              onSousPartieCreate={handleSousPartieCreate}
+              onSousPartieRemove={handleSousPartieRemove}
+              onSousPartieEdit={handleSousPartieEdit}
+              onSousPartieNumeroChange={handleSousPartieNumeroChange}
+              onSousPartiesReorder={handleSousPartiesReorder}
             />
           </div>
 

@@ -770,6 +770,49 @@ class PartieViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(parties, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='search')
+    def search(self, request):
+        """
+        Endpoint de recherche optimisé pour React Select
+        Retourne les parties au format {value, label, data} pour React Select
+        """
+        search_query = request.query_params.get('q', '').strip()
+        
+        # Base queryset - exclure les parties supprimées
+        queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        # Filtrer par recherche si fournie
+        if search_query:
+            queryset = queryset.filter(
+                Q(titre__icontains=search_query) |
+                Q(type__icontains=search_query)
+            )
+        
+        # Limiter à 50 résultats pour les performances
+        queryset = queryset[:50]
+        
+        # Formater pour React Select
+        results = []
+        for partie in queryset:
+            results.append({
+                'value': partie.id,
+                'label': f"{partie.titre} ({partie.type})",
+                'data': {
+                    'id': partie.id,
+                    'titre': partie.titre,
+                    'type': partie.type,
+                    'domaine': partie.type,  # Utiliser type comme domaine
+                    'total_partie': 0,  # Sera calculé plus tard
+                    'special_lines': [],
+                    'sous_parties': []
+                }
+            })
+        
+        return Response({
+            'options': results,
+            'total': len(results)
+        })
+
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()
     serializer_class = SousPartieSerializer
@@ -830,6 +873,65 @@ class SousPartieViewSet(viewsets.ModelViewSet):
         sous_parties = SousPartie.objects.all()
         serializer = self.get_serializer(sous_parties, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Endpoint dédié pour React Select : recherche de sous-parties par description
+        Retourne un format {value, label, data} compatible avec React Select
+        """
+        partie_id = request.query_params.get('partie', None)
+        q = request.query_params.get('q', '').strip()
+        
+        queryset = SousPartie.objects.filter(is_deleted=False).prefetch_related('lignes_details')
+        
+        # Filtrer par partie si spécifiée (obligatoire)
+        if partie_id:
+            queryset = queryset.filter(partie_id=partie_id)
+        else:
+            # Si pas de partie_id, retourner vide
+            return Response([])
+        
+        # Recherche par description
+        if q:
+            queryset = queryset.filter(description__icontains=q)
+        
+        # Limiter à 50 résultats
+        queryset = queryset[:50]
+        
+        # Formater pour React Select avec toutes les infos nécessaires
+        results = []
+        for sp in queryset:
+            # Sérialiser les lignes_details
+            lignes_details = [
+                {
+                    'id': ld.id,
+                    'description': ld.description,
+                    'unite': ld.unite,
+                    'cout_main_oeuvre': str(ld.cout_main_oeuvre),
+                    'cout_materiel': str(ld.cout_materiel),
+                    'taux_fixe': str(ld.taux_fixe),
+                    'marge': str(ld.marge),
+                    'prix': str(ld.prix),
+                    'sous_partie': ld.sous_partie_id,
+                    'is_deleted': ld.is_deleted
+                }
+                for ld in sp.lignes_details.all() if not ld.is_deleted
+            ]
+            
+            results.append({
+                'value': sp.id,
+                'label': sp.description or 'Sans description',
+                'data': {
+                    'id': sp.id,
+                    'description': sp.description,
+                    'partie': sp.partie_id,
+                    'lignes_details': lignes_details,
+                    'is_deleted': sp.is_deleted
+                }
+            })
+        
+        return Response(results)
 
 from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
