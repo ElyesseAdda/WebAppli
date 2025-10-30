@@ -72,7 +72,7 @@ const DevisAvance = () => {
     return new Intl.NumberFormat('fr-FR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    }).format(montant).replace(/,/g, ' ');
+    }).format(montant).replace(/,/g, '.');
   };
 
   // Fonction pour formater le numéro de téléphone
@@ -661,6 +661,42 @@ const DevisAvance = () => {
     ));
   };
 
+  // ========== HANDLERS POUR LIGNES DE DÉTAIL ==========
+
+  // Ajouter une ligne de détail à une sous-partie sélectionnée
+  const handleLigneDetailSelect = (partieId, sousPartieId, ligneDetail) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id !== partieId) return p;
+      const updatedSous = (p.selectedSousParties || []).map(sp => {
+        if (sp.id !== sousPartieId) return sp;
+        const existing = Array.isArray(sp.selectedLignesDetails) ? sp.selectedLignesDetails : [];
+        const already = existing.some(ld => ld.id === ligneDetail.id);
+        return already ? sp : { ...sp, selectedLignesDetails: [...existing, { ...ligneDetail, quantity: 0 }] };
+      });
+      return { ...p, selectedSousParties: updatedSous };
+    }));
+  };
+
+  // Créer une ligne de détail (TODO: compléter la création serveur si besoin)
+  const handleLigneDetailCreate = async (sousPartieId, description) => {
+    console.log('Création de ligne de détail (à implémenter côté API):', sousPartieId, description);
+  };
+
+  // Changer la quantité d'une ligne de détail
+  const handleLigneDetailQuantityChange = (partieId, sousPartieId, ligneDetailId, quantity) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id !== partieId) return p;
+      const updatedSous = (p.selectedSousParties || []).map(sp => {
+        if (sp.id !== sousPartieId) return sp;
+        const updatedLignes = (sp.selectedLignesDetails || []).map(ld => 
+          ld.id === ligneDetailId ? { ...ld, quantity } : ld
+        );
+        return { ...sp, selectedLignesDetails: updatedLignes };
+      });
+      return { ...p, selectedSousParties: updatedSous };
+    }));
+  };
+
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();
@@ -907,6 +943,9 @@ const DevisAvance = () => {
               onSousPartieEdit={handleSousPartieEdit}
               onSousPartieNumeroChange={handleSousPartieNumeroChange}
               onSousPartiesReorder={handleSousPartiesReorder}
+              onLigneDetailSelect={handleLigneDetailSelect}
+              onLigneDetailCreate={handleLigneDetailCreate}
+              onLigneDetailQuantityChange={handleLigneDetailQuantityChange}
             />
           </div>
 

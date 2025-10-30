@@ -3,6 +3,7 @@ import { FiX } from 'react-icons/fi';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import PartieSearch from './PartieSearch';
 import SousPartieSearch from './SousPartieSearch';
+import LigneDetailSearch from './LigneDetailSearch';
 
 const DevisTable = ({ 
   devisData, 
@@ -26,7 +27,10 @@ const DevisTable = ({
   onSousPartieRemove,
   onSousPartieEdit,
   onSousPartieNumeroChange,
-  onSousPartiesReorder
+  onSousPartiesReorder,
+  onLigneDetailSelect,
+  onLigneDetailCreate,
+  onLigneDetailQuantityChange
 }) => {
   // Fonction pour gérer la fin du drag & drop
   const handleDragEnd = (result) => {
@@ -482,7 +486,13 @@ const DevisTable = ({
                                         fontWeight: 'bold',
                                         marginLeft: '10px'
                                       }}>
-                                        {formatMontantEspace(partie.total_partie || 0)} €
+                                        {formatMontantEspace(
+                                          (partie.selectedSousParties || []).reduce((partieSum, sp) => 
+                                            partieSum + (sp.selectedLignesDetails || []).reduce((spSum, ld) => 
+                                              spSum + (parseFloat(ld.prix || 0) * parseFloat(ld.quantity || 0)), 0
+                                            ), 0
+                                          )
+                                        )} €
                                       </span>
                                     </div>
                                   </div>
@@ -521,148 +531,280 @@ const DevisTable = ({
                                             {(provided) => (
                                               <div {...provided.droppableProps} ref={provided.innerRef}>
                                                 {partie.selectedSousParties.map((sousPartie, spIndex) => (
-                                                  <Draggable
-                                                    key={String(sousPartie.id)}
-                                                    draggableId={String(sousPartie.id)}
-                                                    index={spIndex}
-                                                  >
-                                                    {(provided, snapshot) => (
-                                                      <div
-                                                        ref={provided.innerRef}
-                                                        {...provided.draggableProps}
-                                                        style={{
-                                                          ...provided.draggableProps.style,
-                                                          backgroundColor: 'rgb(157, 197, 226)',
-                                                          color: '#333',
-                                                          padding: '10px 15px',
-                                                          marginBottom: '8px',
-                                                          borderRadius: '4px',
-                                                          boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
-                                                          display: 'flex',
-                                                          justifyContent: 'space-between',
-                                                          alignItems: 'center',
-                                                          fontWeight: '600'
-                                                        }}
-                                                      >
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                          <div
-                                                            {...provided.dragHandleProps}
-                                                            style={{
-                                                              cursor: 'grab',
-                                                              padding: '4px',
-                                                              borderRadius: '4px',
-                                                              backgroundColor: 'rgba(0,0,0,0.1)',
-                                                              userSelect: 'none'
-                                                            }}
-                                                          >
-                                                            ⋮⋮
-                                                          </div>
-                                                          <button
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              if (onSousPartieNumeroChange) {
-                                                                const currentNumero = sousPartie.numero;
-                                                                if (currentNumero) {
-                                                                  onSousPartieNumeroChange(partie.id, sousPartie.id, '');
-                                                                } else {
-                                                                  // Attribuer le prochain numéro automatique
-                                                                  const parentNumero = partie.numero;
-                                                                  const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
-
-                                                                  if (isParentNumeric) {
-                                                                    // Filtrer les sous-parties déjà numérotées avec le même préfixe
-                                                                    const regex = new RegExp('^' + parentNumero + '\\.(\\d+)$');
-                                                                    const withPrefix = (partie.selectedSousParties || []).filter(sp => sp.numero && regex.test(sp.numero));
-                                                                    let nextIndex = 1;
-                                                                    if (withPrefix.length > 0) {
-                                                                      const maxIdx = Math.max(
-                                                                        ...withPrefix.map(sp => {
-                                                                          const m = sp.numero.match(regex);
-                                                                          return m ? parseInt(m[1], 10) : 0;
-                                                                        })
-                                                                      );
-                                                                      nextIndex = maxIdx + 1;
-                                                                    }
-                                                                    onSousPartieNumeroChange(partie.id, sousPartie.id, `${parentNumero}.${nextIndex}`);
+                                                  <React.Fragment key={String(sousPartie.id)}>
+                                                    <Draggable
+                                                      draggableId={String(sousPartie.id)}
+                                                      index={spIndex}
+                                                    >
+                                                      {(provided, snapshot) => (
+                                                        <div
+                                                          ref={provided.innerRef}
+                                                          {...provided.draggableProps}
+                                                          style={{
+                                                            ...provided.draggableProps.style,
+                                                            backgroundColor: 'rgb(157, 197, 226)',
+                                                            color: '#333',
+                                                            padding: '10px 15px',
+                                                            marginBottom: '8px',
+                                                            borderRadius: '4px',
+                                                            boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            fontWeight: '600'
+                                                          }}
+                                                        >
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            <div
+                                                              {...provided.dragHandleProps}
+                                                              style={{
+                                                                cursor: 'grab',
+                                                                padding: '4px',
+                                                                borderRadius: '4px',
+                                                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                                                userSelect: 'none'
+                                                              }}
+                                                            >
+                                                              ⋮⋮
+                                                            </div>
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (onSousPartieNumeroChange) {
+                                                                  const currentNumero = sousPartie.numero;
+                                                                  if (currentNumero) {
+                                                                    onSousPartieNumeroChange(partie.id, sousPartie.id, '');
                                                                   } else {
-                                                                    // Comportement fallback: numérotation simple 1,2,3 (sans préfixe)
-                                                                    const simples = (partie.selectedSousParties || []).filter(sp => sp.numero && /^\d+$/.test(sp.numero));
-                                                                    let nextSimple = 1;
-                                                                    if (simples.length > 0) {
-                                                                      const maxSimple = Math.max(...simples.map(sp => parseInt(sp.numero, 10)));
-                                                                      nextSimple = maxSimple + 1;
+                                                                    // Attribuer le prochain numéro automatique
+                                                                    const parentNumero = partie.numero;
+                                                                    const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
+
+                                                                    if (isParentNumeric) {
+                                                                      // Filtrer les sous-parties déjà numérotées avec le même préfixe
+                                                                      const regex = new RegExp('^' + parentNumero + '\\.(\\d+)$');
+                                                                      const withPrefix = (partie.selectedSousParties || []).filter(sp => sp.numero && regex.test(sp.numero));
+                                                                      let nextIndex = 1;
+                                                                      if (withPrefix.length > 0) {
+                                                                        const maxIdx = Math.max(
+                                                                          ...withPrefix.map(sp => {
+                                                                            const m = sp.numero.match(regex);
+                                                                            return m ? parseInt(m[1], 10) : 0;
+                                                                          })
+                                                                        );
+                                                                        nextIndex = maxIdx + 1;
+                                                                      }
+                                                                      onSousPartieNumeroChange(partie.id, sousPartie.id, `${parentNumero}.${nextIndex}`);
+                                                                    } else {
+                                                                      // Comportement fallback: numérotation simple 1,2,3 (sans préfixe)
+                                                                      const simples = (partie.selectedSousParties || []).filter(sp => sp.numero && /^\d+$/.test(sp.numero));
+                                                                      let nextSimple = 1;
+                                                                      if (simples.length > 0) {
+                                                                        const maxSimple = Math.max(...simples.map(sp => parseInt(sp.numero, 10)));
+                                                                        nextSimple = maxSimple + 1;
+                                                                      }
+                                                                      onSousPartieNumeroChange(partie.id, sousPartie.id, String(nextSimple));
                                                                     }
-                                                                    onSousPartieNumeroChange(partie.id, sousPartie.id, String(nextSimple));
                                                                   }
                                                                 }
-                                                              }
-                                                            }}
-                                                            style={{
-                                                              width: '40px',
-                                                              height: '28px',
-                                                              padding: '2px 4px',
-                                                              border: '1px solid rgba(0,0,0,0.2)',
-                                                              borderRadius: '4px',
-                                                              backgroundColor: sousPartie.numero ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
-                                                              color: '#333',
-                                                              fontSize: '12px',
+                                                              }}
+                                                              style={{
+                                                                width: '40px',
+                                                                height: '28px',
+                                                                padding: '2px 4px',
+                                                                border: '1px solid rgba(0,0,0,0.2)',
+                                                                borderRadius: '4px',
+                                                                backgroundColor: sousPartie.numero ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
+                                                                color: '#333',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer'
+                                                              }}
+                                                            >
+                                                              {sousPartie.numero || 'N°'}
+                                                            </button>
+                                                            <span style={{ fontSize: '15px' }}>{sousPartie.description}</span>
+                                                          </div>
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onSousPartieEdit && onSousPartieEdit(partie.id, sousPartie.id);
+                                                              }}
+                                                              style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                border: 'none',
+                                                                backgroundColor: 'rgba(33, 150, 243, 0.8)',
+                                                                color: 'white',
+                                                                borderRadius: '50%',
+                                                                cursor: 'pointer',
+                                                                fontSize: '12px'
+                                                              }}
+                                                              title="Éditer cette sous-partie"
+                                                            >
+                                                              ✏️
+                                                            </button>
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onSousPartieRemove && onSousPartieRemove(partie.id, sousPartie.id);
+                                                              }}
+                                                              style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                border: 'none',
+                                                                backgroundColor: 'rgba(244, 67, 54, 0.8)',
+                                                                color: 'white',
+                                                                borderRadius: '50%',
+                                                                cursor: 'pointer',
+                                                                fontSize: '12px'
+                                                              }}
+                                                              title="Supprimer cette sous-partie"
+                                                            >
+                                                              <FiX />
+                                                            </button>
+                                                            {/* Total des lignes de détails de la sous-partie */}
+                                                            <span style={{ 
+                                                              fontSize: '14px', 
                                                               fontWeight: 'bold',
-                                                              cursor: 'pointer'
-                                                            }}
-                                                          >
-                                                            {sousPartie.numero || 'N°'}
-                                                          </button>
-                                                          <span style={{ fontSize: '15px' }}>{sousPartie.description}</span>
+                                                              marginLeft: '8px',
+                                                              color: '#333'
+                                                            }}>
+                                                              {formatMontantEspace(
+                                                                (sousPartie.selectedLignesDetails || []).reduce((sum, ld) => 
+                                                                  sum + (parseFloat(ld.prix || 0) * parseFloat(ld.quantity || 0)), 0
+                                                                )
+                                                              )} €
+                                                            </span>
+                                                          </div>
                                                         </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                          <button
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              onSousPartieEdit && onSousPartieEdit(partie.id, sousPartie.id);
-                                                            }}
+                                                      )}
+                                                    </Draggable>
+                                                    
+                                                    {/* Barre de recherche des lignes de détails (en dessous de la sous-partie) */}
+                                                    {(!sousPartie.selectedLignesDetails || sousPartie.selectedLignesDetails.length === 0) && (
+                                                      <div style={{ marginBottom: '8px', marginLeft: '20px' }}>
+                                                        <LigneDetailSearch
+                                                          sousPartieId={sousPartie.id}
+                                                          selectedLignesDetails={sousPartie.selectedLignesDetails || []}
+                                                          onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(partie.id, sousPartie.id, ligne)}
+                                                          onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
+                                                        />
+                                                      </div>
+                                                    )}
+
+                                                    {/* Lignes de détails sélectionnées par l'utilisateur */}
+                                                    {sousPartie.selectedLignesDetails && sousPartie.selectedLignesDetails.length > 0 && (
+                                                      <div>
+                                                        {sousPartie.selectedLignesDetails.map((ligne, index) => (
+                                                          <div
+                                                            key={`ld-sel-${sousPartie.id}-${ligne.id}-${index}`}
                                                             style={{
+                                                              backgroundColor: '#fff',
+                                                              border: '1px solid #dee2e6',
+                                                              borderRadius: '4px',
+                                                              marginBottom: '4px',
+                                                              marginLeft: '20px',
+                                                              padding: '6px 10px',
                                                               display: 'flex',
                                                               alignItems: 'center',
-                                                              justifyContent: 'center',
-                                                              width: '24px',
-                                                              height: '24px',
-                                                              border: 'none',
-                                                              backgroundColor: 'rgba(33, 150, 243, 0.8)',
-                                                              color: 'white',
-                                                              borderRadius: '50%',
-                                                              cursor: 'pointer',
-                                                              fontSize: '12px'
+                                                              justifyContent: 'space-between',
+                                                              fontSize: '13px'
                                                             }}
-                                                            title="Éditer cette sous-partie"
                                                           >
-                                                            ✏️
-                                                          </button>
-                                                          <button
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              onSousPartieRemove && onSousPartieRemove(partie.id, sousPartie.id);
-                                                            }}
-                                                            style={{
-                                                              display: 'flex',
-                                                              alignItems: 'center',
-                                                              justifyContent: 'center',
-                                                              width: '24px',
-                                                              height: '24px',
-                                                              border: 'none',
-                                                              backgroundColor: 'rgba(244, 67, 54, 0.8)',
-                                                              color: 'white',
-                                                              borderRadius: '50%',
-                                                              cursor: 'pointer',
-                                                              fontSize: '12px'
-                                                            }}
-                                                            title="Supprimer cette sous-partie"
-                                                          >
-                                                            <FiX />
-                                                          </button>
+                                                            {/* Désignation */}
+                                                            <div style={{ 
+                                                              flex: '0 0 50%', 
+                                                              paddingLeft: '22px', 
+                                                              textAlign: 'left',
+                                                              borderRight: '1px solid #e9ecef',
+                                                              paddingRight: '10px'
+                                                            }}>
+                                                              {ligne.description}
+                                                            </div>
+                                                            {/* U */}
+                                                            <div style={{ 
+                                                              flex: '0 0 80px', 
+                                                              textAlign: 'center',
+                                                              borderRight: '1px solid #e9ecef',
+                                                              paddingRight: '8px',
+                                                              color: '#6c757d'
+                                                            }}>
+                                                              {ligne.unite || ''}
+                                                            </div>
+                                                            {/* Quantité */}
+                                                            <div style={{ 
+                                                              flex: '0 0 100px', 
+                                                              textAlign: 'center',
+                                                              borderRight: '1px solid #e9ecef',
+                                                              paddingRight: '8px'
+                                                            }}>
+                                                              <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                value={ligne.quantity !== undefined ? ligne.quantity.toString() : '0'}
+                                                                onChange={(e) => {
+                                                                  const value = e.target.value;
+                                                                  // Si vide ou juste un point, ne pas changer la valeur
+                                                                  if (value === '' || value === '.') {
+                                                                    return;
+                                                                  }
+                                                                  const newQuantity = parseFloat(value) || 0;
+                                                                  if (onLigneDetailQuantityChange) {
+                                                                    onLigneDetailQuantityChange(partie.id, sousPartie.id, ligne.id, newQuantity);
+                                                                  }
+                                                                }}
+                                                                style={{
+                                                                  width: '100%',
+                                                                  border: '1px solid #dee2e6',
+                                                                  borderRadius: '4px',
+                                                                  padding: '2px 4px',
+                                                                  fontSize: '13px',
+                                                                  textAlign: 'center'
+                                                                }}
+                                                              />
+                                                            </div>
+                                                            {/* Prix unitaire */}
+                                                            <div style={{ 
+                                                              flex: '0 0 120px', 
+                                                              textAlign: 'center',
+                                                              borderRight: '1px solid #e9ecef',
+                                                              paddingRight: '8px',
+                                                              fontWeight: 500
+                                                            }}>
+                                                              {formatMontantEspace ? formatMontantEspace(parseFloat(ligne.prix || 0)) : ligne.prix}
+                                                            </div>
+                                                            {/* Total HT */}
+                                                            <div style={{ 
+                                                              flex: '0 0 140px', 
+                                                              textAlign: 'right',
+                                                              fontWeight: 600,
+                                                              paddingRight: '10px'
+                                                            }}>
+                                                              {formatMontantEspace ? formatMontantEspace(parseFloat((ligne.prix || 0) * (ligne.quantity || 0))) : parseFloat((ligne.prix || 0) * (ligne.quantity || 0))}
+                                                            </div>
+                                                          </div>
+                                                        ))}
+                                                        
+                                                        {/* Barre de recherche en bas si des lignes sont déjà sélectionnées */}
+                                                        <div style={{ marginBottom: '8px', marginLeft: '20px' }}>
+                                                          <LigneDetailSearch
+                                                            sousPartieId={sousPartie.id}
+                                                            selectedLignesDetails={sousPartie.selectedLignesDetails || []}
+                                                            onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(partie.id, sousPartie.id, ligne)}
+                                                            onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
+                                                          />
                                                         </div>
                                                       </div>
                                                     )}
-                                                  </Draggable>
+                                                  </React.Fragment>
                                                 ))}
                                                 {provided.placeholder}
                                               </div>

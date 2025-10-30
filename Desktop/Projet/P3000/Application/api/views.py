@@ -1478,6 +1478,54 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Endpoint dédié pour React Select : recherche de lignes de détails par description
+        Retourne un format {value, label, data} compatible avec React Select
+        """
+        sous_partie_id = request.query_params.get('sous_partie', None)
+        q = request.query_params.get('q', '').strip()
+        
+        queryset = LigneDetail.objects.filter(is_deleted=False)
+        
+        # Filtrer par sous-partie (obligatoire)
+        if sous_partie_id:
+            queryset = queryset.filter(sous_partie_id=sous_partie_id)
+        else:
+            # Si pas de sous_partie_id, retourner vide
+            return Response([])
+        
+        # Recherche par description
+        if q:
+            queryset = queryset.filter(description__icontains=q)
+        
+        # Limiter à 50 résultats
+        queryset = queryset[:50]
+        
+        # Formater pour React Select
+        results = []
+        for ld in queryset:
+            results.append({
+                'value': ld.id,
+                'label': ld.description or 'Sans description',
+                'data': {
+                    'id': ld.id,
+                    'description': ld.description,
+                    'unite': ld.unite,
+                    'cout_main_oeuvre': str(ld.cout_main_oeuvre),
+                    'cout_materiel': str(ld.cout_materiel),
+                    'taux_fixe': str(ld.taux_fixe),
+                    'marge': str(ld.marge),
+                    'prix': str(ld.prix),
+                    'sous_partie': ld.sous_partie_id,
+                    'partie': ld.partie_id,
+                    'is_deleted': ld.is_deleted
+                }
+            })
+        
+        return Response(results)
+
+    @action(detail=False, methods=['get'])
     def all_including_deleted(self, request):
         """
         DEBUG: Récupère toutes les lignes de détail y compris celles supprimées
