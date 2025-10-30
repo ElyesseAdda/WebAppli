@@ -48,12 +48,29 @@ const DevisTable = ({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editContext, setEditContext] = useState(null);
   const hoverTimeoutRef = React.useRef(null);
+  
+  // États pour les hover des parties et sous-parties
+  const [hoveredPartieId, setHoveredPartieId] = useState(null);
+  const [hoveredPartiePosition, setHoveredPartiePosition] = useState(null);
+  const [isPartieIconsAnimatingOut, setIsPartieIconsAnimatingOut] = useState(false);
+  const partieHoverTimeoutRef = React.useRef(null);
+  
+  const [hoveredSousPartieId, setHoveredSousPartieId] = useState(null);
+  const [hoveredSousPartiePosition, setHoveredSousPartiePosition] = useState(null);
+  const [isSousPartieIconsAnimatingOut, setIsSousPartieIconsAnimatingOut] = useState(false);
+  const sousPartieHoverTimeoutRef = React.useRef(null);
 
-  // Nettoyer le timeout quand le composant est démonté
+  // Nettoyer les timeouts quand le composant est démonté
   useEffect(() => {
     return () => {
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
+      }
+      if (partieHoverTimeoutRef.current) {
+        clearTimeout(partieHoverTimeoutRef.current);
+      }
+      if (sousPartieHoverTimeoutRef.current) {
+        clearTimeout(sousPartieHoverTimeoutRef.current);
       }
     };
   }, []);
@@ -61,6 +78,9 @@ const DevisTable = ({
   // Déclencher l'animation d'entrée quand les icônes apparaissent
   useEffect(() => {
     if (hoveredLigneDetailId) {
+      // Fermer les autres panneaux hover
+      setHoveredPartieId(null);
+      setHoveredSousPartieId(null);
       // Mettre temporairement l'animation à true pour qu'elle parte de la gauche
       setIsIconsAnimatingOut(true);
       // Puis immédiatement la remettre à false pour qu'elle vienne vers nous
@@ -69,6 +89,32 @@ const DevisTable = ({
       }, 10);
     }
   }, [hoveredLigneDetailId]);
+
+  // Déclencher l'animation d'entrée pour les parties
+  useEffect(() => {
+    if (hoveredPartieId) {
+      // Fermer les autres panneaux hover
+      setHoveredLigneDetailId(null);
+      setHoveredSousPartieId(null);
+      setIsPartieIconsAnimatingOut(true);
+      setTimeout(() => {
+        setIsPartieIconsAnimatingOut(false);
+      }, 10);
+    }
+  }, [hoveredPartieId]);
+
+  // Déclencher l'animation d'entrée pour les sous-parties
+  useEffect(() => {
+    if (hoveredSousPartieId) {
+      // Fermer les autres panneaux hover
+      setHoveredPartieId(null);
+      setHoveredLigneDetailId(null);
+      setIsSousPartieIconsAnimatingOut(true);
+      setTimeout(() => {
+        setIsSousPartieIconsAnimatingOut(false);
+      }, 10);
+    }
+  }, [hoveredSousPartieId]);
 
   // Calculer le prix basé sur les coûts et la marge
   const calculatePrice = (ligne) => {
@@ -403,7 +449,35 @@ const DevisTable = ({
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    opacity: snapshot.isDragging ? 0.8 : 1
+                                    opacity: snapshot.isDragging ? 0.8 : 1,
+                                    position: 'relative'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (snapshot.isDragging) return;
+                                    if (partieHoverTimeoutRef.current) {
+                                      clearTimeout(partieHoverTimeoutRef.current);
+                                      partieHoverTimeoutRef.current = null;
+                                    }
+                                    setIsPartieIconsAnimatingOut(false);
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredPartieId(partie.id);
+                                    setHoveredPartiePosition({
+                                      top: rect.top + rect.height / 2 - 12,
+                                      left: rect.right
+                                    });
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (partieHoverTimeoutRef.current) {
+                                      clearTimeout(partieHoverTimeoutRef.current);
+                                    }
+                                    partieHoverTimeoutRef.current = setTimeout(() => {
+                                      setIsPartieIconsAnimatingOut(true);
+                                      setTimeout(() => {
+                                        setHoveredPartieId(null);
+                                        setHoveredPartiePosition(null);
+                                        partieHoverTimeoutRef.current = null;
+                                      }, 300);
+                                    }, 1000);
                                   }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                       <div
@@ -482,68 +556,6 @@ const DevisTable = ({
                                       )}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onPartieEdit && onPartieEdit(partie.id);
-                                        }}
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          width: '28px',
-                                          height: '28px',
-                                          border: 'none',
-                                          backgroundColor: 'rgba(33, 150, 243, 0.8)',
-                                          color: 'white',
-                                          borderRadius: '50%',
-                                          cursor: 'pointer',
-                                          fontSize: '14px',
-                                          transition: 'all 0.2s ease'
-                                        }}
-                                        onMouseOver={(e) => {
-                                          e.target.style.backgroundColor = 'rgba(33, 150, 243, 1)';
-                                          e.target.style.transform = 'scale(1.1)';
-                                        }}
-                                        onMouseOut={(e) => {
-                                          e.target.style.backgroundColor = 'rgba(33, 150, 243, 0.8)';
-                                          e.target.style.transform = 'scale(1)';
-                                        }}
-                                        title="Éditer cette partie"
-                                      >
-                                        ✏️
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onPartieRemove(partie.id);
-                                        }}
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          width: '28px',
-                                          height: '28px',
-                                          border: 'none',
-                                          backgroundColor: 'rgba(244, 67, 54, 0.8)',
-                                          color: 'white',
-                                          borderRadius: '50%',
-                                          cursor: 'pointer',
-                                          fontSize: '14px',
-                                          transition: 'all 0.2s ease'
-                                        }}
-                                        onMouseOver={(e) => {
-                                          e.target.style.backgroundColor = 'rgba(244, 67, 54, 1)';
-                                          e.target.style.transform = 'scale(1.1)';
-                                        }}
-                                        onMouseOut={(e) => {
-                                          e.target.style.backgroundColor = 'rgba(244, 67, 54, 0.8)';
-                                          e.target.style.transform = 'scale(1)';
-                                        }}
-                                        title="Supprimer cette partie"
-                                      >
-                                        <FiX />
-                                      </button>
                                       <span style={{ 
                                         fontSize: '16px', 
                                         fontWeight: 'bold',
@@ -557,6 +569,56 @@ const DevisTable = ({
                                           )
                                         )} €
                                       </span>
+                                      {hoveredPartieId === partie.id && createPortal(
+                                        <div style={{
+                                          position: 'fixed',
+                                          top: `${hoveredPartiePosition?.top || 0}px`,
+                                          left: `${(hoveredPartiePosition?.left || 0) + 30}px`,
+                                          transform: `translateY(0) translateX(${isPartieIconsAnimatingOut ? '-100%' : '0'})`,
+                                          display: 'flex',
+                                          gap: '4px',
+                                          backgroundColor: 'white',
+                                          borderRadius: '8px',
+                                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                                          padding: '4px',
+                                          zIndex: 99999,
+                                          border: '1px solid #e0e0e0',
+                                          transition: 'transform 0.3s ease, opacity 0.3s ease',
+                                          opacity: isPartieIconsAnimatingOut ? 0 : 1
+                                        }}
+                                        onMouseEnter={() => {
+                                          if (partieHoverTimeoutRef.current) {
+                                            clearTimeout(partieHoverTimeoutRef.current);
+                                            partieHoverTimeoutRef.current = null;
+                                          }
+                                          setIsPartieIconsAnimatingOut(false);
+                                        }}
+                                        onMouseLeave={() => {
+                                          if (partieHoverTimeoutRef.current) {
+                                            clearTimeout(partieHoverTimeoutRef.current);
+                                          }
+                                          partieHoverTimeoutRef.current = setTimeout(() => {
+                                            setIsPartieIconsAnimatingOut(true);
+                                            setTimeout(() => {
+                                              setHoveredPartieId(null);
+                                              setHoveredPartiePosition(null);
+                                              partieHoverTimeoutRef.current = null;
+                                            }, 300);
+                                          }, 1000);
+                                        }}>
+                                          <Tooltip title="Éditer">
+                                            <IconButton size="small" onClick={() => onPartieEdit && onPartieEdit(partie.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
+                                              <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
+                                            </IconButton>
+                                          </Tooltip>
+                                          <Tooltip title="Supprimer">
+                                            <IconButton size="small" onClick={() => onPartieRemove && onPartieRemove(partie.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(244, 67, 54, 0.8)', color: 'white' }}>
+                                              <FiX />
+                                            </IconButton>
+                                          </Tooltip>
+                                        </div>,
+                                        document.body
+                                      )}
                                     </div>
                                   </div>
                                   
@@ -626,7 +688,35 @@ const DevisTable = ({
                                                               display: 'flex',
                                                               justifyContent: 'space-between',
                                                               alignItems: 'center',
-                                                              fontWeight: '600'
+                                                              fontWeight: '600',
+                                                              position: 'relative'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                              if (snapshot.isDragging) return;
+                                                              if (sousPartieHoverTimeoutRef.current) {
+                                                                clearTimeout(sousPartieHoverTimeoutRef.current);
+                                                                sousPartieHoverTimeoutRef.current = null;
+                                                              }
+                                                              setIsSousPartieIconsAnimatingOut(false);
+                                                              const rect = e.currentTarget.getBoundingClientRect();
+                                                              setHoveredSousPartieId(sousPartie.id);
+                                                              setHoveredSousPartiePosition({
+                                                                top: rect.top + rect.height / 2 - 12,
+                                                                left: rect.right
+                                                              });
+                                                            }}
+                                                            onMouseLeave={() => {
+                                                              if (sousPartieHoverTimeoutRef.current) {
+                                                                clearTimeout(sousPartieHoverTimeoutRef.current);
+                                                              }
+                                                              sousPartieHoverTimeoutRef.current = setTimeout(() => {
+                                                                setIsSousPartieIconsAnimatingOut(true);
+                                                                setTimeout(() => {
+                                                                  setHoveredSousPartieId(null);
+                                                                  setHoveredSousPartiePosition(null);
+                                                                  sousPartieHoverTimeoutRef.current = null;
+                                                                }, 300);
+                                                              }, 1000);
                                                             }}
                                                           >
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -700,50 +790,6 @@ const DevisTable = ({
                                                               <span style={{ fontSize: '15px' }}>{sousPartie.description}</span>
                                                             </div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                              <button
-                                                                onClick={(e) => {
-                                                                  e.stopPropagation();
-                                                                  onSousPartieEdit && onSousPartieEdit(partie.id, sousPartie.id);
-                                                                }}
-                                                                style={{
-                                                                  display: 'flex',
-                                                                  alignItems: 'center',
-                                                                  justifyContent: 'center',
-                                                                  width: '24px',
-                                                                  height: '24px',
-                                                                  border: 'none',
-                                                                  backgroundColor: 'rgba(33, 150, 243, 0.8)',
-                                                                  color: 'white',
-                                                                  borderRadius: '50%',
-                                                                  cursor: 'pointer',
-                                                                  fontSize: '12px'
-                                                                }}
-                                                                title="Éditer cette sous-partie"
-                                                              >
-                                                                ✏️
-                                                              </button>
-                                                              <button
-                                                                onClick={(e) => {
-                                                                  e.stopPropagation();
-                                                                  onSousPartieRemove && onSousPartieRemove(partie.id, sousPartie.id);
-                                                                }}
-                                                                style={{
-                                                                  display: 'flex',
-                                                                  alignItems: 'center',
-                                                                  justifyContent: 'center',
-                                                                  width: '24px',
-                                                                  height: '24px',
-                                                                  border: 'none',
-                                                                  backgroundColor: 'rgba(244, 67, 54, 0.8)',
-                                                                  color: 'white',
-                                                                  borderRadius: '50%',
-                                                                  cursor: 'pointer',
-                                                                  fontSize: '12px'
-                                                                }}
-                                                                title="Supprimer cette sous-partie"
-                                                              >
-                                                                <FiX />
-                                                              </button>
                                                               {/* Total des lignes de détails de la sous-partie */}
                                                               <span style={{ 
                                                                 fontSize: '14px', 
@@ -757,6 +803,56 @@ const DevisTable = ({
                                                                   )
                                                                 )} €
                                                               </span>
+                                                              {hoveredSousPartieId === sousPartie.id && createPortal(
+                                                                <div style={{
+                                                                  position: 'fixed',
+                                                                  top: `${hoveredSousPartiePosition?.top || 0}px`,
+                                                                  left: `${(hoveredSousPartiePosition?.left || 0) + 30}px`,
+                                                                  transform: `translateY(0) translateX(${isSousPartieIconsAnimatingOut ? '-100%' : '0'})`,
+                                                                  display: 'flex',
+                                                                  gap: '4px',
+                                                                  backgroundColor: 'white',
+                                                                  borderRadius: '8px',
+                                                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                                                                  padding: '4px',
+                                                                  zIndex: 99999,
+                                                                  border: '1px solid #e0e0e0',
+                                                                  transition: 'transform 0.3s ease, opacity 0.3s ease',
+                                                                  opacity: isSousPartieIconsAnimatingOut ? 0 : 1
+                                                                }}
+                                                                onMouseEnter={() => {
+                                                                  if (sousPartieHoverTimeoutRef.current) {
+                                                                    clearTimeout(sousPartieHoverTimeoutRef.current);
+                                                                    sousPartieHoverTimeoutRef.current = null;
+                                                                  }
+                                                                  setIsSousPartieIconsAnimatingOut(false);
+                                                                }}
+                                                                onMouseLeave={() => {
+                                                                  if (sousPartieHoverTimeoutRef.current) {
+                                                                    clearTimeout(sousPartieHoverTimeoutRef.current);
+                                                                  }
+                                                                  sousPartieHoverTimeoutRef.current = setTimeout(() => {
+                                                                    setIsSousPartieIconsAnimatingOut(true);
+                                                                    setTimeout(() => {
+                                                                      setHoveredSousPartieId(null);
+                                                                      setHoveredSousPartiePosition(null);
+                                                                      sousPartieHoverTimeoutRef.current = null;
+                                                                    }, 300);
+                                                                  }, 1000);
+                                                                }}>
+                                                                  <Tooltip title="Éditer">
+                                                                    <IconButton size="small" onClick={() => onSousPartieEdit && onSousPartieEdit(partie.id, sousPartie.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
+                                                                      <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
+                                                                    </IconButton>
+                                                                  </Tooltip>
+                                                                  <Tooltip title="Supprimer">
+                                                                    <IconButton size="small" onClick={() => onSousPartieRemove && onSousPartieRemove(partie.id, sousPartie.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(244, 67, 54, 0.8)', color: 'white' }}>
+                                                                      <FiX />
+                                                                    </IconButton>
+                                                                  </Tooltip>
+                                                                </div>,
+                                                                document.body
+                                                              )}
                                                             </div>
                                                           </div>
                                                           
@@ -978,7 +1074,7 @@ const DevisTable = ({
                                                                       {/* Boutons d'action */}
                                                                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
                                                                       <Tooltip title="Éditer">
-                                                                        <IconButton size="small" onClick={() => { setEditContext({ partieId: partie.id, sousPartieId: sousPartie.id, ligne }); setIsEditOpen(true); }} style={{ width: '24px', height: '24px', padding: '4px' }}>
+                                                                        <IconButton size="small" onClick={() => { setEditContext({ partieId: partie.id, sousPartieId: sousPartie.id, ligne }); setIsEditOpen(true); }} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
                                                                           <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
                                                                         </IconButton>
                                                                       </Tooltip>
