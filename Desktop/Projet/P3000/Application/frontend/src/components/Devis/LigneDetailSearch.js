@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Select from 'react-select';
 import Fuse from 'fuse.js';
 import axios from 'axios';
+import LigneDetailCreateModal from './LigneDetailCreateModal';
 
 const LigneDetailSearch = ({
   sousPartieId,
+  partieId,
   selectedLignesDetails = [],
   onLigneDetailSelect,
   onLigneDetailCreate
@@ -12,6 +14,8 @@ const LigneDetailSearch = ({
   const [inputValue, setInputValue] = useState('');
   const [options, setOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDescription, setModalDescription] = useState('');
 
   // Configuration de Fuse.js pour la recherche floue
   const fuse = useMemo(() => {
@@ -120,16 +124,26 @@ const LigneDetailSearch = ({
     if (!selectedOption) return;
 
     if (selectedOption.value === 'create' || selectedOption.data?.isCreate) {
-      if (onLigneDetailCreate && inputValue.trim()) {
-        onLigneDetailCreate(sousPartieId, inputValue.trim());
-        setInputValue('');
-      }
+      // Ouvrir le modal de création
+      setModalDescription(inputValue.trim());
+      setIsModalOpen(true);
+      setInputValue('');
     } else {
       if (onLigneDetailSelect) {
         onLigneDetailSelect(selectedOption.data);
         setInputValue('');
       }
     }
+  };
+
+  // Gérer la création réussie depuis le modal
+  const handleModalSuccess = (newLigneDetail) => {
+    // Ajouter la nouvelle ligne directement
+    if (onLigneDetailSelect) {
+      onLigneDetailSelect({ ...newLigneDetail, quantity: 0 });
+    }
+    setIsModalOpen(false);
+    setModalDescription('');
   };
 
   const customStyles = {
@@ -182,27 +196,38 @@ const LigneDetailSearch = ({
   };
 
   return (
-    <div style={{ marginBottom: '8px' }}>
-      <Select
-        isClearable
-        isSearchable
-        placeholder="Rechercher une ligne de détail..."
-        options={optionsWithCreate}
-        value={null}
-        onChange={handleChange}
-        inputValue={inputValue}
-        onInputChange={(newValue) => setInputValue(newValue)}
-        styles={customStyles}
-        menuPortalTarget={document.body}
-        menuPosition="fixed"
-        isLoading={isLoading}
-        noOptionsMessage={() => 
-          inputValue.trim() 
-            ? `Aucune ligne trouvée. Tapez pour créer "${inputValue}"`
-            : 'Commencez à taper pour rechercher...'
-        }
+    <>
+      <div style={{ marginBottom: '8px' }}>
+        <Select
+          isClearable
+          isSearchable
+          placeholder="Rechercher une ligne de détail..."
+          options={optionsWithCreate}
+          value={null}
+          onChange={handleChange}
+          inputValue={inputValue}
+          onInputChange={(newValue) => setInputValue(newValue)}
+          styles={customStyles}
+          menuPortalTarget={document.body}
+          menuPosition="fixed"
+          isLoading={isLoading}
+          noOptionsMessage={() => 
+            inputValue.trim() 
+              ? `Aucune ligne trouvée. Tapez pour créer "${inputValue}"`
+              : 'Commencez à taper pour rechercher...'
+          }
+        />
+      </div>
+      
+      <LigneDetailCreateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        description={modalDescription}
+        sousPartieId={sousPartieId}
+        partieId={partieId}
+        onSuccess={handleModalSuccess}
       />
-    </div>
+    </>
   );
 };
 

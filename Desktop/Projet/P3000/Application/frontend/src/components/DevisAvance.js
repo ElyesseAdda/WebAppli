@@ -697,6 +697,75 @@ const DevisAvance = () => {
     }));
   };
 
+  // Retirer une ligne de détail du devis
+  const handleLigneDetailRemove = (partieId, sousPartieId, ligneDetailId) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id !== partieId) return p;
+      const updatedSous = (p.selectedSousParties || []).map(sp => {
+        if (sp.id !== sousPartieId) return sp;
+        const updatedLignes = (sp.selectedLignesDetails || []).filter(ld => ld.id !== ligneDetailId);
+        return { ...sp, selectedLignesDetails: updatedLignes };
+      });
+      return { ...p, selectedSousParties: updatedSous };
+    }));
+  };
+
+  // Éditer une ligne de détail (modal d'édition)
+  const handleLigneDetailEdit = (ligneDetail) => {
+    console.log('Édition de ligne de détail:', ligneDetail);
+    // Le modal d'édition est géré par DevisTable
+  };
+
+  // Modifier la marge d'une ligne de détail (ce qui recalcule le prix unitaire)
+  const handleLigneDetailMargeChange = (partieId, sousPartieId, ligneDetailId, marge) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id !== partieId) return p;
+      const updatedSous = (p.selectedSousParties || []).map(sp => {
+        if (sp.id !== sousPartieId) return sp;
+        const updatedLignes = (sp.selectedLignesDetails || []).map(ld => {
+          if (ld.id !== ligneDetailId) return ld;
+          // Calculer le nouveau prix basé sur la marge
+          const cout_total = parseFloat(ld.cout_main_oeuvre || 0) + parseFloat(ld.cout_materiel || 0);
+          const taux_fixe = parseFloat(ld.taux_fixe || 0);
+          const prix_base = cout_total * (1 + taux_fixe / 100);
+          const prix_calcule = prix_base * (1 + marge / 100);
+          return { 
+            ...ld, 
+            marge_devis: marge,
+            prix_devis: prix_calcule
+          };
+        });
+        return { ...sp, selectedLignesDetails: updatedLignes };
+      });
+      return { ...p, selectedSousParties: updatedSous };
+    }));
+  };
+
+  // Modifier directement le prix unitaire d'une ligne de détail
+  const handleLigneDetailPriceChange = (partieId, sousPartieId, ligneDetailId, prix) => {
+    setSelectedParties(prev => prev.map(p => {
+      if (p.id !== partieId) return p;
+      const updatedSous = (p.selectedSousParties || []).map(sp => {
+        if (sp.id !== sousPartieId) return sp;
+        const updatedLignes = (sp.selectedLignesDetails || []).map(ld => {
+          if (ld.id !== ligneDetailId) return ld;
+          // Si le prix est modifié manuellement, calculer la marge implicite
+          const cout_total = parseFloat(ld.cout_main_oeuvre || 0) + parseFloat(ld.cout_materiel || 0);
+          const taux_fixe = parseFloat(ld.taux_fixe || 0);
+          const prix_base = cout_total * (1 + taux_fixe / 100);
+          const marge_implicite = prix_base > 0 ? ((prix / prix_base) - 1) * 100 : 0;
+          return { 
+            ...ld, 
+            prix_devis: prix,
+            marge_devis: marge_implicite
+          };
+        });
+        return { ...sp, selectedLignesDetails: updatedLignes };
+      });
+      return { ...p, selectedSousParties: updatedSous };
+    }));
+  };
+
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();
@@ -946,6 +1015,10 @@ const DevisAvance = () => {
               onLigneDetailSelect={handleLigneDetailSelect}
               onLigneDetailCreate={handleLigneDetailCreate}
               onLigneDetailQuantityChange={handleLigneDetailQuantityChange}
+              onLigneDetailEdit={handleLigneDetailEdit}
+              onLigneDetailRemove={handleLigneDetailRemove}
+              onLigneDetailMargeChange={handleLigneDetailMargeChange}
+              onLigneDetailPriceChange={handleLigneDetailPriceChange}
             />
           </div>
 

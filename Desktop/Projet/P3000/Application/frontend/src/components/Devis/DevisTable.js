@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { IconButton, Tooltip } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import { FiX } from 'react-icons/fi';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import PartieSearch from './PartieSearch';
 import SousPartieSearch from './SousPartieSearch';
 import LigneDetailSearch from './LigneDetailSearch';
+import LigneDetailEditModal from './LigneDetailEditModal';
 
 const DevisTable = ({ 
   devisData, 
@@ -30,8 +34,67 @@ const DevisTable = ({
   onSousPartiesReorder,
   onLigneDetailSelect,
   onLigneDetailCreate,
-  onLigneDetailQuantityChange
+  onLigneDetailQuantityChange,
+  onLigneDetailEdit,
+  onLigneDetailRemove,
+  onLigneDetailMargeChange,
+  onLigneDetailPriceChange
 }) => {
+  // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
+  const [draggedPartieId, setDraggedPartieId] = useState(null);
+  const [hoveredLigneDetailId, setHoveredLigneDetailId] = useState(null);
+  const [hoveredLignePosition, setHoveredLignePosition] = useState(null);
+  const [isIconsAnimatingOut, setIsIconsAnimatingOut] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editContext, setEditContext] = useState(null);
+  const hoverTimeoutRef = React.useRef(null);
+
+  // Nettoyer le timeout quand le composant est démonté
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Déclencher l'animation d'entrée quand les icônes apparaissent
+  useEffect(() => {
+    if (hoveredLigneDetailId) {
+      // Mettre temporairement l'animation à true pour qu'elle parte de la gauche
+      setIsIconsAnimatingOut(true);
+      // Puis immédiatement la remettre à false pour qu'elle vienne vers nous
+      setTimeout(() => {
+        setIsIconsAnimatingOut(false);
+      }, 10);
+    }
+  }, [hoveredLigneDetailId]);
+
+  // Calculer le prix basé sur les coûts et la marge
+  const calculatePrice = (ligne) => {
+    // Si un prix_devis existe (prix personnalisé pour ce devis), l'utiliser
+    if (ligne.prix_devis !== null && ligne.prix_devis !== undefined) {
+      return parseFloat(ligne.prix_devis);
+    }
+    
+    // Sinon, utiliser la marge du devis si elle existe, sinon la marge de base
+    const marge = ligne.marge_devis !== null && ligne.marge_devis !== undefined 
+      ? parseFloat(ligne.marge_devis)
+      : parseFloat(ligne.marge) || 0;
+    
+    const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
+    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+    const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
+    
+    const base = cout_main_oeuvre + cout_materiel;
+    const montant_taux_fixe = base * (taux_fixe / 100);
+    const sous_total = base + montant_taux_fixe;
+    const montant_marge = sous_total * (marge / 100);
+    const prix = sous_total + montant_marge;
+    
+    return prix;
+  };
+
   // Fonction pour gérer la fin du drag & drop
   const handleDragEnd = (result) => {
     console.log('🎯 Drag end result:', result);
@@ -489,7 +552,7 @@ const DevisTable = ({
                                         {formatMontantEspace(
                                           (partie.selectedSousParties || []).reduce((partieSum, sp) => 
                                             partieSum + (sp.selectedLignesDetails || []).reduce((spSum, ld) => 
-                                              spSum + (parseFloat(ld.prix || 0) * parseFloat(ld.quantity || 0)), 0
+                                              spSum + (calculatePrice(ld) * parseFloat(ld.quantity || 0)), 0
                                             ), 0
                                           )
                                         )} €
@@ -503,7 +566,9 @@ const DevisTable = ({
                                     padding: '20px',
                                     border: '1px solid #dee2e6',
                                     borderTop: 'none',
-                                    borderRadius: '0 0 4px 4px'
+                                    borderRadius: '0 0 4px 4px',
+                                    overflow: 'visible',
+                                    position: 'relative'
                                   }}>
                                     {/* Barre de recherche de sous-partie en haut si aucune sous-partie */}
                                     {(!partie.selectedSousParties || partie.selectedSousParties.length === 0) && (
@@ -521,10 +586,19 @@ const DevisTable = ({
                                     {partie.selectedSousParties && partie.selectedSousParties.length > 0 && (
                                       <div>
                                         <DragDropContext
+                                          onDragStart={(start) => {
+                                            console.log('🎯 Drag start sous-partie:', start);
+                                            setDraggedPartieId(partie.id);
+                                          }}
                                           onDragEnd={(result) => {
+                                            console.log('🎯 Drag end sous-partie:', result);
                                             if (result.destination && onSousPartiesReorder) {
                                               onSousPartiesReorder(partie.id, result);
                                             }
+                                            // Attendre que la fin du drag soit complète avant de réafficher les lignes
+                                            setTimeout(() => {
+                                              setDraggedPartieId(null);
+                                            }, 150);
                                           }}
                                         >
                                           <Droppable droppableId={`sous-parties-${partie.id}`}>
@@ -537,273 +611,463 @@ const DevisTable = ({
                                                       index={spIndex}
                                                     >
                                                       {(provided, snapshot) => (
-                                                        <div
-                                                          ref={provided.innerRef}
-                                                          {...provided.draggableProps}
-                                                          style={{
-                                                            ...provided.draggableProps.style,
-                                                            backgroundColor: 'rgb(157, 197, 226)',
-                                                            color: '#333',
-                                                            padding: '10px 15px',
-                                                            marginBottom: '8px',
-                                                            borderRadius: '4px',
-                                                            boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
-                                                            display: 'flex',
-                                                            justifyContent: 'space-between',
-                                                            alignItems: 'center',
-                                                            fontWeight: '600'
-                                                          }}
-                                                        >
-                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                            <div
-                                                              {...provided.dragHandleProps}
-                                                              style={{
-                                                                cursor: 'grab',
-                                                                padding: '4px',
-                                                                borderRadius: '4px',
-                                                                backgroundColor: 'rgba(0,0,0,0.1)',
-                                                                userSelect: 'none'
-                                                              }}
-                                                            >
-                                                              ⋮⋮
-                                                            </div>
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (onSousPartieNumeroChange) {
-                                                                  const currentNumero = sousPartie.numero;
-                                                                  if (currentNumero) {
-                                                                    onSousPartieNumeroChange(partie.id, sousPartie.id, '');
-                                                                  } else {
-                                                                    // Attribuer le prochain numéro automatique
-                                                                    const parentNumero = partie.numero;
-                                                                    const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
-
-                                                                    if (isParentNumeric) {
-                                                                      // Filtrer les sous-parties déjà numérotées avec le même préfixe
-                                                                      const regex = new RegExp('^' + parentNumero + '\\.(\\d+)$');
-                                                                      const withPrefix = (partie.selectedSousParties || []).filter(sp => sp.numero && regex.test(sp.numero));
-                                                                      let nextIndex = 1;
-                                                                      if (withPrefix.length > 0) {
-                                                                        const maxIdx = Math.max(
-                                                                          ...withPrefix.map(sp => {
-                                                                            const m = sp.numero.match(regex);
-                                                                            return m ? parseInt(m[1], 10) : 0;
-                                                                          })
-                                                                        );
-                                                                        nextIndex = maxIdx + 1;
-                                                                      }
-                                                                      onSousPartieNumeroChange(partie.id, sousPartie.id, `${parentNumero}.${nextIndex}`);
-                                                                    } else {
-                                                                      // Comportement fallback: numérotation simple 1,2,3 (sans préfixe)
-                                                                      const simples = (partie.selectedSousParties || []).filter(sp => sp.numero && /^\d+$/.test(sp.numero));
-                                                                      let nextSimple = 1;
-                                                                      if (simples.length > 0) {
-                                                                        const maxSimple = Math.max(...simples.map(sp => parseInt(sp.numero, 10)));
-                                                                        nextSimple = maxSimple + 1;
-                                                                      }
-                                                                      onSousPartieNumeroChange(partie.id, sousPartie.id, String(nextSimple));
-                                                                    }
-                                                                  }
-                                                                }
-                                                              }}
-                                                              style={{
-                                                                width: '40px',
-                                                                height: '28px',
-                                                                padding: '2px 4px',
-                                                                border: '1px solid rgba(0,0,0,0.2)',
-                                                                borderRadius: '4px',
-                                                                backgroundColor: sousPartie.numero ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
-                                                                color: '#333',
-                                                                fontSize: '12px',
-                                                                fontWeight: 'bold',
-                                                                cursor: 'pointer'
-                                                              }}
-                                                            >
-                                                              {sousPartie.numero || 'N°'}
-                                                            </button>
-                                                            <span style={{ fontSize: '15px' }}>{sousPartie.description}</span>
-                                                          </div>
-                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onSousPartieEdit && onSousPartieEdit(partie.id, sousPartie.id);
-                                                              }}
-                                                              style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                width: '24px',
-                                                                height: '24px',
-                                                                border: 'none',
-                                                                backgroundColor: 'rgba(33, 150, 243, 0.8)',
-                                                                color: 'white',
-                                                                borderRadius: '50%',
-                                                                cursor: 'pointer',
-                                                                fontSize: '12px'
-                                                              }}
-                                                              title="Éditer cette sous-partie"
-                                                            >
-                                                              ✏️
-                                                            </button>
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onSousPartieRemove && onSousPartieRemove(partie.id, sousPartie.id);
-                                                              }}
-                                                              style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                width: '24px',
-                                                                height: '24px',
-                                                                border: 'none',
-                                                                backgroundColor: 'rgba(244, 67, 54, 0.8)',
-                                                                color: 'white',
-                                                                borderRadius: '50%',
-                                                                cursor: 'pointer',
-                                                                fontSize: '12px'
-                                                              }}
-                                                              title="Supprimer cette sous-partie"
-                                                            >
-                                                              <FiX />
-                                                            </button>
-                                                            {/* Total des lignes de détails de la sous-partie */}
-                                                            <span style={{ 
-                                                              fontSize: '14px', 
-                                                              fontWeight: 'bold',
-                                                              marginLeft: '8px',
-                                                              color: '#333'
-                                                            }}>
-                                                              {formatMontantEspace(
-                                                                (sousPartie.selectedLignesDetails || []).reduce((sum, ld) => 
-                                                                  sum + (parseFloat(ld.prix || 0) * parseFloat(ld.quantity || 0)), 0
-                                                                )
-                                                              )} €
-                                                            </span>
-                                                          </div>
-                                                        </div>
-                                                      )}
-                                                    </Draggable>
-                                                    
-                                                    {/* Barre de recherche des lignes de détails (en dessous de la sous-partie) */}
-                                                    {(!sousPartie.selectedLignesDetails || sousPartie.selectedLignesDetails.length === 0) && (
-                                                      <div style={{ marginBottom: '8px', marginLeft: '20px' }}>
-                                                        <LigneDetailSearch
-                                                          sousPartieId={sousPartie.id}
-                                                          selectedLignesDetails={sousPartie.selectedLignesDetails || []}
-                                                          onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(partie.id, sousPartie.id, ligne)}
-                                                          onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
-                                                        />
-                                                      </div>
-                                                    )}
-
-                                                    {/* Lignes de détails sélectionnées par l'utilisateur */}
-                                                    {sousPartie.selectedLignesDetails && sousPartie.selectedLignesDetails.length > 0 && (
-                                                      <div>
-                                                        {sousPartie.selectedLignesDetails.map((ligne, index) => (
+                                                        <div>
                                                           <div
-                                                            key={`ld-sel-${sousPartie.id}-${ligne.id}-${index}`}
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
                                                             style={{
-                                                              backgroundColor: '#fff',
-                                                              border: '1px solid #dee2e6',
+                                                              ...provided.draggableProps.style,
+                                                              backgroundColor: 'rgb(157, 197, 226)',
+                                                              color: '#333',
+                                                              padding: '10px 15px',
+                                                              marginBottom: '8px',
                                                               borderRadius: '4px',
-                                                              marginBottom: '4px',
-                                                              marginLeft: '20px',
-                                                              padding: '6px 10px',
+                                                              boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
                                                               display: 'flex',
-                                                              alignItems: 'center',
                                                               justifyContent: 'space-between',
-                                                              fontSize: '13px'
+                                                              alignItems: 'center',
+                                                              fontWeight: '600'
                                                             }}
                                                           >
-                                                            {/* Désignation */}
-                                                            <div style={{ 
-                                                              flex: '0 0 50%', 
-                                                              paddingLeft: '22px', 
-                                                              textAlign: 'left',
-                                                              borderRight: '1px solid #e9ecef',
-                                                              paddingRight: '10px'
-                                                            }}>
-                                                              {ligne.description}
-                                                            </div>
-                                                            {/* U */}
-                                                            <div style={{ 
-                                                              flex: '0 0 80px', 
-                                                              textAlign: 'center',
-                                                              borderRight: '1px solid #e9ecef',
-                                                              paddingRight: '8px',
-                                                              color: '#6c757d'
-                                                            }}>
-                                                              {ligne.unite || ''}
-                                                            </div>
-                                                            {/* Quantité */}
-                                                            <div style={{ 
-                                                              flex: '0 0 100px', 
-                                                              textAlign: 'center',
-                                                              borderRight: '1px solid #e9ecef',
-                                                              paddingRight: '8px'
-                                                            }}>
-                                                              <input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.01"
-                                                                value={ligne.quantity !== undefined ? ligne.quantity.toString() : '0'}
-                                                                onChange={(e) => {
-                                                                  const value = e.target.value;
-                                                                  // Si vide ou juste un point, ne pas changer la valeur
-                                                                  if (value === '' || value === '.') {
-                                                                    return;
-                                                                  }
-                                                                  const newQuantity = parseFloat(value) || 0;
-                                                                  if (onLigneDetailQuantityChange) {
-                                                                    onLigneDetailQuantityChange(partie.id, sousPartie.id, ligne.id, newQuantity);
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                              <div
+                                                                {...provided.dragHandleProps}
+                                                                style={{
+                                                                  cursor: 'grab',
+                                                                  padding: '4px',
+                                                                  borderRadius: '4px',
+                                                                  backgroundColor: 'rgba(0,0,0,0.1)',
+                                                                  userSelect: 'none'
+                                                                }}
+                                                              >
+                                                                ⋮⋮
+                                                              </div>
+                                                              <button
+                                                                onClick={(e) => { 
+                                                                  e.stopPropagation();
+                                                                  if (onSousPartieNumeroChange) {
+                                                                    const currentNumero = sousPartie.numero;
+                                                                    if (currentNumero) {
+                                                                      onSousPartieNumeroChange(partie.id, sousPartie.id, '');
+                                                                    } else {
+                                                                      // Attribuer le prochain numéro automatique
+                                                                      const parentNumero = partie.numero;
+                                                                      const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
+
+                                                                      if (isParentNumeric) {
+                                                                        // Filtrer les sous-parties déjà numérotées avec le même préfixe
+                                                                        const regex = new RegExp('^' + parentNumero + '\\.(\\d+)$');
+                                                                        const withPrefix = (partie.selectedSousParties || []).filter(sp => sp.numero && regex.test(sp.numero));
+                                                                        let nextIndex = 1;
+                                                                        if (withPrefix.length > 0) {
+                                                                          const maxIdx = Math.max(
+                                                                            ...withPrefix.map(sp => {
+                                                                              const m = sp.numero.match(regex);
+                                                                              return m ? parseInt(m[1], 10) : 0;
+                                                                            })
+                                                                          );
+                                                                          nextIndex = maxIdx + 1;
+                                                                        }
+                                                                        onSousPartieNumeroChange(partie.id, sousPartie.id, `${parentNumero}.${nextIndex}`);
+                                                                      } else {
+                                                                        // Comportement fallback: numérotation simple 1,2,3 (sans préfixe)
+                                                                        const simples = (partie.selectedSousParties || []).filter(sp => sp.numero && /^\d+$/.test(sp.numero));
+                                                                        let nextSimple = 1;
+                                                                        if (simples.length > 0) {
+                                                                          const maxSimple = Math.max(...simples.map(sp => parseInt(sp.numero, 10)));
+                                                                          nextSimple = maxSimple + 1;
+                                                                        }
+                                                                        onSousPartieNumeroChange(partie.id, sousPartie.id, String(nextSimple));
+                                                                      }
+                                                                    }
                                                                   }
                                                                 }}
                                                                 style={{
-                                                                  width: '100%',
-                                                                  border: '1px solid #dee2e6',
-                                                                  borderRadius: '4px',
+                                                                  width: '40px',
+                                                                  height: '28px',
                                                                   padding: '2px 4px',
-                                                                  fontSize: '13px',
-                                                                  textAlign: 'center'
+                                                                  border: '1px solid rgba(0,0,0,0.2)',
+                                                                  borderRadius: '4px',
+                                                                  backgroundColor: sousPartie.numero ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
+                                                                  color: '#333',
+                                                                  fontSize: '12px',
+                                                                  fontWeight: 'bold',
+                                                                  cursor: 'pointer'
                                                                 }}
-                                                              />
+                                                              >
+                                                                {sousPartie.numero || 'N°'}
+                                                              </button>
+                                                              <span style={{ fontSize: '15px' }}>{sousPartie.description}</span>
                                                             </div>
-                                                            {/* Prix unitaire */}
-                                                            <div style={{ 
-                                                              flex: '0 0 120px', 
-                                                              textAlign: 'center',
-                                                              borderRight: '1px solid #e9ecef',
-                                                              paddingRight: '8px',
-                                                              fontWeight: 500
-                                                            }}>
-                                                              {formatMontantEspace ? formatMontantEspace(parseFloat(ligne.prix || 0)) : ligne.prix}
-                                                            </div>
-                                                            {/* Total HT */}
-                                                            <div style={{ 
-                                                              flex: '0 0 140px', 
-                                                              textAlign: 'right',
-                                                              fontWeight: 600,
-                                                              paddingRight: '10px'
-                                                            }}>
-                                                              {formatMontantEspace ? formatMontantEspace(parseFloat((ligne.prix || 0) * (ligne.quantity || 0))) : parseFloat((ligne.prix || 0) * (ligne.quantity || 0))}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                              <button
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  onSousPartieEdit && onSousPartieEdit(partie.id, sousPartie.id);
+                                                                }}
+                                                                style={{
+                                                                  display: 'flex',
+                                                                  alignItems: 'center',
+                                                                  justifyContent: 'center',
+                                                                  width: '24px',
+                                                                  height: '24px',
+                                                                  border: 'none',
+                                                                  backgroundColor: 'rgba(33, 150, 243, 0.8)',
+                                                                  color: 'white',
+                                                                  borderRadius: '50%',
+                                                                  cursor: 'pointer',
+                                                                  fontSize: '12px'
+                                                                }}
+                                                                title="Éditer cette sous-partie"
+                                                              >
+                                                                ✏️
+                                                              </button>
+                                                              <button
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  onSousPartieRemove && onSousPartieRemove(partie.id, sousPartie.id);
+                                                                }}
+                                                                style={{
+                                                                  display: 'flex',
+                                                                  alignItems: 'center',
+                                                                  justifyContent: 'center',
+                                                                  width: '24px',
+                                                                  height: '24px',
+                                                                  border: 'none',
+                                                                  backgroundColor: 'rgba(244, 67, 54, 0.8)',
+                                                                  color: 'white',
+                                                                  borderRadius: '50%',
+                                                                  cursor: 'pointer',
+                                                                  fontSize: '12px'
+                                                                }}
+                                                                title="Supprimer cette sous-partie"
+                                                              >
+                                                                <FiX />
+                                                              </button>
+                                                              {/* Total des lignes de détails de la sous-partie */}
+                                                              <span style={{ 
+                                                                fontSize: '14px', 
+                                                                fontWeight: 'bold',
+                                                                marginLeft: '8px',
+                                                                color: '#333'
+                                                              }}>
+                                                                {formatMontantEspace(
+                                                                  (sousPartie.selectedLignesDetails || []).reduce((sum, ld) => 
+                                                                    sum + (calculatePrice(ld) * parseFloat(ld.quantity || 0)), 0
+                                                                  )
+                                                                )} €
+                                                              </span>
                                                             </div>
                                                           </div>
-                                                        ))}
+                                                          
+                                                          {/* Barre de recherche des lignes de détails (en dessous de la sous-partie) */}
+                                                          {(!sousPartie.selectedLignesDetails || sousPartie.selectedLignesDetails.length === 0) && (
+                                                            <div style={{ 
+                                                              marginBottom: '8px', 
+                                                              marginLeft: '20px',
+                                                              maxHeight: draggedPartieId === partie.id ? '0' : '1000px',
+                                                              opacity: draggedPartieId === partie.id ? 0 : 1,
+                                                              overflow: 'hidden',
+                                                              transition: 'max-height 0.3s ease, opacity 0.3s ease',
+                                                              transform: draggedPartieId === partie.id ? 'scale(0.95)' : 'scale(1)'
+                                                            }}>
+                                                              <LigneDetailSearch
+                                                                sousPartieId={sousPartie.id}
+                                                                partieId={partie.id}
+                                                                selectedLignesDetails={sousPartie.selectedLignesDetails || []}
+                                                                onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(partie.id, sousPartie.id, ligne)}
+                                                                onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
+                                                              />
+                                                            </div>
+                                                          )}
+
+                                                          {/* Lignes de détails sélectionnées par l'utilisateur */}
+                                                          {sousPartie.selectedLignesDetails && sousPartie.selectedLignesDetails.length > 0 && (
+                                                            <div style={{
+                                                              maxHeight: draggedPartieId === partie.id ? '0' : '1000px',
+                                                              opacity: draggedPartieId === partie.id ? 0 : 1,
+                                                              overflow: draggedPartieId === partie.id ? 'hidden' : 'visible',
+                                                              transition: 'max-height 0.3s ease, opacity 0.3s ease',
+                                                              transform: draggedPartieId === partie.id ? 'scale(0.95)' : 'scale(1)'
+                                                            }}>
+                                                              {sousPartie.selectedLignesDetails.map((ligne, index) => (
+                                                                <div
+                                                                  key={`ld-sel-${sousPartie.id}-${ligne.id}-${index}`}
+                                                                  style={{
+                                                                    backgroundColor: '#fff',
+                                                                    border: '1px solid #dee2e6',
+                                                                    borderRadius: '4px',
+                                                                    marginBottom: '4px',
+                                                                    marginLeft: '20px',
+                                                                    padding: '6px 10px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between',
+                                                                    fontSize: '13px',
+                                                                    position: 'relative',
+                                                                    paddingRight: '58px'
+                                                                  }}
+                                                                  onMouseEnter={(e) => {
+                                                                    // Annuler le timeout précédent si il existe
+                                                                    if (hoverTimeoutRef.current) {
+                                                                      clearTimeout(hoverTimeoutRef.current);
+                                                                      hoverTimeoutRef.current = null;
+                                                                    }
+                                                                    setIsIconsAnimatingOut(false);
+                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                    setHoveredLigneDetailId(ligne.id);
+                                                                    setHoveredLignePosition({
+                                                                      top: rect.top + rect.height / 2 - 24,
+                                                                      left: rect.right
+                                                                    });
+                                                                  }}
+                                                                  onMouseLeave={() => {
+                                                                    // Démarrer un timer de 1 seconde avant de cacher les icônes
+                                                                    if (hoverTimeoutRef.current) {
+                                                                      clearTimeout(hoverTimeoutRef.current);
+                                                                    }
+                                                                    hoverTimeoutRef.current = setTimeout(() => {
+                                                                      setIsIconsAnimatingOut(true);
+                                                                      setTimeout(() => {
+                                                                        setHoveredLigneDetailId(null);
+                                                                        setHoveredLignePosition(null);
+                                                                        hoverTimeoutRef.current = null;
+                                                                      }, 300); // Attendre la fin de l'animation
+                                                                    }, 1000);
+                                                                  }}
+                                                                >
+                                                                  {/* Désignation */}
+                                                                  <div style={{ 
+                                                                    flex: '0 0 50%', 
+                                                                    paddingLeft: '22px', 
+                                                                    textAlign: 'left',
+                                                                    borderRight: '1px solid #e9ecef',
+                                                                    paddingRight: '10px'
+                                                                  }}>
+                                                                    {ligne.description}
+                                                                  </div>
+                                                                  {/* U */}
+                                                                  <div style={{ 
+                                                                    flex: '0 0 80px', 
+                                                                    textAlign: 'center',
+                                                                    borderRight: '1px solid #e9ecef',
+                                                                    paddingRight: '8px',
+                                                                    color: '#6c757d'
+                                                                  }}>
+                                                                    {ligne.unite || ''}
+                                                                  </div>
+                                                                  {/* Quantité */}
+                                                                  <div style={{ 
+                                                                    flex: '0 0 100px', 
+                                                                    textAlign: 'center',
+                                                                    borderRight: '1px solid #e9ecef',
+                                                                    paddingRight: '8px'
+                                                                  }}>
+                                                                    <input
+                                                                      type="number"
+                                                                      min="0"
+                                                                      step="0.01"
+                                                                      value={ligne.quantity !== undefined ? ligne.quantity.toString() : '0'}
+                                                                      onChange={(e) => {
+                                                                        const value = e.target.value;
+                                                                        // Si vide ou juste un point, ne pas changer la valeur
+                                                                        if (value === '' || value === '.') {
+                                                                          return;
+                                                                        }
+                                                                        const newQuantity = parseFloat(value) || 0;
+                                                                        if (onLigneDetailQuantityChange) {
+                                                                          onLigneDetailQuantityChange(partie.id, sousPartie.id, ligne.id, newQuantity);
+                                                                        }
+                                                                      }}
+                                                                      style={{
+                                                                        width: '100%',
+                                                                        border: '1px solid #dee2e6',
+                                                                        borderRadius: '4px',
+                                                                        padding: '2px 4px',
+                                                                        fontSize: '13px',
+                                                                        textAlign: 'center'
+                                                                      }}
+                                                                    />
+                                                                  </div>
+                                                                  {/* Prix unitaire */}
+                                                                  <div style={{ 
+                                                                    flex: '0 0 120px', 
+                                                                    textAlign: 'center',
+                                                                    borderRight: '1px solid #e9ecef',
+                                                                    paddingRight: '8px',
+                                                                    fontWeight: 500
+                                                                  }}>
+                                                                    <input
+                                                                      type="number"
+                                                                      step="0.01"
+                                                                      min="0"
+                                                                      value={ligne.prix_devis !== null && ligne.prix_devis !== undefined ? ligne.prix_devis : calculatePrice(ligne)}
+                                                                      onChange={(e) => {
+                                                                        const value = e.target.value;
+                                                                        // Si vide ou juste un point, ne pas changer la valeur
+                                                                        if (value === '' || value === '.') {
+                                                                          return;
+                                                                        }
+                                                                        const newPrice = parseFloat(value) || 0;
+                                                                        if (onLigneDetailPriceChange) {
+                                                                          onLigneDetailPriceChange(partie.id, sousPartie.id, ligne.id, newPrice);
+                                                                        }
+                                                                      }}
+                                                                      style={{
+                                                                        width: '100%',
+                                                                        border: '1px solid #dee2e6',
+                                                                        borderRadius: '4px',
+                                                                        padding: '2px 4px',
+                                                                        fontSize: '13px',
+                                                                        textAlign: 'center',
+                                                                        backgroundColor: 'transparent'
+                                                                      }}
+                                                                    />
+                                                                  </div>
+                                                                  {/* Total HT */}
+                                                                  <div style={{ 
+                                                                    flex: '0 0 140px', 
+                                                                    textAlign: 'right',
+                                                                    fontWeight: 600,
+                                                                    paddingRight: '10px'
+                                                                  }}>
+                                                                    {formatMontantEspace ? formatMontantEspace(calculatePrice(ligne) * (ligne.quantity || 0)) : (calculatePrice(ligne) * (ligne.quantity || 0)).toFixed(2)}
+                                                                  </div>
+                                                                  {hoveredLigneDetailId === ligne.id && createPortal(
+                                                                    <div style={{
+                                                                      position: 'fixed',
+                                                                      top: `${hoveredLignePosition?.top || 0}px`,
+                                                                      left: `${(hoveredLignePosition?.left || 0) + 30}px`,
+                                                                      transform: `translateY(30%) translateX(${isIconsAnimatingOut ? '-100%' : '0'})`,
+                                                                      display: 'flex',
+                                                                      flexDirection: 'row',
+                                                                      gap: '8px',
+                                                                      alignItems: 'center',
+                                                                      backgroundColor: 'white',
+                                                                      borderRadius: '8px',
+                                                                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                                                                      padding: '8px',
+                                                                      zIndex: 99999,
+                                                                      border: '1px solid #e0e0e0',
+                                                                      transition: 'transform 0.3s ease, opacity 0.3s ease',
+                                                                      opacity: isIconsAnimatingOut ? 0 : 1,
+                                                                      minWidth: '320px'
+                                                                    }}
+                                                                    onMouseEnter={() => {
+                                                                      // Annuler le timeout quand on survole les icônes
+                                                                      if (hoverTimeoutRef.current) {
+                                                                        clearTimeout(hoverTimeoutRef.current);
+                                                                        hoverTimeoutRef.current = null;
+                                                                      }
+                                                                      setIsIconsAnimatingOut(false);
+                                                                    }}
+                                                                    onMouseLeave={() => {
+                                                                      // Redémarrer le timer quand on quitte les icônes
+                                                                      if (hoverTimeoutRef.current) {
+                                                                        clearTimeout(hoverTimeoutRef.current);
+                                                                      }
+                                                                      hoverTimeoutRef.current = setTimeout(() => {
+                                                                        setIsIconsAnimatingOut(true);
+                                                                        setTimeout(() => {
+                                                                          setHoveredLigneDetailId(null);
+                                                                          setHoveredLignePosition(null);
+                                                                          hoverTimeoutRef.current = null;
+                                                                        }, 300); // Attendre la fin de l'animation
+                                                                      }, 1000);
+                                                                    }}>
+                                                                      {/* Boutons d'action */}
+                                                                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                                                      <Tooltip title="Éditer">
+                                                                        <IconButton size="small" onClick={() => { setEditContext({ partieId: partie.id, sousPartieId: sousPartie.id, ligne }); setIsEditOpen(true); }} style={{ width: '24px', height: '24px', padding: '4px' }}>
+                                                                          <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
+                                                                        </IconButton>
+                                                                      </Tooltip>
+                                                                      <Tooltip title="Retirer du devis">
+                                                                        <IconButton size="small" onClick={() => onLigneDetailRemove && onLigneDetailRemove(partie.id, sousPartie.id, ligne.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(244, 67, 54, 0.8)', color: 'white' }}>
+                                                                          <FiX />
+                                                                        </IconButton>
+                                                                      </Tooltip>
+                                                                    </div>
+                                                                    {/* Contrôles de marge */}
+                                                                    <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', alignItems: 'center', flex: 1 }}>
+                                                                      <input
+                                                                        type="number"
+                                                                        step="0.01"
+                                                                        min="0"
+                                                                        max="100"
+                                                                        value={ligne.marge_devis !== null && ligne.marge_devis !== undefined ? ligne.marge_devis : ligne.marge}
+                                                                        onChange={(e) => {
+                                                                          if (onLigneDetailMargeChange) {
+                                                                            onLigneDetailMargeChange(partie.id, sousPartie.id, ligne.id, parseFloat(e.target.value) || 0);
+                                                                          }
+                                                                        }}
+                                                                        style={{
+                                                                          width: 'auto',
+                                                                          minWidth: '50px',
+                                                                          maxWidth: '100px',
+                                                                          padding: '4px 6px',
+                                                                          border: '1px solid #dee2e6',
+                                                                          borderRadius: '4px',
+                                                                          fontSize: '13px',
+                                                                          textAlign: 'center',
+                                                                          fontWeight: '600'
+                                                                        }}
+                                                                      />
+                                                                      <div style={{ fontSize: '12px', color: '#666', fontWeight: '600' }}>
+                                                                        %
+                                                                      </div>
+                                                                      <input
+                                                                        type="range"
+                                                                        min="0"
+                                                                        max="100"
+                                                                        step="0.01"
+                                                                        value={ligne.marge_devis !== null && ligne.marge_devis !== undefined ? ligne.marge_devis : ligne.marge}
+                                                                        onChange={(e) => {
+                                                                          if (onLigneDetailMargeChange) {
+                                                                            onLigneDetailMargeChange(partie.id, sousPartie.id, ligne.id, parseFloat(e.target.value));
+                                                                          }
+                                                                        }}
+                                                                        style={{
+                                                                          flex: 1,
+                                                                          height: '6px',
+                                                                          borderRadius: '5px',
+                                                                          background: '#dee2e6',
+                                                                          outline: 'none',
+                                                                          cursor: 'pointer'
+                                                                        }}
+                                                                      />
+                                                                    </div>
+                                                                    </div>,
+                                                                    document.body
+                                                                  )}
+                                                                </div>
+                                                              ))}
+                                                          </div>
+                                                        )}
                                                         
                                                         {/* Barre de recherche en bas si des lignes sont déjà sélectionnées */}
-                                                        <div style={{ marginBottom: '8px', marginLeft: '20px' }}>
-                                                          <LigneDetailSearch
-                                                            sousPartieId={sousPartie.id}
-                                                            selectedLignesDetails={sousPartie.selectedLignesDetails || []}
-                                                            onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(partie.id, sousPartie.id, ligne)}
-                                                            onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
-                                                          />
-                                                        </div>
+                                                        {sousPartie.selectedLignesDetails && sousPartie.selectedLignesDetails.length > 0 && (
+                                                          <div style={{ 
+                                                            maxHeight: draggedPartieId === partie.id ? '0' : '1000px',
+                                                            opacity: draggedPartieId === partie.id ? 0 : 1,
+                                                            overflow: 'hidden',
+                                                            transition: 'max-height 0.3s ease, opacity 0.3s ease',
+                                                            transform: draggedPartieId === partie.id ? 'scale(0.95)' : 'scale(1)'
+                                                          }}>
+                                                            <div style={{ marginBottom: '8px', marginLeft: '20px' }}>
+                                                              <LigneDetailSearch
+                                                                sousPartieId={sousPartie.id}
+                                                                partieId={partie.id}
+                                                                selectedLignesDetails={sousPartie.selectedLignesDetails || []}
+                                                                onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(partie.id, sousPartie.id, ligne)}
+                                                                onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
+                                                              />
+                                                            </div>
+                                                          </div>
+                                                        )}
                                                       </div>
                                                     )}
+                                                  </Draggable>
                                                   </React.Fragment>
                                                 ))}
                                                 {provided.placeholder}
@@ -937,6 +1201,28 @@ const DevisTable = ({
           </tbody>
         </table>
       </div>
+
+      {isEditOpen && editContext && (
+        <LigneDetailEditModal
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          ligneDetail={editContext.ligne}
+          onSuccess={(updated) => {
+            if (editContext?.ligne) {
+              Object.assign(editContext.ligne, {
+                description: updated.description,
+                unite: updated.unite,
+                cout_main_oeuvre: updated.cout_main_oeuvre,
+                cout_materiel: updated.cout_materiel,
+                taux_fixe: updated.taux_fixe,
+                marge: updated.marge,
+                prix: updated.prix
+              });
+            }
+            setIsEditOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };
