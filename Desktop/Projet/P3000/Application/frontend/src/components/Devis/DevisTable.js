@@ -1029,12 +1029,12 @@ const DevisTable = ({
                                                                   }}>
                                                                     {formatMontantEspace ? formatMontantEspace(calculatePrice(ligne) * (ligne.quantity || 0)) : (calculatePrice(ligne) * (ligne.quantity || 0)).toFixed(2)}
                                                                   </div>
-                                                                  {hoveredLigneDetailId === ligne.id && createPortal(
+                                                                    {hoveredLigneDetailId === ligne.id && createPortal(
                                                                     <div style={{
                                                                       position: 'fixed',
                                                                       top: `${hoveredLignePosition?.top || 0}px`,
                                                                       left: `${(hoveredLignePosition?.left || 0) + 30}px`,
-                                                                      transform: `translateY(30%) translateX(${isIconsAnimatingOut ? '-100%' : '0'})`,
+                                                                      transform: `translateY(30%) translateX(${isIconsAnimatingOut ? '-30px' : '0'})`,
                                                                       display: 'flex',
                                                                       flexDirection: 'row',
                                                                       gap: '8px',
