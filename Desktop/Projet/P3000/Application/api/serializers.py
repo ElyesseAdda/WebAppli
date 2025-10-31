@@ -9,7 +9,7 @@ from .models import (
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgentPrime
+    AgentPrime, Color
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -55,42 +55,19 @@ class DevisSerializer(serializers.ModelSerializer):
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
             'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'parties_metadata', 'devis_chantier',
-            'cout_estime_main_oeuvre', 'cout_estime_materiel'
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes'
         ]
         read_only_fields = ['date_creation', 'client']
 
-    def get_lignes_speciales(self, obj):
-        lignes = obj.lignes_speciales.all()
-        result = {
-            'global': [],
-            'parties': {},
-            'sousParties': {}
-        }
-
-        for ligne in lignes:
-            ligne_data = {
-                'id': ligne.id,
-                'description': ligne.description,
-                'value': float(ligne.value),
-                'valueType': ligne.value_type,
-                'type': ligne.type,
-                'isHighlighted': ligne.is_highlighted
-            }
-
-            if ligne.niveau == 'global':
-                result['global'].append(ligne_data)
-            elif ligne.niveau == 'partie':
-                partie_id = str(ligne.partie.id)
-                if partie_id not in result['parties']:
-                    result['parties'][partie_id] = []
-                result['parties'][partie_id].append(ligne_data)
-            elif ligne.niveau == 'sous_partie':
-                sous_partie_id = str(ligne.sous_partie.id)
-                if sous_partie_id not in result['sousParties']:
-                    result['sousParties'][sous_partie_id] = []
-                result['sousParties'][sous_partie_id].append(ligne_data)
-
-        return result
+    # Ancienne méthode commentée (lignes_speciales est maintenant un JSONField, pas une relation)
+    # def get_lignes_speciales(self, obj):
+    #     lignes = obj.lignes_speciales.all()
+    #     result = {
+    #         'global': [],
+    #         'parties': {},
+    #         'sousParties': {}
+    #     }
+    #     ...
     
     def update(self, instance, validated_data):
         if 'lignes' in validated_data:
@@ -1204,4 +1181,19 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             validated_data['created_by'] = request.user
+        return super().create(validated_data)
+
+
+class ColorSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Color"""
+    class Meta:
+        model = Color
+        fields = ['id', 'name', 'hex_value', 'usage_count', 'created_at']
+        read_only_fields = ['usage_count', 'created_at']
+    
+    def create(self, validated_data):
+        """Assigne automatiquement l'utilisateur connecté"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['user'] = request.user
         return super().create(validated_data)

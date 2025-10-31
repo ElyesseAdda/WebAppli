@@ -8,6 +8,9 @@ import PartieSearch from './PartieSearch';
 import SousPartieSearch from './SousPartieSearch';
 import LigneDetailSearch from './LigneDetailSearch';
 import LigneDetailEditModal from './LigneDetailEditModal';
+import SpecialLinesCreator from './LignesSpeciales/SpecialLinesCreator';
+import PendingSpecialLines from './LignesSpeciales/PendingSpecialLines';
+import SpecialLineEditModal from './LignesSpeciales/SpecialLineEditModal';
 
 const DevisTable = ({ 
   devisData, 
@@ -38,8 +41,21 @@ const DevisTable = ({
   onLigneDetailEdit,
   onLigneDetailRemove,
   onLigneDetailMargeChange,
-  onLigneDetailPriceChange
-}) => {
+  onLigneDetailPriceChange,
+  // Props pour lignes spéciales v2
+  pendingSpecialLines,
+  onAddPendingSpecialLine,
+  onRemovePendingSpecialLine,
+  onEditSpecialLine,
+  editingSpecialLine,
+  showEditModal,
+  onCloseEditModal,
+  onSaveSpecialLine,
+  onSpecialLinesReorder,
+  // Fonctions de calcul
+  calculateGlobalTotal,
+  calculatePartieTotal,
+  calculateSousPartieTotal}) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
   const [hoveredLigneDetailId, setHoveredLigneDetailId] = useState(null);
@@ -59,6 +75,15 @@ const DevisTable = ({
   const [hoveredSousPartiePosition, setHoveredSousPartiePosition] = useState(null);
   const [isSousPartieIconsAnimatingOut, setIsSousPartieIconsAnimatingOut] = useState(false);
   const sousPartieHoverTimeoutRef = React.useRef(null);
+  
+  // États pour le hover des lignes spéciales
+  const [hoveredSpecialLineId, setHoveredSpecialLineId] = useState(null);
+  const [hoveredSpecialLinePosition, setHoveredSpecialLinePosition] = useState(null);
+  const [isSpecialLineIconsAnimatingOut, setIsSpecialLineIconsAnimatingOut] = useState(false);
+  const specialLineHoverTimeoutRef = React.useRef(null);
+  
+  // État pour le modal de création de ligne spéciale
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Nettoyer les timeouts quand le composant est démonté
   useEffect(() => {
@@ -72,6 +97,9 @@ const DevisTable = ({
       if (sousPartieHoverTimeoutRef.current) {
         clearTimeout(sousPartieHoverTimeoutRef.current);
       }
+      if (specialLineHoverTimeoutRef.current) {
+        clearTimeout(specialLineHoverTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -81,6 +109,7 @@ const DevisTable = ({
       // Fermer les autres panneaux hover
       setHoveredPartieId(null);
       setHoveredSousPartieId(null);
+      setHoveredSpecialLineId(null);
       // Mettre temporairement l'animation à true pour qu'elle parte de la gauche
       setIsIconsAnimatingOut(true);
       // Puis immédiatement la remettre à false pour qu'elle vienne vers nous
@@ -96,6 +125,7 @@ const DevisTable = ({
       // Fermer les autres panneaux hover
       setHoveredLigneDetailId(null);
       setHoveredSousPartieId(null);
+      setHoveredSpecialLineId(null);
       setIsPartieIconsAnimatingOut(true);
       setTimeout(() => {
         setIsPartieIconsAnimatingOut(false);
@@ -107,14 +137,29 @@ const DevisTable = ({
   useEffect(() => {
     if (hoveredSousPartieId) {
       // Fermer les autres panneaux hover
-      setHoveredPartieId(null);
       setHoveredLigneDetailId(null);
+      setHoveredPartieId(null);
+      setHoveredSpecialLineId(null);
       setIsSousPartieIconsAnimatingOut(true);
       setTimeout(() => {
         setIsSousPartieIconsAnimatingOut(false);
       }, 10);
     }
   }, [hoveredSousPartieId]);
+
+  // Déclencher l'animation d'entrée pour les lignes spéciales
+  useEffect(() => {
+    if (hoveredSpecialLineId) {
+      // Fermer les autres panneaux hover
+      setHoveredLigneDetailId(null);
+      setHoveredPartieId(null);
+      setHoveredSousPartieId(null);
+      setIsSpecialLineIconsAnimatingOut(true);
+      setTimeout(() => {
+        setIsSpecialLineIconsAnimatingOut(false);
+      }, 10);
+    }
+  }, [hoveredSpecialLineId]);
 
   // Calculer le prix basé sur les coûts et la marge
   const calculatePrice = (ligne) => {
@@ -150,57 +195,77 @@ const DevisTable = ({
       return;
     }
 
-    if (result.source.index === result.destination.index) {
-      console.log('❌ Même position, pas de changement');
-      return;
-    }
-
-    console.log(`🔄 Déplacement de l'index ${result.source.index} vers ${result.destination.index}`);
-
-    const newParties = Array.from(selectedParties);
-    const [reorderedItem] = newParties.splice(result.source.index, 1);
-    newParties.splice(result.destination.index, 0, reorderedItem);
-
-    // Mise à jour des numéros automatiques
-    // Stratégie : 
-    // 1. Si pas de numéro → on ne touche pas (garder vide)
-    // 2. Si numéro simple (1, 2, 3...) → numéro automatique selon la position parmi les parties numérotées
-    // 3. Si numéro personnalisé (A, 1.1, etc.) → garder le numéro personnalisé
-    const updatedParties = newParties.map((partie, index) => {
-      // Si pas de numéro, on le garde vide
-      if (!partie.numero) {
-        return {
-          ...partie,
-          ordre: index
-        };
+    // Gestion du drag des parties
+    if (result.source.droppableId === 'parties' && result.destination.droppableId === 'parties') {
+      if (result.source.index === result.destination.index) {
+        console.log('❌ Même position, pas de changement');
+        return;
       }
-      
-      // Si le numéro est juste un chiffre simple (1, 2, 3...), on le met à jour selon la position
-      if (/^\d+$/.test(partie.numero)) {
-        // Compter combien de parties AVANT celle-ci ont un numéro simple
-        const partiesAvantAvecNumero = newParties.slice(0, index).filter(p => p.numero && /^\d+$/.test(p.numero));
-        const newIndex = partiesAvantAvecNumero.length + 1;
+
+      console.log(`🔄 Déplacement partie de l'index ${result.source.index} vers ${result.destination.index}`);
+
+      const newParties = Array.from(selectedParties);
+      const [reorderedItem] = newParties.splice(result.source.index, 1);
+      newParties.splice(result.destination.index, 0, reorderedItem);
+
+      // Mise à jour des numéros automatiques
+      const updatedParties = newParties.map((partie, index) => {
+        if (!partie.numero) {
+          return {
+            ...partie,
+            ordre: index
+          };
+        }
+        
+        if (/^\d+$/.test(partie.numero)) {
+          const partiesAvantAvecNumero = newParties.slice(0, index).filter(p => p.numero && /^\d+$/.test(p.numero));
+          const newIndex = partiesAvantAvecNumero.length + 1;
+          
+          return {
+            ...partie,
+            numero: newIndex.toString(),
+            ordre: index
+          };
+        }
         
         return {
           ...partie,
-          numero: newIndex.toString(),
           ordre: index
         };
+      });
+
+      console.log('✅ Nouvelles parties:', updatedParties);
+
+      if (onPartiesReorder) {
+        onPartiesReorder(updatedParties);
+      }
+      return;
+    }
+
+    // Gestion du drag des lignes spéciales
+    if (result.source.droppableId === 'pending-special-lines' && result.destination.droppableId === 'pending-special-lines') {
+      if (result.source.index === result.destination.index) {
+        console.log('❌ Même position, pas de changement');
+        return;
+      }
+
+      console.log(`🔄 Déplacement ligne spéciale de l'index ${result.source.index} vers ${result.destination.index}`);
+
+      const newLines = Array.from(pendingSpecialLines);
+      const [reorderedLine] = newLines.splice(result.source.index, 1);
+      newLines.splice(result.destination.index, 0, reorderedLine);
+
+      // Mettre à jour l'état via callback
+      console.log('✅ Nouvelles lignes spéciales:', newLines);
+      
+      if (onSpecialLinesReorder) {
+        onSpecialLinesReorder(newLines);
       }
       
-      // Sinon, c'est un numéro personnalisé, on le garde
-      return {
-        ...partie,
-        ordre: index
-      };
-    });
-
-    console.log('✅ Nouvelles parties:', updatedParties);
-
-    // Appeler la fonction de callback pour mettre à jour l'état parent
-    if (onPartiesReorder) {
-      onPartiesReorder(updatedParties);
+      return;
     }
+
+    console.log('⚠️ Drop entre droppables différents non encore géré:', result.source.droppableId, '→', result.destination.droppableId);
   };
 
   // Fonction pour gérer le début du drag
@@ -1192,10 +1257,90 @@ const DevisTable = ({
                         </div>
                       )}
                     </Droppable>
+                    
+                    {/* PendingSpecialLines dans le même DragDropContext */}
+                    {pendingSpecialLines && pendingSpecialLines.length > 0 && (
+                      <div style={{ marginTop: '10px' }}>
+                        <div style={{ 
+                          fontSize: '14px', 
+                          fontWeight: 'bold', 
+                          color: '#ffa500', 
+                          marginBottom: '5px' 
+                        }}>
+                          📦 EN ATTENTE
+                        </div>
+                        <PendingSpecialLines
+                          lines={pendingSpecialLines}
+                          onEdit={onEditSpecialLine}
+                          onRemove={onRemovePendingSpecialLine}
+                          formatMontantEspace={formatMontantEspace}
+                          setHoveredSpecialLineId={setHoveredSpecialLineId}
+                          setHoveredSpecialLinePosition={setHoveredSpecialLinePosition}
+                          setIsSpecialLineIconsAnimatingOut={setIsSpecialLineIconsAnimatingOut}
+                          specialLineHoverTimeoutRef={specialLineHoverTimeoutRef}
+                          isSpecialLineIconsAnimatingOut={isSpecialLineIconsAnimatingOut}
+                          hoveredSpecialLineId={hoveredSpecialLineId}
+                        />
+                      </div>
+                    )}
                   </DragDropContext>
                 </td>
               </tr>
             )}
+            
+            {/* Portails pour les icônes de hover des lignes spéciales */}
+            {pendingSpecialLines && pendingSpecialLines.map(line => (
+              hoveredSpecialLineId === line.id && createPortal(
+                <div style={{
+                  position: 'fixed',
+                  top: `${hoveredSpecialLinePosition?.top || 0}px`,
+                  left: `${(hoveredSpecialLinePosition?.left || 0) + 30}px`,
+                  transform: `translateY(0) translateX(${isSpecialLineIconsAnimatingOut ? '-100%' : '0'})`,
+                  display: 'flex',
+                  gap: '4px',
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                  padding: '4px',
+                  zIndex: 99999,
+                  border: '1px solid #e0e0e0',
+                  transition: 'transform 0.3s ease, opacity 0.3s ease',
+                  opacity: isSpecialLineIconsAnimatingOut ? 0 : 1
+                }}
+                onMouseEnter={() => {
+                  if (specialLineHoverTimeoutRef.current) {
+                    clearTimeout(specialLineHoverTimeoutRef.current);
+                    specialLineHoverTimeoutRef.current = null;
+                  }
+                  setIsSpecialLineIconsAnimatingOut(false);
+                }}
+                onMouseLeave={() => {
+                  if (specialLineHoverTimeoutRef.current) {
+                    clearTimeout(specialLineHoverTimeoutRef.current);
+                  }
+                  specialLineHoverTimeoutRef.current = setTimeout(() => {
+                    setIsSpecialLineIconsAnimatingOut(true);
+                    setTimeout(() => {
+                      setHoveredSpecialLineId(null);
+                      setHoveredSpecialLinePosition(null);
+                      specialLineHoverTimeoutRef.current = null;
+                    }, 300);
+                  }, 1000);
+                }}>
+                  <Tooltip title="Éditer">
+                    <IconButton size="small" onClick={() => onEditSpecialLine && onEditSpecialLine(line)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
+                      <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Supprimer">
+                    <IconButton size="small" onClick={() => onRemovePendingSpecialLine && onRemovePendingSpecialLine(line.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(244, 67, 54, 0.8)', color: 'white' }}>
+                      <FiX />
+                    </IconButton>
+                  </Tooltip>
+                </div>,
+                document.body
+              )
+            ))}
             
             {selectedParties.length === 0 && (
                 <tr>
@@ -1319,6 +1464,73 @@ const DevisTable = ({
           }}
         />
       )}
+      
+      {/* Zone de création de lignes spéciales */}
+      <div>
+        {/* Modal de création */}
+        <SpecialLinesCreator
+          open={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onAddPendingLine={onAddPendingSpecialLine}
+          formatMontantEspace={formatMontantEspace}
+          selectedParties={selectedParties}
+          calculatePartieTotal={calculatePartieTotal}
+          calculateSousPartieTotal={calculateSousPartieTotal}
+          calculatePrice={calculatePrice}
+          calculateGlobalTotal={calculateGlobalTotal}
+        />
+        
+        {/* Modal d'édition */}
+        {showEditModal && editingSpecialLine && (
+          <SpecialLineEditModal
+            open={showEditModal}
+            line={editingSpecialLine}
+            onClose={onCloseEditModal}
+            onSave={onSaveSpecialLine}
+            formatMontantEspace={formatMontantEspace}
+            selectedParties={selectedParties}
+            calculatePartieTotal={calculatePartieTotal}
+            calculateSousPartieTotal={calculateSousPartieTotal}
+            calculatePrice={calculatePrice}
+            calculateGlobalTotal={calculateGlobalTotal}
+          />
+        )}
+      </div>
+      
+      {/* Bouton flottant pour créer une ligne spéciale */}
+      <button
+        onClick={() => setShowCreateModal(true)}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          backgroundColor: '#1976d2',
+          color: 'white',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          zIndex: 1000,
+          transition: 'all 0.3s ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.transform = 'scale(1.05)';
+          e.target.style.backgroundColor = '#1565c0';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.transform = 'scale(1)';
+          e.target.style.backgroundColor = '#1976d2';
+        }}
+      >
+        <span style={{ fontSize: '18px' }}>+</span>
+        <span>Créer ligne spéciale</span>
+      </button>
     </div>
   );
 };

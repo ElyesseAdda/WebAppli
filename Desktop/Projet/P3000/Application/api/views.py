@@ -34,7 +34,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -44,7 +44,7 @@ from .models import (
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgencyExpenseAggregate, AgentPrime,
+    AgencyExpenseAggregate, AgentPrime, Color,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -10613,4 +10613,72 @@ class AgentPrimeViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         print(f"🗑️  Suppression de la prime: {instance}")
         return super().destroy(request, *args, **kwargs)
+
+
+# ===== VIEWSET POUR LES COULEURS =====
+
+class ColorViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les couleurs personnalisées des utilisateurs
+    
+    Endpoints disponibles:
+    - GET    /api/colors/                    # Liste des couleurs de l'utilisateur
+    - POST   /api/colors/                    # Créer une nouvelle couleur
+    - GET    /api/colors/{id}/               # Détail d'une couleur
+    - PUT    /api/colors/{id}/               # Modifier une couleur
+    - DELETE /api/colors/{id}/               # Supprimer une couleur
+    """
+    serializer_class = ColorSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        """Retourner uniquement les couleurs de l'utilisateur connecté"""
+        if self.request.user.is_authenticated:
+            return Color.objects.filter(user=self.request.user)
+        return Color.objects.none()
+    
+    def perform_create(self, serializer):
+        """Assigner automatiquement l'utilisateur lors de la création"""
+        serializer.save(user=self.request.user)
+
+
+@api_view(['GET', 'POST'])
+def colors_list(request):
+    """
+    Endpoint pour lister et créer des couleurs
+    GET : Liste toutes les couleurs de l'utilisateur
+    POST : Crée une nouvelle couleur
+    """
+    if request.method == 'GET':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Non authentifié'}, status=401)
+        colors = Color.objects.filter(user=request.user)
+        serializer = ColorSerializer(colors, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Non authentifié'}, status=401)
+        serializer = ColorSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+def increment_color_usage(request, color_id):
+    """
+    Endpoint pour incrémenter le compteur d'utilisation d'une couleur
+    """
+    if not request.user.is_authenticated:
+        return Response({'error': 'Non authentifié'}, status=401)
+    
+    try:
+        color = Color.objects.get(id=color_id, user=request.user)
+        color.usage_count += 1
+        color.save()
+        return Response({'status': 'ok', 'usage_count': color.usage_count})
+    except Color.DoesNotExist:
+        return Response({'error': 'Couleur non trouvée'}, status=404)
 

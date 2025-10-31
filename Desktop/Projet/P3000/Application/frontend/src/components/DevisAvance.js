@@ -50,6 +50,11 @@ const DevisAvance = () => {
   const [tva, setTva] = useState(800.00);
   const [montant_ttc, setMontantTtc] = useState(4800.00);
 
+  // États pour les lignes spéciales v2
+  const [pendingSpecialLines, setPendingSpecialLines] = useState([]);
+  const [editingSpecialLine, setEditingSpecialLine] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
   // États pour la gestion des chantiers
   const [chantiers, setChantiers] = useState([]);
   const [selectedChantierId, setSelectedChantierId] = useState(null);
@@ -766,6 +771,90 @@ const DevisAvance = () => {
     }));
   };
 
+  // ===== HANDLERS POUR LIGNES SPÉCIALES V2 =====
+  
+  // Ajouter une ligne en attente
+  const handleAddPendingSpecialLine = (line) => {
+    setPendingSpecialLines(prev => [...prev, line]);
+  };
+
+  // Supprimer une ligne en attente
+  const handleRemovePendingSpecialLine = (lineId) => {
+    setPendingSpecialLines(prev => prev.filter(line => line.id !== lineId));
+  };
+
+  // Ouvrir modal d'édition
+  const handleEditSpecialLine = (line) => {
+    setEditingSpecialLine(line);
+    setShowEditModal(true);
+  };
+
+  // Sauvegarder ligne éditée
+  const handleSaveSpecialLine = (updatedLine) => {
+    setPendingSpecialLines(prev => prev.map(line => 
+      line.id === updatedLine.id ? updatedLine : line
+    ));
+    setShowEditModal(false);
+    setEditingSpecialLine(null);
+  };
+
+  // Réordonner les lignes spéciales
+  const handleSpecialLinesReorder = (newLines) => {
+    setPendingSpecialLines(newLines);
+  };
+
+  // Calculer le prix d'une ligne de détail
+  const calculatePrice = (ligne) => {
+    if (ligne.prix_devis !== null && ligne.prix_devis !== undefined) {
+      return parseFloat(ligne.prix_devis);
+    }
+    const marge = ligne.marge_devis !== null && ligne.marge_devis !== undefined 
+      ? parseFloat(ligne.marge_devis)
+      : parseFloat(ligne.marge) || 0;
+    const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
+    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+    const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
+    const base = cout_main_oeuvre + cout_materiel;
+    const montant_taux_fixe = base * (taux_fixe / 100);
+    const sous_total = base + montant_taux_fixe;
+    const montant_marge = sous_total * (marge / 100);
+    const prix = sous_total + montant_marge;
+    return prix;
+  };
+
+  // Calculer le total global
+  const calculateGlobalTotal = (parties) => {
+    return parties.reduce((total, partie) => {
+      const partieTotal = (partie.selectedSousParties || []).reduce((partieSum, sp) => {
+        const sousPartieTotal = (sp.selectedLignesDetails || []).reduce((spSum, ld) => {
+          const prix = calculatePrice(ld);
+          return spSum + (prix * (ld.quantity || 0));
+        }, 0);
+        return partieSum + sousPartieTotal;
+      }, 0);
+      return total + partieTotal;
+    }, 0);
+  };
+
+  // Calculer le total d'une partie
+  const calculatePartieTotal = (partie) => {
+    return (partie.selectedSousParties || []).reduce((sum, sp) => {
+      const sousPartieTotal = (sp.selectedLignesDetails || []).reduce((spSum, ld) => {
+        const prix = calculatePrice(ld);
+        return spSum + (prix * (ld.quantity || 0));
+      }, 0);
+      return sum + sousPartieTotal;
+    }, 0);
+  };
+
+  // Calculer le total d'une sous-partie
+  const calculateSousPartieTotal = (sousPartie) => {
+    return (sousPartie.selectedLignesDetails || []).reduce((sum, ld) => {
+      const prix = calculatePrice(ld);
+      return sum + (prix * (ld.quantity || 0));
+    }, 0);
+  };
+
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();
@@ -1019,6 +1108,18 @@ const DevisAvance = () => {
               onLigneDetailRemove={handleLigneDetailRemove}
               onLigneDetailMargeChange={handleLigneDetailMargeChange}
               onLigneDetailPriceChange={handleLigneDetailPriceChange}
+              pendingSpecialLines={pendingSpecialLines}
+              onAddPendingSpecialLine={handleAddPendingSpecialLine}
+              onRemovePendingSpecialLine={handleRemovePendingSpecialLine}
+              onEditSpecialLine={handleEditSpecialLine}
+              editingSpecialLine={editingSpecialLine}
+              showEditModal={showEditModal}
+              onCloseEditModal={() => setShowEditModal(false)}
+              onSaveSpecialLine={handleSaveSpecialLine}
+              onSpecialLinesReorder={handleSpecialLinesReorder}
+              calculateGlobalTotal={calculateGlobalTotal}
+              calculatePartieTotal={calculatePartieTotal}
+              calculateSousPartieTotal={calculateSousPartieTotal}
             />
           </div>
 

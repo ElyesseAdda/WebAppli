@@ -87,6 +87,9 @@ from .views import (
     get_ecole_hours,
     recalculate_ecole_expenses,
     AgentPrimeViewSet,
+    ColorViewSet,
+    colors_list,
+    increment_color_usage,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -152,6 +155,7 @@ router.register(r'fournisseurs', FournisseurViewSet)
 router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 router.register(r'drive', DriveViewSet, basename='drive')
 router.register(r'agent-primes', AgentPrimeViewSet, basename='agent-primes')
+router.register(r'colors', ColorViewSet, basename='colors')
 
 # URLs d'authentification
 auth_urlpatterns = [
@@ -270,6 +274,10 @@ urlpatterns = [
     path('ecole/delete/<int:event_id>/', delete_ecole_event, name='delete_ecole_event'),
     path('ecole/hours/<int:agent_id>/', get_ecole_hours, name='get_ecole_hours'),
     path('ecole/recalculate-expenses/', recalculate_ecole_expenses, name='recalculate_ecole_expenses'),
+    
+    # ===== URLs POUR LES COULEURS =====
+    path('colors/', colors_list, name='colors-list'),
+    path('colors/<int:color_id>/increment/', increment_color_usage, name='increment-color-usage'),
 ]
 
 urlpatterns += [

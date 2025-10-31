@@ -535,6 +535,10 @@ class Devis(models.Model):
     parties_metadata = models.JSONField(default=dict, blank=True)  # Métadonnées des parties (numéros, ordre, etc.)
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
     
+    # NOUVEAUX CHAMPS pour le système de lignes spéciales amélioré
+    lignes_speciales_v2 = models.JSONField(default=dict, blank=True, null=True, verbose_name="Lignes spéciales v2")
+    version_systeme_lignes = models.IntegerField(default=1, choices=[(1, 'Ancien'), (2, 'Nouveau')], verbose_name="Version système lignes spéciales")
+    
     # NOUVEAUX CHAMPS pour les coûts estimés
     cout_estime_main_oeuvre = models.DecimalField(
         max_digits=10, 
@@ -560,9 +564,127 @@ class Devis(models.Model):
             'sousParties': special_lines_data.get('sousParties', {})
         }
         self.save()
+    
+    def has_legacy_special_lines(self):
+        """Vérifie si le devis utilise l'ancien système de lignes spéciales"""
+        return self.version_systeme_lignes == 1
+    
+    def has_new_special_lines(self):
+        """Vérifie si le devis utilise le nouveau système de lignes spéciales"""
+        return self.version_systeme_lignes == 2
+    
+    def get_special_lines_for_display(self):
+        """
+        Retourne les lignes spéciales dans le format approprié.
+        Convertit automatiquement l'ancien format si nécessaire.
+        """
+        if self.has_legacy_special_lines():
+            return self._convert_legacy_to_new_format()
+        else:
+            return self.lignes_speciales_v2 or {'items': []}
+    
+    def _convert_legacy_to_new_format(self):
+        """
+        Convertit l'ancien format vers le nouveau format pour migration progressive.
+        """
+        from decimal import Decimal
+        legacy = self.lignes_speciales
+        items = []
+        
+        # Convertir lignes globales
+        for idx, line in enumerate(legacy.get('global', [])):
+            items.append({
+                'id': f'legacy_global_{idx}',
+                'type': 'special_line',
+                'position': {
+                    'parentType': 'global',
+                    'parentId': None,
+                    'positionType': 'after',
+                    'order': idx
+                },
+                'data': line,
+                'styles': self._get_default_styles(line)
+            })
+        
+        # Convertir lignes de parties
+        for partie_id, lines in legacy.get('parties', {}).items():
+            for idx, line in enumerate(lines):
+                items.append({
+                    'id': f'legacy_partie_{partie_id}_{idx}',
+                    'type': 'special_line',
+                    'position': {
+                        'parentType': 'partie',
+                        'parentId': partie_id,
+                        'positionType': 'after',
+                        'order': idx
+                    },
+                    'data': line,
+                    'styles': self._get_default_styles(line)
+                })
+        
+        # Convertir lignes de sous-parties
+        for sous_partie_id, lines in legacy.get('sousParties', {}).items():
+            for idx, line in enumerate(lines):
+                items.append({
+                    'id': f'legacy_sous_partie_{sous_partie_id}_{idx}',
+                    'type': 'special_line',
+                    'position': {
+                        'parentType': 'sous_partie',
+                        'parentId': sous_partie_id,
+                        'positionType': 'after',
+                        'order': idx
+                    },
+                    'data': line,
+                    'styles': self._get_default_styles(line)
+                })
+        
+        return {'items': items}
+    
+    def _get_default_styles(self, line):
+        """Retourne les styles par défaut pour une ligne lors de la conversion"""
+        styles = {}
+        
+        # Si highlighted dans l'ancien, appliquer styles de base
+        if line.get('isHighlighted'):
+            styles['backgroundColor'] = '#ffff00'
+            styles['fontWeight'] = 'bold'
+        
+        # Pour les pourcentages anciens sans base, créer une base par défaut
+        if line.get('valueType') == 'percentage' and not line.get('baseCalculation'):
+            # Créer une base par défaut = global
+            line['baseCalculation'] = {
+                'type': 'global',
+                'path': 'global',
+                'label': '💰 TOTAL GLOBAL HT',
+                'amount': 0  # Sera calculé dynamiquement
+            }
+        
+        # Type display
+        if line.get('type') == 'display':
+            styles['fontStyle'] = 'italic'
+            styles['color'] = '#6c757d'
+            styles['borderLeft'] = '3px solid #6c757d'
+        
+        return styles if styles else None
 
     def __str__(self):
         return f"Devis {self.numero} - {self.chantier.chantier_name}"
+
+class Color(models.Model):
+    """Modèle pour gérer les couleurs personnalisées des utilisateurs"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='colors')
+    name = models.CharField(max_length=100, verbose_name="Nom de la couleur")
+    hex_value = models.CharField(max_length=7, verbose_name="Valeur hexadécimale")
+    created_at = models.DateTimeField(auto_now_add=True)
+    usage_count = models.IntegerField(default=0, verbose_name="Nombre d'utilisations")
+    
+    class Meta:
+        verbose_name = "Couleur"
+        verbose_name_plural = "Couleurs"
+        ordering = ['-usage_count', 'name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.hex_value})"
 
 class TauxFixe(models.Model):
     valeur = models.DecimalField(max_digits=5, decimal_places=2, default=19)
