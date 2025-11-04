@@ -9,7 +9,7 @@ from .models import (
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgentPrime, Color
+    AgentPrime, Color, LigneSpeciale
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -68,6 +68,159 @@ class DevisSerializer(serializers.ModelSerializer):
     #         'sousParties': {}
     #     }
     #     ...
+    
+    def to_representation(self, instance):
+        """
+        Surcharge pour ajouter le système unifié avec mode dual (legacy/unified)
+        """
+        data = super().to_representation(instance)
+        
+        # DÉTECTION DU MODE
+        # Si le devis a des parties/sous-parties/lignes avec index_global > 0, utiliser le nouveau système
+        has_unified_items = (
+            Partie.objects.filter(devis=instance, index_global__gt=0).exists() or
+            SousPartie.objects.filter(devis=instance, index_global__gt=0).exists() or
+            LigneDetail.objects.filter(devis=instance, index_global__gt=0).exists()
+        )
+        
+        if has_unified_items:
+            # NOUVEAU SYSTÈME : Utiliser index_global
+            data['items'] = self._get_unified_items(instance)
+            data['mode'] = 'unified'
+        else:
+            # ANCIEN SYSTÈME : Utiliser parties_metadata
+            data['items'] = self._get_legacy_items(instance)
+            data['mode'] = 'legacy'
+        
+        return data
+    
+    def _get_unified_items(self, instance):
+        """Nouveau système avec index_global"""
+        from .utils import recalculate_all_numeros
+        
+        all_items = []
+        
+        # Charger Parties avec index_global > 0
+        parties = Partie.objects.filter(devis=instance, index_global__gt=0).order_by('index_global')
+        for partie in parties:
+            all_items.append({
+                'type': 'partie',
+                'id': partie.id,
+                'index_global': partie.index_global,
+                'numero': partie.numero,
+                'titre': partie.titre,
+                'type_activite': partie.type,
+            })
+        
+        # Charger SousParties avec index_global > 0
+        sous_parties = SousPartie.objects.filter(devis=instance, index_global__gt=0).order_by('index_global')
+        for sp in sous_parties:
+            all_items.append({
+                'type': 'sous_partie',
+                'id': sp.id,
+                'index_global': sp.index_global,
+                'numero': sp.numero,
+                'partie_id': sp.partie_id,
+                'description': sp.description,
+            })
+        
+        # Charger LignesDetails avec index_global > 0
+        lignes_details = LigneDetail.objects.filter(devis=instance, index_global__gt=0).order_by('index_global')
+        for ld in lignes_details:
+            all_items.append({
+                'type': 'ligne_detail',
+                'id': ld.id,
+                'index_global': ld.index_global,
+                'numero': ld.numero,
+                'sous_partie_id': ld.sous_partie_id,
+                'description': ld.description,
+                'unite': ld.unite,
+                'prix': str(ld.prix),
+                'quantite': str(ld.quantite),
+            })
+        
+        # Charger LignesSpeciales
+        lignes_speciales = LigneSpeciale.objects.filter(devis=instance).order_by('index_global')
+        for ls in lignes_speciales:
+            all_items.append({
+                'type': 'ligne_speciale',
+                'id': ls.id,
+                'index_global': ls.index_global,
+                'numero': ls.numero,
+                'description': ls.description,
+                'type_speciale': ls.type_speciale,
+                'value_type': ls.value_type,
+                'value': str(ls.value),
+                'base_calculation': ls.base_calculation,
+                'styles': ls.styles,
+            })
+        
+        # Tri par index_global et recalcul des numéros
+        return recalculate_all_numeros(all_items)
+    
+    def _get_legacy_items(self, instance):
+        """Ancien système avec parties_metadata"""
+        from .utils import recalculate_all_numeros
+        
+        items = []
+        parties_metadata = instance.parties_metadata or {}
+        selected_parties = parties_metadata.get('selectedParties', [])
+        
+        for partie_data in selected_parties:
+            # Partie
+            items.append({
+                'type': 'partie',
+                'id': partie_data['id'],
+                'index_global': len(items) + 1,
+                'titre': partie_data.get('titre'),
+                'type_activite': partie_data.get('type'),
+                'mode': 'legacy'
+            })
+            
+            # Sous-parties
+            for sp_data in partie_data.get('sousParties', []):
+                items.append({
+                    'type': 'sous_partie',
+                    'id': sp_data['id'],
+                    'index_global': len(items) + 1,
+                    'partie_id': partie_data['id'],
+                    'description': sp_data.get('description'),
+                    'mode': 'legacy'
+                })
+                
+                # Lignes détails
+                for ld_id in sp_data.get('lignesDetails', []):
+                    try:
+                        ligne = LigneDetail.objects.get(id=ld_id)
+                        items.append({
+                            'type': 'ligne_detail',
+                            'id': ligne.id,
+                            'index_global': len(items) + 1,
+                            'sous_partie_id': sp_data['id'],
+                            'description': ligne.description,
+                            'unite': ligne.unite,
+                            'prix': str(ligne.prix),
+                            'mode': 'legacy'
+                        })
+                    except LigneDetail.DoesNotExist:
+                        pass
+        
+        # Ajouter lignes spéciales v2 si présentes
+        lignes_speciales_v2 = instance.lignes_speciales_v2 or {}
+        for ls in lignes_speciales_v2.get('pending', []) + lignes_speciales_v2.get('placed', []):
+            items.append({
+                'type': 'ligne_speciale',
+                'id': ls.get('id'),
+                'index_global': len(items) + 1,
+                'description': ls.get('description'),
+                'type_speciale': ls.get('type_speciale', 'display'),
+                'value_type': ls.get('value_type', 'fixed'),
+                'value': str(ls.get('value', 0)),
+                'styles': ls.get('styles', {}),
+                'mode': 'legacy'
+            })
+        
+        return recalculate_all_numeros(items)
     
     def update(self, instance, validated_data):
         if 'lignes' in validated_data:

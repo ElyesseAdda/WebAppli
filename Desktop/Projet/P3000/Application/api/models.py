@@ -686,6 +686,90 @@ class Color(models.Model):
     def __str__(self):
         return f"{self.name} ({self.hex_value})"
 
+
+class LigneSpeciale(models.Model):
+    """Ligne spéciale liée à un devis - Système unifié avec index_global"""
+    
+    TYPE_CHOICES = [
+        ('reduction', 'Réduction'),
+        ('addition', 'Addition'),
+        ('display', 'Affichage')
+    ]
+    
+    VALUE_TYPE_CHOICES = [
+        ('fixed', 'Montant fixe'),
+        ('percentage', 'Pourcentage')
+    ]
+    
+    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes_speciales_v3')
+    description = models.CharField(max_length=500, verbose_name="Description")
+    
+    # Index global pour le système unifié
+    index_global = models.IntegerField(
+        default=0, 
+        blank=True,
+        help_text="Position dans le devis (tous types confondus)"
+    )
+    numero = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Numéro auto-généré en fonction du contexte"
+    )
+    
+    # Données de la ligne
+    type_speciale = models.CharField(
+        max_length=50,
+        choices=TYPE_CHOICES,
+        default='display',
+        verbose_name="Type de ligne spéciale"
+    )
+    value_type = models.CharField(
+        max_length=50,
+        choices=VALUE_TYPE_CHOICES,
+        default='fixed',
+        verbose_name="Type de valeur"
+    )
+    value = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        verbose_name="Valeur"
+    )
+    
+    # Pour les calculs en pourcentage
+    base_calculation = models.JSONField(
+        blank=True, 
+        null=True,
+        help_text="Base de calcul pour les pourcentages (montant, scope, etc.)"
+    )
+    
+    # Styles personnalisés
+    styles = models.JSONField(
+        default=dict, 
+        blank=True,
+        help_text="Styles CSS (color, backgroundColor, fontWeight, etc.)"
+    )
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['index_global']
+        verbose_name = 'Ligne spéciale'
+        verbose_name_plural = 'Lignes spéciales'
+    
+    def __str__(self):
+        return f"Ligne spéciale #{self.id} - {self.description[:50]}"
+    
+    def calculate_amount(self):
+        """Calcule le montant de la ligne spéciale"""
+        if self.value_type == 'percentage' and self.base_calculation:
+            base_amount = Decimal(str(self.base_calculation.get('amount', 0)))
+            return (base_amount * self.value) / Decimal('100')
+        return self.value
+
 class TauxFixe(models.Model):
     valeur = models.DecimalField(max_digits=5, decimal_places=2, default=19)
     date_modification = models.DateTimeField(auto_now=True)
@@ -717,6 +801,34 @@ class LigneDetail(models.Model):
     marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
+    
+    # NOUVEAUX CHAMPS - Système unifié avec index_global
+    index_global = models.IntegerField(
+        default=0, 
+        blank=True,
+        help_text="Position dans le devis (0 = catalogue, >0 = système unifié)"
+    )
+    numero = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Numéro auto-généré: '1.1.1', '1.1.2', etc."
+    )
+    devis = models.ForeignKey(
+        'Devis', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='lignes_details_unifiees',
+        help_text="Lien vers devis pour système unifié (null = catalogue)"
+    )
+    quantite = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=1,
+        blank=True,
+        help_text="Quantité pour système unifié"
+    )
 
     class Meta:
         constraints = [
@@ -1002,6 +1114,27 @@ class Partie(models.Model):
     titre = models.CharField(max_length=600, null=False, blank=False)
     type = models.CharField(max_length=50, default='PEINTURE', help_text="Domaine d'activité de la partie (chaîne libre)")
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
+    
+    # NOUVEAUX CHAMPS - Système unifié avec index_global
+    index_global = models.IntegerField(
+        default=0, 
+        blank=True,
+        help_text="Position dans le devis (0 = catalogue, >0 = système unifié)"
+    )
+    numero = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Numéro auto-généré: '1', '2', etc."
+    )
+    devis = models.ForeignKey(
+        'Devis', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='parties_unifiees',
+        help_text="Lien vers devis pour système unifié (null = catalogue)"
+    )
 
     class Meta:
         constraints = [
@@ -1021,6 +1154,27 @@ class SousPartie(models.Model):
     partie = models.ForeignKey(Partie, related_name='sous_parties', on_delete=models.CASCADE)
     description = models.CharField(max_length=600, null=True, blank=True)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
+    
+    # NOUVEAUX CHAMPS - Système unifié avec index_global
+    index_global = models.IntegerField(
+        default=0, 
+        blank=True,
+        help_text="Position dans le devis (0 = catalogue, >0 = système unifié)"
+    )
+    numero = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Numéro auto-généré: '1.1', '1.2', etc."
+    )
+    devis = models.ForeignKey(
+        'Devis', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='sous_parties_unifiees',
+        help_text="Lien vers devis pour système unifié (null = catalogue)"
+    )
 
     class Meta:
         constraints = [

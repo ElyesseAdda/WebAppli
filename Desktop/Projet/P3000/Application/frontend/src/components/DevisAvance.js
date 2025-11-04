@@ -55,6 +55,10 @@ const DevisAvance = () => {
   const [editingSpecialLine, setEditingSpecialLine] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // États pour le système unifié (DevisAvance utilise TOUJOURS le mode unified)
+  const [devisItems, setDevisItems] = useState([]);
+  const [isLoadingDevis, setIsLoadingDevis] = useState(false);
+
   // États pour la gestion des chantiers
   const [chantiers, setChantiers] = useState([]);
   const [selectedChantierId, setSelectedChantierId] = useState(null);
@@ -322,10 +326,8 @@ const DevisAvance = () => {
   // Fonction pour rechercher les parties (pour React Select)
   const searchParties = async (inputValue) => {
     try {
-      console.log('🔍 Recherche de parties avec inputValue:', inputValue);
       // Utiliser le nouvel endpoint dédié
       const results = await searchPartiesAPI(inputValue);
-      console.log('📋 Résultats trouvés:', results.length, 'parties');
       return results;
     } catch (error) {
       console.error('❌ Erreur lors de la recherche des parties:', error);
@@ -344,7 +346,6 @@ const DevisAvance = () => {
   // Fonction pour créer une nouvelle partie
   const handlePartieCreate = async (inputValue) => {
     try {
-      console.log('🆕 Création d\'une nouvelle partie:', inputValue);
       
       // Créer la partie en base de données
       const response = await axios.post('/api/parties/', {
@@ -373,8 +374,6 @@ const DevisAvance = () => {
       
       // Recharger la liste des parties disponibles
       await loadParties();
-      
-      console.log('✅ Partie créée avec succès:', newPartie);
       
       return {
         value: newPartie.id,
@@ -444,7 +443,6 @@ const DevisAvance = () => {
       await axios.patch(`/api/parties/${partieId}/`, {
         titre: newTitre
       });
-      console.log('✅ Partie mise à jour en base de données');
     } catch (error) {
       console.error('❌ Erreur lors de la mise à jour de la partie:', error);
     }
@@ -505,7 +503,6 @@ const DevisAvance = () => {
     });
     
     setSelectedParties(updatedParties);
-    console.log('🔄 Parties réorganisées avec sous-parties mises à jour:', updatedParties);
   };
 
   // ========== HANDLERS POUR SOUS-PARTIES ==========
@@ -684,7 +681,7 @@ const DevisAvance = () => {
 
   // Créer une ligne de détail (TODO: compléter la création serveur si besoin)
   const handleLigneDetailCreate = async (sousPartieId, description) => {
-    console.log('Création de ligne de détail (à implémenter côté API):', sousPartieId, description);
+    // Création de ligne de détail (à implémenter côté API)
   };
 
   // Changer la quantité d'une ligne de détail
@@ -717,7 +714,6 @@ const DevisAvance = () => {
 
   // Éditer une ligne de détail (modal d'édition)
   const handleLigneDetailEdit = (ligneDetail) => {
-    console.log('Édition de ligne de détail:', ligneDetail);
     // Le modal d'édition est géré par DevisTable
   };
 
@@ -801,6 +797,186 @@ const DevisAvance = () => {
   // Réordonner les lignes spéciales
   const handleSpecialLinesReorder = (newLines) => {
     setPendingSpecialLines(newLines);
+  };
+
+  // ===== HANDLERS POUR LE SYSTÈME UNIFIÉ =====
+
+  // Convertir selectedParties en devisItems unifié
+  const convertSelectedPartiesToDevisItems = (parties) => {
+    const items = [];
+    let globalIndex = 1;
+    
+    parties.forEach((partie, pIndex) => {
+      
+      // Ajouter la partie
+      const partieItem = {
+        ...partie, // D'abord copier toutes les données
+        type: 'partie', // PUIS écraser le type pour le système unifié
+        id: partie.id,
+        index_global: globalIndex++,
+        titre: partie.titre,
+        type_activite: partie.type, // Sauvegarder le type original
+        numero: partie.numero,
+        selectedSousParties: partie.selectedSousParties
+      };
+      items.push(partieItem);
+      
+      // Ajouter les sous-parties
+      (partie.selectedSousParties || []).forEach((sp, spIndex) => {
+        const spItem = {
+          ...sp, // D'abord copier toutes les données
+          type: 'sous_partie', // PUIS écraser le type
+          id: sp.id,
+          index_global: globalIndex++,
+          partie_id: partie.id,
+          description: sp.description,
+          numero: sp.numero,
+          selectedLignesDetails: sp.selectedLignesDetails
+        };
+        items.push(spItem);
+        
+        // Ajouter les lignes détails
+        (sp.selectedLignesDetails || []).forEach((ld, ldIndex) => {
+          const ldItem = {
+            ...ld, // D'abord copier toutes les données
+            type: 'ligne_detail', // PUIS écraser le type
+            id: ld.id,
+            index_global: globalIndex++,
+            sous_partie_id: sp.id,
+            description: ld.description,
+            unite: ld.unite,
+            prix: ld.prix,
+            quantity: ld.quantity
+          };
+          items.push(ldItem);
+        });
+      });
+    });
+    
+    return items;
+  };
+
+  // Synchroniser devisItems avec selectedParties + lignes spéciales
+  useEffect(() => {
+    if (selectedParties.length > 0) {
+      const convertedItems = convertSelectedPartiesToDevisItems(selectedParties);
+      
+      // Fusionner avec les lignes spéciales déjà placées
+      setDevisItems(prevItems => {
+        
+        const specialLines = prevItems.filter(item => item.type === 'ligne_speciale');
+        const merged = [...convertedItems, ...specialLines];
+        
+        // Trier par index_global et recalculer les numéros
+        const sorted = merged.sort((a, b) => a.index_global - b.index_global);
+        const withNumeros = recalculateNumeros(sorted);
+        return withNumeros;
+      });
+    } else {
+      // Si plus de parties, garder seulement les lignes spéciales
+      setDevisItems(prevItems => prevItems.filter(item => item.type === 'ligne_speciale'));
+    }
+  }, [selectedParties]); // Ne pas inclure devisItems pour éviter la boucle infinie
+
+  // Fonction de recalcul des numéros (côté frontend)
+  // NOTE: Pour l'instant, on NE recalcule PAS les numéros automatiquement
+  // Les numéros sont gérés manuellement via les boutons N°
+  const recalculateNumeros = (items) => {
+    // Juste trier par index_global sans recalculer les numéros
+    return [...items].sort((a, b) => a.index_global - b.index_global);
+  };
+
+  const generateNumero = (item, allItems) => {
+    const findParentById = (parentId) => {
+      return allItems.find(e => e.id === parentId);
+    };
+
+    if (item.type === 'partie') {
+      const partiesBefore = allItems.filter(
+        e => e.type === 'partie' && e.index_global < item.index_global
+      );
+      return String(partiesBefore.length + 1);
+    }
+
+    if (item.type === 'sous_partie') {
+      const partie = findParentById(item.partie_id);
+      if (!partie) return '?.1';
+      
+      const sousPartiesBefore = allItems.filter(
+        e => e.type === 'sous_partie' && 
+        e.partie_id === item.partie_id && 
+        e.index_global < item.index_global
+      );
+      
+      return `${partie.numero}.${sousPartiesBefore.length + 1}`;
+    }
+
+    if (item.type === 'ligne_detail') {
+      const sousPartie = findParentById(item.sous_partie_id);
+      if (!sousPartie) return '?.?.1';
+      
+      const lignesBefore = allItems.filter(
+        e => e.type === 'ligne_detail' && 
+        e.sous_partie_id === item.sous_partie_id && 
+        e.index_global < item.index_global
+      );
+      
+      return `${sousPartie.numero}.${lignesBefore.length + 1}`;
+    }
+
+    if (item.type === 'ligne_speciale') {
+      const previousItems = allItems.filter(e => e.index_global < item.index_global);
+      if (previousItems.length === 0) return '0.1';
+      
+      const lastItem = previousItems[previousItems.length - 1];
+      const lastNumero = lastItem.numero || '0';
+      const parts = lastNumero.split('.');
+      
+      if (parts.length === 1) {
+        return `${parts[0]}.1`;
+      } else if (parts.length === 2) {
+        return `${parts[0]}.${parts[1]}.1`;
+      } else {
+        try {
+          const lastPart = parseInt(parts[parts.length - 1]);
+          const newParts = [...parts.slice(0, -1), String(lastPart + 1)];
+          return newParts.join('.');
+        } catch {
+          return `${parts.join('.')}.1`;
+        }
+      }
+    }
+
+    return '0';
+  };
+
+  // Handler de réordonnancement unifié
+  const handleDevisItemsReorder = async (reorderedItems) => {
+    // Mettre à jour index_global
+    const updated = reorderedItems.map((item, index) => ({
+      ...item,
+      index_global: index + 1
+    }));
+    
+    // Recalculer les numéros
+    const withNumeros = recalculateNumeros(updated);
+    
+    setDevisItems(withNumeros);
+    
+    // Sauvegarder en BDD seulement si le devis existe (a un ID)
+    if (devisData.id) {
+      try {
+        await axios.post(`/api/devis/${devisData.id}/update-order/`, {
+          items: withNumeros.map(item => ({
+            type: item.type,
+            id: item.id,
+            index_global: item.index_global
+          }))
+        });
+      } catch (error) {
+        console.error('❌ Erreur sauvegarde ordre:', error);
+      }
+    }
   };
 
   // Calculer le prix d'une ligne de détail
@@ -1120,6 +1296,9 @@ const DevisAvance = () => {
               calculateGlobalTotal={calculateGlobalTotal}
               calculatePartieTotal={calculatePartieTotal}
               calculateSousPartieTotal={calculateSousPartieTotal}
+              
+              devisItems={devisItems}
+              onDevisItemsReorder={handleDevisItemsReorder}
             />
           </div>
 

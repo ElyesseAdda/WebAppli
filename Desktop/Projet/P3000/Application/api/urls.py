@@ -90,6 +90,11 @@ from .views import (
     ColorViewSet,
     colors_list,
     increment_color_usage,
+    # Endpoints système unifié
+    update_devis_order,
+    create_ligne_speciale,
+    update_ligne_speciale,
+    delete_ligne_speciale,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -278,6 +283,12 @@ urlpatterns = [
     # ===== URLs POUR LES COULEURS =====
     path('colors/', colors_list, name='colors-list'),
     path('colors/<int:color_id>/increment/', increment_color_usage, name='increment-color-usage'),
+    
+    # ===== URLs POUR LE SYSTÈME UNIFIÉ (Index Global & Lignes Spéciales) =====
+    path('devis/<int:devis_id>/update-order/', update_devis_order, name='update-devis-order'),
+    path('devis/<int:devis_id>/ligne-speciale/create/', create_ligne_speciale, name='create-ligne-speciale'),
+    path('devis/<int:devis_id>/ligne-speciale/<int:ligne_id>/update/', update_ligne_speciale, name='update-ligne-speciale'),
+    path('devis/<int:devis_id>/ligne-speciale/<int:ligne_id>/delete/', delete_ligne_speciale, name='delete-ligne-speciale'),
 ]
 
 urlpatterns += [

@@ -44,7 +44,7 @@ from .models import (
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgencyExpenseAggregate, AgentPrime, Color,
+    AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -10681,4 +10681,194 @@ def increment_color_usage(request, color_id):
         return Response({'status': 'ok', 'usage_count': color.usage_count})
     except Color.DoesNotExist:
         return Response({'error': 'Couleur non trouvée'}, status=404)
+
+
+# ========================================
+# ENDPOINTS SYSTÈME UNIFIÉ
+# Index Global et Drag & Drop
+# ========================================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_devis_order(request, devis_id):
+    """
+    Met à jour l'ordre (index_global) de tous les éléments d'un devis
+    
+    POST /api/devis/<devis_id>/update-order/
+    Body: {
+        "items": [
+            {"type": "partie", "id": 1, "index_global": 1},
+            {"type": "sous_partie", "id": 10, "index_global": 2},
+            ...
+        ]
+    }
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        items = request.data.get('items', [])
+        
+        if not items:
+            return Response({'error': 'Aucun élément à mettre à jour'}, status=400)
+        
+        # Mettre à jour index_global pour chaque type
+        updated_count = 0
+        for item in items:
+            item_type = item.get('type')
+            item_id = item.get('id')
+            index_global = item.get('index_global')
+            
+            if not all([item_type, item_id is not None, index_global is not None]):
+                continue
+            
+            if item_type == 'partie':
+                count = Partie.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+            elif item_type == 'sous_partie':
+                count = SousPartie.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+            elif item_type == 'ligne_detail':
+                count = LigneDetail.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+            elif item_type == 'ligne_speciale':
+                count = LigneSpeciale.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+        
+        # Recalculer les numéros (optionnel - peut être fait côté client)
+        from .utils import recalculate_all_numeros
+        
+        return Response({
+            'status': 'success',
+            'updated_count': updated_count,
+            'message': f'{updated_count} élément(s) mis à jour'
+        }, status=200)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_ligne_speciale(request, devis_id):
+    """
+    Créer une nouvelle ligne spéciale
+    
+    POST /api/devis/<devis_id>/ligne-speciale/create/
+    Body: {
+        "description": "Remise de 10%",
+        "type_speciale": "reduction",
+        "value_type": "percentage",
+        "value": 10,
+        "base_calculation": {"amount": 1000, "scope": "total"},
+        "styles": {
+            "fontWeight": "bold",
+            "color": "#d32f2f",
+            "backgroundColor": "#ffebee"
+        }
+    }
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        
+        # Trouver le prochain index_global
+        from django.db.models import Max
+        max_index = LigneSpeciale.objects.filter(devis=devis).aggregate(
+            Max('index_global')
+        )['index_global__max'] or 0
+        
+        # Créer la ligne spéciale
+        ligne_speciale = LigneSpeciale.objects.create(
+            devis=devis,
+            index_global=max_index + 1,
+            description=request.data.get('description', ''),
+            type_speciale=request.data.get('type_speciale', 'display'),
+            value_type=request.data.get('value_type', 'fixed'),
+            value=request.data.get('value', 0),
+            base_calculation=request.data.get('base_calculation'),
+            styles=request.data.get('styles', {})
+        )
+        
+        return Response({
+            'id': ligne_speciale.id,
+            'index_global': ligne_speciale.index_global,
+            'status': 'created',
+            'message': 'Ligne spéciale créée avec succès'
+        }, status=201)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_ligne_speciale(request, devis_id, ligne_id):
+    """
+    Mettre à jour une ligne spéciale existante
+    
+    PUT /api/devis/<devis_id>/ligne-speciale/<ligne_id>/update/
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        ligne_speciale = LigneSpeciale.objects.get(id=ligne_id, devis=devis)
+        
+        # Mettre à jour les champs
+        if 'description' in request.data:
+            ligne_speciale.description = request.data['description']
+        if 'type_speciale' in request.data:
+            ligne_speciale.type_speciale = request.data['type_speciale']
+        if 'value_type' in request.data:
+            ligne_speciale.value_type = request.data['value_type']
+        if 'value' in request.data:
+            ligne_speciale.value = request.data['value']
+        if 'base_calculation' in request.data:
+            ligne_speciale.base_calculation = request.data['base_calculation']
+        if 'styles' in request.data:
+            ligne_speciale.styles = request.data['styles']
+        if 'index_global' in request.data:
+            ligne_speciale.index_global = request.data['index_global']
+        
+        ligne_speciale.save()
+        
+        return Response({
+            'id': ligne_speciale.id,
+            'status': 'updated',
+            'message': 'Ligne spéciale mise à jour'
+        }, status=200)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except LigneSpeciale.DoesNotExist:
+        return Response({'error': 'Ligne spéciale non trouvée'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_ligne_speciale(request, devis_id, ligne_id):
+    """
+    Supprimer une ligne spéciale
+    
+    DELETE /api/devis/<devis_id>/ligne-speciale/<ligne_id>/delete/
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        ligne_speciale = LigneSpeciale.objects.get(id=ligne_id, devis=devis)
+        
+        ligne_speciale.delete()
+        
+        return Response({
+            'status': 'deleted',
+            'message': 'Ligne spéciale supprimée'
+        }, status=200)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except LigneSpeciale.DoesNotExist:
+        return Response({'error': 'Ligne spéciale non trouvée'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 

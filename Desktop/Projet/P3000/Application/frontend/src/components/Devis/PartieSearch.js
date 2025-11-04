@@ -22,11 +22,9 @@ const PartieSearch = ({
 
   // Charger toutes les options au démarrage
   const loadInitialOptions = async () => {
-    console.log('🚀 Chargement initial des options...');
     setIsLoading(true);
     try {
       const allOptions = await searchParties('');
-      console.log('✅ Options chargées:', allOptions.length);
       setOptions(allOptions);
     } catch (error) {
       console.error('❌ Erreur lors du chargement initial:', error);
@@ -98,12 +96,6 @@ const PartieSearch = ({
       }
     }
   ] : filteredOptions;
-
-  // Debug
-  console.log('🔍 Input value:', inputValue);
-  console.log('📋 Options disponibles:', options.length);
-  console.log('🎯 Options filtrées:', filteredOptions.length);
-  console.log('✅ Parties déjà sélectionnées:', selectedParties.map(p => p.titre));
 
   // Styles personnalisés pour React Select
   const customStyles = {
