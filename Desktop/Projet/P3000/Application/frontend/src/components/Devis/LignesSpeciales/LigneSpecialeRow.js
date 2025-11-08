@@ -10,7 +10,8 @@ const LigneSpecialeRow = ({
   provided, 
   snapshot, 
   depth = 0, 
-  formatMontantEspace 
+  formatMontantEspace,
+  displayAs = 'partie'  // 'partie', 'sous_partie', ou 'ligne_detail'
 }) => {
   /**
    * Calcule le montant de la ligne spéciale
@@ -39,26 +40,57 @@ const LigneSpecialeRow = ({
   const typeSpeciale = line.type_speciale || data.type;
   const description = line.description || data.description;
 
-  // Styles de la ligne selon les préférences utilisateur
+  // Styles de base selon le type d'affichage
+  const getBaseStyles = () => {
+    if (displayAs === 'partie') {
+      // Style PARTIE (niveau global)
+      return {
+        backgroundColor: line.styles?.backgroundColor || 'rgba(27, 120, 188, 1)',
+        color: line.styles?.color || 'white',
+        padding: '15px 20px',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        borderRadius: '6px',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+      };
+    } else if (displayAs === 'sous_partie') {
+      // Style SOUS-PARTIE (dans une partie)
+      return {
+        backgroundColor: line.styles?.backgroundColor || 'rgba(157, 197, 226, 1)',
+        color: line.styles?.color || '#333',
+        padding: '10px 15px',
+        fontSize: '15px',
+        fontWeight: '600',
+        borderRadius: '4px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      };
+    } else {
+      // Style LIGNE DE DÉTAIL (dans une sous-partie)
+      return {
+        backgroundColor: line.styles?.backgroundColor || '#fff',
+        color: line.styles?.color || '#333',
+        padding: '8px 12px',
+        fontSize: '13px',
+        fontWeight: 'normal',
+        borderRadius: '4px',
+        border: '1px solid #dee2e6',
+        boxShadow: 'none'
+      };
+    }
+  };
+  
+  // Styles de la ligne selon les préférences utilisateur + type d'affichage
   const lineStyles = {
-    backgroundColor: line.styles?.backgroundColor || 'rgba(27, 120, 188, 1)',
-    color: line.styles?.color || 'white',
-    fontWeight: line.styles?.fontWeight || 'bold',
+    ...getBaseStyles(),
     fontStyle: line.styles?.fontStyle || 'normal',
     textDecoration: line.styles?.textDecoration || 'none',
     textAlign: line.styles?.textAlign || 'left',
-    padding: '15px 20px',
-    fontSize: '16px',
-    borderRadius: '4px',
     borderLeft: line.styles?.borderLeft || 'none',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    cursor: snapshot.isDragging ? 'grabbing' : 'grab',
-    opacity: snapshot.isDragging ? 0.8 : 1,
-    boxShadow: snapshot.isDragging 
-      ? '0 4px 12px rgba(0,0,0,0.3)' 
-      : '0 2px 4px rgba(0,0,0,0.1)',
+    cursor: provided ? (snapshot?.isDragging ? 'grabbing' : 'grab') : 'default',
+    opacity: snapshot?.isDragging ? 0.8 : 1,
     transition: 'all 0.2s ease',
     marginLeft: `${indent}px`,
     marginBottom: '8px'
@@ -72,31 +104,33 @@ const LigneSpecialeRow = ({
 
   return (
     <div
-      ref={provided.innerRef}
-      {...provided.draggableProps}
+      ref={provided?.innerRef}
+      {...(provided?.draggableProps || {})}
       style={{
-        ...provided.draggableProps.style,
+        ...(provided?.draggableProps?.style || {}),
       }}
     >
       <div style={lineStyles}>
-        {/* Handle de drag */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
-            {...provided.dragHandleProps}
-            style={{
-              cursor: 'grab',
-              padding: '8px',
-              borderRadius: '4px',
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              fontSize: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title="Glisser pour déplacer"
-          >
-            ⋮⋮
-          </div>
+          {/* Handle de drag - seulement si draggable */}
+          {provided && (
+            <div
+              {...provided.dragHandleProps}
+              style={{
+                cursor: 'grab',
+                padding: '8px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                fontSize: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title="Glisser pour déplacer"
+            >
+              ⋮⋮
+            </div>
+          )}
           
           {/* Numéro hiérarchique (si disponible) */}
           {line.numero && (

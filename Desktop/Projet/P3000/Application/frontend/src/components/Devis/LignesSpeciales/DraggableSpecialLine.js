@@ -15,7 +15,7 @@ const DraggableSpecialLine = ({ line, index, onEdit, onRemove, formatMontantEspa
   const amount = calculateAmount();
 
   return (
-    <Draggable draggableId={line.id} index={index}>
+    <Draggable draggableId={`pending_${line.id}`} index={index}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}

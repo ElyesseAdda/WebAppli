@@ -36,7 +36,12 @@ const SpecialLinesCreator = ({
     type: "reduction",
     isHighlighted: false,
     baseCalculation: null,
-    styles: {}
+    styles: {},
+    // Nouveau : placement fixe
+    placementType: "global",  // "global", "partie", "sous_partie"
+    placementPartieId: null,
+    placementSousPartieId: null,
+    placementPosition: "end"  // "end", "before_X", "after_X"
   });
   
   const [showBaseSelector, setShowBaseSelector] = useState(false);
@@ -82,7 +87,7 @@ const SpecialLinesCreator = ({
     }
     
     const lineToAdd = {
-      id: `pending_${Date.now()}`,
+      id: Date.now().toString(),
       data: {
         description: newLine.description,
         value: parseFloat(newLine.value),
@@ -92,7 +97,13 @@ const SpecialLinesCreator = ({
       },
       baseCalculation: newLine.baseCalculation,
       styles: newLine.styles,
-      position: null // Sera défini lors du drop
+      // Nouveau : placement fixe
+      placement: {
+        type: newLine.placementType,
+        partieId: newLine.placementPartieId,
+        sousPartieId: newLine.placementSousPartieId,
+        position: newLine.placementPosition
+      }
     };
     
     onAddPendingLine(lineToAdd);
@@ -105,7 +116,11 @@ const SpecialLinesCreator = ({
       type: "reduction",
       isHighlighted: false,
       baseCalculation: null,
-      styles: {}
+      styles: {},
+      placementType: "global",
+      placementPartieId: null,
+      placementSousPartieId: null,
+      placementPosition: "end"
     });
     
     // Fermer le modal
@@ -162,6 +177,24 @@ const SpecialLinesCreator = ({
               value={newLine.description}
               onChange={(e) => setNewLine(prev => ({ ...prev, description: e.target.value }))}
             />
+            
+            {/* Info placement visuel */}
+            <Box sx={{ mt: 2, p: 2, border: '2px solid #2196f3', borderRadius: 1, backgroundColor: '#e3f2fd' }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#1565c0' }}>
+                📍 Placement de la ligne
+              </Typography>
+              
+              <Typography variant="body2" sx={{ color: '#555' }}>
+                Après avoir créé la ligne, cliquez sur une <span style={{ 
+                  backgroundColor: '#2196f3', 
+                  color: 'white', 
+                  padding: '2px 8px', 
+                  borderRadius: '4px',
+                  fontWeight: 'bold',
+                  fontSize: '12px'
+                }}>zone bleue</span> dans le tableau pour choisir précisément où la placer.
+              </Typography>
+            </Box>
             
             <TextField
               type="number"

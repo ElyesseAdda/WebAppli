@@ -54,6 +54,7 @@ const DevisAvance = () => {
   const [pendingSpecialLines, setPendingSpecialLines] = useState([]);
   const [editingSpecialLine, setEditingSpecialLine] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [lineAwaitingPlacement, setLineAwaitingPlacement] = useState(null);  // Ligne en attente de clic sur le tableau
 
   // États pour le système unifié (DevisAvance utilise TOUJOURS le mode unified)
   const [devisItems, setDevisItems] = useState([]);
@@ -771,7 +772,113 @@ const DevisAvance = () => {
   
   // Ajouter une ligne en attente
   const handleAddPendingSpecialLine = (line) => {
-    setPendingSpecialLines(prev => [...prev, line]);
+    // Mettre la ligne en attente de placement (l'utilisateur va cliquer sur le tableau)
+    setLineAwaitingPlacement(line);
+  };
+  
+  // Placer la ligne à un endroit spécifique du tableau
+  const handlePlaceLineAt = (position) => {
+    if (!lineAwaitingPlacement) return;
+    
+    const line = lineAwaitingPlacement;
+    
+    // Décoder la position : "global_start", "global_end", "before_partie_14", "after_partie_14", etc.
+    let context_type = 'global';
+    let context_id = null;
+    let targetIndexGlobal = 1;
+    
+    if (position === 'global_start') {
+      context_type = 'global';
+      targetIndexGlobal = 0.5;  // Avant tout
+    } else if (position === 'global_end') {
+      context_type = 'global';
+      targetIndexGlobal = devisItems.length + 1;  // Après tout
+    } else if (position.startsWith('before_partie_')) {
+      const partieId = parseInt(position.replace('before_partie_', ''));
+      const partie = devisItems.find(item => item.type === 'partie' && item.id === partieId);
+      if (partie) {
+        context_type = 'global';
+        targetIndexGlobal = partie.index_global - 0.5;
+      }
+    } else if (position.startsWith('after_partie_')) {
+      const partieId = parseInt(position.replace('after_partie_', ''));
+      // Trouver le dernier élément de cette partie (sous-parties + lignes)
+      const partieElements = devisItems.filter(item => 
+        item.type === 'partie' && item.id === partieId ||
+        item.type === 'sous_partie' && item.partie_id === partieId ||
+        (item.type === 'ligne_detail' && devisItems.some(sp => sp.type === 'sous_partie' && sp.id === item.sous_partie_id && sp.partie_id === partieId))
+      ).sort((a, b) => a.index_global - b.index_global);
+      
+      if (partieElements.length > 0) {
+        context_type = 'global';
+        targetIndexGlobal = partieElements[partieElements.length - 1].index_global + 0.5;
+      }
+    } else if (position.startsWith('before_sp_')) {
+      const spId = parseInt(position.replace('before_sp_', ''));
+      const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === spId);
+      if (sp) {
+        context_type = 'partie';
+        context_id = sp.partie_id;
+        targetIndexGlobal = sp.index_global - 0.5;
+      }
+    } else if (position.startsWith('after_sp_')) {
+      const spId = parseInt(position.replace('after_sp_', ''));
+      // Trouver le dernier élément de cette sous-partie (lignes de détail)
+      const spElements = devisItems.filter(item => 
+        item.type === 'sous_partie' && item.id === spId ||
+        item.type === 'ligne_detail' && item.sous_partie_id === spId
+      ).sort((a, b) => a.index_global - b.index_global);
+      
+      if (spElements.length > 0) {
+        const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === spId);
+        context_type = 'partie';
+        context_id = sp?.partie_id;
+        targetIndexGlobal = spElements[spElements.length - 1].index_global + 0.5;
+      }
+    } else if (position.startsWith('before_ligne_')) {
+      const ligneId = parseInt(position.replace('before_ligne_', ''));
+      const ligne = devisItems.find(item => item.type === 'ligne_detail' && item.id === ligneId);
+      if (ligne) {
+        context_type = 'sous_partie';
+        context_id = ligne.sous_partie_id;
+        targetIndexGlobal = ligne.index_global - 0.5;
+      }
+    } else if (position.startsWith('after_ligne_')) {
+      const ligneId = parseInt(position.replace('after_ligne_', ''));
+      const ligne = devisItems.find(item => item.type === 'ligne_detail' && item.id === ligneId);
+      if (ligne) {
+        context_type = 'sous_partie';
+        context_id = ligne.sous_partie_id;
+        targetIndexGlobal = ligne.index_global + 0.5;
+      }
+    }
+    
+    // Créer la ligne spéciale
+    const newSpecialLine = {
+      ...line,
+      id: line.id || Date.now().toString(),
+      type: 'ligne_speciale',
+      description: line.data?.description || line.description || '',
+      value: line.data?.value || line.value,
+      value_type: line.data?.valueType || line.value_type,
+      type_speciale: line.data?.type || line.type_speciale,
+      context_type,
+      context_id,
+      index_global: targetIndexGlobal
+    };
+    
+    // Ajouter à devisItems
+    const newItems = [...devisItems, newSpecialLine];
+    
+    // Trier et réindexer
+    const sorted = newItems.sort((a, b) => a.index_global - b.index_global);
+    const reindexed = sorted.map((item, idx) => ({
+      ...item,
+      index_global: idx + 1
+    }));
+    
+    setDevisItems(reindexed);
+    setLineAwaitingPlacement(null);  // Réinitialiser
   };
 
   // Supprimer une ligne en attente
@@ -787,9 +894,29 @@ const DevisAvance = () => {
 
   // Sauvegarder ligne éditée
   const handleSaveSpecialLine = (updatedLine) => {
+    // Mettre à jour la ligne spéciale dans devisItems
+    const updatedItems = devisItems.map(item => {
+      if (item.type === 'ligne_speciale' && item.id === updatedLine.id) {
+        return {
+          ...item,
+          description: updatedLine.data?.description || updatedLine.description,
+          value: updatedLine.data?.value || updatedLine.value,
+          value_type: updatedLine.data?.valueType || updatedLine.value_type,
+          type_speciale: updatedLine.data?.type || updatedLine.type_speciale,
+          styles: updatedLine.styles || item.styles,
+          baseCalculation: updatedLine.baseCalculation || item.baseCalculation
+        };
+      }
+      return item;
+    });
+    
+    setDevisItems(updatedItems);
+    
+    // Aussi mettre à jour pendingSpecialLines si la ligne y est encore
     setPendingSpecialLines(prev => prev.map(line => 
       line.id === updatedLine.id ? updatedLine : line
     ));
+    
     setShowEditModal(false);
     setEditingSpecialLine(null);
   };
@@ -966,6 +1093,40 @@ const DevisAvance = () => {
     // Sauvegarder en BDD seulement si le devis existe (a un ID)
     if (devisData.id) {
       try {
+        // 1. Créer/mettre à jour les lignes spéciales en BDD
+        const specialLines = withNumeros.filter(item => item.type === 'ligne_speciale');
+        
+        for (const line of specialLines) {
+          // Vérifier si la ligne a déjà un ID numérique (sauvegardée en BDD)
+          const isNewLine = typeof line.id === 'string' || !line.devis;
+          
+          if (isNewLine) {
+            // Créer la ligne en BDD
+            const response = await axios.post(`/api/devis/${devisData.id}/ligne-speciale/create/`, {
+              description: line.description,
+              type_speciale: line.type_speciale,
+              value_type: line.value_type,
+              value: line.value,
+              base_calculation: line.base_calculation,
+              styles: line.styles,
+              index_global: line.index_global,
+              context_type: line.context_type,
+              context_id: line.context_id
+            });
+            
+            // Mettre à jour l'ID avec celui de la BDD
+            line.id = response.data.id;
+          } else {
+            // Mettre à jour la ligne existante
+            await axios.put(`/api/devis/${devisData.id}/ligne-speciale/${line.id}/update/`, {
+              index_global: line.index_global,
+              context_type: line.context_type,
+              context_id: line.context_id
+            });
+          }
+        }
+        
+        // 2. Sauvegarder l'ordre global de tous les items
         await axios.post(`/api/devis/${devisData.id}/update-order/`, {
           items: withNumeros.map(item => ({
             type: item.type,
@@ -1290,6 +1451,10 @@ const DevisAvance = () => {
               onEditSpecialLine={handleEditSpecialLine}
               editingSpecialLine={editingSpecialLine}
               showEditModal={showEditModal}
+              lineAwaitingPlacement={lineAwaitingPlacement}
+              onPlaceLineAt={handlePlaceLineAt}
+              onCancelPlacement={() => setLineAwaitingPlacement(null)}
+              onRequestReplacement={(line) => setLineAwaitingPlacement(line)}
               onCloseEditModal={() => setShowEditModal(false)}
               onSaveSpecialLine={handleSaveSpecialLine}
               onSpecialLinesReorder={handleSpecialLinesReorder}

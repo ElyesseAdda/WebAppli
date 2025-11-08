@@ -15,7 +15,7 @@ const PendingSpecialLines = ({
   hoveredSpecialLineId
 }) => {
   return (
-    <Droppable droppableId="pending-special-lines" isDropDisabled={true}>
+    <Droppable droppableId="pending-special-lines">
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
