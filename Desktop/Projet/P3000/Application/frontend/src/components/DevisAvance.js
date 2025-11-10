@@ -55,6 +55,8 @@ const DevisAvance = () => {
   const [editingSpecialLine, setEditingSpecialLine] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [lineAwaitingPlacement, setLineAwaitingPlacement] = useState(null);  // Ligne en attente de clic sur le tableau
+  const [isSelectingBase, setIsSelectingBase] = useState(false);  // Mode de sélection de base pour %
+  const [pendingLineForBase, setPendingLineForBase] = useState(null);  // Ligne en cours de création avec % qui attend sa base
 
   // États pour le système unifié (DevisAvance utilise TOUJOURS le mode unified)
   const [devisItems, setDevisItems] = useState([]);
@@ -771,9 +773,15 @@ const DevisAvance = () => {
   // ===== HANDLERS POUR LIGNES SPÉCIALES V2 =====
   
   // Ajouter une ligne en attente
-  const handleAddPendingSpecialLine = (line) => {
-    // Mettre la ligne en attente de placement (l'utilisateur va cliquer sur le tableau)
-    setLineAwaitingPlacement(line);
+  const handleAddPendingSpecialLine = (line, requiresBaseSelection = false) => {
+    if (requiresBaseSelection) {
+      // La ligne est de type % sans base : activer le mode de sélection
+      setPendingLineForBase(line);
+      setIsSelectingBase(true);
+    } else {
+      // Mettre la ligne en attente de placement (l'utilisateur va cliquer sur le tableau)
+      setLineAwaitingPlacement(line);
+    }
   };
   
   // Placer la ligne à un endroit spécifique du tableau
@@ -884,6 +892,27 @@ const DevisAvance = () => {
   // Supprimer une ligne en attente
   const handleRemovePendingSpecialLine = (lineId) => {
     setPendingSpecialLines(prev => prev.filter(line => line.id !== lineId));
+  };
+
+  // Gérer la sélection de base pour une ligne spéciale en %
+  const handleBaseSelected = (baseInfo) => {
+    // baseInfo contient : { type: 'partie'/'sous_partie'/'global', id: X, label: 'Partie A' }
+    if (!pendingLineForBase) return;
+    
+    // Mettre à jour la ligne avec la base sélectionnée
+    const updatedLine = {
+      ...pendingLineForBase,
+      baseCalculation: baseInfo
+    };
+    
+    // Stocker la ligne mise à jour pour la réédition dans le modal
+    setPendingLineForBase(updatedLine);
+    
+    // Désactiver le mode de sélection
+    setIsSelectingBase(false);
+    
+    // NE PAS créer la ligne automatiquement, le modal va se rouvrir
+    // Le modal se rouvrira automatiquement via la prop pendingLineForBase
   };
 
   // Ouvrir modal d'édition
@@ -1101,13 +1130,21 @@ const DevisAvance = () => {
           const isNewLine = typeof line.id === 'string' || !line.devis;
           
           if (isNewLine) {
+            // Préparer base_calculation SANS amount (pour calcul dynamique)
+            const baseCalcToSave = line.base_calculation ? {
+              type: line.base_calculation.type,
+              id: line.base_calculation.id,
+              label: line.base_calculation.label
+              // ❌ Ne PAS sauvegarder amount
+            } : null;
+
             // Créer la ligne en BDD
             const response = await axios.post(`/api/devis/${devisData.id}/ligne-speciale/create/`, {
               description: line.description,
               type_speciale: line.type_speciale,
               value_type: line.value_type,
               value: line.value,
-              base_calculation: line.base_calculation,
+              base_calculation: baseCalcToSave,
               styles: line.styles,
               index_global: line.index_global,
               context_type: line.context_type,
@@ -1159,37 +1196,179 @@ const DevisAvance = () => {
     return prix;
   };
 
+  // Calculer toutes les bases brutes (sans lignes spéciales)
+  const calculerBasesBrutes = () => {
+    const bases = {
+      sousParties: {},
+      parties: {},
+      global: 0
+    };
+    
+    // 1. Calculer les bases des sous-parties (somme des lignes de détail)
+    devisItems
+      .filter(item => item.type === 'sous_partie')
+      .forEach(sp => {
+        const totalLignes = devisItems
+          .filter(item => item.type === 'ligne_detail' && item.sous_partie_id === sp.id)
+          .reduce((sum, ligne) => {
+            const prix = calculatePrice(ligne);
+            return sum + (prix * (ligne.quantity || 0));
+          }, 0);
+        
+        bases.sousParties[sp.id] = totalLignes;
+      });
+    
+    // 2. Calculer les bases des parties (somme des bases des sous-parties)
+    devisItems
+      .filter(item => item.type === 'partie')
+      .forEach(partie => {
+        const totalSPs = devisItems
+          .filter(item => item.type === 'sous_partie' && item.partie_id === partie.id)
+          .reduce((sum, sp) => sum + (bases.sousParties[sp.id] || 0), 0);
+        
+        bases.parties[partie.id] = totalSPs;
+      });
+    
+    // 3. Calculer la base globale (somme des bases des parties)
+    bases.global = devisItems
+      .filter(item => item.type === 'partie')
+      .reduce((sum, partie) => sum + (bases.parties[partie.id] || 0), 0);
+    
+    return bases;
+  };
+
+  // Calculer le montant d'une ligne spéciale
+  const calculerMontantLigneSpeciale = (ligneSpeciale, bases) => {
+    const value = parseFloat(ligneSpeciale.value || 0);
+    
+    // Si montant fixe, retourner directement
+    if (ligneSpeciale.value_type === 'fixed') {
+      return value;
+    }
+    
+    // Si pourcentage, utiliser baseCalculation
+    if (ligneSpeciale.value_type === 'percentage' && ligneSpeciale.baseCalculation) {
+      const baseCalc = ligneSpeciale.baseCalculation;
+      let base = 0;
+      
+      // Récupérer la base selon le type
+      if (baseCalc.type === 'sous_partie' && baseCalc.id) {
+        base = bases.sousParties[baseCalc.id] || 0;
+      } else if (baseCalc.type === 'partie' && baseCalc.id) {
+        base = bases.parties[baseCalc.id] || 0;
+      } else if (baseCalc.type === 'global') {
+        base = bases.global || 0;
+      }
+      
+      return base * (value / 100);
+    }
+    
+    // Si pourcentage sans baseCalculation, retourner 0 (cas d'erreur)
+    return 0;
+  };
+
   // Calculer le total global
   const calculateGlobalTotal = (parties) => {
-    return parties.reduce((total, partie) => {
-      const partieTotal = (partie.selectedSousParties || []).reduce((partieSum, sp) => {
-        const sousPartieTotal = (sp.selectedLignesDetails || []).reduce((spSum, ld) => {
-          const prix = calculatePrice(ld);
-          return spSum + (prix * (ld.quantity || 0));
-        }, 0);
-        return partieSum + sousPartieTotal;
-      }, 0);
-      return total + partieTotal;
-    }, 0);
+    // Calculer d'abord toutes les bases brutes
+    const bases = calculerBasesBrutes();
+    
+    // Base : somme des parties (avec leurs lignes spéciales déjà incluses)
+    let total = devisItems
+      .filter(item => item.type === 'partie')
+      .reduce((sum, partie) => sum + calculatePartieTotal(partie), 0);
+    
+    // Récupérer les lignes spéciales globales, triées par index_global
+    const lignesSpeciales = devisItems
+      .filter(item => 
+        item.type === 'ligne_speciale' && 
+        item.context_type === 'global'
+      )
+      .sort((a, b) => a.index_global - b.index_global);
+    
+    // Appliquer les lignes spéciales séquentiellement
+    lignesSpeciales.forEach(ls => {
+      const montant = calculerMontantLigneSpeciale(ls, bases);
+      
+      if (ls.type_speciale === 'reduction') {
+        total -= montant;
+      } else if (ls.type_speciale === 'addition') {
+        total += montant;
+      }
+      // Note : les lignes 'display' n'affectent pas le total
+    });
+    
+    return total;
   };
 
   // Calculer le total d'une partie
   const calculatePartieTotal = (partie) => {
-    return (partie.selectedSousParties || []).reduce((sum, sp) => {
-      const sousPartieTotal = (sp.selectedLignesDetails || []).reduce((spSum, ld) => {
-        const prix = calculatePrice(ld);
-        return spSum + (prix * (ld.quantity || 0));
-      }, 0);
-      return sum + sousPartieTotal;
-    }, 0);
+    // Calculer d'abord toutes les bases brutes
+    const bases = calculerBasesBrutes();
+    
+    // Base : somme des sous-parties (avec leurs lignes spéciales déjà incluses)
+    let total = devisItems
+      .filter(item => item.type === 'sous_partie' && item.partie_id === partie.id)
+      .reduce((sum, sp) => sum + calculateSousPartieTotal(sp), 0);
+    
+    // Récupérer les lignes spéciales de cette partie, triées par index_global
+    const lignesSpeciales = devisItems
+      .filter(item => 
+        item.type === 'ligne_speciale' && 
+        item.context_type === 'partie' && 
+        item.context_id === partie.id
+      )
+      .sort((a, b) => a.index_global - b.index_global);
+    
+    // Appliquer les lignes spéciales séquentiellement
+    lignesSpeciales.forEach(ls => {
+      const montant = calculerMontantLigneSpeciale(ls, bases);
+      
+      if (ls.type_speciale === 'reduction') {
+        total -= montant;
+      } else if (ls.type_speciale === 'addition') {
+        total += montant;
+      }
+      // Note : les lignes 'display' n'affectent pas le total
+    });
+    
+    return total;
   };
 
   // Calculer le total d'une sous-partie
   const calculateSousPartieTotal = (sousPartie) => {
-    return (sousPartie.selectedLignesDetails || []).reduce((sum, ld) => {
-      const prix = calculatePrice(ld);
-      return sum + (prix * (ld.quantity || 0));
-    }, 0);
+    // Calculer d'abord toutes les bases brutes
+    const bases = calculerBasesBrutes();
+    
+    // Base : somme des lignes de détail
+    let total = devisItems
+      .filter(item => item.type === 'ligne_detail' && item.sous_partie_id === sousPartie.id)
+      .reduce((sum, ligne) => {
+        const prix = calculatePrice(ligne);
+        return sum + (prix * (ligne.quantity || 0));
+      }, 0);
+    
+    // Récupérer les lignes spéciales de cette sous-partie, triées par index_global
+    const lignesSpeciales = devisItems
+      .filter(item => 
+        item.type === 'ligne_speciale' && 
+        item.context_type === 'sous_partie' && 
+        item.context_id === sousPartie.id
+      )
+      .sort((a, b) => a.index_global - b.index_global);
+    
+    // Appliquer les lignes spéciales séquentiellement
+    lignesSpeciales.forEach(ls => {
+      const montant = calculerMontantLigneSpeciale(ls, bases);
+      
+      if (ls.type_speciale === 'reduction') {
+        total -= montant;
+      } else if (ls.type_speciale === 'addition') {
+        total += montant;
+      }
+      // Note : les lignes 'display' n'affectent pas le total
+    });
+    
+    return total;
   };
 
   // Charger les chantiers au montage du composant
@@ -1464,6 +1643,15 @@ const DevisAvance = () => {
               
               devisItems={devisItems}
               onDevisItemsReorder={handleDevisItemsReorder}
+              
+              isSelectingBase={isSelectingBase}
+              onBaseSelected={handleBaseSelected}
+              onCancelBaseSelection={() => {
+                setIsSelectingBase(false);
+                setPendingLineForBase(null);
+              }}
+              pendingLineForBase={pendingLineForBase}
+              onClearPendingLineForBase={() => setPendingLineForBase(null)}
             />
           </div>
 

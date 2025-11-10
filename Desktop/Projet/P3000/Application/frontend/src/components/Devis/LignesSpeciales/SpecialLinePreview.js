@@ -1,7 +1,13 @@
 import React from 'react';
 import { Box } from '@mui/material';
 
-const SpecialLinePreview = ({ line, formatAmount }) => {
+const SpecialLinePreview = ({ 
+  line, 
+  formatAmount, 
+  devisItems = [], 
+  calculatePartieTotal, 
+  calculateSousPartieTotal 
+}) => {
   // Calculer le montant
   const calculateAmount = () => {
     if (!line.value || line.value === '') return '0.00';
@@ -9,7 +15,28 @@ const SpecialLinePreview = ({ line, formatAmount }) => {
     if (line.valueType === 'percentage') {
       // Si baseCalculation existe, afficher % du montant de base
       if (line.baseCalculation) {
-        const baseAmount = line.baseCalculation.amount || 0;
+        let baseAmount = 0;
+        
+        // ✅ TOUJOURS calculer dynamiquement (pour aperçu en temps réel)
+        if (devisItems.length > 0 && line.baseCalculation.type && line.baseCalculation.id) {
+          if (line.baseCalculation.type === 'partie' && calculatePartieTotal) {
+            const partie = devisItems.find(item => item.type === 'partie' && item.id === line.baseCalculation.id);
+            if (partie) {
+              baseAmount = calculatePartieTotal(partie);
+            }
+          } else if (line.baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
+            const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === line.baseCalculation.id);
+            if (sousPartie) {
+              baseAmount = calculateSousPartieTotal(sousPartie);
+            }
+          }
+        }
+        
+        // Fallback sur amount statique
+        if (!baseAmount && line.baseCalculation.amount) {
+          baseAmount = parseFloat(line.baseCalculation.amount);
+        }
+        
         const calculated = (baseAmount * parseFloat(line.value)) / 100;
         return formatAmount ? formatAmount(calculated) : calculated.toFixed(2);
       }

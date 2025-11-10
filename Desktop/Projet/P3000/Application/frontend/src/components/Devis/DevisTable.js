@@ -177,7 +177,13 @@ const DevisTable = ({
   lineAwaitingPlacement,
   onPlaceLineAt,
   onCancelPlacement,
-  onRequestReplacement
+  onRequestReplacement,
+  // Props pour la sélection de base
+  isSelectingBase,
+  onBaseSelected,
+  onCancelBaseSelection,
+  pendingLineForBase,
+  onClearPendingLineForBase
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
@@ -225,6 +231,14 @@ const DevisTable = ({
       }
     };
   }, []);
+
+  // Rouvrir le modal quand une base a été sélectionnée
+  useEffect(() => {
+    if (pendingLineForBase && !isSelectingBase) {
+      // La base vient d'être sélectionnée, rouvrir le modal
+      setShowCreateModal(true);
+    }
+  }, [pendingLineForBase, isSelectingBase]);
 
   // Déclencher l'animation d'entrée quand les icônes apparaissent
   useEffect(() => {
@@ -704,6 +718,56 @@ const DevisTable = ({
       position: 'relative',
       zIndex: 1
     }}>
+      {/* Overlay sombre pour la sélection de base */}
+      {isSelectingBase && (
+        <>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 100,
+            pointerEvents: 'none'
+          }} />
+          
+          {/* Bannière d'instruction */}
+          <div style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 101,
+            backgroundColor: '#1976d2',
+            color: 'white',
+            padding: '15px 20px',
+            textAlign: 'center',
+            fontWeight: 'bold',
+            fontSize: '16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '20px'
+          }}>
+            <span>📊 Cliquez sur une partie, sous-partie ou ligne pour définir la base de calcul du pourcentage</span>
+            <button
+              onClick={onCancelBaseSelection}
+              style={{
+                backgroundColor: '#d32f2f',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '14px'
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        </>
+      )}
       {/* En-tête du tableau */}
       <div style={{
         backgroundColor: '#1976d2',
@@ -986,6 +1050,9 @@ const DevisTable = ({
                                         depth={0}
                                         formatMontantEspace={formatMontantEspace}
                                         displayAs="partie"  // Afficher comme une partie
+                                        devisItems={devisItems}
+                                        calculatePartieTotal={calculatePartieTotal}
+                                        calculateSousPartieTotal={calculateSousPartieTotal}
                                       />
                                     </div>
                                     
@@ -1040,12 +1107,31 @@ const DevisTable = ({
                                               fontSize: '16px',
                                               borderRadius: '4px',
                                               boxShadow: dragSnapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : '0 2px 4px rgba(0,0,0,0.1)',
-                                              cursor: dragSnapshot.isDragging ? 'grabbing' : 'grab',
+                                              cursor: isSelectingBase ? 'pointer' : (dragSnapshot.isDragging ? 'grabbing' : 'grab'),
                                               display: 'flex',
                                               justifyContent: 'space-between',
                                               alignItems: 'center',
                                               opacity: dragSnapshot.isDragging ? 0.8 : 1,
-                                              position: 'relative'
+                                              position: 'relative',
+                                              zIndex: isSelectingBase ? 102 : 'auto',
+                                              transform: isSelectingBase ? 'scale(1.02)' : 'scale(1)',
+                                              transition: 'all 0.2s ease',
+                                              border: isSelectingBase ? '3px solid #ffeb3b' : 'none'
+                                            }}
+                                            onClick={(e) => {
+                                              if (isSelectingBase) {
+                                                e.stopPropagation();
+                                                const partieTotal = calculatePartieTotal(item);
+                                                // Construire le label en utilisant les bonnes propriétés
+                                                const partieNumero = item.numero || '';
+                                                const partieLibelle = item.libelle || item.name || item.designation || 'Partie';
+                                                onBaseSelected({
+                                                  type: 'partie',
+                                                  id: item.id,
+                                                  label: `${partieNumero} ${partieLibelle} (${formatMontantEspace(partieTotal)} €)`,
+                                                  amount: partieTotal  // ✅ Ajouter le montant calculé
+                                                });
+                                              }
                                             }}
                                             onMouseEnter={(e) => {
                                               if (dragSnapshot.isDragging) return;
@@ -1185,6 +1271,9 @@ const DevisTable = ({
                                                               depth={0}
                                                               formatMontantEspace={formatMontantEspace}
                                                               displayAs="sous_partie"  // Afficher comme une sous-partie
+                                                              devisItems={devisItems}
+                                                              calculatePartieTotal={calculatePartieTotal}
+                                                              calculateSousPartieTotal={calculateSousPartieTotal}
                                                             />
                                                           </div>
                                                         );
@@ -1230,7 +1319,27 @@ const DevisTable = ({
                                                                 justifyContent: 'space-between',
                                                                 alignItems: 'center',
                                                                 fontWeight: '600',
-                                                                position: 'relative'
+                                                                position: 'relative',
+                                                                cursor: isSelectingBase ? 'pointer' : 'auto',
+                                                                zIndex: isSelectingBase ? 102 : 'auto',
+                                                                transform: isSelectingBase ? 'scale(1.02)' : 'scale(1)',
+                                                                transition: 'all 0.2s ease',
+                                                                border: isSelectingBase ? '3px solid #ffeb3b' : 'none'
+                                                              }}
+                                                              onClick={(e) => {
+                                                                if (isSelectingBase) {
+                                                                  e.stopPropagation();
+                                                                  const spTotal = calculateSousPartieTotal(sp);
+                                                                  // Construire le label en utilisant les bonnes propriétés
+                                                                  const spNumero = sp.numero || '';
+                                                                  const spLibelle = sp.libelle || sp.name || sp.designation || 'Sous-partie';
+                                                                  onBaseSelected({
+                                                                    type: 'sous_partie',
+                                                                    id: sp.id,
+                                                                    label: `${spNumero} ${spLibelle} (${formatMontantEspace(spTotal)} €)`,
+                                                                    amount: spTotal  // ✅ Ajouter le montant calculé
+                                                                  });
+                                                                }
                                                               }}
                                                               onMouseEnter={(e) => {
                                                                 if (spDragSnapshot.isDragging) return;
@@ -1387,6 +1496,9 @@ const DevisTable = ({
                                                                                 depth={0}
                                                                                 formatMontantEspace={formatMontantEspace}
                                                                                 displayAs="ligne_detail"  // Afficher comme une ligne de détail
+                                                                                devisItems={devisItems}
+                                                                                calculatePartieTotal={calculatePartieTotal}
+                                                                                calculateSousPartieTotal={calculateSousPartieTotal}
                                                                               />
                                                                             </div>
                                                                           );
@@ -1470,7 +1582,10 @@ const DevisTable = ({
                                                                                       value={ligne.quantity || 0}
                                                                                       onChange={(e) => {
                                                                                         if (onLigneDetailQuantityChange) {
-                                                                                          onLigneDetailQuantityChange(item.id, sp.id, ligne.id, parseFloat(e.target.value) || 0);
+                                                                                          // Trouver la partie_id depuis la sous-partie
+                                                                                          const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
+                                                                                          const partieId = sp?.partie_id;
+                                                                                          onLigneDetailQuantityChange(partieId, ligne.sous_partie_id, ligne.id, parseFloat(e.target.value) || 0);
                                                                                         }
                                                                                       }}
                                                                                       style={{
@@ -1492,7 +1607,10 @@ const DevisTable = ({
                                                                                       value={ligne.prix_devis !== null && ligne.prix_devis !== undefined ? ligne.prix_devis : prix}
                                                                                       onChange={(e) => {
                                                                                         if (onLigneDetailPriceChange) {
-                                                                                          onLigneDetailPriceChange(item.id, sp.id, ligne.id, parseFloat(e.target.value) || 0);
+                                                                                          // Trouver la partie_id depuis la sous-partie
+                                                                                          const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
+                                                                                          const partieId = sp?.partie_id;
+                                                                                          onLigneDetailPriceChange(partieId, ligne.sous_partie_id, ligne.id, parseFloat(e.target.value) || 0);
                                                                                         }
                                                                                       }}
                                                                                       style={{
@@ -1953,7 +2071,10 @@ const DevisTable = ({
         {/* Modal de création */}
         <SpecialLinesCreator
           open={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            onClearPendingLineForBase(); // Nettoyer pendingLineForBase à la fermeture
+          }}
           onAddPendingLine={onAddPendingSpecialLine}
           formatMontantEspace={formatMontantEspace}
           selectedParties={selectedParties}
@@ -1961,6 +2082,10 @@ const DevisTable = ({
           calculateSousPartieTotal={calculateSousPartieTotal}
           calculatePrice={calculatePrice}
           calculateGlobalTotal={calculateGlobalTotal}
+          isSelectingBase={isSelectingBase}
+          devisItems={devisItems}
+          pendingLineForBase={pendingLineForBase}
+          onClearPendingLineForBase={onClearPendingLineForBase}
         />
         
         {/* Modal d'édition */}
@@ -2021,140 +2146,122 @@ const DevisTable = ({
           style={{
             position: 'fixed',
             top: `${hoveredSpecialLinePosition.top}px`,
-            left: `${hoveredSpecialLinePosition.left + 10}px`,
+            left: `${(hoveredSpecialLinePosition.left || 0) + 30}px`,
+            transform: `translateY(0) translateX(${isSpecialLineIconsAnimatingOut ? '-100%' : '0'})`,
             display: 'flex',
-            gap: '8px',
-            zIndex: 10000,
-            animation: isSpecialLineIconsAnimatingOut ? 'slideOutRight 0.3s ease-out' : 'slideInRight 0.3s ease-out'
+            gap: '4px',
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+            padding: '4px',
+            zIndex: 99999,
+            border: '1px solid #e0e0e0',
+            transition: 'transform 0.3s ease, opacity 0.3s ease',
+            opacity: isSpecialLineIconsAnimatingOut ? 0 : 1
+          }}
+          onMouseEnter={() => {
+            if (specialLineHoverTimeoutRef.current) {
+              clearTimeout(specialLineHoverTimeoutRef.current);
+              specialLineHoverTimeoutRef.current = null;
+            }
+            setIsSpecialLineIconsAnimatingOut(false);
+          }}
+          onMouseLeave={() => {
+            if (specialLineHoverTimeoutRef.current) {
+              clearTimeout(specialLineHoverTimeoutRef.current);
+            }
+            specialLineHoverTimeoutRef.current = setTimeout(() => {
+              setIsSpecialLineIconsAnimatingOut(true);
+              setTimeout(() => {
+                setHoveredSpecialLineId(null);
+                setHoveredSpecialLinePosition(null);
+                specialLineHoverTimeoutRef.current = null;
+              }, 300);
+            }, 1000);
           }}
         >
           {/* Bouton Modifier */}
-          <button
-            onClick={() => {
-              const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
-              if (line && onEditSpecialLine) {
-                onEditSpecialLine(line);
-              }
-            }}
-            style={{
-              backgroundColor: '#2196f3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '48px',
-              height: '48px',
-              cursor: 'pointer',
-              fontSize: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.backgroundColor = '#1976d2';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.backgroundColor = '#2196f3';
-            }}
-            title="Modifier la ligne spéciale"
-          >
-            ✏️
-          </button>
+          <Tooltip title="Modifier">
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
+                if (line && onEditSpecialLine) {
+                  onEditSpecialLine(line);
+                }
+              }}
+              style={{ 
+                width: '24px', 
+                height: '24px', 
+                padding: '4px', 
+                backgroundColor: 'rgba(33, 150, 243, 0.8)', 
+                color: 'white' 
+              }}
+            >
+              <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
+            </IconButton>
+          </Tooltip>
 
           {/* Bouton Déplacer */}
-          <button
-            onClick={() => {
-              const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
-              if (line) {
-                // Retirer la ligne de devisItems
-                const itemsWithoutLine = devisItems.filter(item => !(item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId));
-                const reindexed = itemsWithoutLine
-                  .sort((a, b) => a.index_global - b.index_global)
-                  .map((item, idx) => ({ ...item, index_global: idx + 1 }));
-                
-                if (onDevisItemsReorder) {
-                  onDevisItemsReorder(reindexed);
+          <Tooltip title="Déplacer">
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
+                if (line) {
+                  const itemsWithoutLine = devisItems.filter(item => !(item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId));
+                  const reindexed = itemsWithoutLine
+                    .sort((a, b) => a.index_global - b.index_global)
+                    .map((item, idx) => ({ ...item, index_global: idx + 1 }));
+                  
+                  if (onDevisItemsReorder) {
+                    onDevisItemsReorder(reindexed);
+                  }
+                  
+                  if (onRequestReplacement) {
+                    onRequestReplacement(line);
+                  }
                 }
-                
-                // Mettre la ligne en attente de replacement
-                if (onRequestReplacement) {
-                  onRequestReplacement(line);
-                }
-              }
-            }}
-            style={{
-              backgroundColor: '#ff9800',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '48px',
-              height: '48px',
-              cursor: 'pointer',
-              fontSize: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.backgroundColor = '#f57c00';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.backgroundColor = '#ff9800';
-            }}
-            title="Déplacer la ligne spéciale"
-          >
-            ↕️
-          </button>
+              }}
+              style={{ 
+                width: '24px', 
+                height: '24px', 
+                padding: '4px', 
+                backgroundColor: 'rgba(255, 152, 0, 0.8)', 
+                color: 'white' 
+              }}
+            >
+              <span style={{ fontSize: '14px' }}>↕</span>
+            </IconButton>
+          </Tooltip>
 
           {/* Bouton Supprimer */}
-          <button
-            onClick={() => {
-              if (window.confirm('Supprimer cette ligne spéciale ?')) {
-                const itemsWithoutLine = devisItems.filter(item => !(item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId));
-                // Réindexer
-                const reindexed = itemsWithoutLine
-                  .sort((a, b) => a.index_global - b.index_global)
-                  .map((item, idx) => ({ ...item, index_global: idx + 1 }));
-                
-                if (onDevisItemsReorder) {
-                  onDevisItemsReorder(reindexed);
+          <Tooltip title="Supprimer">
+            <IconButton 
+              size="small" 
+              onClick={() => {
+                if (window.confirm('Supprimer cette ligne spéciale ?')) {
+                  const itemsWithoutLine = devisItems.filter(item => !(item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId));
+                  const reindexed = itemsWithoutLine
+                    .sort((a, b) => a.index_global - b.index_global)
+                    .map((item, idx) => ({ ...item, index_global: idx + 1 }));
+                  
+                  if (onDevisItemsReorder) {
+                    onDevisItemsReorder(reindexed);
+                  }
                 }
-              }
-            }}
-            style={{
-              backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '48px',
-              height: '48px',
-              cursor: 'pointer',
-              fontSize: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.backgroundColor = '#d32f2f';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.backgroundColor = '#f44336';
-            }}
-            title="Supprimer la ligne spéciale"
-          >
-            🗑️
-          </button>
+              }}
+              style={{ 
+                width: '24px', 
+                height: '24px', 
+                padding: '4px', 
+                backgroundColor: 'rgba(244, 67, 54, 0.8)', 
+                color: 'white' 
+              }}
+            >
+              <FiX />
+            </IconButton>
+          </Tooltip>
         </div>,
         document.body
       )}

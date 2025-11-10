@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   TextField, 
@@ -27,7 +27,11 @@ const SpecialLinesCreator = ({
   calculatePartieTotal,
   calculateSousPartieTotal,
   calculatePrice,
-  calculateGlobalTotal
+  calculateGlobalTotal,
+  isSelectingBase,
+  devisItems,
+  pendingLineForBase,
+  onClearPendingLineForBase
 }) => {
   const [newLine, setNewLine] = useState({
     description: "",
@@ -45,6 +49,28 @@ const SpecialLinesCreator = ({
   });
   
   const [showBaseSelector, setShowBaseSelector] = useState(false);
+  
+  // Pré-remplir le formulaire quand pendingLineForBase existe
+  useEffect(() => {
+    if (pendingLineForBase && open) {
+      // Convertir data en propriétés directes si nécessaire
+      const lineData = pendingLineForBase.data || pendingLineForBase;
+      
+      setNewLine({
+        description: lineData.description || "",
+        value: lineData.value !== undefined ? lineData.value : "",
+        valueType: lineData.valueType || "fixed",
+        type: lineData.type || "reduction",
+        isHighlighted: lineData.isHighlighted || false,
+        baseCalculation: pendingLineForBase.baseCalculation || null,
+        styles: pendingLineForBase.styles || {},
+        placementType: "global",
+        placementPartieId: null,
+        placementSousPartieId: null,
+        placementPosition: "end"
+      });
+    }
+  }, [pendingLineForBase, open]);
   
   // Quand l'utilisateur change valueType vers "percentage"
   const handleValueTypeChange = (valueType) => {
@@ -75,8 +101,15 @@ const SpecialLinesCreator = ({
   
   // Valider et ajouter à pending
   const handleAddToPending = () => {
-    if (!newLine.description || !newLine.value) {
-      alert("Veuillez remplir la description et la valeur");
+    // Validation de la description (toujours obligatoire)
+    if (!newLine.description) {
+      alert("Veuillez remplir la description");
+      return;
+    }
+    
+    // Validation de la valeur (sauf pour les lignes d'affichage)
+    if (newLine.valueType !== "display" && !newLine.value) {
+      alert("Veuillez remplir la valeur");
       return;
     }
     
@@ -86,16 +119,24 @@ const SpecialLinesCreator = ({
       return;
     }
     
+    // Préparer baseCalculation SANS amount (pour calcul dynamique)
+    const baseCalculationToSave = newLine.baseCalculation ? {
+      type: newLine.baseCalculation.type,
+      id: newLine.baseCalculation.id,
+      label: newLine.baseCalculation.label
+      // ❌ Ne PAS sauvegarder amount pour forcer le calcul dynamique
+    } : null;
+
     const lineToAdd = {
       id: Date.now().toString(),
       data: {
         description: newLine.description,
-        value: parseFloat(newLine.value),
+        value: newLine.valueType === "display" ? 0 : parseFloat(newLine.value), // 0 pour les lignes d'affichage
         valueType: newLine.valueType,
         type: newLine.type,
         isHighlighted: newLine.isHighlighted
       },
-      baseCalculation: newLine.baseCalculation,
+      baseCalculation: baseCalculationToSave,
       styles: newLine.styles,
       // Nouveau : placement fixe
       placement: {
@@ -107,6 +148,11 @@ const SpecialLinesCreator = ({
     };
     
     onAddPendingLine(lineToAdd);
+    
+    // Nettoyer pendingLineForBase si on vient d'une sélection de base
+    if (onClearPendingLineForBase) {
+      onClearPendingLineForBase();
+    }
     
     // Réinitialiser
     setNewLine({
@@ -166,6 +212,9 @@ const SpecialLinesCreator = ({
                   styles: newLine.styles
                 }}
                 formatAmount={formatMontantEspace}
+                devisItems={devisItems}
+                calculatePartieTotal={calculatePartieTotal}
+                calculateSousPartieTotal={calculateSousPartieTotal}
               />
             </Box>
             
@@ -202,7 +251,16 @@ const SpecialLinesCreator = ({
               fullWidth
               margin="normal"
               value={newLine.value}
-              onChange={(e) => setNewLine(prev => ({ ...prev, value: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Empêcher les valeurs négatives
+                if (value === '' || parseFloat(value) >= 0) {
+                  setNewLine(prev => ({ ...prev, value: value }));
+                }
+              }}
+              disabled={newLine.valueType === "display"}
+              helperText={newLine.valueType === "display" ? "Les lignes d'affichage n'ont pas de valeur" : ""}
+              inputProps={{ min: 0, step: "any" }}
             />
             
             {/* Type de valeur avec boutons */}
@@ -225,54 +283,109 @@ const SpecialLinesCreator = ({
                 >
                   % Pourcentage
                 </Button>
-              </ButtonGroup>
-            </Box>
-            
-            {/* Affichage de la base sélectionnée */}
-            {newLine.baseCalculation && (
-              <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
-                <Typography variant="body2" sx={{ fontSize: '13px' }}>
-                  Base : {newLine.baseCalculation.label}
-                </Typography>
                 <Button 
-                  size="small" 
-                  onClick={() => setShowBaseSelector(true)}
-                  sx={{ mt: 0.5 }}
-                >
-                  Changer
-                </Button>
-              </Box>
-            )}
-            
-            {/* Type d'opération avec boutons */}
-            <Box sx={{ mt: 1 }}>
-              <Typography variant="body2" gutterBottom sx={{ fontSize: '13px', fontWeight: 'bold' }}>
-                Type d'opération
-              </Typography>
-              <ButtonGroup fullWidth>
-                <Button 
-                  variant={newLine.type === "reduction" ? "contained" : "outlined"}
-                  onClick={() => setNewLine(prev => ({ ...prev, type: "reduction" }))}
-                  size="small"
-                >
-                  - Réduction
-                </Button>
-                <Button 
-                  variant={newLine.type === "addition" ? "contained" : "outlined"}
-                  onClick={() => setNewLine(prev => ({ ...prev, type: "addition" }))}
-                  size="small"
-                >
-                  + Addition
-                </Button>
-                <Button 
-                  variant={newLine.type === "display" ? "contained" : "outlined"}
-                  onClick={() => setNewLine(prev => ({ ...prev, type: "display" }))}
+                  variant={newLine.valueType === "display" ? "contained" : "outlined"}
+                  onClick={() => {
+                    setNewLine(prev => ({ 
+                      ...prev, 
+                      valueType: "display",
+                      type: "display", // Mettre automatiquement le type à display aussi
+                      value: "" // Vider la valeur pour les lignes d'affichage
+                    }));
+                  }}
                   size="small"
                 >
                   📋 Affichage
                 </Button>
               </ButtonGroup>
             </Box>
+            
+            {/* Sélection de base pour les pourcentages */}
+            {newLine.valueType === "percentage" && (
+              <Box sx={{ mt: 1 }}>
+                {newLine.baseCalculation ? (
+                  // Base déjà sélectionnée
+                  <Box sx={{ p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
+                    <Typography variant="body2" sx={{ fontSize: '13px', mb: 1 }}>
+                      Base : {newLine.baseCalculation.label}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button 
+                        size="small" 
+                        onClick={() => setShowBaseSelector(true)}
+                        variant="outlined"
+                      >
+                        📋 Changer (Liste)
+                      </Button>
+                      <Button 
+                        size="small" 
+                        onClick={() => {
+                          onClose();
+                          onAddPendingLine(newLine, true); // true = requiresBaseSelection
+                        }}
+                        variant="outlined"
+                        color="primary"
+                      >
+                        🎯 Sélectionner sur le tableau
+                      </Button>
+                    </Box>
+                  </Box>
+                ) : (
+                  // Pas de base sélectionnée
+                  <Box sx={{ p: 1.5, backgroundColor: '#fff3e0', borderRadius: '4px', border: '1px solid #ff9800' }}>
+                    <Typography variant="body2" sx={{ fontSize: '13px', mb: 1, fontWeight: 'bold', color: '#e65100' }}>
+                      ⚠️ Veuillez sélectionner une base de calcul
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button 
+                        size="small" 
+                        onClick={() => setShowBaseSelector(true)}
+                        variant="contained"
+                        color="success"
+                      >
+                        📋 Choisir dans la liste
+                      </Button>
+                      <Button 
+                        size="small" 
+                        onClick={() => {
+                          onClose();
+                          onAddPendingLine(newLine, true); // true = requiresBaseSelection
+                        }}
+                        variant="contained"
+                        color="primary"
+                      >
+                        🎯 Cliquer sur le tableau
+                      </Button>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            )}
+            
+            {/* Type d'opération avec boutons - masqué si valueType est "display" */}
+            {newLine.valueType !== "display" && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2" gutterBottom sx={{ fontSize: '13px', fontWeight: 'bold' }}>
+                  Type d'opération
+                </Typography>
+                <ButtonGroup fullWidth>
+                  <Button 
+                    variant={newLine.type === "reduction" ? "contained" : "outlined"}
+                    onClick={() => setNewLine(prev => ({ ...prev, type: "reduction" }))}
+                    size="small"
+                  >
+                    - Réduction
+                  </Button>
+                  <Button 
+                    variant={newLine.type === "addition" ? "contained" : "outlined"}
+                    onClick={() => setNewLine(prev => ({ ...prev, type: "addition" }))}
+                    size="small"
+                  >
+                    + Addition
+                  </Button>
+                </ButtonGroup>
+              </Box>
+            )}
             
             {/* Styles personnalisés */}
             <Accordion sx={{ mt: 2 }}>
@@ -367,7 +480,10 @@ const SpecialLinesCreator = ({
             onClick={handleAddToPending} 
             variant="contained" 
             color="primary"
-            disabled={!newLine.description || !newLine.value}
+            disabled={
+              !newLine.description || 
+              (newLine.valueType !== "display" && !newLine.value)
+            }
           >
             Créer la ligne
           </Button>

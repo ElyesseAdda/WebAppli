@@ -11,7 +11,12 @@ const LigneSpecialeRow = ({
   snapshot, 
   depth = 0, 
   formatMontantEspace,
-  displayAs = 'partie'  // 'partie', 'sous_partie', ou 'ligne_detail'
+  displayAs = 'partie',  // 'partie', 'sous_partie', ou 'ligne_detail'
+  // Props pour calculer dynamiquement la base
+  devisItems = [],
+  calculatePartieTotal,
+  calculateSousPartieTotal,
+  calculatePrice
 }) => {
   /**
    * Calcule le montant de la ligne spéciale
@@ -25,7 +30,28 @@ const LigneSpecialeRow = ({
     const baseCalculation = line.base_calculation || line.baseCalculation;
     
     if (valueType === 'percentage' && baseCalculation) {
-      const baseAmount = parseFloat(baseCalculation.amount || 0);
+      let baseAmount = 0;
+      
+      // ✅ TOUJOURS calculer dynamiquement depuis devisItems (pour mise à jour en temps réel)
+      if (devisItems.length > 0 && baseCalculation.type && baseCalculation.id) {
+        if (baseCalculation.type === 'partie' && calculatePartieTotal) {
+          const partie = devisItems.find(item => item.type === 'partie' && item.id === baseCalculation.id);
+          if (partie) {
+            baseAmount = calculatePartieTotal(partie);
+          }
+        } else if (baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
+          const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === baseCalculation.id);
+          if (sousPartie) {
+            baseAmount = calculateSousPartieTotal(sousPartie);
+          }
+        }
+      }
+      
+      // Fallback sur amount statique si calcul dynamique impossible
+      if (!baseAmount && baseCalculation.amount) {
+        baseAmount = parseFloat(baseCalculation.amount);
+      }
+      
       const percentage = parseFloat(value || 0);
       return (baseAmount * percentage) / 100;
     }
