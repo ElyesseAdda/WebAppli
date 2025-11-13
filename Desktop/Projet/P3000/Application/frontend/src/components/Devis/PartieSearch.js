@@ -27,7 +27,7 @@ const PartieSearch = ({
       const allOptions = await searchParties('');
       setOptions(allOptions);
     } catch (error) {
-      console.error('❌ Erreur lors du chargement initial:', error);
+      // Erreur lors du chargement initial
     } finally {
       setIsLoading(false);
     }

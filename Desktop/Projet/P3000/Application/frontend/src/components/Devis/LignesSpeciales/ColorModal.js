@@ -20,7 +20,6 @@ const ColorModal = ({ open, onClose, onSave, color }) => {
         onSave();
       })
       .catch(err => {
-        console.error('Erreur sauvegarde couleur:', err);
         alert('Erreur lors de la sauvegarde de la couleur');
       });
   };

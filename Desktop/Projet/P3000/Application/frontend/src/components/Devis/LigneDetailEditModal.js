@@ -78,7 +78,6 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
       onSuccess && onSuccess(response.data);
       onClose();
     } catch (err) {
-      console.error('Erreur lors de la mise à jour:', err);
       setError(err.response?.data?.error || err.response?.data?.description?.[0] || 'Erreur lors de la mise à jour');
     } finally {
       setIsLoading(false);

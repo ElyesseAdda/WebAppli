@@ -20,7 +20,6 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SpecialLinePreview from './SpecialLinePreview';
 import ColorPicker from './ColorPicker';
-import BaseCalculationSelector from './BaseCalculationSelector';
 
 const SpecialLineEditModal = ({ 
   open, 
@@ -35,7 +34,6 @@ const SpecialLineEditModal = ({
   calculateGlobalTotal
 }) => {
   const [editedLine, setEditedLine] = useState(null);
-  const [showBaseSelector, setShowBaseSelector] = useState(false);
   
   useEffect(() => {
     if (line) {
@@ -44,27 +42,6 @@ const SpecialLineEditModal = ({
   }, [line]);
   
   if (!editedLine) return null;
-  
-  const handleValueTypeChange = (valueType) => {
-    setEditedLine(prev => ({ ...prev, data: { ...prev.data, valueType } }));
-    
-    if (valueType === 'percentage' && !editedLine.baseCalculation) {
-      setShowBaseSelector(true);
-    }
-  };
-  
-  const handleBaseSelected = (base) => {
-    setEditedLine(prev => ({
-      ...prev,
-      baseCalculation: {
-        type: base.type,
-        path: base.path,
-        label: base.label,
-        amount: base.amount
-      }
-    }));
-    setShowBaseSelector(false);
-  };
   
   const handleStylesChange = (styleKey, value) => {
     setEditedLine(prev => ({
@@ -145,14 +122,14 @@ const SpecialLineEditModal = ({
               <ButtonGroup fullWidth>
                 <Button 
                   variant={editedLine.data.valueType === "fixed" ? "contained" : "outlined"}
-                  onClick={() => handleValueTypeChange("fixed")}
+                  onClick={() => setEditedLine(prev => ({ ...prev, data: { ...prev.data, valueType: "fixed" }, baseCalculation: null }))}
                   size="small"
                 >
                   € Montant fixe
                 </Button>
                 <Button 
                   variant={editedLine.data.valueType === "percentage" ? "contained" : "outlined"}
-                  onClick={() => handleValueTypeChange("percentage")}
+                  onClick={() => setEditedLine(prev => ({ ...prev, data: { ...prev.data, valueType: "percentage" } }))}
                   size="small"
                 >
                   % Pourcentage
@@ -160,19 +137,15 @@ const SpecialLineEditModal = ({
               </ButtonGroup>
             </Box>
             
-            {/* Affichage de la base sélectionnée */}
+            {/* Affichage de la base sélectionnée (lecture seule en édition) */}
             {editedLine.baseCalculation && (
               <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
                 <Typography variant="body2" sx={{ fontSize: '13px' }}>
-                  Base : {editedLine.baseCalculation.label}
+                  <strong>Base :</strong> {editedLine.baseCalculation.label}
                 </Typography>
-                <Button 
-                  size="small" 
-                  onClick={() => setShowBaseSelector(true)}
-                  sx={{ mt: 0.5 }}
-                >
-                  Changer
-                </Button>
+                <Typography variant="caption" sx={{ fontSize: '11px', color: '#666', mt: 0.5, display: 'block' }}>
+                  💡 Pour changer la base, recréez la ligne
+                </Typography>
               </Box>
             )}
             
@@ -300,19 +273,6 @@ const SpecialLineEditModal = ({
           </Button>
         </DialogActions>
       </Dialog>
-      
-      {/* Modal de sélection de base */}
-      <BaseCalculationSelector
-        open={showBaseSelector}
-        onClose={() => setShowBaseSelector(false)}
-        onSelect={handleBaseSelected}
-        parties={selectedParties}
-        calculatePartieTotal={calculatePartieTotal}
-        calculateSousPartieTotal={calculateSousPartieTotal}
-        calculatePrice={calculatePrice}
-        calculateGlobalTotal={calculateGlobalTotal}
-        formatMontantEspace={formatMontantEspace}
-      />
     </>
   );
 };

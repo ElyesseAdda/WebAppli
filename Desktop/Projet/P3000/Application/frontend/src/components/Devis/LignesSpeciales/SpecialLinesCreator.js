@@ -15,7 +15,6 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SpecialLinePreview from './SpecialLinePreview';
-import BaseCalculationSelector from './BaseCalculationSelector';
 import ColorPicker from './ColorPicker';
 
 const SpecialLinesCreator = ({ 
@@ -23,12 +22,8 @@ const SpecialLinesCreator = ({
   onClose,
   onAddPendingLine, 
   formatMontantEspace,
-  selectedParties,
   calculatePartieTotal,
   calculateSousPartieTotal,
-  calculatePrice,
-  calculateGlobalTotal,
-  isSelectingBase,
   devisItems,
   pendingLineForBase,
   onClearPendingLineForBase
@@ -47,8 +42,6 @@ const SpecialLinesCreator = ({
     placementSousPartieId: null,
     placementPosition: "end"  // "end", "before_X", "after_X"
   });
-  
-  const [showBaseSelector, setShowBaseSelector] = useState(false);
   
   // Pré-remplir le formulaire quand pendingLineForBase existe
   useEffect(() => {
@@ -72,32 +65,6 @@ const SpecialLinesCreator = ({
     }
   }, [pendingLineForBase, open]);
   
-  // Quand l'utilisateur change valueType vers "percentage"
-  const handleValueTypeChange = (valueType) => {
-    setNewLine(prev => ({ ...prev, valueType }));
-    
-    if (valueType === 'percentage') {
-      // Ouvrir le sélecteur
-      setShowBaseSelector(true);
-    } else {
-      // Nettoyer la base si on revient à "fixe"
-      setNewLine(prev => ({ ...prev, baseCalculation: null }));
-    }
-  };
-  
-  // Quand l'utilisateur sélectionne une base
-  const handleBaseSelected = (base) => {
-    setNewLine(prev => ({
-      ...prev,
-      baseCalculation: {
-        type: base.type,
-        path: base.path,
-        label: base.label,
-        amount: base.amount
-      }
-    }));
-    setShowBaseSelector(false);
-  };
   
   // Valider et ajouter à pending
   const handleAddToPending = () => {
@@ -271,14 +238,23 @@ const SpecialLinesCreator = ({
               <ButtonGroup fullWidth>
                 <Button 
                   variant={newLine.valueType === "fixed" ? "contained" : "outlined"}
-                  onClick={() => handleValueTypeChange("fixed")}
+                  onClick={() => setNewLine(prev => ({ ...prev, valueType: "fixed", baseCalculation: null }))}
                   size="small"
                 >
                   € Montant fixe
                 </Button>
                 <Button 
                   variant={newLine.valueType === "percentage" ? "contained" : "outlined"}
-                  onClick={() => handleValueTypeChange("percentage")}
+                  onClick={() => {
+                    setNewLine(prev => ({ ...prev, valueType: "percentage" }));
+                    // Si pas de base définie, fermer le modal et activer la sélection
+                    if (!newLine.baseCalculation) {
+                      setTimeout(() => {
+                        onClose();
+                        onAddPendingLine(newLine, true); // true = requiresBaseSelection
+                      }, 100);
+                    }
+                  }}
                   size="small"
                 >
                   % Pourcentage
@@ -300,65 +276,24 @@ const SpecialLinesCreator = ({
               </ButtonGroup>
             </Box>
             
-            {/* Sélection de base pour les pourcentages */}
-            {newLine.valueType === "percentage" && (
-              <Box sx={{ mt: 1 }}>
-                {newLine.baseCalculation ? (
-                  // Base déjà sélectionnée
-                  <Box sx={{ p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
-                    <Typography variant="body2" sx={{ fontSize: '13px', mb: 1 }}>
-                      Base : {newLine.baseCalculation.label}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button 
-                        size="small" 
-                        onClick={() => setShowBaseSelector(true)}
-                        variant="outlined"
-                      >
-                        📋 Changer (Liste)
-                      </Button>
-                      <Button 
-                        size="small" 
-                        onClick={() => {
-                          onClose();
-                          onAddPendingLine(newLine, true); // true = requiresBaseSelection
-                        }}
-                        variant="outlined"
-                        color="primary"
-                      >
-                        🎯 Sélectionner sur le tableau
-                      </Button>
-                    </Box>
-                  </Box>
-                ) : (
-                  // Pas de base sélectionnée
-                  <Box sx={{ p: 1.5, backgroundColor: '#fff3e0', borderRadius: '4px', border: '1px solid #ff9800' }}>
-                    <Typography variant="body2" sx={{ fontSize: '13px', mb: 1, fontWeight: 'bold', color: '#e65100' }}>
-                      ⚠️ Veuillez sélectionner une base de calcul
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button 
-                        size="small" 
-                        onClick={() => setShowBaseSelector(true)}
-                        variant="contained"
-                        color="success"
-                      >
-                        📋 Choisir dans la liste
-                      </Button>
-                      <Button 
-                        size="small" 
-                        onClick={() => {
-                          onClose();
-                          onAddPendingLine(newLine, true); // true = requiresBaseSelection
-                        }}
-                        variant="contained"
-                        color="primary"
-                      >
-                        🎯 Cliquer sur le tableau
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
+            {/* Affichage de la base pour les pourcentages */}
+            {newLine.valueType === "percentage" && newLine.baseCalculation && (
+              <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
+                <Typography variant="body2" sx={{ fontSize: '13px', mb: 1 }}>
+                  <strong>Base :</strong> {newLine.baseCalculation.label}
+                </Typography>
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    onClose();
+                    onAddPendingLine(newLine, true); // true = requiresBaseSelection
+                  }}
+                  variant="outlined"
+                  color="primary"
+                  fullWidth
+                >
+                  🎯 Changer la base
+                </Button>
               </Box>
             )}
             
@@ -489,19 +424,6 @@ const SpecialLinesCreator = ({
           </Button>
         </DialogActions>
       </Dialog>
-      
-      {/* Modal de sélection de base */}
-      <BaseCalculationSelector
-        open={showBaseSelector}
-        onClose={() => setShowBaseSelector(false)}
-        onSelect={handleBaseSelected}
-        parties={selectedParties}
-        calculatePartieTotal={calculatePartieTotal}
-        calculateSousPartieTotal={calculateSousPartieTotal}
-        calculatePrice={calculatePrice}
-        calculateGlobalTotal={calculateGlobalTotal}
-        formatMontantEspace={formatMontantEspace}
-      />
     </>
   );
 };

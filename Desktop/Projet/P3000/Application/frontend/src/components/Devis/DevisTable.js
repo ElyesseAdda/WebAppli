@@ -12,6 +12,7 @@ import SpecialLinesCreator from './LignesSpeciales/SpecialLinesCreator';
 import PendingSpecialLines from './LignesSpeciales/PendingSpecialLines';
 import SpecialLineEditModal from './LignesSpeciales/SpecialLineEditModal';
 import LigneSpecialeRow from './LignesSpeciales/LigneSpecialeRow';
+import { DevisIndexManager } from '../../utils/DevisIndexManager';
 
 // Composant zone de placement pour ligne spéciale (style glass)
 const PlacementZone = ({ position, onPlaceLineAt, isActive, lineAwaitingPlacement, displayAs = 'partie' }) => {
@@ -160,6 +161,8 @@ const DevisTable = ({
   pendingSpecialLines,
   onAddPendingSpecialLine,
   onRemovePendingSpecialLine,
+  onRemoveSpecialLine,  // Supprimer sans recalculer index_global
+  onMoveSpecialLine,    // ✅ TODO 1.3: Déplacer une ligne spéciale existante
   onEditSpecialLine,
   editingSpecialLine,
   showEditModal,
@@ -325,360 +328,61 @@ const DevisTable = ({
 
   // Fonction pour gérer la fin du drag & drop
   const handleDragEnd = (result) => {
+    // Réinitialiser le type de drag
+    setDraggingType(null);
+    
     if (!result.destination) {
       return;
     }
-
-    // ========================================
-    // GESTION DU DRAG DANS LE SYSTÈME UNIFIÉ
-    // ========================================
     
-    // ===== RÉORDONNANCEMENT DES PARTIES =====
-    if (result.source.droppableId === 'parties-global' && result.destination.droppableId === 'parties-global') {
-      if (result.source.index === result.destination.index) return;
-      
-      // Réordonner via onPartiesReorder (qui met à jour selectedParties)
-      const newParties = Array.from(selectedParties);
-      const [moved] = newParties.splice(result.source.index, 1);
-      newParties.splice(result.destination.index, 0, moved);
-      
-      if (onPartiesReorder) {
-        onPartiesReorder(newParties);
-      }
-      
-      return;
+    // ✅ Utiliser le DevisIndexManager pour gérer tout le réordonnancement
+    const reordered = DevisIndexManager.reorderAfterDrag(devisItems, result);
+    
+    // Mettre à jour via le handler unifié
+    if (onDevisItemsReorder) {
+      onDevisItemsReorder(reordered);
     }
     
-    // ===== RÉORDONNANCEMENT DES SOUS-PARTIES =====
-    if (result.source.droppableId.startsWith('sous-parties-') && result.destination.droppableId.startsWith('sous-parties-')) {
-      // Vérifier que c'est dans la même partie
-      if (result.source.droppableId !== result.destination.droppableId) {
-        return;
-      }
-      
+    // Mettre à jour selectedParties pour la compatibilité
+    if (result.source.droppableId === 'parties-global' && onPartiesReorder) {
+      const parties = reordered.filter(i => i.type === 'partie').sort((a, b) => a.index_global - b.index_global);
+      const newParties = parties.map(pItem => selectedParties.find(p => p.id === pItem.id)).filter(Boolean);
+      onPartiesReorder(newParties);
+    }
+    
+    if (result.source.droppableId.startsWith('sous-parties-') && onSousPartiesReorder) {
       const partieId = parseInt(result.source.droppableId.replace('sous-parties-', ''));
-      
-      if (onSousPartiesReorder) {
-        onSousPartiesReorder(partieId, result);
-      }
-      
-      return;
+      onSousPartiesReorder(partieId, result);
     }
     
-    // ===== RÉORDONNANCEMENT DES LIGNES DÉTAILS =====
-    if (result.source.droppableId.startsWith('lignes-') && result.destination.droppableId.startsWith('lignes-')) {
-      // Vérifier que c'est dans la même sous-partie
-      if (result.source.droppableId !== result.destination.droppableId) {
-        return;
-      }
-      
-      // Pour l'instant, pas de handler spécifique pour les lignes détails
-      // Elles restent dans leur ordre actuel
-      
-      return;
-    }
+    // Note: L'ancien système de drag & drop des lignes spéciales a été remplacé par :
+    // - PlacementZone : pour le placement initial (via handlePlaceLineAt)
+    // - Bouton Déplacer : pour le déplacement (via handleMoveSpecialLine)
     
-    // ===== DÉPLACEMENT D'UNE LIGNE SPÉCIALE DÉJÀ PLACÉE - DÉSACTIVÉ =====
-    // Les lignes spéciales ne sont plus draggables, elles sont fixes une fois placées
-    /* ANCIEN CODE DÉSACTIVÉ
-    if (result.draggableId.startsWith('special_')) {
-      console.log('🔄 === DÉPLACEMENT LIGNE SPÉCIALE ===');
-      console.log('🎯 Source:', result.source.droppableId);
-      console.log('🎯 Destination:', result.destination.droppableId);
-      
-      // Extraire l'ID de la ligne spéciale
-      const lineId = result.draggableId.replace('special_global_', '').replace('special_partie_', '').replace('special_sp_', '');
-      const line = devisItems.find(item => item.type === 'ligne_speciale' && String(item.id) === String(lineId));
-      
-      if (!line) {
-        console.error('❌ Ligne spéciale non trouvée:', lineId);
-        return;
-      }
-      
-      console.log('✅ Ligne trouvée:', line);
-      
-      // Déterminer le nouveau contexte selon le droppableId de destination
-      let new_context_type = 'global';
-      let new_context_id = null;
-      
-      if (result.destination.droppableId === 'parties-global') {
-        new_context_type = 'global';
-        console.log('📌 Nouveau contexte: GLOBAL');
-      } else if (result.destination.droppableId.startsWith('sous-parties-')) {
-        new_context_type = 'partie';
-        new_context_id = parseInt(result.destination.droppableId.replace('sous-parties-', ''));
-        console.log('📌 Nouveau contexte: PARTIE', new_context_id);
-      } else if (result.destination.droppableId.startsWith('lignes-')) {
-        new_context_type = 'sous_partie';
-        new_context_id = parseInt(result.destination.droppableId.replace('lignes-', ''));
-        console.log('📌 Nouveau contexte: SOUS-PARTIE', new_context_id);
-      }
-      
-      // Récupérer les éléments du Droppable de destination
-      const destinationItems = devisItems.filter(item => {
-        if (result.destination.droppableId === 'parties-global') {
-          return item.type === 'partie' || (item.type === 'ligne_speciale' && item.context_type === 'global' && item.id !== line.id);
-        } else if (result.destination.droppableId.startsWith('sous-parties-')) {
-          const partieId = parseInt(result.destination.droppableId.replace('sous-parties-', ''));
-          return (item.type === 'sous_partie' && item.partie_id === partieId) || 
-                 (item.type === 'ligne_speciale' && item.context_type === 'partie' && item.context_id === partieId && item.id !== line.id);
-        } else if (result.destination.droppableId.startsWith('lignes-')) {
-          const spId = parseInt(result.destination.droppableId.replace('lignes-', ''));
-          return (item.type === 'ligne_detail' && item.sous_partie_id === spId) || 
-                 (item.type === 'ligne_speciale' && item.context_type === 'sous_partie' && item.context_id === spId && item.id !== line.id);
-        }
-        return false;
-      }).sort((a, b) => a.index_global - b.index_global);
-      
-      console.log('📋 Éléments destination:', destinationItems.map(i => ({ type: i.type, id: i.id, index_global: i.index_global })));
-      
-      // Calculer le nouveau index_global
-      let targetIndexGlobal = 1;
-      
-      if (result.destination.index === 0) {
-        if (destinationItems.length > 0) {
-          targetIndexGlobal = destinationItems[0].index_global - 0.5;
-        } else {
-          targetIndexGlobal = 1;
-        }
-      } else if (result.destination.index >= destinationItems.length) {
-        if (destinationItems.length > 0) {
-          targetIndexGlobal = destinationItems[destinationItems.length - 1].index_global + 0.5;
-        } else {
-          targetIndexGlobal = 1;
-        }
-      } else {
-        const itemBefore = destinationItems[result.destination.index - 1];
-        const itemAfter = destinationItems[result.destination.index];
-        targetIndexGlobal = (itemBefore.index_global + itemAfter.index_global) / 2;
-      }
-      
-      console.log('🎯 Nouveau index_global calculé:', targetIndexGlobal);
-      
-      // Mettre à jour la ligne avec le nouveau contexte et index
-      const updatedItems = devisItems.map(item => {
-        if (item.type === 'ligne_speciale' && String(item.id) === String(lineId)) {
-          return {
-            ...item,
-            context_type: new_context_type,
-            context_id: new_context_id,
-            index_global: targetIndexGlobal
-          };
-        }
-        return item;
-      });
-      
-      // Réindexer tout
-      const sorted = updatedItems.sort((a, b) => a.index_global - b.index_global);
-      const reindexed = sorted.map((item, idx) => ({
-        ...item,
-        index_global: idx + 1
-      }));
-      
-      console.log('✅ Items réindexés:', reindexed.filter(i => i.type === 'ligne_speciale').map(i => ({ 
-        id: i.id, 
-        context_type: i.context_type, 
-        context_id: i.context_id, 
-        index_global: i.index_global 
-      })));
-      
-      if (onDevisItemsReorder) {
-        onDevisItemsReorder(reindexed);
-      }
-      
-      console.log('✅ === FIN DÉPLACEMENT LIGNE SPÉCIALE ===');
-      return;
-    }
-    */
-    
-    // ===== PLACEMENT D'UNE LIGNE SPÉCIALE DEPUIS PENDING - DÉSACTIVÉ =====
-    // Les lignes spéciales sont maintenant placées directement à la création
-    /* ANCIEN CODE DÉSACTIVÉ
-    if (result.source.droppableId === 'pending-special-lines') {
-      console.log('📍 === DÉBUT PLACEMENT LIGNE SPÉCIALE ===');
-      console.log('🎯 Source:', result.source);
-      console.log('🎯 Destination:', result.destination);
-      console.log('🎯 Draggable ID:', result.draggableId);
-      
-      if (onDevisItemsReorder && onRemovePendingSpecialLine) {
-        // Retirer le préfixe 'pending_' du draggableId
-        const lineId = result.draggableId.replace('pending_', '');
-        console.log('🔍 ID brut du drag:', result.draggableId);
-        console.log('🔍 ID après nettoyage:', lineId);
-        console.log('🔍 Type de lineId:', typeof lineId);
-        console.log('🔍 Lignes en attente:', pendingSpecialLines.map(l => ({ 
-          id: l.id, 
-          typeId: typeof l.id,
-          description: l.description || l.data?.description 
-        })));
-        
-        const line = pendingSpecialLines.find(l => String(l.id) === String(lineId));
-        
-        if (line) {
-          console.log('✅ Ligne trouvée:', { id: line.id, description: line.description });
-          
-          // Déterminer le contexte selon le droppableId
-          let context_type = 'global';
-          let context_id = null;
-          
-          console.log('🎯 Droppable de destination:', result.destination.droppableId);
-          
-          if (result.destination.droppableId === 'parties-global') {
-            context_type = 'global';
-            console.log('📌 Contexte: GLOBAL (entre les parties)');
-          } else if (result.destination.droppableId.startsWith('sous-parties-')) {
-            context_type = 'partie';
-            context_id = parseInt(result.destination.droppableId.replace('sous-parties-', ''));
-            console.log('📌 Contexte: PARTIE (dans une partie)', { partie_id: context_id });
-          } else if (result.destination.droppableId.startsWith('lignes-')) {
-            context_type = 'sous_partie';
-            context_id = parseInt(result.destination.droppableId.replace('lignes-', ''));
-            console.log('📌 Contexte: SOUS-PARTIE (dans une sous-partie)', { sous_partie_id: context_id });
-          }
-          
-          console.log('🎯 Index de destination (dans le Droppable):', result.destination.index);
-          console.log('📊 Nombre d\'items actuels:', devisItems.length);
-          
-          // Calculer le vrai index_global basé sur la position dans le Droppable
-          let targetIndexGlobal = 1; // Par défaut, au début
-          
-          // Récupérer les éléments du Droppable de destination, triés par index_global
-          const destinationItems = devisItems.filter(item => {
-            if (result.destination.droppableId === 'parties-global') {
-              return item.type === 'partie' || (item.type === 'ligne_speciale' && item.context_type === 'global');
-            } else if (result.destination.droppableId.startsWith('sous-parties-')) {
-              const partieId = parseInt(result.destination.droppableId.replace('sous-parties-', ''));
-              return (item.type === 'sous_partie' && item.partie_id === partieId) || 
-                     (item.type === 'ligne_speciale' && item.context_type === 'partie' && item.context_id === partieId);
-            } else if (result.destination.droppableId.startsWith('lignes-')) {
-              const spId = parseInt(result.destination.droppableId.replace('lignes-', ''));
-              return (item.type === 'ligne_detail' && item.sous_partie_id === spId) || 
-                     (item.type === 'ligne_speciale' && item.context_type === 'sous_partie' && item.context_id === spId);
-            }
-            return false;
-          }).sort((a, b) => a.index_global - b.index_global);
-          
-          console.log('📋 Éléments du Droppable destination:', destinationItems.map(i => ({
-            type: i.type,
-            id: i.id,
-            index_global: i.index_global
-          })));
-          
-          // Si on drop à l'index 0, prendre l'index_global du premier élément - 0.5 (ou 1 si vide)
-          if (result.destination.index === 0) {
-            if (destinationItems.length > 0) {
-              targetIndexGlobal = destinationItems[0].index_global - 0.5;
-            } else {
-              targetIndexGlobal = 1;
-            }
-          } else if (result.destination.index >= destinationItems.length) {
-            // Si on drop à la fin, prendre l'index_global du dernier + 0.5
-            if (destinationItems.length > 0) {
-              targetIndexGlobal = destinationItems[destinationItems.length - 1].index_global + 0.5;
-            } else {
-              targetIndexGlobal = 1;
-            }
-          } else {
-            // Si on drop au milieu, calculer la moyenne entre l'élément avant et après
-            const itemBefore = destinationItems[result.destination.index - 1];
-            const itemAfter = destinationItems[result.destination.index];
-            targetIndexGlobal = (itemBefore.index_global + itemAfter.index_global) / 2;
-          }
-          
-          console.log('🎯 Index global calculé:', targetIndexGlobal);
-          
-          // Retirer de pending
-          onRemovePendingSpecialLine(line.id);
-          console.log('✅ Ligne retirée de la zone d\'attente');
-          
-          // Ajouter dans devisItems avec le contexte
-          const newItems = [...devisItems];
-          const newLine = {
-            ...line,
-            id: lineId, // Utiliser l'ID sans le préfixe 'pending_'
-            type: 'ligne_speciale',
-            description: line.data?.description || line.description, // Extraire la description
-            value: line.data?.value,
-            value_type: line.data?.valueType,
-            type_speciale: line.data?.type,
-            index_global: targetIndexGlobal,
-            context_type,
-            context_id,
-            position_in_context: result.destination.index
-          };
-          
-          console.log('➕ Nouvelle ligne à insérer:', newLine);
-          newItems.push(newLine);
-          console.log('📊 Nombre d\'items après insertion:', newItems.length);
-          
-          // Réindexer tout : trier par index_global puis attribuer des index entiers séquentiels
-          const sorted = newItems.sort((a, b) => a.index_global - b.index_global);
-          const reindexed = sorted.map((item, idx) => ({
-            ...item,
-            index_global: idx + 1
-          }));
-          
-          console.log('🔄 Items réindexés:', reindexed.map(i => ({ 
-            type: i.type, 
-            id: i.id, 
-            index_global: i.index_global,
-            description: i.description || i.titre || i.designation
-          })));
-          
-          onDevisItemsReorder(reindexed);
-          console.log('✅ === FIN PLACEMENT LIGNE SPÉCIALE ===');
-        } else {
-          console.error('❌ Ligne spéciale non trouvée avec ID:', lineId);
-        }
-        
-        return;
-      } else {
-        console.error('❌ Handlers manquants pour le placement');
-      }
-    }
-    */
+    // ✅ TODO 2.1: ANCIEN CODE SUPPRIMÉ (~150 lignes)
+    // Ancien système : Drag & drop des lignes spéciales (depuis pending + déplacement)
+    // Nouveau système : PlacementZone (cliquable) + bouton Déplacer (handleMoveSpecialLine)
+    // Raison de suppression : Incompatible avec le système hiérarchique décimal
   };
 
+  // État pour suivre le type d'élément en cours de drag
+  const [draggingType, setDraggingType] = useState(null);
+  
   // Fonction pour gérer le début du drag
   const handleDragStart = (start) => {
-    console.log('🚀 === DÉBUT DU DRAG ===');
-    console.log('📦 Draggable ID:', start.draggableId);
-    console.log('📦 Type:', start.type);
-    console.log('📦 Source:', start.source);
-    
-    // Lister TOUS les draggableId actuellement dans le DOM
-    console.log('🔍 Vérification des IDs en double...');
-    const allDraggableIds = [
-      // Parties
-      ...devisItems.filter(i => i.type === 'partie').map(i => `partie_${i.id}`),
-      // Sous-parties
-      ...devisItems.filter(i => i.type === 'sous_partie').map(i => `sp_${i.id}`),
-      // Lignes détails
-      ...devisItems.filter(i => i.type === 'ligne_detail').map(i => `ligne_${i.id}`),
-      // Lignes spéciales (global)
-      ...devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'global').map(i => `special_global_${i.id}`),
-      // Lignes spéciales (partie)
-      ...devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'partie').map(i => `special_partie_${i.id}`),
-      // Lignes spéciales (sous-partie)
-      ...devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'sous_partie').map(i => `special_sp_${i.id}`),
-      // Pending
-      ...pendingSpecialLines.map(l => `pending_${l.id}`)
-    ];
-    
-    console.log('📋 Tous les draggableIds:', allDraggableIds);
-    
-    // Détecter les doublons
-    const duplicates = allDraggableIds.filter((id, index) => allDraggableIds.indexOf(id) !== index);
-    if (duplicates.length > 0) {
-      console.error('❌ DOUBLONS DÉTECTÉS:', duplicates);
-    } else {
-      console.log('✅ Aucun doublon détecté');
+    // Déterminer le type d'élément en cours de drag
+    if (start.draggableId.startsWith('partie_')) {
+      setDraggingType('PARTIE');
+    } else if (start.draggableId.startsWith('sp_')) {
+      setDraggingType('SOUS_PARTIE');
+    } else if (start.draggableId.startsWith('ligne_')) {
+      setDraggingType('LIGNE_DETAIL');
     }
   };
 
   // Fonction pour gérer la mise à jour pendant le drag
   const handleDragUpdate = (update) => {
-    console.log('🔄 Drag update:', update);
+    // Drag update
   };
 
 
@@ -718,6 +422,45 @@ const DevisTable = ({
       position: 'relative',
       zIndex: 1
     }}>
+      {/* Bannière d'aide pendant le drag */}
+      {draggingType && (
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 101,
+          backgroundColor: draggingType === 'PARTIE' ? '#1976d2' : draggingType === 'SOUS_PARTIE' ? '#0288d1' : '#4caf50',
+          color: 'white',
+          padding: '12px 20px',
+          textAlign: 'center',
+          fontWeight: 'bold',
+          fontSize: '14px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px'
+        }}>
+          {draggingType === 'PARTIE' && (
+            <>
+              <span>🔵</span>
+              <span>Déplacement d'une PARTIE - Vous pouvez la déposer uniquement dans la zone globale (bleue)</span>
+            </>
+          )}
+          {draggingType === 'SOUS_PARTIE' && (
+            <>
+              <span>🔷</span>
+              <span>Déplacement d'une SOUS-PARTIE - Vous pouvez la déposer uniquement dans sa partie parent (bleu ciel)</span>
+            </>
+          )}
+          {draggingType === 'LIGNE_DETAIL' && (
+            <>
+              <span>🟢</span>
+              <span>Déplacement d'une LIGNE DÉTAIL - Vous pouvez la déposer uniquement dans sa sous-partie parent (verte)</span>
+            </>
+          )}
+        </div>
+      )}
+      
       {/* Overlay sombre pour la sélection de base */}
       {isSelectingBase && (
         <>
@@ -987,15 +730,18 @@ const DevisTable = ({
                     onDragStart={handleDragStart}
                     onDragUpdate={handleDragUpdate}
                   >
-                    <Droppable droppableId="parties-global">
+                    <Droppable droppableId="parties-global" type="PARTIE">
                       {(provided, snapshot) => (
                         <div
                           {...provided.droppableProps}
                           ref={provided.innerRef}
                           style={{
-                            backgroundColor: snapshot.isDraggingOver ? 'rgba(27, 120, 188, 0.05)' : 'transparent',
+                            backgroundColor: snapshot.isDraggingOver ? 'rgba(27, 120, 188, 0.2)' : 'transparent',
                             padding: '2px 0',
-                            minHeight: '50px'
+                            minHeight: '50px',
+                            border: snapshot.isDraggingOver ? '3px dashed #1976d2' : '3px dashed transparent',
+                            borderRadius: '8px',
+                            transition: 'all 0.2s ease'
                           }}
                         >
                           {/* Zone de placement au début (style partie) */}
@@ -1008,13 +754,18 @@ const DevisTable = ({
                           />
                           
                           {/* Fusionner PARTIES ET lignes spéciales globales, trier par index_global */}
-                          {devisItems
-                            .filter(item => 
-                              item.type === 'partie' ||
-                              (item.type === 'ligne_speciale' && item.context_type === 'global')
-                            )
-                            .sort((a, b) => a.index_global - b.index_global)
-                            .map((item, itemIndex) => {
+                          {(() => {
+                            const items = devisItems
+                              .filter(item => 
+                                item.type === 'partie' ||
+                                (item.type === 'ligne_speciale' && item.context_type === 'global')
+                              )
+                              .sort((a, b) => a.index_global - b.index_global);
+                            
+                            // Compter seulement les parties pour les index drag and drop
+                            let partieIndex = 0;
+                            
+                            return items.map((item, itemIndex) => {
                               
                               // Si c'est une ligne spéciale globale (non draggable)
                               if (item.type === 'ligne_speciale') {
@@ -1069,6 +820,9 @@ const DevisTable = ({
                               }
                               
                               // Sinon, c'est une partie
+                              const currentPartieIndex = partieIndex;
+                              partieIndex++; // Incrémenter pour la prochaine partie
+                              
                               return (
                                 <React.Fragment key={`partie_wrapper_${item.id}`}>
                                 {/* Zone de placement AVANT cette partie */}
@@ -1083,7 +837,8 @@ const DevisTable = ({
                                 <Draggable
                                   key={`partie_${item.id}`}
                                   draggableId={`partie_${item.id}`}
-                                  index={itemIndex}
+                                  index={currentPartieIndex}
+                                  type="PARTIE"
                                 >
                                   {(dragProvided, dragSnapshot) => {
                                       // Vérifier si cette partie a des sous-parties
@@ -1217,25 +972,35 @@ const DevisTable = ({
                                             borderRadius: '0 0 4px 4px',
                                             marginTop: '-4px'
                                           }}>
-                                            <Droppable droppableId={`sous-parties-${item.id}`}>
+                                            <Droppable droppableId={`sous-parties-${item.id}`} type="SOUS_PARTIE">
                                               {(spProvided, spSnapshot) => (
                                                 <div
                                                   {...spProvided.droppableProps}
                                                   ref={spProvided.innerRef}
                                                   style={{
-                                                    backgroundColor: spSnapshot.isDraggingOver ? 'rgba(157, 197, 226, 0.1)' : 'transparent',
+                                                    backgroundColor: spSnapshot.isDraggingOver ? 'rgba(157, 197, 226, 0.3)' : 'transparent',
                                                     minHeight: '30px',
-                                                    padding: '4px 0'
+                                                    padding: '4px 0',
+                                                    border: spSnapshot.isDraggingOver ? '2px dashed #1976d2' : '2px dashed transparent',
+                                                    borderRadius: '6px',
+                                                    transition: 'all 0.2s ease'
                                                   }}
                                                 >
                                                   {/* Fusionner sous-parties ET lignes spéciales de cette partie */}
-                                                  {devisItems
-                                                    .filter(spItem => 
-                                                      (spItem.type === 'sous_partie' && spItem.partie_id === item.id) ||
-                                                      (spItem.type === 'ligne_speciale' && spItem.context_type === 'partie' && spItem.context_id === item.id)
-                                                    )
-                                                    .sort((a, b) => a.index_global - b.index_global)
-                                                    .map((spItem, spIndex) => {
+                                                  {(() => {
+                                                    const spItems = devisItems
+                                                      .filter(spItem => 
+                                                        (spItem.type === 'sous_partie' && spItem.partie_id === item.id) ||
+                                                        (spItem.type === 'ligne_speciale' && spItem.context_type === 'partie' && spItem.context_id === item.id)
+                                                      )
+                                                      .sort((a, b) => a.index_global - b.index_global);
+                                                    
+                                                    
+                                                    
+                                                    // Compter seulement les sous-parties pour les index drag and drop
+                                                    let sousPartieIndex = 0;
+                                                    
+                                                    return spItems.map((spItem, spIndex) => {
                                                       
                                                       // Si c'est une ligne spéciale (non draggable)
                                                       if (spItem.type === 'ligne_speciale') {
@@ -1281,6 +1046,8 @@ const DevisTable = ({
                                                       
                                                       // Sinon, c'est une sous-partie
                                                       const sp = spItem;
+                                                      const currentSousPartieIndex = sousPartieIndex;
+                                                      sousPartieIndex++; // Incrémenter pour la prochaine sous-partie
                                                       
                                                       return (
                                                       <React.Fragment key={`sp_wrapper_${sp.id}`}>
@@ -1296,7 +1063,8 @@ const DevisTable = ({
                                                       <Draggable 
                                                         key={`sp_${sp.id}`} 
                                                         draggableId={`sp_${sp.id}`} 
-                                                        index={spIndex}
+                                                        index={currentSousPartieIndex}
+                                                        type="SOUS_PARTIE"
                                                       >
                                                         {(spDragProvided, spDragSnapshot) => (
                                                           <div
@@ -1442,25 +1210,33 @@ const DevisTable = ({
                                                               borderTop: 'none',
                                                               borderRadius: '0 0 4px 4px'
                                                             }}>
-                                                              <Droppable droppableId={`lignes-${sp.id}`}>
+                                                              <Droppable droppableId={`lignes-${sp.id}`} type="LIGNE_DETAIL">
                                                                 {(ldProvided, ldSnapshot) => (
                                                                   <div
                                                                     {...ldProvided.droppableProps}
                                                                     ref={ldProvided.innerRef}
                                                                     style={{
-                                                                      backgroundColor: ldSnapshot.isDraggingOver ? 'rgba(230, 230, 230, 0.3)' : 'transparent',
+                                                                      backgroundColor: ldSnapshot.isDraggingOver ? 'rgba(76, 175, 80, 0.2)' : 'transparent',
                                                                       minHeight: '30px',
-                                                                      padding: '4px 0'
+                                                                      padding: '4px 0',
+                                                                      border: ldSnapshot.isDraggingOver ? '2px dashed #4caf50' : '2px dashed transparent',
+                                                                      borderRadius: '4px',
+                                                                      transition: 'all 0.2s ease'
                                                                     }}
                                                                   >
                                                                     {/* Fusionner lignes détails ET lignes spéciales, trier par index_global */}
-                                                                    {devisItems
-                                                                      .filter(item => 
-                                                                        (item.type === 'ligne_detail' && item.sous_partie_id === sp.id) ||
-                                                                        (item.type === 'ligne_speciale' && item.context_type === 'sous_partie' && item.context_id === sp.id)
-                                                                      )
-                                                                      .sort((a, b) => a.index_global - b.index_global)
-                                                                      .map((item, itemIndex) => {
+                                                                    {(() => {
+                                                                      const ldItems = devisItems
+                                                                        .filter(item => 
+                                                                          (item.type === 'ligne_detail' && item.sous_partie_id === sp.id) ||
+                                                                          (item.type === 'ligne_speciale' && item.context_type === 'sous_partie' && item.context_id === sp.id)
+                                                                        )
+                                                                        .sort((a, b) => a.index_global - b.index_global);
+                                                                      
+                                                                      // Compter seulement les lignes détails pour les index drag and drop
+                                                                      let ligneDetailIndex = 0;
+                                                                      
+                                                                      return ldItems.map((item, itemIndex) => {
                                                                         
                                                                         // Si c'est une ligne spéciale (non draggable)
                                                                         if (item.type === 'ligne_speciale') {
@@ -1508,6 +1284,8 @@ const DevisTable = ({
                                                                         const ligne = item;
                                                                         const prix = calculatePrice(ligne);
                                                                         const total = prix * (ligne.quantity || 0);
+                                                                        const currentLigneDetailIndex = ligneDetailIndex;
+                                                                        ligneDetailIndex++; // Incrémenter pour la prochaine ligne
                                                                         
                                                                         return (
                                                                           <React.Fragment key={`ligne_wrapper_${ligne.id}`}>
@@ -1523,7 +1301,8 @@ const DevisTable = ({
                                                                           <Draggable 
                                                                             key={`ligne_${ligne.id}`} 
                                                                             draggableId={`ligne_${ligne.id}`} 
-                                                                            index={itemIndex}
+                                                                            index={currentLigneDetailIndex}
+                                                                            type="LIGNE_DETAIL"
                                                                           >
                                                                             {(ldDragProvided, ldDragSnapshot) => (
                                                                               <div
@@ -1641,7 +1420,8 @@ const DevisTable = ({
                                                                           />
                                                                           </React.Fragment>
                                                                         );
-                                                                      })}
+                                                                      });
+                                                                    })()}
                                                                     
                                                                     {ldProvided.placeholder}
                                                                   </div>
@@ -1673,7 +1453,8 @@ const DevisTable = ({
                                                       />
                                                       </React.Fragment>
                                                     );
-                                                    })}
+                                                    });
+                                                  })()}
                                                   
                                                   {spProvided.placeholder}
                                                 </div>
@@ -1705,7 +1486,8 @@ const DevisTable = ({
                                 />
                                 </React.Fragment>
                               );
-                            })}
+                            });
+                          })()}
                           
                           {/* Zone de placement à la fin */}
                           <PlacementZone 
@@ -2077,12 +1859,8 @@ const DevisTable = ({
           }}
           onAddPendingLine={onAddPendingSpecialLine}
           formatMontantEspace={formatMontantEspace}
-          selectedParties={selectedParties}
           calculatePartieTotal={calculatePartieTotal}
           calculateSousPartieTotal={calculateSousPartieTotal}
-          calculatePrice={calculatePrice}
-          calculateGlobalTotal={calculateGlobalTotal}
-          isSelectingBase={isSelectingBase}
           devisItems={devisItems}
           pendingLineForBase={pendingLineForBase}
           onClearPendingLineForBase={onClearPendingLineForBase}
@@ -2207,20 +1985,9 @@ const DevisTable = ({
             <IconButton 
               size="small" 
               onClick={() => {
-                const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
-                if (line) {
-                  const itemsWithoutLine = devisItems.filter(item => !(item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId));
-                  const reindexed = itemsWithoutLine
-                    .sort((a, b) => a.index_global - b.index_global)
-                    .map((item, idx) => ({ ...item, index_global: idx + 1 }));
-                  
-                  if (onDevisItemsReorder) {
-                    onDevisItemsReorder(reindexed);
-                  }
-                  
-                  if (onRequestReplacement) {
-                    onRequestReplacement(line);
-                  }
+                // ✅ TODO 1.3: Utiliser le nouveau handler handleMoveSpecialLine
+                if (onMoveSpecialLine) {
+                  onMoveSpecialLine(hoveredSpecialLineId);
                 }
               }}
               style={{ 
@@ -2241,13 +2008,9 @@ const DevisTable = ({
               size="small" 
               onClick={() => {
                 if (window.confirm('Supprimer cette ligne spéciale ?')) {
-                  const itemsWithoutLine = devisItems.filter(item => !(item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId));
-                  const reindexed = itemsWithoutLine
-                    .sort((a, b) => a.index_global - b.index_global)
-                    .map((item, idx) => ({ ...item, index_global: idx + 1 }));
-                  
-                  if (onDevisItemsReorder) {
-                    onDevisItemsReorder(reindexed);
+                  // ✅ Supprimer SANS recalculer les index_global
+                  if (onRemoveSpecialLine) {
+                    onRemoveSpecialLine(hoveredSpecialLineId);
                   }
                 }
               }}

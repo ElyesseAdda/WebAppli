@@ -169,7 +169,7 @@ const SousPartieSearch = ({
         setOptions(formattedOptions);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des sous-parties:', error);
+      // Erreur lors du chargement des sous-parties
       setOptions([]);
     } finally {
       setIsLoading(false);

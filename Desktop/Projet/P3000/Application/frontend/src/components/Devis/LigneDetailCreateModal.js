@@ -97,7 +97,6 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
       
       onClose();
     } catch (err) {
-      console.error('Erreur lors de la création:', err);
       setError(err.response?.data?.error || err.response?.data?.description?.[0] || 'Erreur lors de la création');
     } finally {
       setIsLoading(false);

@@ -12,7 +12,7 @@ const ColorPicker = ({ value, onChange, label }) => {
   useEffect(() => {
     axios.get('/api/colors/')
       .then(res => setCustomColors(res.data))
-      .catch(err => console.error('Erreur chargement couleurs:', err));
+      .catch(err => {/* Erreur chargement couleurs */});
   }, []);
   
   const handleColorSelect = (color) => {
@@ -22,7 +22,7 @@ const ColorPicker = ({ value, onChange, label }) => {
     // Incrémenter le compteur si c'est une couleur enregistrée
     if (color.id) {
       axios.post(`/api/colors/${color.id}/increment/`)
-        .catch(err => console.error('Erreur incrémentation:', err));
+        .catch(err => {/* Erreur incrémentation */});
     }
   };
   
@@ -35,7 +35,7 @@ const ColorPicker = ({ value, onChange, label }) => {
     // Recharger les couleurs
     axios.get('/api/colors/')
       .then(res => setCustomColors(res.data))
-      .catch(err => console.error('Erreur chargement couleurs:', err));
+      .catch(err => {/* Erreur chargement couleurs */});
     setShowModal(false);
   };
   

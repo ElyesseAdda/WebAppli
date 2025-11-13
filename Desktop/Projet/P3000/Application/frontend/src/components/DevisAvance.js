@@ -9,6 +9,7 @@ import ChantierInfo from './Devis/ChantierInfo';
 import DevisTable from './Devis/DevisTable';
 import DevisRecap from './Devis/DevisRecap';
 import ChantierForm from './ChantierForm';
+import { DevisIndexManager } from '../utils/DevisIndexManager';
 
 const DevisAvance = () => {
   // États pour les données du devis
@@ -61,6 +62,7 @@ const DevisAvance = () => {
   // États pour le système unifié (DevisAvance utilise TOUJOURS le mode unified)
   const [devisItems, setDevisItems] = useState([]);
   const [isLoadingDevis, setIsLoadingDevis] = useState(false);
+  const [isReordering, setIsReordering] = useState(false); // Flag pour éviter les recalculs pendant le drag & drop
 
   // États pour la gestion des chantiers
   const [chantiers, setChantiers] = useState([]);
@@ -75,9 +77,45 @@ const DevisAvance = () => {
 
   // États pour la gestion des parties
   const [availableParties, setAvailableParties] = useState([]);
-  const [selectedParties, setSelectedParties] = useState([]);
   const [isLoadingParties, setIsLoadingParties] = useState(false);
   const [partiesToCreate, setPartiesToCreate] = useState([]); // Nouvelles parties à créer
+  
+  // ✅ NOUVEAU : Enrichir devisItems pour que les parties aient selectedSousParties (pour compatibilité)
+  const enrichedDevisItems = React.useMemo(() => {
+    return devisItems.map(item => {
+      if (item.type === 'partie') {
+        // Enrichir la partie avec selectedSousParties
+        return {
+          ...item,
+          selectedSousParties: devisItems
+            .filter(i => i.type === 'sous_partie' && i.partie_id === item.id)
+            .map(spItem => ({
+              ...spItem,
+              selectedLignesDetails: devisItems
+                .filter(i => i.type === 'ligne_detail' && i.sous_partie_id === spItem.id)
+            }))
+        };
+      } else if (item.type === 'sous_partie') {
+        // Enrichir la sous-partie avec selectedLignesDetails
+        return {
+          ...item,
+          selectedLignesDetails: devisItems
+            .filter(i => i.type === 'ligne_detail' && i.sous_partie_id === item.id)
+        };
+      }
+      return item;
+    });
+  }, [devisItems]);
+  
+  // ✅ Construire selectedParties depuis enrichedDevisItems pour les barres de recherche
+  const selectedParties = React.useMemo(() => {
+    return enrichedDevisItems
+      .filter(item => item.type === 'partie')
+      .map(partieItem => ({
+        ...partieItem,
+        type: partieItem.type_activite || 'PEINTURE' // Restaurer le type original
+      }));
+  }, [enrichedDevisItems]);
 
   // Fonction pour formater les montants avec espaces
   const formatMontantEspace = (montant) => {
@@ -113,7 +151,7 @@ const DevisAvance = () => {
       const response = await axios.get('/api/chantier/');
       setChantiers(response.data);
     } catch (error) {
-      console.error('Erreur lors du chargement des chantiers:', error);
+      // Erreur lors du chargement des chantiers
     } finally {
       setIsLoadingChantiers(false);
     }
@@ -204,7 +242,7 @@ const DevisAvance = () => {
           }
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des détails du chantier:', error);
+        // Erreur lors du chargement des détails du chantier
         // En cas d'erreur, utiliser les données de base du chantier
         const selectedChantier = chantiers.find(c => c.id === chantierId);
         if (selectedChantier) {
@@ -271,7 +309,7 @@ const DevisAvance = () => {
       setDevisData(prev => ({ ...prev, numero: baseNumber }));
       return baseNumber;
     } catch (error) {
-      console.error("Erreur lors de la génération du numéro de devis:", error);
+      // Erreur lors de la génération du numéro de devis
       const currentYear = new Date().getFullYear();
       const fallbackNumber = `Devis n°001.${currentYear}`;
       setDevisData(prev => ({ ...prev, numero: fallbackNumber }));
@@ -300,7 +338,7 @@ const DevisAvance = () => {
       setAvailableParties(allParties);
       return filteredParties;
     } catch (error) {
-      console.error('Erreur lors du chargement des parties:', error);
+      // Erreur lors du chargement des parties
       return [];
     } finally {
       setIsLoadingParties(false);
@@ -319,7 +357,7 @@ const DevisAvance = () => {
       const response = await axios.get('/api/parties/search/', { params });
       return response.data.options;
     } catch (error) {
-      console.error('Erreur lors de la recherche des parties:', error);
+      // Erreur lors de la recherche des parties
       return [];
     } finally {
       setIsLoadingParties(false);
@@ -333,23 +371,40 @@ const DevisAvance = () => {
       const results = await searchPartiesAPI(inputValue);
       return results;
     } catch (error) {
-      console.error('❌ Erreur lors de la recherche des parties:', error);
+      // Erreur lors de la recherche des parties
       return [];
     }
   };
 
   // Fonction pour gérer la sélection d'une partie
   const handlePartieSelect = (selectedOption) => {
-    if (selectedOption && !selectedParties.find(p => p.id === selectedOption.value)) {
-      const newPartie = { ...selectedOption.data, selectedSousParties: [] };
-      setSelectedParties(prev => [...prev, newPartie]);
-    }
+    if (!selectedOption) return;
+    
+    // Vérifier si la partie n'existe pas déjà
+    const alreadyExists = devisItems.some(item => item.type === 'partie' && item.id === selectedOption.value);
+    if (alreadyExists) return;
+    
+    // ✅ Calculer le prochain index de partie
+    const parties = devisItems.filter(i => i.type === 'partie');
+    const nextIndex = parties.length + 1;
+    
+    // Créer l'item partie
+    const newPartie = {
+      ...selectedOption.data,
+      type: 'partie',
+      id: selectedOption.value,
+      index_global: nextIndex,
+      titre: selectedOption.data.titre,
+      type_activite: selectedOption.data.type
+    };
+    
+    // Ajouter directement dans devisItems
+    setDevisItems(prev => sortByIndexGlobal([...prev, newPartie]));
   };
 
   // Fonction pour créer une nouvelle partie
   const handlePartieCreate = async (inputValue) => {
     try {
-      
       // Créer la partie en base de données
       const response = await axios.post('/api/parties/', {
         titre: inputValue,
@@ -357,23 +412,24 @@ const DevisAvance = () => {
         is_deleted: false
       });
       
+      // ✅ Calculer le prochain index de partie
+      const parties = devisItems.filter(i => i.type === 'partie');
+      const nextIndex = parties.length + 1;
+      
       const newPartie = {
         id: response.data.id,
+        type: 'partie',
         titre: response.data.titre,
-        type: response.data.type,
-        domaine: response.data.type,
-        total_partie: 0,
-        special_lines: [],
-        sous_parties: [],
-        selectedSousParties: [],
+        type_activite: response.data.type,
+        index_global: nextIndex,
         isNew: true
       };
       
       // Ajouter à la liste des parties à créer (pour référence)
       setPartiesToCreate(prev => [...prev, newPartie]);
       
-      // Ajouter à la sélection
-      setSelectedParties(prev => [...prev, newPartie]);
+      // Ajouter directement dans devisItems
+      setDevisItems(prev => sortByIndexGlobal([...prev, newPartie]));
       
       // Recharger la liste des parties disponibles
       await loadParties();
@@ -384,23 +440,19 @@ const DevisAvance = () => {
         data: newPartie
       };
     } catch (error) {
-      console.error('❌ Erreur lors de la création de la partie:', error);
-      
-      // En cas d'erreur, créer une partie temporaire
+      // Erreur lors de la création de la partie
       const tempPartie = {
         id: `temp_${Date.now()}`,
+        type: 'partie',
         titre: inputValue,
-        type: 'PEINTURE',
-        domaine: 'PEINTURE',
-        total_partie: 0,
-        special_lines: [],
-        sous_parties: [],
+        type_activite: 'PEINTURE',
+        index_global: devisItems.filter(i => i.type === 'partie').length + 1,
         isNew: true,
         isTemp: true
       };
       
       setPartiesToCreate(prev => [...prev, tempPartie]);
-      setSelectedParties(prev => [...prev, tempPartie]);
+      setDevisItems(prev => sortByIndexGlobal([...prev, tempPartie]));
       
       return {
         value: tempPartie.id,
@@ -412,7 +464,23 @@ const DevisAvance = () => {
 
   // Fonction pour supprimer une partie sélectionnée
   const handlePartieRemove = (partieId) => {
-    setSelectedParties(prev => prev.filter(p => p.id !== partieId));
+    // ✅ Supprimer la partie ET tous ses enfants de devisItems
+    setDevisItems(prev => {
+      // Trouver toutes les sous-parties de cette partie
+      const sousPartiesIds = prev
+        .filter(item => item.type === 'sous_partie' && item.partie_id === partieId)
+        .map(sp => sp.id);
+      
+      // Supprimer : partie + sous-parties + lignes détails + lignes spéciales
+      return prev.filter(item => {
+        if (item.type === 'partie' && item.id === partieId) return false;
+        if (item.type === 'sous_partie' && item.partie_id === partieId) return false;
+        if (item.type === 'ligne_detail' && sousPartiesIds.includes(item.sous_partie_id)) return false;
+        if (item.type === 'ligne_speciale' && item.context_type === 'partie' && item.context_id === partieId) return false;
+        if (item.type === 'ligne_speciale' && item.context_type === 'sous_partie' && sousPartiesIds.includes(item.context_id)) return false;
+        return true;
+      });
+    });
     
     // Si c'était une nouvelle partie, la retirer de la liste à créer
     setPartiesToCreate(prev => prev.filter(p => p.id !== partieId));
@@ -420,17 +488,16 @@ const DevisAvance = () => {
 
   // Fonction pour éditer une partie sélectionnée
   const handlePartieEdit = (partieId) => {
-    const partie = selectedParties.find(p => p.id === partieId);
+    const partie = devisItems.find(item => item.type === 'partie' && item.id === partieId);
     if (partie) {
       const newTitre = prompt('Modifier le titre de la partie:', partie.titre);
       if (newTitre && newTitre.trim() !== partie.titre) {
-        setSelectedParties(prev => 
-          prev.map(p => 
-            p.id === partieId 
-              ? { ...p, titre: newTitre.trim() }
-              : p
-          )
-        );
+        // ✅ Mettre à jour directement dans devisItems
+        setDevisItems(prev => prev.map(item =>
+          item.type === 'partie' && item.id === partieId
+            ? { ...item, titre: newTitre.trim() }
+            : item
+        ));
         
         // Si c'est une partie existante, mettre à jour en base de données
         if (!partie.isNew && !partie.isTemp) {
@@ -447,78 +514,48 @@ const DevisAvance = () => {
         titre: newTitre
       });
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour de la partie:', error);
+      // Erreur lors de la mise à jour de la partie
     }
   };
 
   // Fonction pour modifier le numéro d'une partie
-  // Le numéro est stocké dans l'état local de la partie
-  // Lors de la sauvegarde du devis, ces numéros seront envoyés dans parties_metadata
   const handlePartieNumeroChange = (partieId, newNumero) => {
-    setSelectedParties(prev => 
-      prev.map(p => 
-        p.id === partieId 
-          ? { ...p, numero: newNumero }
-          : p
-      )
-    );
-    
-    // Le parties_metadata sera construit lors de la sauvegarde du devis avec la structure :
-    // { parties: { [partieId]: { numero: newNumero, ordre: index } } }
+    // ✅ Mettre à jour directement dans devisItems
+    setDevisItems(prev => prev.map(item =>
+      item.type === 'partie' && item.id === partieId
+        ? { ...item, numero: newNumero }
+        : item
+    ));
   };
 
   // Fonction pour gérer la réorganisation des parties via drag & drop
   const handlePartiesReorder = (reorderedParties) => {
-    // Après la réorganisation des parties, mettre à jour les numéros des sous-parties
-    const updatedParties = reorderedParties.map(partie => {
-      const oldNumero = selectedParties.find(p => p.id === partie.id)?.numero;
-      const newNumero = partie.numero;
-      
-      // Si le numéro de la partie a changé (drag & drop), mettre à jour les sous-parties
-      if (oldNumero && newNumero && oldNumero !== newNumero && /^\d+$/.test(oldNumero) && /^\d+$/.test(newNumero)) {
-        // Récupérer les sous-parties
-        const updatedSousParties = (partie.selectedSousParties || []).map(sp => {
-          if (!sp.numero) {
-            return sp; // Pas de numéro, on laisse vide
-          }
-          
-          // Si la sous-partie a un numéro avec l'ancien préfixe (ex: "1.2")
-          const regex = new RegExp('^' + oldNumero + '\\.(\\d+)$');
-          if (regex.test(sp.numero)) {
-            // Remplacer l'ancien préfixe par le nouveau (ex: "1.2" devient "2.2")
-            const match = sp.numero.match(regex);
-            const suffix = match ? match[1] : '';
-            return { ...sp, numero: `${newNumero}.${suffix}` };
-          }
-          
-          // Sinon, garder le numéro tel quel
-          return sp;
-        });
-        
-        return {
-          ...partie,
-          selectedSousParties: updatedSousParties
-        };
-      }
-      
-      // Aucune mise à jour nécessaire pour les sous-parties
-      return partie;
-    });
-    
-    setSelectedParties(updatedParties);
+    // ✅ Cette fonction est appelée par DevisTable après le drag & drop
+    // Les index ont déjà été recalculés par DevisIndexManager.reorderAfterDrag
+    // Plus rien à faire ici, devisItems a déjà été mis à jour par handleDevisItemsReorder
   };
 
   // ========== HANDLERS POUR SOUS-PARTIES ==========
   
   // Sélectionner une sous-partie existante
   const handleSousPartieSelect = (partieId, sousPartie) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id === partieId) {
-        const updatedSousParties = [...(p.selectedSousParties || []), sousPartie];
-        return { ...p, selectedSousParties: updatedSousParties };
-      }
-      return p;
-    }));
+    // ✅ Utiliser le manager pour calculer le prochain index
+    const partie = devisItems.find(i => i.type === 'partie' && i.id === partieId);
+    if (!partie) return;
+    
+    const nextIndex = getNextIndex(devisItems, 'partie', partieId) || (partie.index_global + 0.1);
+    
+    // Créer l'item sous-partie
+    const newSousPartie = {
+      ...sousPartie,
+      type: 'sous_partie',
+      id: sousPartie.id,
+      index_global: nextIndex,
+      partie_id: partieId
+    };
+    
+    // Ajouter directement dans devisItems
+    setDevisItems(prev => sortByIndexGlobal([...prev, newSousPartie]));
   };
 
   // Créer une nouvelle sous-partie
@@ -536,29 +573,24 @@ const DevisAvance = () => {
         });
       }
     } catch (error) {
-      console.error('Erreur lors de la création de la sous-partie:', error);
+      // Erreur lors de la création de la sous-partie
     }
   };
 
   // Supprimer une sous-partie
   const handleSousPartieRemove = (partieId, sousPartieId) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id === partieId) {
-        return {
-          ...p,
-          selectedSousParties: (p.selectedSousParties || []).filter(sp => sp.id !== sousPartieId)
-        };
-      }
-      return p;
+    // ✅ Supprimer la sous-partie ET toutes ses lignes de devisItems
+    setDevisItems(prev => prev.filter(item => {
+      if (item.type === 'sous_partie' && item.id === sousPartieId) return false;
+      if (item.type === 'ligne_detail' && item.sous_partie_id === sousPartieId) return false;
+      if (item.type === 'ligne_speciale' && item.context_type === 'sous_partie' && item.context_id === sousPartieId) return false;
+      return true;
     }));
   };
 
   // Éditer une sous-partie
   const handleSousPartieEdit = async (partieId, sousPartieId) => {
-    const partie = selectedParties.find(p => p.id === partieId);
-    if (!partie) return;
-    
-    const sousPartie = partie.selectedSousParties.find(sp => sp.id === sousPartieId);
+    const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === sousPartieId);
     if (!sousPartie) return;
     
     const newDescription = prompt('Modifier la description:', sousPartie.description);
@@ -568,118 +600,80 @@ const DevisAvance = () => {
           description: newDescription.trim()
         });
         
-        setSelectedParties(prev => prev.map(p => {
-          if (p.id === partieId) {
-            return {
-              ...p,
-              selectedSousParties: p.selectedSousParties.map(sp => 
-                sp.id === sousPartieId ? { ...sp, description: newDescription.trim() } : sp
-              )
-            };
-          }
-          return p;
-        }));
+        // ✅ Mettre à jour directement dans devisItems
+        setDevisItems(prev => prev.map(item =>
+          item.type === 'sous_partie' && item.id === sousPartieId
+            ? { ...item, description: newDescription.trim() }
+            : item
+        ));
       } catch (error) {
-        console.error('Erreur lors de la modification de la sous-partie:', error);
+        // Erreur lors de la modification de la sous-partie
       }
     }
   };
 
   // Changer le numéro d'une sous-partie (prend en compte le préfixe de la partie si numérique)
   const handleSousPartieNumeroChange = (partieId, sousPartieId, newNumero) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id !== partieId) return p;
-
-      const parentNumero = p.numero;
-      const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
-
-      // Si on enlève le numéro
-      if (newNumero === '') {
-        return {
-          ...p,
-          selectedSousParties: (p.selectedSousParties || []).map(sp =>
-            sp.id === sousPartieId ? { ...sp, numero: '' } : sp
-          )
-        };
-      }
-
-      // Si on attribue un numéro automatique, s'assurer du format
-      let finalNumero = newNumero;
-      if (isParentNumeric) {
-        // Si newNumero est juste un index (ex: "1"), préfixer
-        if (/^\d+$/.test(newNumero)) {
-          finalNumero = `${parentNumero}.${newNumero}`;
-        }
-      }
-
-      return {
-        ...p,
-        selectedSousParties: (p.selectedSousParties || []).map(sp =>
-          sp.id === sousPartieId ? { ...sp, numero: finalNumero } : sp
-        )
-      };
-    }));
-  };
-
-  // Réorganiser les sous-parties via drag & drop
-  const handleSousPartiesReorder = (partieId, result) => {
-    const partie = selectedParties.find(p => p.id === partieId);
+    const partie = devisItems.find(item => item.type === 'partie' && item.id === partieId);
     if (!partie) return;
     
-    const newSousParties = Array.from(partie.selectedSousParties);
-    const [reorderedItem] = newSousParties.splice(result.source.index, 1);
-    newSousParties.splice(result.destination.index, 0, reorderedItem);
-    
-    // Préfixe parent si numérique
     const parentNumero = partie.numero;
     const isParentNumeric = parentNumero && /^\d+$/.test(parentNumero);
-
-    // Mise à jour des numéros automatiques pour les sous-parties numérotées
-    const updatedSousParties = newSousParties.map((sp, index) => {
-      if (!sp.numero) {
-        return { ...sp, ordre: index };
-      }
-
-      if (isParentNumeric) {
-        // Renuméroter seulement celles qui suivent le pattern "parent.idx"
-        const regex = new RegExp('^' + parentNumero + '\\.(\\d+)$');
-        if (regex.test(sp.numero)) {
-          const before = newSousParties.slice(0, index).filter(s => s.numero && regex.test(s.numero));
-          const newIdx = before.length + 1;
-          return { ...sp, numero: `${parentNumero}.${newIdx}`, ordre: index };
-        }
-        // Garder les custom numbers non conformes
-        return { ...sp, ordre: index };
-      } else {
-        // Fallback: renumérotation simple 1,2,3 uniquement pour les numéros simples
-        if (/^\d+$/.test(sp.numero)) {
-          const before = newSousParties.slice(0, index).filter(s => s.numero && /^\d+$/.test(s.numero));
-          const newIdx = before.length + 1;
-          return { ...sp, numero: String(newIdx), ordre: index };
-        }
-        return { ...sp, ordre: index };
-      }
-    });
     
-    setSelectedParties(prev => prev.map(p => 
-      p.id === partieId ? { ...p, selectedSousParties: updatedSousParties } : p
+    // Si on enlève le numéro
+    if (newNumero === '') {
+      setDevisItems(prev => prev.map(item =>
+        item.type === 'sous_partie' && item.id === sousPartieId
+          ? { ...item, numero: '' }
+          : item
+      ));
+      return;
+    }
+    
+    // Si on attribue un numéro automatique, s'assurer du format
+    let finalNumero = newNumero;
+    if (isParentNumeric && /^\d+$/.test(newNumero)) {
+      finalNumero = `${parentNumero}.${newNumero}`;
+    }
+    
+    // ✅ Mettre à jour directement dans devisItems
+    setDevisItems(prev => prev.map(item =>
+      item.type === 'sous_partie' && item.id === sousPartieId
+        ? { ...item, numero: finalNumero }
+        : item
     ));
+  };
+
+  // Réorganiser les sous-parties via drag & drop (système hiérarchique)
+  const handleSousPartiesReorder = (partieId, result) => {
+    // ✅ Cette fonction est appelée par DevisTable après le drag & drop
+    // Les index ont déjà été recalculés par DevisIndexManager.reorderAfterDrag
+    // Plus rien à faire ici, devisItems a déjà été mis à jour par handleDevisItemsReorder
   };
 
   // ========== HANDLERS POUR LIGNES DE DÉTAIL ==========
 
   // Ajouter une ligne de détail à une sous-partie sélectionnée
   const handleLigneDetailSelect = (partieId, sousPartieId, ligneDetail) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id !== partieId) return p;
-      const updatedSous = (p.selectedSousParties || []).map(sp => {
-        if (sp.id !== sousPartieId) return sp;
-        const existing = Array.isArray(sp.selectedLignesDetails) ? sp.selectedLignesDetails : [];
-        const already = existing.some(ld => ld.id === ligneDetail.id);
-        return already ? sp : { ...sp, selectedLignesDetails: [...existing, { ...ligneDetail, quantity: 0 }] };
-      });
-      return { ...p, selectedSousParties: updatedSous };
-    }));
+    // ✅ Utiliser le manager pour calculer le prochain index
+    const nextIndex = getNextIndex(devisItems, 'sous_partie', sousPartieId);
+    
+    if (!nextIndex) {
+      return;
+    }
+    
+    // Créer la nouvelle ligne détail
+    const newLigneDetail = {
+      ...ligneDetail,
+      type: 'ligne_detail',
+      id: ligneDetail.id,
+      index_global: nextIndex,
+      sous_partie_id: sousPartieId,
+      quantity: 0
+    };
+    
+    // Ajouter directement dans devisItems
+    setDevisItems(prev => sortByIndexGlobal([...prev, newLigneDetail]));
   };
 
   // Créer une ligne de détail (TODO: compléter la création serveur si besoin)
@@ -689,30 +683,21 @@ const DevisAvance = () => {
 
   // Changer la quantité d'une ligne de détail
   const handleLigneDetailQuantityChange = (partieId, sousPartieId, ligneDetailId, quantity) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id !== partieId) return p;
-      const updatedSous = (p.selectedSousParties || []).map(sp => {
-        if (sp.id !== sousPartieId) return sp;
-        const updatedLignes = (sp.selectedLignesDetails || []).map(ld => 
-          ld.id === ligneDetailId ? { ...ld, quantity } : ld
-        );
-        return { ...sp, selectedLignesDetails: updatedLignes };
-      });
-      return { ...p, selectedSousParties: updatedSous };
+    // ✅ Mettre à jour directement devisItems (source de vérité unique)
+    setDevisItems(prev => prev.map(item => {
+      if (item.type === 'ligne_detail' && item.id === ligneDetailId) {
+        return { ...item, quantity };
+      }
+      return item;
     }));
   };
 
   // Retirer une ligne de détail du devis
   const handleLigneDetailRemove = (partieId, sousPartieId, ligneDetailId) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id !== partieId) return p;
-      const updatedSous = (p.selectedSousParties || []).map(sp => {
-        if (sp.id !== sousPartieId) return sp;
-        const updatedLignes = (sp.selectedLignesDetails || []).filter(ld => ld.id !== ligneDetailId);
-        return { ...sp, selectedLignesDetails: updatedLignes };
-      });
-      return { ...p, selectedSousParties: updatedSous };
-    }));
+    // ✅ Supprimer directement de devisItems
+    setDevisItems(prev => prev.filter(item => 
+      !(item.type === 'ligne_detail' && item.id === ligneDetailId)
+    ));
   };
 
   // Éditer une ligne de détail (modal d'édition)
@@ -722,51 +707,43 @@ const DevisAvance = () => {
 
   // Modifier la marge d'une ligne de détail (ce qui recalcule le prix unitaire)
   const handleLigneDetailMargeChange = (partieId, sousPartieId, ligneDetailId, marge) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id !== partieId) return p;
-      const updatedSous = (p.selectedSousParties || []).map(sp => {
-        if (sp.id !== sousPartieId) return sp;
-        const updatedLignes = (sp.selectedLignesDetails || []).map(ld => {
-          if (ld.id !== ligneDetailId) return ld;
-          // Calculer le nouveau prix basé sur la marge
-          const cout_total = parseFloat(ld.cout_main_oeuvre || 0) + parseFloat(ld.cout_materiel || 0);
-          const taux_fixe = parseFloat(ld.taux_fixe || 0);
-          const prix_base = cout_total * (1 + taux_fixe / 100);
-          const prix_calcule = prix_base * (1 + marge / 100);
-          return { 
-            ...ld, 
-            marge_devis: marge,
-            prix_devis: prix_calcule
-          };
-        });
-        return { ...sp, selectedLignesDetails: updatedLignes };
-      });
-      return { ...p, selectedSousParties: updatedSous };
+    // ✅ Mettre à jour directement devisItems (source de vérité unique)
+    setDevisItems(prev => prev.map(item => {
+      if (item.type === 'ligne_detail' && item.id === ligneDetailId) {
+        // Calculer le nouveau prix basé sur la marge
+        const cout_total = parseFloat(item.cout_main_oeuvre || 0) + parseFloat(item.cout_materiel || 0);
+        const taux_fixe = parseFloat(item.taux_fixe || 0);
+        const prix_base = cout_total * (1 + taux_fixe / 100);
+        const prix_calcule = prix_base * (1 + marge / 100);
+        
+        return { 
+          ...item, 
+          marge_devis: marge,
+          prix_devis: prix_calcule
+        };
+      }
+      return item;
     }));
   };
 
   // Modifier directement le prix unitaire d'une ligne de détail
   const handleLigneDetailPriceChange = (partieId, sousPartieId, ligneDetailId, prix) => {
-    setSelectedParties(prev => prev.map(p => {
-      if (p.id !== partieId) return p;
-      const updatedSous = (p.selectedSousParties || []).map(sp => {
-        if (sp.id !== sousPartieId) return sp;
-        const updatedLignes = (sp.selectedLignesDetails || []).map(ld => {
-          if (ld.id !== ligneDetailId) return ld;
-          // Si le prix est modifié manuellement, calculer la marge implicite
-          const cout_total = parseFloat(ld.cout_main_oeuvre || 0) + parseFloat(ld.cout_materiel || 0);
-          const taux_fixe = parseFloat(ld.taux_fixe || 0);
-          const prix_base = cout_total * (1 + taux_fixe / 100);
-          const marge_implicite = prix_base > 0 ? ((prix / prix_base) - 1) * 100 : 0;
-          return { 
-            ...ld, 
-            prix_devis: prix,
-            marge_devis: marge_implicite
-          };
-        });
-        return { ...sp, selectedLignesDetails: updatedLignes };
-      });
-      return { ...p, selectedSousParties: updatedSous };
+    // ✅ Mettre à jour directement devisItems (source de vérité unique)
+    setDevisItems(prev => prev.map(item => {
+      if (item.type === 'ligne_detail' && item.id === ligneDetailId) {
+        // Calculer la marge implicite
+        const cout_total = parseFloat(item.cout_main_oeuvre || 0) + parseFloat(item.cout_materiel || 0);
+        const taux_fixe = parseFloat(item.taux_fixe || 0);
+        const prix_base = cout_total * (1 + taux_fixe / 100);
+        const marge_implicite = prix_base > 0 ? ((prix / prix_base) - 1) * 100 : 0;
+        
+        return { 
+          ...item, 
+          prix_devis: prix,
+          marge_devis: marge_implicite
+        };
+      }
+      return item;
     }));
   };
 
@@ -784,114 +761,108 @@ const DevisAvance = () => {
     }
   };
   
-  // Placer la ligne à un endroit spécifique du tableau
+  // ✅ Utiliser TOUTES les fonctions du DevisIndexManager
+  const { 
+    roundIndex, 
+    reindexSousPartie, 
+    reindexPartie, 
+    reindexAll,
+    getPartiePrefix,
+    getSousPartieIndex,
+    getNextIndex,
+    sortByIndexGlobal,
+    insertAtPosition,
+    reorderAfterDrag
+  } = DevisIndexManager;
+
+  /**
+   * Valider que tous les éléments ont un index_global valide
+   * Utile pour détecter les problèmes de synchronisation
+   */
+  const validateIndexes = (items, context = '') => {
+    const errors = [];
+    items.forEach(item => {
+      if (item.index_global === undefined || item.index_global === null || isNaN(item.index_global)) {
+        errors.push({
+          type: item.type,
+          id: item.id,
+          description: item.description || item.designation || 'N/A',
+          index_global: item.index_global
+        });
+      }
+    });
+    
+    if (errors.length > 0) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  // ✅ Plus besoin de synchronisation : devisItems est la source de vérité unique
+
+  // Placer la ligne à un endroit spécifique du tableau (système hiérarchique)
   const handlePlaceLineAt = (position) => {
     if (!lineAwaitingPlacement) return;
     
     const line = lineAwaitingPlacement;
     
-    // Décoder la position : "global_start", "global_end", "before_partie_14", "after_partie_14", etc.
-    let context_type = 'global';
-    let context_id = null;
-    let targetIndexGlobal = 1;
+    // ✅ Activer isReordering pour éviter la boucle de synchronisation
+    setIsReordering(true);
     
-    if (position === 'global_start') {
-      context_type = 'global';
-      targetIndexGlobal = 0.5;  // Avant tout
-    } else if (position === 'global_end') {
-      context_type = 'global';
-      targetIndexGlobal = devisItems.length + 1;  // Après tout
-    } else if (position.startsWith('before_partie_')) {
-      const partieId = parseInt(position.replace('before_partie_', ''));
-      const partie = devisItems.find(item => item.type === 'partie' && item.id === partieId);
-      if (partie) {
-        context_type = 'global';
-        targetIndexGlobal = partie.index_global - 0.5;
-      }
-    } else if (position.startsWith('after_partie_')) {
-      const partieId = parseInt(position.replace('after_partie_', ''));
-      // Trouver le dernier élément de cette partie (sous-parties + lignes)
-      const partieElements = devisItems.filter(item => 
-        item.type === 'partie' && item.id === partieId ||
-        item.type === 'sous_partie' && item.partie_id === partieId ||
-        (item.type === 'ligne_detail' && devisItems.some(sp => sp.type === 'sous_partie' && sp.id === item.sous_partie_id && sp.partie_id === partieId))
-      ).sort((a, b) => a.index_global - b.index_global);
-      
-      if (partieElements.length > 0) {
-        context_type = 'global';
-        targetIndexGlobal = partieElements[partieElements.length - 1].index_global + 0.5;
-      }
-    } else if (position.startsWith('before_sp_')) {
-      const spId = parseInt(position.replace('before_sp_', ''));
-      const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === spId);
-      if (sp) {
-        context_type = 'partie';
-        context_id = sp.partie_id;
-        targetIndexGlobal = sp.index_global - 0.5;
-      }
-    } else if (position.startsWith('after_sp_')) {
-      const spId = parseInt(position.replace('after_sp_', ''));
-      // Trouver le dernier élément de cette sous-partie (lignes de détail)
-      const spElements = devisItems.filter(item => 
-        item.type === 'sous_partie' && item.id === spId ||
-        item.type === 'ligne_detail' && item.sous_partie_id === spId
-      ).sort((a, b) => a.index_global - b.index_global);
-      
-      if (spElements.length > 0) {
-        const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === spId);
-        context_type = 'partie';
-        context_id = sp?.partie_id;
-        targetIndexGlobal = spElements[spElements.length - 1].index_global + 0.5;
-      }
-    } else if (position.startsWith('before_ligne_')) {
-      const ligneId = parseInt(position.replace('before_ligne_', ''));
-      const ligne = devisItems.find(item => item.type === 'ligne_detail' && item.id === ligneId);
-      if (ligne) {
-        context_type = 'sous_partie';
-        context_id = ligne.sous_partie_id;
-        targetIndexGlobal = ligne.index_global - 0.5;
-      }
-    } else if (position.startsWith('after_ligne_')) {
-      const ligneId = parseInt(position.replace('after_ligne_', ''));
-      const ligne = devisItems.find(item => item.type === 'ligne_detail' && item.id === ligneId);
-      if (ligne) {
-        context_type = 'sous_partie';
-        context_id = ligne.sous_partie_id;
-        targetIndexGlobal = ligne.index_global + 0.5;
-      }
-    }
+    // Préparer la nouvelle ligne spéciale
+    const { isMoving, originalId, data, ...lineWithoutFlags } = line;
     
-    // Créer la ligne spéciale
-    const newSpecialLine = {
-      ...line,
-      id: line.id || Date.now().toString(),
-      type: 'ligne_speciale',
-      description: line.data?.description || line.description || '',
-      value: line.data?.value || line.value,
-      value_type: line.data?.valueType || line.value_type,
-      type_speciale: line.data?.type || line.type_speciale,
-      context_type,
-      context_id,
-      index_global: targetIndexGlobal
+    const newLine = {
+      ...lineWithoutFlags,
+      id: isMoving ? line.id : (line.id || Date.now().toString()),
+      description: data?.description || line.description || '',
+      value: data?.value || line.value,
+      value_type: data?.valueType || line.value_type,
+      type_speciale: data?.type || line.type_speciale,
+      baseCalculation: line.baseCalculation,
+      base_calculation: line.base_calculation,
+      styles: line.styles,
+      isMoving,
+      originalId
     };
     
-    // Ajouter à devisItems
-    const newItems = [...devisItems, newSpecialLine];
+    // ✅ Utiliser le DevisIndexManager pour l'insertion
+    const updated = DevisIndexManager.insertAtPosition(devisItems, newLine, position);
     
-    // Trier et réindexer
-    const sorted = newItems.sort((a, b) => a.index_global - b.index_global);
-    const reindexed = sorted.map((item, idx) => ({
-      ...item,
-      index_global: idx + 1
-    }));
+    setDevisItems(updated);
+    setLineAwaitingPlacement(null);
     
-    setDevisItems(reindexed);
-    setLineAwaitingPlacement(null);  // Réinitialiser
+    // ✅ Désactiver le flag après un délai
+    setTimeout(() => setIsReordering(false), 100);
   };
 
   // Supprimer une ligne en attente
   const handleRemovePendingSpecialLine = (lineId) => {
     setPendingSpecialLines(prev => prev.filter(line => line.id !== lineId));
+  };
+
+  // Supprimer une ligne spéciale placée (sans recalculer les index_global)
+  const handleRemoveSpecialLine = (lineId) => {
+    setDevisItems(prev => prev.filter(item => !(item.type === 'ligne_speciale' && item.id === lineId)));
+  };
+  
+  // ✅ NOUVEAU : Déplacer une ligne spéciale existante via le bouton
+  const handleMoveSpecialLine = (lineId) => {
+    // Trouver la ligne spéciale dans devisItems
+    const lineToMove = devisItems.find(item => item.type === 'ligne_speciale' && item.id === lineId);
+    
+    if (!lineToMove) {
+      return;
+    }
+    
+    // Mettre la ligne en mode "en attente de placement"
+    // L'utilisateur va ensuite cliquer sur le tableau pour choisir la nouvelle position
+    setLineAwaitingPlacement({
+      ...lineToMove,
+      isMoving: true, // Flag pour indiquer qu'on déplace (pas une création)
+      originalId: lineId // Garder l'ID original pour la suppression
+    });
   };
 
   // Gérer la sélection de base pour une ligne spéciale en %
@@ -957,89 +928,25 @@ const DevisAvance = () => {
 
   // ===== HANDLERS POUR LE SYSTÈME UNIFIÉ =====
 
-  // Convertir selectedParties en devisItems unifié
-  const convertSelectedPartiesToDevisItems = (parties) => {
-    const items = [];
-    let globalIndex = 1;
-    
-    parties.forEach((partie, pIndex) => {
-      
-      // Ajouter la partie
-      const partieItem = {
-        ...partie, // D'abord copier toutes les données
-        type: 'partie', // PUIS écraser le type pour le système unifié
-        id: partie.id,
-        index_global: globalIndex++,
-        titre: partie.titre,
-        type_activite: partie.type, // Sauvegarder le type original
-        numero: partie.numero,
-        selectedSousParties: partie.selectedSousParties
-      };
-      items.push(partieItem);
-      
-      // Ajouter les sous-parties
-      (partie.selectedSousParties || []).forEach((sp, spIndex) => {
-        const spItem = {
-          ...sp, // D'abord copier toutes les données
-          type: 'sous_partie', // PUIS écraser le type
-          id: sp.id,
-          index_global: globalIndex++,
-          partie_id: partie.id,
-          description: sp.description,
-          numero: sp.numero,
-          selectedLignesDetails: sp.selectedLignesDetails
-        };
-        items.push(spItem);
-        
-        // Ajouter les lignes détails
-        (sp.selectedLignesDetails || []).forEach((ld, ldIndex) => {
-          const ldItem = {
-            ...ld, // D'abord copier toutes les données
-            type: 'ligne_detail', // PUIS écraser le type
-            id: ld.id,
-            index_global: globalIndex++,
-            sous_partie_id: sp.id,
-            description: ld.description,
-            unite: ld.unite,
-            prix: ld.prix,
-            quantity: ld.quantity
-          };
-          items.push(ldItem);
-        });
-      });
-    });
-    
-    return items;
-  };
+  // ✅ Plus besoin de convertir : devisItems est la source de vérité unique
 
-  // Synchroniser devisItems avec selectedParties + lignes spéciales
-  useEffect(() => {
-    if (selectedParties.length > 0) {
-      const convertedItems = convertSelectedPartiesToDevisItems(selectedParties);
-      
-      // Fusionner avec les lignes spéciales déjà placées
-      setDevisItems(prevItems => {
-        
-        const specialLines = prevItems.filter(item => item.type === 'ligne_speciale');
-        const merged = [...convertedItems, ...specialLines];
-        
-        // Trier par index_global et recalculer les numéros
-        const sorted = merged.sort((a, b) => a.index_global - b.index_global);
-        const withNumeros = recalculateNumeros(sorted);
-        return withNumeros;
-      });
-    } else {
-      // Si plus de parties, garder seulement les lignes spéciales
-      setDevisItems(prevItems => prevItems.filter(item => item.type === 'ligne_speciale'));
-    }
-  }, [selectedParties]); // Ne pas inclure devisItems pour éviter la boucle infinie
+  // ✅ Plus besoin de useEffect : devisItems est la source de vérité unique, géré directement par les handlers
 
   // Fonction de recalcul des numéros (côté frontend)
-  // NOTE: Pour l'instant, on NE recalcule PAS les numéros automatiquement
-  // Les numéros sont gérés manuellement via les boutons N°
+  // Recalcule automatiquement les numéros après réorganisation
   const recalculateNumeros = (items) => {
-    // Juste trier par index_global sans recalculer les numéros
-    return [...items].sort((a, b) => a.index_global - b.index_global);
+    // Trier par index_global
+    const sorted = [...items].sort((a, b) => a.index_global - b.index_global);
+    
+    // Recalculer les numéros seulement pour les éléments qui en ont
+    return sorted.map(item => {
+      // Si l'élément n'a pas de numéro, le laisser tel quel
+      if (!item.numero) return item;
+      
+      // Calculer le nouveau numéro basé sur la position
+      const newNumero = generateNumero(item, sorted);
+      return { ...item, numero: newNumero };
+    });
   };
 
   const generateNumero = (item, allItems) => {
@@ -1048,36 +955,47 @@ const DevisAvance = () => {
     };
 
     if (item.type === 'partie') {
-      const partiesBefore = allItems.filter(
-        e => e.type === 'partie' && e.index_global < item.index_global
+      // Compter uniquement les parties NUMÉROTÉES avant celle-ci
+      const partiesNumeroteesBefore = allItems.filter(
+        e => e.type === 'partie' && 
+        e.index_global < item.index_global &&
+        e.numero && /^\d+$/.test(e.numero) // Seulement les numéros simples (1, 2, 3...)
       );
-      return String(partiesBefore.length + 1);
+      return String(partiesNumeroteesBefore.length + 1);
     }
 
     if (item.type === 'sous_partie') {
       const partie = findParentById(item.partie_id);
-      if (!partie) return '?.1';
+      if (!partie || !partie.numero) return ''; // Si pas de partie ou partie sans numéro, pas de numéro
       
-      const sousPartiesBefore = allItems.filter(
+      // Regex pour les sous-parties qui suivent le pattern "X.Y" où X = numéro de la partie
+      const regex = new RegExp('^' + partie.numero + '\\.(\\d+)$');
+      
+      const sousPartiesNumeroteesBefore = allItems.filter(
         e => e.type === 'sous_partie' && 
         e.partie_id === item.partie_id && 
-        e.index_global < item.index_global
+        e.index_global < item.index_global &&
+        e.numero && regex.test(e.numero) // Compter seulement les sous-parties avec le bon format
       );
       
-      return `${partie.numero}.${sousPartiesBefore.length + 1}`;
+      return `${partie.numero}.${sousPartiesNumeroteesBefore.length + 1}`;
     }
 
     if (item.type === 'ligne_detail') {
       const sousPartie = findParentById(item.sous_partie_id);
-      if (!sousPartie) return '?.?.1';
+      if (!sousPartie || !sousPartie.numero) return ''; // Si pas de sous-partie ou sous-partie sans numéro, pas de numéro
       
-      const lignesBefore = allItems.filter(
+      // Regex pour les lignes qui suivent le pattern "X.Y.Z" où X.Y = numéro de la sous-partie
+      const regex = new RegExp('^' + sousPartie.numero.replace(/\./g, '\\.') + '\\.(\\d+)$');
+      
+      const lignesNumeroteesBefore = allItems.filter(
         e => e.type === 'ligne_detail' && 
         e.sous_partie_id === item.sous_partie_id && 
-        e.index_global < item.index_global
+        e.index_global < item.index_global &&
+        e.numero && regex.test(e.numero) // Compter seulement les lignes avec le bon format
       );
       
-      return `${sousPartie.numero}.${lignesBefore.length + 1}`;
+      return `${sousPartie.numero}.${lignesNumeroteesBefore.length + 1}`;
     }
 
     if (item.type === 'ligne_speciale') {
@@ -1106,18 +1024,36 @@ const DevisAvance = () => {
     return '0';
   };
 
-  // Handler de réordonnancement unifié
+  // Handler de réordonnancement unifié (système hiérarchique)
   const handleDevisItemsReorder = async (reorderedItems) => {
-    // Mettre à jour index_global
-    const updated = reorderedItems.map((item, index) => ({
-      ...item,
-      index_global: index + 1
-    }));
+    // ⚠️ Cette fonction doit recevoir TOUS les items, y compris les lignes spéciales
+    // Si appelée sans lignes spéciales, cela causera leur disparition
     
-    // Recalculer les numéros
-    const withNumeros = recalculateNumeros(updated);
+    // Activer le flag pour éviter la synchro
+    setIsReordering(true);
+    
+    // ✅ Dédupliquer les items reçus (au cas où)
+    const uniqueItems = [];
+    const seenIds = new Map();
+    reorderedItems.forEach(item => {
+      const key = `${item.type}_${item.id}`;
+      if (!seenIds.has(key)) {
+        seenIds.set(key, item);
+        uniqueItems.push(item);
+      }
+    });
+    
+    // ✅ Les items sont déjà réordonnés par DevisTable avec les bons index_global
+    // On les trie juste pour être sûr
+    const sorted = DevisIndexManager.sortByIndexGlobal(uniqueItems);
+    
+    // Recalculer les numéros d'affichage
+    const withNumeros = recalculateNumeros(sorted);
     
     setDevisItems(withNumeros);
+    
+    // ✅ Désactiver le flag après un délai
+    setTimeout(() => setIsReordering(false), 100);
     
     // Sauvegarder en BDD seulement si le devis existe (a un ID)
     if (devisData.id) {
@@ -1172,7 +1108,7 @@ const DevisAvance = () => {
           }))
         });
       } catch (error) {
-        console.error('❌ Erreur sauvegarde ordre:', error);
+        // Erreur sauvegarde ordre
       }
     }
   };
@@ -1627,6 +1563,8 @@ const DevisAvance = () => {
               pendingSpecialLines={pendingSpecialLines}
               onAddPendingSpecialLine={handleAddPendingSpecialLine}
               onRemovePendingSpecialLine={handleRemovePendingSpecialLine}
+              onRemoveSpecialLine={handleRemoveSpecialLine}
+              onMoveSpecialLine={handleMoveSpecialLine}
               onEditSpecialLine={handleEditSpecialLine}
               editingSpecialLine={editingSpecialLine}
               showEditModal={showEditModal}
@@ -1641,7 +1579,7 @@ const DevisAvance = () => {
               calculatePartieTotal={calculatePartieTotal}
               calculateSousPartieTotal={calculateSousPartieTotal}
               
-              devisItems={devisItems}
+              devisItems={enrichedDevisItems}
               onDevisItemsReorder={handleDevisItemsReorder}
               
               isSelectingBase={isSelectingBase}

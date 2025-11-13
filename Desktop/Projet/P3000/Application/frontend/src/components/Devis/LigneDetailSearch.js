@@ -101,7 +101,7 @@ const LigneDetailSearch = ({
         setOptions(formattedOptions);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des lignes de détails:', error);
+      // Erreur lors du chargement des lignes de détails
       setOptions([]);
     } finally {
       setIsLoading(false);
