@@ -308,13 +308,19 @@ const DevisTable = ({
       return parseFloat(ligne.prix_devis);
     }
     
-    // Sinon, utiliser la marge du devis si elle existe, sinon la marge de base
+    const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
+    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+    
+    // Si pas de coûts, utiliser le prix de base (prix manuel ou prix du catalogue)
+    if (cout_main_oeuvre === 0 && cout_materiel === 0) {
+      return parseFloat(ligne.prix) || 0;
+    }
+    
+    // Sinon, calculer avec les coûts
     const marge = ligne.marge_devis !== null && ligne.marge_devis !== undefined 
       ? parseFloat(ligne.marge_devis)
       : parseFloat(ligne.marge) || 0;
     
-    const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
-    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
     const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
     
     const base = cout_main_oeuvre + cout_materiel;

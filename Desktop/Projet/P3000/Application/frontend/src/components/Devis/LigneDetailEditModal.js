@@ -6,45 +6,70 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
   const [formData, setFormData] = useState({
     description: '',
     unite: '',
-    cout_main_oeuvre: '0',
-    cout_materiel: '0',
-    taux_fixe: '20',
-    marge: '20'
+    prix: '',
+    cout_main_oeuvre: '',
+    cout_materiel: '',
+    taux_fixe: '',
+    marge: ''
   });
   const [prixCalcule, setPrixCalcule] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [useModeCalcul, setUseModeCalcul] = useState(false); // Mode calcul auto vs saisie manuelle
 
   useEffect(() => {
     if (isOpen && ligneDetail) {
+      const hasCouts = ligneDetail.cout_main_oeuvre > 0 || ligneDetail.cout_materiel > 0;
+      
       setFormData({
         description: ligneDetail.description || '',
         unite: ligneDetail.unite || '',
-        cout_main_oeuvre: String(ligneDetail.cout_main_oeuvre ?? '0'),
-        cout_materiel: String(ligneDetail.cout_materiel ?? '0'),
-        taux_fixe: String(ligneDetail.taux_fixe ?? '20'),
-        marge: String(ligneDetail.marge ?? '20')
+        prix: String(ligneDetail.prix ?? ''),
+        cout_main_oeuvre: hasCouts ? String(ligneDetail.cout_main_oeuvre ?? '') : '',
+        cout_materiel: hasCouts ? String(ligneDetail.cout_materiel ?? '') : '',
+        taux_fixe: hasCouts ? String(ligneDetail.taux_fixe ?? '') : '',
+        marge: hasCouts ? String(ligneDetail.marge ?? '') : ''
       });
-      setShowAdvanced(false);
+      
+      // Ouvrir automatiquement les champs avancés si des coûts existent
+      setShowAdvanced(hasCouts);
+      setUseModeCalcul(hasCouts);
       setError('');
     }
   }, [isOpen, ligneDetail]);
 
+  // Détecter si l'utilisateur utilise les champs avancés et calculer le prix automatiquement
   useEffect(() => {
-    const cout_main_oeuvre = parseFloat(formData.cout_main_oeuvre) || 0;
-    const cout_materiel = parseFloat(formData.cout_materiel) || 0;
-    const taux_fixe = parseFloat(formData.taux_fixe) || 0;
-    const marge = parseFloat(formData.marge) || 0;
+    // Vérifier si au moins un champ avancé est rempli (non vide et non nul)
+    const hasCoutMainOeuvre = formData.cout_main_oeuvre !== '' && formData.cout_main_oeuvre !== null;
+    const hasCoutMateriel = formData.cout_materiel !== '' && formData.cout_materiel !== null;
+    const hasTauxFixe = formData.taux_fixe !== '' && formData.taux_fixe !== null;
+    const hasMarge = formData.marge !== '' && formData.marge !== null;
+    
+    const hasAnyAdvancedField = hasCoutMainOeuvre || hasCoutMateriel || hasTauxFixe || hasMarge;
+    
+    // Activer le mode calcul si au moins un champ avancé est rempli
+    setUseModeCalcul(hasAnyAdvancedField);
+    
+    if (hasAnyAdvancedField) {
+      // Calculer le prix automatiquement
+      const cout_main_oeuvre = parseFloat(formData.cout_main_oeuvre) || 0;
+      const cout_materiel = parseFloat(formData.cout_materiel) || 0;
+      const taux_fixe = parseFloat(formData.taux_fixe) || 0;
+      const marge = parseFloat(formData.marge) || 0;
+      
+      const base = cout_main_oeuvre + cout_materiel;
+      const montant_taux_fixe = base * (taux_fixe / 100);
+      const sous_total = base + montant_taux_fixe;
+      const montant_marge = sous_total * (marge / 100);
+      const prix = sous_total + montant_marge;
 
-    const base = cout_main_oeuvre + cout_materiel;
-    const montant_taux_fixe = base * (taux_fixe / 100);
-    const sous_total = base + montant_taux_fixe;
-    const montant_marge = sous_total * (marge / 100);
-    const prix = sous_total + montant_marge;
-
-    setPrixCalcule(prix);
+      setPrixCalcule(prix);
+      // Mettre à jour le prix dans formData
+      setFormData(prev => ({ ...prev, prix: prix.toFixed(2) }));
+    }
   }, [formData.cout_main_oeuvre, formData.cout_materiel, formData.taux_fixe, formData.marge]);
 
   const handleChange = (e) => {
@@ -54,26 +79,34 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     if (!formData.unite.trim()) {
       setError("L'unité est obligatoire");
       return;
     }
-    if (!prixCalcule || prixCalcule === 0) {
+    
+    // Validation du prix : soit manuel, soit calculé
+    const prixFinal = useModeCalcul ? prixCalcule : parseFloat(formData.prix);
+    
+    if (!prixFinal || prixFinal === 0 || isNaN(prixFinal)) {
       setError('Le prix unitaire est obligatoire');
       return;
     }
+    
     try {
       setIsLoading(true);
       setError('');
+      
       const payload = {
         description: formData.description,
         unite: formData.unite,
-        cout_main_oeuvre: formData.cout_main_oeuvre,
-        cout_materiel: formData.cout_materiel,
-        taux_fixe: formData.taux_fixe,
-        marge: formData.marge,
-        prix: prixCalcule
+        cout_main_oeuvre: formData.cout_main_oeuvre === '' || formData.cout_main_oeuvre === null ? '0' : formData.cout_main_oeuvre,
+        cout_materiel: formData.cout_materiel === '' || formData.cout_materiel === null ? '0' : formData.cout_materiel,
+        taux_fixe: formData.taux_fixe === '' || formData.taux_fixe === null ? '20' : formData.taux_fixe,
+        marge: formData.marge === '' || formData.marge === null ? '20' : formData.marge,
+        prix: prixFinal
       };
+      
       const response = await axios.patch(`/api/ligne-details/${ligneDetail.id}/`, payload);
       onSuccess && onSuccess(response.data);
       onClose();
@@ -159,25 +192,46 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
             </div>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
-                Prix unitaire (€)
+                Prix unitaire (€) <span style={{ color: 'red' }}>*</span>
               </label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    border: '2px solid #1976d2',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    backgroundColor: '#e3f2fd',
-                    color: '#1976d2',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  {prixCalcule.toFixed(2)} €
-                </div>
+                {useModeCalcul ? (
+                  // Mode calcul automatique : affichage en lecture seule
+                  <div
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      border: '2px solid #1976d2',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      backgroundColor: '#e3f2fd',
+                      color: '#1976d2',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    {prixCalcule.toFixed(2)} € <span style={{ fontSize: '12px', marginLeft: '8px', opacity: 0.8 }}>(calculé)</span>
+                  </div>
+                ) : (
+                  // Mode saisie manuelle : input éditable
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="prix"
+                    value={formData.prix}
+                    onChange={handleChange}
+                    placeholder="Ex: 25.50"
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                    required
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
@@ -199,6 +253,16 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                   {showAdvanced ? '▼' : '▶'}
                 </button>
               </div>
+              {useModeCalcul && (
+                <div style={{ fontSize: '12px', color: '#28a745', marginTop: '4px', fontWeight: '600' }}>
+                  ✓ Prix calculé automatiquement en fonction des coûts
+                </div>
+              )}
+              {!useModeCalcul && showAdvanced && (
+                <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '4px' }}>
+                  Remplissez les champs ci-dessous pour calculer le prix automatiquement
+                </div>
+              )}
             </div>
           </div>
 

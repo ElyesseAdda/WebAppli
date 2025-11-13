@@ -1115,20 +1115,32 @@ const DevisAvance = () => {
 
   // Calculer le prix d'une ligne de détail
   const calculatePrice = (ligne) => {
+    // Si un prix_devis existe (prix personnalisé pour ce devis), l'utiliser
     if (ligne.prix_devis !== null && ligne.prix_devis !== undefined) {
       return parseFloat(ligne.prix_devis);
     }
+    
+    const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
+    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+    
+    // Si pas de coûts, utiliser le prix de base (prix manuel ou prix du catalogue)
+    if (cout_main_oeuvre === 0 && cout_materiel === 0) {
+      return parseFloat(ligne.prix) || 0;
+    }
+    
+    // Sinon, calculer avec les coûts
     const marge = ligne.marge_devis !== null && ligne.marge_devis !== undefined 
       ? parseFloat(ligne.marge_devis)
       : parseFloat(ligne.marge) || 0;
-    const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
-    const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+    
     const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
+    
     const base = cout_main_oeuvre + cout_materiel;
     const montant_taux_fixe = base * (taux_fixe / 100);
     const sous_total = base + montant_taux_fixe;
     const montant_marge = sous_total * (marge / 100);
     const prix = sous_total + montant_marge;
+    
     return prix;
   };
 

@@ -1545,15 +1545,28 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
             taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
             marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
 
-            # Calcul du prix avec arrondis intermédiaires
-            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
-            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
-            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
-            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
-            prix = (sous_total + montant_marge).quantize(TWOPLACES)
-
-            # Ajout du prix calculé aux données
-            data['prix'] = prix
+            # Déterminer si on doit calculer le prix ou utiliser le prix saisi manuellement
+            # Mode manuel : si les coûts sont à 0 et qu'un prix est fourni
+            prix_manuel = data.get('prix')
+            has_couts = cout_main_oeuvre > 0 or cout_materiel > 0
+            
+            if has_couts:
+                # Mode calcul automatique : recalculer le prix
+                base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+                montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+                sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+                montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+                prix = (sous_total + montant_marge).quantize(TWOPLACES)
+                data['prix'] = prix
+            elif prix_manuel:
+                # Mode saisie manuelle : utiliser le prix fourni
+                data['prix'] = Decimal(str(prix_manuel)).quantize(TWOPLACES)
+            else:
+                # Aucun prix ni coûts : erreur
+                return Response(
+                    {'error': 'Prix ou coûts requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
@@ -1579,15 +1592,25 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
             taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
             marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
 
-            # Calcul du prix avec arrondis intermédiaires
-            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
-            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
-            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
-            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
-            prix = (sous_total + montant_marge).quantize(TWOPLACES)
-
-            # Ajout du prix calculé aux données
-            data['prix'] = prix
+            # Déterminer si on doit calculer le prix ou utiliser le prix saisi manuellement
+            # Mode manuel : si les coûts sont à 0 et qu'un prix est fourni
+            prix_manuel = data.get('prix')
+            has_couts = cout_main_oeuvre > 0 or cout_materiel > 0
+            
+            if has_couts:
+                # Mode calcul automatique : recalculer le prix
+                base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+                montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+                sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+                montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+                prix = (sous_total + montant_marge).quantize(TWOPLACES)
+                data['prix'] = prix
+            elif prix_manuel:
+                # Mode saisie manuelle : utiliser le prix fourni
+                data['prix'] = Decimal(str(prix_manuel)).quantize(TWOPLACES)
+            else:
+                # Aucun prix ni coûts : garder le prix existant
+                data['prix'] = instance.prix
 
             serializer = self.get_serializer(instance, data=data, partial=True)
             serializer.is_valid(raise_exception=True)

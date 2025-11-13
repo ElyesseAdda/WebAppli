@@ -78,24 +78,27 @@ const PartieSearch = ({
     );
   }, [inputValue, options, selectedParties, fuse]);
 
-  // Ajouter l'option de création si aucune correspondance trouvée et qu'il y a du texte
-  const optionsWithCreate = inputValue && filteredOptions.length === 0 ? [
-    {
-      value: `create_${inputValue}`,
-      label: `✨ Créer "${inputValue}"`,
-      data: {
-        id: `create_${inputValue}`,
-        titre: inputValue,
-        type: 'PEINTURE',
-        domaine: 'PEINTURE',
-        total_partie: 0,
-        special_lines: [],
-        sous_parties: [],
-        isNew: true,
-        isCreateOption: true
-      }
-    }
-  ] : filteredOptions;
+  // Ajouter l'option de création tout en bas si l'utilisateur tape quelque chose
+  const optionsWithCreate = inputValue && inputValue.trim() !== '' 
+    ? [
+        ...filteredOptions,  // D'abord les résultats de recherche
+        {
+          value: `create_${inputValue}`,
+          label: `✨ Créer "${inputValue}"`,
+          data: {
+            id: `create_${inputValue}`,
+            titre: inputValue,
+            type: 'PEINTURE',
+            domaine: 'PEINTURE',
+            total_partie: 0,
+            special_lines: [],
+            sous_parties: [],
+            isNew: true,
+            isCreateOption: true
+          }
+        }
+      ]
+    : filteredOptions;
 
   // Styles personnalisés pour React Select
   const customStyles = {

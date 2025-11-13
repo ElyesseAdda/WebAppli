@@ -849,9 +849,18 @@ class LigneDetail(models.Model):
     def save(self, *args, **kwargs):
         if not self.taux_fixe:
             # Utiliser le dernier taux fixe enregistré
-            dernier_taux = TauxFixe.objects.latest()
-            self.taux_fixe = dernier_taux.valeur
-        self.calculer_prix()
+            try:
+                dernier_taux = TauxFixe.objects.latest()
+                self.taux_fixe = dernier_taux.valeur
+            except TauxFixe.DoesNotExist:
+                # Aucun taux fixe en base, utiliser 20% par défaut
+                self.taux_fixe = 20
+        
+        # Ne recalculer le prix que si on a des coûts (sinon c'est un prix manuel)
+        has_couts = self.cout_main_oeuvre > 0 or self.cout_materiel > 0
+        if has_couts:
+            self.calculer_prix()
+        
         super().save(*args, **kwargs)
 
     def __str__(self):
