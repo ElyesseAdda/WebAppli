@@ -16,6 +16,8 @@ const LigneSpecialeRow = ({
   devisItems = [],
   calculatePartieTotal,
   calculateSousPartieTotal,
+  calculateGlobalTotal,
+  calculateGlobalTotalExcludingLine,
   calculatePrice
 }) => {
   /**
@@ -33,16 +35,27 @@ const LigneSpecialeRow = ({
       let baseAmount = 0;
       
       // ✅ TOUJOURS calculer dynamiquement depuis devisItems (pour mise à jour en temps réel)
-      if (devisItems.length > 0 && baseCalculation.type && baseCalculation.id) {
-        if (baseCalculation.type === 'partie' && calculatePartieTotal) {
-          const partie = devisItems.find(item => item.type === 'partie' && item.id === baseCalculation.id);
-          if (partie) {
-            baseAmount = calculatePartieTotal(partie);
+      if (baseCalculation.type) {
+        if (baseCalculation.type === 'global') {
+          // Pour éviter la récursion, calculer le total SANS cette ligne
+          const lineId = line.id || line.data?.id;
+          if (calculateGlobalTotalExcludingLine) {
+            baseAmount = calculateGlobalTotalExcludingLine(lineId);
+          } else if (calculateGlobalTotal) {
+            // Fallback si la fonction d'exclusion n'est pas disponible
+            baseAmount = calculateGlobalTotal();
           }
-        } else if (baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
-          const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === baseCalculation.id);
-          if (sousPartie) {
-            baseAmount = calculateSousPartieTotal(sousPartie);
+        } else if (devisItems.length > 0 && baseCalculation.id) {
+          if (baseCalculation.type === 'partie' && calculatePartieTotal) {
+            const partie = devisItems.find(item => item.type === 'partie' && item.id === baseCalculation.id);
+            if (partie) {
+              baseAmount = calculatePartieTotal(partie);
+            }
+          } else if (baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
+            const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === baseCalculation.id);
+            if (sousPartie) {
+              baseAmount = calculateSousPartieTotal(sousPartie);
+            }
           }
         }
       }

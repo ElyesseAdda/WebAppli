@@ -24,6 +24,9 @@ const SpecialLinesCreator = ({
   formatMontantEspace,
   calculatePartieTotal,
   calculateSousPartieTotal,
+  calculateGlobalTotal,
+  calculateGlobalTotalExcludingLine,
+  total_ht,
   devisItems,
   pendingLineForBase,
   onClearPendingLineForBase
@@ -49,14 +52,33 @@ const SpecialLinesCreator = ({
       // Convertir data en propriétés directes si nécessaire
       const lineData = pendingLineForBase.data || pendingLineForBase;
       
+      // ✅ Extraire valueType depuis data.valueType (priorité) ou depuis pendingLineForBase directement
+      // pendingLineForBase peut avoir la structure : { data: { valueType: "percentage" }, ... }
+      const valueType = pendingLineForBase.data?.valueType || lineData.valueType || "fixed";
+      
       setNewLine({
         description: lineData.description || "",
         value: lineData.value !== undefined ? lineData.value : "",
-        valueType: lineData.valueType || "fixed",
+        valueType: valueType, // ✅ Utiliser la valeur extraite correctement
         type: lineData.type || "reduction",
         isHighlighted: lineData.isHighlighted || false,
         baseCalculation: pendingLineForBase.baseCalculation || null,
         styles: pendingLineForBase.styles || {},
+        placementType: "global",
+        placementPartieId: null,
+        placementSousPartieId: null,
+        placementPosition: "end"
+      });
+    } else if (!pendingLineForBase && open) {
+      // Réinitialiser le formulaire si le modal s'ouvre sans pendingLineForBase
+      setNewLine({
+        description: "",
+        value: "",
+        valueType: "fixed",
+        type: "reduction",
+        isHighlighted: false,
+        baseCalculation: null,
+        styles: {},
         placementType: "global",
         placementPartieId: null,
         placementSousPartieId: null,
@@ -182,6 +204,8 @@ const SpecialLinesCreator = ({
                 devisItems={devisItems}
                 calculatePartieTotal={calculatePartieTotal}
                 calculateSousPartieTotal={calculateSousPartieTotal}
+                calculateGlobalTotal={calculateGlobalTotal}
+                calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
               />
             </Box>
             
@@ -246,12 +270,25 @@ const SpecialLinesCreator = ({
                 <Button 
                   variant={newLine.valueType === "percentage" ? "contained" : "outlined"}
                   onClick={() => {
-                    setNewLine(prev => ({ ...prev, valueType: "percentage" }));
+                    // Mettre à jour avec la nouvelle valeur
+                    const updatedLine = { ...newLine, valueType: "percentage" };
+                    setNewLine(updatedLine);
                     // Si pas de base définie, fermer le modal et activer la sélection
-                    if (!newLine.baseCalculation) {
+                    if (!updatedLine.baseCalculation) {
                       setTimeout(() => {
                         onClose();
-                        onAddPendingLine(newLine, true); // true = requiresBaseSelection
+                        // Utiliser la ligne mise à jour, pas newLine (qui n'est pas encore mis à jour)
+                        onAddPendingLine({
+                          ...updatedLine,
+                          id: Date.now().toString(),
+                          data: {
+                            description: updatedLine.description,
+                            value: updatedLine.value,
+                            valueType: updatedLine.valueType,
+                            type: updatedLine.type,
+                            isHighlighted: updatedLine.isHighlighted
+                          }
+                        }, true); // true = requiresBaseSelection
                       }, 100);
                     }
                   }}
@@ -276,24 +313,34 @@ const SpecialLinesCreator = ({
               </ButtonGroup>
             </Box>
             
-            {/* Affichage de la base pour les pourcentages */}
-            {newLine.valueType === "percentage" && newLine.baseCalculation && (
-              <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
-                <Typography variant="body2" sx={{ fontSize: '13px', mb: 1 }}>
-                  <strong>Base :</strong> {newLine.baseCalculation.label}
-                </Typography>
-                <Button 
-                  size="small" 
-                  onClick={() => {
-                    onClose();
-                    onAddPendingLine(newLine, true); // true = requiresBaseSelection
-                  }}
-                  variant="outlined"
-                  color="primary"
-                  fullWidth
-                >
-                  🎯 Changer la base
-                </Button>
+            {/* Affichage de la base sélectionnée pour les pourcentages */}
+            {newLine.valueType === "percentage" && (
+              <Box sx={{ mt: 2 }}>
+                {newLine.baseCalculation ? (
+                  <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
+                    <Typography variant="body2" sx={{ fontSize: '13px', mb: 1 }}>
+                      <strong>Base sélectionnée :</strong> {newLine.baseCalculation.label}
+                    </Typography>
+                    <Button 
+                      size="small" 
+                      onClick={() => {
+                        onClose();
+                        onAddPendingLine(newLine, true); // true = requiresBaseSelection
+                      }}
+                      variant="outlined"
+                      color="primary"
+                      fullWidth
+                    >
+                      🎯 Changer la base
+                    </Button>
+                  </Box>
+                ) : (
+                  <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
+                    <Typography variant="body2" sx={{ fontSize: '12px', color: '#856404' }}>
+                      💡 Cliquez sur le Montant HT total, une partie ou sous-partie dans le tableau pour sélectionner la base de calcul
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             )}
             

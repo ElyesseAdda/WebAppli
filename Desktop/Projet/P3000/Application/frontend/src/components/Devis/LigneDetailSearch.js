@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Select from 'react-select';
 import Fuse from 'fuse.js';
 import axios from 'axios';
@@ -9,7 +9,8 @@ const LigneDetailSearch = ({
   partieId,
   selectedLignesDetails = [],
   onLigneDetailSelect,
-  onLigneDetailCreate
+  onLigneDetailCreate,
+  mainDevisItems = [] // Les items du tableau principal pour filtrer les lignes détails déjà utilisées
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [options, setOptions] = useState([]);
@@ -70,7 +71,7 @@ const LigneDetailSearch = ({
   }, [filteredOptions, inputValue]);
 
   // Charger les options via l'endpoint search
-  const loadOptions = async () => {
+  const loadOptions = useCallback(async () => {
     if (!sousPartieId) return;
     
     try {
@@ -82,8 +83,14 @@ const LigneDetailSearch = ({
       const response = await axios.get(url);
       
       if (response.data && Array.isArray(response.data)) {
+        // Filtrer les lignes déjà dans selectedLignesDetails ET celles déjà dans mainDevisItems (tableau principal)
+        const usedLigneIds = new Set([
+          ...selectedLignesDetails.map(ld => ld.id),
+          ...mainDevisItems.filter(item => item.type === 'ligne_detail').map(item => item.id)
+        ]);
+        
         const formattedOptions = response.data
-          .filter(option => !selectedLignesDetails.some(ld => ld.id === option.value))
+          .filter(option => !usedLigneIds.has(option.value))
           .map(option => {
             const unite = option.data?.unite || '';
             const prix = option.data?.prix || '';
@@ -106,7 +113,7 @@ const LigneDetailSearch = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sousPartieId, inputValue, selectedLignesDetails, mainDevisItems]);
 
   // Charger les options lorsque l'input change
   useEffect(() => {
@@ -117,7 +124,7 @@ const LigneDetailSearch = ({
     }, 300);
     
     return () => clearTimeout(timeoutId);
-  }, [inputValue, sousPartieId, selectedLignesDetails]);
+  }, [sousPartieId, loadOptions]);
 
   // Gérer la sélection ou création
   const handleChange = (selectedOption) => {

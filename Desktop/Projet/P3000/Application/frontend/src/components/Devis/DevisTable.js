@@ -171,6 +171,7 @@ const DevisTable = ({
   onSpecialLinesReorder,
   // Fonctions de calcul
   calculateGlobalTotal,
+  calculateGlobalTotalExcludingLine,
   calculatePartieTotal,
   calculateSousPartieTotal,
   // Props pour le système unifié
@@ -186,7 +187,12 @@ const DevisTable = ({
   onBaseSelected,
   onCancelBaseSelection,
   pendingLineForBase,
-  onClearPendingLineForBase
+  onClearPendingLineForBase,
+  // Props pour le tableau option
+  isOptionsTable = false,
+  onTransferToMain,
+  // Props pour filtrer les lignes détails déjà utilisées (pour le tableau option)
+  mainDevisItems = [] // Les items du tableau principal pour filtrer les lignes détails
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
@@ -498,7 +504,7 @@ const DevisTable = ({
             justifyContent: 'center',
             gap: '20px'
           }}>
-            <span>📊 Cliquez sur une partie, sous-partie ou ligne pour définir la base de calcul du pourcentage</span>
+            <span>📊 Cliquez sur le Montant HT total, une partie, sous-partie ou ligne pour définir la base de calcul du pourcentage</span>
             <button
               onClick={onCancelBaseSelection}
               style={{
@@ -514,6 +520,59 @@ const DevisTable = ({
             >
               Annuler
             </button>
+          </div>
+          
+          {/* Ligne Montant HT total cliquable */}
+          <div style={{
+            position: 'sticky',
+            top: '60px',
+            zIndex: 102,
+            margin: '10px',
+            marginBottom: '20px'
+          }}>
+            <div 
+              onClick={() => {
+                const globalTotal = calculateGlobalTotal ? calculateGlobalTotal() : (total_ht || 0);
+                onBaseSelected({
+                  type: 'global',
+                  id: null,
+                  label: `Montant HT total (${formatMontantEspace(globalTotal)} €)`,
+                  amount: globalTotal
+                });
+              }}
+              style={{
+                backgroundColor: '#28a745',
+                color: 'white',
+                padding: '15px 20px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                border: '3px solid #ffeb3b',
+                transition: 'all 0.2s ease',
+                transform: 'scale(1.02)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>💰</span>
+                <span>Montant HT total</span>
+              </div>
+              <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                {formatMontantEspace(calculateGlobalTotal ? calculateGlobalTotal() : (total_ht || 0))} €
+              </span>
+            </div>
           </div>
         </>
       )}
@@ -810,6 +869,8 @@ const DevisTable = ({
                                         devisItems={devisItems}
                                         calculatePartieTotal={calculatePartieTotal}
                                         calculateSousPartieTotal={calculateSousPartieTotal}
+                                        calculateGlobalTotal={calculateGlobalTotal}
+                                        calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
                                       />
                                     </div>
                                     
@@ -1045,6 +1106,8 @@ const DevisTable = ({
                                                               devisItems={devisItems}
                                                               calculatePartieTotal={calculatePartieTotal}
                                                               calculateSousPartieTotal={calculateSousPartieTotal}
+                                                              calculateGlobalTotal={calculateGlobalTotal}
+                                                              calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
                                                             />
                                                           </div>
                                                         );
@@ -1281,6 +1344,8 @@ const DevisTable = ({
                                                                                 devisItems={devisItems}
                                                                                 calculatePartieTotal={calculatePartieTotal}
                                                                                 calculateSousPartieTotal={calculateSousPartieTotal}
+                                                                                calculateGlobalTotal={calculateGlobalTotal}
+                                                                                calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
                                                                               />
                                                                             </div>
                                                                           );
@@ -1442,6 +1507,7 @@ const DevisTable = ({
                                                                   selectedLignesDetails={sp.selectedLignesDetails || []}
                                                                   onLigneDetailSelect={(ligne) => onLigneDetailSelect && onLigneDetailSelect(item.id, sp.id, ligne)}
                                                                   onLigneDetailCreate={(spId, description) => onLigneDetailCreate && onLigneDetailCreate(spId, description)}
+                                                                  mainDevisItems={isOptionsTable ? mainDevisItems : []}
                                                                 />
                                                               </div>
                                                             </div>
@@ -1589,6 +1655,13 @@ const DevisTable = ({
                             }, 300);
                           }, 1000);
                         }}>
+                          {isOptionsTable && onTransferToMain && (
+                            <Tooltip title="Transférer vers le tableau principal">
+                              <IconButton size="small" onClick={() => onTransferToMain(partie)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(76, 175, 80, 0.8)', color: 'white' }}>
+                                <span style={{ fontSize: '14px' }}>→</span>
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <Tooltip title="Éditer">
                             <IconButton size="small" onClick={() => onPartieEdit && onPartieEdit(partie.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
                               <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
@@ -1639,6 +1712,13 @@ const DevisTable = ({
                             }, 300);
                           }, 1000);
                         }}>
+                          {isOptionsTable && onTransferToMain && (
+                            <Tooltip title="Transférer vers le tableau principal">
+                              <IconButton size="small" onClick={() => onTransferToMain(sp)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(76, 175, 80, 0.8)', color: 'white' }}>
+                                <span style={{ fontSize: '14px' }}>→</span>
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <Tooltip title="Éditer">
                             <IconButton size="small" onClick={() => onSousPartieEdit && onSousPartieEdit(sp.partie_id, sp.id)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
                               <EditIcon fontSize="small" style={{ fontSize: '14px' }} />
@@ -1693,6 +1773,15 @@ const DevisTable = ({
                           }, 1000);
                         }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
+                            {isOptionsTable && onTransferToMain && (
+                              <Tooltip title="Transférer vers le tableau principal">
+                                <IconButton size="small" onClick={() => {
+                                  onTransferToMain(ligne);
+                                }} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(76, 175, 80, 0.8)', color: 'white' }}>
+                                  <span style={{ fontSize: '14px' }}>→</span>
+                                </IconButton>
+                              </Tooltip>
+                            )}
                             <Tooltip title="Éditer">
                               <IconButton size="small" onClick={() => { 
                                 setEditContext({ partieId: ligne.partie_id, sousPartieId: ligne.sous_partie_id, ligne }); 
@@ -1867,6 +1956,9 @@ const DevisTable = ({
           formatMontantEspace={formatMontantEspace}
           calculatePartieTotal={calculatePartieTotal}
           calculateSousPartieTotal={calculateSousPartieTotal}
+          calculateGlobalTotal={calculateGlobalTotal}
+          calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
+          total_ht={total_ht}
           devisItems={devisItems}
           pendingLineForBase={pendingLineForBase}
           onClearPendingLineForBase={onClearPendingLineForBase}

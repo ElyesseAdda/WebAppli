@@ -6,7 +6,9 @@ const SpecialLinePreview = ({
   formatAmount, 
   devisItems = [], 
   calculatePartieTotal, 
-  calculateSousPartieTotal 
+  calculateSousPartieTotal,
+  calculateGlobalTotal,
+  calculateGlobalTotalExcludingLine
 }) => {
   // Calculer le montant
   const calculateAmount = () => {
@@ -18,16 +20,25 @@ const SpecialLinePreview = ({
         let baseAmount = 0;
         
         // ✅ TOUJOURS calculer dynamiquement (pour aperçu en temps réel)
-        if (devisItems.length > 0 && line.baseCalculation.type && line.baseCalculation.id) {
-          if (line.baseCalculation.type === 'partie' && calculatePartieTotal) {
-            const partie = devisItems.find(item => item.type === 'partie' && item.id === line.baseCalculation.id);
-            if (partie) {
-              baseAmount = calculatePartieTotal(partie);
+        if (line.baseCalculation.type) {
+          if (line.baseCalculation.type === 'global') {
+            // Pour éviter la récursion, calculer le total SANS cette ligne
+            // Dans le preview, on n'a pas d'ID de ligne, donc on utilise calculateGlobalTotal
+            // (c'est pour l'aperçu, donc pas de problème de récursion)
+            if (calculateGlobalTotal) {
+              baseAmount = calculateGlobalTotal();
             }
-          } else if (line.baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
-            const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === line.baseCalculation.id);
-            if (sousPartie) {
-              baseAmount = calculateSousPartieTotal(sousPartie);
+          } else if (devisItems.length > 0 && line.baseCalculation.id) {
+            if (line.baseCalculation.type === 'partie' && calculatePartieTotal) {
+              const partie = devisItems.find(item => item.type === 'partie' && item.id === line.baseCalculation.id);
+              if (partie) {
+                baseAmount = calculatePartieTotal(partie);
+              }
+            } else if (line.baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
+              const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === line.baseCalculation.id);
+              if (sousPartie) {
+                baseAmount = calculateSousPartieTotal(sousPartie);
+              }
             }
           }
         }

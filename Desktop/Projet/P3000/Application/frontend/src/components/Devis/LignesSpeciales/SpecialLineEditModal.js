@@ -37,11 +37,33 @@ const SpecialLineEditModal = ({
   
   useEffect(() => {
     if (line) {
-      setEditedLine(line);
+      // Normaliser la structure : gérer les deux formats possibles
+      // Format 1: { data: { description, value, ... }, baseCalculation, styles }
+      // Format 2: { description, value, value_type, type_speciale, baseCalculation, styles }
+      const normalizedLine = line.data 
+        ? line // Déjà au bon format
+        : {
+            // Convertir le format plat en format avec data
+            data: {
+              description: line.description || '',
+              value: line.value || 0,
+              valueType: line.value_type || line.valueType || 'fixed',
+              type: line.type_speciale || line.type || 'addition'
+            },
+            baseCalculation: line.baseCalculation || line.base_calculation || null,
+            styles: line.styles || {},
+            // Conserver les autres propriétés importantes
+            id: line.id,
+            type: line.type,
+            context_type: line.context_type,
+            context_id: line.context_id,
+            index_global: line.index_global
+          };
+      setEditedLine(normalizedLine);
     }
   }, [line]);
   
-  if (!editedLine) return null;
+  if (!editedLine || !editedLine.data) return null;
   
   const handleStylesChange = (styleKey, value) => {
     setEditedLine(prev => ({
@@ -54,7 +76,18 @@ const SpecialLineEditModal = ({
   };
   
   const handleSave = () => {
-    onSave(editedLine);
+    // S'assurer que toutes les propriétés sont présentes pour la sauvegarde
+    const lineToSave = {
+      ...editedLine,
+      // S'assurer que data existe
+      data: editedLine.data || {
+        description: editedLine.description || '',
+        value: editedLine.value || 0,
+        valueType: editedLine.valueType || editedLine.value_type || 'fixed',
+        type: editedLine.type || editedLine.type_speciale || 'addition'
+      }
+    };
+    onSave(lineToSave);
     onClose();
   };
   

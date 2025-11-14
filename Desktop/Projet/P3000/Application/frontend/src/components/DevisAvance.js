@@ -8,6 +8,7 @@ import ClientInfo from './Devis/ClientInfo';
 import ChantierInfo from './Devis/ChantierInfo';
 import DevisTable from './Devis/DevisTable';
 import DevisRecap from './Devis/DevisRecap';
+import TableauOption from './Devis/TableauOption';
 import ChantierForm from './ChantierForm';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 
@@ -47,9 +48,9 @@ const DevisAvance = () => {
 
 
   const [special_lines_global, setSpecialLinesGlobal] = useState([]);
-  const [total_ht, setTotalHt] = useState(4000.00);
-  const [tva, setTva] = useState(800.00);
-  const [montant_ttc, setMontantTtc] = useState(4800.00);
+  const [total_ht, setTotalHt] = useState(0);
+  const [tva, setTva] = useState(0);
+  const [montant_ttc, setMontantTtc] = useState(0);
 
   // États pour les lignes spéciales v2
   const [pendingSpecialLines, setPendingSpecialLines] = useState([]);
@@ -1186,7 +1187,7 @@ const DevisAvance = () => {
   };
 
   // Calculer le montant d'une ligne spéciale
-  const calculerMontantLigneSpeciale = (ligneSpeciale, bases) => {
+  const calculerMontantLigneSpeciale = (ligneSpeciale, bases, excludeLineId = null) => {
     const value = parseFloat(ligneSpeciale.value || 0);
     
     // Si montant fixe, retourner directement
@@ -1205,7 +1206,8 @@ const DevisAvance = () => {
       } else if (baseCalc.type === 'partie' && baseCalc.id) {
         base = bases.parties[baseCalc.id] || 0;
       } else if (baseCalc.type === 'global') {
-        base = bases.global || 0;
+        // Pour le type global, calculer le total SANS cette ligne pour éviter la récursion
+        base = calculateGlobalTotalExcludingLine(ligneSpeciale.id || excludeLineId);
       }
       
       return base * (value / 100);
@@ -1215,8 +1217,8 @@ const DevisAvance = () => {
     return 0;
   };
 
-  // Calculer le total global
-  const calculateGlobalTotal = (parties) => {
+  // Calculer le total global SANS une ligne spéciale spécifique (pour éviter la récursion)
+  const calculateGlobalTotalExcludingLine = (excludeLineId = null) => {
     // Calculer d'abord toutes les bases brutes
     const bases = calculerBasesBrutes();
     
@@ -1225,17 +1227,18 @@ const DevisAvance = () => {
       .filter(item => item.type === 'partie')
       .reduce((sum, partie) => sum + calculatePartieTotal(partie), 0);
     
-    // Récupérer les lignes spéciales globales, triées par index_global
+    // Récupérer les lignes spéciales globales, triées par index_global, en excluant celle spécifiée
     const lignesSpeciales = devisItems
       .filter(item => 
         item.type === 'ligne_speciale' && 
-        item.context_type === 'global'
+        item.context_type === 'global' &&
+        item.id !== excludeLineId
       )
       .sort((a, b) => a.index_global - b.index_global);
     
     // Appliquer les lignes spéciales séquentiellement
     lignesSpeciales.forEach(ls => {
-      const montant = calculerMontantLigneSpeciale(ls, bases);
+      const montant = calculerMontantLigneSpeciale(ls, bases, excludeLineId);
       
       if (ls.type_speciale === 'reduction') {
         total -= montant;
@@ -1246,6 +1249,11 @@ const DevisAvance = () => {
     });
     
     return total;
+  };
+
+  // Calculer le total global
+  const calculateGlobalTotal = () => {
+    return calculateGlobalTotalExcludingLine(null);
   };
 
   // Calculer le total d'une partie
@@ -1317,6 +1325,53 @@ const DevisAvance = () => {
     });
     
     return total;
+  };
+
+  // Calculer automatiquement total_ht, tva et montant_ttc
+  useEffect(() => {
+    // Calculer le total HT en utilisant calculateGlobalTotal
+    // calculateGlobalTotal utilise devisItems qui est dans les dépendances
+    const totalHT = calculateGlobalTotal();
+    
+    // Calculer la TVA
+    const tvaRate = devisData.tva_rate || 20;
+    const tvaAmount = totalHT * (tvaRate / 100);
+    
+    // Calculer le TTC
+    const totalTTC = totalHT + tvaAmount;
+    
+    // Mettre à jour les états
+    setTotalHt(totalHT);
+    setTva(tvaAmount);
+    setMontantTtc(totalTTC);
+    
+    // Mettre à jour aussi devisData pour la cohérence
+    setDevisData(prev => ({
+      ...prev,
+      price_ht: totalHT,
+      price_ttc: totalTTC
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devisItems, devisData.tva_rate]);
+
+  // Fonction pour transférer un élément du tableau option vers le tableau principal
+  const handleTransferFromOptionsToMain = (itemToTransfer) => {
+    if (!itemToTransfer) return;
+    
+    // Calculer le prochain index_global pour l'élément transféré
+    const nextIndex = getNextIndex(devisItems, itemToTransfer.type === 'ligne_detail' ? 'sous_partie' : 
+                                                      itemToTransfer.type === 'sous_partie' ? 'partie' : 'global', 
+                                                      itemToTransfer.type === 'ligne_detail' ? itemToTransfer.sous_partie_id :
+                                                      itemToTransfer.type === 'sous_partie' ? itemToTransfer.partie_id : null);
+    
+    // Créer la copie de l'élément avec le nouvel index
+    const transferredItem = {
+      ...itemToTransfer,
+      index_global: nextIndex || (devisItems.length > 0 ? Math.max(...devisItems.map(i => i.index_global)) + 1 : 1)
+    };
+    
+    // Ajouter au tableau principal
+    setDevisItems(prev => sortByIndexGlobal([...prev, transferredItem]));
   };
 
   // Charger les chantiers au montage du composant
@@ -1588,6 +1643,7 @@ const DevisAvance = () => {
               onSaveSpecialLine={handleSaveSpecialLine}
               onSpecialLinesReorder={handleSpecialLinesReorder}
               calculateGlobalTotal={calculateGlobalTotal}
+              calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
               calculatePartieTotal={calculatePartieTotal}
               calculateSousPartieTotal={calculateSousPartieTotal}
               
@@ -1630,8 +1686,19 @@ const DevisAvance = () => {
               tva={tva}
               montant_ttc={montant_ttc}
               formatMontantEspace={formatMontantEspace}
+              onTvaRateChange={(newRate) => {
+                setDevisData(prev => ({ ...prev, tva_rate: newRate }));
+              }}
             />
           </div>
+
+          {/* Section 6: Options (prestations supplémentaires) */}
+          <TableauOption
+            devisData={devisData}
+            devisItems={devisItems}
+            formatMontantEspace={formatMontantEspace}
+            onTransferToMain={handleTransferFromOptionsToMain}
+          />
 
           {/* Section 6: Actions */}
           <div style={{

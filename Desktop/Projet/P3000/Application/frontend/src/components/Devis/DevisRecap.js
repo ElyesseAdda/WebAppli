@@ -1,6 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace }) => {
+const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace, onTvaRateChange }) => {
+  // État local pour gérer la valeur pendant la saisie
+  const [localTvaRate, setLocalTvaRate] = useState(devisData.tva_rate ?? 20);
+  
+  // Synchroniser avec devisData quand il change (mais pas pendant la saisie)
+  useEffect(() => {
+    if (devisData.tva_rate !== null && devisData.tva_rate !== undefined) {
+      setLocalTvaRate(devisData.tva_rate);
+    }
+  }, [devisData.tva_rate]);
+
+  const handleTvaRateChange = (e) => {
+    const inputValue = e.target.value;
+    // Permettre la saisie vide temporairement
+    if (inputValue === '') {
+      setLocalTvaRate('');
+      return;
+    }
+    
+    const newRate = parseFloat(inputValue);
+    if (!isNaN(newRate)) {
+      setLocalTvaRate(newRate);
+      if (onTvaRateChange) {
+        onTvaRateChange(newRate);
+      }
+    }
+  };
+
+  const handleTvaRateBlur = () => {
+    // Si le champ est vide au blur, remettre la valeur par défaut
+    if (localTvaRate === '' || localTvaRate === null || localTvaRate === undefined) {
+      const defaultValue = 20;
+      setLocalTvaRate(defaultValue);
+      if (onTvaRateChange) {
+        onTvaRateChange(defaultValue);
+      }
+    }
+  };
+
   return (
     <div style={{
       backgroundColor: 'white',
@@ -64,9 +102,31 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
             border: '1px solid #dee2e6',
             borderRadius: '4px',
             fontSize: '14px',
-            color: '#495057'
+            color: '#495057',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
           }}>
-            TVA ({devisData.tva_rate}%)
+            <span>TVA</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={localTvaRate}
+              onChange={handleTvaRateChange}
+              onBlur={handleTvaRateBlur}
+              style={{
+                width: '60px',
+                padding: '4px 8px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                fontSize: '14px',
+                textAlign: 'center',
+                backgroundColor: 'white'
+              }}
+            />
+            <span>%</span>
           </div>
           <div style={{
             padding: '12px 20px',
