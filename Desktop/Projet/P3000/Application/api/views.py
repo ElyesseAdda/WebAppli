@@ -2917,8 +2917,23 @@ def create_devis(request):
                     'status': 'En attente',
                     'devis_chantier': True,
                     'lignes_speciales': lignes_speciales_filtered,
-                    'lignes_display': lignes_display
+                    'lignes_display': lignes_display,
+                    'parties_metadata': request.data.get('parties_metadata', {}),
+                    'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
+                    'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0')))
                 }
+                
+                # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
+                # Si non fournie, le modèle utilisera auto_now_add=True
+                if 'date_creation' in request.data and request.data['date_creation']:
+                    from django.utils.dateparse import parse_datetime
+                    try:
+                        date_creation = parse_datetime(request.data['date_creation'])
+                        if date_creation:
+                            devis_data['date_creation'] = date_creation
+                    except (ValueError, TypeError):
+                        # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
+                        pass
             else:
                 # Séparer les lignes spéciales normales des lignes de type 'display'
                 lignes_speciales_raw = request.data.get('lignes_speciales', {})
@@ -2956,8 +2971,23 @@ def create_devis(request):
                     'status': 'En attente',
                     'devis_chantier': False,
                     'lignes_speciales': lignes_speciales_filtered,
-                    'lignes_display': lignes_display
+                    'lignes_display': lignes_display,
+                    'parties_metadata': request.data.get('parties_metadata', {}),
+                    'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
+                    'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0')))
                 }
+                
+                # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
+                # Si non fournie, le modèle utilisera auto_now_add=True
+                if 'date_creation' in request.data and request.data['date_creation']:
+                    from django.utils.dateparse import parse_datetime
+                    try:
+                        date_creation = parse_datetime(request.data['date_creation'])
+                        if date_creation:
+                            devis_data['date_creation'] = date_creation
+                    except (ValueError, TypeError):
+                        # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
+                        pass
             
             devis = Devis.objects.create(**devis_data)
 
@@ -2985,12 +3015,35 @@ def create_devis(request):
             
             # Création des lignes de devis
             for ligne in request.data.get('lignes', []):
-                DevisLigne.objects.create(
-                    devis=devis,
-                    ligne_detail_id=ligne['ligne'],
-                    quantite=Decimal(str(ligne['quantity'])),
-                    prix_unitaire=Decimal(str(ligne['custom_price']))
-                )
+                # Préparer les données pour la création
+                ligne_data = {
+                    'devis': devis,
+                    'ligne_detail_id': ligne['ligne'],
+                    'quantite': Decimal(str(ligne['quantity'])),
+                    'prix_unitaire': Decimal(str(ligne['custom_price']))
+                }
+                
+                # ✅ Ajouter index_global si présent (pour conserver l'ordre des lignes)
+                # Le champ index_global est maintenant dans le modèle DevisLigne
+                if 'index_global' in ligne and ligne['index_global'] is not None:
+                    try:
+                        # index_global peut être décimal (1.101, 1.102, etc.)
+                        index_global = float(ligne['index_global'])
+                        if index_global >= 0:
+                            ligne_data['index_global'] = Decimal(str(index_global))
+                    except (ValueError, TypeError):
+                        # Si l'index n'est pas valide, utiliser default=0
+                        pass
+                
+                # ✅ Note: Le numero des lignes n'est pas stocké dans DevisLigne
+                # Il est géré via parties_metadata.lignesDetails (ordre dans le tableau)
+                # Les numéros des lignes sont calculés à l'affichage selon leur position dans parties_metadata
+                
+                # ✅ Note: total_ht est une propriété calculée (quantite * prix_unitaire)
+                # Il est envoyé dans le payload pour vérification mais n'est pas stocké
+                # Le backend calcule automatiquement total_ht = quantite * prix_unitaire
+                
+                DevisLigne.objects.create(**ligne_data)
             
             # Préparer la réponse avec l'ID du devis et de l'appel d'offres si applicable
             response_data = {'id': devis.id}

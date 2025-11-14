@@ -11,6 +11,7 @@ import DevisRecap from './Devis/DevisRecap';
 import TableauOption from './Devis/TableauOption';
 import ChantierForm from './ChantierForm';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
+import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
 
 const DevisAvance = () => {
   // États pour les données du devis
@@ -75,6 +76,8 @@ const DevisAvance = () => {
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
   const [nextTsNumber, setNextTsNumber] = useState(null);
+  const [clientId, setClientId] = useState(null); // ID du client associé
+  const [isSaving, setIsSaving] = useState(false); // Flag pour la sauvegarde en cours
 
   // États pour la gestion des parties
   const [availableParties, setAvailableParties] = useState([]);
@@ -207,6 +210,9 @@ const DevisAvance = () => {
                   client_mail: clientData.client_mail || '',
                   phone_Number: String(clientData.phone_Number || '')
                 });
+                
+                // Stocker l'ID du client
+                setClientId(clientId);
               }
             }
           } else if (typeof chantierData.societe === 'number') {
@@ -238,6 +244,9 @@ const DevisAvance = () => {
                   client_mail: clientData.client_mail || '',
                   phone_Number: String(clientData.phone_Number || '')
                 });
+                
+                // Stocker l'ID du client
+                setClientId(clientId);
               }
             }
           }
@@ -1374,6 +1383,128 @@ const DevisAvance = () => {
     setDevisItems(prev => sortByIndexGlobal([...prev, transferredItem]));
   };
 
+  // Fonction pour récupérer l'ID du client depuis le chantier sélectionné
+  const getClientIdFromChantier = async (chantierId) => {
+    if (!chantierId || chantierId === -1) {
+      return null;
+    }
+    
+    try {
+      const chantierResponse = await axios.get(`/api/chantier/${chantierId}/`);
+      const chantierData = chantierResponse.data;
+      
+      if (chantierData.societe) {
+        let societeData = null;
+        
+        if (typeof chantierData.societe === 'object' && chantierData.societe.id) {
+          societeData = chantierData.societe;
+        } else if (typeof chantierData.societe === 'number') {
+          const societeResponse = await axios.get(`/api/societe/${chantierData.societe}/`);
+          societeData = societeResponse.data;
+        }
+        
+        if (societeData && societeData.client_name) {
+          const clientId = typeof societeData.client_name === 'object' 
+            ? societeData.client_name.id 
+            : societeData.client_name;
+          return clientId;
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération du client depuis le chantier:', error);
+    }
+    
+    return null;
+  };
+
+  // Fonction pour sauvegarder le devis au format legacy
+  const handleSaveDevis = async () => {
+    try {
+      setIsSaving(true);
+      
+      // Valider les données avant transformation
+      const validation = validateBeforeTransform({
+        devisItems,
+        devisData,
+        selectedChantierId
+      });
+      
+      if (!validation.valid) {
+        alert(`Erreurs de validation:\n${validation.errors.join('\n')}`);
+        return;
+      }
+      
+      // Récupérer l'ID du client si nécessaire
+      let finalClientId = clientId;
+      if (!finalClientId && selectedChantierId) {
+        finalClientId = await getClientIdFromChantier(selectedChantierId);
+      }
+      
+      // Transformer les données vers le format legacy
+      const legacyDevis = transformToLegacyFormat({
+        devisItems,
+        devisData: {
+          ...devisData,
+          price_ht: total_ht,
+          price_ttc: montant_ttc
+        },
+        selectedChantierId,
+        clientIds: finalClientId ? [finalClientId] : []
+      });
+      
+      // ✅ MODE TEST : Console.log les données à envoyer (sans envoyer à l'API)
+      console.log('=== DONNÉES À ENVOYER À L\'API ===');
+      console.log('Payload complet:', JSON.stringify(legacyDevis, null, 2));
+      console.log('Structure du payload:', legacyDevis);
+      console.log('Nombre de lignes:', legacyDevis.lignes?.length || 0);
+      console.log('Lignes spéciales globales:', legacyDevis.lignes_speciales?.global?.length || 0);
+      console.log('Lignes spéciales parties:', Object.keys(legacyDevis.lignes_speciales?.parties || {}).length);
+      console.log('Lignes spéciales sous-parties:', Object.keys(legacyDevis.lignes_speciales?.sousParties || {}).length);
+      console.log('Lignes display globales:', legacyDevis.lignes_display?.global?.length || 0);
+      console.log('Lignes display parties:', Object.keys(legacyDevis.lignes_display?.parties || {}).length);
+      console.log('Lignes display sous-parties:', Object.keys(legacyDevis.lignes_display?.sousParties || {}).length);
+      console.log('Client IDs:', legacyDevis.client);
+      console.log('Chantier ID:', legacyDevis.chantier);
+      console.log('Devis chantier:', legacyDevis.devis_chantier);
+      console.log('Coûts estimés:', {
+        cout_estime_main_oeuvre: legacyDevis.cout_estime_main_oeuvre,
+        cout_estime_materiel: legacyDevis.cout_estime_materiel
+      });
+      console.log('Totaux:', {
+        price_ht: legacyDevis.price_ht,
+        price_ttc: legacyDevis.price_ttc,
+        tva_rate: legacyDevis.tva_rate
+      });
+      console.log('===================================');
+      
+      alert('✅ Données à envoyer affichées dans la console (mode test)');
+      
+      // ❌ APPEL API DÉSACTIVÉ POUR LE TEST
+      // Décommenter ci-dessous pour activer l'envoi réel à l'API
+      /*
+      // Envoyer à l'API
+      const response = await axios.post('/api/devis/', legacyDevis);
+      
+      if (response.status === 201) {
+        // Succès : mettre à jour l'ID du devis pour les futures modifications
+        setDevisData(prev => ({ ...prev, id: response.data.id }));
+        alert('Devis sauvegardé avec succès!');
+        
+        // Si c'est un devis travaux et qu'un appel d'offres a été créé
+        if (response.data.appel_offres_id) {
+          alert(`Appel d'offres créé : ${response.data.appel_offres_name}`);
+        }
+      }
+      */
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du devis:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Erreur inconnue';
+      alert(`Erreur lors de la sauvegarde du devis:\n${errorMessage}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();
@@ -1717,30 +1848,91 @@ const DevisAvance = () => {
               Actions disponibles
             </h3>
             <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button style={{
-                backgroundColor: '#1976d2',
-                color: 'white',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-              }}>
-                💾 Sauvegarder le devis
+              <button 
+                onClick={handleSaveDevis}
+                disabled={isSaving}
+                style={{
+                  backgroundColor: isSaving ? '#6c757d' : '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  opacity: isSaving ? 0.6 : 1
+                }}
+              >
+                {isSaving ? '⏳ Sauvegarde...' : '💾 Sauvegarder le devis'}
               </button>
-              <button style={{
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-              }}>
+              <button 
+                onClick={async () => {
+                  try {
+                    // Valider les données avant transformation
+                    const validation = validateBeforeTransform({
+                      devisItems,
+                      devisData,
+                      selectedChantierId
+                    });
+                    
+                    if (!validation.valid) {
+                      alert(`Erreurs de validation:\n${validation.errors.join('\n')}`);
+                      return;
+                    }
+                    
+                    // Récupérer l'ID du client si nécessaire
+                    let finalClientId = clientId;
+                    if (!finalClientId && selectedChantierId) {
+                      finalClientId = await getClientIdFromChantier(selectedChantierId);
+                    }
+                    
+                    // Transformer les données vers le format legacy
+                    const legacyDevis = transformToLegacyFormat({
+                      devisItems,
+                      devisData: {
+                        ...devisData,
+                        price_ht: total_ht,
+                        price_ttc: montant_ttc
+                      },
+                      selectedChantierId,
+                      clientIds: finalClientId ? [finalClientId] : []
+                    });
+                    
+                    // Préparer les données pour la prévisualisation temporaire
+                    const previewData = {
+                      ...legacyDevis,
+                      chantier: selectedChantierId || -1,
+                      tempData: selectedChantierId === -1 ? {
+                        chantier: chantier,
+                        client: client,
+                        societe: societe
+                      } : {}
+                    };
+                    
+                    // Encoder les données pour l'URL
+                    const encodedData = encodeURIComponent(JSON.stringify(previewData));
+                    const previewUrl = `/api/preview-devis-v2/?devis=${encodedData}`;
+                    
+                    // Ouvrir dans un nouvel onglet
+                    window.open(previewUrl, '_blank');
+                  } catch (error) {
+                    console.error('Erreur lors de la prévisualisation:', error);
+                    alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
+                  }
+                }}
+                style={{
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
                 👁️ Aperçu PDF
               </button>
               <button style={{

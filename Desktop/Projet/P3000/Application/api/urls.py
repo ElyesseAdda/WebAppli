@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from .Devis_views import preview_saved_devis_v2, preview_devis_v2
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
@@ -7,7 +8,7 @@ from .views import (
     historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
     get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
     delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
-    list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, 
+    list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture,
     create_facture_from_devis,check_facture_numero, get_chantier_details, check_chantier_name, check_client, check_societe,
     calculate_special_lines, get_devis_special_lines, get_devis_factures, update_facture_status, get_fournisseurs,
     bon_commande_view, BonCommandeViewSet, get_products_by_fournisseur, preview_bon_commande, generate_bon_commande_number,
@@ -178,6 +179,7 @@ urlpatterns = [
     path('dashboard/resume/', DashboardViewSet.as_view({'get': 'resume'})),
     path('generate-pdf-from-preview/', generate_pdf_from_preview, name='generate_pdf_from_preview'),
     path('preview-devis/', preview_devis, name='preview_devis'),
+    path('preview-devis-v2/', preview_devis_v2, name='preview_devis_v2'),
     path('historique_stock/', historique_stock, name='historique_stock'),
     path('delete_events_by_agent_and_period/', delete_events_by_agent_and_period, name='delete-events-by-agent-and-period'),
     path('agents-with-work-days/', get_agents_with_work_days, name='agents-with-work-days'),
@@ -195,6 +197,7 @@ urlpatterns = [
     path('get-next-devis-number/', get_next_devis_number, name='get-next-devis-number'),
     path('chantier/<int:chantier_id>/relations/', get_chantier_relations, name='chantier-relations'),
     path('preview-saved-devis/<int:devis_id>/', preview_saved_devis, name='preview-saved-devis'),
+    path('preview-saved-devis-v2/<int:devis_id>/', preview_saved_devis_v2, name='preview-saved-devis-v2'),
     path('list-devis/<int:devis_id>/update_status/', update_devis_status, name='update_devis_status'),
     path('create-facture/', create_facture, name='create-facture'),
     path('preview-facture/<int:facture_id>/', preview_facture, name='preview-facture'),

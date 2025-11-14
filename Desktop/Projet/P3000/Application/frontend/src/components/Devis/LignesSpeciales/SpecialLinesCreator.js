@@ -357,7 +357,7 @@ const SpecialLinesCreator = ({
                     size="small"
                   >
                     - Réduction
-                  </Button>
+                  </Button>git 
                   <Button 
                     variant={newLine.type === "addition" ? "contained" : "outlined"}
                     onClick={() => setNewLine(prev => ({ ...prev, type: "addition" }))}

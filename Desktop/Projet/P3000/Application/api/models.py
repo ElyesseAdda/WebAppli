@@ -957,12 +957,25 @@ class DevisLigne(models.Model):
     quantite = models.DecimalField(max_digits=10, decimal_places=2)
     prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
     
+    # ✅ Index global pour le système unifié (position dans le devis)
+    index_global = models.DecimalField(
+        max_digits=10, 
+        decimal_places=3, 
+        default=0, 
+        blank=True,
+        null=True,
+        help_text="Position dans le devis (1.101, 1.102, 2.201, etc.)"
+    )
+    
     @property
     def total_ht(self):
         return self.quantite * self.prix_unitaire
 
     def __str__(self):
         return f"{self.ligne_detail.description} - {self.quantite} x {self.prix_unitaire}€"
+    
+    class Meta:
+        ordering = ['index_global']  # Trier par index_global par défaut
 
     
 
@@ -1130,11 +1143,11 @@ class Partie(models.Model):
         blank=True,
         help_text="Position dans le devis (0 = catalogue, >0 = système unifié)"
     )
-    numero = models.CharField(
-        max_length=50, 
+    numero = models.IntegerField(
+        default=0,
         blank=True, 
         null=True,
-        help_text="Numéro auto-généré: '1', '2', etc."
+        help_text="Numéro de la partie: 1, 2, 3, etc. (0 = pas de numéro)"
     )
     devis = models.ForeignKey(
         'Devis', 

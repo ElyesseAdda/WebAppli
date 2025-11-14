@@ -19,7 +19,11 @@ class DevisLigneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DevisLigne
-        fields = ['ligne_detail', 'quantite', 'prix_unitaire', 'total_ht']
+        fields = ['ligne_detail', 'quantite', 'prix_unitaire', 'total_ht', 'index_global']
+        # ✅ index_global peut être null/blank pour les anciens devis (default=0)
+        extra_kwargs = {
+            'index_global': {'required': False, 'allow_null': True}
+        }
 
     def get_total_ht(self, obj):
         return obj.quantite * obj.prix_unitaire
