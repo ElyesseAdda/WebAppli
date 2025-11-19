@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .Devis_views import preview_saved_devis_v2, preview_devis_v2
+from .SituationViews import preview_situation_v2
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
@@ -254,6 +255,7 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/last-situation/', get_last_situation, name='get-last-situation'),
     path('chantier/<int:chantier_id>/situations/', get_chantier_situations, name='chantier-situations'),
     path('preview-situation/<int:situation_id>/', preview_situation, name='preview-situation'),
+    path('preview-situation-v2/<int:situation_id>/', preview_situation_v2, name='preview-situation-v2'),
     path('generate-situation-pdf/', generate_situation_pdf, name='generate_situation_pdf'),
     path('chantier/<int:chantier_id>/bons-commande/', get_chantier_bons_commande, name='chantier-bons-commande'),
     path('chantier-stats/', get_chantier_stats, name='chantier-stats'),

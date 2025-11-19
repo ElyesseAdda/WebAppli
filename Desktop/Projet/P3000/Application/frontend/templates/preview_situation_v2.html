@@ -1,0 +1,1078 @@
+{% load static %}
+{% load phone_filters %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Prévisualisation de la Situation</title>
+    <style>
+      /* Import des polices Google Fonts pour assurer la compatibilité */
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+      
+      /* Style général */
+      body {
+        font-family: Arial, Helvetica, "Roboto", sans-serif;
+        font-size: 0.9rem;
+        margin-left: 0px;
+        width: 210mm;     /* Largeur A4 */
+        margin-right: 90px;
+        margin-top: 10px;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+      @page {
+        size: A4;
+        width: 210mm;     /* Largeur A4 */
+        height: 297mm;    /* Hauteur A4 */
+        margin: 10mm;
+        scale: 70%;
+      }
+      .bold {
+        font-weight: 700;
+      }
+
+      /* Style du tableau */
+      table {
+       width: 100%; 
+      }
+
+      /* Style pour les sections en bleu */
+      .partie {
+        background-color: rgba(27, 120, 188, 1);
+        color: white;
+        font-weight: bold;
+        padding: 0px;
+        padding-bottom: 15px;
+        text-align: left;
+        background-clip: content-box;
+        font-size: 0.8rem;
+        padding-top: 20px;
+        height: auto;
+        min-height: 20px;
+        line-height: 25px;
+      }
+      
+      .partie-text {
+        display: inline-block;
+        max-width: 345px;
+        word-wrap: break-word;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        vertical-align: top;
+      }
+      .sous-partie {
+        background-color: rgb(157, 197, 226);
+        color: black;
+        padding: 5px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.8rem;
+        height: auto;
+        min-height: 20px;
+        line-height: 20px;
+      }
+      
+      .sous-partie-text {
+        display: inline-block;
+        max-width: 345px;
+        word-wrap: break-word;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        vertical-align: top;
+      }
+      .ligne-details {
+        text-align: left;
+        width: 320px;
+        font-size: 0.8rem;
+        padding-left: 22px;
+        height: 20px;
+        padding-right: 7px;
+      }
+      .designation {
+        text-align: center;
+        width: 345px;
+        font-size: 0.8rem;
+        border: 2px solid black;
+      }
+      
+      .total {
+        text-align: right;
+        font-weight: bold;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .unite {
+        width: 35px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .unitetableau {
+        text-align: center;
+        font-size: 0.8rem;
+        width: 35px;
+        padding-right: 2px;
+      }
+      .quantite {
+        width: 55px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .quantitetableau {
+        text-align: center;
+        width: 55px;
+        font-size: 0.8rem;
+        padding-right: 2px;
+      }
+      .prix {
+        width: 75px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+      }
+      .prixtableau {
+        text-align: center;
+        font-size: 0.8rem;
+        width: 75px;
+        padding-right: 3px;
+      }
+      .totalHt {
+        width: 82px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.9rem;
+      }
+      .totalHttableau {
+        text-align: center;
+        width: 85px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding-right: 2px;
+      }
+      .pourcentage {
+        text-align: center;
+        width: 65px;
+        border: 2px solid black;
+        font-size: 0.9rem;
+      }
+      .pourcentagetitre {
+        text-align: center;
+        width: 65px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        border: 2px solid black;
+      }
+      .pourcentagetableau {
+        text-align: center;
+        width: 65px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding-right: 2px;
+      }
+      .montanttableau {
+        text-align: right;
+        width: 90px;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+      .bordertitre {
+        border: solid 2px black;
+        margin-bottom: 10px;
+      }
+      .border {
+        border: solid 2px black;
+        padding: 2px;
+      }
+     
+      .ghost-container {
+        position: relative;
+        margin: 0;
+        width: 100%;
+      }
+
+      .ghost-grid {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: grid;
+        grid-template-columns: 345px 35px 55px 75px 82px 65px 87px;
+        gap: 6px;
+        pointer-events: none;
+        height: calc(100% - 4px);
+      }
+
+      .ghost-cell {
+        border: 2px solid black;
+        margin: 0px;
+        background: transparent;
+        height: 100%;
+      }
+
+      .ghost-cell.text {
+        grid-column: 1;
+        width: 345px;
+      }
+
+      .ghost-cell.unite {
+        grid-column: 2;
+        width: 35px;
+      }
+
+      .ghost-cell.quantite {
+        grid-column: 3;
+        width: 55px;
+      }
+
+      .ghost-cell.prix {
+        grid-column: 4;
+        width: 75px;
+      }
+
+      .ghost-cell.total {
+        grid-column: 5;
+        width: 82px;
+      }
+
+      .ghost-cell.pourcentage {
+        grid-column: 6;
+        width: 65px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.9rem;
+      }
+
+      .ghost-cell.montant {
+        grid-column: 7;
+        width: 90px;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.9rem;
+      }
+
+      .client-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: 2fr;
+        grid-column-gap: 150px;
+        grid-row-gap: 0px;
+        margin-bottom: -30px;
+      }
+      .client-container h3 {
+        text-decoration: underline 1.5px black;
+        text-underline-offset: 2px;
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+      .client-container h4 {
+        font-size: 0.9rem;
+        font-weight: 800;
+        margin-bottom: 6px;
+      }
+      .client-container p {
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin: 2px 0px;
+        line-height: 1.2;
+      }
+      
+      .client-info {
+        line-height: 8px;
+        grid-area: 1 / 1 / 2 / 2;
+      }
+      .client-info h3 {
+        margin-bottom: 0px;
+      }
+      .client-info h4 {
+        margin-top: 12px;
+      }
+      .contact-info {
+        line-height: 7px;
+        grid-area: 1 / 2 / 2 / 3;
+        padding-left: 50px;
+      }
+      .contact-info h3 {
+        margin-bottom: 8px;
+      }
+      .contact-info h4 {
+        margin-top: 14px;
+      }
+       
+      .client-mail {
+        word-break: break-all;
+        overflow-wrap: break-word;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .client-info,
+      .contact-info {
+        margin-bottom: 10px;
+      }
+      .chantier-info {
+        line-height: 6px;
+      }
+      .chantier-info h2 {
+        font-weight: 700;
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+        text-decoration: underline 1.5px black;
+        text-underline-offset: 2px;
+      }
+      .chantier-info h3 {
+        margin-top: 0px;
+        margin-bottom: 0px;
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+      .chantier-info p {
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      .date {
+        font-size: 0.9rem;
+        text-align: left;
+        margin-top: 30px;
+        font-weight: 500;
+      }
+      .p3000-container {
+        padding-top: 0px;
+        padding-bottom: 20px;
+        display: grid;
+        grid-template-rows: 1fr;
+        grid-column-gap: 0px;
+        grid-row-gap: 0px;
+      }
+      .logo-container {
+        grid-area: 1 / 1 / 2 / 2;
+        width: 300px;
+      }
+      .logo {
+        width: 220px;
+        height: 140px;
+      }
+      .P3000-info {
+        grid-area: 1 / 2 / 2 / 3;
+        color: rgba(27, 120, 188, 1);
+        text-align: right;
+        font-weight: 600;
+      }
+      .P3000-info p {
+        font-size: 0.9rem;
+        font-style: italic;
+        line-height: 10px;
+        font-weight: 500;
+      }
+      .P3000-info h2 {
+        letter-spacing: -1px;
+        text-decoration: none;
+        font-style: normal;
+        font-size: 26px;
+        font-weight: 700;
+        margin: 0px;
+      }
+      .header {
+        padding: 1px;
+        border: solid 2px black;
+      }
+      .header h1 {
+        font-size: 20px;
+        margin: 1px;
+        border: solid 2px black;
+        text-decoration: none;
+      }
+      .header,
+      .footer {
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      h2 {
+        text-decoration: underline 2px black;
+      }
+
+      .recap-table {
+        width: 100%;
+        margin-top: 20px;
+        border: 2px solid black;
+      }
+
+      .recap-table th {
+        color: black;
+        text-align: center;
+        border: 2px solid black;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .recap-table td {
+        border: 2px solid black;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding: 0px;
+      }
+
+      .recap-table tr {
+        margin-bottom: 10px;
+      }
+
+      .recap-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+
+      .recap-line-spacer {
+        height: 8px;
+        border-bottom: 2px solid black;
+        margin-bottom: 0;
+      }
+
+      .montant-row {
+        background-color: rgba(27, 120, 188, 1);
+        color: white;
+      }
+
+      .label {
+        text-align: left;
+      }
+
+      .montanta {
+        text-align: right;
+        min-width: 100px;
+      }
+
+      .nature-travaux {
+        margin-top: 0px;
+        line-height: 6px;
+      }
+
+      .nature-travaux h5 {
+        font-weight: 700;
+        font-size: 0.8rem;
+        margin-bottom: 15px;
+        margin-top: 6px;
+        text-decoration: underline 1.5px black;
+      }
+
+      .nature-travaux p {
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-top: 10px;
+      }
+
+      .special-line {
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+      .special-line-text {
+        max-width: 300px;
+        word-wrap: break-word;
+        word-break: break-word;
+        display: inline-block;
+      }
+      .special-line-wrapper {
+        padding: 0 !important;
+        border: none !important;
+      }
+      .special-line-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .special-line-table td {
+        border: none !important;
+      }
+      .special-line-amount {
+        text-decoration: none !important;
+        display: inline-block;
+        width: 100%;
+      }
+
+      .special-line-spacer {
+        height: 8px;
+        background: transparent;
+      }
+
+      .highlighted {
+        background-color: yellow;
+        color: #dc3545;
+        font-weight: bold;
+      }
+
+      /* Styles pour les lignes spéciales de type 'display' */
+      .display-only {
+        background-color: #f8f9fa !important;
+        border-left: 3px solid #6c757d;
+      }
+      .display-line {
+        font-style: italic;
+        color: #6c757d;
+      }
+      .display-only.highlighted {
+        background-color: yellow !important;
+        color: #dc3545 !important;
+        font-weight: bold;
+        border-left: 3px solid #dc3545;
+      }
+      .display-only.highlighted .display-line {
+        font-style: normal;
+        color: #dc3545 !important;
+        font-weight: bold;
+      }
+
+      .footer {
+        font-size: 0.9rem;
+        font-weight: 500;
+        width: 792px;
+        text-align: left;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="p3000-container">
+      <div class="logo-container">
+        <img class="logo" src="{% static 'logo.png' %}" alt="" />
+      </div>
+      <div class="P3000-info">
+        <h2>SARL PEINTURE 3000</h2>
+        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+        <p>13014 - Marseille</p>
+        <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
+        <p>N°Siren: 532 875 317 RCS Marseille</p>
+        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
+      </div>
+    </div>
+
+    <div class="client-container">
+      <div class="client-info">
+        <h3>Client:</h3>
+        <h4>{{ societe.nom }}</h4>
+        <p>{{ societe.rue }}</p>
+        <p>{{ societe.codepostal_societe }}, {{ societe.ville }}</p>
+      </div>
+
+      <div class="contact-info">
+        <h3>Contact:</h3>
+        <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.prenom }} {{ client.nom }}</p>
+        {% if client.poste %}<p>{{ client.poste }}</p>{% endif %}
+        <p class="client-mail">Mail: {{ client.client_mail }}</p>
+        <p>
+          Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="date">
+      <p>A Marseille, le {{ situation.date_creation|date:"d/m/Y" }}</p>
+    </div>
+
+    <div class="header">
+      <h1>{{ situation.numero_situation }}</h1>
+    </div>
+
+    <div class="header-info" style="display: flex; justify-content: space-between;">
+      <div class="adresse-chantier" style="width: 50%;">
+        <div class="chantier-info">
+          <h2>ADRESSE DU CHANTIER :</h2>
+          <h3>{{ chantier.nom }}</h3>
+          <p>{{ chantier.rue }}</p>
+          <p>{{ chantier.ville }}</p>
+        </div>
+      </div>
+      <div style="width: 50%;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">Montant du marché HT:</strong>
+          <span class="montanta" style="font-size: 0.8rem;font-weight: 700;">{{ total_marche_ht|format_montant_espace }}</span>
+        </div>
+        {% if total_avenants != 0 %}
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">Avenant HT:</strong>
+          <span class="montanta" style="font-size: 0.8rem;font-weight: 700;">{{ total_avenants|format_montant_espace }}</span>
+        </div>
+        {% endif %}
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">% Avancement:</strong>
+          <span class="pourcentagetableau" style="font-size: 0.8rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|format_montant_espace }}%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; ">
+          <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">Montant total des travaux HT</strong>
+          <span class="montanta" style="font-size: 0.8rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: right;width: 150px;padding-right: 5px;">{{ situation.montant_total_travaux|format_montant_espace }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tableau principal -->
+    <div class="bordertitre" style="position: relative; z-index: 1 ">
+      <table>
+        <thead>
+          <tr>
+            <th class="designation">DESIGNATION</th>
+            <th class="unite">U</th>
+            <th class="quantite">Quantité</th>
+            <th class="prix">Prix <br>Unitaire</th>
+            <th class="totalHt">Total HT</th>
+            <th class="pourcentagetitre">AV %</th>
+            <th class="totalHt">TOTAL</th>
+          </tr>
+        </thead>
+      </table>
+    </div>
+
+    <div class="border" style="padding: 2px">
+      <div class="ghost-container">
+        <!-- Grille fantôme -->
+        <div class="ghost-grid"> 
+          <div class="ghost-cell text"></div>
+          <div class="ghost-cell unite"></div>
+          <div class="ghost-cell quantite"></div>
+          <div class="ghost-cell prix"></div>
+          <div class="ghost-cell total"></div>
+          <div class="ghost-cell pourcentage"></div>
+          <div class="ghost-cell montant"></div>
+        </div>
+        <table>
+          <tbody>
+            <tr>
+              <td colspan="7">
+                {% if devis.nature_travaux %}
+                <div class="nature-travaux">
+                  <h5>Nature des travaux :</h5>
+                  <p style="text-transform: uppercase;">{{ devis.nature_travaux }}</p>
+                </div>
+                {% endif %}
+              </td>
+            </tr>
+            {% for partie in parties %}
+            <tr class="partie">
+              <td class="partie" colspan="7">
+                <span class="partie-text">
+                  {% if partie.numero %}{{ partie.numero }} - {% endif %}{{ partie.titre }}
+                </span>
+                <span style="float: right">
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ partie.montant_avancement|format_montant_espace }}</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ partie.pourcentage|floatformat:2 }} %</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ partie.total_partie|format_montant_espace }}</span>
+                </span>
+              </td>
+            </tr>
+            {% for special_line in partie.special_lines %}
+            <tr class="special-line-spacer"><td colspan="7"></td></tr>
+            <tr class="special-line-row">
+              <td colspan="7" class="special-line-wrapper">
+                <table class="special-line-table">
+                  <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                    <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                      <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                    </td>
+                    <td class="totalHttableau"></td>
+                    <td class="pourcentagetableau"></td>
+                    <td class="totalHttableau"></td>
+                    <td class="totalHttableau">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                        {% if special_line.type == 'reduction' %}-{% endif %}
+                        {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                        {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                    </td>
+                    <td class="pourcentagetableau"></td>
+                    <td class="montanttableau" data-style="{{ special_line.style_attr }}">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                        {% if special_line.type == 'reduction' %}-{% endif %}
+                        {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                        {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% endfor %}
+            {% for sous_partie in partie.sous_parties %}
+            {% if sous_partie.description != "Lignes directes" %}
+            <tr class="sous-partie">
+              <td colspan="7">
+                <span class="sous-partie-text">
+                  {% if sous_partie.numero %}{{ sous_partie.numero }} {% endif %}{{ sous_partie.description }}
+                </span>
+                <span style="float: right">
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ sous_partie.montant_avancement|format_montant_espace }}</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;">{{ sous_partie.pourcentage|floatformat:2 }} %</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ sous_partie.total_sous_partie|format_montant_espace }}</span>
+                </span>
+              </td>
+            </tr>
+            {% for special_line in sous_partie.special_lines %}
+            <tr class="special-line-spacer"><td colspan="7"></td></tr>
+            <tr class="special-line-row">
+              <td colspan="7" class="special-line-wrapper">
+                <table class="special-line-table">
+                  <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                    <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                      <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                    </td>
+                    <td class="totalHttableau"></td>
+                    <td class="pourcentagetableau"></td>
+                    <td class="totalHttableau"></td>
+                    <td class="totalHttableau">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                        {% if special_line.type == 'reduction' %}-{% endif %}
+                        {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                        {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                    </td>
+                    <td class="pourcentagetableau"></td>
+                    <td class="montanttableau" data-style="{{ special_line.style_attr }}">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                        {% if special_line.type == 'reduction' %}-{% endif %}
+                        {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                        {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+            {% for ligne in sous_partie.lignes_details %}
+            <tr>
+              <td class="ligne-details">{{ ligne.description }}</td>
+              <td class="unitetableau">{{ ligne.unite }}</td>
+              <td class="quantitetableau">{{ ligne.quantity }}</td>
+              <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }}</td>
+              <td class="totalHttableau">{{ ligne.total_ht|format_montant_espace }}</td>
+              <td class="pourcentagetableau">{{ ligne.pourcentage|floatformat:2 }} %</td>
+              <td class="montanttableau">{{ ligne.montant_situation|format_montant_espace }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            {% endfor %}
+            
+            {% for special_line in special_lines_global %}
+            <tr class="special-line-spacer"><td colspan="7"></td></tr>
+            <tr class="special-line-row">
+              <td colspan="7" class="special-line-wrapper">
+                <table class="special-line-table">
+                  <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                    <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                      <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                    </td>
+                    <td class="totalHttableau"></td>
+                    <td class="pourcentagetableau"></td>
+                    <td class="totalHttableau"></td>
+                    <td class="totalHttableau">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                        {% if special_line.type == 'reduction' %}-{% endif %}
+                        {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                        {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                    </td>
+                    <td class="pourcentagetableau"></td>
+                    <td class="montanttableau" data-style="{{ special_line.style_attr }}">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                        {% if special_line.type == 'reduction' %}-{% endif %}
+                        {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                        {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% endfor %}
+
+            {% if lignes_avenant %}
+            <!-- Section Avenants -->
+            <tr>
+              <td colspan="7" class="partie">
+                <span class="partie-text">Avenants</span>
+              </td>
+            </tr>
+            {% for avenant in lignes_avenant %}
+            <tr class="sous-partie">
+              <td colspan="7">
+                <span class="sous-partie-text">Avenant N°{{ avenant.numero }}</span>
+                <span style="float: right">
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|format_montant_espace }}</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(5px);">{{ avenant.pourcentage_avenant|floatformat:2 }} %</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ avenant.total_avenant|format_montant_espace }}</span>
+                </span>
+              </td>
+            </tr>
+            {% for ligne in avenant.lignes %}
+            <tr>
+              <td class="ligne-details">{{ ligne.devis_numero }}</td>
+              <td class="unitetableau" style="font-size: 0.7rem;">Forf</td>
+              <td class="quantitetableau">1,00</td>
+              <td class="prixtableau">{{ ligne.montant_ht|format_montant_espace }}</td>
+              <td class="totalHttableau">{{ ligne.montant_ht|format_montant_espace }}</td>
+              <td class="pourcentagetableau">{{ ligne.pourcentage_actuel|floatformat:2 }} %</td>
+              <td class="montanttableau">{{ ligne.montant|format_montant_espace }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            {% endif %}
+
+            <!-- Ligne du montant global -->
+            <tr style="margin-top: 20px;">
+              <td colspan="7" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
+                <span style="max-width: 300px; word-wrap: break-word; display: inline-block; padding-left: 100px;">MONTANT GLOBAL HT</span>
+                <span style="float: right; margin-left: 20px;">
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ situation.montant_total_cumul_ht|format_montant_espace }}</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ situation.pourcentage_avancement|floatformat:2 }} %</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;transform: translateX(10px)">{{ total_ht|format_montant_espace }}</span>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Totaux HT, TVA et TTC -->
+    <table class="recap-table">
+      <tr>
+        <th colspan="2">RÉCAPITULATIF</th>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label">- Montant total cumul HT</span>
+            <span class="montanta">{{ situation.montant_total_cumul_ht|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label">- Cumuls mois précédents HT</span>
+            <span class="montanta">{{ situation.cumul_precedent|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label">- Montant du mois HT</span>
+            <span class="montanta">{{ situation.montant_ht_mois|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      {% if situation.retenue_garantie > 0 %}
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label" style="color: red;font-weight: 700;">- RG {{ situation.taux_retenue_garantie|format_taux_propre }}% HT du mois</span>
+            <span class="montanta" style="color: red;font-weight: 700;">-{{ situation.retenue_garantie|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      {% endif %}
+      {% if situation.montant_prorata != 0 %}
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label" style="color: red;font-weight: 700;">- Compte prorata {{ situation.taux_prorata }}% HT du mois</span>
+            <span class="montanta" style="color: red;font-weight: 700;">-{{ situation.montant_prorata|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      {% endif %}
+      {% for ligne in lignes_supplementaires %}
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label" style="color: red;font-weight: 700;">- {{ ligne.description }}</span>
+            <span class="montanta" style="color: red;font-weight: 700;">
+              {% if ligne.type == 'deduction' %}-{% endif %}
+              {{ ligne.montant|format_montant_espace }}
+            </span>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if situation.retenue_cie != 0 %}
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label" style="color: red;font-weight: 700;">- CIE HT du mois</span>
+            <span class="montanta" style="color: red;font-weight: 700;">
+              {% if situation.type_retenue_cie == 'deduction' %}-{% endif %}{{ situation.retenue_cie|format_montant_espace }}
+            </span>
+          </div>
+        </td>
+      </tr>
+      {% endif %}
+      <tr class="total-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line" style="background-color: rgba(27, 120, 188, 1); color: white;">
+            <span class="label" style="font-weight: bold;">- Montant total du mois HT après retenues</span>
+            <span class="montanta" style="font-weight: bold;">{{ situation.montant_apres_retenues|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="tva-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label">- TVA 20%</span>
+            <span class="montanta">{{ situation.tva|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2">
+          <div class="recap-line-spacer"></div>
+          <div class="recap-line">
+            <span class="label">- Montant total T.T.C. à payer</span>
+            <span class="montanta">{{ montant_ttc|format_montant_espace }}</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+    <div class="footer">
+      <span>Signature suivie de la mention "BON POUR ACCORD"</span>
+      <div class="taux-info" style="margin-top: 10px; font-size: 0.8rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <span>Taux d'escompte en cas de paiement anticipé :</span>
+          <span>2%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <span>Taux de pénalité de retard :</span>
+          <span>0,80%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>Indemnité forfaitaire de recouvrement</span>
+          <span>40,00 €</span>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+    function formatNumber(number) {
+        let parts = Number(number).toFixed(2).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        return parts.join('.');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Formater les nombres
+        const elements = document.querySelectorAll('.totalHttableau, .montanttableau, .prixtableau, .montanta, .pourcentagetableau, .centaine');
+        elements.forEach(element => {
+            const text = element.textContent;
+            const number = parseFloat(text.replace(/[^0-9.-]+/g, ''));
+            if (!isNaN(number)) {
+                const formattedNumber = formatNumber(number);
+                element.textContent = element.textContent.replace(
+                    number.toFixed(2), 
+                    formattedNumber
+                );
+            }
+        });
+        
+        // Formater le numéro de téléphone
+        const phoneElement = document.getElementById('phone-number');
+        if (phoneElement && phoneElement.textContent.trim()) {
+            const phoneNumber = phoneElement.textContent.trim();
+            if (phoneNumber.length === 9) {
+                const phoneWithZero = '0' + phoneNumber;
+                const formatted = phoneWithZero.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                phoneElement.textContent = formatted;
+            } else if (phoneNumber.length >= 10) {
+                const formatted = phoneNumber.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+                phoneElement.textContent = formatted;
+            }
+        }
+
+        // Appliquer les styles dynamiques transmis via data-style
+        document.querySelectorAll('[data-style]').forEach((element) => {
+            const styleValue = element.getAttribute('data-style');
+            if (styleValue) {
+                // Si l'élément est dans une cellule totalHttableau ou montanttableau, retirer text-align du style
+                if (element.classList.contains('totalHttableau') || element.classList.contains('montanttableau') || element.closest('.totalHttableau') || element.closest('.montanttableau')) {
+                    const styleWithoutTextAlign = styleValue.replace(/text-align\s*:\s*[^;]+;?/gi, '').trim();
+                    const cleanedStyle = styleWithoutTextAlign.replace(/;;+/g, ';').replace(/^;|;$/g, '');
+                    if (cleanedStyle) {
+                        element.setAttribute('style', cleanedStyle);
+                    }
+                } else {
+                    element.setAttribute('style', styleValue);
+                }
+            }
+        });
+    });
+    </script>
+  </body>
+</html>
+

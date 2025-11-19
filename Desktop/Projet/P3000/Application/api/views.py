@@ -3236,7 +3236,7 @@ def get_chantier_relations(request):
 
 def is_new_system_devis(devis):
     """
-    Détecte si un devis utilise le nouveau système (avec index_global)
+    Détecte si un devis utilise le nouveau système (avec index_global et parties_metadata)
     Utilise la même logique que DevisSerializer
     """
     # Vérifier si le devis a des DevisLigne avec index_global > 0
@@ -3252,7 +3252,13 @@ def is_new_system_devis(devis):
         LigneDetail.objects.filter(devis=devis, index_global__gt=0).exists()
     )
     
-    return has_unified_lignes or has_unified_items
+    # Vérifier si parties_metadata existe et contient des données
+    has_parties_metadata = (
+        devis.parties_metadata and 
+        devis.parties_metadata.get('selectedParties', [])
+    )
+    
+    return has_unified_lignes or has_unified_items or bool(has_parties_metadata)
 
 
 @api_view(['GET'])
@@ -6242,6 +6248,12 @@ def preview_situation(request, situation_id):
     try:
         situation = get_object_or_404(Situation, id=situation_id)
         devis = situation.devis
+        
+        # Vérifier si le devis utilise le nouveau système
+        if is_new_system_devis(devis):
+            # Rediriger vers preview_situation_v2 pour le nouveau système
+            from django.shortcuts import redirect
+            return redirect(f'/api/preview-situation-v2/{situation_id}/')
         chantier = situation.chantier
         societe = chantier.societe
         client = societe.client_name

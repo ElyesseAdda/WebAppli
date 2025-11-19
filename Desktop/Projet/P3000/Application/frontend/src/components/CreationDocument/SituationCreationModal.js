@@ -991,8 +991,20 @@ const SituationCreationModal = ({
     // Créer un map pour accéder rapidement aux lignes du devis par ligne_detail_id
     const lignesDevisMap = new Map();
     devisLignes.forEach(ligne => {
-      if (ligne.ligne_detail) {
-        lignesDevisMap.set(ligne.ligne_detail, ligne);
+      // ligne.ligne_detail peut être un ID (number) ou un objet avec un id
+      const ligneDetailId = typeof ligne.ligne_detail === 'object' 
+        ? ligne.ligne_detail?.id 
+        : ligne.ligne_detail;
+      if (ligneDetailId) {
+        lignesDevisMap.set(ligneDetailId, ligne);
+      }
+    });
+    
+    // Créer aussi un map par ID de DevisLigne pour accès direct
+    const devisLignesByIdMap = new Map();
+    devisLignes.forEach(ligne => {
+      if (ligne.id) {
+        devisLignesByIdMap.set(ligne.id, ligne);
       }
     });
 
@@ -1035,21 +1047,47 @@ const SituationCreationModal = ({
             if (sousPartie) {
               // Récupérer les données complètes de la ligne depuis DevisLigne
               const ligneDevis = lignesDevisMap.get(item.id);
-              const quantite = ligneDevis ? parseFloat(ligneDevis.quantite || 0) : parseFloat(item.quantite || 0);
-              const prixUnitaire = ligneDevis ? parseFloat(ligneDevis.prix_unitaire || 0) : parseFloat(item.prix || 0);
-              const totalHT = ligneDevis ? parseFloat(ligneDevis.total_ht || 0) : (quantite * prixUnitaire);
               
-              sousPartie.lignes.push({
-                id: ligneDevis?.id || item.id,
-                description: item.description,
-                quantite: quantite,
-                prix_unitaire: prixUnitaire,
-                total_ht: totalHT,
-                ligne_detail_id: item.id,
-                index_global: ligneDevis?.index_global || item.index_global || 0,
-                pourcentage_actuel: 0,
-                pourcentage_precedent: 0
-              });
+              // Si aucune ligne n'est trouvée, chercher dans toutes les lignes du devis
+              let ligneDevisFinale = ligneDevis;
+              if (!ligneDevisFinale) {
+                // Chercher une ligne qui correspond à cette LigneDetail
+                ligneDevisFinale = devisLignes.find(l => {
+                  const ligneDetailId = typeof l.ligne_detail === 'object' 
+                    ? l.ligne_detail?.id 
+                    : l.ligne_detail;
+                  return ligneDetailId === item.id;
+                });
+              }
+              
+              const quantite = ligneDevisFinale ? parseFloat(ligneDevisFinale.quantite || 0) : parseFloat(item.quantite || 0);
+              const prixUnitaire = ligneDevisFinale ? parseFloat(ligneDevisFinale.prix_unitaire || 0) : parseFloat(item.prix || 0);
+              const totalHT = ligneDevisFinale ? parseFloat(ligneDevisFinale.total_ht || 0) : (quantite * prixUnitaire);
+              
+              // S'assurer qu'on a bien une DevisLigne avec un ID avant d'ajouter la ligne
+              if (ligneDevisFinale && ligneDevisFinale.id) {
+                sousPartie.lignes.push({
+                  id: ligneDevisFinale.id, // ✅ Toujours utiliser l'ID de DevisLigne
+                  description: item.description,
+                  quantite: quantite,
+                  prix_unitaire: prixUnitaire,
+                  total_ht: totalHT,
+                  ligne_detail_id: item.id,
+                  index_global: ligneDevisFinale.index_global || item.index_global || 0,
+                  pourcentage_actuel: 0,
+                  pourcentage_precedent: 0
+                });
+              } else {
+                console.warn(`⚠️ Aucune DevisLigne trouvée pour LigneDetail ID ${item.id}. Cette ligne sera ignorée.`, {
+                  item,
+                  ligneDevis,
+                  ligneDevisFinale,
+                  devisLignes: devisLignes.map(l => ({
+                    id: l.id,
+                    ligne_detail: l.ligne_detail
+                  }))
+                });
+              }
             }
           }
         }

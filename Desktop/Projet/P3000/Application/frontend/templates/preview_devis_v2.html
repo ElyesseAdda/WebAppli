@@ -633,7 +633,7 @@
                   <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
                       <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
                   </td>
-                  <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                  <td class="totalHttableau">
                       {% if special_line.type != 'display' %}
                       <span class="special-line-amount">
                           {% if special_line.type == 'reduction' %}-{% endif %}
@@ -812,7 +812,18 @@
         document.querySelectorAll('[data-style]').forEach((element) => {
             const styleValue = element.getAttribute('data-style');
             if (styleValue) {
-                element.setAttribute('style', styleValue);
+                // Si l'élément est dans une cellule totalHttableau, retirer text-align du style
+                if (element.classList.contains('totalHttableau') || element.closest('.totalHttableau')) {
+                    // Retirer text-align du style
+                    const styleWithoutTextAlign = styleValue.replace(/text-align\s*:\s*[^;]+;?/gi, '').trim();
+                    // Nettoyer les points-virgules multiples
+                    const cleanedStyle = styleWithoutTextAlign.replace(/;;+/g, ';').replace(/^;|;$/g, '');
+                    if (cleanedStyle) {
+                        element.setAttribute('style', cleanedStyle);
+                    }
+                } else {
+                    element.setAttribute('style', styleValue);
+                }
             }
         });
     });
