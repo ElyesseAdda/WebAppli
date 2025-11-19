@@ -128,7 +128,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
           </IconButton>
         </TableCell>
         <TableCell sx={{ width: "300px", padding: "8px" }}>
-          {partie.titre}
+          {partie.numero && !partie.numero.startsWith('?') ? `${partie.numero} - ` : ""}{partie.titre}
         </TableCell>
         <TableCell
           sx={{ width: "100px", padding: "8px" }}
@@ -268,91 +268,119 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                   />
                 )
               )}
-              {/* Lignes spéciales de la partie */}
-              {lignesSpecialesPartie.map((ligne, index) => (
-                <TableRow
-                  key={ligne.id}
-                  sx={{
-                    backgroundColor:
-                      index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
-                    "& td": { padding: "8px" },
-                  }}
-                >
-                  <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
-                  <TableCell sx={{ width: "300px", padding: "8px" }}>
-                    {ligne.description}
-                    <Typography
-                      variant="caption"
-                      display="block"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      Ligne spéciale partie
-                    </Typography>
-                  </TableCell>
-                  <TableCell
-                    sx={{ width: "100px", padding: "8px" }}
-                    align="right"
-                  ></TableCell>
-                  <TableCell
-                    sx={{ width: "120px", padding: "8px" }}
-                    align="right"
-                  ></TableCell>
-                  <TableCell
-                    sx={{ width: "120px", padding: "8px" }}
-                    align="right"
-                  >
-                    {ligne.type === "reduction" ? "-" : ""}
-                    {parseFloat(ligne.montant_ht)
-                      .toFixed(2)
-                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                    €
-                  </TableCell>
-                  <TableCell
-                    sx={{ width: "120px", padding: "8px" }}
-                    align="right"
-                  >
-                    <TextField
-                      type="number"
-                      value={ligne.pourcentage_actuel || 0}
-                      onChange={(e) =>
-                        handlePourcentageChange(
-                          ligne.id,
-                          e.target.value,
-                          "special"
-                        )
-                      }
-                      onFocus={(e) => e.target.select()}
-                      InputProps={{
-                        inputProps: {
-                          min: 0,
-                          max: 100,
-                          step: "any",
-                        },
-                      }}
-                      size="small"
+              {/* Lignes spéciales de la partie - Trier par index_global si disponible */}
+              {lignesSpecialesPartie
+                .sort((a, b) => (a.index_global || 0) - (b.index_global || 0))
+                .map((ligne, index) => {
+                  // ✅ Appliquer les styles de la ligne spéciale
+                  const ligneStyles = ligne.styles || {};
+                  return (
+                    <TableRow
+                      key={ligne.id}
                       sx={{
-                        width: "100px",
-                        "& input": {
-                          textAlign: "right",
-                        },
+                        backgroundColor:
+                          index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                        "& td": { padding: "8px" },
                       }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sx={{ width: "120px", padding: "8px" }}
-                    align="right"
-                  >
-                    {ligne.type === "reduction" ? "-" : ""}
-                    {(
-                      (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) /
-                      100
-                    )
-                      .toFixed(2)
-                      .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                    €
-                  </TableCell>
-                </TableRow>
-              ))}
+                    >
+                      <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
+                      <TableCell 
+                        sx={{ 
+                          width: "300px", 
+                          padding: "8px",
+                          // ✅ Appliquer les styles de la ligne spéciale
+                          fontWeight: ligneStyles.fontWeight || 'normal',
+                          fontStyle: ligneStyles.fontStyle || 'normal',
+                          textDecoration: ligneStyles.textDecoration || 'none',
+                          color: ligneStyles.color || 'inherit',
+                          backgroundColor: ligneStyles.backgroundColor || 'transparent',
+                          textAlign: ligneStyles.textAlign || 'left',
+                        }}
+                      >
+                        {ligne.description}
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          sx={{ color: "text.secondary" }}
+                        >
+                          Ligne spéciale partie
+                        </Typography>
+                      </TableCell>
+                      <TableCell
+                        sx={{ width: "100px", padding: "8px" }}
+                        align="right"
+                      ></TableCell>
+                      <TableCell
+                        sx={{ width: "120px", padding: "8px" }}
+                        align="right"
+                      ></TableCell>
+                      <TableCell
+                        sx={{ 
+                          width: "120px", 
+                          padding: "8px",
+                          fontWeight: ligneStyles.fontWeight || 'normal',
+                          color: ligneStyles.color || 'inherit',
+                        }}
+                        align="right"
+                      >
+                        {ligne.type === "reduction" ? "-" : ""}
+                        {parseFloat(ligne.montant_ht)
+                          .toFixed(2)
+                          .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                        €
+                      </TableCell>
+                      <TableCell
+                        sx={{ width: "120px", padding: "8px" }}
+                        align="right"
+                      >
+                        <TextField
+                          type="number"
+                          value={ligne.pourcentage_actuel || 0}
+                          onChange={(e) =>
+                            handlePourcentageChange(
+                              ligne.id,
+                              e.target.value,
+                              "special"
+                            )
+                          }
+                          onFocus={(e) => e.target.select()}
+                          InputProps={{
+                            inputProps: {
+                              min: 0,
+                              max: 100,
+                              step: "any",
+                            },
+                          }}
+                          size="small"
+                          sx={{
+                            width: "100px",
+                            "& input": {
+                              textAlign: "right",
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell
+                        sx={{ 
+                          width: "120px", 
+                          padding: "8px",
+                          fontWeight: ligneStyles.fontWeight || 'bold',
+                          color: ligneStyles.color || 'inherit',
+                        }}
+                        align="right"
+                      >
+                        {ligne.type === "reduction" ? "-" : ""}
+                        {(
+                          (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) /
+                          100
+                        )
+                          .toFixed(2)
+                          .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                        €
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
             </Box>
           </Collapse>
         </TableCell>
@@ -424,7 +452,7 @@ const SousPartieTable = ({
               </IconButton>
             </TableCell>
             <TableCell sx={{ width: "300px", padding: "8px" }}>
-              {sousPartie.description}
+              {sousPartie.numero ? `${sousPartie.numero} ` : ""}{sousPartie.description}
             </TableCell>
             <TableCell
               sx={{ width: "100px", padding: "8px" }}
@@ -539,88 +567,116 @@ const SousPartieTable = ({
                 </TableCell>
               </TableRow>
             ))}
-            {/* Lignes spéciales de la sous-partie */}
-            {lignesSpecialesSousPartie.map((ligne, index) => (
-              <TableRow
-                key={ligne.id}
-                sx={{
-                  backgroundColor:
-                    index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
-                  "& td": { padding: "8px" },
-                }}
-              >
-                <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
-                <TableCell sx={{ width: "300px", padding: "8px" }}>
-                  {ligne.description}
-                  <Typography
-                    variant="caption"
-                    display="block"
-                    sx={{ color: "text.secondary" }}
-                  >
-                    Ligne spéciale sous-partie
-                  </Typography>
-                </TableCell>
-                <TableCell
-                  sx={{ width: "100px", padding: "8px" }}
-                  align="right"
-                ></TableCell>
-                <TableCell
-                  sx={{ width: "120px", padding: "8px" }}
-                  align="right"
-                ></TableCell>
-                <TableCell
-                  sx={{ width: "120px", padding: "8px" }}
-                  align="right"
-                >
-                  {ligne.type === "reduction" ? "-" : ""}
-                  {parseFloat(ligne.montant_ht)
-                    .toFixed(2)
-                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                  €
-                </TableCell>
-                <TableCell
-                  sx={{ width: "120px", padding: "8px" }}
-                  align="right"
-                >
-                  <TextField
-                    type="number"
-                    value={ligne.pourcentage_actuel || 0}
-                    onChange={(e) =>
-                      handlePourcentageChange(
-                        ligne.id,
-                        e.target.value,
-                        "special"
-                      )
-                    }
-                    onFocus={(e) => e.target.select()}
-                    InputProps={{
-                      inputProps: {
-                        min: 0,
-                        max: 100,
-                        step: "any",
-                      },
-                    }}
-                    size="small"
+            {/* Lignes spéciales de la sous-partie - Trier par index_global si disponible */}
+            {lignesSpecialesSousPartie
+              .sort((a, b) => (a.index_global || 0) - (b.index_global || 0))
+              .map((ligne, index) => {
+                // ✅ Appliquer les styles de la ligne spéciale
+                const ligneStyles = ligne.styles || {};
+                return (
+                  <TableRow
+                    key={ligne.id}
                     sx={{
-                      width: "100px",
-                      "& input": {
-                        textAlign: "right",
-                      },
+                      backgroundColor:
+                        index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                      "& td": { padding: "8px" },
                     }}
-                  />
-                </TableCell>
-                <TableCell
-                  sx={{ width: "120px", padding: "8px" }}
-                  align="right"
-                >
-                  {ligne.type === "reduction" ? "-" : ""}
-                  {((ligne.montant_ht * (ligne.pourcentage_actuel || 0)) / 100)
-                    .toFixed(2)
-                    .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                  €
-                </TableCell>
-              </TableRow>
-            ))}
+                  >
+                    <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
+                    <TableCell 
+                      sx={{ 
+                        width: "300px", 
+                        padding: "8px",
+                        // ✅ Appliquer les styles de la ligne spéciale
+                        fontWeight: ligneStyles.fontWeight || 'normal',
+                        fontStyle: ligneStyles.fontStyle || 'normal',
+                        textDecoration: ligneStyles.textDecoration || 'none',
+                        color: ligneStyles.color || 'inherit',
+                        backgroundColor: ligneStyles.backgroundColor || 'transparent',
+                        textAlign: ligneStyles.textAlign || 'left',
+                      }}
+                    >
+                      {ligne.description}
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: "text.secondary" }}
+                      >
+                        Ligne spéciale sous-partie
+                      </Typography>
+                    </TableCell>
+                    <TableCell
+                      sx={{ width: "100px", padding: "8px" }}
+                      align="right"
+                    ></TableCell>
+                    <TableCell
+                      sx={{ width: "120px", padding: "8px" }}
+                      align="right"
+                    ></TableCell>
+                    <TableCell
+                      sx={{ 
+                        width: "120px", 
+                        padding: "8px",
+                        fontWeight: ligneStyles.fontWeight || 'normal',
+                        color: ligneStyles.color || 'inherit',
+                      }}
+                      align="right"
+                    >
+                      {ligne.type === "reduction" ? "-" : ""}
+                      {parseFloat(ligne.montant_ht)
+                        .toFixed(2)
+                        .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                      €
+                    </TableCell>
+                    <TableCell
+                      sx={{ width: "120px", padding: "8px" }}
+                      align="right"
+                    >
+                      <TextField
+                        type="number"
+                        value={ligne.pourcentage_actuel || 0}
+                        onChange={(e) =>
+                          handlePourcentageChange(
+                            ligne.id,
+                            e.target.value,
+                            "special"
+                          )
+                        }
+                        onFocus={(e) => e.target.select()}
+                        InputProps={{
+                          inputProps: {
+                            min: 0,
+                            max: 100,
+                            step: "any",
+                          },
+                        }}
+                        size="small"
+                        sx={{
+                          width: "100px",
+                          "& input": {
+                            textAlign: "right",
+                          },
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell
+                      sx={{ 
+                        width: "120px", 
+                        padding: "8px",
+                        fontWeight: ligneStyles.fontWeight || 'bold',
+                        color: ligneStyles.color || 'inherit',
+                      }}
+                      align="right"
+                    >
+                      {ligne.type === "reduction" ? "-" : ""}
+                      {((ligne.montant_ht * (ligne.pourcentage_actuel || 0)) / 100)
+                        .toFixed(2)
+                        .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                      €
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
       </Collapse>
@@ -917,17 +973,445 @@ const SituationCreationModal = ({
   const [numeroSituation, setNumeroSituation] = useState("");
   const [dateCreation, setDateCreation] = useState("");
 
+  // ✅ Détecter si le devis vient de DevisAvance.js via parties_metadata
+  const isFromDevisAvance = devis?.parties_metadata && 
+    devis.parties_metadata.selectedParties && 
+    devis.parties_metadata.selectedParties.length > 0;
+
+  // Fonction pour construire la structure depuis les items unifiés (DevisAvance)
+  const buildStructureFromUnifiedItems = (items, devisLignes = []) => {
+    // Trier tous les items par index_global
+    const sortedItems = [...items].sort((a, b) => 
+      (a.index_global || 0) - (b.index_global || 0)
+    );
+
+    const structureMap = new Map();
+    const lignesSpecialesList = [];
+
+    // Créer un map pour accéder rapidement aux lignes du devis par ligne_detail_id
+    const lignesDevisMap = new Map();
+    devisLignes.forEach(ligne => {
+      if (ligne.ligne_detail) {
+        lignesDevisMap.set(ligne.ligne_detail, ligne);
+      }
+    });
+
+    sortedItems.forEach(item => {
+      if (item.type === 'partie') {
+        structureMap.set(item.id, {
+          id: item.id,
+          titre: item.titre,
+          type_activite: item.type_activite,
+          index_global: item.index_global,
+          // ✅ Convertir le numéro en chaîne si présent
+          numero: item.numero !== null && item.numero !== undefined && item.numero !== '' 
+            ? String(item.numero) 
+            : null,
+          sous_parties: []
+        });
+      } else if (item.type === 'sous_partie') {
+        const partie = structureMap.get(item.partie_id);
+        if (partie) {
+          partie.sous_parties.push({
+            id: item.id,
+            description: item.description,
+            index_global: item.index_global,
+            // ✅ Convertir le numéro en chaîne si présent
+            numero: item.numero !== null && item.numero !== undefined && item.numero !== '' 
+              ? String(item.numero) 
+              : null,
+            lignes: []
+          });
+        }
+      } else if (item.type === 'ligne_detail') {
+        // Trouver la partie et sous-partie correspondantes
+        const sousPartieItem = sortedItems.find(i => 
+          i.type === 'sous_partie' && i.id === item.sous_partie_id
+        );
+        if (sousPartieItem) {
+          const partie = structureMap.get(sousPartieItem.partie_id);
+          if (partie) {
+            const sousPartie = partie.sous_parties.find(sp => sp.id === item.sous_partie_id);
+            if (sousPartie) {
+              // Récupérer les données complètes de la ligne depuis DevisLigne
+              const ligneDevis = lignesDevisMap.get(item.id);
+              const quantite = ligneDevis ? parseFloat(ligneDevis.quantite || 0) : parseFloat(item.quantite || 0);
+              const prixUnitaire = ligneDevis ? parseFloat(ligneDevis.prix_unitaire || 0) : parseFloat(item.prix || 0);
+              const totalHT = ligneDevis ? parseFloat(ligneDevis.total_ht || 0) : (quantite * prixUnitaire);
+              
+              sousPartie.lignes.push({
+                id: ligneDevis?.id || item.id,
+                description: item.description,
+                quantite: quantite,
+                prix_unitaire: prixUnitaire,
+                total_ht: totalHT,
+                ligne_detail_id: item.id,
+                index_global: ligneDevis?.index_global || item.index_global || 0,
+                pourcentage_actuel: 0,
+                pourcentage_precedent: 0
+              });
+            }
+          }
+        }
+      } else if (item.type === 'ligne_speciale') {
+        // Déterminer le niveau et les IDs de contexte depuis les données de la ligne spéciale
+        // Les lignes spéciales peuvent avoir context_type et context_id dans les items
+        let niveau = 'global';
+        let partie_id = null;
+        let sous_partie_id = null;
+        
+        // Si context_type et context_id sont présents dans l'item
+        if (item.context_type) {
+          niveau = item.context_type;
+          if (item.context_type === 'partie' && item.context_id) {
+            partie_id = item.context_id.toString();
+          } else if (item.context_type === 'sous_partie' && item.context_id) {
+            sous_partie_id = item.context_id.toString();
+            // Trouver la partie parente
+            const sousPartieItem = sortedItems.find(i => 
+              i.type === 'sous_partie' && i.id === item.context_id
+            );
+            if (sousPartieItem) {
+              partie_id = sousPartieItem.partie_id?.toString() || null;
+            }
+          }
+        }
+        
+        // Calculer le montant HT
+        let montantHT = 0;
+        if (item.value_type === 'percentage') {
+          // Pour les pourcentages, on a besoin du montant de base
+          // On utilisera le price_ht du devis comme base par défaut
+          montantHT = (devis.price_ht * parseFloat(item.value || 0)) / 100;
+        } else {
+          montantHT = parseFloat(item.value || 0);
+        }
+        
+        // Ajouter les lignes spéciales avec leurs styles et index_global
+        lignesSpecialesList.push({
+          id: item.id,
+          description: item.description,
+          type: item.type_speciale || 'display',
+          value: parseFloat(item.value || 0),
+          valueType: item.value_type || 'fixed',
+          niveau: niveau,
+          partie_id: partie_id,
+          sous_partie_id: sous_partie_id,
+          pourcentage_actuel: 0,
+          pourcentage_precedent: 0,
+          montant_ht: montantHT,
+          styles: item.styles || {}, // ✅ Inclure les styles
+          index_global: item.index_global || 0,
+          base_calculation: item.base_calculation || null
+        });
+      }
+    });
+
+    // Convertir la map en array et trier par index_global
+    const structureArray = Array.from(structureMap.values())
+      .sort((a, b) => (a.index_global || 0) - (b.index_global || 0));
+
+    // Trier les sous-parties et lignes par index_global
+    structureArray.forEach(partie => {
+      partie.sous_parties.sort((a, b) => (a.index_global || 0) - (b.index_global || 0));
+      partie.sous_parties.forEach(sp => {
+        sp.lignes.sort((a, b) => (a.index_global || 0) - (b.index_global || 0));
+      });
+    });
+
+    return { structure: structureArray, lignesSpeciales: lignesSpecialesList };
+  };
+
+  // Fonction pour convertir les lignes spéciales depuis le format legacy vers le format du modal
+  const convertLignesSpecialesFromLegacy = (lignesSpecialesLegacy, devisPriceHT, structure = []) => {
+    const lignesSpecialesList = [];
+    
+    if (!lignesSpecialesLegacy) {
+      return lignesSpecialesList;
+    }
+    
+    // Créer un map pour trouver rapidement la partie parente d'une sous-partie
+    const sousPartieToPartieMap = new Map();
+    structure.forEach(partie => {
+      partie.sous_parties.forEach(sp => {
+        sousPartieToPartieMap.set(sp.id.toString(), partie.id.toString());
+      });
+    });
+    
+    // Lignes spéciales globales
+    if (lignesSpecialesLegacy.global && Array.isArray(lignesSpecialesLegacy.global)) {
+      lignesSpecialesLegacy.global.forEach((ligne, index) => {
+        if (ligne.type !== 'display') {
+          const montantHT = ligne.montant_calcule || 
+            (ligne.valueType === 'percentage' 
+              ? (devisPriceHT * parseFloat(ligne.value || 0)) / 100 
+              : parseFloat(ligne.value || 0));
+          
+          lignesSpecialesList.push({
+            id: `global_${index}`,
+            description: ligne.description,
+            type: ligne.type,
+            value: parseFloat(ligne.value || 0),
+            valueType: ligne.valueType || 'fixed',
+            niveau: 'global',
+            partie_id: null,
+            sous_partie_id: null,
+            pourcentage_actuel: 0,
+            pourcentage_precedent: 0,
+            montant_ht: montantHT,
+            styles: ligne.styles || {},
+            index_global: ligne.index_global || 0
+          });
+        }
+      });
+    }
+    
+    // Lignes spéciales des parties
+    if (lignesSpecialesLegacy.parties) {
+      Object.keys(lignesSpecialesLegacy.parties).forEach((partieId) => {
+        const lignesPartie = lignesSpecialesLegacy.parties[partieId];
+        if (Array.isArray(lignesPartie)) {
+          lignesPartie.forEach((ligne, index) => {
+            if (ligne.type !== 'display') {
+              const montantHT = ligne.montant_calcule || 
+                (ligne.valueType === 'percentage' 
+                  ? (devisPriceHT * parseFloat(ligne.value || 0)) / 100 
+                  : parseFloat(ligne.value || 0));
+              
+              lignesSpecialesList.push({
+                id: `partie_${partieId}_${index}`,
+                description: ligne.description,
+                type: ligne.type,
+                value: parseFloat(ligne.value || 0),
+                valueType: ligne.valueType || 'fixed',
+                niveau: 'partie',
+                partie_id: partieId.toString(),
+                sous_partie_id: null,
+                pourcentage_actuel: 0,
+                pourcentage_precedent: 0,
+                montant_ht: montantHT,
+                styles: ligne.styles || {},
+                index_global: ligne.index_global || 0
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    // Lignes spéciales des sous-parties
+    if (lignesSpecialesLegacy.sousParties) {
+      Object.keys(lignesSpecialesLegacy.sousParties).forEach((sousPartieId) => {
+        const lignesSousPartie = lignesSpecialesLegacy.sousParties[sousPartieId];
+        if (Array.isArray(lignesSousPartie)) {
+          lignesSousPartie.forEach((ligne, index) => {
+            if (ligne.type !== 'display') {
+              const montantHT = ligne.montant_calcule || 
+                (ligne.valueType === 'percentage' 
+                  ? (devisPriceHT * parseFloat(ligne.value || 0)) / 100 
+                  : parseFloat(ligne.value || 0));
+              
+              // Trouver la partie parente depuis la structure
+              const partieId = sousPartieToPartieMap.get(sousPartieId.toString());
+              
+              lignesSpecialesList.push({
+                id: `souspartie_${sousPartieId}_${index}`,
+                description: ligne.description,
+                type: ligne.type,
+                value: parseFloat(ligne.value || 0),
+                valueType: ligne.valueType || 'fixed',
+                niveau: 'sous_partie',
+                partie_id: partieId || null,
+                sous_partie_id: sousPartieId.toString(),
+                pourcentage_actuel: 0,
+                pourcentage_precedent: 0,
+                montant_ht: montantHT,
+                styles: ligne.styles || {},
+                index_global: ligne.index_global || 0
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    return lignesSpecialesList;
+  };
+
   useEffect(() => {
     if (devis?.id) {
-      axios
-        .get(`/api/devis-structure/${devis.id}/structure/`)
-        .then((response) => {
-          setStructure(response.data);
-        })
-        .catch((error) => {
-          console.error("Erreur lors du chargement de la structure:", error);
-          alert("Erreur lors du chargement des données");
-        });
+      if (isFromDevisAvance) {
+        // ✅ NOUVEAU SYSTÈME : Charger depuis le serializer qui retourne les items avec index_global
+        // Le ViewSet est enregistré sous 'devisa' dans le router
+        axios
+          .get(`/api/devisa/${devis.id}/`)
+          .then((response) => {
+            const devisData = response.data;
+            const devisLignes = devisData.lignes || []; // Les lignes sont incluses dans le serializer
+            
+            // Le serializer retourne 'items' avec tous les éléments triés par index_global
+            if (devisData.items && devisData.items.length > 0) {
+              const { structure: newStructure, lignesSpeciales: newLignesSpeciales } = 
+                buildStructureFromUnifiedItems(devisData.items, devisLignes);
+              
+              // ✅ Charger les lignes spéciales depuis devisData.lignes_speciales si disponible
+              let finalLignesSpeciales = newLignesSpeciales;
+              if (devisData.lignes_speciales) {
+                const lignesSpecialesFromLegacy = convertLignesSpecialesFromLegacy(
+                  devisData.lignes_speciales,
+                  devisData.price_ht || devis.price_ht || 0,
+                  newStructure // Passer la structure pour déterminer les partie_id des sous-parties
+                );
+                
+                // Fusionner avec les lignes spéciales des items (priorité aux items)
+                const mergedLignesSpeciales = [...newLignesSpeciales];
+                lignesSpecialesFromLegacy.forEach(ls => {
+                  // Vérifier si la ligne n'existe pas déjà
+                  if (!mergedLignesSpeciales.find(existing => existing.id === ls.id)) {
+                    mergedLignesSpeciales.push(ls);
+                  }
+                });
+                
+                // Trier par index_global
+                finalLignesSpeciales = mergedLignesSpeciales.sort((a, b) => 
+                  (a.index_global || 0) - (b.index_global || 0)
+                );
+              } else {
+                // Si pas de lignes spéciales dans devisData.lignes_speciales, utiliser celles des items
+                finalLignesSpeciales = newLignesSpeciales.sort((a, b) => 
+                  (a.index_global || 0) - (b.index_global || 0)
+                );
+              }
+              
+              // ✅ Enrichir la structure avec les numéros depuis parties_metadata si disponible
+              if (devisData.parties_metadata && devisData.parties_metadata.selectedParties) {
+                const enrichStructureWithNumeros = (structure, partiesMetadata) => {
+                  return structure.map(partie => {
+                    const partieMeta = partiesMetadata.selectedParties.find(p => p.id === partie.id);
+                    if (partieMeta) {
+                      return {
+                        ...partie,
+                        numero: partieMeta.numero !== null && partieMeta.numero !== undefined && partieMeta.numero !== '' 
+                          ? String(partieMeta.numero) 
+                          : partie.numero,
+                        sous_parties: partie.sous_parties.map(sp => {
+                          const spMeta = partieMeta.sousParties.find(spm => spm.id === sp.id);
+                          if (spMeta && spMeta.numero) {
+                            return {
+                              ...sp,
+                              numero: String(spMeta.numero)
+                            };
+                          }
+                          return sp;
+                        })
+                      };
+                    }
+                    return partie;
+                  });
+                };
+                
+                const enrichedStructure = enrichStructureWithNumeros(newStructure, devisData.parties_metadata);
+                setStructure(enrichedStructure);
+              } else {
+                setStructure(newStructure);
+              }
+              setLignesSpeciales(finalLignesSpeciales);
+            } else {
+              // Fallback : utiliser l'ancien endpoint
+              axios
+                .get(`/api/devis-structure/${devis.id}/structure/`)
+                .then((response) => {
+                  setStructure(response.data);
+                })
+                .catch((error) => {
+                  console.error("Erreur lors du chargement de la structure:", error);
+                  alert("Erreur lors du chargement des données");
+                });
+            }
+          })
+          .catch((error) => {
+            console.error("Erreur lors du chargement du devis:", error);
+            // Fallback vers l'ancien système
+            axios
+              .get(`/api/devis-structure/${devis.id}/structure/`)
+              .then((response) => {
+                setStructure(response.data);
+              })
+              .catch((error) => {
+                console.error("Erreur lors du chargement de la structure:", error);
+                alert("Erreur lors du chargement des données");
+              });
+          });
+      } else {
+        // ✅ ANCIEN SYSTÈME : Construire depuis parties_metadata si disponible
+        if (devis.parties_metadata && devis.parties_metadata.selectedParties) {
+          // Construire la structure depuis parties_metadata pour avoir les numéros
+          const buildStructureFromPartiesMetadata = (partiesMetadata, structureFromAPI) => {
+            const structureMap = new Map();
+            
+            // Créer un map pour accéder rapidement aux données de l'API par ID
+            const apiStructureMap = new Map();
+            structureFromAPI.forEach(partie => {
+              apiStructureMap.set(partie.id, partie);
+            });
+            
+            partiesMetadata.selectedParties.forEach(partieMeta => {
+              const partieAPI = apiStructureMap.get(partieMeta.id);
+              if (partieAPI) {
+                structureMap.set(partieMeta.id, {
+                  id: partieMeta.id,
+                  titre: partieMeta.titre,
+                  // ✅ Convertir le numéro en chaîne si présent
+                  numero: partieMeta.numero !== null && partieMeta.numero !== undefined && partieMeta.numero !== '' 
+                    ? String(partieMeta.numero) 
+                    : null,
+                  sous_parties: partieMeta.sousParties.map(spMeta => {
+                    const spAPI = partieAPI.sous_parties.find(sp => sp.id === spMeta.id);
+                    // ✅ Convertir le numéro en chaîne si présent (depuis parties_metadata)
+                    const numero = spMeta.numero !== null && spMeta.numero !== undefined && spMeta.numero !== '' 
+                      ? String(spMeta.numero) 
+                      : null;
+                    return {
+                      id: spMeta.id,
+                      description: spMeta.description,
+                      numero: numero, // ✅ Récupérer le numéro depuis parties_metadata
+                      lignes: spAPI ? spAPI.lignes : (spMeta.lignesDetails ? [] : []) // Utiliser lignesDetails si spAPI n'existe pas
+                    };
+                  })
+                });
+              }
+            });
+            
+            return Array.from(structureMap.values());
+          };
+          
+          // Charger la structure depuis l'API puis enrichir avec les numéros
+          axios
+            .get(`/api/devis-structure/${devis.id}/structure/`)
+            .then((response) => {
+              const structureWithNumeros = buildStructureFromPartiesMetadata(
+                devis.parties_metadata,
+                response.data
+              );
+              setStructure(structureWithNumeros);
+            })
+            .catch((error) => {
+              console.error("Erreur lors du chargement de la structure:", error);
+              alert("Erreur lors du chargement des données");
+            });
+        } else {
+          // Fallback : utiliser l'endpoint classique sans numéros
+          axios
+            .get(`/api/devis-structure/${devis.id}/structure/`)
+            .then((response) => {
+              setStructure(response.data);
+            })
+            .catch((error) => {
+              console.error("Erreur lors du chargement de la structure:", error);
+              alert("Erreur lors du chargement des données");
+            });
+        }
+      }
 
       // Charger le chantier si nécessaire
       if (devis.chantier && !chantier) {
@@ -944,8 +1428,9 @@ const SituationCreationModal = ({
       // Utiliser price_ht au lieu de montant_ht
       setTotalHT(devis.price_ht || 0);
 
-      // Charger les lignes spéciales du devis (exclure les lignes display)
-      if (devis.lignes_speciales) {
+      // ✅ Charger les lignes spéciales du devis (exclure les lignes display)
+      // Seulement pour l'ancien système (pas pour DevisAvance qui les charge déjà)
+      if (!isFromDevisAvance && devis.lignes_speciales) {
         const specialLines = [];
 
         // Lignes spéciales globales
@@ -966,6 +1451,9 @@ const SituationCreationModal = ({
                   (ligne.valueType === "percentage"
                     ? (devis.price_ht * ligne.value) / 100
                     : ligne.value),
+                // ✅ Ajouter les styles et index_global si disponibles
+                styles: ligne.styles || {},
+                index_global: ligne.index_global || 0,
               });
             }
           });
@@ -991,6 +1479,9 @@ const SituationCreationModal = ({
                     (ligne.valueType === "percentage"
                       ? (devis.price_ht * ligne.value) / 100
                       : ligne.value),
+                  // ✅ Ajouter les styles et index_global si disponibles
+                  styles: ligne.styles || {},
+                  index_global: ligne.index_global || 0,
                 });
               }
             });
@@ -1021,6 +1512,9 @@ const SituationCreationModal = ({
                         (ligne.valueType === "percentage"
                           ? (devis.price_ht * ligne.value) / 100
                           : ligne.value),
+                      // ✅ Ajouter les styles et index_global si disponibles
+                      styles: ligne.styles || {},
+                      index_global: ligne.index_global || 0,
                     });
                   }
                 }
@@ -1862,10 +2356,6 @@ const SituationCreationModal = ({
 
         // Téléchargement automatique vers le Drive après création
         try {
-          console.log(
-            "🚀 Lancement du téléchargement automatique de la situation vers le Drive..."
-          );
-
           const driveData = {
             situationId: response.data.id,
             chantierId: chantier.id,
@@ -1877,13 +2367,7 @@ const SituationCreationModal = ({
             numeroSituation: numeroSituation, // Utiliser le numéro du state
           };
 
-          console.log(
-            "🔍 DEBUG SituationCreationModal - driveData:",
-            driveData
-          );
-
           await generatePDFDrive("situation", driveData);
-          console.log("✅ Situation téléchargée avec succès vers le Drive");
         } catch (driveError) {
           console.error(
             "❌ Erreur lors du téléchargement automatique de la situation:",
@@ -2250,95 +2734,124 @@ const SituationCreationModal = ({
                   lignesSpeciales={lignesSpeciales}
                 />
               ))}
-              {/* Lignes spéciales globales */}
+              {/* Lignes spéciales globales - Trier par index_global si disponible */}
               {lignesSpeciales
                 .filter((ligne) => ligne.niveau === "global")
-                .map((ligne, index) => (
-                  <TableRow
-                    key={ligne.id}
-                    sx={{
-                      backgroundColor:
-                        index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
-                      "& td": { padding: "8px" },
-                    }}
-                  >
-                    <TableCell
-                      sx={{ width: "50px", padding: "8px" }}
-                    ></TableCell>
-                    <TableCell sx={{ width: "300px", padding: "8px" }}>
-                      {ligne.description}
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        sx={{ color: "text.secondary" }}
+                .sort((a, b) => (a.index_global || 0) - (b.index_global || 0))
+                .map((ligne, index) => {
+                  // ✅ Appliquer les styles de la ligne spéciale
+                  const ligneStyles = ligne.styles || {};
+                  return (
+                    <TableRow
+                      key={ligne.id}
+                      sx={{
+                        backgroundColor:
+                          index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                        "& td": { padding: "8px" },
+                      }}
+                    >
+                      <TableCell
+                        sx={{ width: "50px", padding: "8px" }}
+                      ></TableCell>
+                      <TableCell 
+                        sx={{ 
+                          width: "300px", 
+                          padding: "8px",
+                          // ✅ Appliquer les styles de la ligne spéciale
+                          fontWeight: ligneStyles.fontWeight || 'normal',
+                          fontStyle: ligneStyles.fontStyle || 'normal',
+                          textDecoration: ligneStyles.textDecoration || 'none',
+                          color: ligneStyles.color || 'inherit',
+                          backgroundColor: ligneStyles.backgroundColor || 'transparent',
+                          textAlign: ligneStyles.textAlign || 'left',
+                        }}
                       >
-                        Ligne spéciale globale
-                      </Typography>
-                    </TableCell>
-                    <TableCell
-                      sx={{ width: "100px", padding: "8px" }}
-                      align="right"
-                    ></TableCell>
-                    <TableCell
-                      sx={{ width: "120px", padding: "8px" }}
-                      align="right"
-                    ></TableCell>
-                    <TableCell
-                      sx={{ width: "120px", padding: "8px" }}
-                      align="right"
-                    >
-                      {ligne.type === "reduction" ? "-" : ""}
-                      {parseFloat(ligne.montant_ht)
-                        .toFixed(2)
-                        .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                      €
-                    </TableCell>
-                    <TableCell
-                      sx={{ width: "120px", padding: "8px" }}
-                      align="right"
-                    >
-                      <TextField
-                        type="number"
-                        value={ligne.pourcentage_actuel || 0}
-                        onChange={(e) =>
-                          handlePourcentageChange(
-                            ligne.id,
-                            e.target.value,
-                            "special"
-                          )
-                        }
-                        onFocus={(e) => e.target.select()}
-                        InputProps={{
-                          inputProps: {
-                            min: 0,
-                            max: 100,
-                            step: "any",
-                          },
+                        {ligne.description}
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          sx={{ color: "text.secondary" }}
+                        >
+                          Ligne spéciale globale
+                        </Typography>
+                      </TableCell>
+                      <TableCell
+                        sx={{ width: "100px", padding: "8px" }}
+                        align="right"
+                      ></TableCell>
+                      <TableCell
+                        sx={{ width: "120px", padding: "8px" }}
+                        align="right"
+                      ></TableCell>
+                      <TableCell
+                        sx={{ 
+                          width: "120px", 
+                          padding: "8px",
+                          // ✅ Appliquer les styles pour les montants
+                          fontWeight: ligneStyles.fontWeight || 'normal',
+                          color: ligneStyles.color || 'inherit',
                         }}
-                        size="small"
-                        sx={{
-                          width: "100px",
-                          "& input": {
-                            textAlign: "right",
-                          },
+                        align="right"
+                      >
+                        {ligne.type === "reduction" ? "-" : ""}
+                        {parseFloat(ligne.montant_ht)
+                          .toFixed(2)
+                          .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                        €
+                      </TableCell>
+                      <TableCell
+                        sx={{ width: "120px", padding: "8px" }}
+                        align="right"
+                      >
+                        <TextField
+                          type="number"
+                          value={ligne.pourcentage_actuel || 0}
+                          onChange={(e) =>
+                            handlePourcentageChange(
+                              ligne.id,
+                              e.target.value,
+                              "special"
+                            )
+                          }
+                          onFocus={(e) => e.target.select()}
+                          InputProps={{
+                            inputProps: {
+                              min: 0,
+                              max: 100,
+                              step: "any",
+                            },
+                          }}
+                          size="small"
+                          sx={{
+                            width: "100px",
+                            "& input": {
+                              textAlign: "right",
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell
+                        sx={{ 
+                          width: "120px", 
+                          padding: "8px",
+                          // ✅ Appliquer les styles pour les montants calculés
+                          fontWeight: ligneStyles.fontWeight || 'bold',
+                          color: ligneStyles.color || 'inherit',
                         }}
-                      />
-                    </TableCell>
-                    <TableCell
-                      sx={{ width: "120px", padding: "8px" }}
-                      align="right"
-                    >
-                      {ligne.type === "reduction" ? "-" : ""}
-                      {(
-                        (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) /
-                        100
-                      )
-                        .toFixed(2)
-                        .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
-                      €
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        align="right"
+                      >
+                        {ligne.type === "reduction" ? "-" : ""}
+                        {(
+                          (ligne.montant_ht * (ligne.pourcentage_actuel || 0)) /
+                          100
+                        )
+                          .toFixed(2)
+                          .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
+                        €
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               <AvenantsPartieRow
                 avenants={avenants}
                 handlePourcentageChange={handlePourcentageChange}
