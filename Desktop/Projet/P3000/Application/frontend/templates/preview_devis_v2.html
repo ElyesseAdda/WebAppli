@@ -39,7 +39,7 @@
       /* Style du tableau */
       table {
        width: 100%; 
-        
+       /* border-collapse: collapse; */
       }
      
 
@@ -120,6 +120,7 @@
         width: 33px;
         font-size: 0.8rem;
         text-align: center;
+        padding-left: 10px;
       }
         
       
@@ -438,6 +439,9 @@
         text-align: right;
         min-width: 100px;
       }
+      .montant-global-value {
+        font-weight: 700;
+      }
 
       .nature-travaux {
         margin-top: 0px;
@@ -462,9 +466,30 @@
 
       .special-line {
         font-size: 14px;
-       
         font-weight: 700;
         padding-left: 22px;
+      }
+      .special-line-text {
+        max-width: 430px;
+        word-wrap: break-word;
+        word-break: break-word;
+        display: inline-block;
+      }
+      .special-line-wrapper {
+        padding: 0 !important;
+        border: none !important;
+      }
+      .special-line-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .special-line-table td {
+        border: none !important;
+      }
+      .special-line-amount {
+        text-decoration: none !important;
+        display: inline-block;
+        width: 100%;
       }
       
       /* Espacement avant les lignes spéciales */
@@ -483,31 +508,6 @@
         color: #dc3545;
       }
       
-      .display-only {
-        background-color: #f8f9fa !important;
-        border-left: 3px solid #6c757d;
-        margin-top: 8px;
-        padding-top: 8px;
-      }
-      
-      .display-line {
-        
-        color: #000000;
-      }
-      
-      /* Lignes d'affichage mises en évidence */
-      .display-only.highlighted {
-        background-color: yellow !important;
-        color: #dc3545 !important;
-        font-weight: bold;
-        border-left: 3px solid #dc3545;
-      }
-      
-      /* Lignes d'affichage mises en évidence - texte */
-      .display-only.highlighted .display-line {
-        font-style: normal;
-        color: #dc3545 !important;
-      }
 
       
       
@@ -618,7 +618,7 @@
           {% for partie in parties %}
           <tr class="partie">
             <td class="partie" colspan="5">
-              {{ partie.titre }}
+              {% if partie.numero %}{{ partie.numero }} - {% endif %}{{ partie.titre }}
               <span style="float: right"
                 >{{ partie.total_partie|format_montant_espace }}</span
               >
@@ -626,25 +626,39 @@
           </tr>
           {% for special_line in partie.special_lines %}
            <tr class="special-line-spacer"><td colspan="5"></td></tr>
-           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
-                  <span style="max-width: 430px; word-wrap: break-word; word-break: break-word; display: inline-block;">{{ special_line.description }}</span>
-              </td>
-              <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}-{% endif %}
-                  {% if special_line.type != 'display' %}
-                  {{ special_line.montant|format_montant_espace }}
-                  {% else %}
-                      {{ special_line.value|format_montant_espace }}
-                  {% endif %}
-              </td>
+           <tr class="special-line-row">
+            <td colspan="5" class="special-line-wrapper">
+              <table class="special-line-table">
+                <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                  <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                      <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                  </td>
+                  <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                          {% if special_line.type == 'reduction' %}-{% endif %}
+                          {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                          {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                  </td>
+                </tr>
+              </table>
+            </td>
           </tr>
           {% endfor %}
           {% for sous_partie in partie.sous_parties %}
           {% if sous_partie.description != "Lignes directes" %}
           <tr class="sous-partie">
             <td colspan="5">
-              {{ sous_partie.description }}
+              {% if sous_partie.numero %}{{ sous_partie.numero }} {% endif %}{{ sous_partie.description }}
               <span style="float: right"
                 >{{ sous_partie.total_sous_partie|format_montant_espace }}</span
               >
@@ -652,18 +666,32 @@
           </tr>
           {% for special_line in sous_partie.special_lines %}
            <tr class="special-line-spacer"><td colspan="5"></td></tr>
-           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
-                      <span style="max-width: 430px; word-wrap: break-word; word-break: break-word; display: inline-block;">{{ special_line.description }}</span>
-              </td>
-              <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}-{% endif %}
-                  {% if special_line.type != 'display' %}
-                  {{ special_line.montant|format_montant_espace }}
-                  {% else %}
-                      {{ special_line.value|format_montant_espace }}
-                  {% endif %}
-              </td>
+           <tr class="special-line-row">
+            <td colspan="5" class="special-line-wrapper">
+              <table class="special-line-table">
+                <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                  <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                          <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                  </td>
+                  <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                          {% if special_line.type == 'reduction' %}-{% endif %}
+                          {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                          {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                  </td>
+                </tr>
+              </table>
+            </td>
           </tr>
           {% endfor %}
           {% endif %}
@@ -678,28 +706,42 @@
           {% endfor %} {% endfor %} {% endfor %}
           {% for special_line in special_lines_global %}
            <tr class="special-line-spacer"><td colspan="5"></td></tr>
-           <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-              <td colspan="4" class="special-line {% if special_line.type == 'display' %}display-line{% endif %}">
-                   <span style="max-width: 430px; word-wrap: break-word; word-break: break-word; display: inline-block;">{{ special_line.description }}</span>
-              </td>
-              <td class="totalHttableau">
-                  {% if special_line.type == 'reduction' %}-{% endif %}
-                  {% if special_line.type != 'display' %}
-                  {{ special_line.montant|format_montant_espace }}
-                  {% else %}
-                      {{ special_line.value|format_montant_espace }}
-                  {% endif %}
-              </td>
+           <tr class="special-line-row">
+            <td colspan="5" class="special-line-wrapper">
+              <table class="special-line-table">
+                <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                  <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                       <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                  </td>
+                  <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                      {% if special_line.type != 'display' %}
+                      <span class="special-line-amount">
+                          {% if special_line.type == 'reduction' %}-{% endif %}
+                          {{ special_line.montant|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      {% if special_line.value and special_line.value != 0 %}
+                      <span class="special-line-amount">
+                          {{ special_line.value|format_montant_espace }}
+                      </span>
+                      {% else %}
+                      &nbsp;
+                      {% endif %}
+                      {% endif %}
+                  </td>
+                </tr>
+              </table>
+            </td>
           </tr>
           {% endfor %}
 
           <!-- Nouvelle ligne pour le montant global -->
-          <tr style="margin-top: 20px;">
-            <td colspan="4" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px;">
+          <tr style="margin-top: 20px; border: none;">
+            <td colspan="4" style="text-align: left; font-weight: 700; font-size: 0.8rem; padding-top: 15px; padding-left: 10px; border: none;">
                 MONTANT GLOBAL HT 
             </td>
-            <td class="totalHttableau" style="padding-top: 15px;">
-                {{ total_ht|format_montant_espace }}
+            <td class="totalHttableau" style="padding-top: 15px; border: none;">
+                <span class="montant-global-value">{{ total_ht|format_montant_espace }}</span>
             </td>
           </tr>
         </tbody>
@@ -715,7 +757,7 @@
         <td colspan="2">
           <div class="recap-line">
             <span class="label">- MONTANT GLOBAL HT</span>
-            <span class="montant">{{ total_ht|format_montant_espace }}</span>
+            <span class="montant montant-global-value">{{ total_ht|format_montant_espace }}</span>
           </div>
         </td>
       </tr>
@@ -765,6 +807,14 @@
                 phoneElement.textContent = formatted;
             }
         }
+
+        // Appliquer les styles dynamiques transmis via data-style
+        document.querySelectorAll('[data-style]').forEach((element) => {
+            const styleValue = element.getAttribute('data-style');
+            if (styleValue) {
+                element.setAttribute('style', styleValue);
+            }
+        });
     });
     </script>
   </body>

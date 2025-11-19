@@ -7,6 +7,34 @@ from decimal import Decimal
 from .models import Devis, Partie, SousPartie, Chantier
 import json
 import urllib.parse
+import re
+
+
+def _to_kebab_case(value: str) -> str:
+    """
+    Convertit une clé camelCase ou PascalCase (fontWeight) en kebab-case (font-weight)
+    pour un rendu CSS inline correct dans les templates.
+    """
+    if not value:
+        return ''
+    kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', value).lower()
+    return kebab
+
+
+def build_inline_style(styles: dict | None) -> str:
+    """
+    Transforme un dictionnaire de styles provenant du frontend en attribut CSS inline.
+    Exemple: {'fontWeight': 'bold', 'backgroundColor': '#fff'} -> 'font-weight:bold; background-color:#fff'
+    """
+    if not styles:
+        return ''
+    parts = []
+    for key, val in styles.items():
+        if val in (None, ''):
+            continue
+        kebab_key = _to_kebab_case(str(key))
+        parts.append(f"{kebab_key}:{val}")
+    return '; '.join(parts)
 
 
 @api_view(['GET'])
@@ -111,7 +139,8 @@ def preview_saved_devis(request, devis_id):
                             'valueType': special_line['valueType'],
                             'type': special_line['type'],
                             'montant': montant,
-                            'isHighlighted': special_line.get('isHighlighted', False)
+                            'isHighlighted': special_line.get('isHighlighted', False),
+                            'style_attr': build_inline_style(special_line.get('styles'))
                         })
                     
                     # Ajouter les lignes display de la sous-partie
@@ -122,7 +151,8 @@ def preview_saved_devis(request, devis_id):
                             'valueType': display_line['valueType'],
                             'type': display_line['type'],
                             'montant': Decimal(str(display_line['value'])),  # Montant affiché directement
-                            'isHighlighted': display_line.get('isHighlighted', False)
+                            'isHighlighted': display_line.get('isHighlighted', False),
+                            'style_attr': build_inline_style(display_line.get('styles'))
                         })
 
                     sous_partie_data['total_sous_partie'] = total_sous_partie
@@ -155,7 +185,8 @@ def preview_saved_devis(request, devis_id):
                         'valueType': special_line['valueType'],
                         'type': special_line['type'],
                         'montant': montant,
-                        'isHighlighted': special_line.get('isHighlighted', False)
+                        'isHighlighted': special_line.get('isHighlighted', False),
+                        'style_attr': build_inline_style(special_line.get('styles'))
                     })
                 
                 # Ajouter les lignes display de la partie
@@ -166,7 +197,8 @@ def preview_saved_devis(request, devis_id):
                         'valueType': display_line['valueType'],
                         'type': display_line['type'],
                         'montant': Decimal(str(display_line['value'])),  # Montant affiché directement
-                        'isHighlighted': display_line.get('isHighlighted', False)
+                        'isHighlighted': display_line.get('isHighlighted', False),
+                        'style_attr': build_inline_style(display_line.get('styles'))
                     })
 
                 partie_data['total_partie'] = total_partie
@@ -182,6 +214,7 @@ def preview_saved_devis(request, devis_id):
                 montant = Decimal(str(special_line['value']))
 
             special_line['montant'] = montant
+            special_line['style_attr'] = build_inline_style(special_line.get('styles'))
 
             if special_line['type'] == 'reduction':
                 total_ht -= montant
@@ -192,6 +225,7 @@ def preview_saved_devis(request, devis_id):
         display_lines_global = lignes_display.get('global', [])
         for display_line in display_lines_global:
             display_line['montant'] = Decimal(str(display_line['value']))  # Montant affiché directement
+            display_line['style_attr'] = build_inline_style(display_line.get('styles'))
             special_lines_global.append(display_line)
 
         # Calculer TVA et TTC
@@ -473,7 +507,7 @@ def preview_devis_v2(request):
                 client = societe.client_name if societe else None
 
             # Utiliser les données du frontend (parties_metadata, lignes, etc.)
-            total_ht = Decimal(str(devis_data.get('price_ht', 0)))
+            total_ht = Decimal('0')
             parties_data = []
 
             # Récupérer les lignes spéciales du devis
@@ -589,7 +623,8 @@ def preview_devis_v2(request):
                                 'valueType': value_type,
                                 'type': line_type,
                                 'montant': montant,
-                                'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24')
+                                'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                                'style_attr': build_inline_style(special_line.get('styles'))
                             })
                         
                         # Ajouter les lignes display de la sous-partie
@@ -600,7 +635,8 @@ def preview_devis_v2(request):
                                 'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
                                 'type': display_line.get('type', 'display'),
                                 'montant': Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))),
-                                'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24')
+                                'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                                'style_attr': build_inline_style(display_line.get('styles'))
                             })
 
                         sous_partie_data['total_sous_partie'] = total_sous_partie
@@ -643,7 +679,8 @@ def preview_devis_v2(request):
                             'valueType': value_type,
                             'type': line_type,
                             'montant': montant,
-                            'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24')
+                            'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                            'style_attr': build_inline_style(special_line.get('styles'))
                         })
                     
                     # Ajouter les lignes display de la partie
@@ -654,7 +691,8 @@ def preview_devis_v2(request):
                             'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
                             'type': display_line.get('type', 'display'),
                             'montant': Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))),
-                            'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24')
+                            'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                            'style_attr': build_inline_style(display_line.get('styles'))
                         })
 
                     partie_data['total_partie'] = total_partie
@@ -673,6 +711,7 @@ def preview_devis_v2(request):
                     montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
                 special_line['montant'] = float(montant)
+                special_line['style_attr'] = build_inline_style(special_line.get('styles'))
 
                 line_type = special_line.get('type', 'display')
                 if line_type == 'reduction':
@@ -686,6 +725,7 @@ def preview_devis_v2(request):
             
             for display_line in display_lines_global:
                 display_line['montant'] = float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))))
+                display_line['style_attr'] = build_inline_style(display_line.get('styles'))
                 special_lines_global.append(display_line)
 
             # Calculer TVA et TTC

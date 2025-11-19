@@ -120,7 +120,7 @@ const SpecialLinesCreator = ({
       id: Date.now().toString(),
       data: {
         description: newLine.description,
-        value: newLine.valueType === "display" ? 0 : parseFloat(newLine.value), // 0 pour les lignes d'affichage
+        value: newLine.valueType === "display" ? (newLine.value ? parseFloat(newLine.value) : 0) : parseFloat(newLine.value), // Valeur optionnelle pour les lignes d'affichage
         valueType: newLine.valueType,
         type: newLine.type,
         isHighlighted: newLine.isHighlighted
@@ -249,8 +249,7 @@ const SpecialLinesCreator = ({
                   setNewLine(prev => ({ ...prev, value: value }));
                 }
               }}
-              disabled={newLine.valueType === "display"}
-              helperText={newLine.valueType === "display" ? "Les lignes d'affichage n'ont pas de valeur" : ""}
+              helperText={newLine.valueType === "display" ? "Valeur optionnelle pour les lignes d'affichage (laisser vide ou 0 pour ne pas afficher de montant)" : ""}
               inputProps={{ min: 0, step: "any" }}
             />
             
@@ -357,7 +356,7 @@ const SpecialLinesCreator = ({
                     size="small"
                   >
                     - Réduction
-                  </Button>git 
+                  </Button>
                   <Button 
                     variant={newLine.type === "addition" ? "contained" : "outlined"}
                     onClick={() => setNewLine(prev => ({ ...prev, type: "addition" }))}
