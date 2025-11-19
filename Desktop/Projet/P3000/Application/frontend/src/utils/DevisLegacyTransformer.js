@@ -292,12 +292,15 @@ const organizeSpecialLines = (devisItems) => {
     const montant = calculateSpecialLineAmount(ls, bases, devisItems);
     
     // Construire la ligne spéciale au format legacy
+    const valueType = ls.value_type || ls.valueType || 'fixed';
     const legacyLine = {
       description: ls.description || '',
       type: ls.type_speciale || 'display',
       value: parseFloat(ls.value || 0),
-      value_type: ls.value_type || 'fixed',
+      value_type: valueType, // Format Python (underscore)
+      valueType: valueType, // Format JavaScript (camelCase) pour compatibilité
       amount: montant, // Montant calculé
+      isHighlighted: ls.isHighlighted || false, // Ajouter isHighlighted si présent
       // ✅ Styles : préserver tous les styles pour l'affichage en base de données
       // Les styles incluent : fontWeight, fontStyle, textDecoration, color, backgroundColor, textAlign, etc.
       styles: ls.styles && typeof ls.styles === 'object' ? { ...ls.styles } : {}
@@ -395,13 +398,24 @@ const convertDateToISO = (dateString) => {
  * @param {Object} params.devisData - Données de base du devis (numero, date_creation, etc.)
  * @param {number|null} params.selectedChantierId - ID du chantier sélectionné (ou null/-1)
  * @param {Array} params.clientIds - IDs des clients associés
+ * @param {string} params.devisType - Type de devis ('normal' ou 'chantier')
+ * @param {Object|null} params.pendingChantierData - Données du chantier en attente (pour appel d'offres)
+ * @param {number|null} params.societeId - ID de la société (pour appel d'offres)
+ * @param {Object|null} params.totals - Totaux estimés (cout_estime_main_oeuvre, cout_estime_materiel, cout_avec_taux_fixe, marge_estimee)
+ * @param {number} params.tauxFixe - Taux fixe global (par défaut 20)
  * @returns {Object} Devis au format legacy prêt pour l'API
  */
 export const transformToLegacyFormat = ({
   devisItems,
   devisData,
   selectedChantierId,
-  clientIds = []
+  clientIds = [],
+  // ✅ NOUVEAUX PARAMÈTRES
+  devisType = "normal", // 'normal' ou 'chantier'
+  pendingChantierData = null,
+  societeId = null,
+  totals = null, // { cout_estime_main_oeuvre, cout_estime_materiel, cout_avec_taux_fixe, marge_estimee }
+  tauxFixe = 20,
 }) => {
   // Extraire les lignes de détail
   const lignes = extractLignes(devisItems);
@@ -409,15 +423,14 @@ export const transformToLegacyFormat = ({
   // Organiser les lignes spéciales (séparer display des autres)
   const { lignes_speciales, lignes_display } = organizeSpecialLines(devisItems);
   
-  // Calculer les coûts estimés
-  const costs = calculateEstimatedCosts(devisItems);
+  // Calculer les coûts estimés (utiliser totals si fourni, sinon calculer)
+  const costs = totals || calculateEstimatedCosts(devisItems);
   
   // ✅ Extraire les parties/sous-parties avec leurs numéros pour parties_metadata
   const parties_metadata = extractPartiesMetadata(devisItems);
   
-  // Déterminer si c'est un devis de chantier
-  // Si selectedChantierId est -1 ou null, c'est un devis travaux (nouveau chantier)
-  const devis_chantier = !selectedChantierId || selectedChantierId === -1;
+  // Déterminer si c'est un devis de chantier (appel d'offres)
+  const devis_chantier = devisType === "chantier";
   
   // Convertir la date de création au format ISO 8601 complet
   const date_creation_iso = convertDateToISO(devisData.date_creation);
@@ -449,11 +462,26 @@ export const transformToLegacyFormat = ({
     parties_metadata: parties_metadata,
     
     // Coûts estimés
-    cout_estime_main_oeuvre: costs.cout_estime_main_oeuvre.toFixed(2),
-    cout_estime_materiel: costs.cout_estime_materiel.toFixed(2),
+    cout_estime_main_oeuvre: parseFloat(costs.cout_estime_main_oeuvre || 0).toFixed(2),
+    cout_estime_materiel: parseFloat(costs.cout_estime_materiel || 0).toFixed(2),
     
     // Clients
     client: clientIds.length > 0 ? clientIds : [],
+    
+    // ✅ NOUVEAU : Données pour l'appel d'offres si c'est un devis de chantier
+    ...(devis_chantier && pendingChantierData && societeId && {
+      chantier_name: pendingChantierData.chantier.chantier_name.trim(),
+      societe_id: societeId,
+      ville: pendingChantierData.chantier.ville,
+      rue: pendingChantierData.chantier.rue,
+      code_postal: pendingChantierData.chantier.code_postal.toString(),
+      taux_fixe: tauxFixe !== null ? tauxFixe : 20,
+      // Coûts supplémentaires si disponibles dans totals
+      ...(totals && {
+        cout_avec_taux_fixe: parseFloat(totals.cout_avec_taux_fixe || 0).toFixed(2),
+        marge_estimee: parseFloat(totals.marge_estimee || 0).toFixed(2),
+      }),
+    }),
     
     // ❌ SUPPRIMÉ : Ces champs sont générés automatiquement par le serializer lors de la lecture
     // - version_systeme_lignes : Détecté automatiquement selon le format des lignes spéciales

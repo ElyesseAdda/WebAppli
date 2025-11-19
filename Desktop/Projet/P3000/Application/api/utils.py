@@ -1205,3 +1205,131 @@ def upload_file_to_s3(local_file_path: str, s3_file_path: str) -> bool:
     except Exception as e:
         print(f"❌ Erreur lors de l'upload vers S3: {str(e)}")
         return False
+
+
+# ========================================
+# UTILITAIRES POUR LE SYSTÈME UNIFIÉ
+# Index Global et Numérotation Hiérarchique
+# ========================================
+
+def generate_numero_for_item(item, all_items):
+    """
+    Génère le numéro hiérarchique basé sur l'index_global
+    
+    Args:
+        item: dict avec 'type', 'id', 'index_global', et IDs de parents
+        all_items: liste de tous les items du devis
+        
+    Returns:
+        str: Numéro hiérarchique ("1", "1.1", "1.1.1", etc.)
+    
+    Exemples:
+        - Partie: "1", "2"
+        - Sous-partie: "1.1", "1.2"
+        - Ligne détail: "1.1.1", "1.1.2"
+        - Ligne spéciale: continue la numérotation du contexte
+    """
+    
+    def find_parent_by_id(parent_id, all_items):
+        """Trouve un élément par son ID"""
+        return next((e for e in all_items if e.get('id') == parent_id), None)
+    
+    item_type = item.get('type')
+    
+    if item_type == 'partie':
+        # Numéro de la partie : compter combien de parties avant
+        parties_before = [
+            e for e in all_items 
+            if e.get('type') == 'partie' 
+            and e.get('index_global', 0) < item.get('index_global', 0)
+        ]
+        return str(len(parties_before) + 1)
+    
+    elif item_type == 'sous_partie':
+        # Numéro de la sous-partie : trouver la partie parent
+        partie = find_parent_by_id(item.get('partie_id'), all_items)
+        if not partie:
+            return "?.1"
+        
+        # Compter combien de sous-parties avant dans la même partie
+        sous_parties_before = [
+            e for e in all_items 
+            if e.get('type') == 'sous_partie' 
+            and e.get('partie_id') == item.get('partie_id')
+            and e.get('index_global', 0) < item.get('index_global', 0)
+        ]
+        
+        return f"{partie.get('numero', '?')}.{len(sous_parties_before) + 1}"
+    
+    elif item_type == 'ligne_detail':
+        # Numéro de la ligne détail : trouver la sous-partie parent
+        sous_partie = find_parent_by_id(item.get('sous_partie_id'), all_items)
+        if not sous_partie:
+            return "?.?.1"
+        
+        # Compter combien de lignes détails avant dans la même sous-partie
+        lignes_before = [
+            e for e in all_items 
+            if e.get('type') == 'ligne_detail' 
+            and e.get('sous_partie_id') == item.get('sous_partie_id')
+            and e.get('index_global', 0) < item.get('index_global', 0)
+        ]
+        
+        return f"{sous_partie.get('numero', '?.?')}.{len(lignes_before) + 1}"
+    
+    elif item_type == 'ligne_speciale':
+        # Numéro de la ligne spéciale : continuer la hiérarchie du précédent
+        previous_items = [
+            e for e in all_items 
+            if e.get('index_global', 0) < item.get('index_global', 0)
+        ]
+        
+        if not previous_items:
+            return "0.1"  # Première ligne
+        
+        last_item = previous_items[-1]
+        last_numero = last_item.get('numero', '0')
+        
+        # Incrémenter le dernier niveau de la numérotation
+        parts = last_numero.split('.')
+        if len(parts) == 1:
+            # Après une partie : X.1
+            return f"{parts[0]}.1"
+        elif len(parts) == 2:
+            # Après une sous-partie : X.Y.1
+            return f"{parts[0]}.{parts[1]}.1"
+        else:
+            # Après une ligne détail ou ligne spéciale : incrémenter le dernier
+            try:
+                last_part = int(parts[-1])
+                new_parts = parts[:-1] + [str(last_part + 1)]
+                return '.'.join(new_parts)
+            except (ValueError, IndexError):
+                return f"{'.'.join(parts)}.1"
+    
+    return "0"
+
+
+def recalculate_all_numeros(all_items):
+    """
+    Recalcule tous les numéros hiérarchiques pour une liste d'éléments
+    
+    Args:
+        all_items: liste d'items avec leurs données
+        
+    Returns:
+        list: liste des items avec numéros mis à jour
+    """
+    if not all_items:
+        return []
+    
+    # Trier par index_global
+    sorted_items = sorted(all_items, key=lambda x: x.get('index_global', 0))
+    
+    # Générer le numéro pour chaque élément
+    result = []
+    for item in sorted_items:
+        numero = generate_numero_for_item(item, sorted_items)
+        result.append({**item, 'numero': numero})
+    
+    return result

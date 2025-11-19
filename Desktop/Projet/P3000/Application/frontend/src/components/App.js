@@ -21,6 +21,7 @@ import ChantierInfo from "./ChantierInfo";
 import ChantiersDashboard from "./ChantiersDashboard";
 import ChantierTabs from "./ChantierTabs";
 import CreationDevis from "./CreationDevis";
+import DevisAvance from "./DevisAvance";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Drive from "./Drive";
@@ -40,6 +41,8 @@ import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
 import Test from "./Test";
+import TestDragDrop from "./TestDragDrop";
+import TestDragSimple from "./TestDragSimple";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -186,6 +189,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <CreationDevis />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/DevisAvance"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <DevisAvance />
                 </Layout>
               </ProtectedRoute>
             }
@@ -417,6 +431,28 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <Test />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/test-drag-drop"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TestDragDrop />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/test-drag-simple"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TestDragSimple />
                 </Layout>
               </ProtectedRoute>
             }

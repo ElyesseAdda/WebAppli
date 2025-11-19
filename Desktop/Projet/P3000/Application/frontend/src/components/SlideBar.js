@@ -58,6 +58,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
             label: "Créer document",
             children: [
               { label: "Devis", to: "/CreationDevis" },
+              { label: "Devis Avancé", to: "/DevisAvance" },
               { label: "Bon de commande", to: "/BonCommande" },
             ],
             icon: MdCreateNewFolder,

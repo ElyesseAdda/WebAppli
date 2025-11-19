@@ -1,0 +1,209 @@
+import React from 'react';
+import { Draggable } from 'react-beautiful-dnd';
+
+/**
+ * Composant pour afficher une ligne spéciale dans le tableau du devis
+ * Utilisé dans le système unifié avec index_global
+ */
+const LigneSpecialeRow = ({ 
+  line, 
+  provided, 
+  snapshot, 
+  depth = 0, 
+  formatMontantEspace,
+  displayAs = 'partie',  // 'partie', 'sous_partie', ou 'ligne_detail'
+  // Props pour calculer dynamiquement la base
+  devisItems = [],
+  calculatePartieTotal,
+  calculateSousPartieTotal,
+  calculateGlobalTotal,
+  calculateGlobalTotalExcludingLine,
+  calculatePrice
+}) => {
+  /**
+   * Calcule le montant de la ligne spéciale
+   * Support des deux formats : nouveau (line.value) et ancien (line.data.value)
+   */
+  const calculateAmount = () => {
+    // Support du format avec 'data'
+    const data = line.data || line;
+    const valueType = line.value_type || data.valueType;
+    const value = line.value || data.value;
+    const baseCalculation = line.base_calculation || line.baseCalculation;
+    
+    if (valueType === 'percentage' && baseCalculation) {
+      let baseAmount = 0;
+      
+      // ✅ TOUJOURS calculer dynamiquement depuis devisItems (pour mise à jour en temps réel)
+      if (baseCalculation.type) {
+        if (baseCalculation.type === 'global') {
+          // Pour éviter la récursion, calculer le total SANS cette ligne
+          const lineId = line.id || line.data?.id;
+          if (calculateGlobalTotalExcludingLine) {
+            baseAmount = calculateGlobalTotalExcludingLine(lineId);
+          } else if (calculateGlobalTotal) {
+            // Fallback si la fonction d'exclusion n'est pas disponible
+            baseAmount = calculateGlobalTotal();
+          }
+        } else if (devisItems.length > 0 && baseCalculation.id) {
+          if (baseCalculation.type === 'partie' && calculatePartieTotal) {
+            const partie = devisItems.find(item => item.type === 'partie' && item.id === baseCalculation.id);
+            if (partie) {
+              baseAmount = calculatePartieTotal(partie);
+            }
+          } else if (baseCalculation.type === 'sous_partie' && calculateSousPartieTotal) {
+            const sousPartie = devisItems.find(item => item.type === 'sous_partie' && item.id === baseCalculation.id);
+            if (sousPartie) {
+              baseAmount = calculateSousPartieTotal(sousPartie);
+            }
+          }
+        }
+      }
+      
+      // Fallback sur amount statique si calcul dynamique impossible
+      if (!baseAmount && baseCalculation.amount) {
+        baseAmount = parseFloat(baseCalculation.amount);
+      }
+      
+      const percentage = parseFloat(value || 0);
+      return (baseAmount * percentage) / 100;
+    }
+    return parseFloat(value || 0);
+  };
+
+  const amount = calculateAmount();
+  const indent = depth * 20; // Indentation selon la profondeur
+  
+  // Support des deux formats de données
+  const data = line.data || line;
+  const typeSpeciale = line.type_speciale || data.type;
+  const description = line.description || data.description;
+
+  // Styles de base selon le type d'affichage
+  const getBaseStyles = () => {
+    if (displayAs === 'partie') {
+      // Style PARTIE (niveau global)
+      return {
+        backgroundColor: line.styles?.backgroundColor || 'rgba(27, 120, 188, 1)',
+        color: line.styles?.color || 'white',
+        padding: '15px 20px',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        borderRadius: '6px',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+      };
+    } else if (displayAs === 'sous_partie') {
+      // Style SOUS-PARTIE (dans une partie)
+      return {
+        backgroundColor: line.styles?.backgroundColor || 'rgba(157, 197, 226, 1)',
+        color: line.styles?.color || '#333',
+        padding: '10px 15px',
+        fontSize: '15px',
+        fontWeight: '600',
+        borderRadius: '4px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      };
+    } else {
+      // Style LIGNE DE DÉTAIL (dans une sous-partie)
+      return {
+        backgroundColor: line.styles?.backgroundColor || '#fff',
+        color: line.styles?.color || '#333',
+        padding: '8px 12px',
+        fontSize: '13px',
+        fontWeight: 'normal',
+        borderRadius: '4px',
+        border: '1px solid #dee2e6',
+        boxShadow: 'none'
+      };
+    }
+  };
+  
+  // Styles de la ligne selon les préférences utilisateur + type d'affichage
+  const lineStyles = {
+    ...getBaseStyles(),
+    fontStyle: line.styles?.fontStyle || 'normal',
+    textDecoration: line.styles?.textDecoration || 'none',
+    textAlign: line.styles?.textAlign || 'left',
+    borderLeft: line.styles?.borderLeft || 'none',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    cursor: provided ? (snapshot?.isDragging ? 'grabbing' : 'grab') : 'default',
+    opacity: snapshot?.isDragging ? 0.8 : 1,
+    transition: 'all 0.2s ease',
+    marginLeft: `${indent}px`,
+    marginBottom: '8px'
+  };
+
+  // Couleur du montant selon le type
+  const amountColor = 
+    typeSpeciale === 'reduction' ? '#d32f2f' :
+    typeSpeciale === 'addition' ? '#1976d2' : 
+    '#9e9e9e';
+
+  return (
+    <div
+      ref={provided?.innerRef}
+      {...(provided?.draggableProps || {})}
+      style={{
+        ...(provided?.draggableProps?.style || {}),
+      }}
+    >
+      <div style={lineStyles}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Handle de drag - seulement si draggable */}
+          {provided && (
+            <div
+              {...provided.dragHandleProps}
+              style={{
+                cursor: 'grab',
+                padding: '8px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                fontSize: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title="Glisser pour déplacer"
+            >
+              ⋮⋮
+            </div>
+          )}
+          
+          {/* Numéro hiérarchique (si disponible) */}
+          {line.numero && (
+            <span style={{ 
+              opacity: 0.7, 
+              marginRight: '8px',
+              fontWeight: 'normal',
+              fontSize: '14px'
+            }}>
+              {line.numero}
+            </span>
+          )}
+          
+          {/* Description */}
+          <span>{description || 'Ligne spéciale'}</span>
+        </div>
+
+        {/* Montant */}
+        <span
+          style={{
+            fontSize: '16px',
+            fontWeight: 'bold',
+            color: amountColor,
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {typeSpeciale === 'reduction' && '-'}
+          {typeSpeciale === 'addition' && '+'}
+          {formatMontantEspace(amount)} €
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export default LigneSpecialeRow;
+

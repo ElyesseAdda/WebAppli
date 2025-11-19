@@ -34,7 +34,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -44,7 +44,7 @@ from .models import (
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgencyExpenseAggregate, AgentPrime,
+    AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -770,6 +770,49 @@ class PartieViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(parties, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='search')
+    def search(self, request):
+        """
+        Endpoint de recherche optimisé pour React Select
+        Retourne les parties au format {value, label, data} pour React Select
+        """
+        search_query = request.query_params.get('q', '').strip()
+        
+        # Base queryset - exclure les parties supprimées
+        queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        # Filtrer par recherche si fournie
+        if search_query:
+            queryset = queryset.filter(
+                Q(titre__icontains=search_query) |
+                Q(type__icontains=search_query)
+            )
+        
+        # Limiter à 50 résultats pour les performances
+        queryset = queryset[:50]
+        
+        # Formater pour React Select
+        results = []
+        for partie in queryset:
+            results.append({
+                'value': partie.id,
+                'label': f"{partie.titre} ({partie.type})",
+                'data': {
+                    'id': partie.id,
+                    'titre': partie.titre,
+                    'type': partie.type,
+                    'domaine': partie.type,  # Utiliser type comme domaine
+                    'total_partie': 0,  # Sera calculé plus tard
+                    'special_lines': [],
+                    'sous_parties': []
+                }
+            })
+        
+        return Response({
+            'options': results,
+            'total': len(results)
+        })
+
 class SousPartieViewSet(viewsets.ModelViewSet):
     queryset = SousPartie.objects.all()
     serializer_class = SousPartieSerializer
@@ -830,6 +873,65 @@ class SousPartieViewSet(viewsets.ModelViewSet):
         sous_parties = SousPartie.objects.all()
         serializer = self.get_serializer(sous_parties, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Endpoint dédié pour React Select : recherche de sous-parties par description
+        Retourne un format {value, label, data} compatible avec React Select
+        """
+        partie_id = request.query_params.get('partie', None)
+        q = request.query_params.get('q', '').strip()
+        
+        queryset = SousPartie.objects.filter(is_deleted=False).prefetch_related('lignes_details')
+        
+        # Filtrer par partie si spécifiée (obligatoire)
+        if partie_id:
+            queryset = queryset.filter(partie_id=partie_id)
+        else:
+            # Si pas de partie_id, retourner vide
+            return Response([])
+        
+        # Recherche par description
+        if q:
+            queryset = queryset.filter(description__icontains=q)
+        
+        # Limiter à 50 résultats
+        queryset = queryset[:50]
+        
+        # Formater pour React Select avec toutes les infos nécessaires
+        results = []
+        for sp in queryset:
+            # Sérialiser les lignes_details
+            lignes_details = [
+                {
+                    'id': ld.id,
+                    'description': ld.description,
+                    'unite': ld.unite,
+                    'cout_main_oeuvre': str(ld.cout_main_oeuvre),
+                    'cout_materiel': str(ld.cout_materiel),
+                    'taux_fixe': str(ld.taux_fixe),
+                    'marge': str(ld.marge),
+                    'prix': str(ld.prix),
+                    'sous_partie': ld.sous_partie_id,
+                    'is_deleted': ld.is_deleted
+                }
+                for ld in sp.lignes_details.all() if not ld.is_deleted
+            ]
+            
+            results.append({
+                'value': sp.id,
+                'label': sp.description or 'Sans description',
+                'data': {
+                    'id': sp.id,
+                    'description': sp.description,
+                    'partie': sp.partie_id,
+                    'lignes_details': lignes_details,
+                    'is_deleted': sp.is_deleted
+                }
+            })
+        
+        return Response(results)
 
 from rest_framework import viewsets, status, serializers, status
 from rest_framework.response import Response
@@ -1376,6 +1478,54 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Endpoint dédié pour React Select : recherche de lignes de détails par description
+        Retourne un format {value, label, data} compatible avec React Select
+        """
+        sous_partie_id = request.query_params.get('sous_partie', None)
+        q = request.query_params.get('q', '').strip()
+        
+        queryset = LigneDetail.objects.filter(is_deleted=False)
+        
+        # Filtrer par sous-partie (obligatoire)
+        if sous_partie_id:
+            queryset = queryset.filter(sous_partie_id=sous_partie_id)
+        else:
+            # Si pas de sous_partie_id, retourner vide
+            return Response([])
+        
+        # Recherche par description
+        if q:
+            queryset = queryset.filter(description__icontains=q)
+        
+        # Limiter à 50 résultats
+        queryset = queryset[:50]
+        
+        # Formater pour React Select
+        results = []
+        for ld in queryset:
+            results.append({
+                'value': ld.id,
+                'label': ld.description or 'Sans description',
+                'data': {
+                    'id': ld.id,
+                    'description': ld.description,
+                    'unite': ld.unite,
+                    'cout_main_oeuvre': str(ld.cout_main_oeuvre),
+                    'cout_materiel': str(ld.cout_materiel),
+                    'taux_fixe': str(ld.taux_fixe),
+                    'marge': str(ld.marge),
+                    'prix': str(ld.prix),
+                    'sous_partie': ld.sous_partie_id,
+                    'partie': ld.partie_id,
+                    'is_deleted': ld.is_deleted
+                }
+            })
+        
+        return Response(results)
+
+    @action(detail=False, methods=['get'])
     def all_including_deleted(self, request):
         """
         DEBUG: Récupère toutes les lignes de détail y compris celles supprimées
@@ -1395,15 +1545,28 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
             taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
             marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
 
-            # Calcul du prix avec arrondis intermédiaires
-            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
-            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
-            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
-            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
-            prix = (sous_total + montant_marge).quantize(TWOPLACES)
-
-            # Ajout du prix calculé aux données
-            data['prix'] = prix
+            # Déterminer si on doit calculer le prix ou utiliser le prix saisi manuellement
+            # Mode manuel : si les coûts sont à 0 et qu'un prix est fourni
+            prix_manuel = data.get('prix')
+            has_couts = cout_main_oeuvre > 0 or cout_materiel > 0
+            
+            if has_couts:
+                # Mode calcul automatique : recalculer le prix
+                base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+                montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+                sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+                montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+                prix = (sous_total + montant_marge).quantize(TWOPLACES)
+                data['prix'] = prix
+            elif prix_manuel:
+                # Mode saisie manuelle : utiliser le prix fourni
+                data['prix'] = Decimal(str(prix_manuel)).quantize(TWOPLACES)
+            else:
+                # Aucun prix ni coûts : erreur
+                return Response(
+                    {'error': 'Prix ou coûts requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
@@ -1429,15 +1592,25 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
             taux_fixe = Decimal(str(data.get('taux_fixe', 0))).quantize(TWOPLACES)
             marge = Decimal(str(data.get('marge', 0))).quantize(TWOPLACES)
 
-            # Calcul du prix avec arrondis intermédiaires
-            base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
-            montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
-            sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
-            montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
-            prix = (sous_total + montant_marge).quantize(TWOPLACES)
-
-            # Ajout du prix calculé aux données
-            data['prix'] = prix
+            # Déterminer si on doit calculer le prix ou utiliser le prix saisi manuellement
+            # Mode manuel : si les coûts sont à 0 et qu'un prix est fourni
+            prix_manuel = data.get('prix')
+            has_couts = cout_main_oeuvre > 0 or cout_materiel > 0
+            
+            if has_couts:
+                # Mode calcul automatique : recalculer le prix
+                base = (cout_main_oeuvre + cout_materiel).quantize(TWOPLACES)
+                montant_taux_fixe = (base * (taux_fixe / Decimal('100'))).quantize(TWOPLACES)
+                sous_total = (base + montant_taux_fixe).quantize(TWOPLACES)
+                montant_marge = (sous_total * (marge / Decimal('100'))).quantize(TWOPLACES)
+                prix = (sous_total + montant_marge).quantize(TWOPLACES)
+                data['prix'] = prix
+            elif prix_manuel:
+                # Mode saisie manuelle : utiliser le prix fourni
+                data['prix'] = Decimal(str(prix_manuel)).quantize(TWOPLACES)
+            else:
+                # Aucun prix ni coûts : garder le prix existant
+                data['prix'] = instance.prix
 
             serializer = self.get_serializer(instance, data=data, partial=True)
             serializer.is_valid(raise_exception=True)
@@ -2708,29 +2881,36 @@ def create_devis(request):
                 
                 appel_offres = AppelOffres.objects.create(**appel_offres_data)
                 
-                # Séparer les lignes spéciales normales des lignes de type 'display'
-                lignes_speciales_raw = request.data.get('lignes_speciales', {})
-                lignes_speciales_filtered = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                lignes_display = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                # Filtrer les lignes spéciales des parties
-                for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
-                    lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
-                
-                # Filtrer les lignes spéciales des sous-parties
-                for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
-                    lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
+                # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
+                # Si oui, utiliser directement, sinon filtrer depuis lignes_speciales
+                if 'lignes_display' in request.data and request.data['lignes_display']:
+                    # Le frontend a déjà séparé les lignes display
+                    lignes_display = request.data.get('lignes_display', {})
+                    lignes_speciales_filtered = request.data.get('lignes_speciales', {})
+                else:
+                    # Ancien comportement : séparer les lignes spéciales normales des lignes de type 'display'
+                    lignes_speciales_raw = request.data.get('lignes_speciales', {})
+                    lignes_speciales_filtered = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    lignes_display = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    # Filtrer les lignes spéciales des parties
+                    for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
+                        lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
+                    
+                    # Filtrer les lignes spéciales des sous-parties
+                    for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
+                        lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
                 
                 # Création du devis lié à l'appel d'offres
                 devis_data = {
@@ -2744,32 +2924,54 @@ def create_devis(request):
                     'status': 'En attente',
                     'devis_chantier': True,
                     'lignes_speciales': lignes_speciales_filtered,
-                    'lignes_display': lignes_display
+                    'lignes_display': lignes_display,
+                    'parties_metadata': request.data.get('parties_metadata', {}),
+                    'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
+                    'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0')))
                 }
+                
+                # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
+                # Si non fournie, le modèle utilisera auto_now_add=True
+                if 'date_creation' in request.data and request.data['date_creation']:
+                    from django.utils.dateparse import parse_datetime
+                    try:
+                        date_creation = parse_datetime(request.data['date_creation'])
+                        if date_creation:
+                            devis_data['date_creation'] = date_creation
+                    except (ValueError, TypeError):
+                        # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
+                        pass
             else:
-                # Séparer les lignes spéciales normales des lignes de type 'display'
-                lignes_speciales_raw = request.data.get('lignes_speciales', {})
-                lignes_speciales_filtered = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                lignes_display = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                # Filtrer les lignes spéciales des parties
-                for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
-                    lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
-                
-                # Filtrer les lignes spéciales des sous-parties
-                for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
-                    lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
+                # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
+                # Si oui, utiliser directement, sinon filtrer depuis lignes_speciales
+                if 'lignes_display' in request.data and request.data['lignes_display']:
+                    # Le frontend a déjà séparé les lignes display
+                    lignes_display = request.data.get('lignes_display', {})
+                    lignes_speciales_filtered = request.data.get('lignes_speciales', {})
+                else:
+                    # Ancien comportement : séparer les lignes spéciales normales des lignes de type 'display'
+                    lignes_speciales_raw = request.data.get('lignes_speciales', {})
+                    lignes_speciales_filtered = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    lignes_display = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    # Filtrer les lignes spéciales des parties
+                    for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
+                        lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
+                    
+                    # Filtrer les lignes spéciales des sous-parties
+                    for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
+                        lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
                 
                 # Création du devis de base (comme avant)
                 devis_data = {
@@ -2783,8 +2985,23 @@ def create_devis(request):
                     'status': 'En attente',
                     'devis_chantier': False,
                     'lignes_speciales': lignes_speciales_filtered,
-                    'lignes_display': lignes_display
+                    'lignes_display': lignes_display,
+                    'parties_metadata': request.data.get('parties_metadata', {}),
+                    'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
+                    'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0')))
                 }
+                
+                # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
+                # Si non fournie, le modèle utilisera auto_now_add=True
+                if 'date_creation' in request.data and request.data['date_creation']:
+                    from django.utils.dateparse import parse_datetime
+                    try:
+                        date_creation = parse_datetime(request.data['date_creation'])
+                        if date_creation:
+                            devis_data['date_creation'] = date_creation
+                    except (ValueError, TypeError):
+                        # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
+                        pass
             
             devis = Devis.objects.create(**devis_data)
 
@@ -2812,12 +3029,35 @@ def create_devis(request):
             
             # Création des lignes de devis
             for ligne in request.data.get('lignes', []):
-                DevisLigne.objects.create(
-                    devis=devis,
-                    ligne_detail_id=ligne['ligne'],
-                    quantite=Decimal(str(ligne['quantity'])),
-                    prix_unitaire=Decimal(str(ligne['custom_price']))
-                )
+                # Préparer les données pour la création
+                ligne_data = {
+                    'devis': devis,
+                    'ligne_detail_id': ligne['ligne'],
+                    'quantite': Decimal(str(ligne['quantity'])),
+                    'prix_unitaire': Decimal(str(ligne['custom_price']))
+                }
+                
+                # ✅ Ajouter index_global si présent (pour conserver l'ordre des lignes)
+                # Le champ index_global est maintenant dans le modèle DevisLigne
+                if 'index_global' in ligne and ligne['index_global'] is not None:
+                    try:
+                        # index_global peut être décimal (1.101, 1.102, etc.)
+                        index_global = float(ligne['index_global'])
+                        if index_global >= 0:
+                            ligne_data['index_global'] = Decimal(str(index_global))
+                    except (ValueError, TypeError):
+                        # Si l'index n'est pas valide, utiliser default=0
+                        pass
+                
+                # ✅ Note: Le numero des lignes n'est pas stocké dans DevisLigne
+                # Il est géré via parties_metadata.lignesDetails (ordre dans le tableau)
+                # Les numéros des lignes sont calculés à l'affichage selon leur position dans parties_metadata
+                
+                # ✅ Note: total_ht est une propriété calculée (quantite * prix_unitaire)
+                # Il est envoyé dans le payload pour vérification mais n'est pas stocké
+                # Le backend calcule automatiquement total_ht = quantite * prix_unitaire
+                
+                DevisLigne.objects.create(**ligne_data)
             
             # Préparer la réponse avec l'ID du devis et de l'appel d'offres si applicable
             response_data = {'id': devis.id}
@@ -2867,48 +3107,79 @@ def get_next_devis_number(request):
         is_ts = request.GET.get('is_ts') == 'true'
         prefix = request.GET.get('prefix', 'DEV')  # Préfixe personnalisable
         
+        print(f"Paramètres reçus - chantier_id: {chantier_id}, devis_chantier: {devis_chantier}, is_ts: {is_ts}")
+        
         # Obtenir l'année en cours
         current_year = timezone.now().year
         year_suffix = str(current_year)[-2:]
         
-        # Récupérer le dernier devis créé avec le même préfixe (ordonné par ID décroissant)
-        last_devis = Devis.objects.filter(
-            numero__startswith=f"{prefix}-"
+        # Récupérer le dernier devis créé pour l'année courante
+        # Chercher d'abord le nouveau format "Devis n°017.2025"
+        last_devis_new_format = Devis.objects.filter(
+            numero__contains=f".{current_year}"
         ).order_by('-id').first()
         
-        if last_devis:
-            try:
-                # Extraire le numéro de séquence du dernier devis
-                sequence = int(last_devis.numero.split('-')[1])
-                next_sequence = sequence + 1
-            except (IndexError, ValueError):
+        # Si pas de devis au nouveau format, chercher l'ancien format "DEV-001-25"
+        if not last_devis_new_format:
+            last_devis_old_format = Devis.objects.filter(
+                numero__startswith=f"DEV-"
+            ).order_by('-id').first()
+            
+            if last_devis_old_format:
+                try:
+                    # Extraire le numéro de l'ancien format (ex: "001" de "DEV-001-25")
+                    old_sequence_match = re.search(r'DEV-(\d+)-', last_devis_old_format.numero)
+                    if old_sequence_match:
+                        sequence = int(old_sequence_match.group(1))
+                        next_sequence = sequence + 1
+                    else:
+                        next_sequence = 1
+                except (ValueError, AttributeError):
+                    next_sequence = 1
+            else:
                 next_sequence = 1
         else:
-            next_sequence = 1
+            try:
+                # Extraire le numéro de séquence du nouveau format (ex: "017" de "Devis n°017.2025")
+                sequence_match = re.search(r'Devis n°(\d+)\.', last_devis_new_format.numero)
+                if sequence_match:
+                    sequence = int(sequence_match.group(1))
+                    next_sequence = sequence + 1
+                else:
+                    next_sequence = 1
+            except (ValueError, AttributeError):
+                next_sequence = 1
             
-        # Formater le nouveau numéro avec le préfixe personnalisé
-        numero = f"{prefix}-{str(next_sequence).zfill(3)}-{year_suffix}"
+        # Formater le nouveau numéro selon le format demandé
+        numero = f"Devis n°{str(next_sequence).zfill(3)}.{current_year}"
+        print(f"Génération du numéro de devis: {numero} (séquence: {next_sequence}, année: {current_year})")
         
-        # Si c'est un TS, calculer le prochain numéro de TS
+        # Si c'est un TS (chantier existant), calculer le prochain numéro de TS
         next_ts = None
-        if is_ts and chantier_id:
+        if chantier_id and not devis_chantier:
             # Trouver le dernier TS pour ce chantier
             last_ts = Devis.objects.filter(
                 chantier_id=chantier_id,
                 devis_chantier=False
             ).count()
             next_ts = str(last_ts + 1).zfill(3)
+            print(f"Calcul TS pour chantier {chantier_id}: {next_ts}")
         
         return Response({
             'numero': numero,
-            'next_ts': next_ts
+            'next_ts': next_ts,
+            'sequence': str(next_sequence).zfill(3),
+            'year': current_year
         })
         
     except Exception as e:
         print(f"Erreur dans get_next_devis_number: {str(e)}")
+        current_year = timezone.now().year
         return Response({
-            'numero': f"DEV-001-{timezone.now().year % 100}",
-            'next_ts': "001"
+            'numero': f"Devis n°001.{current_year}",
+            'next_ts': "001",
+            'sequence': "001",
+            'year': current_year
         })
 
 @api_view(['GET'])
@@ -2963,12 +3234,49 @@ def get_chantier_relations(request):
     
     return Response(data)
 
+def is_new_system_devis(devis):
+    """
+    Détecte si un devis utilise le nouveau système (avec index_global et parties_metadata)
+    Utilise la même logique que DevisSerializer
+    """
+    # Vérifier si le devis a des DevisLigne avec index_global > 0
+    has_unified_lignes = DevisLigne.objects.filter(
+        devis=devis, 
+        index_global__gt=0
+    ).exists()
+    
+    # Vérifier si le devis a des parties/sous-parties/lignes avec index_global > 0
+    has_unified_items = (
+        Partie.objects.filter(devis=devis, index_global__gt=0).exists() or
+        SousPartie.objects.filter(devis=devis, index_global__gt=0).exists() or
+        LigneDetail.objects.filter(devis=devis, index_global__gt=0).exists()
+    )
+    
+    # Vérifier si parties_metadata existe et contient des données
+    has_parties_metadata = (
+        devis.parties_metadata and 
+        devis.parties_metadata.get('selectedParties', [])
+    )
+    
+    return has_unified_lignes or has_unified_items or bool(has_parties_metadata)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def preview_saved_devis(request, devis_id):
+    """
+    Vue de prévisualisation qui redirige automatiquement vers la bonne version
+    selon le système utilisé par le devis (ancien ou nouveau)
+    """
     try:
         devis = get_object_or_404(Devis, id=devis_id)
         
+        # Détecter si le devis utilise le nouveau système
+        if is_new_system_devis(devis):
+            # Rediriger vers preview_saved_devis_v2 pour le nouveau système
+            return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
+        
+        # Sinon, continuer avec l'ancien système (code existant)
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
         if devis.devis_chantier and devis.appel_offres:
             # Cas d'un devis de chantier (appel d'offres)
@@ -5940,6 +6248,12 @@ def preview_situation(request, situation_id):
     try:
         situation = get_object_or_404(Situation, id=situation_id)
         devis = situation.devis
+        
+        # Vérifier si le devis utilise le nouveau système
+        if is_new_system_devis(devis):
+            # Rediriger vers preview_situation_v2 pour le nouveau système
+            from django.shortcuts import redirect
+            return redirect(f'/api/preview-situation-v2/{situation_id}/')
         chantier = situation.chantier
         societe = chantier.societe
         client = societe.client_name
@@ -10432,4 +10746,262 @@ class AgentPrimeViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         print(f"🗑️  Suppression de la prime: {instance}")
         return super().destroy(request, *args, **kwargs)
+
+
+# ===== VIEWSET POUR LES COULEURS =====
+
+class ColorViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les couleurs personnalisées des utilisateurs
+    
+    Endpoints disponibles:
+    - GET    /api/colors/                    # Liste des couleurs de l'utilisateur
+    - POST   /api/colors/                    # Créer une nouvelle couleur
+    - GET    /api/colors/{id}/               # Détail d'une couleur
+    - PUT    /api/colors/{id}/               # Modifier une couleur
+    - DELETE /api/colors/{id}/               # Supprimer une couleur
+    """
+    serializer_class = ColorSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        """Retourner uniquement les couleurs de l'utilisateur connecté"""
+        if self.request.user.is_authenticated:
+            return Color.objects.filter(user=self.request.user)
+        return Color.objects.none()
+    
+    def perform_create(self, serializer):
+        """Assigner automatiquement l'utilisateur lors de la création"""
+        serializer.save(user=self.request.user)
+
+
+@api_view(['GET', 'POST'])
+def colors_list(request):
+    """
+    Endpoint pour lister et créer des couleurs
+    GET : Liste toutes les couleurs de l'utilisateur
+    POST : Crée une nouvelle couleur
+    """
+    if request.method == 'GET':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Non authentifié'}, status=401)
+        colors = Color.objects.filter(user=request.user)
+        serializer = ColorSerializer(colors, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Non authentifié'}, status=401)
+        serializer = ColorSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+def increment_color_usage(request, color_id):
+    """
+    Endpoint pour incrémenter le compteur d'utilisation d'une couleur
+    """
+    if not request.user.is_authenticated:
+        return Response({'error': 'Non authentifié'}, status=401)
+    
+    try:
+        color = Color.objects.get(id=color_id, user=request.user)
+        color.usage_count += 1
+        color.save()
+        return Response({'status': 'ok', 'usage_count': color.usage_count})
+    except Color.DoesNotExist:
+        return Response({'error': 'Couleur non trouvée'}, status=404)
+
+
+# ========================================
+# ENDPOINTS SYSTÈME UNIFIÉ
+# Index Global et Drag & Drop
+# ========================================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_devis_order(request, devis_id):
+    """
+    Met à jour l'ordre (index_global) de tous les éléments d'un devis
+    
+    POST /api/devis/<devis_id>/update-order/
+    Body: {
+        "items": [
+            {"type": "partie", "id": 1, "index_global": 1},
+            {"type": "sous_partie", "id": 10, "index_global": 2},
+            ...
+        ]
+    }
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        items = request.data.get('items', [])
+        
+        if not items:
+            return Response({'error': 'Aucun élément à mettre à jour'}, status=400)
+        
+        # Mettre à jour index_global pour chaque type
+        updated_count = 0
+        for item in items:
+            item_type = item.get('type')
+            item_id = item.get('id')
+            index_global = item.get('index_global')
+            
+            if not all([item_type, item_id is not None, index_global is not None]):
+                continue
+            
+            if item_type == 'partie':
+                count = Partie.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+            elif item_type == 'sous_partie':
+                count = SousPartie.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+            elif item_type == 'ligne_detail':
+                count = LigneDetail.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+            elif item_type == 'ligne_speciale':
+                count = LigneSpeciale.objects.filter(id=item_id, devis=devis).update(index_global=index_global)
+                updated_count += count
+        
+        # Recalculer les numéros (optionnel - peut être fait côté client)
+        from .utils import recalculate_all_numeros
+        
+        return Response({
+            'status': 'success',
+            'updated_count': updated_count,
+            'message': f'{updated_count} élément(s) mis à jour'
+        }, status=200)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_ligne_speciale(request, devis_id):
+    """
+    Créer une nouvelle ligne spéciale
+    
+    POST /api/devis/<devis_id>/ligne-speciale/create/
+    Body: {
+        "description": "Remise de 10%",
+        "type_speciale": "reduction",
+        "value_type": "percentage",
+        "value": 10,
+        "base_calculation": {"amount": 1000, "scope": "total"},
+        "styles": {
+            "fontWeight": "bold",
+            "color": "#d32f2f",
+            "backgroundColor": "#ffebee"
+        }
+    }
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        
+        # Trouver le prochain index_global
+        from django.db.models import Max
+        max_index = LigneSpeciale.objects.filter(devis=devis).aggregate(
+            Max('index_global')
+        )['index_global__max'] or 0
+        
+        # Créer la ligne spéciale
+        ligne_speciale = LigneSpeciale.objects.create(
+            devis=devis,
+            index_global=max_index + 1,
+            description=request.data.get('description', ''),
+            type_speciale=request.data.get('type_speciale', 'display'),
+            value_type=request.data.get('value_type', 'fixed'),
+            value=request.data.get('value', 0),
+            base_calculation=request.data.get('base_calculation'),
+            styles=request.data.get('styles', {})
+        )
+        
+        return Response({
+            'id': ligne_speciale.id,
+            'index_global': ligne_speciale.index_global,
+            'status': 'created',
+            'message': 'Ligne spéciale créée avec succès'
+        }, status=201)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_ligne_speciale(request, devis_id, ligne_id):
+    """
+    Mettre à jour une ligne spéciale existante
+    
+    PUT /api/devis/<devis_id>/ligne-speciale/<ligne_id>/update/
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        ligne_speciale = LigneSpeciale.objects.get(id=ligne_id, devis=devis)
+        
+        # Mettre à jour les champs
+        if 'description' in request.data:
+            ligne_speciale.description = request.data['description']
+        if 'type_speciale' in request.data:
+            ligne_speciale.type_speciale = request.data['type_speciale']
+        if 'value_type' in request.data:
+            ligne_speciale.value_type = request.data['value_type']
+        if 'value' in request.data:
+            ligne_speciale.value = request.data['value']
+        if 'base_calculation' in request.data:
+            ligne_speciale.base_calculation = request.data['base_calculation']
+        if 'styles' in request.data:
+            ligne_speciale.styles = request.data['styles']
+        if 'index_global' in request.data:
+            ligne_speciale.index_global = request.data['index_global']
+        
+        ligne_speciale.save()
+        
+        return Response({
+            'id': ligne_speciale.id,
+            'status': 'updated',
+            'message': 'Ligne spéciale mise à jour'
+        }, status=200)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except LigneSpeciale.DoesNotExist:
+        return Response({'error': 'Ligne spéciale non trouvée'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_ligne_speciale(request, devis_id, ligne_id):
+    """
+    Supprimer une ligne spéciale
+    
+    DELETE /api/devis/<devis_id>/ligne-speciale/<ligne_id>/delete/
+    """
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        ligne_speciale = LigneSpeciale.objects.get(id=ligne_id, devis=devis)
+        
+        ligne_speciale.delete()
+        
+        return Response({
+            'status': 'deleted',
+            'message': 'Ligne spéciale supprimée'
+        }, status=200)
+    
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except LigneSpeciale.DoesNotExist:
+        return Response({'error': 'Ligne spéciale non trouvée'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 

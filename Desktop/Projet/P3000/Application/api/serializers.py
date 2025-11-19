@@ -9,7 +9,7 @@ from .models import (
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgentPrime
+    AgentPrime, Color, LigneSpeciale
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -19,7 +19,11 @@ class DevisLigneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DevisLigne
-        fields = ['ligne_detail', 'quantite', 'prix_unitaire', 'total_ht']
+        fields = ['id', 'ligne_detail', 'quantite', 'prix_unitaire', 'total_ht', 'index_global']
+        # ✅ index_global peut être null/blank pour les anciens devis (default=0)
+        extra_kwargs = {
+            'index_global': {'required': False, 'allow_null': True}
+        }
 
     def get_total_ht(self, obj):
         return obj.quantite * obj.prix_unitaire
@@ -45,6 +49,8 @@ class FournisseurSerializer(serializers.ModelSerializer):
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
     lignes_speciales = serializers.JSONField(required=False)
+    lignes_display = serializers.JSONField(required=False)
+    parties_metadata = serializers.JSONField(required=False)
     client = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     chantier = serializers.PrimaryKeyRelatedField(queryset=Chantier.objects.all())
 
@@ -53,43 +59,173 @@ class DevisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'devis_chantier',
-            'cout_estime_main_oeuvre', 'cout_estime_materiel'
+            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes'
         ]
         read_only_fields = ['date_creation', 'client']
 
-    def get_lignes_speciales(self, obj):
-        lignes = obj.lignes_speciales.all()
-        result = {
-            'global': [],
-            'parties': {},
-            'sousParties': {}
-        }
-
-        for ligne in lignes:
-            ligne_data = {
-                'id': ligne.id,
-                'description': ligne.description,
-                'value': float(ligne.value),
-                'valueType': ligne.value_type,
-                'type': ligne.type,
-                'isHighlighted': ligne.is_highlighted
-            }
-
-            if ligne.niveau == 'global':
-                result['global'].append(ligne_data)
-            elif ligne.niveau == 'partie':
-                partie_id = str(ligne.partie.id)
-                if partie_id not in result['parties']:
-                    result['parties'][partie_id] = []
-                result['parties'][partie_id].append(ligne_data)
-            elif ligne.niveau == 'sous_partie':
-                sous_partie_id = str(ligne.sous_partie.id)
-                if sous_partie_id not in result['sousParties']:
-                    result['sousParties'][sous_partie_id] = []
-                result['sousParties'][sous_partie_id].append(ligne_data)
-
-        return result
+    # Ancienne méthode commentée (lignes_speciales est maintenant un JSONField, pas une relation)
+    # def get_lignes_speciales(self, obj):
+    #     lignes = obj.lignes_speciales.all()
+    #     result = {
+    #         'global': [],
+    #         'parties': {},
+    #         'sousParties': {}
+    #     }
+    #     ...
+    
+    def to_representation(self, instance):
+        """
+        Surcharge pour ajouter le système unifié avec mode dual (legacy/unified)
+        """
+        data = super().to_representation(instance)
+        
+        # DÉTECTION DU MODE
+        # Si le devis a des parties/sous-parties/lignes avec index_global > 0, utiliser le nouveau système
+        has_unified_items = (
+            Partie.objects.filter(devis=instance, index_global__gt=0).exists() or
+            SousPartie.objects.filter(devis=instance, index_global__gt=0).exists() or
+            LigneDetail.objects.filter(devis=instance, index_global__gt=0).exists()
+        )
+        
+        if has_unified_items:
+            # NOUVEAU SYSTÈME : Utiliser index_global
+            data['items'] = self._get_unified_items(instance)
+            data['mode'] = 'unified'
+        else:
+            # ANCIEN SYSTÈME : Utiliser parties_metadata
+            data['items'] = self._get_legacy_items(instance)
+            data['mode'] = 'legacy'
+        
+        return data
+    
+    def _get_unified_items(self, instance):
+        """Nouveau système avec index_global"""
+        from .utils import recalculate_all_numeros
+        
+        all_items = []
+        
+        # Charger Parties avec index_global > 0
+        parties = Partie.objects.filter(devis=instance, index_global__gt=0).order_by('index_global')
+        for partie in parties:
+            all_items.append({
+                'type': 'partie',
+                'id': partie.id,
+                'index_global': partie.index_global,
+                'numero': partie.numero,
+                'titre': partie.titre,
+                'type_activite': partie.type,
+            })
+        
+        # Charger SousParties avec index_global > 0
+        sous_parties = SousPartie.objects.filter(devis=instance, index_global__gt=0).order_by('index_global')
+        for sp in sous_parties:
+            all_items.append({
+                'type': 'sous_partie',
+                'id': sp.id,
+                'index_global': sp.index_global,
+                'numero': sp.numero,
+                'partie_id': sp.partie_id,
+                'description': sp.description,
+            })
+        
+        # Charger LignesDetails avec index_global > 0
+        lignes_details = LigneDetail.objects.filter(devis=instance, index_global__gt=0).order_by('index_global')
+        for ld in lignes_details:
+            all_items.append({
+                'type': 'ligne_detail',
+                'id': ld.id,
+                'index_global': ld.index_global,
+                'numero': ld.numero,
+                'sous_partie_id': ld.sous_partie_id,
+                'description': ld.description,
+                'unite': ld.unite,
+                'prix': str(ld.prix),
+                'quantite': str(ld.quantite),
+            })
+        
+        # Charger LignesSpeciales
+        lignes_speciales = LigneSpeciale.objects.filter(devis=instance).order_by('index_global')
+        for ls in lignes_speciales:
+            all_items.append({
+                'type': 'ligne_speciale',
+                'id': ls.id,
+                'index_global': ls.index_global,
+                'numero': ls.numero,
+                'description': ls.description,
+                'type_speciale': ls.type_speciale,
+                'value_type': ls.value_type,
+                'value': str(ls.value),
+                'base_calculation': ls.base_calculation,
+                'styles': ls.styles,
+            })
+        
+        # Tri par index_global et recalcul des numéros
+        return recalculate_all_numeros(all_items)
+    
+    def _get_legacy_items(self, instance):
+        """Ancien système avec parties_metadata"""
+        from .utils import recalculate_all_numeros
+        
+        items = []
+        parties_metadata = instance.parties_metadata or {}
+        selected_parties = parties_metadata.get('selectedParties', [])
+        
+        for partie_data in selected_parties:
+            # Partie
+            items.append({
+                'type': 'partie',
+                'id': partie_data['id'],
+                'index_global': len(items) + 1,
+                'titre': partie_data.get('titre'),
+                'type_activite': partie_data.get('type'),
+                'mode': 'legacy'
+            })
+            
+            # Sous-parties
+            for sp_data in partie_data.get('sousParties', []):
+                items.append({
+                    'type': 'sous_partie',
+                    'id': sp_data['id'],
+                    'index_global': len(items) + 1,
+                    'partie_id': partie_data['id'],
+                    'description': sp_data.get('description'),
+                    'mode': 'legacy'
+                })
+                
+                # Lignes détails
+                for ld_id in sp_data.get('lignesDetails', []):
+                    try:
+                        ligne = LigneDetail.objects.get(id=ld_id)
+                        items.append({
+                            'type': 'ligne_detail',
+                            'id': ligne.id,
+                            'index_global': len(items) + 1,
+                            'sous_partie_id': sp_data['id'],
+                            'description': ligne.description,
+                            'unite': ligne.unite,
+                            'prix': str(ligne.prix),
+                            'mode': 'legacy'
+                        })
+                    except LigneDetail.DoesNotExist:
+                        pass
+        
+        # Ajouter lignes spéciales v2 si présentes
+        lignes_speciales_v2 = instance.lignes_speciales_v2 or {}
+        for ls in lignes_speciales_v2.get('pending', []) + lignes_speciales_v2.get('placed', []):
+            items.append({
+                'type': 'ligne_speciale',
+                'id': ls.get('id'),
+                'index_global': len(items) + 1,
+                'description': ls.get('description'),
+                'type_speciale': ls.get('type_speciale', 'display'),
+                'value_type': ls.get('value_type', 'fixed'),
+                'value': str(ls.get('value', 0)),
+                'styles': ls.get('styles', {}),
+                'mode': 'legacy'
+            })
+        
+        return recalculate_all_numeros(items)
     
     def update(self, instance, validated_data):
         if 'lignes' in validated_data:
@@ -107,6 +243,10 @@ class DevisSerializer(serializers.ModelSerializer):
         # Mettre à jour les lignes spéciales
         if 'lignes_speciales' in validated_data:
             instance.lignes_speciales = validated_data.pop('lignes_speciales')
+        
+        # Mettre à jour les lignes display
+        if 'lignes_display' in validated_data:
+            instance.lignes_display = validated_data.pop('lignes_display')
 
         # Mettre à jour les autres champs
         for attr, value in validated_data.items():
@@ -1203,4 +1343,19 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             validated_data['created_by'] = request.user
+        return super().create(validated_data)
+
+
+class ColorSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Color"""
+    class Meta:
+        model = Color
+        fields = ['id', 'name', 'hex_value', 'usage_count', 'created_at']
+        read_only_fields = ['usage_count', 'created_at']
+    
+    def create(self, validated_data):
+        """Assigne automatiquement l'utilisateur connecté"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['user'] = request.user
         return super().create(validated_data)

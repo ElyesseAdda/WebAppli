@@ -916,6 +916,11 @@ const CreationDevis = () => {
 
         // 3. Créer le chantier seulement si ce n'est PAS un devis de chantier
         if (devisType !== "chantier") {
+          // Vérifier que societeId est bien défini avant de créer le chantier
+          if (!societeId) {
+            throw new Error("Erreur : L'ID de la société n'a pas pu être obtenu. Impossible de créer le chantier.");
+          }
+
           const updatedChantierData = {
             chantier_name: pendingChantierData.chantier.chantier_name.trim(),
             ville: pendingChantierData.chantier.ville,
@@ -923,7 +928,7 @@ const CreationDevis = () => {
             code_postal: pendingChantierData.chantier.code_postal.toString(),
             montant_ht: totalHT,
             montant_ttc: totalTTC,
-            societe: societeId,
+            societe_id: societeId,  // Utiliser societe_id car societe est read_only dans le serializer
             client: clientId,
             // Ajout des coûts estimés
             cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
@@ -934,11 +939,13 @@ const CreationDevis = () => {
             taux_fixe: tauxFixe !== null ? tauxFixe : 20, // Valeur par défaut si non chargé
           };
 
+          console.log("Création du chantier avec societe_id:", societeId, "et client:", clientId);
           const chantierResponse = await axios.post(
             "/api/chantier/",
             updatedChantierData
           );
           chantierIdToUse = chantierResponse.data.id;
+          console.log("Chantier créé avec succès, ID:", chantierIdToUse);
         }
       } else {
         console.log("Utilisation d'un chantier existant:", selectedChantierId);
