@@ -49,6 +49,7 @@ class FournisseurSerializer(serializers.ModelSerializer):
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
     lignes_speciales = serializers.JSONField(required=False)
+    lignes_display = serializers.JSONField(required=False)
     parties_metadata = serializers.JSONField(required=False)
     client = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     chantier = serializers.PrimaryKeyRelatedField(queryset=Chantier.objects.all())
@@ -58,7 +59,7 @@ class DevisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'parties_metadata', 'devis_chantier',
+            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes'
         ]
         read_only_fields = ['date_creation', 'client']
@@ -242,6 +243,10 @@ class DevisSerializer(serializers.ModelSerializer):
         # Mettre à jour les lignes spéciales
         if 'lignes_speciales' in validated_data:
             instance.lignes_speciales = validated_data.pop('lignes_speciales')
+        
+        # Mettre à jour les lignes display
+        if 'lignes_display' in validated_data:
+            instance.lignes_display = validated_data.pop('lignes_display')
 
         # Mettre à jour les autres champs
         for attr, value in validated_data.items():

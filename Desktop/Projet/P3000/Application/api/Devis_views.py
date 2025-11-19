@@ -37,12 +37,46 @@ def build_inline_style(styles: dict | None) -> str:
     return '; '.join(parts)
 
 
+def is_new_system_devis(devis):
+    """
+    Détecte si un devis utilise le nouveau système (avec index_global)
+    Utilise la même logique que DevisSerializer
+    """
+    from .models import Partie, SousPartie, LigneDetail, DevisLigne
+    
+    # Vérifier si le devis a des DevisLigne avec index_global > 0
+    has_unified_lignes = DevisLigne.objects.filter(
+        devis=devis, 
+        index_global__gt=0
+    ).exists()
+    
+    # Vérifier si le devis a des parties/sous-parties/lignes avec index_global > 0
+    has_unified_items = (
+        Partie.objects.filter(devis=devis, index_global__gt=0).exists() or
+        SousPartie.objects.filter(devis=devis, index_global__gt=0).exists() or
+        LigneDetail.objects.filter(devis=devis, index_global__gt=0).exists()
+    )
+    
+    return has_unified_lignes or has_unified_items
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def preview_saved_devis(request, devis_id):
+    """
+    Vue de prévisualisation qui redirige automatiquement vers la bonne version
+    selon le système utilisé par le devis (ancien ou nouveau)
+    """
     try:
         devis = get_object_or_404(Devis, id=devis_id)
         
+        # Détecter si le devis utilise le nouveau système
+        if is_new_system_devis(devis):
+            # Rediriger vers preview_saved_devis_v2 pour le nouveau système
+            from django.shortcuts import redirect
+            return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
+        
+        # Sinon, continuer avec l'ancien système (code existant)
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
         if devis.devis_chantier and devis.appel_offres:
             # Cas d'un devis de chantier (appel d'offres)
@@ -254,8 +288,8 @@ def preview_saved_devis(request, devis_id):
 @permission_classes([AllowAny])
 def preview_saved_devis_v2(request, devis_id):
     """
-    Version V2 de la prévisualisation des devis - Pour tester le nouveau système avec index_global
-    Copie ligne par ligne de preview_saved_devis pour le moment
+    Version V2 de la prévisualisation des devis sauvegardés
+    Utilise parties_metadata comme preview_devis_v2 pour un affichage cohérent
     """
     try:
         devis = get_object_or_404(Devis, id=devis_id)
@@ -264,13 +298,25 @@ def preview_saved_devis_v2(request, devis_id):
         if devis.devis_chantier and devis.appel_offres:
             # Cas d'un devis de chantier (appel d'offres)
             chantier = devis.appel_offres
-            societe = devis.appel_offres.societe
-            client = societe.client_name if societe else None
+            # ✅ Toujours récupérer la société depuis le chantier/appel d'offres
+            societe = devis.appel_offres.societe if devis.appel_offres else None
+            # Priorité au client directement associé au devis, sinon utiliser celui de la société
+            clients_devis = list(devis.client.all())
+            if clients_devis:
+                client = clients_devis[0]
+            else:
+                client = societe.client_name if societe else None
         else:
             # Cas d'un devis normal
             chantier = devis.chantier
+            # ✅ Toujours récupérer la société depuis le chantier
             societe = chantier.societe if chantier else None
-            client = societe.client_name if societe else None
+            # Priorité au client directement associé au devis, sinon utiliser celui de la société
+            clients_devis = list(devis.client.all())
+            if clients_devis:
+                client = clients_devis[0]
+            else:
+                client = societe.client_name if societe else None
 
         total_ht = Decimal('0')
         parties_data = []
@@ -279,60 +325,116 @@ def preview_saved_devis_v2(request, devis_id):
         lignes_speciales = devis.lignes_speciales or {}
         lignes_display = devis.lignes_display or {}
 
-        # Fonction de tri naturel pour les parties
-        def natural_sort_key(titre):
-            import re
-            # Extraire le numéro au début du titre (ex: "1-", "11-", "21-")
-            match = re.match(r'^(\d+)-', titre)
-            if match:
-                # Retourner un tuple (numéro, titre) pour un tri correct
-                return (int(match.group(1)), titre)
-            # Si pas de numéro, retourner (0, titre) pour mettre en premier
-            return (0, titre)
+        # Récupérer parties_metadata pour construire la structure (comme preview_devis_v2)
+        parties_metadata = devis.parties_metadata or {}
+        selected_parties = parties_metadata.get('selectedParties', [])
 
-        # Récupérer et trier les parties
-        parties_to_process = list(Partie.objects.filter(id__in=[ligne.ligne_detail.sous_partie.partie.id for ligne in devis.lignes.all()]).distinct())
-        parties_to_process.sort(key=lambda p: natural_sort_key(p.titre))
+        # Si parties_metadata est vide, utiliser l'ancienne méthode de récupération
+        if not selected_parties:
+            # Fallback : récupérer les parties depuis les lignes
+            parties_to_process = list(Partie.objects.filter(id__in=[ligne.ligne_detail.sous_partie.partie.id for ligne in devis.lignes.all()]).distinct())
+            # Convertir en format metadata pour compatibilité
+            selected_parties = []
+            for partie in parties_to_process:
+                sous_parties_meta = []
+                sous_parties = SousPartie.objects.filter(partie=partie, id__in=[ligne.ligne_detail.sous_partie.id for ligne in devis.lignes.all()]).distinct()
+                for sp in sous_parties:
+                    lignes_ids = [l.ligne_detail.id for l in devis.lignes.filter(ligne_detail__sous_partie=sp)]
+                    sous_parties_meta.append({
+                        'id': sp.id,
+                        'description': sp.description,
+                        'numero': getattr(sp, 'numero', None),
+                        'index_global': getattr(sp, 'index_global', 0),
+                        'lignesDetails': lignes_ids
+                    })
+                selected_parties.append({
+                    'id': partie.id,
+                    'titre': partie.titre,
+                    'numero': getattr(partie, 'numero', None),
+                    'index_global': getattr(partie, 'index_global', 0),
+                    'sousParties': sous_parties_meta
+                })
 
-        for partie in parties_to_process:
+        # Fonction de tri par index_global ou numéro de partie (si présent)
+        def sort_key_by_index(partie):
+            # Si on a index_global dans les données, l'utiliser
+            if 'index_global' in partie:
+                return float(partie.get('index_global', 999))
+            # Sinon, utiliser le numéro
+            numero = partie.get('numero')
+            if numero and isinstance(numero, (int, str)) and str(numero).isdigit():
+                return int(numero)
+            return 999  # Mettre les parties sans numéro à la fin
+
+        # Trier les parties par index_global si présent, sinon par numéro
+        selected_parties = sorted(selected_parties, key=sort_key_by_index)
+
+        # Construire un mapping des lignes par ligne_detail.id pour accès rapide
+        lignes_by_detail = {}
+        for ligne in devis.lignes.all().order_by('index_global'):
+            ligne_detail_id = ligne.ligne_detail.id
+            if ligne_detail_id not in lignes_by_detail:
+                lignes_by_detail[ligne_detail_id] = []
+            lignes_by_detail[ligne_detail_id].append(ligne)
+
+        # Construire la structure des parties depuis parties_metadata
+        for partie_meta in selected_parties:
             sous_parties_data = []
             total_partie = Decimal('0')
 
             # Récupérer les lignes spéciales pour cette partie
-            special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie.id), [])
-            # Récupérer les lignes display pour cette partie
-            display_lines_partie = lignes_display.get('parties', {}).get(str(partie.id), [])
+            special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_meta['id']), [])
+            display_lines_partie = lignes_display.get('parties', {}).get(str(partie_meta['id']), [])
 
-            # Récupérer et trier les sous-parties
-            sous_parties_to_process = list(SousPartie.objects.filter(partie=partie, id__in=[ligne.ligne_detail.sous_partie.id for ligne in devis.lignes.all()]).distinct())
-            sous_parties_to_process.sort(key=lambda sp: natural_sort_key(sp.description))
+            # Trier les sous-parties par index_global si présent, sinon par numéro
+            sous_parties_meta = sorted(partie_meta.get('sousParties', []), key=lambda sp: float(sp.get('index_global', 999)) if 'index_global' in sp else (int(sp.get('numero', '999').split('.')[-1]) if sp.get('numero') and '.' in str(sp.get('numero')) else 999))
 
-            for sous_partie in sous_parties_to_process:
+            # Traiter les sous-parties de cette partie
+            for sous_partie_meta in sous_parties_meta:
                 lignes_details_data = []
                 total_sous_partie = Decimal('0')
 
-                # Calculer le total des lignes de détail
-                for ligne in devis.lignes.filter(ligne_detail__sous_partie=sous_partie):
-                    total_ligne = Decimal(str(ligne.quantite)) * Decimal(str(ligne.prix_unitaire))
-                    lignes_details_data.append({
-                        'description': ligne.ligne_detail.description,
-                        'unite': ligne.ligne_detail.unite,
-                        'quantity': ligne.quantite,
-                        'custom_price': ligne.prix_unitaire,
-                        'total': total_ligne
-                    })
-                    total_sous_partie += total_ligne
+                # Récupérer les lignes de détail pour cette sous-partie
+                ligne_detail_ids = sous_partie_meta.get('lignesDetails', [])
+                
+                # Extraire les lignes correspondantes depuis les DevisLigne
+                lignes_filtered = []
+                for ligne_detail_id in ligne_detail_ids:
+                    if ligne_detail_id in lignes_by_detail:
+                        lignes_filtered.extend(lignes_by_detail[ligne_detail_id])
+                
+                # Trier par index_global si présent
+                lignes_filtered.sort(key=lambda l: float(l.index_global) if l.index_global else 999)
+                
+                for ligne in lignes_filtered:
+                    try:
+                        total_ligne = Decimal(str(ligne.quantite)) * Decimal(str(ligne.prix_unitaire))
+                        lignes_details_data.append({
+                            'description': ligne.ligne_detail.description,
+                            'unite': ligne.ligne_detail.unite,
+                            'quantity': ligne.quantite,
+                            'custom_price': ligne.prix_unitaire,
+                            'total': total_ligne
+                        })
+                        total_sous_partie += total_ligne
+                    except Exception:
+                        pass
 
                 if lignes_details_data:
-                    # Trier les lignes de détail par ordre naturel
-                    lignes_details_data.sort(key=lambda l: natural_sort_key(l['description']))
-                    
                     # Récupérer les lignes spéciales pour cette sous-partie
-                    special_lines_sous_partie = lignes_speciales.get('sousParties', {}).get(str(sous_partie.id), [])
-                    # Récupérer les lignes display pour cette sous-partie
-                    display_lines_sous_partie = lignes_display.get('sousParties', {}).get(str(sous_partie.id), [])
+                    special_lines_sous_partie = lignes_speciales.get('sousParties', {}).get(str(sous_partie_meta['id']), [])
+                    display_lines_sous_partie = lignes_display.get('sousParties', {}).get(str(sous_partie_meta['id']), [])
+                    
+                    # Trier les lignes spéciales par index_global si présent
+                    def sort_special_lines(lines):
+                        return sorted(lines, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+                    
+                    special_lines_sous_partie = sort_special_lines(special_lines_sous_partie)
+                    display_lines_sous_partie = sort_special_lines(display_lines_sous_partie)
+                    
                     sous_partie_data = {
-                        'description': sous_partie.description,
+                        'description': sous_partie_meta.get('description', ''),
+                        'numero': sous_partie_meta.get('numero'),  # ✅ Inclure le numéro
                         'lignes_details': lignes_details_data,
                         'total_sous_partie': total_sous_partie,
                         'special_lines': []
@@ -340,34 +442,39 @@ def preview_saved_devis_v2(request, devis_id):
 
                     # Calculer et ajouter chaque ligne spéciale
                     for special_line in special_lines_sous_partie:
-                        if special_line['valueType'] == 'percentage':
-                            montant = (total_sous_partie * Decimal(str(special_line['value']))) / Decimal('100')
+                        value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
+                        if value_type == 'percentage':
+                            montant = (total_sous_partie * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
                         else:
-                            montant = Decimal(str(special_line['value']))
+                            montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
-                        if special_line['type'] == 'reduction':
+                        line_type = special_line.get('type', 'display')
+                        if line_type == 'reduction':
                             total_sous_partie -= montant
-                        else:
+                        elif line_type == 'addition':
                             total_sous_partie += montant
+                        # 'display' n'affecte pas le total
 
                         sous_partie_data['special_lines'].append({
-                            'description': special_line['description'],
-                            'value': special_line['value'],
-                            'valueType': special_line['valueType'],
-                            'type': special_line['type'],
+                            'description': special_line.get('description', ''),
+                            'value': special_line.get('value', 0) or special_line.get('amount', 0),
+                            'valueType': value_type,
+                            'type': line_type,
                             'montant': montant,
-                            'isHighlighted': special_line.get('isHighlighted', False)
+                            'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                            'style_attr': build_inline_style(special_line.get('styles'))
                         })
                     
                     # Ajouter les lignes display de la sous-partie
                     for display_line in display_lines_sous_partie:
                         sous_partie_data['special_lines'].append({
-                            'description': display_line['description'],
-                            'value': display_line['value'],
-                            'valueType': display_line['valueType'],
-                            'type': display_line['type'],
-                            'montant': Decimal(str(display_line['value'])),  # Montant affiché directement
-                            'isHighlighted': display_line.get('isHighlighted', False)
+                            'description': display_line.get('description', ''),
+                            'value': display_line.get('value', 0) or display_line.get('amount', 0),
+                            'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
+                            'type': display_line.get('type', 'display'),
+                            'montant': Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))),
+                            'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                            'style_attr': build_inline_style(display_line.get('styles'))
                         })
 
                     sous_partie_data['total_sous_partie'] = total_sous_partie
@@ -375,8 +482,16 @@ def preview_saved_devis_v2(request, devis_id):
                     total_partie += total_sous_partie
 
             if sous_parties_data:
+                # Trier les lignes spéciales de la partie par index_global
+                def sort_special_lines_partie(lines):
+                    return sorted(lines, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+                
+                special_lines_partie = sort_special_lines_partie(special_lines_partie)
+                display_lines_partie = sort_special_lines_partie(display_lines_partie)
+                
                 partie_data = {
-                    'titre': partie.titre,
+                    'titre': partie_meta.get('titre', ''),
+                    'numero': partie_meta.get('numero'),  # ✅ Inclure le numéro
                     'sous_parties': sous_parties_data,
                     'total_partie': total_partie,
                     'special_lines': []
@@ -384,60 +499,89 @@ def preview_saved_devis_v2(request, devis_id):
 
                 # Calculer et ajouter les lignes spéciales de la partie
                 for special_line in special_lines_partie:
-                    if special_line['valueType'] == 'percentage':
-                        montant = (total_partie * Decimal(str(special_line['value']))) / Decimal('100')
+                    value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
+                    if value_type == 'percentage':
+                        montant = (total_partie * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
                     else:
-                        montant = Decimal(str(special_line['value']))
+                        montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
-                    if special_line['type'] == 'reduction':
+                    line_type = special_line.get('type', 'display')
+                    if line_type == 'reduction':
                         total_partie -= montant
-                    else:
+                    elif line_type == 'addition':
                         total_partie += montant
 
                     partie_data['special_lines'].append({
-                        'description': special_line['description'],
-                        'value': special_line['value'],
-                        'valueType': special_line['valueType'],
-                        'type': special_line['type'],
+                        'description': special_line.get('description', ''),
+                        'value': special_line.get('value', 0) or special_line.get('amount', 0),
+                        'valueType': value_type,
+                        'type': line_type,
                         'montant': montant,
-                        'isHighlighted': special_line.get('isHighlighted', False)
+                        'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                        'style_attr': build_inline_style(special_line.get('styles'))
                     })
                 
                 # Ajouter les lignes display de la partie
                 for display_line in display_lines_partie:
                     partie_data['special_lines'].append({
-                        'description': display_line['description'],
-                        'value': display_line['value'],
-                        'valueType': display_line['valueType'],
-                        'type': display_line['type'],
-                        'montant': Decimal(str(display_line['value'])),  # Montant affiché directement
-                        'isHighlighted': display_line.get('isHighlighted', False)
+                        'description': display_line.get('description', ''),
+                        'value': display_line.get('value', 0) or display_line.get('amount', 0),
+                        'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
+                        'type': display_line.get('type', 'display'),
+                        'montant': Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))),
+                        'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                        'style_attr': build_inline_style(display_line.get('styles'))
                     })
 
                 partie_data['total_partie'] = total_partie
                 parties_data.append(partie_data)
                 total_ht += total_partie
 
-        # Appliquer les lignes spéciales globales
+        # Appliquer les lignes spéciales globales (triées par index_global)
         special_lines_global = lignes_speciales.get('global', [])
+        special_lines_global = sorted(special_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+        
+        # Convertir les lignes spéciales globales en format cohérent pour le template
+        special_lines_global_formatted = []
         for special_line in special_lines_global:
-            if special_line['valueType'] == 'percentage':
-                montant = (total_ht * Decimal(str(special_line['value']))) / Decimal('100')
+            value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
+            if value_type == 'percentage':
+                montant = (total_ht * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
             else:
-                montant = Decimal(str(special_line['value']))
+                montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
-            special_line['montant'] = montant
-
-            if special_line['type'] == 'reduction':
+            line_type = special_line.get('type', 'display')
+            if line_type == 'reduction':
                 total_ht -= montant
-            else:
+            elif line_type == 'addition':
                 total_ht += montant
+
+            special_lines_global_formatted.append({
+                'description': special_line.get('description', ''),
+                'value': special_line.get('value', 0) or special_line.get('amount', 0),
+                'valueType': value_type,
+                'type': line_type,
+                'montant': float(montant),
+                'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                'style_attr': build_inline_style(special_line.get('styles'))
+            })
         
         # Ajouter les lignes display globales
         display_lines_global = lignes_display.get('global', [])
+        display_lines_global = sorted(display_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+        
         for display_line in display_lines_global:
-            display_line['montant'] = Decimal(str(display_line['value']))  # Montant affiché directement
-            special_lines_global.append(display_line)
+            special_lines_global_formatted.append({
+                'description': display_line.get('description', ''),
+                'value': display_line.get('value', 0) or display_line.get('amount', 0),
+                'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
+                'type': display_line.get('type', 'display'),
+                'montant': float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0)))),
+                'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                'style_attr': build_inline_style(display_line.get('styles'))
+            })
+        
+        special_lines_global = special_lines_global_formatted
 
         # Calculer TVA et TTC
         tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
@@ -458,7 +602,8 @@ def preview_saved_devis_v2(request, devis_id):
         return render(request, 'preview_devis_v2.html', context)
 
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        import traceback
+        return JsonResponse({'error': f'{str(e)}\n{traceback.format_exc()}'}, status=400)
 
 
 @api_view(['GET'])

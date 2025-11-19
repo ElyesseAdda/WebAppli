@@ -102,6 +102,7 @@ const DevisAvance = () => {
   const [showSocieteInfoModal, setShowSocieteInfoModal] = useState(false);
   const [showSelectSocieteModal, setShowSelectSocieteModal] = useState(false);
   const [selectedSocieteId, setSelectedSocieteId] = useState(null);
+  // Note: showClientTypeModal supprimé car non nécessaire
 
   // États pour la gestion du devis
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
@@ -109,6 +110,7 @@ const DevisAvance = () => {
   const [nextTsNumber, setNextTsNumber] = useState(null);
   const [clientId, setClientId] = useState(null); // ID du client associé
   const [isSaving, setIsSaving] = useState(false); // Flag pour la sauvegarde en cours
+  const [tauxFixe, setTauxFixe] = useState(20); // Taux fixe global (par défaut 20%)
 
   // États pour la gestion des parties
   const [availableParties, setAvailableParties] = useState([]);
@@ -195,6 +197,10 @@ const DevisAvance = () => {
   // Gérer la sélection d'un chantier
   const handleChantierSelection = async (chantierId) => {
     setSelectedChantierId(chantierId);
+    // Si un chantier existant est sélectionné, remettre le type à "normal"
+    if (chantierId && chantierId !== -1) {
+      setDevisType("normal");
+    }
     // Régénérer le numéro de devis avec le bon suffixe
     await generateDevisNumber(chantierId);
     
@@ -225,8 +231,8 @@ const DevisAvance = () => {
         setClient({
           name: pendingChantierData.client.name || "",
           surname: pendingChantierData.client.surname || "",
-          civilite: "",
-          poste: "",
+          civilite: pendingChantierData.client.civilite || "",
+          poste: pendingChantierData.client.poste || "",
           client_mail: pendingChantierData.client.client_mail || "",
           phone_Number: String(pendingChantierData.client.phone_Number || "")
         });
@@ -358,8 +364,8 @@ const DevisAvance = () => {
       setClient({
         name: pendingChantierData.client.name || "",
         surname: pendingChantierData.client.surname || "",
-        civilite: "",
-        poste: "",
+        civilite: pendingChantierData.client.civilite || "",
+        poste: pendingChantierData.client.poste || "",
         client_mail: pendingChantierData.client.client_mail || "",
         phone_Number: String(pendingChantierData.client.phone_Number || "")
       });
@@ -397,9 +403,11 @@ const DevisAvance = () => {
         surname: clientData.surname || "",
         phone_Number: parseInt(clientData.phone_Number) || 0,
         client_mail: clientData.client_mail || "",
+        civilite: clientData.civilite || "",
+        poste: clientData.poste || "",
       };
       
-      // Mettre à jour pendingChantierData
+      // Mettre à jour pendingChantierData avec tous les champs du client
       setPendingChantierData((prev) => ({
         ...prev,
         client: updatedClient,
@@ -409,8 +417,8 @@ const DevisAvance = () => {
       setClient({
         name: updatedClient.name,
         surname: updatedClient.surname,
-        civilite: clientData.civilite || "",
-        poste: clientData.poste || "",
+        civilite: updatedClient.civilite,
+        poste: updatedClient.poste,
         client_mail: updatedClient.client_mail,
         phone_Number: String(updatedClient.phone_Number)
       });
@@ -460,6 +468,8 @@ const DevisAvance = () => {
         surname: clientData.surname || "",
         phone_Number: parseInt(clientData.phone_Number) || 0,
         client_mail: clientData.client_mail || "",
+        civilite: clientData.civilite || "",
+        poste: clientData.poste || "",
       };
 
       const updatedSociete = {
@@ -469,7 +479,7 @@ const DevisAvance = () => {
         codepostal_societe: societeData.codepostal_societe || "",
       };
 
-      // Mettre à jour pendingChantierData avec les données récupérées
+      // Mettre à jour pendingChantierData avec les données récupérées (incluant civilite et poste)
       setPendingChantierData((prev) => ({
         ...prev,
         client: updatedClient,
@@ -480,8 +490,8 @@ const DevisAvance = () => {
       setClient({
         name: updatedClient.name,
         surname: updatedClient.surname,
-        civilite: clientData.civilite || "",
-        poste: clientData.poste || "",
+        civilite: updatedClient.civilite,
+        poste: updatedClient.poste,
         client_mail: updatedClient.client_mail,
         phone_Number: String(updatedClient.phone_Number)
       });
@@ -504,33 +514,37 @@ const DevisAvance = () => {
     try {
       setIsGeneratingNumber(true);
       
-      // Utiliser le paramètre ou l'état selectedChantierId
       const chantierIdToUse = chantierIdParam !== null ? chantierIdParam : selectedChantierId;
       
-      // Déterminer le type de devis selon le chantier sélectionné
+      // ✅ NOUVEAU : Si c'est un appel d'offres, utiliser le format "Devis travaux"
+      if (devisType === "chantier") {
+        const params = { devis_chantier: 'true' };
+        const response = await axios.get("/api/get-next-devis-number/", { params });
+        const baseNumber = response.data.numero;
+        const finalNumber = `${baseNumber} - Devis travaux`;
+        setDevisData(prev => ({ ...prev, numero: finalNumber }));
+        return finalNumber;
+      }
+      
+      // Logique existante pour les devis normaux
       const isChantierExistant = chantierIdToUse && chantierIdToUse !== -1;
       
-      // Préparer les paramètres de l'API
       const params = {};
       if (isChantierExistant) {
         params.chantier_id = chantierIdToUse;
-        params.devis_chantier = 'false'; // TS pour chantier existant
+        params.devis_chantier = 'false';
       } else {
-        params.devis_chantier = 'true'; // Devis travaux pour nouveau chantier
+        params.devis_chantier = 'true';
       }
       
       const response = await axios.get("/api/get-next-devis-number/", { params });
       
-      // Base du numéro : "Devis n°017.2025"
       let baseNumber = response.data.numero;
       
-      // Ajouter le suffixe selon le type
       if (isChantierExistant && response.data.next_ts) {
-        // Chantier existant : "Devis n°017.2025 - TS n°001"
         baseNumber = `${baseNumber} - TS n°${response.data.next_ts}`;
         setNextTsNumber(response.data.next_ts);
       } else if (!isChantierExistant) {
-        // Nouveau chantier : "Devis n°017.2025 - Devis travaux"
         baseNumber = `${baseNumber} - Devis travaux`;
       }
       
@@ -1483,6 +1497,60 @@ const DevisAvance = () => {
     return calculateGlobalTotalExcludingLine(null);
   };
 
+  // Fonction pour calculer les totaux estimés (main d'œuvre, matériel, marge)
+  const calculateEstimatedTotals = () => {
+    let totals = {
+      cout_estime_main_oeuvre: 0,
+      cout_estime_materiel: 0,
+      cout_avec_taux_fixe: 0,
+      marge_estimee: 0,
+    };
+
+    // 1. Calculer les coûts directs à partir de devisItems
+    const lignesDetails = devisItems.filter(item => item.type === 'ligne_detail');
+    
+    lignesDetails.forEach(ligne => {
+      const quantity = parseFloat(ligne.quantity || 0);
+      const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre || 0);
+      const cout_materiel = parseFloat(ligne.cout_materiel || 0);
+
+      totals.cout_estime_main_oeuvre += cout_main_oeuvre * quantity;
+      totals.cout_estime_materiel += cout_materiel * quantity;
+    });
+
+    // 2. Calculer le total des coûts directs
+    const coutsDirects = totals.cout_estime_main_oeuvre + totals.cout_estime_materiel;
+
+    // 3. Calculer le montant du taux fixe (moyenne pondérée des taux_fixe des lignes)
+    let totalTauxFixe = 0;
+    let totalQuantite = 0;
+    
+    lignesDetails.forEach(ligne => {
+      const quantity = parseFloat(ligne.quantity || 0);
+      const tauxPersonnalise = parseFloat(ligne.taux_fixe || tauxFixe || 20);
+      totalTauxFixe += tauxPersonnalise * quantity;
+      totalQuantite += quantity;
+    });
+
+    const tauxFixeMoyen = totalQuantite > 0 ? totalTauxFixe / totalQuantite : (tauxFixe || 20);
+    const montantTauxFixe = coutsDirects * (tauxFixeMoyen / 100);
+    totals.cout_avec_taux_fixe = coutsDirects + montantTauxFixe;
+
+    // 4. Obtenir le total HT (calculé automatiquement)
+    const totalHT = calculateGlobalTotal();
+
+    // 5. Calculer la marge (Total HT - Coût avec taux fixe)
+    totals.marge_estimee = totalHT - totals.cout_avec_taux_fixe;
+
+    // 6. Arrondir tous les résultats à 2 décimales
+    totals.cout_estime_main_oeuvre = parseFloat(totals.cout_estime_main_oeuvre.toFixed(2));
+    totals.cout_estime_materiel = parseFloat(totals.cout_estime_materiel.toFixed(2));
+    totals.cout_avec_taux_fixe = parseFloat(totals.cout_avec_taux_fixe.toFixed(2));
+    totals.marge_estimee = parseFloat(totals.marge_estimee.toFixed(2));
+
+    return totals;
+  };
+
   // Calculer le total d'une partie
   const calculatePartieTotal = (partie) => {
     // Calculer d'abord toutes les bases brutes
@@ -1687,8 +1755,11 @@ const DevisAvance = () => {
       let finalSocieteId = null;
       let finalChantierId = selectedChantierId;
       
-      // Gestion du client et de la société pour nouveau chantier (selectedChantierId === -1)
-      if (selectedChantierId === -1) {
+      // Calculer les totaux estimés une seule fois (utilisé pour le chantier et la transformation)
+      const totals = calculateEstimatedTotals();
+      
+      // Gestion du client et de la société pour nouveau chantier OU appel d'offres
+      if (selectedChantierId === -1 || devisType === "chantier") {
         if (!pendingChantierData.client || !pendingChantierData.societe || !pendingChantierData.chantier) {
           const missingData = {
             client: !pendingChantierData.client ? "Client manquant" : null,
@@ -1705,9 +1776,14 @@ const DevisAvance = () => {
         if (existingClient) {
           finalClientId = existingClient.id;
         } else {
+          // Créer le client avec tous les champs (incluant civilite et poste)
           const clientResponse = await axios.post("/api/client/", {
-            ...pendingChantierData.client,
+            name: pendingChantierData.client.name,
+            surname: pendingChantierData.client.surname,
             phone_Number: pendingChantierData.client.phone_Number.toString(),
+            client_mail: pendingChantierData.client.client_mail || "",
+            civilite: pendingChantierData.client.civilite || "",
+            poste: pendingChantierData.client.poste || "",
           });
           finalClientId = clientResponse.data.id;
         }
@@ -1715,34 +1791,75 @@ const DevisAvance = () => {
         // 2. Vérifier si la société existe
         const existingSociete = await checkSocieteExists(pendingChantierData.societe);
         if (existingSociete) {
+          console.log("Société existante trouvée:", existingSociete);
           finalSocieteId = existingSociete.id;
         } else {
-          const societeResponse = await axios.post("/api/societe/", {
-            ...pendingChantierData.societe,
+          console.log("Création d'une nouvelle société");
+          // Préparer les données de la société avec gestion sécurisée du code postal
+          const societeData = {
+            nom_societe: pendingChantierData.societe.nom_societe || "",
+            ville_societe: pendingChantierData.societe.ville_societe || "",
+            rue_societe: pendingChantierData.societe.rue_societe || "",
             client_name: finalClientId,
-            codepostal_societe: pendingChantierData.societe.codepostal_societe.toString(),
-          });
+          };
+          
+          // Ajouter codepostal_societe seulement s'il existe et n'est pas vide
+          if (pendingChantierData.societe.codepostal_societe) {
+            societeData.codepostal_societe = pendingChantierData.societe.codepostal_societe.toString();
+          }
+          
+          const societeResponse = await axios.post("/api/societe/", societeData);
           finalSocieteId = societeResponse.data.id;
+          console.log("Société créée avec succès, ID:", finalSocieteId);
         }
 
-        // 3. Créer le chantier
-        const chantierResponse = await axios.post("/api/chantier/", {
-          chantier_name: pendingChantierData.chantier.chantier_name.trim(),
-          ville: pendingChantierData.chantier.ville,
-          rue: pendingChantierData.chantier.rue,
-          code_postal: pendingChantierData.chantier.code_postal.toString(),
-          montant_ht: total_ht,
-          montant_ttc: montant_ttc,
-          societe: finalSocieteId,
-          client: finalClientId,
-        });
-        finalChantierId = chantierResponse.data.id;
+        // 3. Créer le chantier SEULEMENT si ce n'est PAS un appel d'offres
+        if (devisType !== "chantier") {
+          // Vérifier que finalSocieteId est bien défini avant de créer le chantier
+          if (!finalSocieteId) {
+            throw new Error("Erreur : L'ID de la société n'a pas pu être obtenu. Impossible de créer le chantier.");
+          }
+
+          // Créer le chantier avec la société (totals déjà calculé plus haut)
+          const chantierResponse = await axios.post("/api/chantier/", {
+            chantier_name: pendingChantierData.chantier.chantier_name.trim(),
+            ville: pendingChantierData.chantier.ville,
+            rue: pendingChantierData.chantier.rue,
+            code_postal: pendingChantierData.chantier.code_postal.toString(),
+            montant_ht: total_ht,
+            montant_ttc: montant_ttc,
+            societe_id: finalSocieteId,
+            client: finalClientId,
+            // Coûts estimés
+            cout_estime_main_oeuvre: totals.cout_estime_main_oeuvre,
+            cout_estime_materiel: totals.cout_estime_materiel,
+            cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
+            marge_estimee: totals.marge_estimee,
+            taux_fixe: tauxFixe !== null ? tauxFixe : 20,
+          });
+          finalChantierId = chantierResponse.data.id;
+        }
       } else if (selectedChantierId) {
-        // Récupérer l'ID du client depuis le chantier existant
+        // Récupérer l'ID du client et de la société depuis le chantier existant
+        console.log("Utilisation d'un chantier existant:", selectedChantierId);
+        const chantierResponse = await axios.get(`/api/chantier/${selectedChantierId}/`);
+        const chantierData = chantierResponse.data;
+        
+        // Récupérer la société depuis le chantier
+        if (chantierData.societe) {
+          // Si societe est un objet avec les détails (via serializer)
+          if (typeof chantierData.societe === 'object' && chantierData.societe.id) {
+            finalSocieteId = chantierData.societe.id;
+          } else if (typeof chantierData.societe === 'number') {
+            finalSocieteId = chantierData.societe;
+          }
+        }
+        
+        // Récupérer l'ID du client depuis la société ou directement depuis le chantier
         finalClientId = await getClientIdFromChantier(selectedChantierId);
       }
       
-      // Transformer les données vers le format legacy
+      // Transformer les données vers le format legacy (totals déjà calculé plus haut)
       const legacyDevis = transformToLegacyFormat({
         devisItems,
         devisData: {
@@ -1751,7 +1868,13 @@ const DevisAvance = () => {
           price_ttc: montant_ttc
         },
         selectedChantierId: finalChantierId,
-        clientIds: finalClientId ? [finalClientId] : []
+        clientIds: finalClientId ? [finalClientId] : [],
+        // ✅ NOUVEAU : Données pour appel d'offres
+        devisType: devisType, // Passer le type de devis
+        pendingChantierData: devisType === "chantier" ? pendingChantierData : null,
+        societeId: finalSocieteId,
+        totals: totals, // Totals estimés (marge_estimee, cout_avec_taux_fixe)
+        tauxFixe: tauxFixe,
       });
       
       // Envoyer à l'API
@@ -1767,15 +1890,9 @@ const DevisAvance = () => {
           console.log("✅ Coûts du devis recalculés avec succès");
         } catch (recalcError) {
           console.error("❌ Erreur lors du recalcul des coûts:", recalcError);
-          // Ne pas bloquer la création du devis si le recalcul échoue
         }
         
         alert('Devis sauvegardé avec succès!');
-        
-        // Si c'est un devis travaux et qu'un appel d'offres a été créé
-        if (response.data.appel_offres_id) {
-          alert(`Appel d'offres créé : ${response.data.appel_offres_name}`);
-        }
         
         // Rediriger vers la liste des devis
         window.location.href = '/ListeDevis';
@@ -1863,7 +1980,7 @@ const DevisAvance = () => {
                 <Select
                   value={selectedChantierId || ''}
                   onChange={(e) => handleChantierSelection(e.target.value)}
-                  disabled={isLoadingChantiers}
+                  disabled={isLoadingChantiers} // Permettre de recliquer même si appel d'offres
                   displayEmpty
                   notched
                 >
@@ -1887,19 +2004,41 @@ const DevisAvance = () => {
               <Button
                 variant="contained"
                 startIcon={<FiPlus />}
-                onClick={() => setShowClientInfoModal(true)}
+                onClick={() => {
+                  // Pour appel d'offres, mettre le type à "chantier" et ouvrir directement le modal de création client
+                  setDevisType("chantier");
+                  setSelectedChantierId(null);
+                  setPendingChantierData({
+                    client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+                    societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
+                    chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
+                    devis: null,
+                  });
+                  setShowClientInfoModal(true);
+                  // Régénérer le numéro avec le format "Devis travaux"
+                  generateDevisNumber(null);
+                }}
+                // Permettre de recliquer même si déjà en mode appel d'offres (pour recommencer)
                 sx={{
-                  backgroundColor: '#28a745',
-                  '&:hover': { backgroundColor: '#218838' },
+                  backgroundColor: '#ff9800',
+                  '&:hover': { backgroundColor: '#f57c00' },
                   textTransform: 'none',
                   fontWeight: 'bold'
                 }}
               >
-                Créer un nouveau chantier
+                Créer un appel d'offres
               </Button>
             </Box>
             
-            {selectedChantierId && (
+            {devisType === "chantier" && (
+              <Box sx={{ mt: 2, p: 2, backgroundColor: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Appel d'offres :</strong> Aucun chantier ne sera créé. Les informations du chantier seront stockées dans l'appel d'offres.
+                </Typography>
+              </Box>
+            )}
+            
+            {selectedChantierId && devisType === "normal" && (
               <Box sx={{ mt: 2, p: 2, backgroundColor: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
                 <Typography variant="body2" color="text.secondary">
                   Chantier sélectionné : <strong>{chantier.chantier_name}</strong>
@@ -1934,7 +2073,7 @@ const DevisAvance = () => {
               isEditable={selectedChantierId === -1}
               onClientChange={(updatedClient) => {
                 setClient(updatedClient);
-                // Mettre à jour pendingChantierData
+                // Mettre à jour pendingChantierData avec tous les champs (incluant civilite et poste)
                 setPendingChantierData((prev) => ({
                   ...prev,
                   client: {
@@ -1942,6 +2081,8 @@ const DevisAvance = () => {
                     surname: updatedClient.surname || "",
                     phone_Number: updatedClient.phone_Number || "",
                     client_mail: updatedClient.client_mail || "",
+                    civilite: updatedClient.civilite || "",
+                    poste: updatedClient.poste || "",
                   },
                 }));
               }}
@@ -2287,32 +2428,85 @@ const DevisAvance = () => {
       {/* Modals pour la création de nouveau chantier */}
       <ClientInfoModal
         open={showClientInfoModal}
-        onClose={() => setShowClientInfoModal(false)}
+        onClose={() => {
+          setShowClientInfoModal(false);
+          // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
+          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
+            setDevisType("normal");
+            setSelectedChantierId(null);
+            setPendingChantierData({
+              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
+              chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
+              devis: null,
+            });
+          }
+        }}
         onSubmit={handleClientInfoSubmit}
       />
 
       <SocieteInfoModal
         open={showSocieteInfoModal}
-        onClose={() => setShowSocieteInfoModal(false)}
+        onClose={() => {
+          setShowSocieteInfoModal(false);
+          // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
+          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
+            setDevisType("normal");
+            setSelectedChantierId(null);
+            setPendingChantierData({
+              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
+              chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
+              devis: null,
+            });
+          }
+        }}
         onSubmit={handleSocieteInfoSubmit}
       />
 
       <SelectSocieteModal
         open={showSelectSocieteModal}
-        onClose={() => setShowSelectSocieteModal(false)}
+        onClose={() => {
+          setShowSelectSocieteModal(false);
+          // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
+          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
+            setDevisType("normal");
+            setSelectedChantierId(null);
+            setPendingChantierData({
+              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
+              chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
+              devis: null,
+            });
+          }
+        }}
         onSocieteSelect={handleSocieteSelect}
       />
 
       {/* Modal de création de chantier */}
       <ChantierForm
         open={showChantierForm}
-        onClose={() => setShowChantierForm(false)}
+        onClose={() => {
+          setShowChantierForm(false);
+          // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
+          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
+            setDevisType("normal");
+            setSelectedChantierId(null);
+            setPendingChantierData({
+              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
+              chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
+              devis: null,
+            });
+          }
+        }}
         onSubmit={(chantierData) => {
           handleChantierCreation(chantierData);
         }}
         societeId={selectedSocieteId}
         chantierData={pendingChantierData.chantier}
       />
+
     </div>
   );
 };

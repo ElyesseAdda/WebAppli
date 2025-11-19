@@ -2881,29 +2881,36 @@ def create_devis(request):
                 
                 appel_offres = AppelOffres.objects.create(**appel_offres_data)
                 
-                # Séparer les lignes spéciales normales des lignes de type 'display'
-                lignes_speciales_raw = request.data.get('lignes_speciales', {})
-                lignes_speciales_filtered = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                lignes_display = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                # Filtrer les lignes spéciales des parties
-                for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
-                    lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
-                
-                # Filtrer les lignes spéciales des sous-parties
-                for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
-                    lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
+                # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
+                # Si oui, utiliser directement, sinon filtrer depuis lignes_speciales
+                if 'lignes_display' in request.data and request.data['lignes_display']:
+                    # Le frontend a déjà séparé les lignes display
+                    lignes_display = request.data.get('lignes_display', {})
+                    lignes_speciales_filtered = request.data.get('lignes_speciales', {})
+                else:
+                    # Ancien comportement : séparer les lignes spéciales normales des lignes de type 'display'
+                    lignes_speciales_raw = request.data.get('lignes_speciales', {})
+                    lignes_speciales_filtered = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    lignes_display = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    # Filtrer les lignes spéciales des parties
+                    for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
+                        lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
+                    
+                    # Filtrer les lignes spéciales des sous-parties
+                    for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
+                        lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
                 
                 # Création du devis lié à l'appel d'offres
                 devis_data = {
@@ -2935,29 +2942,36 @@ def create_devis(request):
                         # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
                         pass
             else:
-                # Séparer les lignes spéciales normales des lignes de type 'display'
-                lignes_speciales_raw = request.data.get('lignes_speciales', {})
-                lignes_speciales_filtered = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                lignes_display = {
-                    'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
-                    'parties': {},
-                    'sousParties': {}
-                }
-                
-                # Filtrer les lignes spéciales des parties
-                for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
-                    lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
-                
-                # Filtrer les lignes spéciales des sous-parties
-                for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
-                    lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
-                    lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
+                # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
+                # Si oui, utiliser directement, sinon filtrer depuis lignes_speciales
+                if 'lignes_display' in request.data and request.data['lignes_display']:
+                    # Le frontend a déjà séparé les lignes display
+                    lignes_display = request.data.get('lignes_display', {})
+                    lignes_speciales_filtered = request.data.get('lignes_speciales', {})
+                else:
+                    # Ancien comportement : séparer les lignes spéciales normales des lignes de type 'display'
+                    lignes_speciales_raw = request.data.get('lignes_speciales', {})
+                    lignes_speciales_filtered = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') != 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    lignes_display = {
+                        'global': [line for line in lignes_speciales_raw.get('global', []) if line.get('type') == 'display'],
+                        'parties': {},
+                        'sousParties': {}
+                    }
+                    
+                    # Filtrer les lignes spéciales des parties
+                    for partie_id, lines in lignes_speciales_raw.get('parties', {}).items():
+                        lignes_speciales_filtered['parties'][partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['parties'][partie_id] = [line for line in lines if line.get('type') == 'display']
+                    
+                    # Filtrer les lignes spéciales des sous-parties
+                    for sous_partie_id, lines in lignes_speciales_raw.get('sousParties', {}).items():
+                        lignes_speciales_filtered['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') != 'display']
+                        lignes_display['sousParties'][sous_partie_id] = [line for line in lines if line.get('type') == 'display']
                 
                 # Création du devis de base (comme avant)
                 devis_data = {
@@ -3220,12 +3234,43 @@ def get_chantier_relations(request):
     
     return Response(data)
 
+def is_new_system_devis(devis):
+    """
+    Détecte si un devis utilise le nouveau système (avec index_global)
+    Utilise la même logique que DevisSerializer
+    """
+    # Vérifier si le devis a des DevisLigne avec index_global > 0
+    has_unified_lignes = DevisLigne.objects.filter(
+        devis=devis, 
+        index_global__gt=0
+    ).exists()
+    
+    # Vérifier si le devis a des parties/sous-parties/lignes avec index_global > 0
+    has_unified_items = (
+        Partie.objects.filter(devis=devis, index_global__gt=0).exists() or
+        SousPartie.objects.filter(devis=devis, index_global__gt=0).exists() or
+        LigneDetail.objects.filter(devis=devis, index_global__gt=0).exists()
+    )
+    
+    return has_unified_lignes or has_unified_items
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def preview_saved_devis(request, devis_id):
+    """
+    Vue de prévisualisation qui redirige automatiquement vers la bonne version
+    selon le système utilisé par le devis (ancien ou nouveau)
+    """
     try:
         devis = get_object_or_404(Devis, id=devis_id)
         
+        # Détecter si le devis utilise le nouveau système
+        if is_new_system_devis(devis):
+            # Rediriger vers preview_saved_devis_v2 pour le nouveau système
+            return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
+        
+        # Sinon, continuer avec l'ancien système (code existant)
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
         if devis.devis_chantier and devis.appel_offres:
             # Cas d'un devis de chantier (appel d'offres)
