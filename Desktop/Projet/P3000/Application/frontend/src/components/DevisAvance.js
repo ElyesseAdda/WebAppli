@@ -16,39 +16,72 @@ import SelectSocieteModal from './SelectSocieteModal';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
 
+const createInitialDevisData = () => ({
+  numero: '',
+  date_creation: new Date().toISOString().split('T')[0],
+  nature_travaux: '',
+  tva_rate: 20,
+  price_ht: 0,
+  price_ttc: 0
+});
+
+const createInitialClientState = () => ({
+  name: '',
+  surname: '',
+  civilite: '',
+  poste: '',
+  client_mail: '',
+  phone_Number: ''
+});
+
+const createInitialSocieteState = () => ({
+  nom_societe: '',
+  rue_societe: '',
+  codepostal_societe: '',
+  ville_societe: ''
+});
+
+const createInitialChantierState = () => ({
+  chantier_name: '',
+  rue: '',
+  code_postal: '',
+  ville: ''
+});
+
+const createInitialPendingChantierData = () => ({
+  client: {
+    name: "",
+    surname: "",
+    client_mail: "",
+    phone_Number: "",
+    civilite: "",
+    poste: ""
+  },
+  societe: {
+    nom_societe: "",
+    ville_societe: "",
+    rue_societe: "",
+    codepostal_societe: "",
+  },
+  chantier: {
+    id: -1,
+    chantier_name: "",
+    ville: "",
+    rue: "",
+    code_postal: "",
+  },
+  devis: null,
+});
+
 const DevisAvance = () => {
   // États pour les données du devis
-  const [devisData, setDevisData] = useState({
-    numero: '',
-    date_creation: new Date().toISOString().split('T')[0],
-    nature_travaux: '',
-    tva_rate: 20,
-    price_ht: 0,
-    price_ttc: 0
-  });
+  const [devisData, setDevisData] = useState(() => createInitialDevisData());
 
-  const [client, setClient] = useState({
-    name: '',
-    surname: '',
-    civilite: '',
-    poste: '',
-    client_mail: '',
-    phone_Number: ''
-  });
+  const [client, setClient] = useState(() => createInitialClientState());
 
-  const [societe, setSociete] = useState({
-    nom_societe: '',
-    rue_societe: '',
-    codepostal_societe: '',
-    ville_societe: ''
-  });
+  const [societe, setSociete] = useState(() => createInitialSocieteState());
 
-  const [chantier, setChantier] = useState({
-    chantier_name: '',
-    rue: '',
-    code_postal: '',
-    ville: ''
-  });
+  const [chantier, setChantier] = useState(() => createInitialChantierState());
 
 
   const [special_lines_global, setSpecialLinesGlobal] = useState([]);
@@ -76,28 +109,7 @@ const DevisAvance = () => {
   const [isLoadingChantiers, setIsLoadingChantiers] = useState(false);
   
   // États pour la création de nouveau chantier (même logique que CreationDevis.js)
-  const [pendingChantierData, setPendingChantierData] = useState({
-    client: {
-      name: "",
-      surname: "",
-      client_mail: "",
-      phone_Number: "",
-    },
-    societe: {
-      nom_societe: "",
-      ville_societe: "",
-      rue_societe: "",
-      codepostal_societe: "",
-    },
-    chantier: {
-      id: -1,
-      chantier_name: "",
-      ville: "",
-      rue: "",
-      code_postal: "",
-    },
-    devis: null,
-  });
+  const [pendingChantierData, setPendingChantierData] = useState(() => createInitialPendingChantierData());
   const [showClientInfoModal, setShowClientInfoModal] = useState(false);
   const [showSocieteInfoModal, setShowSocieteInfoModal] = useState(false);
   const [showSelectSocieteModal, setShowSelectSocieteModal] = useState(false);
@@ -116,6 +128,12 @@ const DevisAvance = () => {
   const [availableParties, setAvailableParties] = useState([]);
   const [isLoadingParties, setIsLoadingParties] = useState(false);
   const [partiesToCreate, setPartiesToCreate] = useState([]); // Nouvelles parties à créer
+  
+  // États liés à la persistance locale
+  const [sessionUser, setSessionUser] = useState(null);
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  const draftSaveTimeoutRef = React.useRef(null);
+  const lastDraftKeyRef = React.useRef(null);
   
   // ✅ NOUVEAU : Enrichir devisItems pour que les parties aient selectedSousParties (pour compatibilité)
   const enrichedDevisItems = React.useMemo(() => {
@@ -153,6 +171,59 @@ const DevisAvance = () => {
         type: partieItem.type_activite || 'PEINTURE' // Restaurer le type original
       }));
   }, [enrichedDevisItems]);
+  
+  const draftStorageKey = React.useMemo(() => {
+    if (sessionUser?.id) {
+      return `devisAvanceDraft_user_${sessionUser.id}`;
+    }
+    return 'devisAvanceDraft_global';
+  }, [sessionUser]);
+  
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await axios.get('/auth/check/');
+        if (response?.data?.authenticated && response.data.user) {
+          setSessionUser(response.data.user);
+        } else {
+          setSessionUser(null);
+        }
+      } catch (error) {
+        console.error("Erreur lors de la récupération de l'utilisateur courant:", error);
+        setSessionUser(null);
+      }
+    };
+    
+    fetchCurrentUser();
+  }, []);
+  
+  useEffect(() => {
+    if (!draftStorageKey) {
+      return;
+    }
+    
+    if (lastDraftKeyRef.current !== draftStorageKey) {
+      const previousKey = lastDraftKeyRef.current;
+      
+      if (
+        previousKey === 'devisAvanceDraft_global' &&
+        draftStorageKey !== previousKey
+      ) {
+        try {
+          const globalDraft = localStorage.getItem(previousKey);
+          const existingDraftForUser = localStorage.getItem(draftStorageKey);
+          if (globalDraft && !existingDraftForUser) {
+            localStorage.setItem(draftStorageKey, globalDraft);
+          }
+        } catch (error) {
+          console.error('Erreur lors de la migration du brouillon Devis Avance:', error);
+        }
+      }
+      
+      lastDraftKeyRef.current = draftStorageKey;
+      setIsDraftHydrated(false);
+    }
+  }, [draftStorageKey]);
 
   // Fonction pour formater les montants avec espaces
   const formatMontantEspace = (montant) => {
@@ -1040,6 +1111,227 @@ const DevisAvance = () => {
     
     return true;
   };
+  
+  const hydrateDraftState = React.useCallback((draft) => {
+    if (!draft || typeof draft !== 'object') {
+      return;
+    }
+    
+    try {
+      if (draft.devisData) {
+        setDevisData(prev => ({
+          ...prev,
+          ...draft.devisData,
+          date_creation: draft.devisData.date_creation || prev.date_creation
+        }));
+      }
+      
+      if (draft.client) {
+        setClient(prev => ({
+          ...prev,
+          ...draft.client
+        }));
+      }
+      
+      if (draft.societe) {
+        setSociete(prev => ({
+          ...prev,
+          ...draft.societe
+        }));
+      }
+      
+      if (draft.chantier) {
+        setChantier(prev => ({
+          ...prev,
+          ...draft.chantier
+        }));
+      }
+      
+      if (Array.isArray(draft.devisItems)) {
+        setDevisItems(draft.devisItems);
+      }
+      
+      if (Array.isArray(draft.pendingSpecialLines)) {
+        setPendingSpecialLines(draft.pendingSpecialLines);
+      }
+      
+      if (Array.isArray(draft.special_lines_global)) {
+        setSpecialLinesGlobal(draft.special_lines_global);
+      }
+      
+      if (draft.pendingChantierData) {
+        setPendingChantierData(prev => ({
+          ...prev,
+          ...draft.pendingChantierData,
+          client: {
+            ...prev.client,
+            ...draft.pendingChantierData.client
+          },
+          societe: {
+            ...prev.societe,
+            ...draft.pendingChantierData.societe
+          },
+          chantier: {
+            ...prev.chantier,
+            ...draft.pendingChantierData.chantier
+          }
+        }));
+      }
+      
+      if (draft.pendingLineForBase !== undefined) {
+        setPendingLineForBase(draft.pendingLineForBase);
+      }
+      
+      if (draft.lineAwaitingPlacement !== undefined) {
+        setLineAwaitingPlacement(draft.lineAwaitingPlacement);
+      }
+      
+      if (typeof draft.isSelectingBase === 'boolean') {
+        setIsSelectingBase(draft.isSelectingBase);
+      }
+      
+      if (typeof draft.selectedChantierId !== 'undefined') {
+        setSelectedChantierId(draft.selectedChantierId ?? null);
+      }
+      
+      if (typeof draft.devisType === 'string') {
+        setDevisType(draft.devisType);
+      }
+      
+      if (typeof draft.tauxFixe === 'number') {
+        setTauxFixe(draft.tauxFixe);
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'application du brouillon Devis Avance:', error);
+    }
+  }, []);
+  
+  useEffect(() => {
+    if (!draftStorageKey || isDraftHydrated) {
+      return;
+    }
+    
+    try {
+      const rawDraft = localStorage.getItem(draftStorageKey);
+      if (rawDraft) {
+        const parsedDraft = JSON.parse(rawDraft);
+        hydrateDraftState(parsedDraft);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du brouillon Devis Avance:', error);
+    } finally {
+      setIsDraftHydrated(true);
+    }
+  }, [draftStorageKey, isDraftHydrated, hydrateDraftState]);
+  
+  useEffect(() => {
+    if (!draftStorageKey || !isDraftHydrated) {
+      return;
+    }
+    
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+    
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      const draftPayload = {
+        devisData,
+        client,
+        societe,
+        chantier,
+        special_lines_global,
+        pendingSpecialLines,
+        devisItems,
+        selectedChantierId,
+        pendingChantierData,
+        devisType,
+        tauxFixe,
+        lineAwaitingPlacement,
+        pendingLineForBase,
+        isSelectingBase
+      };
+      
+      try {
+        localStorage.setItem(draftStorageKey, JSON.stringify(draftPayload));
+      } catch (error) {
+        console.error('Erreur lors de la sauvegarde du brouillon Devis Avance:', error);
+      }
+    }, 400);
+    
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, [
+    draftStorageKey,
+    isDraftHydrated,
+    devisData,
+    client,
+    societe,
+    chantier,
+    special_lines_global,
+    pendingSpecialLines,
+    devisItems,
+    selectedChantierId,
+    pendingChantierData,
+    devisType,
+    tauxFixe,
+    lineAwaitingPlacement,
+    pendingLineForBase,
+    isSelectingBase
+  ]);
+  
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  const clearDraftStorage = React.useCallback(() => {
+    if (!draftStorageKey) {
+      return;
+    }
+    
+    try {
+      localStorage.removeItem(draftStorageKey);
+    } catch (error) {
+      console.error('Erreur lors de la suppression du brouillon Devis Avance:', error);
+    }
+  }, [draftStorageKey]);
+  
+  const resetDevisFormState = React.useCallback(() => {
+    setDevisData(createInitialDevisData());
+    setClient(createInitialClientState());
+    setSociete(createInitialSocieteState());
+    setChantier(createInitialChantierState());
+    setSpecialLinesGlobal([]);
+    setPendingSpecialLines([]);
+    setEditingSpecialLine(null);
+    setShowEditModal(false);
+    setLineAwaitingPlacement(null);
+    setIsSelectingBase(false);
+    setPendingLineForBase(null);
+    setDevisItems([]);
+    setSelectedChantierId(null);
+    setPendingChantierData(createInitialPendingChantierData());
+    setSelectedSocieteId(null);
+    setDevisType("normal");
+    setTauxFixe(20);
+    setPartiesToCreate([]);
+    setIsReordering(false);
+    setShowChantierForm(false);
+    setShowClientInfoModal(false);
+    setShowSocieteInfoModal(false);
+    setShowSelectSocieteModal(false);
+    setClientId(null);
+    setNextTsNumber(null);
+    setTotalHt(0);
+    setTva(0);
+    setMontantTtc(0);
+  }, []);
 
   // ✅ Plus besoin de synchronisation : devisItems est la source de vérité unique
 
@@ -1883,13 +2175,101 @@ const DevisAvance = () => {
       if (response.data) {
         // Succès : mettre à jour l'ID du devis pour les futures modifications
         setDevisData(prev => ({ ...prev, id: response.data.id }));
-        
+        clearDraftStorage();
+
         // Recalculer automatiquement les coûts du devis créé
         try {
           await axios.post(`/api/devis/${response.data.id}/recalculer-couts/`);
           console.log("✅ Coûts du devis recalculés avec succès");
         } catch (recalcError) {
           console.error("❌ Erreur lors du recalcul des coûts:", recalcError);
+        }
+
+        const devisId = response.data.id;
+        
+        // Gestion auto-download pour les appels d'offres (devisType "chantier")
+        if (devisType === "chantier") {
+          try {
+            const appelOffresId = response.data.appel_offres_id;
+            const appelOffresName = response.data.appel_offres_name;
+            if (appelOffresId && appelOffresName) {
+              const societeName =
+                pendingChantierData?.societe?.nom_societe ||
+                societe.nom_societe ||
+                "Société";
+              const urlParams = new URLSearchParams({
+                autoDownload: "true",
+                devisId: devisId,
+                appelOffresId: appelOffresId,
+                appelOffresName: appelOffresName,
+                societeName: societeName,
+                numero: devisData.numero,
+              });
+              alert(
+                "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
+              );
+              window.location.href = `/ListeDevis?${urlParams.toString()}`;
+              return;
+            }
+          } catch (autoDownloadAppelOffresError) {
+            console.error(
+              "❌ Erreur lors de la préparation du téléchargement auto (appel d'offres):",
+              autoDownloadAppelOffresError
+            );
+          }
+        }
+
+        // Gestion auto-download pour les devis normaux
+        if (devisType === "normal" && finalChantierId) {
+          try {
+            const chantierResponse = await axios.get(
+              `/api/chantier/${finalChantierId}/`
+            );
+            const chantierData = chantierResponse.data;
+            let societeName = "";
+            if (chantierData.societe) {
+              if (typeof chantierData.societe === "object") {
+                societeName = chantierData.societe.nom_societe || "";
+              } else {
+                try {
+                  const societeResponse = await axios.get(
+                    `/api/societe/${chantierData.societe}/`
+                  );
+                  societeName = societeResponse.data?.nom_societe || "";
+                } catch (societeError) {
+                  console.error(
+                    "❌ Erreur lors de la récupération de la société pour auto-download:",
+                    societeError
+                  );
+                }
+              }
+            }
+
+            const urlParams = new URLSearchParams({
+              autoDownload: "true",
+              devisId: devisId,
+              chantierId: finalChantierId,
+              chantierName:
+                chantierData.chantier_name || chantier.chantier_name || "",
+              societeName:
+                societeName ||
+                chantierData.societe?.nom_societe ||
+                societe.nom_societe ||
+                "Société",
+              numero: devisData.numero,
+            });
+
+            alert(
+              "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
+            );
+            window.location.href = `/ListeDevis?${urlParams.toString()}`;
+            return;
+          } catch (autoDownloadNormalError) {
+            console.error(
+              "❌ Erreur lors de la préparation du téléchargement auto (devis normal):",
+              autoDownloadNormalError
+            );
+          }
         }
         
         alert('Devis sauvegardé avec succès!');
@@ -1904,6 +2284,17 @@ const DevisAvance = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+  
+  const handleResetDraft = async () => {
+    const confirmed = window.confirm("Voulez-vous vraiment réinitialiser toutes les informations du devis en cours ?");
+    if (!confirmed) {
+      return;
+    }
+    
+    resetDevisFormState();
+    clearDraftStorage();
+    await generateDevisNumber(null);
   };
 
   // Charger les chantiers au montage du composant
@@ -2407,18 +2798,21 @@ const DevisAvance = () => {
               >
                 👁️ Aperçu PDF
               </button>
-              <button style={{
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-              }}>
-                📋 Dupliquer
+              <button
+                onClick={handleResetDraft}
+                style={{
+                  backgroundColor: '#9e9e9e',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                ♻️ Réinitialiser
               </button>
             </div>
           </div>
