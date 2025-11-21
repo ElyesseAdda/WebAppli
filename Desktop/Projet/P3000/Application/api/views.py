@@ -691,6 +691,10 @@ class PartieViewSet(viewsets.ModelViewSet):
         type_filter = self.request.query_params.get('type')
         if type_filter:
             queryset = queryset.filter(type=type_filter)
+        
+        # Exclure les anciennes parties au format "1-", "2-", etc.
+        queryset = queryset.exclude(titre__regex=r'^\d+-')
+        
         return queryset
     
     def get_object(self):
@@ -757,8 +761,12 @@ class PartieViewSet(viewsets.ModelViewSet):
         """
         Récupère la liste des types de domaines existants
         """
-        # Filtrer aussi les domaines des parties non supprimées
-        domaines = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True)).values_list('type', flat=True).distinct().order_by('type')
+        # Filtrer aussi les domaines des parties non supprimées et exclure les anciennes parties au format "1-", "2-", etc.
+        domaines = Partie.objects.filter(
+            Q(is_deleted=False) | Q(is_deleted__isnull=True)
+        ).exclude(
+            titre__regex=r'^\d+-'
+        ).values_list('type', flat=True).distinct().order_by('type')
         return Response(list(domaines))
     
     @action(detail=False, methods=['get'])
@@ -780,6 +788,9 @@ class PartieViewSet(viewsets.ModelViewSet):
         
         # Base queryset - exclure les parties supprimées
         queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        
+        # Exclure les anciennes parties au format "1-", "2-", etc.
+        queryset = queryset.exclude(titre__regex=r'^\d+-')
         
         # Filtrer par recherche si fournie
         if search_query:

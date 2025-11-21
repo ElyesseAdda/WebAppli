@@ -59,14 +59,60 @@ const SousPartieSearch = ({
     );
   }, [inputValue, options, selectedSousParties, fuse]);
 
-  // Options avec possibilité de créer
-  const optionsWithCreate = useMemo(() => {
-    // Si pas de recherche ou si on a des résultats, retourner les options normales
-    if (inputValue.trim() === '' || filteredOptions.length > 0) {
-      return filteredOptions;
+  // Option spéciale "Lignes directes" (souvent utilisée)
+  const lignesDirectesOption = useMemo(() => {
+    // Vérifier si "Lignes directes" n'est pas déjà sélectionnée
+    const isAlreadySelected = selectedSousParties.some(
+      sp => sp.description && sp.description.toLowerCase() === 'lignes directes'
+    );
+    
+    if (isAlreadySelected) {
+      return null;
     }
     
-    // Si aucun résultat, proposer l'option de création
+    return {
+      value: 'create_lignes_directes',
+      label: '✨ Lignes directes',
+      data: { description: 'Lignes directes', isCreate: true, isSpecial: true }
+    };
+  }, [selectedSousParties]);
+
+  // Options avec possibilité de créer
+  const optionsWithCreate = useMemo(() => {
+    const searchLower = inputValue.trim().toLowerCase();
+    const shouldShowLignesDirectes = lignesDirectesOption && (
+      inputValue.trim() === '' || 
+      'lignes directes'.includes(searchLower) ||
+      searchLower.includes('lignes') ||
+      searchLower.includes('directes')
+    );
+    
+    // Si pas de recherche, ajouter "Lignes directes" en premier si disponible
+    if (inputValue.trim() === '') {
+      const options = [];
+      if (lignesDirectesOption) {
+        options.push(lignesDirectesOption);
+      }
+      // Ajouter les autres options filtrées
+      options.push(...filteredOptions);
+      return options;
+    }
+    
+    // Si on a des résultats de recherche, ajouter "Lignes directes" en premier si elle correspond
+    if (filteredOptions.length > 0) {
+      const options = [];
+      if (shouldShowLignesDirectes && lignesDirectesOption) {
+        options.push(lignesDirectesOption);
+      }
+      options.push(...filteredOptions);
+      return options;
+    }
+    
+    // Si aucun résultat, proposer "Lignes directes" si elle correspond, sinon l'option de création
+    if (shouldShowLignesDirectes && lignesDirectesOption) {
+      return [lignesDirectesOption];
+    }
+    
     return [
       {
         value: 'create',
@@ -74,16 +120,17 @@ const SousPartieSearch = ({
         data: { description: inputValue, isCreate: true }
       }
     ];
-  }, [filteredOptions, inputValue]);
+  }, [filteredOptions, inputValue, lignesDirectesOption]);
 
   // Gérer la sélection ou création
   const handleChange = (selectedOption) => {
     if (!selectedOption) return;
 
-    // Si c'est une création
-    if (selectedOption.value === 'create' || selectedOption.data?.isCreate) {
-      if (onSousPartieCreate && inputValue.trim()) {
-        onSousPartieCreate(partieId, inputValue.trim());
+    // Si c'est une création (y compris "Lignes directes")
+    if (selectedOption.value === 'create' || selectedOption.value === 'create_lignes_directes' || selectedOption.data?.isCreate) {
+      const description = selectedOption.data?.description || inputValue.trim();
+      if (onSousPartieCreate && description) {
+        onSousPartieCreate(partieId, description);
         setInputValue(''); // Réinitialiser après création
       }
     } else {

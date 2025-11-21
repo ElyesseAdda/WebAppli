@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404, render
-from django.http import JsonResponse
+from django.http import JsonResponse, QueryDict
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -606,219 +606,188 @@ def preview_saved_devis_v2(request, devis_id):
         return JsonResponse({'error': f'{str(e)}\n{traceback.format_exc()}'}, status=400)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def preview_devis_v2(request):
     """
     Version V2 de la prévisualisation temporaire des devis - Basée sur les données du frontend
     Permet de prévisualiser un devis sans l'avoir sauvegardé en base de données
     """
-    devis_data_encoded = request.GET.get('devis')
+    devis_data = None
 
-    if devis_data_encoded:
-        try:
-            # Décoder les données du devis depuis l'URL (Django décode déjà, mais on peut avoir besoin de unquote pour les caractères spéciaux)
+    if request.method == 'POST':
+        devis_data = request.data
+
+        # Gérer les cas où le payload arrive sous forme de QueryDict ou de chaîne
+        if isinstance(devis_data, QueryDict):
+            # Si axios envoie un champ unique "devis" pour compatibilité, tenter de le décoder
+            if 'devis' in devis_data:
+                try:
+                    devis_data = json.loads(devis_data.get('devis', '{}'))
+                except json.JSONDecodeError as exc:
+                    return JsonResponse({'error': f'Payload invalid: {str(exc)}'}, status=400)
+            else:
+                devis_data = devis_data.dict()
+
+        if isinstance(devis_data, (str, bytes)):
+            try:
+                devis_data = json.loads(devis_data)
+            except json.JSONDecodeError as exc:
+                return JsonResponse({'error': f'Payload invalid: {str(exc)}'}, status=400)
+    else:
+        devis_data_encoded = request.GET.get('devis')
+        if devis_data_encoded:
             try:
                 devis_data = json.loads(devis_data_encoded)
             except json.JSONDecodeError:
-                # Si échec, essayer avec unquote
-                devis_data = json.loads(urllib.parse.unquote(devis_data_encoded))
-            
-            chantier_id = devis_data.get('chantier') or devis_data.get('chantier_id')
+                try:
+                    devis_data = json.loads(urllib.parse.unquote(devis_data_encoded))
+                except json.JSONDecodeError as exc:
+                    return JsonResponse({'error': f'Erreur de décodage JSON: {str(exc)}'}, status=400)
 
-            if chantier_id == -1 or not chantier_id:
-                # Utiliser les données temporaires
-                temp_data = devis_data.get('tempData', {})
-                chantier = temp_data.get('chantier', {})
-                client = temp_data.get('client', {})
-                societe = temp_data.get('societe', {})
+    if not isinstance(devis_data, dict):
+        return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
-                # S'assurer que tous les champs ont une valeur par défaut
-                for field in ['name', 'surname', 'phone_Number', 'client_mail', 'civilite', 'poste']:
-                    if not client.get(field):
-                        client[field] = ''
+    try:
+        chantier_id = devis_data.get('chantier') or devis_data.get('chantier_id')
 
-                for field in ['nom_societe', 'ville_societe', 'rue_societe', 'codepostal_societe']:
-                    if not societe.get(field):
-                        societe[field] = ''
-                    
-                for field in ['chantier_name', 'ville', 'rue', 'code_postal']:
-                    if not chantier.get(field):
-                        chantier[field] = ''
-            else:
-                # Utiliser les données existantes
-                chantier = get_object_or_404(Chantier, id=chantier_id)
-                societe = chantier.societe
-                client = societe.client_name if societe else None
+        if chantier_id == -1 or not chantier_id:
+            # Utiliser les données temporaires
+            temp_data = devis_data.get('tempData', {})
+            chantier = temp_data.get('chantier', {})
+            client = temp_data.get('client', {})
+            societe = temp_data.get('societe', {})
 
-            # Utiliser les données du frontend (parties_metadata, lignes, etc.)
-            total_ht = Decimal('0')
-            parties_data = []
+            # S'assurer que tous les champs ont une valeur par défaut
+            for field in ['name', 'surname', 'phone_Number', 'client_mail', 'civilite', 'poste']:
+                if not client.get(field):
+                    client[field] = ''
 
-            # Récupérer les lignes spéciales du devis
-            lignes_speciales = devis_data.get('lignes_speciales', {})
-            lignes_display = devis_data.get('lignes_display', {})
+            for field in ['nom_societe', 'ville_societe', 'rue_societe', 'codepostal_societe']:
+                if not societe.get(field):
+                    societe[field] = ''
+                
+            for field in ['chantier_name', 'ville', 'rue', 'code_postal']:
+                if not chantier.get(field):
+                    chantier[field] = ''
+        else:
+            # Utiliser les données existantes
+            chantier = get_object_or_404(Chantier, id=chantier_id)
+            societe = chantier.societe
+            client = societe.client_name if societe else None
 
-            # Récupérer parties_metadata pour construire la structure
-            parties_metadata = devis_data.get('parties_metadata', {})
-            selected_parties = parties_metadata.get('selectedParties', [])
+        # Utiliser les données du frontend (parties_metadata, lignes, etc.)
+        total_ht = Decimal('0')
+        parties_data = []
 
-            # Fonction de tri par index_global ou numéro de partie (si présent)
-            def sort_key_by_index(partie):
-                # Si on a index_global dans les données, l'utiliser
-                if 'index_global' in partie:
-                    return float(partie.get('index_global', 999))
-                # Sinon, utiliser le numéro
-                numero = partie.get('numero')
-                if numero and isinstance(numero, (int, str)) and str(numero).isdigit():
-                    return int(numero)
-                return 999  # Mettre les parties sans numéro à la fin
+        # Récupérer les lignes spéciales du devis
+        lignes_speciales = devis_data.get('lignes_speciales', {})
+        lignes_display = devis_data.get('lignes_display', {})
 
-            # Trier les parties par index_global si présent, sinon par numéro
-            selected_parties = sorted(selected_parties, key=sort_key_by_index)
+        # Récupérer parties_metadata pour construire la structure
+        parties_metadata = devis_data.get('parties_metadata', {})
+        selected_parties = parties_metadata.get('selectedParties', [])
 
-            # Construire la structure des parties depuis parties_metadata
-            for partie_meta in selected_parties:
-                sous_parties_data = []
-                total_partie = Decimal('0')
+        # Fonction de tri par index_global ou numéro de partie (si présent)
+        def sort_key_by_index(partie):
+            # Si on a index_global dans les données, l'utiliser
+            if 'index_global' in partie:
+                return float(partie.get('index_global', 999))
+            # Sinon, utiliser le numéro
+            numero = partie.get('numero')
+            if numero and isinstance(numero, (int, str)) and str(numero).isdigit():
+                return int(numero)
+            return 999  # Mettre les parties sans numéro à la fin
 
-                # Récupérer les lignes spéciales pour cette partie
-                special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_meta['id']), [])
-                display_lines_partie = lignes_display.get('parties', {}).get(str(partie_meta['id']), [])
+        # Trier les parties par index_global si présent, sinon par numéro
+        selected_parties = sorted(selected_parties, key=sort_key_by_index)
 
-                # Trier les sous-parties par index_global si présent, sinon par numéro
-                sous_parties_meta = sorted(partie_meta.get('sousParties', []), key=lambda sp: float(sp.get('index_global', 999)) if 'index_global' in sp else (int(sp.get('numero', '999').split('.')[-1]) if sp.get('numero') and '.' in str(sp.get('numero')) else 999))
+        # Construire la structure des parties depuis parties_metadata
+        for partie_meta in selected_parties:
+            sous_parties_data = []
+            total_partie = Decimal('0')
 
-                # Traiter les sous-parties de cette partie
-                for sous_partie_meta in sous_parties_meta:
-                    lignes_details_data = []
-                    total_sous_partie = Decimal('0')
+            # Récupérer les lignes spéciales pour cette partie
+            special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_meta['id']), [])
+            display_lines_partie = lignes_display.get('parties', {}).get(str(partie_meta['id']), [])
 
-                    # Récupérer les lignes de détail pour cette sous-partie
-                    ligne_detail_ids = sous_partie_meta.get('lignesDetails', [])
-                    
-                    # Extraire les lignes correspondantes depuis les données du frontend
-                    # Trier les lignes par index_global si présent
-                    lignes_filtered = []
-                    for ligne_data in devis_data.get('lignes', []):
-                        if ligne_data.get('ligne') in ligne_detail_ids:
-                            lignes_filtered.append(ligne_data)
-                    
-                    # Trier par index_global si présent
-                    lignes_filtered.sort(key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
-                    
-                    for ligne_data in lignes_filtered:
-                        # Récupérer les détails de la ligne_detail depuis la base
-                        try:
-                            from .models import LigneDetail
-                            ligne_detail = LigneDetail.objects.get(id=ligne_data['ligne'])
-                            quantity = Decimal(str(ligne_data.get('quantity', 0)))
-                            custom_price = Decimal(str(ligne_data.get('custom_price', 0)))
-                            total_ligne = quantity * custom_price
-                            
-                            lignes_details_data.append({
-                                'description': ligne_detail.description,
-                                'unite': ligne_detail.unite,
-                                'quantity': quantity,
-                                'custom_price': custom_price,
-                                'total': total_ligne
-                            })
-                            total_sous_partie += total_ligne
-                        except Exception:
-                            pass
+            # Trier les sous-parties par index_global si présent, sinon par numéro
+            sous_parties_meta = sorted(partie_meta.get('sousParties', []), key=lambda sp: float(sp.get('index_global', 999)) if 'index_global' in sp else (int(sp.get('numero', '999').split('.')[-1]) if sp.get('numero') and '.' in str(sp.get('numero')) else 999))
 
-                    if lignes_details_data:
-                        # Récupérer les lignes spéciales pour cette sous-partie
-                        special_lines_sous_partie = lignes_speciales.get('sousParties', {}).get(str(sous_partie_meta['id']), [])
-                        display_lines_sous_partie = lignes_display.get('sousParties', {}).get(str(sous_partie_meta['id']), [])
+            # Traiter les sous-parties de cette partie
+            for sous_partie_meta in sous_parties_meta:
+                lignes_details_data = []
+                total_sous_partie = Decimal('0')
+
+                # Récupérer les lignes de détail pour cette sous-partie
+                ligne_detail_ids = sous_partie_meta.get('lignesDetails', [])
+                
+                # Extraire les lignes correspondantes depuis les données du frontend
+                # Trier les lignes par index_global si présent
+                lignes_filtered = []
+                for ligne_data in devis_data.get('lignes', []):
+                    if ligne_data.get('ligne') in ligne_detail_ids:
+                        lignes_filtered.append(ligne_data)
+                
+                # Trier par index_global si présent
+                lignes_filtered.sort(key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+                
+                for ligne_data in lignes_filtered:
+                    # Récupérer les détails de la ligne_detail depuis la base
+                    try:
+                        from .models import LigneDetail
+                        ligne_detail = LigneDetail.objects.get(id=ligne_data['ligne'])
+                        quantity = Decimal(str(ligne_data.get('quantity', 0)))
+                        custom_price = Decimal(str(ligne_data.get('custom_price', 0)))
+                        total_ligne = quantity * custom_price
                         
-                        # Trier les lignes spéciales par index_global si présent
-                        def sort_special_lines(lines):
-                            return sorted(lines, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
-                        
-                        special_lines_sous_partie = sort_special_lines(special_lines_sous_partie)
-                        display_lines_sous_partie = sort_special_lines(display_lines_sous_partie)
-                        
-                        sous_partie_data = {
-                            'description': sous_partie_meta.get('description', ''),
-                            'numero': sous_partie_meta.get('numero'),  # ✅ Inclure le numéro
-                            'lignes_details': lignes_details_data,
-                            'total_sous_partie': total_sous_partie,
-                            'special_lines': []
-                        }
+                        lignes_details_data.append({
+                            'description': ligne_detail.description,
+                            'unite': ligne_detail.unite,
+                            'quantity': quantity,
+                            'custom_price': custom_price,
+                            'total': total_ligne
+                        })
+                        total_sous_partie += total_ligne
+                    except Exception:
+                        pass
 
-                        # Calculer et ajouter chaque ligne spéciale
-                        for special_line in special_lines_sous_partie:
-                            value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
-                            if value_type == 'percentage':
-                                montant = (total_sous_partie * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
-                            else:
-                                montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
-
-                            line_type = special_line.get('type', 'display')
-                            if line_type == 'reduction':
-                                total_sous_partie -= montant
-                            elif line_type == 'addition':
-                                total_sous_partie += montant
-                            # 'display' n'affecte pas le total
-
-                            sous_partie_data['special_lines'].append({
-                                'description': special_line.get('description', ''),
-                                'value': special_line.get('value', 0) or special_line.get('amount', 0),
-                                'valueType': value_type,
-                                'type': line_type,
-                                'montant': montant,
-                                'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
-                                'style_attr': build_inline_style(special_line.get('styles'))
-                            })
-                        
-                        # Ajouter les lignes display de la sous-partie
-                        for display_line in display_lines_sous_partie:
-                            sous_partie_data['special_lines'].append({
-                                'description': display_line.get('description', ''),
-                                'value': display_line.get('value', 0) or display_line.get('amount', 0),
-                                'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
-                                'type': display_line.get('type', 'display'),
-                                'montant': Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))),
-                                'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
-                                'style_attr': build_inline_style(display_line.get('styles'))
-                            })
-
-                        sous_partie_data['total_sous_partie'] = total_sous_partie
-                        sous_parties_data.append(sous_partie_data)
-                        total_partie += total_sous_partie
-
-                if sous_parties_data:
-                    # Trier les lignes spéciales de la partie par index_global
-                    def sort_special_lines_partie(lines):
+                if lignes_details_data:
+                    # Récupérer les lignes spéciales pour cette sous-partie
+                    special_lines_sous_partie = lignes_speciales.get('sousParties', {}).get(str(sous_partie_meta['id']), [])
+                    display_lines_sous_partie = lignes_display.get('sousParties', {}).get(str(sous_partie_meta['id']), [])
+                    
+                    # Trier les lignes spéciales par index_global si présent
+                    def sort_special_lines(lines):
                         return sorted(lines, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
                     
-                    special_lines_partie = sort_special_lines_partie(special_lines_partie)
-                    display_lines_partie = sort_special_lines_partie(display_lines_partie)
+                    special_lines_sous_partie = sort_special_lines(special_lines_sous_partie)
+                    display_lines_sous_partie = sort_special_lines(display_lines_sous_partie)
                     
-                    partie_data = {
-                        'titre': partie_meta.get('titre', ''),
-                        'numero': partie_meta.get('numero'),  # ✅ Inclure le numéro
-                        'sous_parties': sous_parties_data,
-                        'total_partie': total_partie,
+                    sous_partie_data = {
+                        'description': sous_partie_meta.get('description', ''),
+                        'numero': sous_partie_meta.get('numero'),  # ✅ Inclure le numéro
+                        'lignes_details': lignes_details_data,
+                        'total_sous_partie': total_sous_partie,
                         'special_lines': []
                     }
 
-                    # Calculer et ajouter les lignes spéciales de la partie
-                    for special_line in special_lines_partie:
+                    # Calculer et ajouter chaque ligne spéciale
+                    for special_line in special_lines_sous_partie:
                         value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
                         if value_type == 'percentage':
-                            montant = (total_partie * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
+                            montant = (total_sous_partie * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
                         else:
                             montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
                         line_type = special_line.get('type', 'display')
                         if line_type == 'reduction':
-                            total_partie -= montant
+                            total_sous_partie -= montant
                         elif line_type == 'addition':
-                            total_partie += montant
+                            total_sous_partie += montant
+                        # 'display' n'affecte pas le total
 
-                        partie_data['special_lines'].append({
+                        sous_partie_data['special_lines'].append({
                             'description': special_line.get('description', ''),
                             'value': special_line.get('value', 0) or special_line.get('amount', 0),
                             'valueType': value_type,
@@ -828,9 +797,9 @@ def preview_devis_v2(request):
                             'style_attr': build_inline_style(special_line.get('styles'))
                         })
                     
-                    # Ajouter les lignes display de la partie
-                    for display_line in display_lines_partie:
-                        partie_data['special_lines'].append({
+                    # Ajouter les lignes display de la sous-partie
+                    for display_line in display_lines_sous_partie:
+                        sous_partie_data['special_lines'].append({
                             'description': display_line.get('description', ''),
                             'value': display_line.get('value', 0) or display_line.get('amount', 0),
                             'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
@@ -840,73 +809,125 @@ def preview_devis_v2(request):
                             'style_attr': build_inline_style(display_line.get('styles'))
                         })
 
-                    partie_data['total_partie'] = total_partie
-                    parties_data.append(partie_data)
-                    total_ht += total_partie
+                    sous_partie_data['total_sous_partie'] = total_sous_partie
+                    sous_parties_data.append(sous_partie_data)
+                    total_partie += total_sous_partie
 
-            # Appliquer les lignes spéciales globales (triées par index_global)
-            special_lines_global = lignes_speciales.get('global', [])
-            special_lines_global = sorted(special_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
-            
-            for special_line in special_lines_global:
-                value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
-                if value_type == 'percentage':
-                    montant = (total_ht * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
-                else:
-                    montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
+            if sous_parties_data:
+                # Trier les lignes spéciales de la partie par index_global
+                def sort_special_lines_partie(lines):
+                    return sorted(lines, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+                
+                special_lines_partie = sort_special_lines_partie(special_lines_partie)
+                display_lines_partie = sort_special_lines_partie(display_lines_partie)
+                
+                partie_data = {
+                    'titre': partie_meta.get('titre', ''),
+                    'numero': partie_meta.get('numero'),  # ✅ Inclure le numéro
+                    'sous_parties': sous_parties_data,
+                    'total_partie': total_partie,
+                    'special_lines': []
+                }
 
-                special_line['montant'] = float(montant)
-                special_line['style_attr'] = build_inline_style(special_line.get('styles'))
+                # Calculer et ajouter les lignes spéciales de la partie
+                for special_line in special_lines_partie:
+                    value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
+                    if value_type == 'percentage':
+                        montant = (total_partie * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
+                    else:
+                        montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
-                line_type = special_line.get('type', 'display')
-                if line_type == 'reduction':
-                    total_ht -= montant
-                elif line_type == 'addition':
-                    total_ht += montant
-            
-            # Ajouter les lignes display globales
-            display_lines_global = lignes_display.get('global', [])
-            display_lines_global = sorted(display_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
-            
-            for display_line in display_lines_global:
-                display_line['montant'] = float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))))
-                display_line['style_attr'] = build_inline_style(display_line.get('styles'))
-                special_lines_global.append(display_line)
+                    line_type = special_line.get('type', 'display')
+                    if line_type == 'reduction':
+                        total_partie -= montant
+                    elif line_type == 'addition':
+                        total_partie += montant
 
-            # Calculer TVA et TTC
-            tva_rate = Decimal(str(devis_data.get('tva_rate', 20)))
-            tva = total_ht * (tva_rate / Decimal('100'))
-            montant_ttc = total_ht + tva
+                    partie_data['special_lines'].append({
+                        'description': special_line.get('description', ''),
+                        'value': special_line.get('value', 0) or special_line.get('amount', 0),
+                        'valueType': value_type,
+                        'type': line_type,
+                        'montant': montant,
+                        'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                        'style_attr': build_inline_style(special_line.get('styles'))
+                    })
+                
+                # Ajouter les lignes display de la partie
+                for display_line in display_lines_partie:
+                    partie_data['special_lines'].append({
+                        'description': display_line.get('description', ''),
+                        'value': display_line.get('value', 0) or display_line.get('amount', 0),
+                        'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
+                        'type': display_line.get('type', 'display'),
+                        'montant': Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))),
+                        'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
+                        'style_attr': build_inline_style(display_line.get('styles'))
+                    })
 
-            # Créer un objet devis temporaire pour le template
-            class TempDevis:
-                def __init__(self, data):
-                    self.numero = data.get('numero', '')
-                    self.date_creation = data.get('date_creation')
-                    self.nature_travaux = data.get('nature_travaux', '')
-                    self.tva_rate = float(tva_rate)
+                partie_data['total_partie'] = total_partie
+                parties_data.append(partie_data)
+                total_ht += total_partie
 
-            temp_devis = TempDevis(devis_data)
+        # Appliquer les lignes spéciales globales (triées par index_global)
+        special_lines_global = lignes_speciales.get('global', [])
+        special_lines_global = sorted(special_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+        
+        for special_line in special_lines_global:
+            value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
+            if value_type == 'percentage':
+                montant = (total_ht * Decimal(str(special_line.get('value', 0)))) / Decimal('100')
+            else:
+                montant = Decimal(str(special_line.get('value', 0) or special_line.get('amount', 0)))
 
-            context = {
-                'devis': temp_devis,
-                'chantier': chantier,
-                'societe': societe,
-                'client': client,
-                'parties': parties_data,
-                'total_ht': total_ht,
-                'tva': tva,
-                'montant_ttc': montant_ttc,
-                'special_lines_global': special_lines_global
-            }
+            special_line['montant'] = float(montant)
+            special_line['style_attr'] = build_inline_style(special_line.get('styles'))
 
-            return render(request, 'preview_devis_v2.html', context)
+            line_type = special_line.get('type', 'display')
+            if line_type == 'reduction':
+                total_ht -= montant
+            elif line_type == 'addition':
+                total_ht += montant
+        
+        # Ajouter les lignes display globales
+        display_lines_global = lignes_display.get('global', [])
+        display_lines_global = sorted(display_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+        
+        for display_line in display_lines_global:
+            display_line['montant'] = float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))))
+            display_line['style_attr'] = build_inline_style(display_line.get('styles'))
+            special_lines_global.append(display_line)
 
-        except json.JSONDecodeError as e:
-            return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
-        except Exception as e:
-            import traceback
-            return JsonResponse({'error': f'{str(e)}\n{traceback.format_exc()}'}, status=400)
-    else:
-        return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
+        # Calculer TVA et TTC
+        tva_rate = Decimal(str(devis_data.get('tva_rate', 20)))
+        tva = total_ht * (tva_rate / Decimal('100'))
+        montant_ttc = total_ht + tva
+
+        # Créer un objet devis temporaire pour le template
+        class TempDevis:
+            def __init__(self, data):
+                self.numero = data.get('numero', '')
+                self.date_creation = data.get('date_creation')
+                self.nature_travaux = data.get('nature_travaux', '')
+                self.tva_rate = float(tva_rate)
+
+        temp_devis = TempDevis(devis_data)
+
+        context = {
+            'devis': temp_devis,
+            'chantier': chantier,
+            'societe': societe,
+            'client': client,
+            'parties': parties_data,
+            'total_ht': total_ht,
+            'tva': tva,
+            'montant_ttc': montant_ttc,
+            'special_lines_global': special_lines_global
+        }
+
+        return render(request, 'preview_devis_v2.html', context)
+
+    except Exception as e:
+        import traceback
+        return JsonResponse({'error': f'{str(e)}\n{traceback.format_exc()}'}, status=400)
 

@@ -2731,6 +2731,13 @@ const DevisAvance = () => {
               </button>
               <button 
                 onClick={async () => {
+                  const previewWindow = window.open('', '_blank');
+                  if (!previewWindow) {
+                    alert("Veuillez autoriser les fenêtres pop-up pour afficher l'aperçu.");
+                    return;
+                  }
+                  previewWindow.document.write('<p style="font-family: sans-serif;">Prévisualisation en cours...</p>');
+                  previewWindow.document.close();
                   try {
                     // Valider les données avant transformation
                     const validation = validateBeforeTransform({
@@ -2741,6 +2748,7 @@ const DevisAvance = () => {
                     
                     if (!validation.valid) {
                       alert(`Erreurs de validation:\n${validation.errors.join('\n')}`);
+                      previewWindow.close();
                       return;
                     }
                     
@@ -2773,13 +2781,18 @@ const DevisAvance = () => {
                       } : {}
                     };
                     
-                    // Encoder les données pour l'URL
-                    const encodedData = encodeURIComponent(JSON.stringify(previewData));
-                    const previewUrl = `/api/preview-devis-v2/?devis=${encodedData}`;
-                    
-                    // Ouvrir dans un nouvel onglet
-                    window.open(previewUrl, '_blank');
+                    const response = await axios.post('/api/preview-devis-v2/', previewData, {
+                      headers: { 'Content-Type': 'application/json' },
+                      responseType: 'text'
+                    });
+
+                    previewWindow.document.open();
+                    previewWindow.document.write(response.data);
+                    previewWindow.document.close();
                   } catch (error) {
+                    if (previewWindow && !previewWindow.closed) {
+                      previewWindow.close();
+                    }
                     console.error('Erreur lors de la prévisualisation:', error);
                     alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
                   }
