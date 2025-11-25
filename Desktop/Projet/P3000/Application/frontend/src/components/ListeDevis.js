@@ -43,8 +43,60 @@ import TransformationTSModal from "./TransformationTSModal";
 import { generateDevisMarchePDFDrive } from "./pdf_drive_functions";
 
 const formatNumber = (number) => {
-  return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const value = Number.parseFloat(number);
+  if (Number.isNaN(value)) {
+    return "0,00";
+  }
+  return value.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
+
+const buildClientName = (devis) => {
+  if (devis.client_name) {
+    return devis.client_name;
+  }
+  const client =
+    devis.client ||
+    devis.client_info ||
+    (typeof devis.societe === "object" ? devis.societe?.client_name : null);
+  if (!client) {
+    return "";
+  }
+  if (typeof client === "string") {
+    return client;
+  }
+  const parts = [client.name, client.surname].filter(Boolean);
+  return parts.join(" ").trim();
+};
+
+const buildChantierName = (devis) => {
+  if (devis.chantier_name) {
+    return devis.chantier_name;
+  }
+  const chantier = devis.chantier || devis.chantier_info;
+  if (!chantier) {
+    return "";
+  }
+  if (typeof chantier === "string") {
+    return chantier;
+  }
+  return chantier.chantier_name || chantier.name || "";
+};
+
+const normalizeDevisEntries = (items = []) =>
+  items.map((item) => ({
+    ...item,
+    chantier_name: buildChantierName(item),
+    client_name: buildClientName(item),
+  }));
+
+const sortByNewestFirst = (items = []) =>
+  [...items].sort(
+    (a, b) =>
+      new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime()
+  );
 
 const ListeDevis = () => {
   const [devis, setDevis] = useState([]);
@@ -55,7 +107,7 @@ const ListeDevis = () => {
     chantier_name: "",
     client_name: "",
     date_creation: "",
-    price_ttc: "",
+    price_ht: "",
     status: "Tous",
   });
   const [orderBy, setOrderBy] = useState("date");
@@ -99,7 +151,7 @@ const ListeDevis = () => {
       const filtered = devis.filter((devis) =>
         devis.numero?.toLowerCase().includes(numeroFilter.toLowerCase())
       );
-      setFilteredDevis(filtered);
+      setFilteredDevis(sortByNewestFirst(filtered));
     }
 
     // Vérifier s'il y a une génération PDF en attente
@@ -417,7 +469,7 @@ const ListeDevis = () => {
       const filtered = devis.filter((devis) =>
         devis.numero?.toLowerCase().includes(numeroFilter.toLowerCase())
       );
-      setFilteredDevis(filtered);
+      setFilteredDevis(sortByNewestFirst(filtered));
     }
   }, [devis]);
 
@@ -435,8 +487,10 @@ const ListeDevis = () => {
       console.log("🔍 DEBUG - État précédent:", previousDevisIds);
       console.log("🔍 DEBUG - Nouveaux devis détectés:", newlyCreatedDevis);
 
-      setDevis(newDevis);
-      setFilteredDevis(newDevis);
+      const normalizedDevis = normalizeDevisEntries(newDevis);
+      const sortedDevis = sortByNewestFirst(normalizedDevis);
+      setDevis(sortedDevis);
+      setFilteredDevis(sortedDevis);
 
       // Seulement traiter les nouveaux devis si on avait déjà une liste précédente
       // ET si ce n'est pas le premier chargement de la page
@@ -514,8 +568,8 @@ const ListeDevis = () => {
               .split("T")[0];
             return devisDate === newFilters[key];
 
-          case "price_ttc":
-            const devisPrice = devis.price_ttc?.toString() || "";
+          case "price_ht":
+            const devisPrice = devis.price_ht?.toString() || "";
             return devisPrice.includes(newFilters[key]);
 
           case "status":
@@ -542,7 +596,7 @@ const ListeDevis = () => {
           (new Date(a[property]).getTime() - new Date(b[property]).getTime())
         );
       }
-      if (property === "price_ttc") {
+      if (property === "price_ht") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
         );
@@ -1099,16 +1153,16 @@ const ListeDevis = () => {
                 </AlignedCell>
                 <AlignedCell>
                   <TableSortLabel
-                    active={orderBy === "price_ttc"}
-                    direction={orderBy === "price_ttc" ? order : "asc"}
-                    onClick={() => handleSort("price_ttc")}
+                    active={orderBy === "price_ht"}
+                    direction={orderBy === "price_ht" ? order : "asc"}
+                    onClick={() => handleSort("price_ht")}
                     sx={{ textAlign: "center" }}
                   >
                     <PriceTextField
-                      label="Prix TTC"
+                      label="Prix HT"
                       variant="standard"
-                      value={filters.price_ttc}
-                      onChange={handleFilterChange("price_ttc")}
+                      value={filters.price_ht}
+                      onChange={handleFilterChange("price_ht")}
                       sx={{
                         maxWidth: "60px", // Limite la largeur maximale
                         minWidth: "40px", // Assure une largeur minimale
@@ -1155,7 +1209,7 @@ const ListeDevis = () => {
                     <CenteredTableCell
                       style={{ fontWeight: 600, color: green[500] }}
                     >
-                      {formatNumber(devis.price_ttc)} €
+                      {formatNumber(devis.price_ht)} €
                     </CenteredTableCell>
                     <StatusCell status={devis.status}>
                       {devis.status}

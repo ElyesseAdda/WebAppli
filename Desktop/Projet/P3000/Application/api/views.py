@@ -166,7 +166,18 @@ class FactureTSViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(chantier_id=chantier_id)
         return queryset.select_related('devis', 'avenant')
 class DevisViewSet(viewsets.ModelViewSet):
-    queryset = Devis.objects.all().prefetch_related('lignes')
+    queryset = (
+        Devis.objects.all()
+        .select_related(
+            'chantier',
+            'chantier__societe',
+            'chantier__societe__client_name',
+            'appel_offres',
+            'appel_offres__societe',
+            'appel_offres__societe__client_name',
+        )
+        .prefetch_related('lignes', 'client')
+    )
     serializer_class = DevisSerializer
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
 

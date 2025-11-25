@@ -53,13 +53,16 @@ class DevisSerializer(serializers.ModelSerializer):
     parties_metadata = serializers.JSONField(required=False)
     client = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     chantier = serializers.PrimaryKeyRelatedField(queryset=Chantier.objects.all())
+    chantier_name = serializers.SerializerMethodField()
+    client_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
+            'chantier', 'appel_offres', 'chantier_name', 'client_name',
+            'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes'
         ]
         read_only_fields = ['date_creation', 'client']
@@ -74,6 +77,35 @@ class DevisSerializer(serializers.ModelSerializer):
     #     }
     #     ...
     
+    def get_chantier_name(self, obj):
+        if obj.devis_chantier and obj.appel_offres:
+            return obj.appel_offres.chantier_name if obj.appel_offres else None
+        if obj.chantier:
+            return obj.chantier.chantier_name
+        return None
+
+    def get_client_name(self, obj):
+        clients = None
+        if hasattr(obj, '_prefetched_objects_cache') and 'client' in obj._prefetched_objects_cache:
+            clients = obj._prefetched_objects_cache['client']
+        if clients is None:
+            clients = list(obj.client.all())
+        if clients:
+            return ", ".join(
+                f"{client.name} {client.surname}".strip()
+                for client in clients
+            )
+        # Fallback to societe contact
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        contact = getattr(societe, 'client_name', None) if societe else None
+        if contact:
+            return f"{contact.name} {contact.surname}".strip()
+        return None
+
     def to_representation(self, instance):
         """
         Surcharge pour ajouter le système unifié avec mode dual (legacy/unified)
