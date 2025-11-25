@@ -18,7 +18,8 @@ const LigneSpecialeRow = ({
   calculateSousPartieTotal,
   calculateGlobalTotal,
   calculateGlobalTotalExcludingLine,
-  calculatePrice
+  calculatePrice,
+  calculateRecurringLineAmount
 }) => {
   /**
    * Calcule le montant de la ligne spéciale
@@ -71,7 +72,10 @@ const LigneSpecialeRow = ({
     return parseFloat(value || 0);
   };
 
-  const amount = calculateAmount();
+  const isRecurringSpecial = line.isRecurringSpecial || line.data?.isRecurringSpecial;
+  const amount = isRecurringSpecial && calculateRecurringLineAmount
+    ? calculateRecurringLineAmount(line)
+    : calculateAmount();
   const indent = depth * 20; // Indentation selon la profondeur
   
   // Support des deux formats de données

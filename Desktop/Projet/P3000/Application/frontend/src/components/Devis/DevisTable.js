@@ -194,9 +194,11 @@ const DevisTable = ({
   // Props pour filtrer les lignes détails déjà utilisées (pour le tableau option)
   mainDevisItems = [], // Les items du tableau principal pour filtrer les lignes détails
   // Props pour la ligne récurrente
-  onCreateRecurringSpecialLine,
   calculateRecurringLineAmount,
-  hasRecurringLine
+  hasRecurringLine,
+  pendingRecurringLine,
+  onAutoPlaceRecurringLine,
+  pendingRecurringAmount = 0
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
@@ -226,6 +228,15 @@ const DevisTable = ({
   
   // État pour le modal de création de ligne spéciale
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const canUsePlacementZones = Boolean(lineAwaitingPlacement && !lineAwaitingPlacement.isRecurringSpecial);
+  const placementLine = canUsePlacementZones ? lineAwaitingPlacement : null;
+  const hasPendingRecurringLine = Boolean(pendingRecurringLine && pendingRecurringLine.isRecurringSpecial);
+  const handleRecurringBannerClick = React.useCallback(() => {
+    if (onAutoPlaceRecurringLine) {
+      onAutoPlaceRecurringLine();
+    }
+  }, [onAutoPlaceRecurringLine]);
 
   // Nettoyer les timeouts quand le composant est démonté
   useEffect(() => {
@@ -739,7 +750,7 @@ const DevisTable = ({
             )}
 
             {/* Indicateur : ligne en attente de placement */}
-            {lineAwaitingPlacement && (
+            {placementLine && (
               <tr>
                 <td colSpan="5" style={{ padding: '0', border: 'none' }}>
                   <div style={{
@@ -757,7 +768,7 @@ const DevisTable = ({
                     <span style={{ fontSize: '24px' }}>📍</span>
                     <div>
                       <div style={{ fontSize: '16px' }}>
-                        Ligne en attente : "{lineAwaitingPlacement.data?.description || lineAwaitingPlacement.description}"
+                        Ligne en attente : "{placementLine.data?.description || placementLine.description}"
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 'normal', marginTop: '4px' }}>
                         👆 Cliquez sur une <span style={{ 
@@ -816,8 +827,8 @@ const DevisTable = ({
                           <PlacementZone 
                             position="global_start" 
                             onPlaceLineAt={onPlaceLineAt} 
-                            isActive={!!lineAwaitingPlacement}
-                            lineAwaitingPlacement={lineAwaitingPlacement}
+                            isActive={!!placementLine}
+                            lineAwaitingPlacement={placementLine}
                             displayAs="partie"
                           />
                           
@@ -874,6 +885,7 @@ const DevisTable = ({
                                         calculateSousPartieTotal={calculateSousPartieTotal}
                                         calculateGlobalTotal={calculateGlobalTotal}
                                         calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
+                                        calculateRecurringLineAmount={calculateRecurringLineAmount}
                                       />
                                     </div>
                                     
@@ -881,8 +893,8 @@ const DevisTable = ({
                                     <PlacementZone 
                                       position={`after_special_${item.id}`} 
                                       onPlaceLineAt={onPlaceLineAt} 
-                                      isActive={!!lineAwaitingPlacement}
-                                      lineAwaitingPlacement={lineAwaitingPlacement}
+                                      isActive={!!placementLine}
+                                      lineAwaitingPlacement={placementLine}
                                       displayAs="partie"
                                     />
                                   </React.Fragment>
@@ -899,8 +911,8 @@ const DevisTable = ({
                                 <PlacementZone 
                                   position={`before_partie_${item.id}`} 
                                   onPlaceLineAt={onPlaceLineAt} 
-                                  isActive={!!lineAwaitingPlacement}
-                                  lineAwaitingPlacement={lineAwaitingPlacement}
+                                  isActive={!!placementLine}
+                                  lineAwaitingPlacement={placementLine}
                                   displayAs="partie"
                                 />
                                 
@@ -1111,6 +1123,7 @@ const DevisTable = ({
                                                               calculateSousPartieTotal={calculateSousPartieTotal}
                                                               calculateGlobalTotal={calculateGlobalTotal}
                                                               calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
+                                                            calculateRecurringLineAmount={calculateRecurringLineAmount}
                                                             />
                                                           </div>
                                                         );
@@ -1124,13 +1137,13 @@ const DevisTable = ({
                                                       return (
                                                       <React.Fragment key={`sp_wrapper_${sp.id}`}>
                                                       {/* Zone de placement AVANT cette sous-partie */}
-                                                      <PlacementZone 
-                                                        position={`before_sp_${sp.id}`} 
-                                                        onPlaceLineAt={onPlaceLineAt} 
-                                                        isActive={!!lineAwaitingPlacement}
-                                                        lineAwaitingPlacement={lineAwaitingPlacement}
-                                                        displayAs="sous_partie"
-                                                      />
+                                    <PlacementZone 
+                                      position={`before_sp_${sp.id}`} 
+                                      onPlaceLineAt={onPlaceLineAt} 
+                                      isActive={!!placementLine}
+                                      lineAwaitingPlacement={placementLine}
+                                      displayAs="sous_partie"
+                                    />
                                                       
                                                       <Draggable 
                                                         key={`sp_${sp.id}`} 
@@ -1349,6 +1362,7 @@ const DevisTable = ({
                                                                                 calculateSousPartieTotal={calculateSousPartieTotal}
                                                                                 calculateGlobalTotal={calculateGlobalTotal}
                                                                                 calculateGlobalTotalExcludingLine={calculateGlobalTotalExcludingLine}
+                                                                                calculateRecurringLineAmount={calculateRecurringLineAmount}
                                                                               />
                                                                             </div>
                                                                           );
@@ -1364,13 +1378,13 @@ const DevisTable = ({
                                                                         return (
                                                                           <React.Fragment key={`ligne_wrapper_${ligne.id}`}>
                                                                           {/* Zone de placement AVANT cette ligne */}
-                                                                          <PlacementZone 
-                                                                            position={`before_ligne_${ligne.id}`} 
-                                                                            onPlaceLineAt={onPlaceLineAt} 
-                                                                            isActive={!!lineAwaitingPlacement}
-                                                                            lineAwaitingPlacement={lineAwaitingPlacement}
-                                                                            displayAs="ligne_detail"
-                                                                          />
+                                                      <PlacementZone 
+                                                        position={`before_ligne_${ligne.id}`} 
+                                                        onPlaceLineAt={onPlaceLineAt} 
+                                                        isActive={!!placementLine}
+                                                        lineAwaitingPlacement={placementLine}
+                                                        displayAs="ligne_detail"
+                                                      />
                                                                           
                                                                           <Draggable 
                                                                             key={`ligne_${ligne.id}`} 
@@ -1488,8 +1502,8 @@ const DevisTable = ({
                                                                           <PlacementZone 
                                                                             position={`after_ligne_${ligne.id}`} 
                                                                             onPlaceLineAt={onPlaceLineAt} 
-                                                                            isActive={!!lineAwaitingPlacement}
-                                                                            lineAwaitingPlacement={lineAwaitingPlacement}
+                                                                            isActive={!!placementLine}
+                                                                            lineAwaitingPlacement={placementLine}
                                                                             displayAs="ligne_detail"
                                                                           />
                                                                           </React.Fragment>
@@ -1522,8 +1536,8 @@ const DevisTable = ({
                                                       <PlacementZone 
                                                         position={`after_sp_${sp.id}`} 
                                                         onPlaceLineAt={onPlaceLineAt} 
-                                                        isActive={!!lineAwaitingPlacement}
-                                                        lineAwaitingPlacement={lineAwaitingPlacement}
+                                                        isActive={!!placementLine}
+                                                        lineAwaitingPlacement={placementLine}
                                                         displayAs="sous_partie"
                                                       />
                                                       </React.Fragment>
@@ -1555,8 +1569,8 @@ const DevisTable = ({
                                 <PlacementZone 
                                   position={`after_partie_${item.id}`} 
                                   onPlaceLineAt={onPlaceLineAt} 
-                                  isActive={!!lineAwaitingPlacement}
-                                  lineAwaitingPlacement={lineAwaitingPlacement}
+                                  isActive={!!placementLine}
+                                  lineAwaitingPlacement={placementLine}
                                   displayAs="partie"
                                 />
                                 </React.Fragment>
@@ -1568,10 +1582,52 @@ const DevisTable = ({
                           <PlacementZone 
                             position="global_end" 
                             onPlaceLineAt={onPlaceLineAt} 
-                            isActive={!!lineAwaitingPlacement}
-                            lineAwaitingPlacement={lineAwaitingPlacement}
+                            isActive={!!placementLine}
+                            lineAwaitingPlacement={placementLine}
                             displayAs="partie"
                           />
+
+                          {/* Placeholder translucide (dernière position) */}
+                          {hasPendingRecurringLine && (
+                            <div
+                              onClick={handleRecurringBannerClick}
+                              style={{
+                                margin: '10px 10px 0 10px',
+                                padding: '18px 24px',
+                                borderRadius: '8px',
+                                border: '2px dashed rgba(255,56,56,0.4)',
+                                backgroundColor: 'rgba(251,255,36,0.35)',
+                                color: '#ff3838',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                backdropFilter: 'blur(2px)',
+                                transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.transform = 'scale(1.01)';
+                                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.15)';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontSize: '16px' }}>
+                                  {pendingRecurringLine.data?.description || pendingRecurringLine.description}
+                                </div>
+                                <div style={{ fontSize: '13px', fontWeight: 'normal', opacity: 0.8 }}>
+                                  Cliquez pour l’insérer automatiquement à la suite du devis
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '18px' }}>
+                                {formatMontantEspace(pendingRecurringAmount)} €
+                              </div>
+                            </div>
+                          )}
                           
                           {provided.placeholder}
                         </div>

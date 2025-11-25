@@ -73,6 +73,72 @@ const createInitialPendingChantierData = () => ({
   devis: null,
 });
 
+const RECURRING_SPECIAL_LINE_TEMPLATE = {
+  id: 'recurring_special_line',
+  type: 'ligne_speciale',
+  type_speciale: 'display',
+  value_type: 'display',
+  value: 0,
+  context_type: 'global',
+  context_id: null,
+  description: 'Montant global HT des prestations unitaires',
+  data: {
+    description: 'Montant global HT des prestations unitaires',
+    valueType: 'display',
+    type: 'display',
+    value: 0
+  },
+  styles: {
+    backgroundColor: '#fbff24',
+    color: '#ff3838',
+    fontWeight: 'bold',
+    textAlign: 'left'
+  },
+  isRecurringSpecial: true
+};
+
+const isRecurringSpecialLine = (item) => (
+  item &&
+  item.type === 'ligne_speciale' &&
+  (
+    item.isRecurringSpecial ||
+    item.description === RECURRING_SPECIAL_LINE_TEMPLATE.description ||
+    item.data?.description === RECURRING_SPECIAL_LINE_TEMPLATE.description
+  )
+);
+
+const getNextPartieNumero = (items = []) => {
+  const numericValues = items
+    .filter(item => item.type === 'partie' && item.numero && /^\d+$/.test(item.numero))
+    .map(item => parseInt(item.numero, 10));
+  if (numericValues.length === 0) {
+    return '1';
+  }
+  return String(Math.max(...numericValues) + 1);
+};
+
+const getNextSousPartieNumero = (items = [], partieId) => {
+  if (!partieId) {
+    return '';
+  }
+  const parentPartie = items.find(item => item.type === 'partie' && item.id === partieId);
+  const parentNumero = parentPartie?.numero;
+  if (!parentNumero || !/^\d+(\.\d+)?$/.test(parentNumero)) {
+    return '';
+  }
+  const escapedParent = parentNumero.replace(/\./g, '\\.');
+  const regex = new RegExp(`^${escapedParent}\\.(\\d+)$`);
+  const existingIndexes = items
+    .filter(item => item.type === 'sous_partie' && item.partie_id === partieId && item.numero && regex.test(item.numero))
+    .map(item => {
+      const match = item.numero.match(regex);
+      return match ? parseInt(match[1], 10) : null;
+    })
+    .filter(index => index !== null);
+  const nextIndex = existingIndexes.length ? Math.max(...existingIndexes) + 1 : 1;
+  return `${parentNumero}.${nextIndex}`;
+};
+
 const DevisAvance = () => {
   // États pour les données du devis
   const [devisData, setDevisData] = useState(() => createInitialDevisData());
@@ -96,6 +162,11 @@ const DevisAvance = () => {
   const [lineAwaitingPlacement, setLineAwaitingPlacement] = useState(null);  // Ligne en attente de clic sur le tableau
   const [isSelectingBase, setIsSelectingBase] = useState(false);  // Mode de sélection de base pour %
   const [pendingLineForBase, setPendingLineForBase] = useState(null);  // Ligne en cours de création avec % qui attend sa base
+  const [recurringLineDraft, setRecurringLineDraft] = useState(null);
+  const buildRecurringSpecialLine = React.useCallback(() => ({
+    ...RECURRING_SPECIAL_LINE_TEMPLATE,
+    id: `recurring_special_line_${Date.now()}`
+  }), []);
 
   // États pour le système unifié (DevisAvance utilise TOUJOURS le mode unified)
   const [devisItems, setDevisItems] = useState([]);
@@ -161,6 +232,10 @@ const DevisAvance = () => {
       return item;
     });
   }, [devisItems]);
+
+  const hasRecurringLine = React.useMemo(() => {
+    return devisItems.some(isRecurringSpecialLine);
+  }, [devisItems]);
   
   // ✅ Construire selectedParties depuis enrichedDevisItems pour les barres de recherche
   const selectedParties = React.useMemo(() => {
@@ -189,7 +264,6 @@ const DevisAvance = () => {
           setSessionUser(null);
         }
       } catch (error) {
-        console.error("Erreur lors de la récupération de l'utilisateur courant:", error);
         setSessionUser(null);
       }
     };
@@ -216,7 +290,6 @@ const DevisAvance = () => {
             localStorage.setItem(draftStorageKey, globalDraft);
           }
         } catch (error) {
-          console.error('Erreur lors de la migration du brouillon Devis Avance:', error);
         }
       }
       
@@ -465,7 +538,6 @@ const DevisAvance = () => {
       return;
     }
     if (!clientData) {
-      console.error("clientData est undefined");
       return;
     }
     try {
@@ -497,7 +569,6 @@ const DevisAvance = () => {
       setShowClientInfoModal(false);
       setShowSocieteInfoModal(true);
     } catch (error) {
-      console.error("Erreur:", error);
     }
   };
 
@@ -573,7 +644,6 @@ const DevisAvance = () => {
       setShowSelectSocieteModal(false);
       setShowChantierForm(true);
     } catch (error) {
-      console.error("Erreur lors de la récupération des données:", error);
       alert(
         "Erreur lors de la récupération des données du client et de la société"
       );
@@ -693,26 +763,29 @@ const DevisAvance = () => {
   const handlePartieSelect = (selectedOption) => {
     if (!selectedOption) return;
     
-    // Vérifier si la partie n'existe pas déjà
-    const alreadyExists = devisItems.some(item => item.type === 'partie' && item.id === selectedOption.value);
-    if (alreadyExists) return;
-    
-    // ✅ Calculer le prochain index de partie
-    const parties = devisItems.filter(i => i.type === 'partie');
-    const nextIndex = parties.length + 1;
-    
-    // Créer l'item partie
-    const newPartie = {
-      ...selectedOption.data,
-      type: 'partie',
-      id: selectedOption.value,
-      index_global: nextIndex,
-      titre: selectedOption.data.titre,
-      type_activite: selectedOption.data.type
-    };
-    
-    // Ajouter directement dans devisItems
-    setDevisItems(prev => sortByIndexGlobal([...prev, newPartie]));
+    setDevisItems(prevItems => {
+      const alreadyExists = prevItems.some(item => item.type === 'partie' && item.id === selectedOption.value);
+      if (alreadyExists) {
+        return prevItems;
+      }
+      
+      const parties = prevItems.filter(i => i.type === 'partie');
+      const nextIndex = parties.length + 1;
+      const numero = selectedOption.data?.numero || getNextPartieNumero(prevItems);
+      
+      const newPartie = {
+        ...selectedOption.data,
+        type: 'partie',
+        id: selectedOption.value,
+        index_global: nextIndex,
+        titre: selectedOption.data.titre,
+        type_activite: selectedOption.data.type,
+        numero
+      };
+      
+      const updated = sortByIndexGlobal([...prevItems, newPartie]);
+      return reindexAll(updated);
+    });
   };
 
   // Fonction pour créer une nouvelle partie
@@ -725,24 +798,28 @@ const DevisAvance = () => {
         is_deleted: false
       });
       
-      // ✅ Calculer le prochain index de partie
-      const parties = devisItems.filter(i => i.type === 'partie');
-      const nextIndex = parties.length + 1;
-      
-      const newPartie = {
+      const apiPartie = {
         id: response.data.id,
-        type: 'partie',
         titre: response.data.titre,
         type_activite: response.data.type,
-        index_global: nextIndex,
         isNew: true
       };
       
-      // Ajouter à la liste des parties à créer (pour référence)
-      setPartiesToCreate(prev => [...prev, newPartie]);
+      setPartiesToCreate(prev => [...prev, apiPartie]);
       
-      // Ajouter directement dans devisItems
-      setDevisItems(prev => sortByIndexGlobal([...prev, newPartie]));
+      setDevisItems(prevItems => {
+        const parties = prevItems.filter(i => i.type === 'partie');
+        const nextIndex = parties.length + 1;
+        const numero = getNextPartieNumero(prevItems);
+        const newPartie = {
+          ...apiPartie,
+          type: 'partie',
+          index_global: nextIndex,
+          numero
+        };
+        const updated = sortByIndexGlobal([...prevItems, newPartie]);
+        return reindexAll(updated);
+      });
       
       // Recharger la liste des parties disponibles
       await loadParties();
@@ -756,16 +833,26 @@ const DevisAvance = () => {
       // Erreur lors de la création de la partie
       const tempPartie = {
         id: `temp_${Date.now()}`,
-        type: 'partie',
         titre: inputValue,
         type_activite: 'PEINTURE',
-        index_global: devisItems.filter(i => i.type === 'partie').length + 1,
         isNew: true,
         isTemp: true
       };
       
       setPartiesToCreate(prev => [...prev, tempPartie]);
-      setDevisItems(prev => sortByIndexGlobal([...prev, tempPartie]));
+      setDevisItems(prevItems => {
+        const parties = prevItems.filter(i => i.type === 'partie');
+        const nextIndex = parties.length + 1;
+        const numero = getNextPartieNumero(prevItems);
+        const newPartie = {
+          ...tempPartie,
+          type: 'partie',
+          index_global: nextIndex,
+          numero
+        };
+        const updated = sortByIndexGlobal([...prevItems, newPartie]);
+        return reindexAll(updated);
+      });
       
       return {
         value: tempPartie.id,
@@ -852,23 +939,33 @@ const DevisAvance = () => {
   
   // Sélectionner une sous-partie existante
   const handleSousPartieSelect = (partieId, sousPartie) => {
-    // ✅ Utiliser le manager pour calculer le prochain index
-    const partie = devisItems.find(i => i.type === 'partie' && i.id === partieId);
-    if (!partie) return;
+    if (!sousPartie) return;
     
-    const nextIndex = getNextIndex(devisItems, 'partie', partieId) || (partie.index_global + 0.1);
-    
-    // Créer l'item sous-partie
-    const newSousPartie = {
-      ...sousPartie,
-      type: 'sous_partie',
-      id: sousPartie.id,
-      index_global: nextIndex,
-      partie_id: partieId
-    };
-    
-    // Ajouter directement dans devisItems
-    setDevisItems(prev => sortByIndexGlobal([...prev, newSousPartie]));
+    setDevisItems(prevItems => {
+      const partie = prevItems.find(i => i.type === 'partie' && i.id === partieId);
+      if (!partie) {
+        return prevItems;
+      }
+      
+      const nextIndex = getNextIndex(prevItems, 'partie', partieId) || (partie.index_global + 0.1);
+      const numero = sousPartie.numero || getNextSousPartieNumero(prevItems, partieId);
+      
+      const newSousPartie = {
+        ...sousPartie,
+        type: 'sous_partie',
+        id: sousPartie.id,
+        index_global: nextIndex,
+        partie_id: partieId,
+        numero
+      };
+      
+      const alreadyExists = prevItems.some(item => item.type === 'sous_partie' && item.id === sousPartie.id);
+      if (alreadyExists) {
+        return prevItems;
+      }
+      
+      return sortByIndexGlobal([...prevItems, newSousPartie]);
+    });
   };
 
   // Créer une nouvelle sous-partie
@@ -1185,6 +1282,10 @@ const DevisAvance = () => {
       if (draft.lineAwaitingPlacement !== undefined) {
         setLineAwaitingPlacement(draft.lineAwaitingPlacement);
       }
+
+      if (draft.recurringLineDraft !== undefined) {
+        setRecurringLineDraft(draft.recurringLineDraft);
+      }
       
       if (typeof draft.isSelectingBase === 'boolean') {
         setIsSelectingBase(draft.isSelectingBase);
@@ -1202,7 +1303,6 @@ const DevisAvance = () => {
         setTauxFixe(draft.tauxFixe);
       }
     } catch (error) {
-      console.error('Erreur lors de l\'application du brouillon Devis Avance:', error);
     }
   }, []);
   
@@ -1218,7 +1318,6 @@ const DevisAvance = () => {
         hydrateDraftState(parsedDraft);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement du brouillon Devis Avance:', error);
     } finally {
       setIsDraftHydrated(true);
     }
@@ -1248,13 +1347,13 @@ const DevisAvance = () => {
         tauxFixe,
         lineAwaitingPlacement,
         pendingLineForBase,
-        isSelectingBase
+      isSelectingBase,
+      recurringLineDraft
       };
       
       try {
         localStorage.setItem(draftStorageKey, JSON.stringify(draftPayload));
       } catch (error) {
-        console.error('Erreur lors de la sauvegarde du brouillon Devis Avance:', error);
       }
     }, 400);
     
@@ -1298,7 +1397,6 @@ const DevisAvance = () => {
     try {
       localStorage.removeItem(draftStorageKey);
     } catch (error) {
-      console.error('Erreur lors de la suppression du brouillon Devis Avance:', error);
     }
   }, [draftStorageKey]);
   
@@ -1314,6 +1412,7 @@ const DevisAvance = () => {
     setLineAwaitingPlacement(null);
     setIsSelectingBase(false);
     setPendingLineForBase(null);
+    setRecurringLineDraft(null);
     setDevisItems([]);
     setSelectedChantierId(null);
     setPendingChantierData(createInitialPendingChantierData());
@@ -1370,6 +1469,30 @@ const DevisAvance = () => {
     // ✅ Désactiver le flag après un délai
     setTimeout(() => setIsReordering(false), 100);
   };
+
+  const handleAutoPlaceRecurringLine = React.useCallback(() => {
+    if (!recurringLineDraft) {
+      return;
+    }
+
+    setIsReordering(true);
+
+    const newLine = {
+      ...recurringLineDraft,
+      id: recurringLineDraft.id || `recurring_special_line_${Date.now()}`,
+      context_type: 'global',
+      context_id: null
+    };
+
+    setDevisItems(prevItems => {
+      const updated = DevisIndexManager.insertAtPosition(prevItems, newLine, 'global_end');
+      return reindexAll(updated);
+    });
+    setRecurringLineDraft(null);
+
+    setTimeout(() => setIsReordering(false), 100);
+  }, [recurringLineDraft, devisItems, reindexAll]);
+
 
   // Supprimer une ligne en attente
   const handleRemovePendingSpecialLine = (lineId) => {
@@ -1789,6 +1912,60 @@ const DevisAvance = () => {
     return calculateGlobalTotalExcludingLine(null);
   };
 
+  const calculateRecurringLineAmount = React.useCallback((lineOrId) => {
+    const targetId = typeof lineOrId === 'object' ? lineOrId.id : lineOrId;
+    if (!targetId) {
+      return 0;
+    }
+    const targetLine = devisItems.find(item => item.id === targetId);
+    if (!targetLine || targetLine.index_global === undefined) {
+      return 0;
+    }
+    const sortedItems = [...devisItems].sort((a, b) => a.index_global - b.index_global);
+    const bases = calculerBasesBrutes();
+    let runningTotal = 0;
+    for (const item of sortedItems) {
+      if (item.index_global >= targetLine.index_global) {
+        break;
+      }
+      if (item.type === 'partie') {
+        runningTotal += calculatePartieTotal(item, bases);
+      } else if (item.type === 'ligne_speciale' && item.context_type === 'global') {
+        const amount = calculerMontantLigneSpeciale(item, bases, targetLine.id);
+        if (item.type_speciale === 'addition') {
+          runningTotal += amount;
+        } else if (item.type_speciale === 'reduction') {
+          runningTotal -= amount;
+        }
+      }
+    }
+    return runningTotal;
+  }, [devisItems]);
+
+  useEffect(() => {
+    if (!hasRecurringLine) {
+      return;
+    }
+
+    setDevisItems(prevItems => {
+      let didUpdate = false;
+      const updatedItems = prevItems.map(item => {
+        if (isRecurringSpecialLine(item)) {
+          const amount = calculateRecurringLineAmount(item);
+          if (Number.isFinite(amount)) {
+            const currentValue = typeof item.value === 'number' ? item.value : 0;
+            if (Math.abs(currentValue - amount) > 0.01 || item.value === undefined) {
+              didUpdate = true;
+              return { ...item, value: amount };
+            }
+          }
+        }
+        return item;
+      });
+      return didUpdate ? updatedItems : prevItems;
+    });
+  }, [hasRecurringLine, calculateRecurringLineAmount]);
+
   // Fonction pour calculer les totaux estimés (main d'œuvre, matériel, marge)
   const calculateEstimatedTotals = () => {
     let totals = {
@@ -1844,14 +2021,14 @@ const DevisAvance = () => {
   };
 
   // Calculer le total d'une partie
-  const calculatePartieTotal = (partie) => {
+  const calculatePartieTotal = (partie, basesOverride = null) => {
     // Calculer d'abord toutes les bases brutes
-    const bases = calculerBasesBrutes();
+    const bases = basesOverride || calculerBasesBrutes();
     
     // Base : somme des sous-parties (avec leurs lignes spéciales déjà incluses)
     let total = devisItems
       .filter(item => item.type === 'sous_partie' && item.partie_id === partie.id)
-      .reduce((sum, sp) => sum + calculateSousPartieTotal(sp), 0);
+      .reduce((sum, sp) => sum + calculateSousPartieTotal(sp, bases), 0);
     
     // Récupérer les lignes spéciales de cette partie, triées par index_global
     const lignesSpeciales = devisItems
@@ -1878,9 +2055,9 @@ const DevisAvance = () => {
   };
 
   // Calculer le total d'une sous-partie
-  const calculateSousPartieTotal = (sousPartie) => {
+  const calculateSousPartieTotal = (sousPartie, basesOverride = null) => {
     // Calculer d'abord toutes les bases brutes
-    const bases = calculerBasesBrutes();
+    const bases = basesOverride || calculerBasesBrutes();
     
     // Base : somme des lignes de détail
     let total = devisItems
@@ -1989,7 +2166,6 @@ const DevisAvance = () => {
         }
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération du client depuis le chantier:', error);
     }
     
     return null;
@@ -2006,7 +2182,6 @@ const DevisAvance = () => {
       });
       return response.data.client || null;
     } catch (error) {
-      console.error("Erreur lors de la vérification du client:", error);
       return null;
     }
   };
@@ -2021,7 +2196,6 @@ const DevisAvance = () => {
       });
       return response.data.societe || null;
     } catch (error) {
-      console.error("Erreur lors de la vérification de la société:", error);
       return null;
     }
   };
@@ -2083,10 +2257,8 @@ const DevisAvance = () => {
         // 2. Vérifier si la société existe
         const existingSociete = await checkSocieteExists(pendingChantierData.societe);
         if (existingSociete) {
-          console.log("Société existante trouvée:", existingSociete);
           finalSocieteId = existingSociete.id;
         } else {
-          console.log("Création d'une nouvelle société");
           // Préparer les données de la société avec gestion sécurisée du code postal
           const societeData = {
             nom_societe: pendingChantierData.societe.nom_societe || "",
@@ -2102,7 +2274,6 @@ const DevisAvance = () => {
           
           const societeResponse = await axios.post("/api/societe/", societeData);
           finalSocieteId = societeResponse.data.id;
-          console.log("Société créée avec succès, ID:", finalSocieteId);
         }
 
         // 3. Créer le chantier SEULEMENT si ce n'est PAS un appel d'offres
@@ -2133,7 +2304,6 @@ const DevisAvance = () => {
         }
       } else if (selectedChantierId) {
         // Récupérer l'ID du client et de la société depuis le chantier existant
-        console.log("Utilisation d'un chantier existant:", selectedChantierId);
         const chantierResponse = await axios.get(`/api/chantier/${selectedChantierId}/`);
         const chantierData = chantierResponse.data;
         
@@ -2180,9 +2350,8 @@ const DevisAvance = () => {
         // Recalculer automatiquement les coûts du devis créé
         try {
           await axios.post(`/api/devis/${response.data.id}/recalculer-couts/`);
-          console.log("✅ Coûts du devis recalculés avec succès");
         } catch (recalcError) {
-          console.error("❌ Erreur lors du recalcul des coûts:", recalcError);
+          void recalcError;
         }
 
         const devisId = response.data.id;
@@ -2212,10 +2381,7 @@ const DevisAvance = () => {
               return;
             }
           } catch (autoDownloadAppelOffresError) {
-            console.error(
-              "❌ Erreur lors de la préparation du téléchargement auto (appel d'offres):",
-              autoDownloadAppelOffresError
-            );
+            void autoDownloadAppelOffresError;
           }
         }
 
@@ -2237,10 +2403,7 @@ const DevisAvance = () => {
                   );
                   societeName = societeResponse.data?.nom_societe || "";
                 } catch (societeError) {
-                  console.error(
-                    "❌ Erreur lors de la récupération de la société pour auto-download:",
-                    societeError
-                  );
+                  void societeError;
                 }
               }
             }
@@ -2265,10 +2428,7 @@ const DevisAvance = () => {
             window.location.href = `/ListeDevis?${urlParams.toString()}`;
             return;
           } catch (autoDownloadNormalError) {
-            console.error(
-              "❌ Erreur lors de la préparation du téléchargement auto (devis normal):",
-              autoDownloadNormalError
-            );
+            void autoDownloadNormalError;
           }
         }
         
@@ -2278,7 +2438,6 @@ const DevisAvance = () => {
         window.location.href = '/ListeDevis';
       }
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde du devis:', error);
       const errorMessage = error.response?.data?.error || error.response?.data?.detail || error.message || 'Erreur inconnue';
       alert(`Erreur lors de la sauvegarde du devis:\n${errorMessage}`);
     } finally {
@@ -2297,99 +2456,6 @@ const DevisAvance = () => {
     await generateDevisNumber(null);
   };
 
-  // ✅ Logs de debug : Afficher un tableau des lignes présentes dans le devis
-  useEffect(() => {
-    if (devisItems.length === 0) {
-      console.log('📋 DevisAvance - Aucune ligne dans le devis');
-      return;
-    }
-    
-    // Créer un tableau formaté pour l'affichage
-    const tableData = devisItems
-      .sort((a, b) => a.index_global - b.index_global)
-      .map((item, idx) => {
-        const row = {
-          '#': idx + 1,
-          'Index Global': item.index_global,
-          'Type': item.type,
-          'ID': item.id,
-          'Description': item.description || item.titre || item.designation || '-',
-          'Numéro': item.numero || '-',
-          'Context Type': item.context_type || '-',
-          'Context ID': item.context_id || '-',
-          'Partie ID': item.partie_id || '-',
-          'Sous-Partie ID': item.sous_partie_id || '-'
-        };
-        
-        // Ajouter des informations spécifiques selon le type
-        if (item.type === 'ligne_detail') {
-          row['Quantité'] = item.quantity || 0;
-          row['Prix'] = item.prix_devis || item.prix || '-';
-        }
-        
-        if (item.type === 'ligne_speciale') {
-          row['Type Spéciale'] = item.type_speciale || '-';
-          row['Value Type'] = item.value_type || '-';
-          row['Valeur'] = item.value || '-';
-        }
-        
-        return row;
-      });
-    
-    // Afficher le tableau dans la console
-    console.group('📋 DevisAvance - Tableau des lignes du devis');
-    console.table(tableData);
-    
-    // Afficher aussi un résumé par type
-    const summary = {
-      'Total lignes': devisItems.length,
-      'Parties': devisItems.filter(i => i.type === 'partie').length,
-      'Sous-parties': devisItems.filter(i => i.type === 'sous_partie').length,
-      'Lignes détails': devisItems.filter(i => i.type === 'ligne_detail').length,
-      'Lignes spéciales globales': devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'global').length,
-      'Lignes spéciales partie': devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'partie').length,
-      'Lignes spéciales sous-partie': devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'sous_partie').length
-    };
-    
-    console.log('📊 Résumé par type:', summary);
-    
-    // Vérifier les index manquants ou dupliqués
-    const indexes = devisItems.map(i => i.index_global).sort((a, b) => a - b);
-    const duplicates = indexes.filter((val, idx) => indexes.indexOf(val) !== idx);
-    const missing = [];
-    
-    if (indexes.length > 0) {
-      const minIndex = Math.floor(Math.min(...indexes));
-      const maxIndex = Math.ceil(Math.max(...indexes));
-      
-      for (let i = minIndex; i <= maxIndex; i++) {
-        if (!indexes.includes(i) && devisItems.some(item => 
-          item.type === 'partie' || 
-          (item.type === 'ligne_speciale' && item.context_type === 'global')
-        )) {
-          // Vérifier seulement pour les éléments globaux
-          const hasGlobalItemAt = devisItems.some(item => 
-            (item.type === 'partie' || (item.type === 'ligne_speciale' && item.context_type === 'global')) &&
-            Math.floor(item.index_global) === i
-          );
-          if (!hasGlobalItemAt && i >= 1) {
-            missing.push(i);
-          }
-        }
-      }
-    }
-    
-    if (duplicates.length > 0) {
-      console.warn('⚠️ Index dupliqués détectés:', duplicates);
-    }
-    
-    if (missing.length > 0 && missing.length < 10) {
-      console.warn('⚠️ Index manquants dans la séquence (éléments globaux):', missing);
-    }
-    
-    console.groupEnd();
-  }, [devisItems]);
-
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();
@@ -2398,6 +2464,15 @@ const DevisAvance = () => {
     // Charger les parties initiales
     loadParties();
   }, []);
+
+  useEffect(() => {
+    const hasAtLeastOnePartie = devisItems.some(item => item.type === 'partie');
+    const recurringLineExists = devisItems.some(isRecurringSpecialLine);
+    if (!hasAtLeastOnePartie || recurringLineExists || recurringLineDraft) {
+      return;
+    }
+    setRecurringLineDraft(buildRecurringSpecialLine());
+  }, [devisItems, recurringLineDraft, buildRecurringSpecialLine]);
 
   return (
     <div style={{
@@ -2745,6 +2820,11 @@ const DevisAvance = () => {
               }}
               pendingLineForBase={pendingLineForBase}
               onClearPendingLineForBase={() => setPendingLineForBase(null)}
+              pendingRecurringLine={recurringLineDraft}
+              onAutoPlaceRecurringLine={handleAutoPlaceRecurringLine}
+              pendingRecurringAmount={calculateGlobalTotal()}
+              calculateRecurringLineAmount={calculateRecurringLineAmount}
+              hasRecurringLine={hasRecurringLine}
             />
           </div>
 
@@ -2872,10 +2952,9 @@ const DevisAvance = () => {
                     
                     // Ouvrir dans un nouvel onglet
                     window.open(previewUrl, '_blank');
-                  } catch (error) {
-                    console.error('Erreur lors de la prévisualisation:', error);
-                    alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
-                  }
+                } catch (error) {
+                  alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
+                }
                 }}
                 style={{
                   backgroundColor: '#28a745',

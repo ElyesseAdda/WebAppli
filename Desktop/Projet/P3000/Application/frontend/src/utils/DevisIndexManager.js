@@ -260,6 +260,16 @@ const insertAtPosition = (allItems, newLine, position) => {
     // Insérer au début de tout
     insertIndex = 0;
   } 
+  else if (position === 'global_end') {
+    context_type = 'global';
+    context_id = null;
+    scopeId = 'global';
+    const globalItems = allItems.filter(i => 
+      i.type === 'partie' ||
+      (i.type === 'ligne_speciale' && i.context_type === 'global')
+    ).sort((a, b) => a.index_global - b.index_global);
+    insertIndex = globalItems.length;
+  }
   else if (position.startsWith('before_ligne_')) {
     const ligneId = parseInt(position.replace('before_ligne_', ''));
     const ligne = allItems.find(i => i.type === 'ligne_detail' && i.id === ligneId);
