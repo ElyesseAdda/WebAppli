@@ -98,10 +98,27 @@ const sortByNewestFirst = (items = []) =>
       new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime()
   );
 
+const DEVIS_PER_PAGE = 15;
+
+const hasActiveFilters = (filters) => {
+  return (
+    filters.numero ||
+    filters.chantier_name ||
+    filters.client_name ||
+    filters.date_creation ||
+    filters.price_ht ||
+    (filters.status && filters.status !== "Tous")
+  );
+};
+
 const ListeDevis = () => {
   const [devis, setDevis] = useState([]);
   const [filteredDevis, setFilteredDevis] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [nextPageUrl, setNextPageUrl] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [allDevisForFilter, setAllDevisForFilter] = useState(null); // Cache pour recherche
   const [filters, setFilters] = useState({
     numero: "",
     chantier_name: "",
@@ -172,18 +189,11 @@ const ListeDevis = () => {
         // Vérifier que la demande n'est pas trop ancienne (max 5 minutes)
         const now = Date.now();
         if (now - timestamp > 5 * 60 * 1000) {
-          console.log(
-            "⚠️ Génération PDF en attente trop ancienne, suppression"
-          );
           sessionStorage.removeItem("pendingPDFGeneration");
           return;
         }
 
         if (type === "devis_marche") {
-          console.log(
-            "🚀 Lancement de la génération PDF automatique pour l'appel d'offre"
-          );
-
           // Pour la génération automatique, on n'a pas l'ID du devis
           // On va récupérer le devis depuis l'appel d'offres
           try {
@@ -199,32 +209,25 @@ const ListeDevis = () => {
                 appelOffresName,
                 societeName,
                 (response) => {
-                  console.log("✅ PDF généré avec succès pour l'appel d'offre");
+                  void response;
                   sessionStorage.removeItem("pendingPDFGeneration");
                 },
                 (error) => {
-                  console.error(
-                    "❌ Erreur lors de la génération du PDF:",
-                    error
-                  );
+                  void error;
                   sessionStorage.removeItem("pendingPDFGeneration");
                 }
               );
             } else {
-              console.error("❌ Aucun devis trouvé pour l'appel d'offres");
               sessionStorage.removeItem("pendingPDFGeneration");
             }
           } catch (error) {
-            console.error("❌ Erreur lors de la récupération du devis:", error);
+            void error;
             sessionStorage.removeItem("pendingPDFGeneration");
           }
         }
       }
     } catch (error) {
-      console.error(
-        "❌ Erreur lors de la vérification de la génération PDF en attente:",
-        error
-      );
+      void error;
       // Nettoyer le sessionStorage en cas d'erreur
       sessionStorage.removeItem("pendingPDFGeneration");
     }
@@ -233,11 +236,6 @@ const ListeDevis = () => {
   // Fonction pour vérifier et lancer le téléchargement automatique depuis l'URL
   const checkAutoDownloadFromURL = async () => {
     try {
-      console.log(
-        "🔍 NOUVEAU: Vérification du téléchargement automatique depuis l'URL"
-      );
-      console.log("🔍 URL actuelle:", window.location.href);
-
       const urlParams = new URLSearchParams(window.location.search);
       const autoDownload = urlParams.get("autoDownload");
 
@@ -250,26 +248,12 @@ const ListeDevis = () => {
         const societeName = urlParams.get("societeName");
         const numero = urlParams.get("numero");
 
-        console.log("🚀 NOUVEAU: Téléchargement automatique détecté:", {
-          devisId,
-          appelOffresId,
-          appelOffresName,
-          chantierId,
-          chantierName,
-          societeName,
-          numero,
-        });
-
         // Vérifier si c'est un devis de chantier ou un devis normal
         if (devisId && appelOffresId && appelOffresName && societeName) {
           // C'est un devis de chantier
           // Attendre que les devis soient chargés
           setTimeout(async () => {
             try {
-              console.log(
-                "🎯 NOUVEAU: Lancement du téléchargement automatique avec le système universel"
-              );
-
               // Utiliser le nouveau système universel
               await generatePDFDrive(
                 "devis_chantier",
@@ -282,19 +266,12 @@ const ListeDevis = () => {
                 },
                 {
                   onSuccess: (response) => {
-                    console.log(
-                      "✅ NOUVEAU: Téléchargement automatique réussi:",
-                      response
-                    );
+                    void response;
                     // Nettoyer l'URL après succès
                     const newUrl = window.location.pathname;
                     window.history.replaceState({}, document.title, newUrl);
                   },
                   onError: (error) => {
-                    console.error(
-                      "❌ NOUVEAU: Erreur lors du téléchargement automatique:",
-                      error
-                    );
                     // Afficher une notification d'erreur
                     alert(
                       `❌ Erreur lors du téléchargement automatique: ${error.message}`
@@ -306,10 +283,6 @@ const ListeDevis = () => {
                 }
               );
             } catch (error) {
-              console.error(
-                "❌ NOUVEAU: Erreur lors du téléchargement automatique:",
-                error
-              );
               alert(
                 `❌ Erreur lors du téléchargement automatique: ${error.message}`
               );
@@ -323,10 +296,6 @@ const ListeDevis = () => {
           // Attendre que les devis soient chargés
           setTimeout(async () => {
             try {
-              console.log(
-                "🎯 NOUVEAU: Lancement du téléchargement automatique pour devis normal avec le système universel"
-              );
-
               // Utiliser le nouveau système universel pour les devis normaux
               await generatePDFDrive(
                 "devis_normal",
@@ -339,19 +308,12 @@ const ListeDevis = () => {
                 },
                 {
                   onSuccess: (response) => {
-                    console.log(
-                      "✅ NOUVEAU: Téléchargement automatique devis normal réussi:",
-                      response
-                    );
+                    void response;
                     // Nettoyer l'URL après succès
                     const newUrl = window.location.pathname;
                     window.history.replaceState({}, document.title, newUrl);
                   },
                   onError: (error) => {
-                    console.error(
-                      "❌ NOUVEAU: Erreur lors du téléchargement automatique devis normal:",
-                      error
-                    );
                     alert(
                       `❌ Erreur lors du téléchargement automatique: ${error.message}`
                     );
@@ -362,10 +324,6 @@ const ListeDevis = () => {
                 }
               );
             } catch (error) {
-              console.error(
-                "❌ NOUVEAU: Erreur lors du téléchargement automatique devis normal:",
-                error
-              );
               alert(
                 `❌ Erreur lors du téléchargement automatique: ${error.message}`
               );
@@ -375,9 +333,6 @@ const ListeDevis = () => {
             }
           }, 2000); // Attendre 2 secondes pour que les devis soient chargés
         } else {
-          console.warn(
-            "⚠️ NOUVEAU: Paramètres manquants pour le téléchargement automatique"
-          );
           alert("⚠️ Paramètres manquants pour le téléchargement automatique");
           // Nettoyer l'URL si les paramètres sont incomplets
           const newUrl = window.location.pathname;
@@ -385,10 +340,6 @@ const ListeDevis = () => {
         }
       }
     } catch (error) {
-      console.error(
-        "❌ NOUVEAU: Erreur lors de la vérification du téléchargement automatique:",
-        error
-      );
       alert(
         `❌ Erreur lors de la vérification du téléchargement automatique: ${error.message}`
       );
@@ -398,16 +349,9 @@ const ListeDevis = () => {
   // Fonction pour gérer le téléchargement automatique des nouveaux devis
   const handleAutoDownloadForNewDevis = async (devis) => {
     try {
-      console.log(
-        "🎯 Téléchargement automatique pour le nouveau devis:",
-        devis
-      );
-
       // Récupérer les données complètes du devis
       const response = await axios.get(`/api/devisa/${devis.id}/`);
       const devisComplet = response.data;
-
-      console.log("📋 Données du devis complet:", devisComplet);
 
       // Vérifier que c'est bien un devis de chantier avec un appel d'offres
       if (devisComplet.devis_chantier === true && devisComplet.appel_offres) {
@@ -428,8 +372,6 @@ const ListeDevis = () => {
           societe = societeResponse.data;
         }
 
-        console.log("🚀 Lancement du téléchargement automatique...");
-
         // Lancer la génération PDF
         await generateDevisMarchePDFDrive(
           devisComplet.id,
@@ -437,26 +379,20 @@ const ListeDevis = () => {
           appelOffres.chantier_name,
           societe.nom_societe,
           (response) => {
-            console.log("✅ Téléchargement automatique réussi:", response);
+            void response;
             alert("✅ Devis téléchargé automatiquement dans le Drive !");
           },
           (error) => {
-            console.error(
-              "❌ Erreur lors du téléchargement automatique:",
-              error
-            );
             alert(
               "❌ Erreur lors du téléchargement automatique. Vous pouvez le faire manuellement."
             );
           }
         );
       } else {
-        console.log(
-          "ℹ️ Ce devis n'est pas un devis de chantier ou n'a pas d'appel d'offres associé"
-        );
+        // Pas de log ici pour rester silencieux
       }
     } catch (error) {
-      console.error("❌ Erreur lors du téléchargement automatique:", error);
+      void error;
     }
   };
 
@@ -466,17 +402,23 @@ const ListeDevis = () => {
     const numeroFilter = urlParams.get("numero");
 
     if (numeroFilter && devis.length > 0) {
-      const filtered = devis.filter((devis) =>
-        devis.numero?.toLowerCase().includes(numeroFilter.toLowerCase())
+      const filtered = devis.filter((d) =>
+        d.numero?.toLowerCase().includes(numeroFilter.toLowerCase())
       );
-      setFilteredDevis(sortByNewestFirst(filtered));
+      setFilteredDevis(filtered);
     }
   }, [devis]);
 
-  const fetchDevis = async () => {
+  const fetchDevis = async (url = "/api/devisa/", append = false) => {
     try {
-      const response = await axios.get("/api/devisa/");
-      const newDevis = response.data;
+      setIsLoading(true);
+      const response = await axios.get(url);
+      const data = response.data;
+      
+      // Gérer la réponse paginée
+      const newDevis = data.results || data;
+      const next = data.next || null;
+      const count = data.count || newDevis.length;
 
       // Détecter les nouveaux devis (ceux qui n'étaient pas dans la liste précédente)
       const previousDevisIds = devis.map((d) => d.id);
@@ -484,13 +426,20 @@ const ListeDevis = () => {
         (d) => !previousDevisIds.includes(d.id)
       );
 
-      console.log("🔍 DEBUG - État précédent:", previousDevisIds);
-      console.log("🔍 DEBUG - Nouveaux devis détectés:", newlyCreatedDevis);
-
       const normalizedDevis = normalizeDevisEntries(newDevis);
-      const sortedDevis = sortByNewestFirst(normalizedDevis);
-      setDevis(sortedDevis);
-      setFilteredDevis(sortedDevis);
+      
+      if (append) {
+        // Ajouter à la liste existante
+        setDevis((prev) => [...prev, ...normalizedDevis]);
+        setFilteredDevis((prev) => [...prev, ...normalizedDevis]);
+      } else {
+        // Remplacer la liste
+        setDevis(normalizedDevis);
+        setFilteredDevis(normalizedDevis);
+      }
+      
+      setNextPageUrl(next);
+      setTotalCount(count);
 
       // Seulement traiter les nouveaux devis si on avait déjà une liste précédente
       // ET si ce n'est pas le premier chargement de la page
@@ -503,86 +452,116 @@ const ListeDevis = () => {
           (d) => d.devis_chantier === true
         );
         if (chantierDevis.length > 0) {
-          console.log(
-            `🚀 ${chantierDevis.length} nouveau(x) devis de chantier détecté(s), téléchargement automatique...`
-          );
           // Attendre un peu pour que l'interface se stabilise
           setTimeout(() => {
             // Traiter tous les devis de chantier trouvés
             chantierDevis.forEach((devis, index) => {
               // Délai progressif pour éviter les conflits (1s, 2s, 3s, etc.)
               setTimeout(() => {
-                console.log(
-                  `📄 Traitement du devis ${index + 1}/${
-                    chantierDevis.length
-                  }: ${devis.numero}`
-                );
                 handleAutoDownloadForNewDevis(devis);
               }, index * 1000); // 1 seconde entre chaque devis
             });
           }, 1000);
         }
       } else if (!isInitialized) {
-        console.log("ℹ️ Premier chargement - initialisation terminée");
         setIsInitialized(true);
-      } else {
-        console.log("ℹ️ Aucun nouveau devis détecté");
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des devis:", error);
+      void error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleFilterChange = (field) => (event) => {
+  // Charger tous les devis pour la recherche (uniquement quand nécessaire)
+  const loadAllDevisForFilter = async () => {
+    if (allDevisForFilter) return allDevisForFilter;
+    
+    try {
+      setIsLoading(true);
+      // Charger tous les devis sans pagination pour le filtrage
+      const response = await axios.get("/api/devisa/?page_size=1000");
+      const data = response.data;
+      const allDevis = sortByNewestFirst(normalizeDevisEntries(data.results || data));
+      setAllDevisForFilter(allDevis);
+      return allDevis;
+    } catch (error) {
+      void error;
+      return devis;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFilterChange = (field) => async (event) => {
     const newFilters = {
       ...filters,
       [field]: event.target.value,
     };
     setFilters(newFilters);
 
-    let filtered = devis.filter((devis) => {
-      return Object.keys(newFilters).every((key) => {
-        if (!newFilters[key] || newFilters[key] === "Tous") return true;
+    // Si on a des filtres actifs, charger tous les devis pour filtrer
+    if (hasActiveFilters(newFilters)) {
+      const allDevis = await loadAllDevisForFilter();
+      
+      let filtered = allDevis.filter((d) => {
+        return Object.keys(newFilters).every((key) => {
+          if (!newFilters[key] || newFilters[key] === "Tous") return true;
 
-        switch (key) {
-          case "numero":
-            return devis.numero
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
+          switch (key) {
+            case "numero":
+              return d.numero
+                ?.toLowerCase()
+                .includes(newFilters[key].toLowerCase());
 
-          case "chantier_name":
-            return devis.chantier_name
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
+            case "chantier_name":
+              return d.chantier_name
+                ?.toLowerCase()
+                .includes(newFilters[key].toLowerCase());
 
-          case "client_name":
-            return devis.client_name
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
+            case "client_name":
+              return d.client_name
+                ?.toLowerCase()
+                .includes(newFilters[key].toLowerCase());
 
-          case "date_creation":
-            if (!newFilters[key]) return true;
-            // Convertir la date du devis au format YYYY-MM-DD pour la comparaison
-            const devisDate = new Date(devis.date_creation)
-              .toISOString()
-              .split("T")[0];
-            return devisDate === newFilters[key];
+            case "date_creation":
+              if (!newFilters[key]) return true;
+              // Convertir la date du devis au format YYYY-MM-DD pour la comparaison
+              const devisDate = new Date(d.date_creation)
+                .toISOString()
+                .split("T")[0];
+              return devisDate === newFilters[key];
 
-          case "price_ht":
-            const devisPrice = devis.price_ht?.toString() || "";
-            return devisPrice.includes(newFilters[key]);
+            case "price_ht":
+              const devisPrice = d.price_ht?.toString() || "";
+              return devisPrice.includes(newFilters[key]);
 
-          case "status":
-            return devis.status === newFilters[key];
+            case "status":
+              return d.status === newFilters[key];
 
-          default:
-            return true;
-        }
+            default:
+              return true;
+          }
+        });
       });
-    });
 
-    setFilteredDevis(filtered);
+      setFilteredDevis(filtered);
+    } else {
+      // Pas de filtre, revenir à la liste paginée
+      setFilteredDevis(devis);
+    }
   };
+
+  const handleLoadMore = () => {
+    if (nextPageUrl && !isLoading) {
+      fetchDevis(nextPageUrl, true);
+    }
+  };
+
+  // Devis à afficher
+  const devisToDisplay = filteredDevis;
+
+  const hasMoreDevis = !hasActiveFilters(filters) && nextPageUrl !== null;
 
   const handleSort = (property) => {
     const isAsc = orderBy === property && order === "asc";
@@ -667,7 +646,7 @@ const ListeDevis = () => {
 
       await updateDevisStatus(newStatus);
     } catch (error) {
-      console.error("Erreur lors de la modification du statut:", error);
+      void error;
       alert("Erreur lors de la modification du statut");
     }
   };
@@ -693,7 +672,7 @@ const ListeDevis = () => {
       setDevisToUpdate(null);
       setNewStatus(null);
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du statut:", error);
+      void error;
       alert("Erreur lors de la mise à jour du statut");
     }
   };
@@ -745,7 +724,7 @@ const ListeDevis = () => {
       setNewStatus(null);
       setShowStatusModal(false);
     } catch (error) {
-      console.error("Erreur lors de la suppression des factures:", error);
+      void error;
       alert("Erreur lors de la suppression des factures");
     }
   };
@@ -758,7 +737,7 @@ const ListeDevis = () => {
   const handleConfirmDelete = async () => {
     try {
       if (!selectedDevis) {
-        console.error("Aucun devis sélectionné");
+        alert("Aucun devis sélectionné");
         return;
       }
 
@@ -776,7 +755,7 @@ const ListeDevis = () => {
       setDeleteModalOpen(false);
       setSelectedDevis(null);
     } catch (error) {
-      console.error("Erreur lors de la suppression du devis:", error);
+      void error;
       alert("Erreur lors de la suppression du devis");
     }
   };
@@ -791,7 +770,6 @@ const ListeDevis = () => {
       if (type === "TS") {
         const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
         const devisComplet = devisResponse.data;
-        console.log("Devis complet:", devisComplet);
 
         // Vérifier que ce n'est PAS un devis de chantier
         if (devisComplet.devis_chantier === true) {
@@ -833,7 +811,6 @@ const ListeDevis = () => {
         setFactureModalOpen(true);
       }
     } catch (error) {
-      console.error("Erreur lors de la récupération des données:", error);
 
       // Afficher un message d'erreur plus détaillé
       if (error.response?.data?.error) {
@@ -905,7 +882,7 @@ const ListeDevis = () => {
       window.location.href = `/BonCommande?${queryParams.toString()}`;
       
     } catch (error) {
-      console.error("Erreur lors de la conversion en bon de commande:", error);
+      void error;
       alert("Erreur lors de la conversion en bon de commande. Veuillez réessayer.");
     }
   };
@@ -933,7 +910,6 @@ const ListeDevis = () => {
 
   const handleFactureSubmit = async (factureData) => {
     try {
-      console.log("Données envoyées:", factureData);
       const response = await axios.post("/api/facture/", factureData);
 
       // Message de succès
@@ -941,17 +917,11 @@ const ListeDevis = () => {
 
       // Auto-download de la facture dans le Drive
       try {
-        console.log(
-          "🚀 Lancement de l'auto-download de la facture vers le Drive"
-        );
-
         // Récupérer les données complètes de la facture créée
         const factureResponse = await axios.get(
           `/api/facture/${response.data.id}/`
         );
         const factureComplet = factureResponse.data;
-
-        console.log("📋 Données de la facture complète:", factureComplet);
 
         // Récupérer les données de la société depuis le chantier
         const chantierResponse = await axios.get(
@@ -970,8 +940,6 @@ const ListeDevis = () => {
           societe = societeResponse.data;
         }
 
-        console.log("🏢 Données de la société:", societe);
-
         // Utiliser le système universel pour générer le PDF
         await generatePDFDrive(
           "facture",
@@ -984,17 +952,10 @@ const ListeDevis = () => {
           },
           {
             onSuccess: (response) => {
-              console.log(
-                "✅ Facture générée avec succès dans le Drive:",
-                response
-              );
+              void response;
               alert("✅ Facture téléchargée automatiquement dans le Drive !");
             },
             onError: (error) => {
-              console.error(
-                "❌ Erreur lors de la génération de la facture:",
-                error
-              );
               alert(
                 `❌ Erreur lors de la génération automatique: ${error.message}`
               );
@@ -1002,7 +963,7 @@ const ListeDevis = () => {
           }
         );
       } catch (autoDownloadError) {
-        console.error("❌ Erreur lors de l'auto-download:", autoDownloadError);
+        void autoDownloadError;
         // Ne pas bloquer le processus principal si l'auto-download échoue
         alert(
           "⚠️ Facture créée mais erreur lors du téléchargement automatique. Vous pouvez le faire manuellement."
@@ -1012,10 +973,6 @@ const ListeDevis = () => {
       handleFactureModalClose();
       fetchDevis();
     } catch (error) {
-      console.error(
-        "Erreur lors de la création de la facture:",
-        error.response?.data || error
-      );
       alert(
         "Erreur lors de la création de la facture. Veuillez vérifier les données."
       );
@@ -1024,7 +981,6 @@ const ListeDevis = () => {
 
   const handleGeneratePDF = async (devis) => {
     try {
-      console.log("Tentative de génération du PDF pour le devis:", devis.id);
 
       // Appel à l'API existante
       const response = await axios.post(
@@ -1063,15 +1019,12 @@ const ListeDevis = () => {
         const reader = new FileReader();
         reader.onload = function () {
           const errorMessage = JSON.parse(reader.result);
-          console.error("Erreur serveur:", errorMessage);
           alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
         };
         reader.readAsText(response.data);
       }
     } catch (error) {
-      console.error("Erreur détaillée:", error.response?.data);
-      console.error("Status:", error.response?.status);
-      console.error("Headers:", error.response?.headers);
+      void error;
       alert(
         "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
       );
@@ -1192,7 +1145,7 @@ const ListeDevis = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredDevis.map((devis) => (
+              {devisToDisplay.map((devis) => (
                 <React.Fragment key={devis.id}>
                   <TableRow>
                     <DevisNumber
@@ -1270,6 +1223,49 @@ const ListeDevis = () => {
             </TableBody>
           </Table>
         </StyledTableContainer>
+
+        {/* Indicateur de chargement */}
+        {isLoading && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 2,
+              mt: 1,
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              Chargement...
+            </Typography>
+          </Box>
+        )}
+
+        {/* Bandeau "Afficher plus" */}
+        {hasMoreDevis && !isLoading && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 2,
+              mt: 1,
+              borderTop: "1px solid #e0e0e0",
+            }}
+          >
+            <Button
+              variant="outlined"
+              onClick={handleLoadMore}
+              sx={{
+                textTransform: "none",
+                fontWeight: 500,
+                px: 4,
+              }}
+            >
+              Afficher plus ({totalCount - devis.length} restants)
+            </Button>
+          </Box>
+        )}
       </StyledBox>
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
@@ -1342,7 +1338,7 @@ const ListeDevis = () => {
                 );
               }
             } catch (error) {
-              console.error("Erreur lors du chargement des données:", error);
+              void error;
               alert("Erreur lors du chargement des données");
             }
           }}
@@ -1357,47 +1353,24 @@ const ListeDevis = () => {
             onClick={async () => {
               handleClose();
               try {
-                console.log(
-                  "🧪 TEST: Génération PDF Drive pour devis de chantier (ancien système)"
-                );
-
                 // Récupérer les données complètes du devis
                 const response = await axios.get(
                   `/api/devisa/${selectedDevis.id}/`
                 );
                 const devisComplet = response.data;
 
-                console.log("📋 Données du devis complet:", devisComplet);
-                console.log(
-                  "📋 Champ appel_offres:",
-                  devisComplet.appel_offres
-                );
-                console.log(
-                  "📋 Type de appel_offres:",
-                  typeof devisComplet.appel_offres
-                );
-
                 // Vérifier si appel_offres existe
                 if (!devisComplet.appel_offres) {
-                  console.error(
-                    "❌ ERREUR: Le champ appel_offres est undefined ou null"
-                  );
                   alert(
                     "❌ ERREUR: Ce devis n'est pas lié à un appel d'offres. Vérifiez que c'est bien un devis de chantier."
                   );
                   return;
                 }
 
-                // Récupérer les données de l'appel d'offres
-                console.log(
-                  `🔍 Récupération de l'appel d'offres: /api/appels-offres/${devisComplet.appel_offres}/`
-                );
-
                 const appelOffresResponse = await axios.get(
                   `/api/appels-offres/${devisComplet.appel_offres}/`
                 );
                 const appelOffres = appelOffresResponse.data;
-                console.log("📋 Données de l'appel d'offres:", appelOffres);
 
                 // Récupérer les données de la société
                 let societe;
@@ -1407,20 +1380,12 @@ const ListeDevis = () => {
                 ) {
                   // La société est déjà un objet complet
                   societe = appelOffres.societe;
-                  console.log(
-                    "📋 Données de la société (déjà récupérées):",
-                    societe
-                  );
                 } else {
                   // La société est juste un ID, on doit la récupérer
                   const societeResponse = await axios.get(
                     `/api/societe/${appelOffres.societe}/`
                   );
                   societe = societeResponse.data;
-                  console.log(
-                    "📋 Données de la société (récupérées via API):",
-                    societe
-                  );
                 }
 
                 // Lancer la génération PDF avec les notifications
@@ -1430,24 +1395,17 @@ const ListeDevis = () => {
                   appelOffres.chantier_name,
                   societe.nom_societe,
                   (response) => {
-                    console.log("✅ TEST: PDF généré avec succès", response);
+                    void response;
                     alert("✅ TEST: PDF généré avec succès dans le Drive !");
                   },
                   (error) => {
-                    console.error(
-                      "❌ TEST: Erreur lors de la génération du PDF:",
-                      error
-                    );
                     alert(
                       `❌ TEST: Erreur lors de la génération du PDF: ${error.message}`
                     );
                   }
                 );
               } catch (error) {
-                console.error(
-                  "❌ TEST: Erreur lors de la récupération des données:",
-                  error
-                );
+                void error;
                 alert(
                   `❌ TEST: Erreur lors de la récupération des données: ${error.message}`
                 );
@@ -1464,23 +1422,14 @@ const ListeDevis = () => {
             onClick={async () => {
               handleClose();
               try {
-                console.log(
-                  "🚀 NOUVEAU: Génération PDF Drive avec le système universel"
-                );
-
                 // Récupérer les données complètes du devis
                 const response = await axios.get(
                   `/api/devisa/${selectedDevis.id}/`
                 );
                 const devisComplet = response.data;
 
-                console.log("📋 Données du devis complet:", devisComplet);
-
                 // Vérifier si appel_offres existe
                 if (!devisComplet.appel_offres) {
-                  console.error(
-                    "❌ ERREUR: Le champ appel_offres est undefined ou null"
-                  );
                   alert(
                     "❌ ERREUR: Ce devis n'est pas lié à un appel d'offres. Vérifiez que c'est bien un devis de chantier."
                   );
@@ -1519,19 +1468,12 @@ const ListeDevis = () => {
                   },
                   {
                     onSuccess: (response) => {
-                      console.log(
-                        "✅ NOUVEAU: PDF généré avec succès",
-                        response
-                      );
+                    void response;
                       alert(
                         "✅ NOUVEAU: PDF généré avec succès dans le Drive !"
                       );
                     },
                     onError: (error) => {
-                      console.error(
-                        "❌ NOUVEAU: Erreur lors de la génération du PDF:",
-                        error
-                      );
                       alert(
                         `❌ NOUVEAU: Erreur lors de la génération du PDF: ${error.message}`
                       );
@@ -1539,10 +1481,7 @@ const ListeDevis = () => {
                   }
                 );
               } catch (error) {
-                console.error(
-                  "❌ NOUVEAU: Erreur lors de la récupération des données:",
-                  error
-                );
+              void error;
                 alert(
                   `❌ NOUVEAU: Erreur lors de la récupération des données: ${error.message}`
                 );

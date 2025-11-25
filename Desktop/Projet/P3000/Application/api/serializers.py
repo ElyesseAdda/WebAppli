@@ -46,6 +46,48 @@ class FournisseurSerializer(serializers.ModelSerializer):
         }
 
 
+class DevisListSerializer(serializers.ModelSerializer):
+    """Serializer allégé pour la liste des devis (pagination rapide)"""
+    chantier_name = serializers.SerializerMethodField()
+    client_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Devis
+        fields = [
+            'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
+            'status', 'chantier_name', 'client_name', 'devis_chantier', 'appel_offres', 'chantier'
+        ]
+
+    def get_chantier_name(self, obj):
+        if obj.devis_chantier and obj.appel_offres:
+            return obj.appel_offres.chantier_name if obj.appel_offres else None
+        if obj.chantier:
+            return obj.chantier.chantier_name
+        return None
+
+    def get_client_name(self, obj):
+        clients = None
+        if hasattr(obj, '_prefetched_objects_cache') and 'client' in obj._prefetched_objects_cache:
+            clients = obj._prefetched_objects_cache['client']
+        if clients is None:
+            clients = list(obj.client.all())
+        if clients:
+            return ", ".join(
+                f"{client.name} {client.surname}".strip()
+                for client in clients
+            )
+        # Fallback to societe contact
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        contact = getattr(societe, 'client_name', None) if societe else None
+        if contact:
+            return f"{contact.name} {contact.surname}".strip()
+        return None
+
+
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
     lignes_speciales = serializers.JSONField(required=False)

@@ -165,6 +165,15 @@ class FactureTSViewSet(viewsets.ModelViewSet):
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         return queryset.select_related('devis', 'avenant')
+
+
+class DevisPagination(PageNumberPagination):
+    """Pagination pour la liste des devis"""
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = (
         Devis.objects.all()
@@ -177,16 +186,25 @@ class DevisViewSet(viewsets.ModelViewSet):
             'appel_offres__societe__client_name',
         )
         .prefetch_related('lignes', 'client')
+        .order_by('-date_creation')
     )
     serializer_class = DevisSerializer
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
+    pagination_class = DevisPagination
+
+    def get_serializer_class(self):
+        from .serializers import DevisListSerializer
+        if self.action == 'list':
+            return DevisListSerializer
+        return DevisSerializer
 
     def get_queryset(self):
         queryset = super().get_queryset()
         chantier_id = self.request.query_params.get('chantier')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
-        return queryset
+        # Toujours trier par date de création décroissante (plus récent en premier)
+        return queryset.order_by('-date_creation')
     
     @action(detail=True, methods=['get'])
     def format_lignes(self, request, pk=None):
