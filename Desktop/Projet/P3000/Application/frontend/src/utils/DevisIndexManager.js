@@ -202,17 +202,25 @@ const reindexPartie = (allItems, partieId) => {
 const reindexAll = (items) => {
   let updated = [...items];
   
-  // 1. Réindexer les parties
-  const parties = updated.filter(i => i.type === 'partie');
-  parties.forEach((partie, idx) => {
-    updated = updated.map(item => 
-      item.type === 'partie' && item.id === partie.id
-        ? { ...item, index_global: idx + 1 }
-        : item
+  // 1. Réindexer tous les éléments globaux (parties + lignes spéciales globales) avec des entiers
+  const globalItems = updated
+    .filter(i => 
+      i.type === 'partie' ||
+      (i.type === 'ligne_speciale' && i.context_type === 'global')
+    )
+    .sort((a, b) => a.index_global - b.index_global);
+  
+  // Réindexer avec des entiers séquentiels (1, 2, 3, 4...)
+  globalItems.forEach((item, idx) => {
+    updated = updated.map(i => 
+      i.type === item.type && i.id === item.id
+        ? { ...i, index_global: idx + 1 }
+        : i
     );
   });
   
   // 2. Réindexer chaque partie (sous-parties + lignes spéciales de partie)
+  const parties = updated.filter(i => i.type === 'partie');
   parties.forEach(partie => {
     updated = reindexPartie(updated, partie.id);
   });
@@ -406,33 +414,15 @@ const insertAtPosition = (allItems, newLine, position) => {
     // Insérer la ligne à la position
     globalItems.splice(insertIndex >= 0 ? insertIndex : 0, 0, lineToInsert);
     
-    // Réindexer séquentiellement : 0.001, 0.002, 1, 1.001, 2, 2.001...
-    // Les parties gardent leur index entier (1, 2, 3...)
-    // Les lignes spéciales prennent des index décimaux
-    let partieCount = 0;
-    const reindexed = globalItems.map((item, idx) => {
-      if (item.type === 'partie') {
-        partieCount++;
-        return { ...item, index_global: partieCount };
-      } else {
-        // Ligne spéciale globale
-        if (partieCount === 0) {
-          // Avant la première partie : 0.001, 0.002, 0.003...
-          const specialsBefore = globalItems.slice(0, idx).filter(i => i.type === 'ligne_speciale');
-          return { ...item, index_global: roundIndex((specialsBefore.length + 1) * INCREMENTS.GLOBAL_SPECIAL) };
-        } else {
-          // Entre/après des parties : 1.001, 1.002... 2.001, 2.002...
-          const specialsAfterLastPartie = globalItems.slice(0, idx).filter(i => 
-            i.type === 'ligne_speciale' && 
-            globalItems.slice(0, globalItems.indexOf(i)).filter(gi => gi.type === 'partie').length === partieCount
-          );
-          return { ...item, index_global: roundIndex(partieCount + (specialsAfterLastPartie.length + 1) * INCREMENTS.GLOBAL_SPECIAL) };
-        }
-      }
-    });
+    // ✅ Réindexer avec des ENTIERS séquentiels : 1, 2, 3, 4...
+    // Les parties et lignes spéciales globales utilisent tous des index entiers
+    const reindexed = globalItems.map((item, idx) => ({
+      ...item,
+      index_global: idx + 1
+    }));
     
     // Reconstruire allItems
-    const result = itemsWithoutOld.map(item => {
+    let result = itemsWithoutOld.map(item => {
       const updated = reindexed.find(r => r.type === item.type && r.id === item.id);
       return updated || item;
     });
@@ -444,6 +434,19 @@ const insertAtPosition = (allItems, newLine, position) => {
         result.push(inserted);
       }
     }
+    
+    // ✅ CRITIQUE : Réindexer toutes les parties (enfants inclus : sous-parties, lignes...)
+    // Cela met à jour les index des sous-parties et lignes détails pour correspondre aux nouveaux index des parties
+    const reindexedParties = reindexed.filter(i => i.type === 'partie');
+    reindexedParties.forEach(partie => {
+      result = reindexPartie(result, partie.id);
+    });
+    
+    // Réindexer toutes les sous-parties (leurs enfants inclus)
+    const sousParties = result.filter(i => i.type === 'sous_partie');
+    sousParties.forEach(sp => {
+      result = reindexSousPartie(result, sp.id);
+    });
     
     return sortByIndexGlobal(result);
   }
@@ -536,33 +539,90 @@ const reorderAfterDrag = (allItems, result) => {
   if (source.droppableId === 'parties-global') {
     const partieId = parseInt(draggableId.replace('partie_', ''));
     
-    const parties = allItems.filter(i => i.type === 'partie')
+    // ✅ ÉTAPE 1 : Récupérer TOUS les éléments globaux (parties + lignes spéciales globales) triés
+    const globalItems = allItems
+      .filter(i => 
+        i.type === 'partie' ||
+        (i.type === 'ligne_speciale' && i.context_type === 'global')
+      )
       .sort((a, b) => a.index_global - b.index_global);
     
-    const [moved] = parties.splice(source.index, 1);
-    parties.splice(destination.index, 0, moved);
+    // Extraire parties et lignes spéciales séparément
+    const parties = globalItems.filter(i => i.type === 'partie');
+    const lignesSpeciales = globalItems.filter(i => i.type === 'ligne_speciale');
     
-    // Recalculer les index de parties
-    parties.forEach((partie, idx) => {
-      allItems = allItems.map(item => 
-        item.type === 'partie' && item.id === partie.id
-          ? { ...item, index_global: idx + 1 }
-          : item
-      );
+    // ✅ ÉTAPE 2 : Réordonner uniquement les parties selon le drag & drop
+    const [movedPartie] = parties.splice(source.index, 1);
+    parties.splice(destination.index, 0, movedPartie);
+    
+    // ✅ ÉTAPE 3 : Reconstruire la liste complète en préservant la position relative
+    // Pour chaque ligne spéciale, déterminer combien de parties étaient avant elle dans l'ordre original
+    const specialLinesWithContext = lignesSpeciales.map(ls => {
+      const oldIndex = globalItems.indexOf(ls);
+      // Compter combien de parties étaient avant cette ligne spéciale dans l'ordre original
+      const partiesBeforeCount = globalItems
+        .slice(0, oldIndex)
+        .filter(gi => gi.type === 'partie').length;
+      
+      return {
+        ligne: ls,
+        partiesBeforeCount: partiesBeforeCount
+      };
     });
     
-    // Réindexer toutes les parties (enfants inclus)
-    parties.forEach(partie => {
-      allItems = reindexPartie(allItems, partie.id);
+    // ✅ ÉTAPE 4 : Reconstruire la nouvelle liste en insérant les lignes spéciales
+    // à leur position relative par rapport aux parties réordonnées
+    const newGlobalItems = [];
+    
+    // Pour chaque position dans la liste finale (parties + lignes spéciales)
+    for (let partieIdx = 0; partieIdx <= parties.length; partieIdx++) {
+      // Insérer toutes les lignes spéciales qui étaient avant cette position de partie
+      const specialsForThisPosition = specialLinesWithContext
+        .filter(sl => sl.partiesBeforeCount === partieIdx)
+        .sort((a, b) => {
+          // Préserver l'ordre original parmi les lignes spéciales du même groupe
+          const idxA = globalItems.indexOf(a.ligne);
+          const idxB = globalItems.indexOf(b.ligne);
+          return idxA - idxB;
+        });
+      
+      specialsForThisPosition.forEach(sl => {
+        newGlobalItems.push(sl.ligne);
+      });
+      
+      // Insérer la partie à cette position (si elle existe)
+      if (partieIdx < parties.length) {
+        newGlobalItems.push(parties[partieIdx]);
+      }
+    }
+    
+    // ✅ ÉTAPE 5 : Réindexer TOUS les éléments globaux avec des entiers séquentiels (1, 2, 3, 4...)
+    const reindexedGlobalItems = newGlobalItems.map((item, idx) => ({
+      ...item,
+      index_global: idx + 1
+    }));
+    
+    // Mettre à jour allItems avec les nouveaux index
+    let updated = allItems.map(item => {
+      const updatedGlobal = reindexedGlobalItems.find(
+        g => g.type === item.type && g.id === item.id
+      );
+      return updatedGlobal || item;
+    });
+    
+    // ✅ ÉTAPE 6 : Réindexer toutes les parties (enfants inclus : sous-parties, lignes...)
+    const reindexedParties = reindexedGlobalItems.filter(i => i.type === 'partie');
+    reindexedParties.forEach(partie => {
+      updated = reindexPartie(updated, partie.id);
     });
     
     // Réindexer toutes les sous-parties
-    const sousParties = allItems.filter(i => i.type === 'sous_partie');
+    const sousParties = updated.filter(i => i.type === 'sous_partie');
     sousParties.forEach(sp => {
-      allItems = reindexSousPartie(allItems, sp.id);
+      updated = reindexSousPartie(updated, sp.id);
     });
     
-    return sortByIndexGlobal(allItems);
+    return sortByIndexGlobal(updated);
   }
   
   // Drag & drop des sous-parties

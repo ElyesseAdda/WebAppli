@@ -192,7 +192,11 @@ const DevisTable = ({
   isOptionsTable = false,
   onTransferToMain,
   // Props pour filtrer les lignes détails déjà utilisées (pour le tableau option)
-  mainDevisItems = [] // Les items du tableau principal pour filtrer les lignes détails
+  mainDevisItems = [], // Les items du tableau principal pour filtrer les lignes détails
+  // Props pour la ligne récurrente
+  onCreateRecurringSpecialLine,
+  calculateRecurringLineAmount,
+  hasRecurringLine
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
@@ -786,7 +790,6 @@ const DevisTable = ({
               </tr>
             )}
             
-            {/* RENDU UNIFIÉ : Affichage par index_global (toujours actif dans DevisAvance) */}
             {devisItems.length > 0 && (
               <tr>
                 <td colSpan="5" style={{ padding: '0', border: 'none' }}>
@@ -1575,7 +1578,7 @@ const DevisTable = ({
                       )}
                     </Droppable>
                     
-                    {/* Barre de recherche partie en bas pour ajouter d'autres parties */}
+                    
                     {devisItems.some(item => item.type === 'partie') && (
                       <div style={{ 
                         backgroundColor: 'rgba(27, 120, 188, 1)', 
@@ -1609,7 +1612,7 @@ const DevisTable = ({
                       </div>
                     )}
                     
-                    {/* Zone EN ATTENTE - Supprimée car les lignes spéciales sont maintenant placées directement à la création */}
+                    
                   </DragDropContext>
                   
                   {/* Portails pour les icônes hover - Rendu Unifié */}

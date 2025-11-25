@@ -83,6 +83,12 @@ def preview_situation_v2(request, situation_id):
         
         total_ht = Decimal('0')
         parties_data = []
+
+        def parse_index(value, default=Decimal('999')):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(default)
         
         # Récupérer les lignes spéciales du devis
         lignes_speciales = devis.lignes_speciales or {}
@@ -135,7 +141,7 @@ def preview_situation_v2(request, situation_id):
         def sort_key_by_index(partie):
             # Si on a index_global dans les données, l'utiliser
             if 'index_global' in partie:
-                return float(partie.get('index_global', 999))
+                return parse_index(partie.get('index_global'))
             # Sinon, utiliser le numéro
             numero = partie.get('numero')
             if numero and isinstance(numero, (int, str)) and str(numero).isdigit():
@@ -158,6 +164,7 @@ def preview_situation_v2(request, situation_id):
             sous_parties_data = []
             total_partie = Decimal('0')
             total_avancement_partie = Decimal('0')
+            partie_index_global = parse_index(partie_meta.get('index_global'))
             
             # Récupérer les lignes spéciales pour cette partie
             special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_meta['id']), [])
@@ -307,7 +314,8 @@ def preview_situation_v2(request, situation_id):
                     'total_partie_sans_speciales': total_partie_sans_speciales,  # ✅ Pour calculer total_marche_ht
                     'montant_avancement': total_avancement_partie,
                     'pourcentage': (total_avancement_partie / total_partie * 100) if total_partie else Decimal('0'),
-                    'special_lines': []
+                    'special_lines': [],
+                    'index_global': partie_index_global
                 }
                 
                 # Calculer et ajouter les lignes spéciales de la partie
@@ -360,7 +368,7 @@ def preview_situation_v2(request, situation_id):
         special_lines_global = lignes_speciales.get('global', [])
         special_lines_global = sorted(
             special_lines_global, 
-            key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999
+            key=lambda l: parse_index(l.get('index_global'))
         )
         
         # Convertir les lignes spéciales globales en format cohérent pour le template
@@ -384,6 +392,7 @@ def preview_situation_v2(request, situation_id):
                 'valueType': value_type,
                 'type': line_type,
                 'montant': float(montant),
+                'index_global': parse_index(special_line.get('index_global')),
                 'isHighlighted': special_line.get('isHighlighted', False) or (
                     special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or 
                     special_line.get('styles', {}).get('backgroundColor') == '#fbff24'
@@ -395,7 +404,7 @@ def preview_situation_v2(request, situation_id):
         display_lines_global = lignes_display.get('global', [])
         display_lines_global = sorted(
             display_lines_global, 
-            key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999
+            key=lambda l: parse_index(l.get('index_global'))
         )
         
         for display_line in display_lines_global:
@@ -405,6 +414,7 @@ def preview_situation_v2(request, situation_id):
                 'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
                 'type': display_line.get('type', 'display'),
                 'montant': float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0)))),
+                'index_global': parse_index(display_line.get('index_global')),
                 'isHighlighted': display_line.get('isHighlighted', False) or (
                     display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or 
                     display_line.get('styles', {}).get('backgroundColor') == '#fbff24'
@@ -413,6 +423,21 @@ def preview_situation_v2(request, situation_id):
             })
         
         special_lines_global = special_lines_global_formatted
+
+        global_items = []
+        for partie in parties_data:
+            global_items.append({
+                'type': 'partie',
+                'index_global': partie.get('index_global', parse_index(None)),
+                'data': partie
+            })
+        for line in special_lines_global:
+            global_items.append({
+                'type': 'special_line',
+                'index_global': line.get('index_global', parse_index(None)),
+                'data': line
+            })
+        global_items = sorted(global_items, key=lambda item: item.get('index_global', 999))
         
         # Gestion des avenants (identique à preview_situation)
         avenant_data = []
@@ -671,6 +696,7 @@ def preview_situation_v2(request, situation_id):
                 'date_validation': situation.date_validation,
             },
             'parties': parties_data,  # ✅ Structure avec numéros et styles
+            'global_items': global_items,
             'lignes_avenant': avenant_data,
             'lignes_supplementaires': lignes_supplementaires_data,
             'special_lines_global': special_lines_global,  # ✅ Avec style_attr

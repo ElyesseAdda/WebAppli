@@ -2297,6 +2297,99 @@ const DevisAvance = () => {
     await generateDevisNumber(null);
   };
 
+  // ✅ Logs de debug : Afficher un tableau des lignes présentes dans le devis
+  useEffect(() => {
+    if (devisItems.length === 0) {
+      console.log('📋 DevisAvance - Aucune ligne dans le devis');
+      return;
+    }
+    
+    // Créer un tableau formaté pour l'affichage
+    const tableData = devisItems
+      .sort((a, b) => a.index_global - b.index_global)
+      .map((item, idx) => {
+        const row = {
+          '#': idx + 1,
+          'Index Global': item.index_global,
+          'Type': item.type,
+          'ID': item.id,
+          'Description': item.description || item.titre || item.designation || '-',
+          'Numéro': item.numero || '-',
+          'Context Type': item.context_type || '-',
+          'Context ID': item.context_id || '-',
+          'Partie ID': item.partie_id || '-',
+          'Sous-Partie ID': item.sous_partie_id || '-'
+        };
+        
+        // Ajouter des informations spécifiques selon le type
+        if (item.type === 'ligne_detail') {
+          row['Quantité'] = item.quantity || 0;
+          row['Prix'] = item.prix_devis || item.prix || '-';
+        }
+        
+        if (item.type === 'ligne_speciale') {
+          row['Type Spéciale'] = item.type_speciale || '-';
+          row['Value Type'] = item.value_type || '-';
+          row['Valeur'] = item.value || '-';
+        }
+        
+        return row;
+      });
+    
+    // Afficher le tableau dans la console
+    console.group('📋 DevisAvance - Tableau des lignes du devis');
+    console.table(tableData);
+    
+    // Afficher aussi un résumé par type
+    const summary = {
+      'Total lignes': devisItems.length,
+      'Parties': devisItems.filter(i => i.type === 'partie').length,
+      'Sous-parties': devisItems.filter(i => i.type === 'sous_partie').length,
+      'Lignes détails': devisItems.filter(i => i.type === 'ligne_detail').length,
+      'Lignes spéciales globales': devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'global').length,
+      'Lignes spéciales partie': devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'partie').length,
+      'Lignes spéciales sous-partie': devisItems.filter(i => i.type === 'ligne_speciale' && i.context_type === 'sous_partie').length
+    };
+    
+    console.log('📊 Résumé par type:', summary);
+    
+    // Vérifier les index manquants ou dupliqués
+    const indexes = devisItems.map(i => i.index_global).sort((a, b) => a - b);
+    const duplicates = indexes.filter((val, idx) => indexes.indexOf(val) !== idx);
+    const missing = [];
+    
+    if (indexes.length > 0) {
+      const minIndex = Math.floor(Math.min(...indexes));
+      const maxIndex = Math.ceil(Math.max(...indexes));
+      
+      for (let i = minIndex; i <= maxIndex; i++) {
+        if (!indexes.includes(i) && devisItems.some(item => 
+          item.type === 'partie' || 
+          (item.type === 'ligne_speciale' && item.context_type === 'global')
+        )) {
+          // Vérifier seulement pour les éléments globaux
+          const hasGlobalItemAt = devisItems.some(item => 
+            (item.type === 'partie' || (item.type === 'ligne_speciale' && item.context_type === 'global')) &&
+            Math.floor(item.index_global) === i
+          );
+          if (!hasGlobalItemAt && i >= 1) {
+            missing.push(i);
+          }
+        }
+      }
+    }
+    
+    if (duplicates.length > 0) {
+      console.warn('⚠️ Index dupliqués détectés:', duplicates);
+    }
+    
+    if (missing.length > 0 && missing.length < 10) {
+      console.warn('⚠️ Index manquants dans la séquence (éléments globaux):', missing);
+    }
+    
+    console.groupEnd();
+  }, [devisItems]);
+
   // Charger les chantiers au montage du composant
   useEffect(() => {
     fetchChantiers();

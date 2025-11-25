@@ -76,6 +76,16 @@ const calculateEstimatedCosts = (devisItems) => {
  */
 const extractPartiesMetadata = (devisItems) => {
   const selectedParties = [];
+  const parseIndex = (value) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
   
   // Trier les parties par index_global
   const parties = devisItems
@@ -93,6 +103,7 @@ const extractPartiesMetadata = (devisItems) => {
       id: partie.id,
       titre: partie.titre || '',
       type: partie.type_activite || 'PEINTURE',
+      index_global: parseIndex(partie.index_global),
       // ✅ Ajouter le numéro de la partie (Integer pour partie, 0 = pas de numéro)
       numero: partie.numero !== null && partie.numero !== undefined && partie.numero !== '' 
         ? (typeof partie.numero === 'number' ? partie.numero : parseInt(partie.numero, 10))
@@ -106,6 +117,7 @@ const extractPartiesMetadata = (devisItems) => {
         return {
           id: sp.id,
           description: sp.description || '',
+          index_global: parseIndex(sp.index_global),
           // ✅ Ajouter le numéro de la sous-partie (CharField pour sous-partie)
           numero: sp.numero !== null && sp.numero !== undefined && sp.numero !== '' 
             ? String(sp.numero) 

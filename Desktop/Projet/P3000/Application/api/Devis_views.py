@@ -92,6 +92,18 @@ def preview_saved_devis(request, devis_id):
         total_ht = Decimal('0')
         parties_data = []
 
+        def parse_index(value, default=Decimal('999')):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(default)
+
+        def parse_index(value, default=Decimal('999')):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(default)
+
         # Récupérer les lignes spéciales du devis
         lignes_speciales = devis.lignes_speciales or {}
         lignes_display = devis.lignes_display or {}
@@ -321,6 +333,12 @@ def preview_saved_devis_v2(request, devis_id):
         total_ht = Decimal('0')
         parties_data = []
 
+        def parse_index(value, default=Decimal('999')):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(default)
+
         # Récupérer les lignes spéciales du devis
         lignes_speciales = devis.lignes_speciales or {}
         lignes_display = devis.lignes_display or {}
@@ -359,7 +377,7 @@ def preview_saved_devis_v2(request, devis_id):
         def sort_key_by_index(partie):
             # Si on a index_global dans les données, l'utiliser
             if 'index_global' in partie:
-                return float(partie.get('index_global', 999))
+                return parse_index(partie.get('index_global'))
             # Sinon, utiliser le numéro
             numero = partie.get('numero')
             if numero and isinstance(numero, (int, str)) and str(numero).isdigit():
@@ -381,6 +399,7 @@ def preview_saved_devis_v2(request, devis_id):
         for partie_meta in selected_parties:
             sous_parties_data = []
             total_partie = Decimal('0')
+            partie_index_global = parse_index(partie_meta.get('index_global'))
 
             # Récupérer les lignes spéciales pour cette partie
             special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_meta['id']), [])
@@ -494,7 +513,8 @@ def preview_saved_devis_v2(request, devis_id):
                     'numero': partie_meta.get('numero'),  # ✅ Inclure le numéro
                     'sous_parties': sous_parties_data,
                     'total_partie': total_partie,
-                    'special_lines': []
+                    'special_lines': [],
+                    'index_global': partie_index_global
                 }
 
                 # Calculer et ajouter les lignes spéciales de la partie
@@ -539,7 +559,7 @@ def preview_saved_devis_v2(request, devis_id):
 
         # Appliquer les lignes spéciales globales (triées par index_global)
         special_lines_global = lignes_speciales.get('global', [])
-        special_lines_global = sorted(special_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+        special_lines_global = sorted(special_lines_global, key=lambda l: parse_index(l.get('index_global')))
         
         # Convertir les lignes spéciales globales en format cohérent pour le template
         special_lines_global_formatted = []
@@ -562,13 +582,14 @@ def preview_saved_devis_v2(request, devis_id):
                 'valueType': value_type,
                 'type': line_type,
                 'montant': float(montant),
+                'index_global': parse_index(special_line.get('index_global')),
                 'isHighlighted': special_line.get('isHighlighted', False) or (special_line.get('styles', {}).get('backgroundColor') == '#ffff00' or special_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
                 'style_attr': build_inline_style(special_line.get('styles'))
             })
         
         # Ajouter les lignes display globales
         display_lines_global = lignes_display.get('global', [])
-        display_lines_global = sorted(display_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+        display_lines_global = sorted(display_lines_global, key=lambda l: parse_index(l.get('index_global')))
         
         for display_line in display_lines_global:
             special_lines_global_formatted.append({
@@ -577,11 +598,28 @@ def preview_saved_devis_v2(request, devis_id):
                 'valueType': display_line.get('value_type') or display_line.get('valueType', 'fixed'),
                 'type': display_line.get('type', 'display'),
                 'montant': float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0)))),
+                'index_global': parse_index(display_line.get('index_global')),
                 'isHighlighted': display_line.get('isHighlighted', False) or (display_line.get('styles', {}).get('backgroundColor') == '#ffff00' or display_line.get('styles', {}).get('backgroundColor') == '#fbff24'),
                 'style_attr': build_inline_style(display_line.get('styles'))
             })
         
         special_lines_global = special_lines_global_formatted
+
+        # ✅ Fusionner parties et lignes spéciales globales par index_global
+        global_items = []
+        for partie in parties_data:
+            global_items.append({
+                'type': 'partie',
+                'index_global': partie.get('index_global', parse_index(None)),
+                'data': partie
+            })
+        for line in special_lines_global:
+            global_items.append({
+                'type': 'special_line',
+                'index_global': line.get('index_global', parse_index(None)),
+                'data': line
+            })
+        global_items = sorted(global_items, key=lambda item: item.get('index_global', 999))
 
         # Calculer TVA et TTC
         tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
@@ -596,7 +634,8 @@ def preview_saved_devis_v2(request, devis_id):
             'total_ht': total_ht,
             'tva': tva,
             'montant_ttc': montant_ttc,
-            'special_lines_global': special_lines_global
+            'special_lines_global': special_lines_global,
+            'global_items': global_items
         }
 
         return render(request, 'preview_devis_v2.html', context)
@@ -655,6 +694,12 @@ def preview_devis_v2(request):
             total_ht = Decimal('0')
             parties_data = []
 
+            def parse_index(value, default=Decimal('999')):
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return float(default)
+
             # Récupérer les lignes spéciales du devis
             lignes_speciales = devis_data.get('lignes_speciales', {})
             lignes_display = devis_data.get('lignes_display', {})
@@ -667,7 +712,7 @@ def preview_devis_v2(request):
             def sort_key_by_index(partie):
                 # Si on a index_global dans les données, l'utiliser
                 if 'index_global' in partie:
-                    return float(partie.get('index_global', 999))
+                    return parse_index(partie.get('index_global'))
                 # Sinon, utiliser le numéro
                 numero = partie.get('numero')
                 if numero and isinstance(numero, (int, str)) and str(numero).isdigit():
@@ -681,6 +726,7 @@ def preview_devis_v2(request):
             for partie_meta in selected_parties:
                 sous_parties_data = []
                 total_partie = Decimal('0')
+                partie_index_global = parse_index(partie_meta.get('index_global'))
 
                 # Récupérer les lignes spéciales pour cette partie
                 special_lines_partie = lignes_speciales.get('parties', {}).get(str(partie_meta['id']), [])
@@ -801,7 +847,8 @@ def preview_devis_v2(request):
                         'numero': partie_meta.get('numero'),  # ✅ Inclure le numéro
                         'sous_parties': sous_parties_data,
                         'total_partie': total_partie,
-                        'special_lines': []
+                        'special_lines': [],
+                        'index_global': partie_index_global
                     }
 
                     # Calculer et ajouter les lignes spéciales de la partie
@@ -846,7 +893,7 @@ def preview_devis_v2(request):
 
             # Appliquer les lignes spéciales globales (triées par index_global)
             special_lines_global = lignes_speciales.get('global', [])
-            special_lines_global = sorted(special_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+            special_lines_global = sorted(special_lines_global, key=lambda l: parse_index(l.get('index_global')))
             
             for special_line in special_lines_global:
                 value_type = special_line.get('value_type') or special_line.get('valueType', 'fixed')
@@ -857,6 +904,7 @@ def preview_devis_v2(request):
 
                 special_line['montant'] = float(montant)
                 special_line['style_attr'] = build_inline_style(special_line.get('styles'))
+                special_line['index_global'] = parse_index(special_line.get('index_global'))
 
                 line_type = special_line.get('type', 'display')
                 if line_type == 'reduction':
@@ -866,12 +914,28 @@ def preview_devis_v2(request):
             
             # Ajouter les lignes display globales
             display_lines_global = lignes_display.get('global', [])
-            display_lines_global = sorted(display_lines_global, key=lambda l: float(l.get('index_global', 999)) if 'index_global' in l else 999)
+            display_lines_global = sorted(display_lines_global, key=lambda l: parse_index(l.get('index_global')))
             
             for display_line in display_lines_global:
                 display_line['montant'] = float(Decimal(str(display_line.get('value', 0) or display_line.get('amount', 0))))
                 display_line['style_attr'] = build_inline_style(display_line.get('styles'))
+                display_line['index_global'] = parse_index(display_line.get('index_global'))
                 special_lines_global.append(display_line)
+
+            global_items = []
+            for partie in parties_data:
+                global_items.append({
+                    'type': 'partie',
+                    'index_global': partie.get('index_global', parse_index(None)),
+                    'data': partie
+                })
+            for line in special_lines_global:
+                global_items.append({
+                    'type': 'special_line',
+                    'index_global': line.get('index_global', parse_index(None)),
+                    'data': line
+                })
+            global_items = sorted(global_items, key=lambda item: item.get('index_global', 999))
 
             # Calculer TVA et TTC
             tva_rate = Decimal(str(devis_data.get('tva_rate', 20)))
@@ -897,7 +961,8 @@ def preview_devis_v2(request):
                 'total_ht': total_ht,
                 'tva': tva,
                 'montant_ttc': montant_ttc,
-                'special_lines_global': special_lines_global
+                'special_lines_global': special_lines_global,
+                'global_items': global_items
             }
 
             return render(request, 'preview_devis_v2.html', context)

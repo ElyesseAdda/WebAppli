@@ -615,125 +615,246 @@
             </td>
           </tr>
           {% endif %}
-          {% for partie in parties %}
-          <tr class="partie">
-            <td class="partie" colspan="5">
-              {% if partie.numero %}{{ partie.numero }} - {% endif %}{{ partie.titre }}
-              <span style="float: right"
-                >{{ partie.total_partie|format_montant_espace }}</span
-              >
-            </td>
-          </tr>
-          {% for special_line in partie.special_lines %}
-           <tr class="special-line-spacer"><td colspan="5"></td></tr>
-           <tr class="special-line-row">
-            <td colspan="5" class="special-line-wrapper">
-              <table class="special-line-table">
-                <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-                  <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
-                      <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
-                  </td>
-                  <td class="totalHttableau">
-                      {% if special_line.type != 'display' %}
-                      <span class="special-line-amount">
-                          {% if special_line.type == 'reduction' %}-{% endif %}
-                          {{ special_line.montant|format_montant_espace }}
-                      </span>
-                      {% else %}
-                      {% if special_line.value and special_line.value != 0 %}
-                      <span class="special-line-amount">
-                          {{ special_line.value|format_montant_espace }}
-                      </span>
-                      {% else %}
-                      &nbsp;
-                      {% endif %}
-                      {% endif %}
+          {% if global_items %}
+            {% for element in global_items %}
+              {% if element.type == 'partie' %}
+                {% with partie=element.data %}
+                <tr class="partie">
+                  <td class="partie" colspan="5">
+                    {% if partie.numero %}{{ partie.numero }} - {% endif %}{{ partie.titre }}
+                    <span style="float: right">{{ partie.total_partie|format_montant_espace }}</span>
                   </td>
                 </tr>
-              </table>
-            </td>
-          </tr>
-          {% endfor %}
-          {% for sous_partie in partie.sous_parties %}
-          {% if sous_partie.description != "Lignes directes" %}
-          <tr class="sous-partie">
-            <td colspan="5">
-              {% if sous_partie.numero %}{{ sous_partie.numero }} {% endif %}{{ sous_partie.description }}
-              <span style="float: right"
-                >{{ sous_partie.total_sous_partie|format_montant_espace }}</span
-              >
-            </td>
-          </tr>
-          {% for special_line in sous_partie.special_lines %}
-           <tr class="special-line-spacer"><td colspan="5"></td></tr>
-           <tr class="special-line-row">
-            <td colspan="5" class="special-line-wrapper">
-              <table class="special-line-table">
-                <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-                  <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                {% for special_line in partie.special_lines %}
+                 <tr class="special-line-spacer"><td colspan="5"></td></tr>
+                 <tr class="special-line-row">
+                  <td colspan="5" class="special-line-wrapper">
+                    <table class="special-line-table">
+                      <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                        <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                            <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                        </td>
+                        <td class="totalHttableau">
+                            {% if special_line.type != 'display' %}
+                            <span class="special-line-amount">
+                                {% if special_line.type == 'reduction' %}-{% endif %}
+                                {{ special_line.montant|format_montant_espace }}
+                            </span>
+                            {% else %}
+                            {% if special_line.value and special_line.value != 0 %}
+                            <span class="special-line-amount">
+                                {{ special_line.value|format_montant_espace }}
+                            </span>
+                            {% else %}
+                            &nbsp;
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endfor %}
+                {% for sous_partie in partie.sous_parties %}
+                {% if sous_partie.description != "Lignes directes" %}
+                <tr class="sous-partie">
+                  <td colspan="5">
+                    {% if sous_partie.numero %}{{ sous_partie.numero }} {% endif %}{{ sous_partie.description }}
+                    <span style="float: right">{{ sous_partie.total_sous_partie|format_montant_espace }}</span>
+                  </td>
+                </tr>
+                {% for special_line in sous_partie.special_lines %}
+                 <tr class="special-line-spacer"><td colspan="5"></td></tr>
+                 <tr class="special-line-row">
+                  <td colspan="5" class="special-line-wrapper">
+                    <table class="special-line-table">
+                      <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                        <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                                <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                        </td>
+                        <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                            {% if special_line.type != 'display' %}
+                            <span class="special-line-amount">
+                                {% if special_line.type == 'reduction' %}-{% endif %}
+                                {{ special_line.montant|format_montant_espace }}
+                            </span>
+                            {% else %}
+                            {% if special_line.value and special_line.value != 0 %}
+                            <span class="special-line-amount">
+                                {{ special_line.value|format_montant_espace }}
+                            </span>
+                            {% else %}
+                            &nbsp;
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                {% for ligne in sous_partie.lignes_details %}
+                <tr>
+                  <td class="ligne-details">{{ ligne.description }}</td>
+                  <td class="unitetableau">{{ ligne.unite }}</td>
+                  <td class="quantitetableau">{{ ligne.quantity }}</td>
+                  <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }} </td>
+                  <td class="totalHttableau">{{ ligne.total|format_montant_espace }}</td>
+                </tr>
+                {% endfor %} {% endfor %}
+                {% endwith %}
+              {% elif element.type == 'special_line' %}
+                {% with special_line=element.data %}
+                <tr class="special-line-spacer"><td colspan="5"></td></tr>
+                <tr class="special-line-row">
+                  <td colspan="5" class="special-line-wrapper">
+                    <table class="special-line-table">
+                      <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                        <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                             <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                        </td>
+                        <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                            {% if special_line.type != 'display' %}
+                            <span class="special-line-amount">
+                                {% if special_line.type == 'reduction' %}-{% endif %}
+                                {{ special_line.montant|format_montant_espace }}
+                            </span>
+                            {% else %}
+                            {% if special_line.value and special_line.value != 0 %}
+                            <span class="special-line-amount">
+                                {{ special_line.value|format_montant_espace }}
+                            </span>
+                            {% else %}
+                            &nbsp;
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endwith %}
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            {% comment %} Fallback pour les anciens contextes sans global_items {% endcomment %}
+            {% for partie in parties %}
+            <tr class="partie">
+              <td class="partie" colspan="5">
+                {% if partie.numero %}{{ partie.numero }} - {% endif %}{{ partie.titre }}
+                <span style="float: right">{{ partie.total_partie|format_montant_espace }}</span>
+              </td>
+            </tr>
+            {% for special_line in partie.special_lines %}
+              <tr class="special-line-spacer"><td colspan="5"></td></tr>
+              <tr class="special-line-row">
+                <td colspan="5" class="special-line-wrapper">
+                  <table class="special-line-table">
+                    <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                      <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
                           <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
-                  </td>
-                  <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
-                      {% if special_line.type != 'display' %}
-                      <span class="special-line-amount">
-                          {% if special_line.type == 'reduction' %}-{% endif %}
-                          {{ special_line.montant|format_montant_espace }}
-                      </span>
-                      {% else %}
-                      {% if special_line.value and special_line.value != 0 %}
-                      <span class="special-line-amount">
-                          {{ special_line.value|format_montant_espace }}
-                      </span>
-                      {% else %}
-                      &nbsp;
-                      {% endif %}
-                      {% endif %}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          {% endfor %}
+                      </td>
+                      <td class="totalHttableau">
+                          {% if special_line.type != 'display' %}
+                          <span class="special-line-amount">
+                              {% if special_line.type == 'reduction' %}-{% endif %}
+                              {{ special_line.montant|format_montant_espace }}
+                          </span>
+                          {% else %}
+                          {% if special_line.value and special_line.value != 0 %}
+                          <span class="special-line-amount">
+                              {{ special_line.value|format_montant_espace }}
+                          </span>
+                          {% else %}
+                          &nbsp;
+                          {% endif %}
+                          {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            {% endfor %}
+            {% for sous_partie in partie.sous_parties %}
+            {% if sous_partie.description != "Lignes directes" %}
+            <tr class="sous-partie">
+              <td colspan="5">
+                {% if sous_partie.numero %}{{ sous_partie.numero }} {% endif %}{{ sous_partie.description }}
+                <span style="float: right">{{ sous_partie.total_sous_partie|format_montant_espace }}</span>
+              </td>
+            </tr>
+            {% for special_line in sous_partie.special_lines %}
+            <tr class="special-line-spacer"><td colspan="5"></td></tr>
+            <tr class="special-line-row">
+              <td colspan="5" class="special-line-wrapper">
+                <table class="special-line-table">
+                  <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                    <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                            <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                    </td>
+                    <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                        {% if special_line.type != 'display' %}
+                        <span class="special-line-amount">
+                            {% if special_line.type == 'reduction' %}-{% endif %}
+                            {{ special_line.montant|format_montant_espace }}
+                        </span>
+                        {% else %}
+                        {% if special_line.value and special_line.value != 0 %}
+                        <span class="special-line-amount">
+                            {{ special_line.value|format_montant_espace }}
+                        </span>
+                        {% else %}
+                        &nbsp;
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+            {% for ligne in sous_partie.lignes_details %}
+            <tr>
+              <td class="ligne-details">{{ ligne.description }}</td>
+              <td class="unitetableau">{{ ligne.unite }}</td>
+              <td class="quantitetableau">{{ ligne.quantity }}</td>
+              <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }} </td>
+              <td class="totalHttableau">{{ ligne.total|format_montant_espace }}</td>
+            </tr>
+            {% endfor %} {% endfor %} {% endfor %}
+            {% for special_line in special_lines_global %}
+              <tr class="special-line-spacer"><td colspan="5"></td></tr>
+              <tr class="special-line-row">
+                <td colspan="5" class="special-line-wrapper">
+                  <table class="special-line-table">
+                    <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
+                      <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
+                           <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
+                      </td>
+                      <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
+                          {% if special_line.type != 'display' %}
+                          <span class="special-line-amount">
+                              {% if special_line.type == 'reduction' %}-{% endif %}
+                              {{ special_line.montant|format_montant_espace }}
+                          </span>
+                          {% else %}
+                          {% if special_line.value and special_line.value != 0 %}
+                          <span class="special-line-amount">
+                              {{ special_line.value|format_montant_espace }}
+                          </span>
+                          {% else %}
+                          &nbsp;
+                          {% endif %}
+                          {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            {% endfor %}
           {% endif %}
-          {% for ligne in sous_partie.lignes_details %}
-          <tr>
-            <td class="ligne-details">{{ ligne.description }}</td>
-            <td class="unitetableau">{{ ligne.unite }}</td>
-            <td class="quantitetableau">{{ ligne.quantity }}</td>
-            <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }} </td>
-            <td class="totalHttableau">{{ ligne.total|format_montant_espace }}</td>
-          </tr>
-          {% endfor %} {% endfor %} {% endfor %}
-          {% for special_line in special_lines_global %}
-           <tr class="special-line-spacer"><td colspan="5"></td></tr>
-           <tr class="special-line-row">
-            <td colspan="5" class="special-line-wrapper">
-              <table class="special-line-table">
-                <tr class="{% if special_line.isHighlighted %}highlighted{% endif %} {% if special_line.type == 'display' %}display-only{% endif %}">
-                  <td class="special-line {% if special_line.type == 'display' %}display-line{% endif %}" data-style="{{ special_line.style_attr }}">
-                       <span class="special-line-text" data-style="{{ special_line.style_attr }}">{{ special_line.description }}</span>
-                  </td>
-                  <td class="totalHttableau" data-style="{{ special_line.style_attr }}">
-                      {% if special_line.type != 'display' %}
-                      <span class="special-line-amount">
-                          {% if special_line.type == 'reduction' %}-{% endif %}
-                          {{ special_line.montant|format_montant_espace }}
-                      </span>
-                      {% else %}
-                      {% if special_line.value and special_line.value != 0 %}
-                      <span class="special-line-amount">
-                          {{ special_line.value|format_montant_espace }}
-                      </span>
-                      {% else %}
-                      &nbsp;
-                      {% endif %}
-                      {% endif %}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          {% endfor %}
 
           <!-- Nouvelle ligne pour le montant global -->
           <tr style="margin-top: 20px; border: none;">
