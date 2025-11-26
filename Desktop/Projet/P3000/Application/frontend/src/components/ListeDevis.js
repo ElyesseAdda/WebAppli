@@ -602,7 +602,7 @@ const ListeDevis = () => {
 
   const handleModifyDevis = () => {
     if (selectedDevis) {
-      window.location.href = `/ModificationDevis/${selectedDevis.id}`;
+      window.location.href = `/ModificationDevisV2/${selectedDevis.id}`;
     }
     handleClose();
   };
@@ -1272,7 +1272,7 @@ const ListeDevis = () => {
         <MenuItem
           onClick={() => {
             handleClose();
-            navigate(`/ModificationDevis/${selectedDevis?.id}`);
+            navigate(`/ModificationDevisV2/${selectedDevis?.id}`);
           }}
         >
           Modifier le devis

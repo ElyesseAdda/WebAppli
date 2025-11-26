@@ -654,7 +654,7 @@
             {% endif %}
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">% Avancement:</strong>
-                <span class="pourcentagetableau" style="font-size: 0.8rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|format_montant_espace }}%</span>
+                <span class="pourcentagetableau" style="font-size: 0.8rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|floatformat:2 }} %</span>
             </div>
             <div style="display: flex; justify-content: space-between; ">
                 <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">Montant total des travaux HT</strong>

@@ -36,6 +36,7 @@ import ListeSituation from "./ListeSituation";
 import ListeFournisseurs from "./ListeFournisseurs";
 import Login from "./Login";
 import ModificationDevis from "./ModificationDevis";
+import ModificationDevisV2 from "./ModifDevis/ModificationDevisV2";
 import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
@@ -255,6 +256,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ModificationDevis />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ModificationDevisV2/:devisId"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ModificationDevisV2 />
                 </Layout>
               </ProtectedRoute>
             }

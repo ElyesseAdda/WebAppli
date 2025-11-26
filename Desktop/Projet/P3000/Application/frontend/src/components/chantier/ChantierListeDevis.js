@@ -217,7 +217,7 @@ const ChantierListeDevis = ({
   // --- Actions modales ---
   const handleModifyDevis = () => {
     if (selectedDevis) {
-      window.location.href = `/ModificationDevis/${selectedDevis.id}`;
+      window.location.href = `/ModificationDevisV2/${selectedDevis.id}`;
     }
     handleClose();
   };
