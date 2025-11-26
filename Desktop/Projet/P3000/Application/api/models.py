@@ -16,6 +16,7 @@ STATE_CHOICES = [
         ('Terminé', 'Terminé'),
         ('En Cours', 'En Cours'),
         ('Facturé', 'Facturé'),
+        ('En attente', 'En attente'),
     ]
 TYPE_CHOICES = [
         ('Travaux', 'Travaux'),

@@ -229,9 +229,25 @@ const DevisTable = ({
   // État pour le modal de création de ligne spéciale
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const canUsePlacementZones = Boolean(lineAwaitingPlacement && !lineAwaitingPlacement.isRecurringSpecial);
+  // ✅ Zones de placement : actives si ligne en attente ET (pas récurrente OU en mode déplacement)
+  // - Nouvelle ligne récurrente (pas encore placée) → zones désactivées, utiliser la zone en bas
+  // - Ligne récurrente qu'on déplace (isMoving=true) → zones activées
+  const canUsePlacementZones = Boolean(
+    lineAwaitingPlacement && 
+    (!lineAwaitingPlacement.isRecurringSpecial || lineAwaitingPlacement.isMoving)
+  );
   const placementLine = canUsePlacementZones ? lineAwaitingPlacement : null;
   const hasPendingRecurringLine = Boolean(pendingRecurringLine && pendingRecurringLine.isRecurringSpecial);
+  
+  // ✅ Helper pour vérifier si une ligne est la ligne récurrente
+  const isRecurringLine = (item) => (
+    item &&
+    item.type === 'ligne_speciale' &&
+    (
+      item.isRecurringSpecial ||
+      item.description === 'Montant global HT des prestations unitaires'
+    )
+  );
   const handleRecurringBannerClick = React.useCallback(() => {
     if (onAutoPlaceRecurringLine) {
       onAutoPlaceRecurringLine();
@@ -2159,15 +2175,27 @@ const DevisTable = ({
             </IconButton>
           </Tooltip>
 
-          {/* Bouton Supprimer */}
+          {/* Bouton Supprimer - ✅ Capturer l'ID au moment du clic pour éviter les problèmes de timing */}
           <Tooltip title="Supprimer">
             <IconButton 
               size="small" 
               onClick={() => {
-                if (window.confirm('Supprimer cette ligne spéciale ?')) {
-                  // ✅ Supprimer SANS recalculer les index_global
+                // ✅ Trouver la ligne avec l'ID actuel au moment du clic
+                const lineToDelete = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
+                
+                if (!lineToDelete) {
+                  console.warn('Ligne spéciale non trouvée pour ID:', hoveredSpecialLineId);
+                  return;
+                }
+                
+                const isRecurring = isRecurringLine(lineToDelete);
+                const confirmMessage = isRecurring 
+                  ? 'Supprimer la ligne récurrente ? Elle pourra être replacée via la zone en bas du devis.'
+                  : 'Supprimer cette ligne spéciale ?';
+                
+                if (window.confirm(confirmMessage)) {
                   if (onRemoveSpecialLine) {
-                    onRemoveSpecialLine(hoveredSpecialLineId);
+                    onRemoveSpecialLine(lineToDelete.id);
                   }
                 }
               }}

@@ -137,20 +137,211 @@ const ModificationDevisV2 = () => {
   // Utiliser les items chargés
   const devisItems = loadedDevisItems;
 
-  // Hook de calculs
+  // Hook de calculs (sans calculateRecurringLineAmount qui sera défini localement)
   const {
     calculatePrice,
-    calculatePartieTotal,
-    calculateSousPartieTotal,
-    calculateGlobalTotal,
-    calculateGlobalTotalExcludingLine,
-    calculateRecurringLineAmount,
     totalHt,
     tva,
     totalTtc,
     hasRecurringLine,
     formatMontantEspace
   } = useDevisCalculations(devisItems, devisData.tva_rate);
+
+  // ✅ Fonctions de calcul locales (comme dans DevisAvance.js) pour mise à jour dynamique
+  
+  // Calculer toutes les bases brutes (sans lignes spéciales)
+  const calculerBasesBrutes = useCallback(() => {
+    const bases = {
+      sousParties: {},
+      parties: {},
+      global: 0
+    };
+    
+    // 1. Calculer les bases des sous-parties (somme des lignes de détail)
+    devisItems
+      .filter(item => item.type === 'sous_partie')
+      .forEach(sp => {
+        const totalLignes = devisItems
+          .filter(item => item.type === 'ligne_detail' && item.sous_partie_id === sp.id)
+          .reduce((sum, ligne) => {
+            const prix = calculatePrice(ligne);
+            return sum + (prix * (ligne.quantity || 0));
+          }, 0);
+        
+        bases.sousParties[sp.id] = totalLignes;
+      });
+    
+    // 2. Calculer les bases des parties (somme des bases des sous-parties)
+    devisItems
+      .filter(item => item.type === 'partie')
+      .forEach(partie => {
+        const totalSPs = devisItems
+          .filter(item => item.type === 'sous_partie' && item.partie_id === partie.id)
+          .reduce((sum, sp) => sum + (bases.sousParties[sp.id] || 0), 0);
+        
+        bases.parties[partie.id] = totalSPs;
+      });
+    
+    // 3. Calculer la base globale (somme des bases des parties)
+    bases.global = devisItems
+      .filter(item => item.type === 'partie')
+      .reduce((sum, partie) => sum + (bases.parties[partie.id] || 0), 0);
+    
+    return bases;
+  }, [devisItems, calculatePrice]);
+
+  // Calculer le montant d'une ligne spéciale
+  const calculerMontantLigneSpeciale = useCallback((ligneSpeciale, bases, excludeLineId = null) => {
+    const value = parseFloat(ligneSpeciale.value || 0);
+    
+    // Si montant fixe, retourner directement
+    if (ligneSpeciale.value_type === 'fixed') {
+      return value;
+    }
+    
+    // Si pourcentage, utiliser baseCalculation
+    if (ligneSpeciale.value_type === 'percentage' && ligneSpeciale.baseCalculation) {
+      const baseCalc = ligneSpeciale.baseCalculation;
+      let base = 0;
+      
+      // Récupérer la base selon le type
+      if (baseCalc.type === 'sous_partie' && baseCalc.id) {
+        base = bases.sousParties[baseCalc.id] || 0;
+      } else if (baseCalc.type === 'partie' && baseCalc.id) {
+        base = bases.parties[baseCalc.id] || 0;
+      } else if (baseCalc.type === 'global') {
+        base = bases.global || 0;
+      }
+      
+      return base * (value / 100);
+    }
+    
+    return 0;
+  }, []);
+
+  // Calculer le total d'une sous-partie
+  const calculateSousPartieTotal = useCallback((sousPartie, basesOverride = null) => {
+    const bases = basesOverride || calculerBasesBrutes();
+    
+    let total = devisItems
+      .filter(item => item.type === 'ligne_detail' && item.sous_partie_id === sousPartie.id)
+      .reduce((sum, ligne) => {
+        const prix = calculatePrice(ligne);
+        return sum + (prix * (ligne.quantity || 0));
+      }, 0);
+    
+    const lignesSpeciales = devisItems
+      .filter(item => 
+        item.type === 'ligne_speciale' && 
+        item.context_type === 'sous_partie' && 
+        item.context_id === sousPartie.id
+      )
+      .sort((a, b) => a.index_global - b.index_global);
+    
+    lignesSpeciales.forEach(ls => {
+      const montant = calculerMontantLigneSpeciale(ls, bases);
+      if (ls.type_speciale === 'reduction') {
+        total -= montant;
+      } else if (ls.type_speciale === 'addition') {
+        total += montant;
+      }
+    });
+    
+    return total;
+  }, [devisItems, calculatePrice, calculerBasesBrutes, calculerMontantLigneSpeciale]);
+
+  // Calculer le total d'une partie
+  const calculatePartieTotal = useCallback((partie, basesOverride = null) => {
+    const bases = basesOverride || calculerBasesBrutes();
+    
+    let total = devisItems
+      .filter(item => item.type === 'sous_partie' && item.partie_id === partie.id)
+      .reduce((sum, sp) => sum + calculateSousPartieTotal(sp, bases), 0);
+    
+    const lignesSpeciales = devisItems
+      .filter(item => 
+        item.type === 'ligne_speciale' && 
+        item.context_type === 'partie' && 
+        item.context_id === partie.id
+      )
+      .sort((a, b) => a.index_global - b.index_global);
+    
+    lignesSpeciales.forEach(ls => {
+      const montant = calculerMontantLigneSpeciale(ls, bases);
+      if (ls.type_speciale === 'reduction') {
+        total -= montant;
+      } else if (ls.type_speciale === 'addition') {
+        total += montant;
+      }
+    });
+    
+    return total;
+  }, [devisItems, calculateSousPartieTotal, calculerBasesBrutes, calculerMontantLigneSpeciale]);
+
+  // Calculer le total global SANS une ligne spéciale spécifique
+  const calculateGlobalTotalExcludingLine = useCallback((excludeLineId = null) => {
+    const bases = calculerBasesBrutes();
+    
+    let total = devisItems
+      .filter(item => item.type === 'partie')
+      .reduce((sum, partie) => sum + calculatePartieTotal(partie, bases), 0);
+    
+    const lignesSpeciales = devisItems
+      .filter(item => 
+        item.type === 'ligne_speciale' && 
+        item.context_type === 'global' &&
+        item.id !== excludeLineId
+      )
+      .sort((a, b) => a.index_global - b.index_global);
+    
+    lignesSpeciales.forEach(ls => {
+      const montant = calculerMontantLigneSpeciale(ls, bases, excludeLineId);
+      if (ls.type_speciale === 'reduction') {
+        total -= montant;
+      } else if (ls.type_speciale === 'addition') {
+        total += montant;
+      }
+    });
+    
+    return total;
+  }, [devisItems, calculatePartieTotal, calculerBasesBrutes, calculerMontantLigneSpeciale]);
+
+  // Calculer le total global
+  const calculateGlobalTotal = useCallback(() => {
+    return calculateGlobalTotalExcludingLine(null);
+  }, [calculateGlobalTotalExcludingLine]);
+
+  // ✅ Calcul de la ligne récurrente (comme dans DevisAvance.js)
+  const calculateRecurringLineAmount = useCallback((lineOrId) => {
+    const targetId = typeof lineOrId === 'object' ? lineOrId.id : lineOrId;
+    if (!targetId) {
+      return 0;
+    }
+    const targetLine = devisItems.find(item => item.id === targetId);
+    if (!targetLine || targetLine.index_global === undefined) {
+      return 0;
+    }
+    const sortedItems = [...devisItems].sort((a, b) => a.index_global - b.index_global);
+    const bases = calculerBasesBrutes();
+    let runningTotal = 0;
+    
+    for (const item of sortedItems) {
+      if (item.index_global >= targetLine.index_global) {
+        break;
+      }
+      if (item.type === 'partie') {
+        runningTotal += calculatePartieTotal(item, bases);
+      } else if (item.type === 'ligne_speciale' && item.context_type === 'global') {
+        const amount = calculerMontantLigneSpeciale(item, bases, targetLine.id);
+        if (item.type_speciale === 'addition') {
+          runningTotal += amount;
+        } else if (item.type_speciale === 'reduction') {
+          runningTotal -= amount;
+        }
+      }
+    }
+    return runningTotal;
+  }, [devisItems, calculatePartieTotal, calculerBasesBrutes, calculerMontantLigneSpeciale]);
 
   // Hook de handlers
   const {
@@ -231,9 +422,10 @@ const ModificationDevisV2 = () => {
         numero: loadedDevisData.numero || '',
         date_creation: loadedDevisData.date_creation?.split('T')[0] || new Date().toISOString().split('T')[0],
         nature_travaux: loadedDevisData.nature_travaux || '',
-        tva_rate: loadedDevisData.tva_rate || 20,
-        price_ht: loadedDevisData.price_ht || 0,
-        price_ttc: loadedDevisData.price_ttc || 0
+        // ✅ Utiliser ?? au lieu de || pour permettre tva_rate = 0
+        tva_rate: loadedDevisData.tva_rate ?? 20,
+        price_ht: loadedDevisData.price_ht ?? 0,
+        price_ttc: loadedDevisData.price_ttc ?? 0
       });
       setSelectedChantierId(loadedDevisData.chantier);
       setDevisType(loadedDevisData.devis_chantier ? 'chantier' : 'normal');
@@ -349,18 +541,97 @@ const ModificationDevisV2 = () => {
     setRecurringLineDraft(null);
   }, [recurringLineDraft, setDevisItems]);
 
-  // Gérer la ligne récurrente
+  // Gérer la ligne récurrente - ne pas en créer si elle existe déjà
   useEffect(() => {
-    const hasAtLeastOnePartie = devisItems.some(item => item.type === 'partie');
-    const recurringLineExists = devisItems.some(isRecurringSpecialLine);
-    if (!hasAtLeastOnePartie || recurringLineExists || recurringLineDraft) {
+    // Ne pas créer de ligne récurrente si on est en cours de chargement
+    if (isLoading) {
+      console.log('🔄 [RecurringLine] Chargement en cours, skip...');
       return;
     }
+    
+    const hasAtLeastOnePartie = devisItems.some(item => item.type === 'partie');
+    const recurringLineExists = devisItems.some(isRecurringSpecialLine);
+    
+    // ✅ LOG DEBUG : État de la ligne récurrente
+    console.group('🔶 [RecurringLine] Vérification ligne récurrente');
+    console.log('📊 Nombre total d\'items:', devisItems.length);
+    console.log('📦 hasAtLeastOnePartie:', hasAtLeastOnePartie);
+    console.log('🔍 recurringLineExists:', recurringLineExists);
+    console.log('📝 recurringLineDraft actuel:', recurringLineDraft);
+    
+    // Chercher la ligne récurrente dans les items
+    const foundRecurring = devisItems.find(isRecurringSpecialLine);
+    if (foundRecurring) {
+      console.log('✅ Ligne récurrente TROUVÉE:', {
+        id: foundRecurring.id,
+        description: foundRecurring.description,
+        index_global: foundRecurring.index_global,
+        isRecurringSpecial: foundRecurring.isRecurringSpecial
+      });
+    } else {
+      console.log('❌ Aucune ligne récurrente trouvée dans devisItems');
+      // Afficher toutes les lignes spéciales pour debug
+      const allSpecialLines = devisItems.filter(item => item.type === 'ligne_speciale');
+      console.log('📋 Toutes les lignes spéciales:', allSpecialLines);
+    }
+    console.groupEnd();
+    
+    // Si une ligne récurrente existe déjà dans les données, ne pas en créer une nouvelle
+    if (recurringLineExists) {
+      // S'assurer qu'on n'a pas de draft en attente
+      if (recurringLineDraft) {
+        console.log('🧹 Suppression du recurringLineDraft car ligne existe déjà');
+        setRecurringLineDraft(null);
+      }
+      return;
+    }
+    
+    // Créer un draft seulement si on a des parties et pas de ligne récurrente
+    if (!hasAtLeastOnePartie || recurringLineDraft) {
+      console.log('⏭️ Skip création draft:', !hasAtLeastOnePartie ? 'pas de partie' : 'draft existe déjà');
+      return;
+    }
+    
+    console.log('🆕 Création d\'un nouveau recurringLineDraft');
     setRecurringLineDraft(buildRecurringSpecialLine());
-  }, [devisItems, recurringLineDraft, buildRecurringSpecialLine]);
+  }, [devisItems, recurringLineDraft, buildRecurringSpecialLine, isLoading]);
+
+  // ✅ Mettre à jour dynamiquement la valeur de la ligne récurrente
+  useEffect(() => {
+    if (!hasRecurringLine) {
+      return;
+    }
+
+    setDevisItems(prevItems => {
+      let didUpdate = false;
+      const updatedItems = prevItems.map(item => {
+        if (isRecurringSpecialLine(item)) {
+          const amount = calculateRecurringLineAmount(item);
+          if (Number.isFinite(amount)) {
+            const currentValue = typeof item.value === 'number' ? item.value : 0;
+            if (Math.abs(currentValue - amount) > 0.01 || item.value === undefined) {
+              didUpdate = true;
+              return { ...item, value: amount };
+            }
+          }
+        }
+        return item;
+      });
+      return didUpdate ? updatedItems : prevItems;
+    });
+  }, [hasRecurringLine, calculateRecurringLineAmount, setDevisItems]);
 
   // Handler pour sauvegarder
   const handleSaveDevis = async () => {
+    // ✅ Debug : vérifier les valeurs avant sauvegarde
+    console.group('📤 [handleSaveDevis] Données envoyées');
+    console.log('tva_rate:', devisData.tva_rate);
+    console.log('totalHt:', totalHt);
+    console.log('tva (calculée):', tva);
+    console.log('totalTtc:', totalTtc);
+    console.log('price_ttc attendu:', totalHt + (totalHt * (devisData.tva_rate ?? 20) / 100));
+    console.groupEnd();
+    
     const validation = validateBeforeTransform({
       devisItems,
       devisData,
@@ -819,4 +1090,5 @@ const ModificationDevisV2 = () => {
 };
 
 export default ModificationDevisV2;
+
 

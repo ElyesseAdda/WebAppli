@@ -153,11 +153,11 @@ const extractLignes = (devisItems) => {
     const prix_unitaire = calculatePrice(ligne);
     const total_ht = quantite * prix_unitaire;
     
-    // Format attendu par l'API : { ligne: ID, quantity: qty, custom_price: price, total_ht: total, index_global: index, numero: num }
+    // ✅ Format attendu par l'API Django : { ligne_detail: ID, quantite: qty, prix_unitaire: price, total_ht: total, index_global: index }
     const ligneData = {
-      ligne: ligne.id,
-      quantity: quantite.toFixed(2),
-      custom_price: prix_unitaire.toFixed(2),
+      ligne_detail: ligne.id,  // ← Nom correct pour le serializer
+      quantite: quantite.toFixed(2),  // ← Nom correct pour le serializer
+      prix_unitaire: prix_unitaire.toFixed(2),  // ← Nom correct pour le serializer
       // ✅ Ajouter total_ht (calculé, même si c'est une propriété côté backend)
       total_ht: total_ht.toFixed(2)
     };
@@ -196,7 +196,102 @@ const extractLignes = (devisItems) => {
  * @param {Array} devisItems - Tous les items pour calculs récursifs si nécessaire
  * @returns {number} Montant calculé de la ligne spéciale
  */
+const RECURRING_LINE_DESCRIPTION = 'Montant global HT des prestations unitaires';
+
+/**
+ * Vérifie si une ligne est une ligne récurrente
+ */
+const isRecurringSpecialLine = (item) => (
+  item &&
+  item.type === 'ligne_speciale' &&
+  (
+    item.isRecurringSpecial ||
+    item.description === RECURRING_LINE_DESCRIPTION
+  )
+);
+
+/**
+ * Calcule le prix d'une ligne de détail (simplifié pour le transformer)
+ */
+const calculateDetailLinePrice = (ligne) => {
+  if (ligne.prix_devis !== null && ligne.prix_devis !== undefined) {
+    return parseFloat(ligne.prix_devis);
+  }
+  const cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
+  const cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+  if (cout_main_oeuvre === 0 && cout_materiel === 0) {
+    return parseFloat(ligne.prix) || 0;
+  }
+  const marge = ligne.marge_devis !== null && ligne.marge_devis !== undefined 
+    ? parseFloat(ligne.marge_devis) : parseFloat(ligne.marge) || 0;
+  const taux_fixe = parseFloat(ligne.taux_fixe) || 0;
+  const base = cout_main_oeuvre + cout_materiel;
+  const montant_taux_fixe = base * (taux_fixe / 100);
+  const sous_total = base + montant_taux_fixe;
+  return sous_total + (sous_total * (marge / 100));
+};
+
+/**
+ * Calcule le total d'une partie (somme des lignes de détail de ses sous-parties)
+ */
+const calculatePartieTotal = (partie, devisItems) => {
+  // Trouver toutes les sous-parties de cette partie
+  const sousParties = devisItems.filter(item => 
+    item.type === 'sous_partie' && item.partie_id === partie.id
+  );
+  
+  let total = 0;
+  sousParties.forEach(sp => {
+    // Trouver toutes les lignes de détail de cette sous-partie
+    const lignes = devisItems.filter(item => 
+      item.type === 'ligne_detail' && item.sous_partie_id === sp.id
+    );
+    lignes.forEach(ligne => {
+      const prix = calculateDetailLinePrice(ligne);
+      total += prix * (parseFloat(ligne.quantity) || 0);
+    });
+  });
+  
+  return total;
+};
+
+/**
+ * Calcule le montant de la ligne récurrente (somme des éléments avant elle)
+ */
+const calculateRecurringAmount = (recurringLine, devisItems) => {
+  const targetIndex = parseFloat(recurringLine.index_global) || 0;
+  const sortedItems = [...devisItems].sort((a, b) => 
+    (parseFloat(a.index_global) || 0) - (parseFloat(b.index_global) || 0)
+  );
+  
+  let runningTotal = 0;
+  
+  for (const item of sortedItems) {
+    const itemIndex = parseFloat(item.index_global) || 0;
+    if (itemIndex >= targetIndex) break;
+    
+    if (item.type === 'partie') {
+      runningTotal += calculatePartieTotal(item, devisItems);
+    } else if (item.type === 'ligne_speciale' && item.context_type === 'global' && !isRecurringSpecialLine(item)) {
+      // Ajouter les lignes spéciales globales (additions/reductions)
+      const amount = parseFloat(item.value) || 0;
+      if (item.type_speciale === 'addition') {
+        runningTotal += amount;
+      } else if (item.type_speciale === 'reduction') {
+        runningTotal -= amount;
+      }
+    }
+  }
+  
+  return runningTotal;
+};
+
 const calculateSpecialLineAmount = (ligneSpeciale, bases, devisItems = []) => {
+  // ✅ CAS SPÉCIAL : Ligne récurrente - calculer la somme des éléments avant elle
+  if (isRecurringSpecialLine(ligneSpeciale)) {
+    return calculateRecurringAmount(ligneSpeciale, devisItems);
+  }
+  
   const value = parseFloat(ligneSpeciale.value || 0);
   
   // Si montant fixe, retourner directement
@@ -453,12 +548,13 @@ export const transformToLegacyFormat = ({
     numero: devisData.numero || '',
     date_creation: date_creation_iso, // ✅ Format ISO 8601 complet (YYYY-MM-DDTHH:mm:ss.sssZ)
     chantier: selectedChantierId && selectedChantierId !== -1 ? selectedChantierId : null,
-    price_ht: devisData.price_ht || 0,
-    price_ttc: devisData.price_ttc || 0,
-    tva_rate: devisData.tva_rate || 20,
+    price_ht: devisData.price_ht ?? 0,
+    price_ttc: devisData.price_ttc ?? 0,
+    // ✅ Utiliser ?? pour permettre tva_rate = 0
+    tva_rate: devisData.tva_rate ?? 20,
     nature_travaux: devisData.nature_travaux || '',
     description: devisData.description || '',
-    status: 'En attente',
+    status: devisData.status || 'En attente',  // ✅ Conserver le status existant lors d'une modification
     devis_chantier: devis_chantier,
     
     // Lignes de détail

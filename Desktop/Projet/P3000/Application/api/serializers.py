@@ -307,12 +307,22 @@ class DevisSerializer(serializers.ModelSerializer):
             
             lignes_data = validated_data.pop('lignes')
             for ligne_data in lignes_data:
-                DevisLigne.objects.create(
-                    devis=instance,
-                    ligne_detail=ligne_data['ligne_detail'],
-                    quantite=Decimal(str(ligne_data['quantite'])),
-                    prix_unitaire=Decimal(str(ligne_data['prix_unitaire']))
-                )
+                # ✅ Inclure index_global pour préserver l'ordre des lignes
+                ligne_create_data = {
+                    'devis': instance,
+                    'ligne_detail': ligne_data['ligne_detail'],
+                    'quantite': Decimal(str(ligne_data['quantite'])),
+                    'prix_unitaire': Decimal(str(ligne_data['prix_unitaire']))
+                }
+                
+                # Ajouter index_global si présent
+                if 'index_global' in ligne_data and ligne_data['index_global'] is not None:
+                    try:
+                        ligne_create_data['index_global'] = Decimal(str(ligne_data['index_global']))
+                    except (ValueError, TypeError):
+                        pass
+                
+                DevisLigne.objects.create(**ligne_create_data)
 
         # Mettre à jour les lignes spéciales
         if 'lignes_speciales' in validated_data:
@@ -321,6 +331,10 @@ class DevisSerializer(serializers.ModelSerializer):
         # Mettre à jour les lignes display
         if 'lignes_display' in validated_data:
             instance.lignes_display = validated_data.pop('lignes_display')
+        
+        # Mettre à jour parties_metadata si présent
+        if 'parties_metadata' in validated_data:
+            instance.parties_metadata = validated_data.pop('parties_metadata')
 
         # Mettre à jour les autres champs
         for attr, value in validated_data.items():

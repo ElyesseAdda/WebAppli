@@ -1905,7 +1905,7 @@ const ModificationDevis = () => {
         }
         console.log("Données du devis récupérées:", devisData);
 
-        setTvaRate(devisData.tva_rate || 20);
+        setTvaRate(devisData.tva_rate ?? 20);
         setNatureTravaux(devisData.nature_travaux || "");
         setDevisModalData((prev) => ({
           ...prev,

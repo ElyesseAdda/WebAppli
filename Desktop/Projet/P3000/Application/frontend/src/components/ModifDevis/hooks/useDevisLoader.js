@@ -5,69 +5,200 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
+// Description de la ligne récurrente pour identification
+const RECURRING_LINE_DESCRIPTION = 'Montant global HT des prestations unitaires';
+
+/**
+ * Vérifie si une ligne est une ligne récurrente
+ */
+const isRecurringSpecialLine = (item) => (
+  item &&
+  item.type === 'ligne_speciale' &&
+  (
+    item.isRecurringSpecial ||
+    item.description === RECURRING_LINE_DESCRIPTION
+  )
+);
+
+/**
+ * Recalcule les numéros des parties et sous-parties
+ * @param {Array} items - Items à traiter
+ * @returns {Array} Items avec numéros recalculés
+ */
+const recalculateNumeros = (items) => {
+  // Trier par index_global
+  const sortedItems = [...items].sort((a, b) => 
+    (parseFloat(a.index_global) || 0) - (parseFloat(b.index_global) || 0)
+  );
+  
+  // Compteurs pour les numéros
+  let partieCounter = 0;
+  const sousPartieCounters = {}; // partieId -> compteur
+  
+  return sortedItems.map(item => {
+    if (item.type === 'partie') {
+      partieCounter++;
+      // Initialiser le compteur de sous-parties pour cette partie
+      sousPartieCounters[item.id] = 0;
+      
+      // Mettre à jour le numéro seulement s'il n'existe pas ou est invalide
+      const numero = item.numero && /^\d+$/.test(item.numero) 
+        ? item.numero 
+        : String(partieCounter);
+      
+      return { ...item, numero };
+    }
+    
+    if (item.type === 'sous_partie') {
+      // Trouver la partie parente
+      const partie = sortedItems.find(p => p.type === 'partie' && p.id === item.partie_id);
+      if (partie) {
+        // Incrémenter le compteur de sous-parties
+        if (sousPartieCounters[item.partie_id] === undefined) {
+          sousPartieCounters[item.partie_id] = 0;
+        }
+        sousPartieCounters[item.partie_id]++;
+        
+        // Générer le numéro au format "X.Y"
+        const partieNumero = partie.numero || String(partieCounter);
+        const spNumero = sousPartieCounters[item.partie_id];
+        const numero = `${partieNumero}.${spNumero}`;
+        
+        return { ...item, numero };
+      }
+    }
+    
+    return item;
+  });
+};
+
 /**
  * Convertit les données du format API vers le format devisItems unifié
  * @param {Object} devisData - Données brutes du devis depuis l'API
  * @returns {Array} devisItems - Items au format unifié
  */
-const convertApiToDevisItems = (devisData) => {
-  const items = [];
+/**
+ * Crée une ligne spéciale formatée depuis les données JSON
+ */
+const createSpecialLineFromJson = (line, idx, contextType, contextId) => {
+  const isRecurring = line.description === RECURRING_LINE_DESCRIPTION;
+  return {
+    type: 'ligne_speciale',
+    id: line.id || `special_${contextType}_${contextId || 'global'}_${idx}_${Date.now()}`,
+    description: line.description,
+    type_speciale: line.type || 'display',
+    value_type: line.value_type || line.valueType || 'fixed',
+    value: parseFloat(line.value) || 0,
+    context_type: contextType,
+    context_id: contextId,
+    styles: line.styles || {},
+    baseCalculation: line.base_calculation || null,
+    index_global: parseFloat(line.index_global) || 0,
+    isRecurringSpecial: isRecurring
+  };
+};
+
+/**
+ * Extrait les lignes spéciales depuis les champs JSON du devis
+ * Utilise les vrais index_global stockés dans le JSON
+ * @param {Object} devisData - Données du devis
+ */
+const extractSpecialLinesFromJson = (devisData) => {
+  const specialLines = [];
   
-  // ✅ Créer un map des quantités/prix depuis les lignes (DevisLigne)
-  // Les lignes contiennent : { id, ligne_detail (ID), quantite, prix_unitaire, total_ht, index_global }
+  // Fonction pour traiter un objet de lignes spéciales
+  const processSpecialLines = (linesObj, isDisplay = false) => {
+    if (!linesObj) return;
+    
+    // Lignes globales
+    if (linesObj.global && Array.isArray(linesObj.global)) {
+      linesObj.global.forEach((line, idx) => {
+        // ✅ Utiliser le vrai index_global stocké dans le JSON
+        const specialLine = createSpecialLineFromJson(
+          { ...line, type: isDisplay ? 'display' : (line.type || 'display') },
+          idx,
+          'global',
+          null
+        );
+        specialLines.push(specialLine);
+      });
+    }
+    
+    // Lignes de parties
+    if (linesObj.parties) {
+      Object.entries(linesObj.parties).forEach(([partieId, lines]) => {
+        if (Array.isArray(lines)) {
+          lines.forEach((line, idx) => {
+            const specialLine = createSpecialLineFromJson(
+              { ...line, type: isDisplay ? 'display' : (line.type || 'display') },
+              idx,
+              'partie',
+              parseInt(partieId)
+            );
+            specialLines.push(specialLine);
+          });
+        }
+      });
+    }
+    
+    // Lignes de sous-parties
+    if (linesObj.sousParties) {
+      Object.entries(linesObj.sousParties).forEach(([spId, lines]) => {
+        if (Array.isArray(lines)) {
+          lines.forEach((line, idx) => {
+            const specialLine = createSpecialLineFromJson(
+              { ...line, type: isDisplay ? 'display' : (line.type || 'display') },
+              idx,
+              'sous_partie',
+              parseInt(spId)
+            );
+            specialLines.push(specialLine);
+          });
+        }
+      });
+    }
+  };
+  
+  // Traiter lignes_speciales (réductions, additions)
+  processSpecialLines(devisData.lignes_speciales, false);
+  
+  // Traiter lignes_display (affichage uniquement, inclut la ligne récurrente)
+  processSpecialLines(devisData.lignes_display, true);
+  
+  return specialLines;
+};
+
+const convertApiToDevisItems = (devisData) => {
+  let items = [];
+  
+  console.log('🔄 [convertApiToDevisItems] Reconstruction depuis parties_metadata avec vrais index');
+  
+  // ✅ TOUJOURS reconstruire depuis parties_metadata pour avoir les vrais index
+  // Ne PAS utiliser devisData.items car le serializer legacy génère des index incorrects
+  
+  // 1. Créer un map des lignes (DevisLigne) pour les quantités et index
   const lignesMap = new Map();
   if (devisData.lignes && Array.isArray(devisData.lignes)) {
     devisData.lignes.forEach(ligne => {
-      // ligne.ligne_detail est l'ID de la LigneDetail
       lignesMap.set(ligne.ligne_detail, {
         quantite: parseFloat(ligne.quantite) || 0,
         prix_unitaire: parseFloat(ligne.prix_unitaire) || 0,
         total_ht: parseFloat(ligne.total_ht) || 0,
         devis_ligne_id: ligne.id,
-        devis_ligne_index_global: ligne.index_global
+        // ✅ CRUCIAL : Utiliser le vrai index_global de DevisLigne (ex: "1.101")
+        index_global: parseFloat(ligne.index_global) || 0
       });
     });
   }
   
-  // Utiliser les items déjà formatés par le serializer si disponibles
-  if (devisData.items && Array.isArray(devisData.items) && devisData.items.length > 0) {
-    // Le serializer retourne déjà les items au bon format
-    // Mais on doit enrichir les lignes_detail avec les quantités depuis DevisLigne
-    return devisData.items.map(item => {
-      if (item.type === 'ligne_detail') {
-        // Récupérer la quantité depuis lignesMap
-        const ligneData = lignesMap.get(item.id);
-        return {
-          ...item,
-          index_global: parseFloat(item.index_global) || 0,
-          // ✅ Utiliser la quantité de DevisLigne, pas celle de LigneDetail
-          quantity: ligneData?.quantite || 0,
-          prix_devis: ligneData?.prix_unitaire || parseFloat(item.prix) || 0,
-          devis_ligne_id: ligneData?.devis_ligne_id
-        };
-      }
-      return {
-        ...item,
-        index_global: parseFloat(item.index_global) || 0
-      };
-    });
-  }
-  
-  // Sinon, reconstruire depuis parties_metadata et lignes
+  // 2. Reconstruire depuis parties_metadata avec les vrais index
   if (devisData.parties_metadata?.selectedParties) {
     const selectedParties = devisData.parties_metadata.selectedParties;
-    const lignesMap = new Map();
-    
-    // Créer un map des lignes pour accès rapide
-    if (devisData.lignes && Array.isArray(devisData.lignes)) {
-      devisData.lignes.forEach(ligne => {
-        lignesMap.set(ligne.ligne_detail, ligne);
-      });
-    }
     
     // Parcourir les parties
     selectedParties.forEach((partie, partieIdx) => {
-      const partieIndexGlobal = partie.index_global || (partieIdx + 1);
+      // ✅ Utiliser le vrai index_global de la partie
+      const partieIndexGlobal = parseFloat(partie.index_global) || (partieIdx + 1);
       
       // Ajouter la partie
       items.push({
@@ -75,21 +206,22 @@ const convertApiToDevisItems = (devisData) => {
         id: partie.id,
         titre: partie.titre,
         type_activite: partie.type || 'PEINTURE',
-        numero: partie.numero || String(partieIdx + 1),
+        numero: partie.numero !== undefined ? String(partie.numero) : String(partieIdx + 1),
         index_global: partieIndexGlobal
       });
       
       // Ajouter les sous-parties
       if (partie.sousParties && Array.isArray(partie.sousParties)) {
         partie.sousParties.forEach((sp, spIdx) => {
-          const spIndexGlobal = sp.index_global || (partieIndexGlobal + (spIdx + 1) * 0.1);
+          // ✅ Utiliser le vrai index_global de la sous-partie (ex: 1.1, 1.2)
+          const spIndexGlobal = parseFloat(sp.index_global) || (partieIndexGlobal + (spIdx + 1) * 0.1);
           
           items.push({
             type: 'sous_partie',
             id: sp.id,
             description: sp.description,
             partie_id: partie.id,
-            numero: sp.numero || `${partieIdx + 1}.${spIdx + 1}`,
+            numero: sp.numero || `${partie.numero || partieIdx + 1}.${spIdx + 1}`,
             index_global: spIndexGlobal
           });
           
@@ -98,18 +230,17 @@ const convertApiToDevisItems = (devisData) => {
             sp.lignesDetails.forEach((ligneId, ligneIdx) => {
               const ligneData = lignesMap.get(ligneId);
               if (ligneData) {
+                // ✅ Utiliser le vrai index_global de DevisLigne (ex: 1.101, 1.102)
                 const ligneIndexGlobal = ligneData.index_global || (spIndexGlobal + (ligneIdx + 1) * 0.001);
                 
                 items.push({
                   type: 'ligne_detail',
                   id: ligneId,
                   sous_partie_id: sp.id,
-                  quantity: parseFloat(ligneData.quantite) || 0,
-                  prix_devis: parseFloat(ligneData.prix_unitaire) || 0,
+                  quantity: ligneData.quantite,
+                  prix_devis: ligneData.prix_unitaire,
                   index_global: ligneIndexGlobal,
-                  // Les autres champs seront chargés depuis l'API ligne-details
-                  designation: ligneData.designation || '',
-                  unite: ligneData.unite || ''
+                  devis_ligne_id: ligneData.devis_ligne_id
                 });
               }
             });
@@ -119,78 +250,24 @@ const convertApiToDevisItems = (devisData) => {
     });
   }
   
-  // Ajouter les lignes spéciales
-  const addSpecialLines = (specialLines, contextType) => {
-    if (!specialLines) return;
-    
-    // Lignes globales
-    if (specialLines.global && Array.isArray(specialLines.global)) {
-      specialLines.global.forEach((line, idx) => {
-        items.push({
-          type: 'ligne_speciale',
-          id: line.id || `special_global_${idx}_${Date.now()}`,
-          description: line.description,
-          type_speciale: line.type,
-          value_type: line.value_type || line.valueType,
-          value: line.value,
-          context_type: 'global',
-          context_id: null,
-          styles: line.styles || {},
-          baseCalculation: line.base_calculation || null,
-          index_global: line.index_global || (idx + 1)
-        });
-      });
-    }
-    
-    // Lignes de parties
-    if (specialLines.parties) {
-      Object.entries(specialLines.parties).forEach(([partieId, lines]) => {
-        lines.forEach((line, idx) => {
-          items.push({
-            type: 'ligne_speciale',
-            id: line.id || `special_partie_${partieId}_${idx}_${Date.now()}`,
-            description: line.description,
-            type_speciale: line.type,
-            value_type: line.value_type || line.valueType,
-            value: line.value,
-            context_type: 'partie',
-            context_id: parseInt(partieId),
-            styles: line.styles || {},
-            baseCalculation: line.base_calculation || null,
-            index_global: line.index_global || 0
-          });
-        });
-      });
-    }
-    
-    // Lignes de sous-parties
-    if (specialLines.sousParties) {
-      Object.entries(specialLines.sousParties).forEach(([spId, lines]) => {
-        lines.forEach((line, idx) => {
-          items.push({
-            type: 'ligne_speciale',
-            id: line.id || `special_sp_${spId}_${idx}_${Date.now()}`,
-            description: line.description,
-            type_speciale: line.type,
-            value_type: line.value_type || line.valueType,
-            value: line.value,
-            context_type: 'sous_partie',
-            context_id: parseInt(spId),
-            styles: line.styles || {},
-            baseCalculation: line.base_calculation || null,
-            index_global: line.index_global || 0
-          });
-        });
-      });
-    }
-  };
+  // 3. Ajouter les lignes spéciales depuis les champs JSON avec leurs vrais index
+  const jsonSpecialLines = extractSpecialLinesFromJson(devisData);
   
-  // Ajouter les lignes spéciales normales et display
-  addSpecialLines(devisData.lignes_speciales, 'normal');
-  addSpecialLines(devisData.lignes_display, 'display');
+  if (jsonSpecialLines.length > 0) {
+    console.log(`🔶 [convertApiToDevisItems] Ajout de ${jsonSpecialLines.length} lignes spéciales avec leurs vrais index`);
+    jsonSpecialLines.forEach(ls => {
+      console.log(`   - "${ls.description?.substring(0, 30)}" → index_global: ${ls.index_global}`);
+    });
+    items = [...items, ...jsonSpecialLines];
+  }
   
-  // Trier par index_global
-  items.sort((a, b) => a.index_global - b.index_global);
+  // 4. Trier par index_global
+  items.sort((a, b) => (parseFloat(a.index_global) || 0) - (parseFloat(b.index_global) || 0));
+  
+  console.log(`📊 [convertApiToDevisItems] Total: ${items.length} items après tri`);
+  
+  // 5. Recalculer les numéros des parties et sous-parties
+  items = recalculateNumeros(items);
   
   return items;
 };
@@ -265,13 +342,14 @@ export const useDevisLoader = (devisId) => {
           if (ligneDetail) {
             return {
               ...item,
-              designation: ligneDetail.designation || item.designation,
+              // ✅ Utiliser 'description' (nom du champ dans l'API)
+              description: ligneDetail.description || item.description,
               unite: ligneDetail.unite || item.unite,
-              prix: ligneDetail.prix || 0,
-              cout_main_oeuvre: ligneDetail.cout_main_oeuvre || 0,
-              cout_materiel: ligneDetail.cout_materiel || 0,
-              marge: ligneDetail.marge || 0,
-              taux_fixe: ligneDetail.taux_fixe || 0,
+              prix: parseFloat(ligneDetail.prix) || 0,
+              cout_main_oeuvre: parseFloat(ligneDetail.cout_main_oeuvre) || 0,
+              cout_materiel: parseFloat(ligneDetail.cout_materiel) || 0,
+              marge: parseFloat(ligneDetail.marge) || 0,
+              taux_fixe: parseFloat(ligneDetail.taux_fixe) || 0,
               sous_partie: ligneDetail.sous_partie
             };
           }
@@ -307,6 +385,48 @@ export const useDevisLoader = (devisId) => {
       
       // 3. Enrichir avec les données complètes des lignes
       items = await enrichItemsWithLigneDetails(items);
+      
+      // ✅ LOGS DE DEBUG : Afficher les items chargés et leurs index
+      console.group('📋 [useDevisLoader] Chargement du devis ID:', devisId);
+      console.log('📦 Données brutes API (devis):', devis);
+      console.log('📊 Items après conversion:', items.length, 'items');
+      
+      // Log détaillé de chaque item avec son index
+      console.table(items.map((item, idx) => ({
+        '#': idx,
+        'type': item.type,
+        'id': item.id,
+        'index_global': item.index_global,
+        'description': item.type === 'partie' ? item.titre : 
+                       item.type === 'sous_partie' ? item.description :
+                       item.type === 'ligne_detail' ? (item.designation || item.description)?.substring(0, 30) :
+                       item.type === 'ligne_speciale' ? item.description?.substring(0, 30) : '',
+        'isRecurring': item.isRecurringSpecial || false,
+        'context_type': item.context_type || '-'
+      })));
+      
+      // Log spécifique pour les lignes spéciales
+      const specialLines = items.filter(item => item.type === 'ligne_speciale');
+      console.log('🔶 Lignes spéciales trouvées:', specialLines.length);
+      if (specialLines.length > 0) {
+        console.table(specialLines.map(ls => ({
+          'id': ls.id,
+          'description': ls.description,
+          'index_global': ls.index_global,
+          'type_speciale': ls.type_speciale,
+          'isRecurringSpecial': ls.isRecurringSpecial,
+          'context_type': ls.context_type,
+          'styles': JSON.stringify(ls.styles || {})
+        })));
+      }
+      
+      // Log des champs JSON source
+      console.log('📝 Champs JSON du devis:');
+      console.log('   - lignes_speciales:', devis.lignes_speciales);
+      console.log('   - lignes_display:', devis.lignes_display);
+      console.log('   - items (serializer):', devis.items?.length || 0, 'items');
+      console.groupEnd();
+      
       setDevisItems(items);
       
       // 4. Charger les données du chantier si disponible

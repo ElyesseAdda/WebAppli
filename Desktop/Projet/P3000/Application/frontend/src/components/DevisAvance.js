@@ -2098,7 +2098,8 @@ const DevisAvance = () => {
     const totalHT = calculateGlobalTotal();
     
     // Calculer la TVA
-    const tvaRate = devisData.tva_rate || 20;
+    // ✅ Utiliser ?? pour permettre tva_rate = 0
+    const tvaRate = devisData.tva_rate ?? 20;
     const tvaAmount = totalHT * (tvaRate / 100);
     
     // Calculer le TTC
