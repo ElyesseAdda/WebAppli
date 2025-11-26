@@ -545,42 +545,16 @@ const ModificationDevisV2 = () => {
   useEffect(() => {
     // Ne pas créer de ligne récurrente si on est en cours de chargement
     if (isLoading) {
-      console.log('🔄 [RecurringLine] Chargement en cours, skip...');
       return;
     }
     
     const hasAtLeastOnePartie = devisItems.some(item => item.type === 'partie');
     const recurringLineExists = devisItems.some(isRecurringSpecialLine);
     
-    // ✅ LOG DEBUG : État de la ligne récurrente
-    console.group('🔶 [RecurringLine] Vérification ligne récurrente');
-    console.log('📊 Nombre total d\'items:', devisItems.length);
-    console.log('📦 hasAtLeastOnePartie:', hasAtLeastOnePartie);
-    console.log('🔍 recurringLineExists:', recurringLineExists);
-    console.log('📝 recurringLineDraft actuel:', recurringLineDraft);
-    
-    // Chercher la ligne récurrente dans les items
-    const foundRecurring = devisItems.find(isRecurringSpecialLine);
-    if (foundRecurring) {
-      console.log('✅ Ligne récurrente TROUVÉE:', {
-        id: foundRecurring.id,
-        description: foundRecurring.description,
-        index_global: foundRecurring.index_global,
-        isRecurringSpecial: foundRecurring.isRecurringSpecial
-      });
-    } else {
-      console.log('❌ Aucune ligne récurrente trouvée dans devisItems');
-      // Afficher toutes les lignes spéciales pour debug
-      const allSpecialLines = devisItems.filter(item => item.type === 'ligne_speciale');
-      console.log('📋 Toutes les lignes spéciales:', allSpecialLines);
-    }
-    console.groupEnd();
-    
     // Si une ligne récurrente existe déjà dans les données, ne pas en créer une nouvelle
     if (recurringLineExists) {
       // S'assurer qu'on n'a pas de draft en attente
       if (recurringLineDraft) {
-        console.log('🧹 Suppression du recurringLineDraft car ligne existe déjà');
         setRecurringLineDraft(null);
       }
       return;
@@ -588,11 +562,9 @@ const ModificationDevisV2 = () => {
     
     // Créer un draft seulement si on a des parties et pas de ligne récurrente
     if (!hasAtLeastOnePartie || recurringLineDraft) {
-      console.log('⏭️ Skip création draft:', !hasAtLeastOnePartie ? 'pas de partie' : 'draft existe déjà');
       return;
     }
     
-    console.log('🆕 Création d\'un nouveau recurringLineDraft');
     setRecurringLineDraft(buildRecurringSpecialLine());
   }, [devisItems, recurringLineDraft, buildRecurringSpecialLine, isLoading]);
 
@@ -623,15 +595,6 @@ const ModificationDevisV2 = () => {
 
   // Handler pour sauvegarder
   const handleSaveDevis = async () => {
-    // ✅ Debug : vérifier les valeurs avant sauvegarde
-    console.group('📤 [handleSaveDevis] Données envoyées');
-    console.log('tva_rate:', devisData.tva_rate);
-    console.log('totalHt:', totalHt);
-    console.log('tva (calculée):', tva);
-    console.log('totalTtc:', totalTtc);
-    console.log('price_ttc attendu:', totalHt + (totalHt * (devisData.tva_rate ?? 20) / 100));
-    console.groupEnd();
-    
     const validation = validateBeforeTransform({
       devisItems,
       devisData,

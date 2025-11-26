@@ -171,8 +171,6 @@ const extractSpecialLinesFromJson = (devisData) => {
 const convertApiToDevisItems = (devisData) => {
   let items = [];
   
-  console.log('🔄 [convertApiToDevisItems] Reconstruction depuis parties_metadata avec vrais index');
-  
   // ✅ TOUJOURS reconstruire depuis parties_metadata pour avoir les vrais index
   // Ne PAS utiliser devisData.items car le serializer legacy génère des index incorrects
   
@@ -254,17 +252,11 @@ const convertApiToDevisItems = (devisData) => {
   const jsonSpecialLines = extractSpecialLinesFromJson(devisData);
   
   if (jsonSpecialLines.length > 0) {
-    console.log(`🔶 [convertApiToDevisItems] Ajout de ${jsonSpecialLines.length} lignes spéciales avec leurs vrais index`);
-    jsonSpecialLines.forEach(ls => {
-      console.log(`   - "${ls.description?.substring(0, 30)}" → index_global: ${ls.index_global}`);
-    });
     items = [...items, ...jsonSpecialLines];
   }
   
   // 4. Trier par index_global
   items.sort((a, b) => (parseFloat(a.index_global) || 0) - (parseFloat(b.index_global) || 0));
-  
-  console.log(`📊 [convertApiToDevisItems] Total: ${items.length} items après tri`);
   
   // 5. Recalculer les numéros des parties et sous-parties
   items = recalculateNumeros(items);
@@ -385,47 +377,6 @@ export const useDevisLoader = (devisId) => {
       
       // 3. Enrichir avec les données complètes des lignes
       items = await enrichItemsWithLigneDetails(items);
-      
-      // ✅ LOGS DE DEBUG : Afficher les items chargés et leurs index
-      console.group('📋 [useDevisLoader] Chargement du devis ID:', devisId);
-      console.log('📦 Données brutes API (devis):', devis);
-      console.log('📊 Items après conversion:', items.length, 'items');
-      
-      // Log détaillé de chaque item avec son index
-      console.table(items.map((item, idx) => ({
-        '#': idx,
-        'type': item.type,
-        'id': item.id,
-        'index_global': item.index_global,
-        'description': item.type === 'partie' ? item.titre : 
-                       item.type === 'sous_partie' ? item.description :
-                       item.type === 'ligne_detail' ? (item.designation || item.description)?.substring(0, 30) :
-                       item.type === 'ligne_speciale' ? item.description?.substring(0, 30) : '',
-        'isRecurring': item.isRecurringSpecial || false,
-        'context_type': item.context_type || '-'
-      })));
-      
-      // Log spécifique pour les lignes spéciales
-      const specialLines = items.filter(item => item.type === 'ligne_speciale');
-      console.log('🔶 Lignes spéciales trouvées:', specialLines.length);
-      if (specialLines.length > 0) {
-        console.table(specialLines.map(ls => ({
-          'id': ls.id,
-          'description': ls.description,
-          'index_global': ls.index_global,
-          'type_speciale': ls.type_speciale,
-          'isRecurringSpecial': ls.isRecurringSpecial,
-          'context_type': ls.context_type,
-          'styles': JSON.stringify(ls.styles || {})
-        })));
-      }
-      
-      // Log des champs JSON source
-      console.log('📝 Champs JSON du devis:');
-      console.log('   - lignes_speciales:', devis.lignes_speciales);
-      console.log('   - lignes_display:', devis.lignes_display);
-      console.log('   - items (serializer):', devis.items?.length || 0, 'items');
-      console.groupEnd();
       
       setDevisItems(items);
       
