@@ -74,7 +74,6 @@ const GestionAppelsOffres = () => {
       showAlert("Appel d'offres transformé en chantier avec succès !");
       fetchAppelsOffres();
     } catch (error) {
-      console.error("Erreur lors de la transformation:", error);
       const errorMessage =
         error.response?.data?.error || "Erreur lors de la transformation";
       showAlert(errorMessage, "error");

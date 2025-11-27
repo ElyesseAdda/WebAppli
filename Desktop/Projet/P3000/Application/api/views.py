@@ -5030,6 +5030,16 @@ class SituationViewSet(viewsets.ModelViewSet):
     queryset = Situation.objects.all()
     serializer_class = SituationSerializer
 
+    def get_queryset(self):
+        """Optimise les requêtes avec prefetch_related pour charger les lignes"""
+        return Situation.objects.prefetch_related(
+            'lignes',
+            'lignes__ligne_devis',
+            'lignes_supplementaires',
+            'lignes_avenant',
+            'lignes_speciales'
+        ).select_related('devis', 'chantier')
+
     def create(self, request, *args, **kwargs):
         try:
             data = request.data.copy()
@@ -5378,11 +5388,15 @@ def update_situation(request, pk):
         if 'devis' in data:
             data['devis'] = Devis.objects.get(pk=data['devis'])
 
-        # Supprimer les anciennes lignes
-        situation.lignes.all().delete()
-        situation.lignes_supplementaires.all().delete()
-        situation.lignes_avenant.all().delete()
-        situation.lignes_speciales.all().delete()
+        # Supprimer les anciennes lignes SEULEMENT si de nouvelles sont fournies
+        if 'lignes' in data:
+            situation.lignes.all().delete()
+        if 'lignes_supplementaires' in data:
+            situation.lignes_supplementaires.all().delete()
+        if 'lignes_avenant' in data:
+            situation.lignes_avenant.all().delete()
+        if 'lignes_speciales' in data:
+            situation.lignes_speciales.all().delete()
 
         # Mise à jour des champs de base
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
@@ -9520,32 +9534,18 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 appel_offres_name = appel_offres.chantier_name
                 chantier_name = chantier.chantier_name
                 
-                print(f"🔄 Préparation de la copie des dossiers:")
-                print(f"   Société: {societe_name}")
-                print(f"   Appel d'offres: {appel_offres_name}")
-                print(f"   Chantier: {chantier_name}")
-                
             except Exception as e:
-                print(f"Erreur lors de la préparation de la copie: {str(e)}")
+                pass
             
             # Copier automatiquement les dossiers du drive vers le nouveau chemin
             try:
-                print(f"🔄 Copie des dossiers Drive:")
-                print(f"   Société: {societe_name}")
-                print(f"   Appel d'offres: {appel_offres_name}")
-                print(f"   Chantier: {chantier_name}")
-                
-                success = drive_automation.copy_appel_offres_to_chantier(
-                        societe_name=societe_name,
+                drive_automation.copy_appel_offres_to_chantier(
+                    societe_name=societe_name,
                     appel_offres_name=appel_offres_name,
                     chantier_name=chantier_name
-                    )
-                if not success:
-                    print("Erreur lors de la copie des dossiers du drive")
-                else:
-                    print("✅ Copie des dossiers Drive réussie")
-            except Exception as e:
-                print(f"Erreur lors de la copie automatique des dossiers: {str(e)}")
+                )
+            except Exception:
+                pass
             
             return Response({
                 'message': 'Appel d\'offres transformé en chantier avec succès',
