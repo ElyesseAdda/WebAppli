@@ -19,7 +19,7 @@ const COLORS = {
   materiel: '#FF9800',       // Orange
   tauxFixe: '#9C27B0',       // Violet
   margePositive: '#4CAF50',  // Vert (marge ≥ 20%)
-  margeNegative: '#F44336',  // Rouge (marge < 20%)
+  margeNegative: '#F44336',  // Rouge (marge < 10%)
 };
 
 /**
@@ -81,7 +81,7 @@ const calculateChartData = (lignesDetails, totalHT = 0, hoveredLine = null) => {
           id: 'marge',
           label: 'Marge',
           value: Math.round(montantMarge * 100) / 100,
-          color: tauxMargeApplique >= 20 ? COLORS.margePositive : COLORS.margeNegative,
+          color: tauxMargeApplique >= 10 ? COLORS.margePositive : COLORS.margeNegative,
         },
       ].filter(d => d.value > 0),
       totals: {
@@ -97,10 +97,10 @@ const calculateChartData = (lignesDetails, totalHT = 0, hoveredLine = null) => {
   }
   
   // Calcul global pour toutes les lignes
+  // On calcule les coûts à partir des lignes de détail
   let totalMainOeuvre = 0;
   let totalMateriel = 0;
   let totalTauxFixe = 0;
-  let totalMarge = 0;
   
   lignesDetails.forEach(ligne => {
     const quantity = parseFloat(ligne.quantity) || 0;
@@ -111,24 +111,21 @@ const calculateChartData = (lignesDetails, totalHT = 0, hoveredLine = null) => {
     const base = coutMainOeuvre + coutMateriel;
     const montantTauxFixe = base * (tauxFixe / 100);
     
-    const marge = ligne.marge_devis !== null && ligne.marge_devis !== undefined 
-      ? parseFloat(ligne.marge_devis)
-      : parseFloat(ligne.marge) || 0;
-    
-    const sousTotal = base + montantTauxFixe;
-    const montantMarge = sousTotal * (marge / 100);
-    
     totalMainOeuvre += coutMainOeuvre;
     totalMateriel += coutMateriel;
     totalTauxFixe += montantTauxFixe;
-    totalMarge += montantMarge;
   });
   
-  const total = totalMainOeuvre + totalMateriel + totalTauxFixe + totalMarge;
+  // Calcul de la marge réelle basée sur le totalHT du devis
+  // Cela prend en compte les lignes spéciales et les lignes sans coûts
+  const coutsAvecTauxFixe = totalMainOeuvre + totalMateriel + totalTauxFixe;
+  const margeReelle = totalHT - coutsAvecTauxFixe;
   
-  // Calcul du taux de marge réel (marge / sous-total avant marge)
-  const sousTotal = totalMainOeuvre + totalMateriel + totalTauxFixe;
-  const tauxMargeReel = sousTotal > 0 ? (totalMarge / sousTotal) * 100 : 0;
+  // Taux de marge = marge / coûts avec taux fixe
+  const tauxMargeReel = coutsAvecTauxFixe > 0 ? (margeReelle / coutsAvecTauxFixe) * 100 : 0;
+  
+  // Total pour le camembert (coûts + marge réelle)
+  const total = coutsAvecTauxFixe + Math.max(0, margeReelle);
   
   return {
     isHovered: false,
@@ -156,17 +153,17 @@ const calculateChartData = (lignesDetails, totalHT = 0, hoveredLine = null) => {
       {
         id: 'marge',
         label: 'Marge',
-        value: Math.round(totalMarge * 100) / 100,
-        color: tauxMargeReel >= 20 ? COLORS.margePositive : COLORS.margeNegative,
+        value: Math.round(Math.max(0, margeReelle) * 100) / 100,
+        color: tauxMargeReel >= 10 ? COLORS.margePositive : COLORS.margeNegative,
       },
     ].filter(d => d.value > 0),
     totals: {
       mainOeuvre: totalMainOeuvre,
       materiel: totalMateriel,
       tauxFixe: totalTauxFixe,
-      marge: totalMarge,
-      total,
-      pourcentageMarge: tauxMargeReel, // Taux de marge réel (marge / sous-total)
+      marge: margeReelle,
+      total: totalHT, // Utiliser le totalHT du devis comme total
+      pourcentageMarge: tauxMargeReel, // Taux de marge réel (marge / coûts)
     }
   };
 };
@@ -387,7 +384,7 @@ const DevisCostPieChart = ({
               variant="caption" 
               sx={{ 
                 fontWeight: 'bold',
-                color: chartData.totals.pourcentageMarge >= 20 ? COLORS.margePositive : COLORS.margeNegative,
+                color: chartData.totals.pourcentageMarge >= 10 ? COLORS.margePositive : COLORS.margeNegative,
               }}
             >
               {formatMontant(chartData.totals.marge)} ({chartData.totals.pourcentageMarge.toFixed(1)}%)
@@ -395,7 +392,7 @@ const DevisCostPieChart = ({
           </Box>
           
           {/* Alerte marge faible */}
-          {chartData.totals.pourcentageMarge < 20 && chartData.totals.pourcentageMarge > 0 && (
+          {chartData.totals.pourcentageMarge < 10 && chartData.totals.pourcentageMarge > 0 && (
             <Box 
               sx={{ 
                 mt: 1, 
@@ -403,7 +400,7 @@ const DevisCostPieChart = ({
               }}
             >
               <Typography variant="caption" sx={{ color: '#e65100', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                ⚠️ Marge inférieure à 20%
+                ⚠️ Marge inférieure à 10%
               </Typography>
             </Box>
           )}
@@ -478,11 +475,11 @@ const DevisCostPieChart = ({
                 value={chartData.totals.tauxFixe}
               />
               <LegendItem 
-                color={chartData.totals.pourcentageMarge >= 20 ? COLORS.margePositive : COLORS.margeNegative} 
+                color={chartData.totals.pourcentageMarge >= 10 ? COLORS.margePositive : COLORS.margeNegative} 
                 label="Marge" 
                 value={chartData.totals.marge}
                 suffix={` (${chartData.totals.pourcentageMarge.toFixed(1)}%)`}
-                highlight={chartData.totals.pourcentageMarge < 20}
+                highlight={chartData.totals.pourcentageMarge < 10}
               />
             </Box>
           </Box>
