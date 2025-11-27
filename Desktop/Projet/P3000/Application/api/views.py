@@ -6676,6 +6676,66 @@ def preview_situation(request, situation_id):
         # Calculer la TVA
         tva = (montant_apres_retenues * Decimal('0.20')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+        # Calculer le montant total des travaux HT (comme dans SituationViews.py)
+        # = somme des montants d'avancement des parties + lignes spéciales (hors display) + avenants
+        
+        # Somme de tous les montants d'avancement des parties
+        total_montant_avancement_parties = Decimal('0')
+        for partie_data in parties_data:
+            total_montant_avancement_parties += Decimal(str(partie_data.get('montant_avancement', 0)))
+        
+        # Calculer les montants d'avancement des lignes spéciales (hors display)
+        total_montant_avancement_lignes_speciales = Decimal('0')
+        pourcentage_avancement_global = situation.pourcentage_avancement or Decimal('0')
+        
+        # Lignes spéciales des sous-parties
+        for partie_data in parties_data:
+            for sous_partie_data in partie_data.get('sous_parties', []):
+                for special_line in sous_partie_data.get('special_lines', []):
+                    if special_line.get('type') != 'display':
+                        montant_ht = Decimal(str(special_line.get('montant', 0)))
+                        montant_avancement = (montant_ht * pourcentage_avancement_global) / Decimal('100')
+                        
+                        if special_line.get('type') == 'reduction':
+                            total_montant_avancement_lignes_speciales -= montant_avancement
+                        elif special_line.get('type') in ['addition', 'ajout']:
+                            total_montant_avancement_lignes_speciales += montant_avancement
+        
+        # Lignes spéciales des parties
+        for partie_data in parties_data:
+            for special_line in partie_data.get('special_lines', []):
+                if special_line.get('type') != 'display':
+                    montant_ht = Decimal(str(special_line.get('montant', 0)))
+                    montant_avancement = (montant_ht * pourcentage_avancement_global) / Decimal('100')
+                    
+                    if special_line.get('type') == 'reduction':
+                        total_montant_avancement_lignes_speciales -= montant_avancement
+                    elif special_line.get('type') in ['addition', 'ajout']:
+                        total_montant_avancement_lignes_speciales += montant_avancement
+        
+        # Lignes spéciales globales du devis
+        for special_line in special_lines_global:
+            if special_line.get('type') != 'display':
+                montant_ht = Decimal(str(special_line.get('montant', 0)))
+                montant_avancement = (montant_ht * pourcentage_avancement_global) / Decimal('100')
+                
+                if special_line.get('type') == 'reduction':
+                    total_montant_avancement_lignes_speciales -= montant_avancement
+                elif special_line.get('type') in ['addition', 'ajout']:
+                    total_montant_avancement_lignes_speciales += montant_avancement
+        
+        # Lignes spéciales de la situation (le champ 'montant' est déjà le montant d'avancement)
+        for ligne_speciale in situation.lignes_speciales.all():
+            if ligne_speciale.type != 'display':
+                montant_avancement = Decimal(str(ligne_speciale.montant))
+                if ligne_speciale.type == 'reduction':
+                    total_montant_avancement_lignes_speciales -= montant_avancement
+                elif ligne_speciale.type in ['addition', 'ajout']:
+                    total_montant_avancement_lignes_speciales += montant_avancement
+        
+        # Montant total des travaux HT calculé dynamiquement
+        montant_total_travaux_ht = total_montant_avancement_parties + total_montant_avancement_lignes_speciales + total_montant_avancement_avenants
+
         context = {
             'chantier': {
                 'nom': chantier.chantier_name,
@@ -6718,7 +6778,7 @@ def preview_situation(request, situation_id):
                 'type_retenue_cie': type_retenue_cie,
                 'date_creation': situation.date_creation,
                 'montant_total_devis': situation.montant_total_devis,
-                'montant_total_travaux': situation.montant_total_travaux,
+                'montant_total_travaux': montant_total_travaux_ht,
                 'total_avancement': situation.total_avancement,
                 # Ajout des champs manquants
                 'cumul_precedent': situation.cumul_precedent,
