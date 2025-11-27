@@ -15,6 +15,7 @@ import ChantierInfo from '../Devis/ChantierInfo';
 import DevisTable from '../Devis/DevisTable';
 import DevisRecap from '../Devis/DevisRecap';
 import TableauOption from '../Devis/TableauOption';
+import DevisCostPieChart from '../Devis/DevisCostPieChart';
 
 // Hooks personnalisés
 import { useDevisLoader } from './hooks/useDevisLoader';
@@ -112,6 +113,10 @@ const ModificationDevisV2 = () => {
   const [editingSpecialLine, setEditingSpecialLine] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [recurringLineDraft, setRecurringLineDraft] = useState(null);
+
+  // État pour le PieChart - ligne survolée
+  const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
+  const [isPieChartVisible, setIsPieChartVisible] = useState(true);
 
   // Hook de chargement
   const {
@@ -929,6 +934,8 @@ const ModificationDevisV2 = () => {
               pendingRecurringAmount={calculateGlobalTotal()}
               calculateRecurringLineAmount={calculateRecurringLineAmount}
               hasRecurringLine={hasRecurringLine}
+              onLigneDetailHover={setHoveredLigneDetail}
+              hoveredLigneDetail={hoveredLigneDetail}
             />
           </div>
 
@@ -1048,6 +1055,15 @@ const ModificationDevisV2 = () => {
           </div>
         </div>
       </div>
+
+      {/* PieChart flottant pour la répartition des coûts */}
+      <DevisCostPieChart
+        devisItems={devisItems}
+        totalHT={totalHt}
+        hoveredLine={hoveredLigneDetail}
+        isVisible={isPieChartVisible}
+        onClose={() => setIsPieChartVisible(false)}
+      />
     </div>
   );
 };

@@ -9,6 +9,7 @@ import ChantierInfo from './Devis/ChantierInfo';
 import DevisTable from './Devis/DevisTable';
 import DevisRecap from './Devis/DevisRecap';
 import TableauOption from './Devis/TableauOption';
+import DevisCostPieChart from './Devis/DevisCostPieChart';
 import ChantierForm from './ChantierForm';
 import ClientInfoModal from './ClientInfoModal';
 import SocieteInfoModal from './SocieteInfoModal';
@@ -199,6 +200,10 @@ const DevisAvance = () => {
   const [availableParties, setAvailableParties] = useState([]);
   const [isLoadingParties, setIsLoadingParties] = useState(false);
   const [partiesToCreate, setPartiesToCreate] = useState([]); // Nouvelles parties à créer
+  
+  // État pour le PieChart - ligne survolée
+  const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
+  const [isPieChartVisible, setIsPieChartVisible] = useState(true);
   
   // États liés à la persistance locale
   const [sessionUser, setSessionUser] = useState(null);
@@ -2826,6 +2831,8 @@ const DevisAvance = () => {
               pendingRecurringAmount={calculateGlobalTotal()}
               calculateRecurringLineAmount={calculateRecurringLineAmount}
               hasRecurringLine={hasRecurringLine}
+              onLigneDetailHover={setHoveredLigneDetail}
+              hoveredLigneDetail={hoveredLigneDetail}
             />
           </div>
 
@@ -3072,6 +3079,15 @@ const DevisAvance = () => {
         }}
         societeId={selectedSocieteId}
         chantierData={pendingChantierData.chantier}
+      />
+
+      {/* PieChart flottant pour la répartition des coûts */}
+      <DevisCostPieChart
+        devisItems={devisItems}
+        totalHT={total_ht}
+        hoveredLine={hoveredLigneDetail}
+        isVisible={isPieChartVisible}
+        onClose={() => setIsPieChartVisible(false)}
       />
 
     </div>

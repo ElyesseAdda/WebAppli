@@ -198,7 +198,10 @@ const DevisTable = ({
   hasRecurringLine,
   pendingRecurringLine,
   onAutoPlaceRecurringLine,
-  pendingRecurringAmount = 0
+  pendingRecurringAmount = 0,
+  // Props pour le PieChart des coûts
+  onLigneDetailHover,
+  hoveredLigneDetail
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
@@ -1439,6 +1442,10 @@ const DevisTable = ({
                                                                                       top: rect.top + rect.height / 2 - 24,
                                                                                       left: rect.right
                                                                                     });
+                                                                                    // Notifier le PieChart de la ligne survolée
+                                                                                    if (onLigneDetailHover) {
+                                                                                      onLigneDetailHover(ligne);
+                                                                                    }
                                                                                   }}
                                                                                   onMouseLeave={() => {
                                                                                     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -1449,6 +1456,10 @@ const DevisTable = ({
                                                                                         setHoveredLignePosition(null);
                                                                                       }, 300);
                                                                                     }, 1000);
+                                                                                    // Notifier le PieChart qu'on quitte la ligne
+                                                                                    if (onLigneDetailHover) {
+                                                                                      onLigneDetailHover(null);
+                                                                                    }
                                                                                   }}
                                                                                 >
                                                                                   <div {...ldDragProvided.dragHandleProps} style={{ cursor: 'grab', marginRight: '8px' }}>⋮</div>
@@ -1836,6 +1847,10 @@ const DevisTable = ({
                         onMouseEnter={() => {
                           if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
                           setIsIconsAnimatingOut(false);
+                          // Maintenir le hover pour le PieChart quand on est sur les boutons
+                          if (onLigneDetailHover) {
+                            onLigneDetailHover(ligne);
+                          }
                         }}
                         onMouseLeave={() => {
                           if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -1846,6 +1861,10 @@ const DevisTable = ({
                               setHoveredLignePosition(null);
                             }, 300);
                           }, 1000);
+                          // Notifier le PieChart qu'on quitte les boutons
+                          if (onLigneDetailHover) {
+                            onLigneDetailHover(null);
+                          }
                         }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
                             {isOptionsTable && onTransferToMain && (
