@@ -173,60 +173,6 @@
             <h2>{{ agent_data.agent.name }} {{ agent_data.agent.surname }}</h2>
         </div>
 
-        <!-- Tableau des heures -->
-        <h3>Résumé des heures</h3>
-        <table class="hours-table">
-            <thead>
-                <tr>
-                    <th>Type d'heures</th>
-                    <th>Nombre d'heures</th>
-                    <th>Détails</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if agent_data.monthly_hours.normal_hours > 0 %}
-                <tr>
-                    <td>Heures normales</td>
-                    <td>{{ agent_data.monthly_hours.normal_hours|floatformat:2 }} h</td>
-                    <td>-</td>
-                </tr>
-                {% endif %}
-                {% if agent_data.monthly_hours.samedi_hours > 0 %}
-                <tr>
-                    <td>Samedi (+25%)</td>
-                    <td>{{ agent_data.monthly_hours.samedi_hours|floatformat:2 }} h</td>
-                    <td>-</td>
-                </tr>
-                {% endif %}
-                {% if agent_data.monthly_hours.dimanche_hours > 0 %}
-                <tr>
-                    <td>Dimanche (+50%)</td>
-                    <td>{{ agent_data.monthly_hours.dimanche_hours|floatformat:2 }} h</td>
-                    <td>-</td>
-                </tr>
-                {% endif %}
-                {% if agent_data.monthly_hours.ferie_hours > 0 %}
-                <tr>
-                    <td>Jours fériés (+50%)</td>
-                    <td>{{ agent_data.monthly_hours.ferie_hours|floatformat:2 }} h</td>
-                    <td>-</td>
-                </tr>
-                {% endif %}
-                {% if agent_data.monthly_hours.overtime_hours > 0 %}
-                <tr>
-                    <td>Heures supplémentaires (+25%)</td>
-                    <td>{{ agent_data.monthly_hours.overtime_hours|floatformat:2 }} h</td>
-                    <td>-</td>
-                </tr>
-                {% endif %}
-                <tr class="total-row">
-                    <td><strong>Total</strong></td>
-                    <td><strong>{{ agent_data.monthly_hours.total_hours|floatformat:2 }} h</strong></td>
-                    <td>-</td>
-                </tr>
-            </tbody>
-        </table>
-
         <!-- Détail des jours majorés -->
         <h3>Détail des jours majorés</h3>
         {% if agent_data.details_majoration %}
@@ -262,7 +208,13 @@
                             0h
                         {% endif %}
                     </td>
-                    <td><strong>{{ detail.taux }}</strong></td>
+                    <td>
+                        {% if detail.type == 'Heures sup' %}
+                            <strong>-</strong>
+                        {% else %}
+                            <strong>{{ detail.taux }}</strong>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
