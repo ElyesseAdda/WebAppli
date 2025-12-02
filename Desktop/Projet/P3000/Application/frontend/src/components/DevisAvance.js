@@ -2962,12 +2962,29 @@ const DevisAvance = () => {
                       } : {}
                     };
                     
-                    // Encoder les données pour l'URL
-                    const encodedData = encodeURIComponent(JSON.stringify(previewData));
-                    const previewUrl = `/api/preview-devis-v2/?devis=${encodedData}`;
+                    // Utiliser POST au lieu de GET pour éviter les limites d'URL avec les devis longs
+                    // Créer un formulaire temporaire pour soumettre en POST dans un nouvel onglet
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/api/preview-devis-v2/';
+                    form.target = '_blank';
+                    form.style.display = 'none';
                     
-                    // Ouvrir dans un nouvel onglet
-                    window.open(previewUrl, '_blank');
+                    // Ajouter les données comme input hidden (JSON stringifié)
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'devis';
+                    input.value = JSON.stringify(previewData);
+                    form.appendChild(input);
+                    
+                    // Ajouter le formulaire au DOM, le soumettre, puis le supprimer
+                    document.body.appendChild(form);
+                    form.submit();
+                    
+                    // Nettoyer après un court délai
+                    setTimeout(() => {
+                      document.body.removeChild(form);
+                    }, 100);
                 } catch (error) {
                   alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
                 }

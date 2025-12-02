@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -645,23 +646,48 @@ def preview_saved_devis_v2(request, devis_id):
         return JsonResponse({'error': f'{str(e)}\n{traceback.format_exc()}'}, status=400)
 
 
-@api_view(['GET'])
+@csrf_exempt
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def preview_devis_v2(request):
     """
     Version V2 de la prévisualisation temporaire des devis - Basée sur les données du frontend
     Permet de prévisualiser un devis sans l'avoir sauvegardé en base de données
+    Accepte GET (avec données dans l'URL) et POST (avec données dans le body)
     """
-    devis_data_encoded = request.GET.get('devis')
-
-    if devis_data_encoded:
+    # Récupérer les données selon la méthode HTTP
+    if request.method == 'POST':
+        # Pour POST, récupérer depuis le body
+        # Vérifier si c'est du JSON ou des données de formulaire
+        if request.content_type and 'application/json' in request.content_type:
+            devis_data = request.data
+        else:
+            # Données de formulaire HTML
+            devis_json = request.POST.get('devis')
+            if not devis_json:
+                return render(request, 'preview_devis_v2.html', {'error': 'Aucune donnée de devis fournie'})
+            try:
+                devis_data = json.loads(devis_json)
+            except json.JSONDecodeError as e:
+                return render(request, 'preview_devis_v2.html', {'error': f'Erreur de décodage JSON: {str(e)}'})
+    else:
+        # Pour GET, récupérer depuis l'URL (méthode originale)
+        devis_data_encoded = request.GET.get('devis')
+        if not devis_data_encoded:
+            return render(request, 'preview_devis_v2.html', {'error': 'Aucune donnée de devis fournie'})
+        
         try:
-            # Décoder les données du devis depuis l'URL (Django décode déjà, mais on peut avoir besoin de unquote pour les caractères spéciaux)
+            # Décoder les données du devis depuis l'URL
             try:
                 devis_data = json.loads(devis_data_encoded)
             except json.JSONDecodeError:
                 # Si échec, essayer avec unquote
                 devis_data = json.loads(urllib.parse.unquote(devis_data_encoded))
+        except Exception as e:
+            return render(request, 'preview_devis_v2.html', {'error': f'Erreur de décodage des données: {str(e)}'})
+
+    if devis_data:
+        try:
             
             chantier_id = devis_data.get('chantier') or devis_data.get('chantier_id')
 
@@ -747,7 +773,9 @@ def preview_devis_v2(request):
                     # Trier les lignes par index_global si présent
                     lignes_filtered = []
                     for ligne_data in devis_data.get('lignes', []):
-                        if ligne_data.get('ligne') in ligne_detail_ids:
+                        # Supporter les deux formats : 'ligne' (ancien) et 'ligne_detail' (nouveau)
+                        ligne_id = ligne_data.get('ligne') or ligne_data.get('ligne_detail')
+                        if ligne_id in ligne_detail_ids:
                             lignes_filtered.append(ligne_data)
                     
                     # Trier par index_global si présent
@@ -757,9 +785,12 @@ def preview_devis_v2(request):
                         # Récupérer les détails de la ligne_detail depuis la base
                         try:
                             from .models import LigneDetail
-                            ligne_detail = LigneDetail.objects.get(id=ligne_data['ligne'])
-                            quantity = Decimal(str(ligne_data.get('quantity', 0)))
-                            custom_price = Decimal(str(ligne_data.get('custom_price', 0)))
+                            # Supporter les deux formats : 'ligne' (ancien) et 'ligne_detail' (nouveau)
+                            ligne_id = ligne_data.get('ligne') or ligne_data.get('ligne_detail')
+                            ligne_detail = LigneDetail.objects.get(id=ligne_id)
+                            # Supporter les deux formats : 'quantity'/'quantite' et 'custom_price'/'prix_unitaire'
+                            quantity = Decimal(str(ligne_data.get('quantity') or ligne_data.get('quantite', 0)))
+                            custom_price = Decimal(str(ligne_data.get('custom_price') or ligne_data.get('prix_unitaire', 0)))
                             total_ligne = quantity * custom_price
                             
                             lignes_details_data.append({
