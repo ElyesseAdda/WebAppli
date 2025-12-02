@@ -13,15 +13,20 @@ import {
 import React, { useEffect, useState } from "react";
 import axios from "../utils/axiosConfig";
 
-const SelectSocieteModal = ({ open, onClose, onSocieteSelect }) => {
+const SelectSocieteModal = ({ open, onClose, onSocieteSelect, filteredSocietes }) => {
   const [societes, setSocietes] = useState([]);
   const [selectedSociete, setSelectedSociete] = useState("");
 
   useEffect(() => {
     const fetchSocietes = async () => {
       try {
-        const response = await axios.get("/api/societe/");
-        setSocietes(response.data);
+        // Si des sociétés filtrées sont fournies, les utiliser, sinon charger toutes les sociétés
+        if (filteredSocietes && filteredSocietes.length > 0) {
+          setSocietes(filteredSocietes);
+        } else {
+          const response = await axios.get("/api/societe/");
+          setSocietes(response.data);
+        }
       } catch (error) {
         console.error("Erreur lors de la récupération des sociétés:", error);
       }
@@ -30,7 +35,7 @@ const SelectSocieteModal = ({ open, onClose, onSocieteSelect }) => {
     if (open) {
       fetchSocietes();
     }
-  }, [open]);
+  }, [open, filteredSocietes]);
 
   const handleSubmit = () => {
     onSocieteSelect(selectedSociete);

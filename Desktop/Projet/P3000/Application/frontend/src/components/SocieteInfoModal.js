@@ -6,15 +6,39 @@ import {
   DialogTitle,
   TextField,
 } from "@mui/material";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-const SocieteInfoModal = ({ open, onClose, onSubmit }) => {
+const SocieteInfoModal = ({ open, onClose, onSubmit, initialData }) => {
   const [formData, setFormData] = useState({
     nom_societe: "",
     ville_societe: "",
     rue_societe: "",
     codepostal_societe: "",
   });
+
+  // Mettre à jour formData quand initialData change
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        nom_societe: initialData.nom_societe || "",
+        ville_societe: initialData.ville_societe || "",
+        rue_societe: initialData.rue_societe || "",
+        codepostal_societe: initialData.codepostal_societe || "",
+      });
+    }
+  }, [initialData]);
+
+  // Réinitialiser le formulaire quand le modal s'ouvre (si pas d'initialData)
+  useEffect(() => {
+    if (open && !initialData) {
+      setFormData({
+        nom_societe: "",
+        ville_societe: "",
+        rue_societe: "",
+        codepostal_societe: "",
+      });
+    }
+  }, [open, initialData]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({

@@ -14,6 +14,7 @@ import ChantierForm from './ChantierForm';
 import ClientInfoModal from './ClientInfoModal';
 import SocieteInfoModal from './SocieteInfoModal';
 import SelectSocieteModal from './SelectSocieteModal';
+import SelectClientModal from './SelectClientModal';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
 
@@ -183,10 +184,13 @@ const DevisAvance = () => {
   // États pour la création de nouveau chantier (même logique que CreationDevis.js)
   const [pendingChantierData, setPendingChantierData] = useState(() => createInitialPendingChantierData());
   const [showClientInfoModal, setShowClientInfoModal] = useState(false);
+  const [showSelectClientModal, setShowSelectClientModal] = useState(false);
   const [showSocieteInfoModal, setShowSocieteInfoModal] = useState(false);
   const [showSelectSocieteModal, setShowSelectSocieteModal] = useState(false);
   const [selectedSocieteId, setSelectedSocieteId] = useState(null);
-  // Note: showClientTypeModal supprimé car non nécessaire
+  const [selectedClientSocietes, setSelectedClientSocietes] = useState(null);
+  const [prefilledClientData, setPrefilledClientData] = useState(null);
+  const [prefilledSocieteData, setPrefilledSocieteData] = useState(null);
 
   // États pour la gestion du devis
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
@@ -572,7 +576,14 @@ const DevisAvance = () => {
       });
       
       setShowClientInfoModal(false);
-      setShowSocieteInfoModal(true);
+      
+      // Si le client a plusieurs sociétés à choisir, ouvrir le modal de sélection
+      if (selectedClientSocietes && selectedClientSocietes.length > 1) {
+        setShowSelectSocieteModal(true);
+      } else {
+        // Sinon, ouvrir le modal de création/modification de société (avec données pré-remplies si disponibles)
+        setShowSocieteInfoModal(true);
+      }
     } catch (error) {
     }
   };
@@ -596,6 +607,73 @@ const DevisAvance = () => {
     
     setShowSocieteInfoModal(false);
     setShowChantierForm(true);
+  };
+
+  // Fonction pour ouvrir le modal de sélection de client existant
+  const handleOpenSelectClient = () => {
+    setShowClientInfoModal(false);
+    setShowSelectClientModal(true);
+  };
+
+  // Fonction pour gérer la sélection d'un client existant
+  const handleSelectClient = async (clientData, societeData) => {
+    try {
+      // Pré-remplir les données du client
+      const updatedClient = {
+        name: clientData.name || "",
+        surname: clientData.surname || "",
+        phone_Number: clientData.phone_Number || "",
+        client_mail: clientData.client_mail || "",
+        civilite: clientData.civilite || "",
+        poste: clientData.poste || "",
+      };
+
+      // Stocker les données pré-remplies
+      setPrefilledClientData(updatedClient);
+
+      // Gérer les sociétés associées
+      if (societeData) {
+        if (societeData.multiple && societeData.societes && societeData.societes.length > 0) {
+          // Stocker les sociétés pour pré-remplissage
+          if (societeData.societes.length === 1) {
+            // Une seule société, la pré-remplir directement
+            const societe = societeData.societes[0];
+            setPrefilledSocieteData({
+              nom_societe: societe.nom_societe || "",
+              ville_societe: societe.ville_societe || "",
+              rue_societe: societe.rue_societe || "",
+              codepostal_societe: societe.codepostal_societe || "",
+            });
+          } else {
+            // Plusieurs sociétés, les stocker pour sélection ultérieure
+            setSelectedClientSocietes(societeData.societes);
+          }
+        } else {
+          // Société unique trouvée directement
+          setPrefilledSocieteData({
+            nom_societe: societeData.nom_societe || "",
+            ville_societe: societeData.ville_societe || "",
+            rue_societe: societeData.rue_societe || "",
+            codepostal_societe: societeData.codepostal_societe || "",
+          });
+        }
+      }
+
+      // Fermer le modal de sélection et rouvrir le modal client avec les données pré-remplies
+      setShowSelectClientModal(false);
+      setShowClientInfoModal(true);
+    } catch (error) {
+      console.error("Erreur lors de la sélection du client:", error);
+      alert("Erreur lors de la récupération des informations du client");
+    }
+  };
+
+  // Fonction pour créer un nouveau client (bouton dans SelectClientModal)
+  const handleCreateNewClient = () => {
+    setShowSelectClientModal(false);
+    setPrefilledClientData(null);
+    setPrefilledSocieteData(null);
+    setShowClientInfoModal(true);
   };
 
   const handleSocieteSelect = async (societeId) => {
@@ -646,6 +724,7 @@ const DevisAvance = () => {
       setSociete(updatedSociete);
 
       setSelectedSocieteId(societeId);
+      setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
       setShowSelectSocieteModal(false);
       setShowChantierForm(true);
     } catch (error) {
@@ -2578,15 +2657,17 @@ const DevisAvance = () => {
                 variant="contained"
                 startIcon={<FiPlus />}
                 onClick={() => {
-                  // Pour appel d'offres, mettre le type à "chantier" et ouvrir directement le modal de création client
+                  // Pour appel d'offres, mettre le type à "chantier" et ouvrir directement le modal client
                   setDevisType("chantier");
                   setSelectedChantierId(null);
                   setPendingChantierData({
-                    client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+                    client: { name: "", surname: "", client_mail: "", phone_Number: "", civilite: "", poste: "" },
                     societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
                     chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
                     devis: null,
                   });
+                  setPrefilledClientData(null);
+                  setPrefilledSocieteData(null);
                   setShowClientInfoModal(true);
                   // Régénérer le numéro avec le format "Devis travaux"
                   generateDevisNumber(null);
@@ -3025,16 +3106,29 @@ const DevisAvance = () => {
       </div>
 
       {/* Modals pour la création de nouveau chantier */}
+      <SelectClientModal
+        open={showSelectClientModal}
+        onClose={() => {
+          setShowSelectClientModal(false);
+          // Rouvrir le modal client si on annule
+          setShowClientInfoModal(true);
+        }}
+        onSelectClient={handleSelectClient}
+        onCreateNew={handleCreateNewClient}
+      />
+
       <ClientInfoModal
         open={showClientInfoModal}
         onClose={() => {
           setShowClientInfoModal(false);
+          setPrefilledClientData(null);
+          setPrefilledSocieteData(null);
           // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
           if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
             setDevisType("normal");
             setSelectedChantierId(null);
             setPendingChantierData({
-              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              client: { name: "", surname: "", client_mail: "", phone_Number: "", civilite: "", poste: "" },
               societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
               chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
               devis: null,
@@ -3042,18 +3136,21 @@ const DevisAvance = () => {
           }
         }}
         onSubmit={handleClientInfoSubmit}
+        onSelectExisting={handleOpenSelectClient}
+        initialData={prefilledClientData}
       />
 
       <SocieteInfoModal
         open={showSocieteInfoModal}
         onClose={() => {
           setShowSocieteInfoModal(false);
+          setPrefilledSocieteData(null);
           // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
           if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
             setDevisType("normal");
             setSelectedChantierId(null);
             setPendingChantierData({
-              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              client: { name: "", surname: "", client_mail: "", phone_Number: "", civilite: "", poste: "" },
               societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
               chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
               devis: null,
@@ -3061,18 +3158,20 @@ const DevisAvance = () => {
           }
         }}
         onSubmit={handleSocieteInfoSubmit}
+        initialData={prefilledSocieteData}
       />
 
       <SelectSocieteModal
         open={showSelectSocieteModal}
         onClose={() => {
           setShowSelectSocieteModal(false);
+          setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
           // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
           if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
             setDevisType("normal");
             setSelectedChantierId(null);
             setPendingChantierData({
-              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
+              client: { name: "", surname: "", client_mail: "", phone_Number: "", civilite: "", poste: "" },
               societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
               chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
               devis: null,
@@ -3080,6 +3179,7 @@ const DevisAvance = () => {
           }
         }}
         onSocieteSelect={handleSocieteSelect}
+        filteredSocietes={selectedClientSocietes}
       />
 
       {/* Modal de création de chantier */}

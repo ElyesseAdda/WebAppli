@@ -9,10 +9,14 @@ import {
   MenuItem,
   Select,
   TextField,
+  Box,
+  Divider,
+  Typography,
 } from "@mui/material";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { FiUser } from "react-icons/fi";
 
-const ClientInfoModal = ({ open, onClose, onSubmit }) => {
+const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialData }) => {
   const [formData, setFormData] = useState({
     civilite: "",
     name: "",
@@ -21,6 +25,34 @@ const ClientInfoModal = ({ open, onClose, onSubmit }) => {
     phone_Number: "",
     poste: "",
   });
+
+  // Mettre à jour formData quand initialData change
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        civilite: initialData.civilite || "",
+        name: initialData.name || "",
+        surname: initialData.surname || "",
+        client_mail: initialData.client_mail || "",
+        phone_Number: initialData.phone_Number ? String(initialData.phone_Number) : "",
+        poste: initialData.poste || "",
+      });
+    }
+  }, [initialData]);
+
+  // Réinitialiser le formulaire quand le modal s'ouvre (si pas d'initialData)
+  useEffect(() => {
+    if (open && !initialData) {
+      setFormData({
+        civilite: "",
+        name: "",
+        surname: "",
+        client_mail: "",
+        phone_Number: "",
+        poste: "",
+      });
+    }
+  }, [open, initialData]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -42,6 +74,24 @@ const ClientInfoModal = ({ open, onClose, onSubmit }) => {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Informations Client</DialogTitle>
       <DialogContent>
+        {onSelectExisting && (
+          <Box sx={{ mb: 2, mt: 1 }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<FiUser />}
+              fullWidth
+              onClick={onSelectExisting}
+            >
+              Sélectionner un client existant
+            </Button>
+            <Divider sx={{ my: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                ou remplir manuellement
+              </Typography>
+            </Divider>
+          </Box>
+        )}
         <FormControl fullWidth margin="normal">
           <InputLabel>Civilité</InputLabel>
           <Select
