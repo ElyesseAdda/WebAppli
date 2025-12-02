@@ -1027,6 +1027,7 @@ class Situation(models.Model):
     cumul_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_apres_retenues = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tva = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20.00, verbose_name="Taux de TVA (%)")
     
     # Déductions standard
     retenue_garantie = models.DecimalField(max_digits=10, decimal_places=2, default=0)

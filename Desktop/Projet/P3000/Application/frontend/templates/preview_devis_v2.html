@@ -886,8 +886,13 @@
       <tr class="tva-row">
         <td colspan="2">
           <div class="recap-line">
-            <span class="label">- TVA {{ devis.tva_rate|floatformat:2 }}%</span>
-            <span class="montant">{{ tva|format_montant_espace }}</span>
+            {% if devis.tva_rate == 0 %}
+              <span class="label">- TVA autoliquidation</span>
+              <span class="montant" style="text-align: right;">-  &nbsp;&nbsp;&nbsp;€&nbsp;</span>
+            {% else %}
+              <span class="label">- TVA {{ devis.tva_rate|floatformat:2 }}%</span>
+              <span class="montant">{{ tva|format_montant_espace }}</span>
+            {% endif %}
           </div>
         </td>
       </tr>

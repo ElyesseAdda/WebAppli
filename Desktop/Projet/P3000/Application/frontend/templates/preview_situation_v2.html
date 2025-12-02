@@ -1112,8 +1112,13 @@
         <td colspan="2">
           <div class="recap-line-spacer"></div>
           <div class="recap-line">
-            <span class="label">- TVA 20%</span>
-            <span class="montanta">{{ situation.tva|format_montant_espace }}</span>
+            {% if situation.tva_rate == 0 %}
+              <span class="label">- TVA autoliquidation</span> 
+              <span class="montanta" style="text-align: right;">-       &nbsp;&nbsp;&nbsp;€&nbsp;</span>
+            {% else %}
+              <span class="label">- TVA {% if situation.tva_rate %}{{ situation.tva_rate|floatformat:0 }}%{% else %}20%{% endif %}</span>
+              <span class="montanta">{{ situation.tva|format_montant_espace }}</span>
+            {% endif %}
           </div>
         </td>
       </tr>

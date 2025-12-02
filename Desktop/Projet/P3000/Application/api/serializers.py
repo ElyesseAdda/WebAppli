@@ -925,7 +925,7 @@ class SituationSerializer(serializers.ModelSerializer):
             'montant_ht_mois', 'montant_precedent', 'cumul_precedent',
             'montant_total', 'pourcentage_avancement', 'retenue_garantie',
             'montant_prorata', 'retenue_cie', 'montant_apres_retenues',
-            'tva', 'taux_prorata'
+            'tva', 'taux_prorata', 'tva_rate'
         ]
         
         for field in numeric_fields:
@@ -958,7 +958,7 @@ class SituationCreateSerializer(serializers.ModelSerializer):
             'montant_ht_mois', 'cumul_precedent', 'montant_total_cumul_ht',
             'retenue_garantie', 'montant_prorata', 'retenue_cie',
             'montant_apres_retenues', 'tva', 'montant_total_ttc',
-            'pourcentage_avancement', 'taux_prorata'
+            'pourcentage_avancement', 'taux_prorata', 'tva_rate'
         ]
 
         for field in numeric_fields:

@@ -972,6 +972,7 @@ const SituationCreationModal = ({
   const [existingSituation, setExistingSituation] = useState(null);
   const [numeroSituation, setNumeroSituation] = useState("");
   const [dateCreation, setDateCreation] = useState("");
+  const [tvaRate, setTvaRate] = useState(20); // Taux de TVA par défaut à 20%
 
   // ✅ Détecter si le devis vient de DevisAvance.js via parties_metadata
   const isFromDevisAvance = devis?.parties_metadata && 
@@ -1287,6 +1288,11 @@ const SituationCreationModal = ({
             const devisData = response.data;
             const devisLignes = devisData.lignes || []; // Les lignes sont incluses dans le serializer
             
+            // ✅ Charger le taux de TVA du devis
+            if (devisData.tva_rate !== undefined && devisData.tva_rate !== null) {
+              setTvaRate(parseFloat(devisData.tva_rate));
+            }
+            
             // Le serializer retourne 'items' avec tous les éléments triés par index_global
             if (devisData.items && devisData.items.length > 0) {
               const { structure: newStructure, lignesSpeciales: newLignesSpeciales } = 
@@ -1563,6 +1569,11 @@ const SituationCreationModal = ({
 
         setLignesSpeciales(specialLines);
       }
+    }
+    
+    // ✅ Charger le taux de TVA depuis le devis (pour l'ancien système)
+    if (devis?.tva_rate !== undefined && devis?.tva_rate !== null) {
+      setTvaRate(parseFloat(devis.tva_rate));
     }
   }, [devis]);
 
@@ -2177,7 +2188,7 @@ const SituationCreationModal = ({
       retenueGarantie -
       montantProrata -
       parseFloat(retenueCIE || 0);
-    const tva = montantApresRetenues * 0.2;
+    const tva = montantApresRetenues * (tvaRate / 100);
     const montantTotal = montantHtMois + parseFloat(cumulPrecedent);
     const pourcentageAvancement =
       totalHT > 0 ? (montantTotal / totalHT) * 100 : 0;
@@ -2199,7 +2210,7 @@ const SituationCreationModal = ({
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     calculateMontants();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires, tvaRate]);
 
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
@@ -2340,8 +2351,9 @@ const SituationCreationModal = ({
         retenue_cie: formatNumber(retenueCIE),
         type_retenue_cie: typeRetenueCIE,
         montant_apres_retenues: formatNumber(calculerTotalNet()),
-        tva: formatNumber(calculerTotalNet() * 0.2),
-        montant_ttc: formatNumber(calculerTotalNet() * 1.2),
+        tva: formatNumber(calculerTotalNet() * (tvaRate / 100)),
+        tva_rate: formatNumber(tvaRate),
+        montant_ttc: formatNumber(calculerTotalNet() * (1 + tvaRate / 100)),
         pourcentage_avancement: formatNumber(
           (calculerMontantTotalCumul() / (totalHT + montantTotalAvenants)) * 100
         ),
@@ -2505,7 +2517,7 @@ const SituationCreationModal = ({
         montantApresRetenues += parseFloat(ligne.montant);
       }
     });
-    const tva = montantApresRetenues * 0.2;
+    const tva = montantApresRetenues * (tvaRate / 100);
     const pourcentageAvancement =
       montantTotalTravaux > 0
         ? (montantTotalCumul / montantTotalTravaux) * 100
@@ -2536,6 +2548,7 @@ const SituationCreationModal = ({
     typeRetenueCIE,
     lignesSupplementaires,
     lignesSpeciales,
+    tvaRate,
   ]);
 
   const renderCalculs = () => {
@@ -3121,7 +3134,7 @@ const SituationCreationModal = ({
 
               {/* TVA */}
               <TableRow>
-                <TableCell>TVA (20%)</TableCell>
+                <TableCell>TVA ({tvaRate}%)</TableCell>
                 <TableCell align="right">
                   {(() => {
                     const retenueCIEValue = parseFloat(retenueCIE || 0);
@@ -3142,7 +3155,7 @@ const SituationCreationModal = ({
                       }
                     });
 
-                    return (montantBase * 0.2)
+                    return (montantBase * (tvaRate / 100))
                       .toFixed(2)
                       .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
                   })()}{" "}
@@ -3173,7 +3186,7 @@ const SituationCreationModal = ({
                       }
                     });
 
-                    return (montantBase * 1.2)
+                    return (montantBase * (1 + tvaRate / 100))
                       .toFixed(2)
                       .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
                   })()}{" "}

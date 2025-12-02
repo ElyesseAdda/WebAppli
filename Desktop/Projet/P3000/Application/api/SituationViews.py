@@ -522,8 +522,9 @@ def preview_situation_v2(request, situation_id):
             else:
                 montant_apres_retenues += ligne_suppl['montant']
         
-        # Calculer la TVA
-        tva = (montant_apres_retenues * Decimal('0.20')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # Calculer la TVA avec le taux de TVA de la situation
+        tva_rate = situation.tva_rate if hasattr(situation, 'tva_rate') and situation.tva_rate is not None else Decimal('20.00')
+        tva = (montant_apres_retenues * tva_rate / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         
         # Calculer les totaux pour tous les avenants
         total_avenants = Decimal('0')
@@ -692,6 +693,7 @@ def preview_situation_v2(request, situation_id):
                 'montant_apres_retenues': montant_apres_retenues,
                 'montant_total_cumul_ht': situation.montant_total_cumul_ht,
                 'tva': tva,
+                'tva_rate': tva_rate,
                 'statut': situation.statut,
                 'date_validation': situation.date_validation,
             },
