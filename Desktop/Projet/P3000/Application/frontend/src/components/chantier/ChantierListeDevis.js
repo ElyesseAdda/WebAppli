@@ -36,8 +36,11 @@ import StatusChangeModal from "../StatusChangeModal";
 import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
 
-const formatNumber = (number) =>
-  number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+const formatNumber = (number) => {
+  if (number == null) return "";
+  const formatted = parseFloat(number).toFixed(2);
+  return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+};
 
 const ChantierListeDevis = ({
   chantierData,
@@ -126,8 +129,8 @@ const ChantierListeDevis = ({
               .toISOString()
               .split("T")[0];
             return devisDate === filters[key];
-          case "price_ttc":
-            const devisPrice = devis.price_ttc?.toString() || "";
+          case "price_ht":
+            const devisPrice = devis.price_ht?.toString() || "";
             return devisPrice.includes(filters[key]);
           case "status":
             return devis.status === filters[key];
@@ -164,8 +167,8 @@ const ChantierListeDevis = ({
               .toISOString()
               .split("T")[0];
             return devisDate === newFilters[key];
-          case "price_ttc":
-            const devisPrice = devis.price_ttc?.toString() || "";
+          case "price_ht":
+            const devisPrice = devis.price_ht?.toString() || "";
             return devisPrice.includes(newFilters[key]);
           case "status":
             return devis.status === newFilters[key];
@@ -189,7 +192,7 @@ const ChantierListeDevis = ({
           (new Date(a[property]).getTime() - new Date(b[property]).getTime())
         );
       }
-      if (property === "price_ttc") {
+      if (property === "price_ht") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
         );
@@ -483,16 +486,16 @@ const ChantierListeDevis = ({
                 </AlignedCell>
                 <AlignedCell>
                   <TableSortLabel
-                    active={orderBy === "price_ttc"}
-                    direction={orderBy === "price_ttc" ? order : "asc"}
-                    onClick={() => handleSort("price_ttc")}
+                    active={orderBy === "price_ht"}
+                    direction={orderBy === "price_ht" ? order : "asc"}
+                    onClick={() => handleSort("price_ht")}
                     sx={{ textAlign: "center", color: "white" }}
                   >
                     <PriceTextField
-                      label="Prix TTC"
+                      label="Prix HT"
                       variant="standard"
-                      value={filters.price_ttc}
-                      onChange={handleFilterChange("price_ttc")}
+                      value={filters.price_ht}
+                      onChange={handleFilterChange("price_ht")}
                       sx={{
                         maxWidth: "60px",
                         minWidth: "40px",
@@ -541,7 +544,7 @@ const ChantierListeDevis = ({
                   <CenteredTableCell
                     style={{ fontWeight: 600, color: green[500] }}
                   >
-                    {formatNumber(devis.price_ttc)} €
+                    {formatNumber(devis.price_ht)} €
                   </CenteredTableCell>
                   <StatusCell status={devis.status}>{devis.status}</StatusCell>
                   <CenteredTableCell

@@ -476,7 +476,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
   );
 };
 
-const CreationSituation = ({ open, onClose, devis, chantier }) => {
+const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [structure, setStructure] = useState([]);
   const [mois, setMois] = useState("");
   const [annee, setAnnee] = useState(new Date().getFullYear());
@@ -1192,6 +1192,11 @@ const CreationSituation = ({ open, onClose, devis, chantier }) => {
       } else {
         // Création d'une nouvelle situation
         await axios.post("/api/situations/", situationData);
+      }
+
+      // Notifier le parent du succès
+      if (onSuccess) {
+        onSuccess();
       }
 
       onClose();

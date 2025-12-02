@@ -476,6 +476,7 @@ const ChantierDetail = () => {
               chantierData={chantierData}
               state={documentsState}
               setState={setDocumentsState}
+              isActive={selectedTab === 1}
             />
           </TabPanel>
           <Paper

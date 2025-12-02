@@ -5,12 +5,12 @@ import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
 import ChantierListeSituation from "./ChantierListeSituation";
 
-const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
+const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   // Centralisation des états pour chaque sous-liste et filtres
   const [selectedTab, setSelectedTab] = useState(state.selectedTab || 0);
 
   // Utiliser le hook centralisé pour les situations
-  const { situations, loading: loadingSituations } = useSituationsManager(
+  const { situations, loading: loadingSituations, loadSituations } = useSituationsManager(
     chantierData?.id
   );
 
@@ -33,7 +33,7 @@ const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
       numero: "",
       client_name: "",
       date_creation: "",
-      price_ttc: "",
+      price_ht: "",
       status: "Tous",
     }
   );
@@ -87,6 +87,41 @@ const ChantierDocumentsTab = ({ chantierData, state, setState }) => {
       hasLoaded.current = true;
     }
   }, [chantierData?.id]);
+
+  // Recharger toutes les données quand l'onglet Documents devient actif (depuis ChantierDetail)
+  useEffect(() => {
+    if (isActive && chantierData?.id) {
+      // Recharger les données selon l'onglet actuellement sélectionné
+      if (selectedTab === 0) {
+        loadSituations();
+      } else if (selectedTab === 1) {
+        setIsLoadedDevis(false);
+      } else if (selectedTab === 2) {
+        setIsLoadedFactures(false);
+      }
+    }
+  }, [isActive, chantierData?.id, selectedTab, loadSituations]);
+
+  // Recharger les situations quand l'onglet Situations devient actif
+  useEffect(() => {
+    if (selectedTab === 0 && chantierData?.id && isActive) {
+      loadSituations();
+    }
+  }, [selectedTab, chantierData?.id, isActive, loadSituations]);
+
+  // Recharger les devis quand l'onglet Devis devient actif
+  useEffect(() => {
+    if (selectedTab === 1 && chantierData?.id && isActive) {
+      setIsLoadedDevis(false);
+    }
+  }, [selectedTab, chantierData?.id, isActive]);
+
+  // Recharger les factures quand l'onglet Factures devient actif
+  useEffect(() => {
+    if (selectedTab === 2 && chantierData?.id && isActive) {
+      setIsLoadedFactures(false);
+    }
+  }, [selectedTab, chantierData?.id, isActive]);
 
   return (
     <>

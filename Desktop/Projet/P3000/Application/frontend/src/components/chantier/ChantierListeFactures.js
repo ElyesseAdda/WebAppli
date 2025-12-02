@@ -35,8 +35,11 @@ import {
 } from "../../styles/tableStyles";
 import StatusChangeModal from "../StatusChangeModal";
 
-const formatNumber = (number) =>
-  number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+const formatNumber = (number) => {
+  if (number == null) return "";
+  const formatted = parseFloat(number).toFixed(2);
+  return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+};
 
 const ChantierListeFactures = ({
   chantierData,
