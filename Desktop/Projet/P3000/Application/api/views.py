@@ -3061,9 +3061,9 @@ def create_devis(request):
                 # Préparer les données pour la création
                 ligne_data = {
                     'devis': devis,
-                    'ligne_detail_id': ligne['ligne'],
-                    'quantite': Decimal(str(ligne['quantity'])),
-                    'prix_unitaire': Decimal(str(ligne['custom_price']))
+                    'ligne_detail_id': ligne['ligne_detail'],  # ← Corrigé : ligne_detail au lieu de ligne
+                    'quantite': Decimal(str(ligne['quantite'])),  # ← Corrigé : quantite au lieu de quantity
+                    'prix_unitaire': Decimal(str(ligne['prix_unitaire']))  # ← Corrigé : prix_unitaire au lieu de custom_price
                 }
                 
                 # ✅ Ajouter index_global si présent (pour conserver l'ordre des lignes)
