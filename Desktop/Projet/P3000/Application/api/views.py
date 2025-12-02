@@ -4151,6 +4151,63 @@ def create_facture_from_devis(request):
         return Response(FactureSerializer(facture).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def generate_facture_pdf_from_preview(request):
+    """
+    Génère un PDF de facture à partir de l'URL de prévisualisation
+    """
+    try:
+        data = json.loads(request.body)
+        facture_id = data.get('facture_id')
+        
+        if not facture_id:
+            return JsonResponse({'error': 'ID de la facture manquant'}, status=400)
+
+        # URL de la page de prévisualisation pour une facture sauvegardée
+        preview_url = request.build_absolute_uri(f"/api/preview-facture/{facture_id}/")
+
+        # Chemin vers le script Puppeteer
+        node_script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+            'frontend', 'src', 'components', 'generate_pdf.js'
+        )
+
+        # Commande pour exécuter Puppeteer avec Node.js
+        command = ['node', node_script_path, preview_url]
+
+        # Exécuter Puppeteer avec capture de la sortie
+        result = subprocess.run(
+            command, 
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+        # Lire le fichier PDF généré
+        pdf_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+            'frontend', 'src', 'components', 'devis.pdf'
+        )
+
+        if os.path.exists(pdf_path):
+            with open(pdf_path, 'rb') as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="facture_{facture_id}.pdf"'
+            return response
+        else:
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+
+    except json.JSONDecodeError as e:
+        return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
+    except subprocess.CalledProcessError as e:
+        return JsonResponse({
+            'error': f'Erreur lors de l\'exécution du script: {e.stderr}'
+        }, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
 @api_view(['GET'])
 def get_next_facture_number(request):
     """

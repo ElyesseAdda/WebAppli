@@ -219,6 +219,55 @@ const ChantierListeFactures = ({
     }
   };
 
+  const handleGeneratePDF = async (facture) => {
+    try {
+      // Appel à l'API pour générer le PDF
+      const response = await axios.post(
+        "/api/generate-facture-pdf-from-preview/",
+        {
+          facture_id: facture.id,
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Vérifier si la réponse est bien un PDF
+      if (response.headers["content-type"] === "application/pdf") {
+        // Créer un URL pour le blob
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+
+        // Créer un lien temporaire pour télécharger le PDF
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = `facture-${facture.numero}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+      } else {
+        // Si ce n'est pas un PDF, c'est probablement une erreur
+        const reader = new FileReader();
+        reader.onload = function () {
+          const errorMessage = JSON.parse(reader.result);
+          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+      alert(
+        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
+      );
+    }
+  };
+
   return (
     <div
       style={{
@@ -390,6 +439,14 @@ const ChantierListeFactures = ({
       >
         <MenuItem onClick={() => handlePreviewFacture(selectedFacture?.id)}>
           Voir la facture
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            handleGeneratePDF(selectedFacture);
+            handleClose();
+          }}
+        >
+          Télécharger le PDF
         </MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
         <MenuItem
