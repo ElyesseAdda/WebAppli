@@ -10,6 +10,7 @@ import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import fr from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 
 const FactureModal = ({ open, onClose, onSubmit, devis }) => {
   const [formData, setFormData] = useState({
@@ -19,6 +20,7 @@ const FactureModal = ({ open, onClose, onSubmit, devis }) => {
     delai_paiement: 45,
     mode_paiement: "virement",
   });
+  const [loadingNumero, setLoadingNumero] = useState(false);
 
   // Fonction pour calculer la date d'échéance
   const calculateDateEcheance = (dateEnvoi, delaiPaiement) => {
@@ -34,21 +36,43 @@ const FactureModal = ({ open, onClose, onSubmit, devis }) => {
     formData.delai_paiement
   );
 
-  // Initialiser l'adresse de facturation et le numéro de facture
+  // Récupérer le prochain numéro de facture automatique
   useEffect(() => {
-    if (devis && devis.numero) {
-      const adresseSociete = devis.societe
-        ? `${devis.societe.nom_societe}
-${devis.societe.rue_societe}
-${devis.societe.codepostal_societe} ${devis.societe.ville_societe}`
-        : "";
+    const fetchNextFactureNumber = async () => {
+      if (open && !formData.numero_facture) {
+        setLoadingNumero(true);
+        try {
+          const response = await axios.get("/api/get-next-facture-number/");
+          setFormData((prev) => ({
+            ...prev,
+            numero_facture: response.data.numero,
+          }));
+        } catch (error) {
+          console.error("Erreur lors de la récupération du numéro de facture:", error);
+          // Fallback : utiliser le format partagé avec les situations
+          const currentYear = new Date().getFullYear();
+          setFormData((prev) => ({
+            ...prev,
+            numero_facture: `Facture n°01.${currentYear}`,
+          }));
+        } finally {
+          setLoadingNumero(false);
+        }
+      }
+    };
 
-      // Transformer le numéro de devis en numéro de facture
-      const factureNumber = devis.numero.replace("DEV-", "FACT-");
+    fetchNextFactureNumber();
+  }, [open]);
+
+  // Initialiser l'adresse de facturation
+  useEffect(() => {
+    if (devis && devis.societe) {
+      const adresseSociete = `${devis.societe.nom_societe}
+${devis.societe.rue_societe}
+${devis.societe.codepostal_societe} ${devis.societe.ville_societe}`;
 
       setFormData((prev) => ({
         ...prev,
-        numero_facture: prev.numero_facture || factureNumber,
         adresse_facturation: prev.adresse_facturation || adresseSociete,
       }));
     }
@@ -97,6 +121,8 @@ ${devis.societe.codepostal_societe} ${devis.societe.ville_societe}`
             }
             margin="normal"
             required
+            disabled={loadingNumero}
+            helperText={loadingNumero ? "Génération du numéro..." : ""}
           />
           <TextField
             fullWidth

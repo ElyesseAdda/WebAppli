@@ -951,6 +951,14 @@ class Facture(models.Model):
     @property
     def lignes_speciales(self):
         return self.devis.lignes_speciales
+    
+    @property
+    def lignes_display(self):
+        return self.devis.lignes_display
+    
+    @property
+    def parties_metadata(self):
+        return self.devis.parties_metadata
 
 class DevisLigne(models.Model):
     devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name='lignes')
