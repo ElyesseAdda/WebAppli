@@ -235,6 +235,9 @@ const ChantierDetail = () => {
       setError(null);
       const response = await axios.get(`/api/chantier/${id}/details/`);
       setChantierData(response.data);
+      
+      // Sauvegarder le dernier chantier consulté dans localStorage
+      localStorage.setItem("last_visited_chantier", id);
     } catch (error) {
       console.error(
         "Erreur lors du chargement des données du chantier:",
@@ -243,14 +246,33 @@ const ChantierDetail = () => {
       console.log("Status de l'erreur:", error.response?.status);
       console.log("Tentative de redirection...");
 
-      // Si le chantier n'existe pas (404 ou 500), rediriger vers le premier chantier disponible
+      // Si le chantier n'existe pas (404 ou 500), rediriger intelligemment
       if (error.response?.status === 404 || error.response?.status === 500) {
         try {
           const chantiersResponse = await axios.get("/api/chantier/");
           if (chantiersResponse.data && chantiersResponse.data.length > 0) {
-            const premierChantier = chantiersResponse.data[0];
-            console.log(`Redirection vers le chantier ${premierChantier.id}`);
-            navigate(`/ChantierDetail/${premierChantier.id}`);
+            // D'abord essayer de rediriger vers le dernier chantier visité s'il existe et est valide
+            const lastVisitedId = localStorage.getItem("last_visited_chantier");
+            const lastVisitedExists = lastVisitedId && 
+              chantiersResponse.data.some(c => c.id === parseInt(lastVisitedId));
+            
+            let targetChantier;
+            if (lastVisitedExists && lastVisitedId !== id) {
+              // Le dernier chantier visité existe et est différent de celui qui a échoué
+              targetChantier = chantiersResponse.data.find(c => c.id === parseInt(lastVisitedId));
+              console.log(`Redirection vers le dernier chantier visité: ${lastVisitedId}`);
+            } else {
+              // Sinon, prendre le premier chantier disponible
+              targetChantier = chantiersResponse.data[0];
+              console.log(`Redirection vers le premier chantier: ${targetChantier.id}`);
+              
+              // Nettoyer le dernier chantier sauvegardé s'il n'existe plus
+              if (error.response?.status === 404) {
+                localStorage.removeItem("last_visited_chantier");
+              }
+            }
+            
+            navigate(`/ChantierDetail/${targetChantier.id}`);
             return;
           }
         } catch (redirectError) {
@@ -266,8 +288,31 @@ const ChantierDetail = () => {
     }
   };
 
+  // Charger le dernier chantier consulté si aucun ID dans l'URL ou au premier chargement
   useEffect(() => {
-    fetchChantierData();
+    const lastVisitedId = localStorage.getItem("last_visited_chantier");
+    
+    // Si aucun ID dans l'URL et qu'il y a un dernier chantier visité, y rediriger
+    if (!id && lastVisitedId) {
+      navigate(`/ChantierDetail/${lastVisitedId}`, { replace: true });
+      return;
+    }
+    
+    // Si un ID est présent, vérifier s'il faut rediriger vers le dernier visité
+    // (par exemple si on arrive sur l'ID 1 par défaut mais qu'un autre chantier a été visité)
+    if (id && lastVisitedId && id !== lastVisitedId) {
+      // Vérifier si c'est vraiment le premier chargement (pas de données de chantier)
+      if (!chantierData) {
+        // Rediriger vers le dernier chantier visité au lieu du chantier par défaut
+        navigate(`/ChantierDetail/${lastVisitedId}`, { replace: true });
+      }
+    }
+  }, []); // Exécuter seulement au montage du composant
+
+  useEffect(() => {
+    if (id) {
+      fetchChantierData();
+    }
   }, [id]);
 
   const handleTabChange = (event, newValue) => {
