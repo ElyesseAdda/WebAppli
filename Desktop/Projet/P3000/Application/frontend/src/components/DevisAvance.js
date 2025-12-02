@@ -201,7 +201,7 @@ const DevisAvance = () => {
   const [isLoadingParties, setIsLoadingParties] = useState(false);
   const [partiesToCreate, setPartiesToCreate] = useState([]); // Nouvelles parties à créer
   
-  // État pour le PieChart - ligne survolée
+  // État pour le PieChart - ligne sélectionnée (au clic)
   const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
   const [isPieChartVisible, setIsPieChartVisible] = useState(true);
   
@@ -812,21 +812,23 @@ const DevisAvance = () => {
       
       setPartiesToCreate(prev => [...prev, apiPartie]);
       
+      // ✅ Créer newPartie en dehors de setDevisItems pour pouvoir le retourner
+      const parties = devisItems.filter(i => i.type === 'partie');
+      const nextIndex = parties.length + 1;
+      const numero = getNextPartieNumero(devisItems);
+      const newPartie = {
+        ...apiPartie,
+        type: 'partie',
+        index_global: nextIndex,
+        numero
+      };
+      
       setDevisItems(prevItems => {
-        const parties = prevItems.filter(i => i.type === 'partie');
-        const nextIndex = parties.length + 1;
-        const numero = getNextPartieNumero(prevItems);
-        const newPartie = {
-          ...apiPartie,
-          type: 'partie',
-          index_global: nextIndex,
-          numero
-        };
         const updated = sortByIndexGlobal([...prevItems, newPartie]);
         return reindexAll(updated);
       });
       
-      // Recharger la liste des parties disponibles
+      // ✅ Recharger la liste des parties disponibles pour la barre de recherche
       await loadParties();
       
       return {
@@ -845,16 +847,19 @@ const DevisAvance = () => {
       };
       
       setPartiesToCreate(prev => [...prev, tempPartie]);
+      
+      // ✅ Créer newPartie en dehors de setDevisItems
+      const parties = devisItems.filter(i => i.type === 'partie');
+      const nextIndex = parties.length + 1;
+      const numero = getNextPartieNumero(devisItems);
+      const newPartie = {
+        ...tempPartie,
+        type: 'partie',
+        index_global: nextIndex,
+        numero
+      };
+      
       setDevisItems(prevItems => {
-        const parties = prevItems.filter(i => i.type === 'partie');
-        const nextIndex = parties.length + 1;
-        const numero = getNextPartieNumero(prevItems);
-        const newPartie = {
-          ...tempPartie,
-          type: 'partie',
-          index_global: nextIndex,
-          numero
-        };
         const updated = sortByIndexGlobal([...prevItems, newPartie]);
         return reindexAll(updated);
       });
@@ -868,7 +873,7 @@ const DevisAvance = () => {
   };
 
   // Fonction pour supprimer une partie sélectionnée
-  const handlePartieRemove = (partieId) => {
+  const handlePartieRemove = async (partieId) => {
     // ✅ Supprimer la partie ET tous ses enfants de devisItems
     setDevisItems(prev => {
       // Trouver toutes les sous-parties de cette partie
@@ -889,6 +894,9 @@ const DevisAvance = () => {
     
     // Si c'était une nouvelle partie, la retirer de la liste à créer
     setPartiesToCreate(prev => prev.filter(p => p.id !== partieId));
+    
+    // ✅ Recharger la liste des parties disponibles pour qu'elle réapparaisse dans la barre de recherche
+    await loadParties();
   };
 
   // Fonction pour éditer une partie sélectionnée

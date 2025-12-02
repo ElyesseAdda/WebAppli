@@ -2,7 +2,7 @@
  * DevisCostPieChart - Composant de visualisation des coûts du devis
  * Affiche un graphique en camembert avec la répartition des coûts
  * - Vue globale : affiche les totaux de toutes les lignes
- * - Vue hover : affiche les détails d'une ligne spécifique au survol
+ * - Vue détail : affiche les détails d'une ligne spécifique au clic
  */
 import React, { useState, useMemo } from 'react';
 import { ResponsivePie } from '@nivo/pie';
@@ -26,7 +26,7 @@ const COLORS = {
  * Calcule les données pour le PieChart à partir des lignes de détail
  */
 const calculateChartData = (lignesDetails, totalHT = 0, hoveredLine = null) => {
-  // Si une ligne est survolée, calculer ses données spécifiques
+  // Si une ligne est sélectionnée (cliquée), calculer ses données spécifiques
   if (hoveredLine) {
     const quantity = parseFloat(hoveredLine.quantity) || 0;
     const coutMainOeuvre = (parseFloat(hoveredLine.cout_main_oeuvre) || 0) * quantity;
@@ -198,7 +198,7 @@ const DevisCostPieChart = ({
     return devisItems.filter(item => item.type === 'ligne_detail');
   }, [devisItems]);
   
-  // Récupérer la version la plus récente de la ligne survolée depuis devisItems
+  // Récupérer la version la plus récente de la ligne sélectionnée depuis devisItems
   // Ceci permet de mettre à jour le PieChart quand le slider de marge change
   const currentHoveredLine = useMemo(() => {
     if (!hoveredLine) return null;
@@ -344,7 +344,7 @@ const DevisCostPieChart = ({
       </Box>
       
       <Collapse in={isExpanded}>
-        {/* Info ligne survolée (titre seulement) */}
+        {/* Info ligne sélectionnée (titre seulement) */}
         {chartData.isHovered && currentHoveredLine && (
           <Box sx={{ px: 2, py: 1, mx: 1, mb: 0.5 }}>
             <Typography 
@@ -434,7 +434,7 @@ const DevisCostPieChart = ({
         {/* Légende dépliable */}
         <Collapse in={isLegendExpanded}>
           <Box sx={{ px: 2, py: 1.5, mx: 1, mb: 1 }}>
-            {/* Valeurs brutes de la ligne (si hover) */}
+            {/* Valeurs brutes de la ligne (si sélectionnée) */}
             {chartData.isHovered && currentHoveredLine && (
               <Box sx={{ mb: 1.5, p: 1 }}>
                 <Typography variant="caption" sx={{ fontWeight: 600, color: '#1565c0', display: 'block', mb: 0.5 }}>

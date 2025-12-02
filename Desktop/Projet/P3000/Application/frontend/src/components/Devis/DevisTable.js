@@ -205,29 +205,26 @@ const DevisTable = ({
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
-  const [hoveredLigneDetailId, setHoveredLigneDetailId] = useState(null);
-  const [hoveredLignePosition, setHoveredLignePosition] = useState(null);
+  
+  // États pour les clics (boutons d'action) - au lieu de hover
+  const [clickedLigneDetailId, setClickedLigneDetailId] = useState(null);
+  const [clickedLignePosition, setClickedLignePosition] = useState(null);
   const [isIconsAnimatingOut, setIsIconsAnimatingOut] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editContext, setEditContext] = useState(null);
-  const hoverTimeoutRef = React.useRef(null);
   
-  // États pour les hover des parties et sous-parties
-  const [hoveredPartieId, setHoveredPartieId] = useState(null);
-  const [hoveredPartiePosition, setHoveredPartiePosition] = useState(null);
+  const [clickedPartieId, setClickedPartieId] = useState(null);
+  const [clickedPartiePosition, setClickedPartiePosition] = useState(null);
   const [isPartieIconsAnimatingOut, setIsPartieIconsAnimatingOut] = useState(false);
-  const partieHoverTimeoutRef = React.useRef(null);
   
-  const [hoveredSousPartieId, setHoveredSousPartieId] = useState(null);
-  const [hoveredSousPartiePosition, setHoveredSousPartiePosition] = useState(null);
+  const [clickedSousPartieId, setClickedSousPartieId] = useState(null);
+  const [clickedSousPartiePosition, setClickedSousPartiePosition] = useState(null);
   const [isSousPartieIconsAnimatingOut, setIsSousPartieIconsAnimatingOut] = useState(false);
-  const sousPartieHoverTimeoutRef = React.useRef(null);
   
-  // États pour le hover des lignes spéciales
-  const [hoveredSpecialLineId, setHoveredSpecialLineId] = useState(null);
-  const [hoveredSpecialLinePosition, setHoveredSpecialLinePosition] = useState(null);
+  // États pour les clics sur les lignes spéciales
+  const [clickedSpecialLineId, setClickedSpecialLineId] = useState(null);
+  const [clickedSpecialLinePosition, setClickedSpecialLinePosition] = useState(null);
   const [isSpecialLineIconsAnimatingOut, setIsSpecialLineIconsAnimatingOut] = useState(false);
-  const specialLineHoverTimeoutRef = React.useRef(null);
   
   // État pour le modal de création de ligne spéciale
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -257,21 +254,10 @@ const DevisTable = ({
     }
   }, [onAutoPlaceRecurringLine]);
 
-  // Nettoyer les timeouts quand le composant est démonté
+  // useEffect vide pour compatibilité (peut être supprimé si non utilisé ailleurs)
   useEffect(() => {
     return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-      if (partieHoverTimeoutRef.current) {
-        clearTimeout(partieHoverTimeoutRef.current);
-      }
-      if (sousPartieHoverTimeoutRef.current) {
-        clearTimeout(sousPartieHoverTimeoutRef.current);
-      }
-      if (specialLineHoverTimeoutRef.current) {
-        clearTimeout(specialLineHoverTimeoutRef.current);
-      }
+      // Nettoyage si nécessaire
     };
   }, []);
 
@@ -283,13 +269,13 @@ const DevisTable = ({
     }
   }, [pendingLineForBase, isSelectingBase]);
 
-  // Déclencher l'animation d'entrée quand les icônes apparaissent
+  // Déclencher l'animation d'entrée quand les icônes apparaissent (au clic)
   useEffect(() => {
-    if (hoveredLigneDetailId) {
-      // Fermer les autres panneaux hover
-      setHoveredPartieId(null);
-      setHoveredSousPartieId(null);
-      setHoveredSpecialLineId(null);
+    if (clickedLigneDetailId) {
+      // Fermer les autres panneaux
+      setClickedPartieId(null);
+      setClickedSousPartieId(null);
+      setClickedSpecialLineId(null);
       // Mettre temporairement l'animation à true pour qu'elle parte de la gauche
       setIsIconsAnimatingOut(true);
       // Puis immédiatement la remettre à false pour qu'elle vienne vers nous
@@ -297,49 +283,49 @@ const DevisTable = ({
         setIsIconsAnimatingOut(false);
       }, 10);
     }
-  }, [hoveredLigneDetailId]);
+  }, [clickedLigneDetailId]);
 
-  // Déclencher l'animation d'entrée pour les parties
+  // Déclencher l'animation d'entrée pour les parties (au clic)
   useEffect(() => {
-    if (hoveredPartieId) {
-      // Fermer les autres panneaux hover
-      setHoveredLigneDetailId(null);
-      setHoveredSousPartieId(null);
-      setHoveredSpecialLineId(null);
+    if (clickedPartieId) {
+      // Fermer les autres panneaux
+      setClickedLigneDetailId(null);
+      setClickedSousPartieId(null);
+      setClickedSpecialLineId(null);
       setIsPartieIconsAnimatingOut(true);
       setTimeout(() => {
         setIsPartieIconsAnimatingOut(false);
       }, 10);
     }
-  }, [hoveredPartieId]);
+  }, [clickedPartieId]);
 
-  // Déclencher l'animation d'entrée pour les sous-parties
+  // Déclencher l'animation d'entrée pour les sous-parties (au clic)
   useEffect(() => {
-    if (hoveredSousPartieId) {
-      // Fermer les autres panneaux hover
-      setHoveredLigneDetailId(null);
-      setHoveredPartieId(null);
-      setHoveredSpecialLineId(null);
+    if (clickedSousPartieId) {
+      // Fermer les autres panneaux
+      setClickedLigneDetailId(null);
+      setClickedPartieId(null);
+      setClickedSpecialLineId(null);
       setIsSousPartieIconsAnimatingOut(true);
       setTimeout(() => {
         setIsSousPartieIconsAnimatingOut(false);
       }, 10);
     }
-  }, [hoveredSousPartieId]);
+  }, [clickedSousPartieId]);
 
-  // Déclencher l'animation d'entrée pour les lignes spéciales
+  // Déclencher l'animation d'entrée pour les lignes spéciales (au clic)
   useEffect(() => {
-    if (hoveredSpecialLineId) {
-      // Fermer les autres panneaux hover
-      setHoveredLigneDetailId(null);
-      setHoveredPartieId(null);
-      setHoveredSousPartieId(null);
+    if (clickedSpecialLineId) {
+      // Fermer les autres panneaux
+      setClickedLigneDetailId(null);
+      setClickedPartieId(null);
+      setClickedSousPartieId(null);
       setIsSpecialLineIconsAnimatingOut(true);
       setTimeout(() => {
         setIsSpecialLineIconsAnimatingOut(false);
       }, 10);
     }
-  }, [hoveredSpecialLineId]);
+  }, [clickedSpecialLineId]);
 
   // Calculer le prix basé sur les coûts et la marge
   const calculatePrice = (ligne) => {
@@ -870,26 +856,26 @@ const DevisTable = ({
                                 return (
                                   <React.Fragment key={`special_global_${item.id}`}>
                                     <div 
-                                      style={{ marginBottom: '8px', position: 'relative' }}
-                                      onMouseEnter={(e) => {
-                                        if (specialLineHoverTimeoutRef.current) clearTimeout(specialLineHoverTimeoutRef.current);
-                                        setIsSpecialLineIconsAnimatingOut(false);
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        setHoveredSpecialLineId(item.id);
-                                        setHoveredSpecialLinePosition({
-                                          top: rect.top + rect.height / 2 - 24,
-                                          left: rect.right
-                                        });
-                                      }}
-                                      onMouseLeave={() => {
-                                        if (specialLineHoverTimeoutRef.current) clearTimeout(specialLineHoverTimeoutRef.current);
-                                        specialLineHoverTimeoutRef.current = setTimeout(() => {
-                                          setIsSpecialLineIconsAnimatingOut(true);
-                                          setTimeout(() => {
-                                            setHoveredSpecialLineId(null);
-                                            setHoveredSpecialLinePosition(null);
-                                          }, 300);
-                                        }, 1000);
+                                      style={{ marginBottom: '8px', position: 'relative', cursor: 'pointer' }}
+                                      onClick={(e) => {
+                                        // Ignorer les clics sur les inputs, textarea, boutons et icônes
+                                        const tagName = e.target.tagName.toLowerCase();
+                                        if (['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) {
+                                          return;
+                                        }
+                                        
+                                        // Toggle les boutons d'action
+                                        if (clickedSpecialLineId === item.id) {
+                                          setClickedSpecialLineId(null);
+                                          setClickedSpecialLinePosition(null);
+                                        } else {
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          setClickedSpecialLineId(item.id);
+                                          setClickedSpecialLinePosition({
+                                            top: rect.top + rect.height / 2 - 24,
+                                            left: rect.right
+                                          });
+                                        }
                                       }}
                                     >
                                       <LigneSpecialeRow
@@ -975,46 +961,39 @@ const DevisTable = ({
                                               border: isSelectingBase ? '3px solid #ffeb3b' : 'none'
                                             }}
                                             onClick={(e) => {
+                                              // Mode sélection de base
                                               if (isSelectingBase) {
                                                 e.stopPropagation();
                                                 const partieTotal = calculatePartieTotal(item);
-                                                // Construire le label en utilisant les bonnes propriétés
                                                 const partieNumero = item.numero || '';
                                                 const partieLibelle = item.libelle || item.name || item.designation || 'Partie';
                                                 onBaseSelected({
                                                   type: 'partie',
                                                   id: item.id,
                                                   label: `${partieNumero} ${partieLibelle} (${formatMontantEspace(partieTotal)} €)`,
-                                                  amount: partieTotal  // ✅ Ajouter le montant calculé
+                                                  amount: partieTotal
+                                                });
+                                                return;
+                                              }
+                                              
+                                              // Ignorer les clics sur les inputs, textarea, boutons et icônes
+                                              const tagName = e.target.tagName.toLowerCase();
+                                              if (['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) {
+                                                return;
+                                              }
+                                              
+                                              // Toggle les boutons d'action : si on clique sur la partie déjà cliquée, on ferme
+                                              if (clickedPartieId === item.id) {
+                                                setClickedPartieId(null);
+                                                setClickedPartiePosition(null);
+                                              } else {
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                setClickedPartieId(item.id);
+                                                setClickedPartiePosition({
+                                                  top: rect.top + rect.height / 2 - 12,
+                                                  left: rect.right
                                                 });
                                               }
-                                            }}
-                                            onMouseEnter={(e) => {
-                                              if (dragSnapshot.isDragging) return;
-                                              if (partieHoverTimeoutRef.current) {
-                                                clearTimeout(partieHoverTimeoutRef.current);
-                                                partieHoverTimeoutRef.current = null;
-                                              }
-                                              setIsPartieIconsAnimatingOut(false);
-                                              const rect = e.currentTarget.getBoundingClientRect();
-                                              setHoveredPartieId(item.id);
-                                              setHoveredPartiePosition({
-                                                top: rect.top + rect.height / 2 - 12,
-                                                left: rect.right
-                                              });
-                                            }}
-                                            onMouseLeave={() => {
-                                              if (partieHoverTimeoutRef.current) {
-                                                clearTimeout(partieHoverTimeoutRef.current);
-                                              }
-                                              partieHoverTimeoutRef.current = setTimeout(() => {
-                                                setIsPartieIconsAnimatingOut(true);
-                                                setTimeout(() => {
-                                                  setHoveredPartieId(null);
-                                                  setHoveredPartiePosition(null);
-                                                  partieHoverTimeoutRef.current = null;
-                                                }, 300);
-                                              }, 1000);
                                             }}
                                           >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1108,26 +1087,26 @@ const DevisTable = ({
                                                         return (
                                                           <div 
                                                             key={`special_partie_${spItem.id}`} 
-                                                            style={{ marginBottom: '8px', position: 'relative' }}
-                                                            onMouseEnter={(e) => {
-                                                              if (specialLineHoverTimeoutRef.current) clearTimeout(specialLineHoverTimeoutRef.current);
-                                                              setIsSpecialLineIconsAnimatingOut(false);
-                                                              const rect = e.currentTarget.getBoundingClientRect();
-                                                              setHoveredSpecialLineId(spItem.id);
-                                                              setHoveredSpecialLinePosition({
-                                                                top: rect.top + rect.height / 2 - 24,
-                                                                left: rect.right
-                                                              });
-                                                            }}
-                                                            onMouseLeave={() => {
-                                                              if (specialLineHoverTimeoutRef.current) clearTimeout(specialLineHoverTimeoutRef.current);
-                                                              specialLineHoverTimeoutRef.current = setTimeout(() => {
-                                                                setIsSpecialLineIconsAnimatingOut(true);
-                                                                setTimeout(() => {
-                                                                  setHoveredSpecialLineId(null);
-                                                                  setHoveredSpecialLinePosition(null);
-                                                                }, 300);
-                                                              }, 1000);
+                                                            style={{ marginBottom: '8px', position: 'relative', cursor: 'pointer' }}
+                                                            onClick={(e) => {
+                                                              // Ignorer les clics sur les inputs, textarea, boutons et icônes
+                                                              const tagName = e.target.tagName.toLowerCase();
+                                                              if (['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) {
+                                                                return;
+                                                              }
+                                                              
+                                                              // Toggle les boutons d'action
+                                                              if (clickedSpecialLineId === spItem.id) {
+                                                                setClickedSpecialLineId(null);
+                                                                setClickedSpecialLinePosition(null);
+                                                              } else {
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                setClickedSpecialLineId(spItem.id);
+                                                                setClickedSpecialLinePosition({
+                                                                  top: rect.top + rect.height / 2 - 24,
+                                                                  left: rect.right
+                                                                });
+                                                              }
                                                             }}
                                                           >
                                                             <LigneSpecialeRow
@@ -1199,40 +1178,39 @@ const DevisTable = ({
                                                                 border: isSelectingBase ? '3px solid #ffeb3b' : 'none'
                                                               }}
                                                               onClick={(e) => {
+                                                                // Mode sélection de base
                                                                 if (isSelectingBase) {
                                                                   e.stopPropagation();
                                                                   const spTotal = calculateSousPartieTotal(sp);
-                                                                  // Construire le label en utilisant les bonnes propriétés
                                                                   const spNumero = sp.numero || '';
                                                                   const spLibelle = sp.libelle || sp.name || sp.designation || 'Sous-partie';
                                                                   onBaseSelected({
                                                                     type: 'sous_partie',
                                                                     id: sp.id,
                                                                     label: `${spNumero} ${spLibelle} (${formatMontantEspace(spTotal)} €)`,
-                                                                    amount: spTotal  // ✅ Ajouter le montant calculé
+                                                                    amount: spTotal
+                                                                  });
+                                                                  return;
+                                                                }
+                                                                
+                                                                // Ignorer les clics sur les inputs, textarea, boutons et icônes
+                                                                const tagName = e.target.tagName.toLowerCase();
+                                                                if (['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) {
+                                                                  return;
+                                                                }
+                                                                
+                                                                // Toggle les boutons d'action
+                                                                if (clickedSousPartieId === sp.id) {
+                                                                  setClickedSousPartieId(null);
+                                                                  setClickedSousPartiePosition(null);
+                                                                } else {
+                                                                  const rect = e.currentTarget.getBoundingClientRect();
+                                                                  setClickedSousPartieId(sp.id);
+                                                                  setClickedSousPartiePosition({
+                                                                    top: rect.top + rect.height / 2 - 12,
+                                                                    left: rect.right
                                                                   });
                                                                 }
-                                                              }}
-                                                              onMouseEnter={(e) => {
-                                                                if (spDragSnapshot.isDragging) return;
-                                                                if (sousPartieHoverTimeoutRef.current) clearTimeout(sousPartieHoverTimeoutRef.current);
-                                                                setIsSousPartieIconsAnimatingOut(false);
-                                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                                setHoveredSousPartieId(sp.id);
-                                                                setHoveredSousPartiePosition({
-                                                                  top: rect.top + rect.height / 2 - 12,
-                                                                  left: rect.right
-                                                                });
-                                                              }}
-                                                              onMouseLeave={() => {
-                                                                if (sousPartieHoverTimeoutRef.current) clearTimeout(sousPartieHoverTimeoutRef.current);
-                                                                sousPartieHoverTimeoutRef.current = setTimeout(() => {
-                                                                  setIsSousPartieIconsAnimatingOut(true);
-                                                                  setTimeout(() => {
-                                                                    setHoveredSousPartieId(null);
-                                                                    setHoveredSousPartiePosition(null);
-                                                                  }, 300);
-                                                                }, 1000);
                                                               }}
                                                             >
                                                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1347,26 +1325,26 @@ const DevisTable = ({
                                                                           return (
                                                                             <div 
                                                                               key={`special_sp_${item.id}`} 
-                                                                              style={{ marginBottom: '4px', position: 'relative' }}
-                                                                              onMouseEnter={(e) => {
-                                                                                if (specialLineHoverTimeoutRef.current) clearTimeout(specialLineHoverTimeoutRef.current);
-                                                                                setIsSpecialLineIconsAnimatingOut(false);
-                                                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                                                setHoveredSpecialLineId(item.id);
-                                                                                setHoveredSpecialLinePosition({
-                                                                                  top: rect.top + rect.height / 2 - 24,
-                                                                                  left: rect.right
-                                                                                });
-                                                                              }}
-                                                                              onMouseLeave={() => {
-                                                                                if (specialLineHoverTimeoutRef.current) clearTimeout(specialLineHoverTimeoutRef.current);
-                                                                                specialLineHoverTimeoutRef.current = setTimeout(() => {
-                                                                                  setIsSpecialLineIconsAnimatingOut(true);
-                                                                                  setTimeout(() => {
-                                                                                    setHoveredSpecialLineId(null);
-                                                                                    setHoveredSpecialLinePosition(null);
-                                                                                  }, 300);
-                                                                                }, 1000);
+                                                                              style={{ marginBottom: '4px', position: 'relative', cursor: 'pointer' }}
+                                                                              onClick={(e) => {
+                                                                                // Ignorer les clics sur les inputs, textarea, boutons et icônes
+                                                                                const tagName = e.target.tagName.toLowerCase();
+                                                                                if (['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) {
+                                                                                  return;
+                                                                                }
+                                                                                
+                                                                                // Toggle les boutons d'action
+                                                                                if (clickedSpecialLineId === item.id) {
+                                                                                  setClickedSpecialLineId(null);
+                                                                                  setClickedSpecialLinePosition(null);
+                                                                                } else {
+                                                                                  const rect = e.currentTarget.getBoundingClientRect();
+                                                                                  setClickedSpecialLineId(item.id);
+                                                                                  setClickedSpecialLinePosition({
+                                                                                    top: rect.top + rect.height / 2 - 24,
+                                                                                    left: rect.right
+                                                                                  });
+                                                                                }
                                                                               }}
                                                                             >
                                                                               <LigneSpecialeRow
@@ -1422,8 +1400,8 @@ const DevisTable = ({
                                                                               >
                                                                                 <div 
                                                                                   style={{ 
-                                                                                    backgroundColor: '#fff',
-                                                                                    border: '1px solid #dee2e6',
+                                                                                    backgroundColor: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? '#e3f2fd' : '#fff',
+                                                                                    border: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? '2px solid #1976d2' : '1px solid #dee2e6',
                                                                                     borderRadius: '4px',
                                                                                     padding: '6px 10px',
                                                                                     display: 'flex',
@@ -1431,34 +1409,37 @@ const DevisTable = ({
                                                                                     justifyContent: 'space-between',
                                                                                     fontSize: '13px',
                                                                                     position: 'relative',
-                                                                                    paddingRight: '58px'
+                                                                                    paddingRight: '58px',
+                                                                                    cursor: 'pointer',
+                                                                                    transition: 'all 0.2s ease'
                                                                                   }}
-                                                                                  onMouseEnter={(e) => {
-                                                                                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                                                                                    setIsIconsAnimatingOut(false);
-                                                                                    const rect = e.currentTarget.getBoundingClientRect();
-                                                                                    setHoveredLigneDetailId(ligne.id);
-                                                                                    setHoveredLignePosition({
-                                                                                      top: rect.top + rect.height / 2 - 24,
-                                                                                      left: rect.right
-                                                                                    });
-                                                                                    // Notifier le PieChart de la ligne survolée
-                                                                                    if (onLigneDetailHover) {
-                                                                                      onLigneDetailHover(ligne);
+                                                                                  onClick={(e) => {
+                                                                                    // Ignorer les clics sur les inputs, textarea, boutons et icônes
+                                                                                    const tagName = e.target.tagName.toLowerCase();
+                                                                                    if (['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) {
+                                                                                      return;
                                                                                     }
-                                                                                  }}
-                                                                                  onMouseLeave={() => {
-                                                                                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                                                                                    hoverTimeoutRef.current = setTimeout(() => {
-                                                                                      setIsIconsAnimatingOut(true);
-                                                                                      setTimeout(() => {
-                                                                                        setHoveredLigneDetailId(null);
-                                                                                        setHoveredLignePosition(null);
-                                                                                      }, 300);
-                                                                                    }, 1000);
-                                                                                    // Notifier le PieChart qu'on quitte la ligne
+                                                                                    
+                                                                                    // Toggle PieChart : si on clique sur la ligne déjà sélectionnée, on la désélectionne
                                                                                     if (onLigneDetailHover) {
-                                                                                      onLigneDetailHover(null);
+                                                                                      if (hoveredLigneDetail && hoveredLigneDetail.id === ligne.id) {
+                                                                                        onLigneDetailHover(null);
+                                                                                      } else {
+                                                                                        onLigneDetailHover(ligne);
+                                                                                      }
+                                                                                    }
+                                                                                    
+                                                                                    // Toggle boutons d'action
+                                                                                    if (clickedLigneDetailId === ligne.id) {
+                                                                                      setClickedLigneDetailId(null);
+                                                                                      setClickedLignePosition(null);
+                                                                                    } else {
+                                                                                      const rect = e.currentTarget.getBoundingClientRect();
+                                                                                      setClickedLigneDetailId(ligne.id);
+                                                                                      setClickedLignePosition({
+                                                                                        top: rect.top + rect.height / 2 - 24,
+                                                                                        left: rect.right
+                                                                                      });
                                                                                     }
                                                                                   }}
                                                                                 >
@@ -1704,11 +1685,11 @@ const DevisTable = ({
                   {devisItems
                     .filter(item => item.type === 'partie')
                     .map(partie => (
-                      hoveredPartieId === partie.id && createPortal(
+                      clickedPartieId === partie.id && createPortal(
                         <div style={{
                           position: 'fixed',
-                          top: `${hoveredPartiePosition?.top || 0}px`,
-                          left: `${(hoveredPartiePosition?.left || 0) + 30}px`,
+                          top: `${clickedPartiePosition?.top || 0}px`,
+                          left: `${(clickedPartiePosition?.left || 0) + 30}px`,
                           transform: `translateY(0) translateX(${isPartieIconsAnimatingOut ? '-100%' : '0'})`,
                           display: 'flex',
                           gap: '4px',
@@ -1720,26 +1701,6 @@ const DevisTable = ({
                           border: '1px solid #e0e0e0',
                           transition: 'transform 0.3s ease, opacity 0.3s ease',
                           opacity: isPartieIconsAnimatingOut ? 0 : 1
-                        }}
-                        onMouseEnter={() => {
-                          if (partieHoverTimeoutRef.current) {
-                            clearTimeout(partieHoverTimeoutRef.current);
-                            partieHoverTimeoutRef.current = null;
-                          }
-                          setIsPartieIconsAnimatingOut(false);
-                        }}
-                        onMouseLeave={() => {
-                          if (partieHoverTimeoutRef.current) {
-                            clearTimeout(partieHoverTimeoutRef.current);
-                          }
-                          partieHoverTimeoutRef.current = setTimeout(() => {
-                            setIsPartieIconsAnimatingOut(true);
-                            setTimeout(() => {
-                              setHoveredPartieId(null);
-                              setHoveredPartiePosition(null);
-                              partieHoverTimeoutRef.current = null;
-                            }, 300);
-                          }, 1000);
                         }}>
                           {isOptionsTable && onTransferToMain && (
                             <Tooltip title="Transférer vers le tableau principal">
@@ -1767,11 +1728,11 @@ const DevisTable = ({
                   {devisItems
                     .filter(item => item.type === 'sous_partie')
                     .map(sp => (
-                      hoveredSousPartieId === sp.id && createPortal(
+                      clickedSousPartieId === sp.id && createPortal(
                         <div style={{
                           position: 'fixed',
-                          top: `${hoveredSousPartiePosition?.top || 0}px`,
-                          left: `${(hoveredSousPartiePosition?.left || 0) + 30}px`,
+                          top: `${clickedSousPartiePosition?.top || 0}px`,
+                          left: `${(clickedSousPartiePosition?.left || 0) + 30}px`,
                           transform: `translateY(0) translateX(${isSousPartieIconsAnimatingOut ? '-100%' : '0'})`,
                           display: 'flex',
                           gap: '4px',
@@ -1783,20 +1744,6 @@ const DevisTable = ({
                           border: '1px solid #e0e0e0',
                           transition: 'transform 0.3s ease, opacity 0.3s ease',
                           opacity: isSousPartieIconsAnimatingOut ? 0 : 1
-                        }}
-                        onMouseEnter={() => {
-                          if (sousPartieHoverTimeoutRef.current) clearTimeout(sousPartieHoverTimeoutRef.current);
-                          setIsSousPartieIconsAnimatingOut(false);
-                        }}
-                        onMouseLeave={() => {
-                          if (sousPartieHoverTimeoutRef.current) clearTimeout(sousPartieHoverTimeoutRef.current);
-                          sousPartieHoverTimeoutRef.current = setTimeout(() => {
-                            setIsSousPartieIconsAnimatingOut(true);
-                            setTimeout(() => {
-                              setHoveredSousPartieId(null);
-                              setHoveredSousPartiePosition(null);
-                            }, 300);
-                          }, 1000);
                         }}>
                           {isOptionsTable && onTransferToMain && (
                             <Tooltip title="Transférer vers le tableau principal">
@@ -1824,11 +1771,11 @@ const DevisTable = ({
                   {devisItems
                     .filter(item => item.type === 'ligne_detail')
                     .map(ligne => (
-                      hoveredLigneDetailId === ligne.id && createPortal(
+                      clickedLigneDetailId === ligne.id && createPortal(
                         <div style={{
                           position: 'fixed',
-                          top: `${hoveredLignePosition?.top || 0}px`,
-                          left: `${(hoveredLignePosition?.left || 0) + 30}px`,
+                          top: `${clickedLignePosition?.top || 0}px`,
+                          left: `${(clickedLignePosition?.left || 0) + 30}px`,
                           transform: `translateY(30%) translateX(${isIconsAnimatingOut ? '-30px' : '0'})`,
                           display: 'flex',
                           flexDirection: 'row',
@@ -1843,28 +1790,6 @@ const DevisTable = ({
                           transition: 'transform 0.3s ease, opacity 0.3s ease',
                           opacity: isIconsAnimatingOut ? 0 : 1,
                           minWidth: '320px'
-                        }}
-                        onMouseEnter={() => {
-                          if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                          setIsIconsAnimatingOut(false);
-                          // Maintenir le hover pour le PieChart quand on est sur les boutons
-                          if (onLigneDetailHover) {
-                            onLigneDetailHover(ligne);
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                          hoverTimeoutRef.current = setTimeout(() => {
-                            setIsIconsAnimatingOut(true);
-                            setTimeout(() => {
-                              setHoveredLigneDetailId(null);
-                              setHoveredLignePosition(null);
-                            }, 300);
-                          }, 1000);
-                          // Notifier le PieChart qu'on quitte les boutons
-                          if (onLigneDetailHover) {
-                            onLigneDetailHover(null);
-                          }
                         }}>
                           <div style={{ display: 'flex', gap: '4px' }}>
                             {isOptionsTable && onTransferToMain && (
@@ -1955,13 +1880,13 @@ const DevisTable = ({
                       )
                     ))}
                     
-                    {/* Portails pour les icônes de hover des lignes spéciales */}
+                    {/* Portails pour les boutons d'action des lignes spéciales */}
                     {pendingSpecialLines && pendingSpecialLines.map(line => (
-                      hoveredSpecialLineId === line.id && createPortal(
+                      clickedSpecialLineId === line.id && createPortal(
                         <div style={{
                           position: 'fixed',
-                          top: `${hoveredSpecialLinePosition?.top || 0}px`,
-                          left: `${(hoveredSpecialLinePosition?.left || 0) + 30}px`,
+                          top: `${clickedSpecialLinePosition?.top || 0}px`,
+                          left: `${(clickedSpecialLinePosition?.left || 0) + 30}px`,
                           transform: `translateY(0) translateX(${isSpecialLineIconsAnimatingOut ? '-100%' : '0'})`,
                           display: 'flex',
                           gap: '4px',
@@ -1973,25 +1898,6 @@ const DevisTable = ({
                           border: '1px solid #e0e0e0',
                           transition: 'transform 0.3s ease, opacity 0.3s ease',
                           opacity: isSpecialLineIconsAnimatingOut ? 0 : 1
-                        }}
-                        onMouseEnter={() => {
-                          if (specialLineHoverTimeoutRef.current) {
-                            clearTimeout(specialLineHoverTimeoutRef.current);
-                            specialLineHoverTimeoutRef.current = null;
-                          }
-                          setIsSpecialLineIconsAnimatingOut(false);
-                        }}
-                        onMouseLeave={() => {
-                          if (specialLineHoverTimeoutRef.current) {
-                            clearTimeout(specialLineHoverTimeoutRef.current);
-                          }
-                          specialLineHoverTimeoutRef.current = setTimeout(() => {
-                            setIsSpecialLineIconsAnimatingOut(true);
-                            setTimeout(() => {
-                              setHoveredSpecialLineId(null);
-                              setHoveredSpecialLinePosition(null);
-                            }, 300);
-                          }, 1000);
                         }}>
                           <Tooltip title="Éditer">
                             <IconButton size="small" onClick={() => onEditSpecialLine && onEditSpecialLine(line)} style={{ width: '24px', height: '24px', padding: '4px', backgroundColor: 'rgba(33, 150, 243, 0.8)', color: 'white' }}>
@@ -2110,13 +2016,13 @@ const DevisTable = ({
         <span>Créer ligne spéciale</span>
       </button>
       
-      {/* Hover icons - Lignes spéciales */}
-      {hoveredSpecialLineId && hoveredSpecialLinePosition && createPortal(
+      {/* Boutons d'action - Lignes spéciales */}
+      {clickedSpecialLineId && clickedSpecialLinePosition && createPortal(
         <div
           style={{
             position: 'fixed',
-            top: `${hoveredSpecialLinePosition.top}px`,
-            left: `${(hoveredSpecialLinePosition.left || 0) + 30}px`,
+            top: `${clickedSpecialLinePosition.top}px`,
+            left: `${(clickedSpecialLinePosition.left || 0) + 30}px`,
             transform: `translateY(0) translateX(${isSpecialLineIconsAnimatingOut ? '-100%' : '0'})`,
             display: 'flex',
             gap: '4px',
@@ -2129,33 +2035,13 @@ const DevisTable = ({
             transition: 'transform 0.3s ease, opacity 0.3s ease',
             opacity: isSpecialLineIconsAnimatingOut ? 0 : 1
           }}
-          onMouseEnter={() => {
-            if (specialLineHoverTimeoutRef.current) {
-              clearTimeout(specialLineHoverTimeoutRef.current);
-              specialLineHoverTimeoutRef.current = null;
-            }
-            setIsSpecialLineIconsAnimatingOut(false);
-          }}
-          onMouseLeave={() => {
-            if (specialLineHoverTimeoutRef.current) {
-              clearTimeout(specialLineHoverTimeoutRef.current);
-            }
-            specialLineHoverTimeoutRef.current = setTimeout(() => {
-              setIsSpecialLineIconsAnimatingOut(true);
-              setTimeout(() => {
-                setHoveredSpecialLineId(null);
-                setHoveredSpecialLinePosition(null);
-                specialLineHoverTimeoutRef.current = null;
-              }, 300);
-            }, 1000);
-          }}
         >
           {/* Bouton Modifier */}
           <Tooltip title="Modifier">
             <IconButton 
               size="small" 
               onClick={() => {
-                const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
+                const line = devisItems.find(item => item.type === 'ligne_speciale' && item.id === clickedSpecialLineId);
                 if (line && onEditSpecialLine) {
                   onEditSpecialLine(line);
                 }
@@ -2179,7 +2065,7 @@ const DevisTable = ({
               onClick={() => {
                 // ✅ TODO 1.3: Utiliser le nouveau handler handleMoveSpecialLine
                 if (onMoveSpecialLine) {
-                  onMoveSpecialLine(hoveredSpecialLineId);
+                  onMoveSpecialLine(clickedSpecialLineId);
                 }
               }}
               style={{ 
@@ -2200,10 +2086,10 @@ const DevisTable = ({
               size="small" 
               onClick={() => {
                 // ✅ Trouver la ligne avec l'ID actuel au moment du clic
-                const lineToDelete = devisItems.find(item => item.type === 'ligne_speciale' && item.id === hoveredSpecialLineId);
+                const lineToDelete = devisItems.find(item => item.type === 'ligne_speciale' && item.id === clickedSpecialLineId);
                 
                 if (!lineToDelete) {
-                  console.warn('Ligne spéciale non trouvée pour ID:', hoveredSpecialLineId);
+                  console.warn('Ligne spéciale non trouvée pour ID:', clickedSpecialLineId);
                   return;
                 }
                 

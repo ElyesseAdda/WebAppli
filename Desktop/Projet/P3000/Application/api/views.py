@@ -916,6 +916,11 @@ class SousPartieViewSet(viewsets.ModelViewSet):
         
         # Filtrer par partie si spécifiée (obligatoire)
         if partie_id:
+            # ✅ Vérifier si c'est un ID temporaire (commence par 'temp_')
+            if isinstance(partie_id, str) and partie_id.startswith('temp_'):
+                # Pour les parties temporaires (pas encore sauvegardées), retourner une liste vide
+                return Response([])
+            
             queryset = queryset.filter(partie_id=partie_id)
         else:
             # Si pas de partie_id, retourner vide

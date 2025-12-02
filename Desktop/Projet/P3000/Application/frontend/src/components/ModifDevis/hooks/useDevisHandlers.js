@@ -58,9 +58,10 @@ const getNextSousPartieNumero = (items = [], partieId) => {
  * Hook pour les handlers du devis
  * @param {Array} devisItems - Items du devis
  * @param {Function} setDevisItems - Setter pour les items
+ * @param {Function} loadParties - Fonction pour recharger les parties disponibles (optionnel)
  * @returns {Object} Handlers
  */
-export const useDevisHandlers = (devisItems, setDevisItems) => {
+export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) => {
   const [isReordering, setIsReordering] = useState(false);
   const [lineAwaitingPlacement, setLineAwaitingPlacement] = useState(null);
   const [isSelectingBase, setIsSelectingBase] = useState(false);
@@ -143,7 +144,7 @@ export const useDevisHandlers = (devisItems, setDevisItems) => {
   /**
    * Supprimer une partie et tous ses enfants
    */
-  const handlePartieRemove = useCallback((partieId) => {
+  const handlePartieRemove = useCallback(async (partieId) => {
     setDevisItems(prev => {
       const sousPartiesIds = prev
         .filter(item => item.type === 'sous_partie' && item.partie_id === partieId)
@@ -158,7 +159,12 @@ export const useDevisHandlers = (devisItems, setDevisItems) => {
         return true;
       });
     });
-  }, [setDevisItems]);
+    
+    // ✅ Recharger la liste des parties disponibles pour qu'elle réapparaisse dans la barre de recherche
+    if (loadParties) {
+      await loadParties();
+    }
+  }, [setDevisItems, loadParties]);
 
   /**
    * Éditer le titre d'une partie

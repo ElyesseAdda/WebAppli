@@ -20,6 +20,15 @@ const PartieSearch = ({
     loadInitialOptions();
   }, []);
 
+  // ✅ Recharger les options quand selectedParties change (ex: après suppression d'une partie)
+  useEffect(() => {
+    // Recharger uniquement si des options sont déjà présentes
+    // (évite un double chargement au montage)
+    if (options.length > 0) {
+      loadInitialOptions();
+    }
+  }, [selectedParties.length]); // Dépend de la longueur pour détecter ajout/suppression
+
   // Charger toutes les options au démarrage
   const loadInitialOptions = async () => {
     setIsLoading(true);

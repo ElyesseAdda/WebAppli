@@ -114,7 +114,7 @@ const ModificationDevisV2 = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [recurringLineDraft, setRecurringLineDraft] = useState(null);
 
-  // État pour le PieChart - ligne survolée
+  // État pour le PieChart - ligne sélectionnée (au clic)
   const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
   const [isPieChartVisible, setIsPieChartVisible] = useState(true);
 
@@ -316,6 +316,19 @@ const ModificationDevisV2 = () => {
     return calculateGlobalTotalExcludingLine(null);
   }, [calculateGlobalTotalExcludingLine]);
 
+  // ✅ IMPORTANT : Charger les parties disponibles AVANT useDevisHandlers pour éviter l'erreur "before initialization"
+  const loadParties = useCallback(async () => {
+    try {
+      setIsLoadingParties(true);
+      const response = await axios.get('/api/parties/');
+      setAvailableParties(response.data);
+    } catch (err) {
+      console.error('Erreur lors du chargement des parties:', err);
+    } finally {
+      setIsLoadingParties(false);
+    }
+  }, []);
+
   // ✅ Calcul de la ligne récurrente (comme dans DevisAvance.js)
   const calculateRecurringLineAmount = useCallback((lineOrId) => {
     const targetId = typeof lineOrId === 'object' ? lineOrId.id : lineOrId;
@@ -348,7 +361,7 @@ const ModificationDevisV2 = () => {
     return runningTotal;
   }, [devisItems, calculatePartieTotal, calculerBasesBrutes, calculerMontantLigneSpeciale]);
 
-  // Hook de handlers
+  // Hook de handlers (passer loadParties pour recharger après suppression)
   const {
     isReordering,
     lineAwaitingPlacement,
@@ -382,7 +395,7 @@ const ModificationDevisV2 = () => {
     handleCancelBaseSelection,
     handleClearPendingLineForBase,
     handleDevisItemsReorder
-  } = useDevisHandlers(devisItems, setDevisItems);
+  } = useDevisHandlers(devisItems, setDevisItems, loadParties);
 
   // Enrichir les items pour compatibilité avec DevisTable
   const enrichedDevisItems = useMemo(() => {
@@ -474,19 +487,7 @@ const ModificationDevisV2 = () => {
     }
   }, [chantierData]);
 
-  // Charger les parties disponibles
-  const loadParties = useCallback(async () => {
-    try {
-      setIsLoadingParties(true);
-      const response = await axios.get('/api/parties/');
-      setAvailableParties(response.data);
-    } catch (err) {
-      console.error('Erreur lors du chargement des parties:', err);
-    } finally {
-      setIsLoadingParties(false);
-    }
-  }, []);
-
+  // ✅ loadParties est maintenant défini plus haut (avant useDevisHandlers)
   useEffect(() => {
     loadParties();
   }, [loadParties]);
