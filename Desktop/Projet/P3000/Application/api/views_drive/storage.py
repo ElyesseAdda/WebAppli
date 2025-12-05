@@ -295,7 +295,7 @@ class StorageManager:
     
     def move_object(self, source_key: str, dest_key: str) -> bool:
         """
-        Déplace un objet dans S3
+        Déplace un objet dans S3 (fichier ou dossier)
         
         Args:
             source_key: Clé source
@@ -305,10 +305,63 @@ class StorageManager:
             True si succès
         """
         try:
-            # Copier puis supprimer
-            if self.copy_object(source_key, dest_key):
-                return self.delete_object(source_key)
-            return False
+            # Si c'est un dossier (se termine par /), déplacer tous les objets du dossier
+            if source_key.endswith('/'):
+                # S'assurer que dest_key se termine aussi par /
+                if not dest_key.endswith('/'):
+                    dest_key += '/'
+                
+                # Lister tous les objets dans le dossier source
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket_name,
+                    Prefix=source_key
+                )
+                
+                if 'Contents' not in response:
+                    # Dossier vide, créer juste le .keep
+                    self.s3_client.put_object(
+                        Bucket=self.bucket_name,
+                        Key=f"{dest_key}.keep",
+                        Body=b''
+                    )
+                    # Supprimer l'ancien .keep
+                    self.s3_client.delete_object(
+                        Bucket=self.bucket_name,
+                        Key=f"{source_key}.keep"
+                    )
+                    return True
+                
+                # Copier tous les objets
+                objects_to_copy = response['Contents']
+                for obj in objects_to_copy:
+                    old_key = obj['Key']
+                    # Remplacer le préfixe source par le préfixe destination
+                    new_key = old_key.replace(source_key, dest_key, 1)
+                    
+                    # Copier l'objet
+                    copy_source = {
+                        'Bucket': self.bucket_name,
+                        'Key': old_key
+                    }
+                    self.s3_client.copy_object(
+                        CopySource=copy_source,
+                        Bucket=self.bucket_name,
+                        Key=new_key
+                    )
+                
+                # Supprimer tous les anciens objets
+                objects_to_delete = [{'Key': obj['Key']} for obj in objects_to_copy]
+                self.s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={'Objects': objects_to_delete}
+                )
+                
+                return True
+            else:
+                # C'est un fichier, copier puis supprimer
+                if self.copy_object(source_key, dest_key):
+                    return self.delete_object(source_key)
+                return False
             
         except Exception as e:
             return False

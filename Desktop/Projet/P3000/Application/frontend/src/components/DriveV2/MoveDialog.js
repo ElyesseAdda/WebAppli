@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
+import { displayFilename } from './DriveExplorer';
 
 const API_BASE_URL = '/api/drive-v2';
 
@@ -324,7 +325,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h6">
-            Déplacer {itemsToMove.length > 1 ? `${itemsToMove.length} éléments` : itemsToMove[0]?.name}
+            Déplacer {itemsToMove.length > 1 ? `${itemsToMove.length} éléments` : displayFilename(itemsToMove[0]?.name)}
           </Typography>
           <IconButton onClick={onClose} size="small">
             <ArrowBackIcon />
@@ -384,7 +385,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
                         <FolderIcon color="primary" />
                       </ListItemIcon>
                       <ListItemText
-                        primary={folder.name}
+                        primary={displayFilename(folder.name)}
                         secondary={folder.path || 'Racine'}
                       />
                     </StyledListItem>
@@ -424,7 +425,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
               ) : (
                 <FolderIcon fontSize="small" />
               )}
-              {item.name}
+              {displayFilename(item.name)}
             </Link>
           ))}
         </Breadcrumbs>
@@ -475,7 +476,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
                     <FolderIcon color={selectedDestination === folder.path ? 'primary' : 'inherit'} />
                   </ListItemIcon>
                   <ListItemText
-                    primary={folder.name}
+                    primary={displayFilename(folder.name)}
                     secondary={selectedDestination === folder.path ? 'Destination sélectionnée' : 'Clic pour sélectionner, double-clic pour naviguer'}
                   />
                 </StyledListItem>

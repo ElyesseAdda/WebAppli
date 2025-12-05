@@ -64,30 +64,46 @@ class OnlyOfficeManager:
         return extension in editable_extensions
     
     @staticmethod
-    def generate_clean_key(file_path: str) -> tuple:
+    def generate_clean_key(file_path: str, last_modified: str = None) -> tuple:
         """
-        Génère une clé STABLE pour OnlyOffice (sans timestamp)
+        Génère une clé pour OnlyOffice basée sur le chemin et la date de modification
         
         Args:
             file_path: Chemin du fichier
+            last_modified: Date de dernière modification du fichier (ISO format)
             
         Returns:
             Tuple (document_key, version)
         """
         import hashlib
         
-        # OPTIMISATION : Clé stable basée sur le hash du chemin
-        # Comme ça OnlyOffice reconnaît le même document et utilise son cache
+        # Nettoyer le chemin
         clean_path = re.sub(r'[^a-zA-Z0-9._-]', '_', file_path)
         
-        # Hash MD5 court pour unicité
-        file_hash = hashlib.md5(file_path.encode()).hexdigest()[:8]
+        # Inclure la date de modification dans le hash pour détecter les changements
+        if last_modified:
+            # Utiliser la date de modification pour créer une clé unique
+            # Si le fichier est remplacé, la date change et OnlyOffice créera un nouveau document
+            key_string = f"{file_path}_{last_modified}"
+        else:
+            # Fallback : utiliser uniquement le chemin (comportement précédent)
+            key_string = file_path
         
-        # Clé stable (pas de timestamp!)
+        # Hash MD5 pour unicité
+        file_hash = hashlib.md5(key_string.encode()).hexdigest()[:12]
+        
+        # Clé incluant le hash basé sur le chemin et la date de modification
         document_key = f"{clean_path}_{file_hash}"
         
-        # Version basée sur la dernière modification (à implémenter si nécessaire)
+        # Version basée sur la dernière modification
         version = 1
+        if last_modified:
+            # Utiliser un hash de la date pour la version
+            version_hash = hashlib.md5(last_modified.encode()).hexdigest()[:4]
+            try:
+                version = int(version_hash, 16) % 10000  # Convertir en nombre entre 0 et 9999
+            except:
+                version = 1
         
         return document_key, version
     
@@ -120,7 +136,7 @@ class OnlyOfficeManager:
     @staticmethod
     def create_config(file_path: str, file_name: str, file_url: str, 
                      callback_url: str, user_id: str, user_name: str, 
-                     mode: str = 'edit') -> dict:
+                     mode: str = 'edit', storage_manager=None) -> dict:
         """
         Crée la configuration OnlyOffice
         
@@ -132,12 +148,25 @@ class OnlyOfficeManager:
             user_id: ID utilisateur
             user_name: Nom utilisateur
             mode: Mode d'édition ('edit' ou 'view')
+            storage_manager: Instance du StorageManager pour récupérer la date de modification
             
         Returns:
             Dict avec config et token
         """
-        # Générer une clé STABLE (même clé à chaque ouverture du même fichier)
-        document_key, version = OnlyOfficeManager.generate_clean_key(file_path)
+        # Récupérer la date de dernière modification du fichier
+        last_modified = None
+        if storage_manager:
+            try:
+                metadata = storage_manager.get_object_metadata(file_path)
+                if metadata and metadata.get('last_modified'):
+                    last_modified = metadata['last_modified']
+            except:
+                # Si on ne peut pas récupérer la date, continuer sans
+                pass
+        
+        # Générer une clé basée sur le chemin ET la date de modification
+        # Si le fichier est remplacé, la date change et OnlyOffice créera un nouveau document
+        document_key, version = OnlyOfficeManager.generate_clean_key(file_path, last_modified)
         
         # Stocker la correspondance key -> file_path original dans le cache (7 jours)
         cache.set(f"onlyoffice_key_{document_key}", file_path, timeout=604800)

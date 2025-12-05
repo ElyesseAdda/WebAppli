@@ -82,11 +82,71 @@ export const useUpload = () => {
     return currentPath || '';
   };
 
+  // Vérifier si un fichier existe déjà
+  const checkFileExists = async (fileName, filePath) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/list-content/`,
+        {
+          params: { folder_path: filePath },
+          withCredentials: true,
+        }
+      );
+      
+      const files = response.data.files || [];
+      // Normaliser le nom du fichier pour la comparaison (remplacer espaces par underscores)
+      // Le backend normalise automatiquement les noms avec des underscores
+      const normalizedFileName = fileName.replace(/ /g, '_');
+      
+      return files.some(f => {
+        // Les noms dans le backend sont déjà normalisés avec des underscores
+        // Comparer directement (les noms sont déjà normalisés côté backend)
+        return f.name === normalizedFileName;
+      });
+    } catch (error) {
+      // En cas d'erreur, considérer que le fichier n'existe pas pour ne pas bloquer l'upload
+      console.error('Erreur lors de la vérification du fichier:', error);
+      return false;
+    }
+  };
+
+  // Trouver un nom de fichier disponible en ajoutant un numéro
+  const findAvailableFileName = async (originalFileName, filePath) => {
+    // Extraire le nom et l'extension
+    const lastDotIndex = originalFileName.lastIndexOf('.');
+    const hasExtension = lastDotIndex > 0;
+    const baseName = hasExtension ? originalFileName.substring(0, lastDotIndex) : originalFileName;
+    const extension = hasExtension ? originalFileName.substring(lastDotIndex) : '';
+    
+    // Normaliser le nom de base
+    const normalizedBaseName = baseName.replace(/ /g, '_');
+    
+    // Essayer avec des numéros incrémentaux entre parenthèses
+    for (let i = 1; i <= 1000; i++) {
+      // Le nom normalisé avec parenthèses (le backend normalisera les parenthèses en underscores)
+      const candidateName = `${normalizedBaseName}_(${i})${extension}`;
+      const exists = await checkFileExists(candidateName, filePath);
+      
+      if (!exists) {
+        // Retourner le nom avec espaces et parenthèses pour l'affichage
+        // Le backend normalisera automatiquement les espaces et parenthèses
+        return `${baseName}_(${i})${extension}`;
+      }
+    }
+    
+    // Si on n'a pas trouvé, retourner avec un timestamp
+    const timestamp = Date.now();
+    return `${baseName}_(${timestamp})${extension}`;
+  };
+
   // Upload d'un fichier
-  const uploadFile = async (file, currentPath, rootFolderName = null) => {
+  const uploadFile = async (file, currentPath, rootFolderName = null, replaceExisting = false, newFileName = null) => {
     try {
       // Calculer le chemin de destination (peut inclure des sous-dossiers)
       const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
+      
+      // Déterminer le nom du fichier à utiliser
+      const fileNameToUse = newFileName || file.name;
       
       // Déterminer le Content-Type du fichier
       // S'assurer qu'on utilise un type valide, sinon utiliser application/octet-stream
@@ -96,12 +156,38 @@ export const useUpload = () => {
         fileContentType = 'application/octet-stream';
       }
       
+      // Si on doit remplacer un fichier existant, le supprimer d'abord
+      if (replaceExisting) {
+        try {
+          // Normaliser le nom du fichier original pour construire le chemin
+          const normalizedFileName = file.name.replace(/ /g, '_');
+          const fullFilePath = fileDestinationPath + normalizedFileName;
+          
+          await axios.delete(
+            `${API_BASE_URL}/delete-item/`,
+            {
+              params: { 
+                item_path: fullFilePath,
+                item_type: 'file'
+              },
+              withCredentials: true,
+              headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+              },
+            }
+          );
+        } catch (deleteError) {
+          // Si la suppression échoue, continuer quand même l'upload
+          console.warn('Impossible de supprimer le fichier existant:', deleteError);
+        }
+      }
+      
       // 1. Obtenir l'URL d'upload
       const uploadUrlResponse = await axios.post(
         `${API_BASE_URL}/upload-url/`,
         {
           file_path: fileDestinationPath,
-          file_name: file.name,
+          file_name: fileNameToUse,
           content_type: fileContentType,
         },
         {
@@ -246,8 +332,28 @@ export const useUpload = () => {
     }
   };
 
+  // Détecter les fichiers en conflit
+  const detectConflicts = useCallback(async (files, currentPath) => {
+    const rootFolderName = extractRootFolderName(files);
+    const conflicts = [];
+
+    for (const file of files) {
+      const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
+      const exists = await checkFileExists(file.name, fileDestinationPath);
+      
+      if (exists) {
+        conflicts.push({
+          file,
+          destinationPath: fileDestinationPath,
+        });
+      }
+    }
+
+    return conflicts;
+  }, []);
+
   // Upload de plusieurs fichiers
-  const uploadFiles = useCallback(async (files, currentPath) => {
+  const uploadFiles = useCallback(async (files, currentPath, replaceFiles = [], renamedFilesMap = new Map()) => {
     // Filtrer pour ne garder que les fichiers (pas les dossiers)
     // IMPORTANT : Quand on sélectionne un dossier avec webkitdirectory, le navigateur peut parfois
     // retourner le dossier lui-même comme un "fichier" avec size=0 et webkitRelativePath=''
@@ -282,6 +388,7 @@ export const useUpload = () => {
         success: 0,
         error: 0,
         total: 0,
+        conflicts: [],
       };
     }
     
@@ -309,9 +416,27 @@ export const useUpload = () => {
       }
     }
 
+    // Créer un Set pour vérifier rapidement si un fichier doit être remplacé
+    const replaceSet = new Set(replaceFiles.map(f => {
+      // Utiliser le nom original du fichier pour la comparaison
+      if (typeof f === 'string') return f;
+      return f.name || f.webkitRelativePath;
+    }));
+
     // Uploader tous les fichiers
     const results = await Promise.all(
-      validFiles.map((file) => uploadFile(file, currentPath, rootFolderName))
+      validFiles.map(async (file) => {
+        const fileKey = file.name || file.webkitRelativePath;
+        const shouldReplace = replaceSet.has(file.name) || replaceSet.has(file.webkitRelativePath) || replaceSet.has(file);
+        
+        // Si on ne remplace pas et qu'un nouveau nom a été généré, l'utiliser
+        let newFileName = null;
+        if (!shouldReplace && renamedFilesMap && renamedFilesMap.has(fileKey)) {
+          newFileName = renamedFilesMap.get(fileKey);
+        }
+        
+        return uploadFile(file, currentPath, rootFolderName, shouldReplace, newFileName);
+      })
     );
 
     setUploading(false);
@@ -323,11 +448,14 @@ export const useUpload = () => {
       success: successCount,
       error: errorCount,
       total: validFiles.length,
+      conflicts: [],
     };
   }, []);
 
   return {
     uploadFiles,
+    detectConflicts,
+    findAvailableFileName,
     uploading,
     progress,
     errors,

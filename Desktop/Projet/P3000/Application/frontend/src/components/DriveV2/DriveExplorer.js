@@ -3,6 +3,29 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+/**
+ * Convertit un nom de fichier/dossier normalisé (avec underscores) en nom d'affichage (avec espaces)
+ * @param {string} normalizedName - Nom normalisé avec underscores
+ * @returns {string} - Nom d'affichage avec espaces
+ */
+export const displayFilename = (normalizedName) => {
+  if (!normalizedName) return normalizedName;
+  // Remplacer les underscores par des espaces pour l'affichage
+  return normalizedName.replace(/_/g, ' ');
+};
+
+/**
+ * Convertit un chemin normalisé en chemin d'affichage
+ * @param {string} normalizedPath - Chemin normalisé avec underscores
+ * @returns {string} - Chemin d'affichage avec espaces
+ */
+export const displayPath = (normalizedPath) => {
+  if (!normalizedPath) return normalizedPath;
+  // Séparer le chemin en segments et normaliser chacun
+  const segments = normalizedPath.split('/');
+  return segments.map(segment => displayFilename(segment)).join('/');
+};
 import {
   Box,
   List,
@@ -16,6 +39,13 @@ import {
   ListItemIcon,
   ListItemText,
   Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Alert,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -32,10 +62,12 @@ import {
   CloudUpload as UploadIcon,
   Visibility as VisibilityIcon,
   DriveFileMove as MoveIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
 import MoveDialog from './MoveDialog';
+import { checkFileExists, findAvailableFileName } from './hooks/useUpload';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
@@ -139,6 +171,9 @@ const DriveExplorer = ({
   const [itemsToMove, setItemsToMove] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState(new Set());
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [renameConflict, setRenameConflict] = useState(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState(null);
   const [selectionBox, setSelectionBox] = useState(null);
@@ -702,19 +737,47 @@ const DriveExplorer = ({
     setContextMenu(null);
   };
 
-  const handleDownload = async () => {
-    if (!selectedItem) return;
+  const handleDownload = async (item = null) => {
+    const fileToDownload = item || selectedItem;
+    if (!fileToDownload) {
+      console.error('Aucun fichier sélectionné pour le téléchargement');
+      return;
+    }
 
     try {
       const response = await fetch(
-        `/api/drive-v2/download-url/?file_path=${encodeURIComponent(selectedItem.path)}`
+        `/api/drive-v2/download-url/?file_path=${encodeURIComponent(fileToDownload.path)}`,
+        {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        throw new Error(errorData.error || `Erreur HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
 
       // Ouvrir l'URL de téléchargement
-      window.open(data.download_url, '_blank');
+      if (data.download_url) {
+        // Créer un lien temporaire pour forcer le téléchargement
+        const link = document.createElement('a');
+        link.href = data.download_url;
+        link.download = fileToDownload.name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error('URL de téléchargement non disponible dans la réponse');
+      }
     } catch (error) {
-      // Erreur silencieuse
+      console.error('Erreur lors du téléchargement:', error);
+      alert(`Erreur lors du téléchargement: ${error.message}`);
     }
 
     handleCloseContextMenu();
@@ -779,6 +842,242 @@ const DriveExplorer = ({
     }
     
     setMoveDialogOpen(true);
+  };
+
+  // Ouvrir le dialog de renommage
+  const handleRename = () => {
+    if (!selectedItem) return;
+    
+    // Initialiser le nom avec le nom d'affichage (avec espaces)
+    setNewName(displayFilename(selectedItem.name));
+    setRenameConflict(null);
+    setRenameDialogOpen(true);
+    handleCloseContextMenu();
+  };
+
+  // Gérer le renommage avec vérification des conflits
+  const handleRenameConfirm = async () => {
+    if (!selectedItem || !newName.trim()) return;
+
+    const trimmedName = newName.trim();
+    
+    // Extraire le chemin parent
+    const parentPath = selectedItem.path.substring(0, selectedItem.path.lastIndexOf('/') + 1);
+    
+    // Vérifier si un fichier/dossier avec ce nom existe déjà (sauf si c'est le même élément)
+    const isFolder = selectedItem.type === 'folder';
+    const normalizedNewName = trimmedName.replace(/ /g, '_');
+    
+    // Construire le chemin complet du nouveau nom
+    const newPath = parentPath + normalizedNewName + (isFolder ? '/' : '');
+    
+    // Vérifier si le nouveau nom est différent de l'ancien
+    if (newPath === selectedItem.path) {
+      // Le nom n'a pas changé, juste fermer le dialog
+      setRenameDialogOpen(false);
+      setNewName('');
+      return;
+    }
+
+    // Vérifier les conflits
+    try {
+      const response = await fetch(
+        `/api/drive-v2/list-content/?folder_path=${encodeURIComponent(parentPath)}`,
+        {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = isFolder ? (data.folders || []) : (data.files || []);
+        
+        // Vérifier si un élément avec ce nom existe déjà (et ce n'est pas l'élément actuel)
+        const conflict = items.find(item => {
+          const itemNormalizedName = item.name.replace(/ /g, '_');
+          return itemNormalizedName === normalizedNewName && item.path !== selectedItem.path;
+        });
+
+        if (conflict) {
+          // Conflit détecté
+          // Trouver un nom disponible
+          let suggestedName;
+          if (isFolder) {
+            // Pour les dossiers, créer un nom avec numéro entre parenthèses
+            const normalizedBaseName = trimmedName.replace(/ /g, '_');
+            for (let i = 1; i <= 1000; i++) {
+              const candidateName = `${normalizedBaseName}_(${i})`;
+              const candidatePath = parentPath + candidateName + '/';
+              const exists = (data.folders || []).some(f => f.path === candidatePath);
+              if (!exists) {
+                suggestedName = `${trimmedName}_(${i})`;
+                break;
+              }
+            }
+            if (!suggestedName) {
+              const timestamp = Date.now();
+              suggestedName = `${trimmedName}_(${timestamp})`;
+            }
+          } else {
+            // Pour les fichiers, utiliser findAvailableFileName
+            suggestedName = await findAvailableFileName(trimmedName, parentPath);
+          }
+          
+          setRenameConflict({
+            exists: true,
+            suggestedName: suggestedName,
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification des conflits:', error);
+    }
+
+    // Pas de conflit, procéder au renommage
+    await performRename(trimmedName);
+  };
+
+  // Effectuer le renommage
+  const performRename = async (nameToUse) => {
+    if (!selectedItem) return;
+
+    try {
+      const response = await fetch('/api/drive-v2/rename-item/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          old_path: selectedItem.path,
+          new_name: nameToUse,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        const errorMessage = errorData.error || `Erreur HTTP ${response.status}`;
+        
+        // Vérifier si l'erreur indique un conflit de nom
+        if (errorMessage.includes('existe déjà') || 
+            errorMessage.includes('already exists') ||
+            errorMessage.includes('déjà')) {
+          // C'est un conflit de nom, afficher le message de conflit
+          const parentPath = selectedItem.path.substring(0, selectedItem.path.lastIndexOf('/') + 1);
+          const isFolder = selectedItem.type === 'folder';
+          let suggestedName;
+          
+          if (isFolder) {
+            // Pour les dossiers, créer un nom avec numéro entre parenthèses
+            const normalizedBaseName = nameToUse.replace(/ /g, '_');
+            for (let i = 1; i <= 1000; i++) {
+              const candidateName = `${normalizedBaseName}_(${i})`;
+              const candidatePath = parentPath + candidateName + '/';
+              // Vérifier si ce nom existe déjà
+              const checkResponse = await fetch(
+                `/api/drive-v2/list-content/?folder_path=${encodeURIComponent(parentPath)}`,
+                {
+                  credentials: 'include',
+                  headers: { 'Content-Type': 'application/json' },
+                }
+              );
+              if (checkResponse.ok) {
+                const checkData = await checkResponse.json();
+                const exists = (checkData.folders || []).some(f => f.path === candidatePath);
+                if (!exists) {
+                  suggestedName = `${nameToUse}_(${i})`;
+                  break;
+                }
+              }
+            }
+            if (!suggestedName) {
+              const timestamp = Date.now();
+              suggestedName = `${nameToUse}_(${timestamp})`;
+            }
+          } else {
+            // Pour les fichiers, utiliser findAvailableFileName
+            suggestedName = await findAvailableFileName(nameToUse, parentPath);
+          }
+          
+          setRenameConflict({
+            exists: true,
+            suggestedName: suggestedName,
+          });
+          return;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      // Succès
+      setRenameDialogOpen(false);
+      setNewName('');
+      setRenameConflict(null);
+      onRefresh();
+    } catch (error) {
+      console.error('Erreur lors du renommage:', error);
+      // Ne pas afficher d'alerte si c'est un conflit (déjà géré ci-dessus)
+      if (!error.message.includes('existe déjà') && 
+          !error.message.includes('already exists') &&
+          !error.message.includes('déjà')) {
+        alert(`Erreur lors du renommage: ${error.message}`);
+      }
+    }
+  };
+
+  // Gérer "Continuer sans remplacer" (renommer avec un numéro)
+  const handleRenameContinue = async () => {
+    if (!renameConflict || !renameConflict.suggestedName) return;
+    await performRename(renameConflict.suggestedName);
+  };
+
+  // Gérer "Remplacer" (supprimer l'ancien et renommer)
+  const handleRenameReplace = async () => {
+    if (!selectedItem || !newName.trim()) return;
+
+    const trimmedName = newName.trim();
+    const parentPath = selectedItem.path.substring(0, selectedItem.path.lastIndexOf('/') + 1);
+    const normalizedNewName = trimmedName.replace(/ /g, '_');
+    const isFolder = selectedItem.type === 'folder';
+    const newPath = parentPath + normalizedNewName + (isFolder ? '/' : '');
+
+    try {
+      // Récupérer l'élément en conflit
+      const response = await fetch(
+        `/api/drive-v2/list-content/?folder_path=${encodeURIComponent(parentPath)}`,
+        {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = isFolder ? (data.folders || []) : (data.files || []);
+        const conflictItem = items.find(item => {
+          const itemNormalizedName = item.name.replace(/ /g, '_');
+          return itemNormalizedName === normalizedNewName && item.path !== selectedItem.path;
+        });
+
+        if (conflictItem) {
+          // Supprimer l'élément en conflit
+          await onDeleteItem(conflictItem.path, isFolder);
+        }
+      }
+
+      // Maintenant renommer
+      await performRename(trimmedName);
+    } catch (error) {
+      console.error('Erreur lors du remplacement:', error);
+      alert(`Erreur lors du remplacement: ${error.message}`);
+    }
   };
 
   // Fermer le dialog de déplacement et rafraîchir
@@ -1000,7 +1299,7 @@ const DriveExplorer = ({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <FolderIcon color="primary" />
-                <Typography variant="body2">{folder.name}</Typography>
+                <Typography variant="body2">{displayFilename(folder.name)}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
                 --
@@ -1101,7 +1400,7 @@ const DriveExplorer = ({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 {getFileIcon(file.name)}
-                <Typography variant="body2">{file.name}</Typography>
+                <Typography variant="body2">{displayFilename(file.name)}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
                 {formatFileSize(file.size)}
@@ -1110,19 +1409,7 @@ const DriveExplorer = ({
                 {formatDate(file.last_modified)}
               </Typography>
               <Box>
-                <Tooltip title="Télécharger">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedItem(fileItem);
-                      handleDownload();
-                    }}
-                  >
-                    <DownloadIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Plus d'actions">
+              <Tooltip title="Plus d'actions">
                   <IconButton
                     size="small"
                     onClick={(e) => {
@@ -1133,6 +1420,18 @@ const DriveExplorer = ({
                     <MoreVertIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                <Tooltip title="Télécharger">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownload(fileItem);
+                    }}
+                  >
+                    <DownloadIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
               </Box>
             </StyledListItem>
           );
@@ -1166,6 +1465,12 @@ const DriveExplorer = ({
             </MenuItem>
           </>
         )}
+        <MenuItem onClick={handleRename}>
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Renommer</ListItemText>
+        </MenuItem>
         <MenuItem onClick={handleMove}>
           <ListItemIcon>
             <MoveIcon fontSize="small" />
@@ -1193,6 +1498,87 @@ const DriveExplorer = ({
         onMoveComplete={handleMoveComplete}
         onNavigate={onNavigateToFolder}
       />
+
+      {/* Dialog de renommage */}
+      <Dialog
+        open={renameDialogOpen}
+        onClose={() => {
+          setRenameDialogOpen(false);
+          setNewName('');
+          setRenameConflict(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Renommer {selectedItem?.type === 'folder' ? 'le dossier' : 'le fichier'}
+        </DialogTitle>
+        <DialogContent>
+          {renameConflict && renameConflict.exists && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Un {selectedItem?.type === 'folder' ? 'dossier' : 'fichier'} avec ce nom existe déjà.
+            </Alert>
+          )}
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Nouveau nom"
+            fullWidth
+            variant="outlined"
+            value={newName}
+            onChange={(e) => {
+              setNewName(e.target.value);
+              setRenameConflict(null);
+            }}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !renameConflict) {
+                handleRenameConfirm();
+              }
+            }}
+            helperText={
+              renameConflict && renameConflict.exists
+                ? `Nom suggéré: ${displayFilename(renameConflict.suggestedName)}`
+                : 'Les espaces seront automatiquement remplacés par des underscores'
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRenameDialogOpen(false);
+              setNewName('');
+              setRenameConflict(null);
+            }}
+          >
+            Annuler
+          </Button>
+          {renameConflict && renameConflict.exists ? (
+            <>
+              <Button
+                onClick={handleRenameContinue}
+                variant="outlined"
+              >
+                Continuer sans remplacer
+              </Button>
+              <Button
+                onClick={handleRenameReplace}
+                variant="contained"
+                color="error"
+              >
+                Remplacer
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={handleRenameConfirm}
+              variant="contained"
+              disabled={!newName.trim()}
+            >
+              Renommer
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </ExplorerContainer>
   );
 };

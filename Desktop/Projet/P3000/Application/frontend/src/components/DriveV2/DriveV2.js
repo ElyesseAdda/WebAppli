@@ -29,7 +29,7 @@ import {
   NavigateNext as NavigateNextIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
-import DriveExplorer from './DriveExplorer';
+import DriveExplorer, { displayFilename } from './DriveExplorer';
 import DriveUploader from './DriveUploader';
 import DriveSearch from './DriveSearch';
 import { useDrive } from './hooks/useDrive';
@@ -349,7 +349,7 @@ const DriveV2 = () => {
                     ) : (
                       <FolderIcon fontSize="small" />
                     )}
-                    {item.name}
+                    {displayFilename(item.name)}
                   </Link>
                 );
               })}

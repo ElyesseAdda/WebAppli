@@ -291,6 +291,12 @@ class DriveV2ViewSet(viewsets.ViewSet):
             result = self.drive_manager.rename_item(old_path, new_name)
             return Response(result, status=status.HTTP_200_OK)
             
+        except ValueError as e:
+            # Erreur de conflit de nom (message clair pour l'utilisateur)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -422,7 +428,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 callback_url=callback_url,
                 user_id=str(request.user.id),
                 user_name=request.user.get_full_name() or request.user.username,
-                mode=mode
+                mode=mode,
+                storage_manager=self.drive_manager.storage
             )
             
             return Response(result, status=status.HTTP_200_OK)

@@ -15,6 +15,11 @@ import {
   ListItemText,
   IconButton,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -23,9 +28,11 @@ import {
   Close as CloseIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useUpload } from './hooks/useUpload';
+import { displayFilename } from './DriveExplorer';
 
 const UploaderContainer = styled(Box)(({ theme }) => ({
   position: 'fixed',
@@ -67,7 +74,10 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
   const [selectedFiles, setSelectedFiles] = useState(initialFiles);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadMode, setUploadMode] = useState('files'); // 'files' ou 'folder'
-  const { uploadFiles, uploading, progress, errors } = useUpload();
+  const { uploadFiles, detectConflicts, findAvailableFileName, uploading, progress, errors } = useUpload();
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
+  const [conflicts, setConflicts] = useState([]);
+  const [filesToReplace, setFilesToReplace] = useState(new Set());
 
   // Mettre à jour les fichiers sélectionnés si initialFiles change
   useEffect(() => {
@@ -242,14 +252,122 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
     if (selectedFiles.length === 0) return;
 
     try {
-      await uploadFiles(selectedFiles, currentPath);
+      // Détecter les conflits avant l'upload
+      const detectedConflicts = await detectConflicts(selectedFiles, currentPath);
+      
+      if (detectedConflicts.length > 0) {
+        // Afficher le dialog de confirmation
+        setConflicts(detectedConflicts);
+        setConflictDialogOpen(true);
+        return;
+      }
+
+      // Pas de conflit, procéder à l'upload normal
+      await proceedWithUpload([]);
+    } catch (error) {
+      console.error('Erreur lors de la détection des conflits:', error);
+      // En cas d'erreur, procéder quand même à l'upload
+      await proceedWithUpload([]);
+    }
+  };
+
+  // Procéder à l'upload avec les fichiers à remplacer ou renommés
+  const proceedWithUpload = async (replaceFiles = [], renamedFilesMap = new Map()) => {
+    try {
+      // Créer une nouvelle liste de fichiers avec les noms renommés si nécessaire
+      const filesToUpload = selectedFiles.map(file => {
+        const fileKey = file.name || file.webkitRelativePath;
+        if (renamedFilesMap.has(fileKey)) {
+          // Créer un nouveau fichier avec le nom modifié
+          const newFileName = renamedFilesMap.get(fileKey);
+          const renamedFile = new File([file], newFileName, {
+            type: file.type,
+            lastModified: file.lastModified,
+          });
+          // Préserver le webkitRelativePath si présent
+          if (file.webkitRelativePath) {
+            Object.defineProperty(renamedFile, 'webkitRelativePath', {
+              value: file.webkitRelativePath.replace(file.name, newFileName),
+              writable: false,
+            });
+          }
+          return renamedFile;
+        }
+        return file;
+      });
+      
+      await uploadFiles(filesToUpload, currentPath, replaceFiles, renamedFilesMap);
       // Attendre un peu pour que l'utilisateur voie le succès
       setTimeout(() => {
         onUploadComplete();
       }, 1000);
     } catch (error) {
-      // Erreur silencieuse
+      console.error('Erreur lors de l\'upload:', error);
     }
+  };
+
+  // Gérer le remplacement de tous les fichiers
+  const handleReplaceAll = () => {
+    const filesToReplaceList = conflicts.map(conflict => conflict.file);
+    
+    setConflictDialogOpen(false);
+    setConflicts([]);
+    setFilesToReplace(new Set());
+    
+    proceedWithUpload(filesToReplaceList);
+  };
+
+  // Gérer la confirmation du remplacement sélectif
+  const handleReplaceConfirm = () => {
+    const filesToReplaceList = conflicts
+      .filter(conflict => filesToReplace.has(conflict.file.name) || filesToReplace.has(conflict.file.webkitRelativePath))
+      .map(conflict => conflict.file);
+    
+    setConflictDialogOpen(false);
+    setConflicts([]);
+    setFilesToReplace(new Set());
+    
+    proceedWithUpload(filesToReplaceList);
+  };
+
+  // Gérer la continuation sans remplacement (renommer avec numéro)
+  const handleContinueWithoutReplace = async () => {
+    const renamedFilesMap = new Map();
+    
+    // Pour TOUS les conflits, trouver un nom disponible (renommer tous les fichiers)
+    for (const conflict of conflicts) {
+      const fileKey = conflict.file.name || conflict.file.webkitRelativePath;
+      const availableName = await findAvailableFileName(conflict.file.name, conflict.destinationPath);
+      renamedFilesMap.set(fileKey, availableName);
+    }
+    
+    setConflictDialogOpen(false);
+    setConflicts([]);
+    setFilesToReplace(new Set());
+    
+    // Pas de fichiers à remplacer, tous seront renommés
+    proceedWithUpload([], renamedFilesMap);
+  };
+
+  // Gérer l'annulation
+  const handleReplaceCancel = () => {
+    setConflictDialogOpen(false);
+    setConflicts([]);
+    setFilesToReplace(new Set());
+  };
+
+  // Toggle le remplacement d'un fichier
+  const toggleFileReplace = (conflict) => {
+    setFilesToReplace(prev => {
+      const newSet = new Set(prev);
+      const key = conflict.file.name || conflict.file.webkitRelativePath;
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
   };
 
   // Formater la taille du fichier
@@ -448,6 +566,88 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
           </Button>
         </Box>
       </UploaderPaper>
+
+      {/* Dialog de confirmation pour les conflits */}
+      <Dialog
+        open={conflictDialogOpen}
+        onClose={handleReplaceCancel}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon color="warning" />
+            <Typography variant="h6">
+              Fichiers existants détectés
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {conflicts.length} fichier{conflicts.length > 1 ? 's' : ''} avec le même nom existe{conflicts.length > 1 ? 'nt' : ''} déjà dans le drive.
+            Que souhaitez-vous faire ?
+          </DialogContentText>
+          
+          <List dense>
+            {conflicts.map((conflict, index) => {
+              const fileKey = conflict.file.name || conflict.file.webkitRelativePath;
+              const isSelected = filesToReplace.has(fileKey);
+              
+              return (
+                <ListItem
+                  key={index}
+                  button
+                  onClick={() => toggleFileReplace(conflict)}
+                  sx={{
+                    backgroundColor: isSelected ? 'action.selected' : 'transparent',
+                    borderRadius: 1,
+                    mb: 1,
+                  }}
+                >
+                  <ListItemIcon>
+                    <FileIcon />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={displayFilename(conflict.file.name)}
+                    secondary={conflict.destinationPath || currentPath || 'Racine'}
+                  />
+                  {isSelected && (
+                    <CheckIcon color="primary" />
+                  )}
+                </ListItem>
+              );
+            })}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleReplaceCancel}>
+            Annuler l'upload
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleContinueWithoutReplace}
+            color="primary"
+          >
+            Continuer sans remplacer
+          </Button>
+          {filesToReplace.size > 0 && (
+            <Button
+              variant="contained"
+              onClick={handleReplaceConfirm}
+              color="primary"
+            >
+              Remplacer {filesToReplace.size} fichier{filesToReplace.size > 1 ? 's' : ''}
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            onClick={handleReplaceAll}
+            color="error"
+          >
+            Remplacer tous les fichiers
+          </Button>
+        </DialogActions>
+      </Dialog>
     </UploaderContainer>
   );
 };

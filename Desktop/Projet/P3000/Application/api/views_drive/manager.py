@@ -7,6 +7,76 @@ from .storage import StorageManager
 import re
 
 
+def normalize_filename(filename: str) -> str:
+    """
+    Normalise un nom de fichier ou dossier en remplaçant les espaces par des underscores
+    et en préservant les parenthèses pour les numéros de version
+    
+    Args:
+        filename: Nom du fichier/dossier à normaliser
+        
+    Returns:
+        Nom normalisé
+    """
+    if not filename:
+        return filename
+    
+    # Remplacer les espaces par des underscores
+    normalized = filename.replace(' ', '_')
+    
+    # Nettoyer les caractères problématiques (garder alphanumériques, underscores, tirets, points, parenthèses)
+    normalized = re.sub(r'[^a-zA-Z0-9_\-\.\(\)]', '_', normalized)
+    
+    # Éviter les underscores multiples consécutifs (mais pas entre parenthèses)
+    # Remplacer les séquences d'underscores sauf celles qui sont dans des parenthèses
+    parts = re.split(r'(\([^)]*\))', normalized)
+    normalized_parts = []
+    for part in parts:
+        if part.startswith('(') and part.endswith(')'):
+            # Garder les parenthèses telles quelles
+            normalized_parts.append(part)
+        else:
+            # Nettoyer les underscores multiples dans les autres parties
+            cleaned = re.sub(r'_+', '_', part)
+            normalized_parts.append(cleaned)
+    normalized = ''.join(normalized_parts)
+    
+    # Supprimer les underscores au début et à la fin
+    normalized = normalized.strip('_')
+    
+    return normalized
+
+
+def normalize_path_segments(path: str) -> str:
+    """
+    Normalise tous les segments d'un chemin (dossiers et fichiers)
+    
+    Args:
+        path: Chemin à normaliser (ex: "dossier parent/fichier avec espaces.pdf")
+        
+    Returns:
+        Chemin normalisé (ex: "dossier_parent/fichier_avec_espaces.pdf")
+    """
+    if not path:
+        return path
+    
+    # Séparer le chemin en segments
+    segments = path.split('/')
+    
+    # Normaliser chaque segment (sauf le dernier s'il contient une extension)
+    normalized_segments = []
+    for i, segment in enumerate(segments):
+        if segment:
+            # Normaliser le segment
+            normalized_segments.append(normalize_filename(segment))
+        else:
+            # Garder les slashes vides (pour les chemins absolus)
+            normalized_segments.append('')
+    
+    # Rejoindre les segments
+    return '/'.join(normalized_segments)
+
+
 class DriveManager:
     """
     Gestionnaire principal du Drive V2
@@ -96,10 +166,12 @@ class DriveManager:
             
             # Normaliser les chemins
             parent_path = self.normalize_path(parent_path)
-            folder_name = folder_name.strip()
+            # Normaliser le nom du dossier (remplacer espaces par underscores)
+            folder_name_normalized = normalize_filename(folder_name.strip())
+            folder_name_display = folder_name.strip()  # Garder le nom original pour l'affichage
             
-            # Construire le chemin complet
-            folder_path = f"{parent_path}{folder_name}/"
+            # Construire le chemin complet avec le nom normalisé
+            folder_path = f"{parent_path}{folder_name_normalized}/"
             
             # Créer le dossier
             success = self.storage.create_folder(folder_path)
@@ -108,7 +180,8 @@ class DriveManager:
                 return {
                     'success': True,
                     'folder_path': folder_path,
-                    'folder_name': folder_name
+                    'folder_name': folder_name_normalized,
+                    'folder_name_display': folder_name_display
                 }
             else:
                 raise Exception("Échec de la création du dossier")
@@ -132,6 +205,34 @@ class DriveManager:
             Dict avec le résultat
         """
         try:
+            # Avant de supprimer, invalider le cache OnlyOffice si c'est un fichier
+            if not is_folder:
+                from django.core.cache import cache
+                from .onlyoffice import OnlyOfficeManager
+                
+                # Essayer de récupérer la date de modification avant suppression
+                last_modified = None
+                try:
+                    metadata = self.storage.get_object_metadata(item_path)
+                    if metadata and metadata.get('last_modified'):
+                        last_modified = metadata['last_modified']
+                except:
+                    pass
+                
+                # Générer la clé avec et sans date de modification pour être sûr d'invalider
+                try:
+                    # Clé avec date de modification si disponible
+                    if last_modified:
+                        document_key, _ = OnlyOfficeManager.generate_clean_key(item_path, last_modified)
+                        cache.delete(f"onlyoffice_key_{document_key}")
+                    
+                    # Aussi invalider avec la clé sans date (pour les anciens fichiers)
+                    document_key_old, _ = OnlyOfficeManager.generate_clean_key(item_path, None)
+                    cache.delete(f"onlyoffice_key_{document_key_old}")
+                except:
+                    # Si on ne peut pas invalider le cache, continuer quand même
+                    pass
+            
             if is_folder:
                 success = self.storage.delete_folder(item_path)
             else:
@@ -255,8 +356,11 @@ class DriveManager:
             # Normaliser le chemin
             file_path = self.normalize_path(file_path)
             
-            # Construire la clé complète
-            full_key = f"{file_path}{file_name}"
+            # Normaliser le nom du fichier (remplacer espaces par underscores)
+            file_name_normalized = normalize_filename(file_name)
+            
+            # Construire la clé complète avec le nom normalisé
+            full_key = f"{file_path}{file_name_normalized}"
             
             # Générer l'URL d'upload
             upload_data = self.storage.get_presigned_upload_url(
@@ -316,19 +420,22 @@ class DriveManager:
         
         Args:
             source_path: Chemin source
-            dest_path: Chemin destination
+            dest_path: Chemin destination (peut contenir le nom du fichier)
             
         Returns:
             Dict avec le résultat
         """
         try:
-            success = self.storage.move_object(source_path, dest_path)
+            # Normaliser le chemin de destination (normaliser les segments du chemin)
+            dest_path_normalized = normalize_path_segments(dest_path)
+            
+            success = self.storage.move_object(source_path, dest_path_normalized)
             
             if success:
                 return {
                     'success': True,
                     'message': 'Élément déplacé avec succès',
-                    'new_path': dest_path
+                    'new_path': dest_path_normalized
                 }
             else:
                 raise Exception("Échec du déplacement")
@@ -352,18 +459,45 @@ class DriveManager:
             Dict avec le résultat
         """
         try:
-            # Extraire le chemin parent
-            path_parts = old_path.rsplit('/', 2)
+            # Normaliser le nouveau nom (remplacer espaces par underscores)
+            new_name_normalized = normalize_filename(new_name)
             
-            if len(path_parts) >= 2:
-                parent_path = path_parts[0] + '/'
-                new_path = f"{parent_path}{new_name}"
-                
-                # Si c'est un dossier, ajouter le /
-                if old_path.endswith('/'):
-                    new_path += '/'
+            # Extraire le chemin parent
+            is_folder = old_path.endswith('/')
+            
+            # Déterminer le chemin parent et le nouveau chemin
+            if '/' in old_path:
+                # Le fichier/dossier est dans un sous-dossier
+                if is_folder:
+                    # Pour un dossier, enlever le dernier '/' puis extraire le parent
+                    path_without_slash = old_path.rstrip('/')
+                    parent_path = path_without_slash.rsplit('/', 1)[0] + '/' if '/' in path_without_slash else ''
+                    new_path = f"{parent_path}{new_name_normalized}/"
+                else:
+                    # Pour un fichier
+                    parent_path = old_path.rsplit('/', 1)[0] + '/' if '/' in old_path else ''
+                    new_path = f"{parent_path}{new_name_normalized}"
             else:
-                new_path = new_name
+                # Le fichier/dossier est à la racine
+                parent_path = ''
+                if is_folder:
+                    new_path = f"{new_name_normalized}/"
+                else:
+                    new_path = new_name_normalized
+            
+            # Vérifier si la destination existe déjà (conflit)
+            if is_folder:
+                # Pour un dossier, vérifier si le dossier existe déjà
+                folder_content = self.get_folder_content(parent_path)
+                existing_folders = [f['path'] for f in folder_content.get('folders', [])]
+                if new_path in existing_folders and new_path != old_path:
+                    raise ValueError(f"Un dossier avec le nom '{new_name}' existe déjà")
+            else:
+                # Pour un fichier, vérifier si le fichier existe déjà
+                folder_content = self.get_folder_content(parent_path)
+                existing_files = [f['path'] for f in folder_content.get('files', [])]
+                if new_path in existing_files and new_path != old_path:
+                    raise ValueError(f"Un fichier avec le nom '{new_name}' existe déjà")
             
             # Déplacer l'élément
             success = self.storage.move_object(old_path, new_path)
@@ -375,8 +509,15 @@ class DriveManager:
                     'new_path': new_path
                 }
             else:
+                # Vérifier si le fichier source existe
+                source_metadata = self.storage.get_object_metadata(old_path)
+                if not source_metadata:
+                    raise Exception(f"Le fichier ou dossier source '{old_path}' n'existe pas")
                 raise Exception("Échec du renommage")
             
+        except ValueError as e:
+            # Erreur de conflit de nom
+            raise
         except Exception as e:
             raise
     
