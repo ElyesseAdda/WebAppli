@@ -19,6 +19,7 @@ import {
 import {
   CloudUpload as UploadIcon,
   InsertDriveFile as FileIcon,
+  Folder as FolderIcon,
   Close as CloseIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
@@ -65,6 +66,7 @@ const DropZone = styled(Box)(({ theme, isDragOver }) => ({
 const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadMode, setUploadMode] = useState('files'); // 'files' ou 'folder'
   const { uploadFiles, uploading, progress, errors } = useUpload();
 
   // Sélection de fichiers
@@ -73,9 +75,16 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
     setSelectedFiles(files);
   };
 
+  // Sélection de dossier
+  const handleFolderSelect = (event) => {
+    const files = Array.from(event.target.files);
+    setSelectedFiles(files);
+  };
+
   // Drag & Drop
   const handleDragOver = useCallback((event) => {
     event.preventDefault();
+    // Activer le drag & drop pour tous les modes maintenant
     setIsDragOver(true);
   }, []);
 
@@ -84,13 +93,131 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((event) => {
+  // Fonction récursive pour parcourir l'arborescence d'un dossier
+  const traverseFileTree = useCallback((item, path = '', allFiles = []) => {
+    return new Promise((resolve) => {
+      if (item.isFile) {
+        // C'est un fichier
+        item.file((file) => {
+          // Créer un objet File avec webkitRelativePath pour préserver la structure
+          const fileWithPath = new File([file], file.name, {
+            type: file.type,
+            lastModified: file.lastModified,
+          });
+          // Ajouter le chemin relatif
+          Object.defineProperty(fileWithPath, 'webkitRelativePath', {
+            value: path + file.name,
+            writable: false,
+          });
+          allFiles.push(fileWithPath);
+          resolve();
+        }, () => {
+          resolve();
+        });
+      } else if (item.isDirectory) {
+        // C'est un dossier, parcourir récursivement
+        const dirReader = item.createReader();
+        const currentPath = path + item.name + '/';
+        
+        // Fonction récursive pour lire toutes les entrées (readEntries peut retourner par lots)
+        const readAllEntries = () => {
+          const entries = [];
+          
+          const readBatch = () => {
+            dirReader.readEntries((batch) => {
+              if (batch.length === 0) {
+                // Plus d'entrées, traiter toutes les entrées collectées
+                if (entries.length === 0) {
+                  resolve();
+                } else {
+                  const promises = entries.map((entry) => traverseFileTree(entry, currentPath, allFiles));
+                  Promise.all(promises).then(() => resolve());
+                }
+              } else {
+                // Ajouter ce lot d'entrées
+                entries.push(...batch);
+                // Lire le lot suivant
+                readBatch();
+              }
+            }, () => {
+              // Traiter les entrées déjà collectées
+              if (entries.length > 0) {
+                const promises = entries.map((entry) => traverseFileTree(entry, currentPath, allFiles));
+                Promise.all(promises).then(() => resolve());
+              } else {
+                resolve();
+              }
+            });
+          };
+          
+          readBatch();
+        };
+        
+        readAllEntries();
+      } else {
+        resolve();
+      }
+    });
+  }, []);
+
+  const handleDrop = useCallback(async (event) => {
     event.preventDefault();
     setIsDragOver(false);
 
-    const files = Array.from(event.dataTransfer.files);
-    setSelectedFiles(files);
-  }, []);
+    const items = event.dataTransfer.items;
+    
+    if (!items || items.length === 0) {
+      // Fallback : utiliser les fichiers si items n'est pas disponible
+      const files = Array.from(event.dataTransfer.files);
+      setSelectedFiles(files);
+      return;
+    }
+
+    // Vérifier si on peut utiliser webkitGetAsEntry (pour les dossiers)
+    const allFiles = [];
+    const promises = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      // Vérifier si c'est un fichier ou un dossier
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          if (entry.isDirectory) {
+            // C'est un dossier, parcourir récursivement
+            promises.push(traverseFileTree(entry, '', allFiles));
+          } else if (entry.isFile) {
+            // C'est un fichier
+            promises.push(traverseFileTree(entry, '', allFiles));
+          }
+        } else {
+          // Fallback : utiliser getAsFile
+          const file = item.getAsFile();
+          if (file) {
+            allFiles.push(file);
+          }
+        }
+      } else {
+        // Fallback : utiliser getAsFile
+        const file = item.getAsFile();
+        if (file) {
+          allFiles.push(file);
+        }
+      }
+    }
+
+    // Attendre que tous les fichiers soient récupérés
+    await Promise.all(promises);
+    
+    if (allFiles.length > 0) {
+      setSelectedFiles(allFiles);
+    } else {
+      // Fallback final : utiliser dataTransfer.files
+      const files = Array.from(event.dataTransfer.files);
+      setSelectedFiles(files);
+    }
+  }, [traverseFileTree]);
 
   // Upload
   const handleUpload = async () => {
@@ -118,7 +245,9 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
 
   // Statut d'un fichier
   const getFileStatus = (file) => {
-    const fileProgress = progress[file.name];
+    // Utiliser le chemin relatif comme clé si disponible, sinon le nom
+    const fileKey = file.webkitRelativePath || file.name;
+    const fileProgress = progress[fileKey];
     if (!fileProgress) return null;
 
     if (fileProgress.error) {
@@ -128,6 +257,15 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
       return <CheckIcon color="success" />;
     }
     return <LinearProgress variant="determinate" value={fileProgress.progress} sx={{ width: 100 }} />;
+  };
+
+  // Obtenir le chemin d'affichage d'un fichier
+  const getFileDisplayPath = (file) => {
+    if (file.webkitRelativePath) {
+      // Pour les fichiers d'un dossier, afficher le chemin relatif
+      return file.webkitRelativePath;
+    }
+    return file.name;
   };
 
   return (
@@ -148,24 +286,57 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
           Destination: {currentPath || 'Racine'}
         </Alert>
 
+        {/* Mode de sélection */}
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <Button
+            variant={uploadMode === 'files' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setUploadMode('files');
+              setSelectedFiles([]);
+            }}
+            size="small"
+          >
+            Fichiers
+          </Button>
+          <Button
+            variant={uploadMode === 'folder' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setUploadMode('folder');
+              setSelectedFiles([]);
+            }}
+            size="small"
+            startIcon={<FolderIcon />}
+          >
+            Dossier
+          </Button>
+        </Box>
+
         {/* Drop Zone */}
         <DropZone
           isDragOver={isDragOver}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => document.getElementById('file-input').click()}
+          onClick={() => {
+            if (uploadMode === 'folder') {
+              document.getElementById('folder-input').click();
+            } else {
+              document.getElementById('file-input').click();
+            }
+          }}
         >
           <UploadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
           <Typography variant="h6" gutterBottom>
-            Glissez-déposez vos fichiers ici
+            {uploadMode === 'folder' 
+              ? 'Glissez-déposez un dossier ici'
+              : 'Glissez-déposez vos fichiers ici'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            ou cliquez pour sélectionner
+            ou cliquez pour sélectionner {uploadMode === 'folder' ? 'un dossier' : 'des fichiers'}
           </Typography>
         </DropZone>
 
-        {/* Input caché */}
+        {/* Input caché pour fichiers */}
         <input
           type="file"
           id="file-input"
@@ -174,27 +345,65 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
           style={{ display: 'none' }}
         />
 
+        {/* Input caché pour dossier */}
+        <input
+          type="file"
+          id="folder-input"
+          webkitdirectory="true"
+          directory=""
+          multiple
+          onChange={handleFolderSelect}
+          style={{ display: 'none' }}
+        />
+
         {/* Liste des fichiers sélectionnés */}
         {selectedFiles.length > 0 && (
           <>
             <Typography variant="subtitle1" gutterBottom>
-              Fichiers sélectionnés ({selectedFiles.length})
+              {uploadMode === 'folder' ? 'Contenu du dossier' : 'Fichiers sélectionnés'} ({selectedFiles.length})
             </Typography>
+            
+            {/* Avertissement si mode dossier mais pas de fichiers avec chemin relatif */}
+            {uploadMode === 'folder' && selectedFiles.filter(f => f.webkitRelativePath && f.webkitRelativePath !== '').length === 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Aucun fichier détecté dans le dossier. Assurez-vous que le dossier contient des fichiers et réessayez.
+              </Alert>
+            )}
+            
             <List dense sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
-              {selectedFiles.map((file, index) => (
-                <ListItem
-                  key={index}
-                  secondaryAction={getFileStatus(file)}
-                >
-                  <ListItemIcon>
-                    <FileIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={file.name}
-                    secondary={formatFileSize(file.size)}
-                  />
-                </ListItem>
-              ))}
+              {selectedFiles.map((file, index) => {
+                const displayPath = getFileDisplayPath(file);
+                const isInSubfolder = displayPath.includes('/');
+                const hasRelativePath = file.webkitRelativePath && file.webkitRelativePath !== '';
+                
+                return (
+                  <ListItem
+                    key={index}
+                    secondaryAction={getFileStatus(file)}
+                    sx={{
+                      opacity: (!hasRelativePath && uploadMode === 'folder') ? 0.5 : 1,
+                    }}
+                  >
+                    <ListItemIcon>
+                      {isInSubfolder ? <FolderIcon color="primary" /> : <FileIcon />}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={displayPath}
+                      secondary={
+                        uploadMode === 'folder' && !hasRelativePath 
+                          ? '⚠️ Dossier vide ou non détecté' 
+                          : formatFileSize(file.size)
+                      }
+                      primaryTypographyProps={{
+                        sx: {
+                          fontFamily: isInSubfolder ? 'monospace' : 'inherit',
+                          fontSize: isInSubfolder ? '0.875rem' : 'inherit',
+                        }
+                      }}
+                    />
+                  </ListItem>
+                );
+              })}
             </List>
           </>
         )}

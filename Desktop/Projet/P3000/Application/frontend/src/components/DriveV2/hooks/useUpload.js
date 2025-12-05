@@ -28,16 +28,78 @@ export const useUpload = () => {
     return cookieValue;
   };
 
+  // Extraire le nom du dossier racine depuis les fichiers
+  const extractRootFolderName = (files) => {
+    if (files.length === 0) return null;
+    
+    // Prendre le premier fichier qui a un webkitRelativePath
+    const firstFileWithPath = files.find(f => f.webkitRelativePath);
+    if (!firstFileWithPath) return null;
+    
+    // Le premier élément du chemin relatif est le nom du dossier racine
+    const pathParts = firstFileWithPath.webkitRelativePath.split('/');
+    return pathParts[0];
+  };
+
+  // Calculer le chemin de destination d'un fichier
+  const calculateFilePath = (file, currentPath, rootFolderName = null) => {
+    // Si le fichier a un chemin relatif (dans un dossier uploadé)
+    if (file.webkitRelativePath) {
+      const relativePath = file.webkitRelativePath;
+      const pathParts = relativePath.split('/');
+      
+      // Si le fichier est dans un sous-dossier, préserver la structure
+      if (pathParts.length > 1) {
+        // Enlever le nom du fichier pour obtenir le chemin du dossier
+        const folderPath = pathParts.slice(0, -1).join('/');
+        
+        // Si on a un nom de dossier racine, on l'utilise comme base
+        // Sinon, on combine avec le chemin actuel
+        if (rootFolderName) {
+          // Le chemin relatif inclut déjà le nom du dossier racine
+          // On le combine avec le chemin actuel
+          const normalizedCurrentPath = currentPath ? currentPath.replace(/\/$/, '') + '/' : '';
+          return normalizedCurrentPath + folderPath + '/';
+        } else {
+          // Pas de dossier racine, utiliser le chemin actuel
+          const normalizedCurrentPath = currentPath ? currentPath.replace(/\/$/, '') + '/' : '';
+          return normalizedCurrentPath + folderPath + '/';
+        }
+      } else {
+        // Fichier à la racine du dossier sélectionné
+        // Utiliser le nom du dossier racine comme chemin
+        if (rootFolderName) {
+          const normalizedCurrentPath = currentPath ? currentPath.replace(/\/$/, '') + '/' : '';
+          return normalizedCurrentPath + rootFolderName + '/';
+        }
+      }
+    }
+    
+    // Sinon, utiliser le chemin actuel normal
+    return currentPath || '';
+  };
+
   // Upload d'un fichier
-  const uploadFile = async (file, currentPath) => {
+  const uploadFile = async (file, currentPath, rootFolderName = null) => {
     try {
+      // Calculer le chemin de destination (peut inclure des sous-dossiers)
+      const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
+      
+      // Déterminer le Content-Type du fichier
+      // S'assurer qu'on utilise un type valide, sinon utiliser application/octet-stream
+      let fileContentType = file.type || 'application/octet-stream';
+      // Si le type est vide ou invalide, utiliser application/octet-stream
+      if (!fileContentType || fileContentType === '') {
+        fileContentType = 'application/octet-stream';
+      }
+      
       // 1. Obtenir l'URL d'upload
       const uploadUrlResponse = await axios.post(
         `${API_BASE_URL}/upload-url/`,
         {
-          file_path: currentPath,
+          file_path: fileDestinationPath,
           file_name: file.name,
-          content_type: file.type || 'application/octet-stream',
+          content_type: fileContentType,
         },
         {
           withCredentials: true,
@@ -52,24 +114,32 @@ export const useUpload = () => {
 
       // 2. Upload direct vers S3
       const formData = new FormData();
+      
+      // Ajouter tous les champs de la signature retournés par le backend
+      // boto3 generate_presigned_post retourne généralement: key, AWSAccessKeyId, policy, signature, Content-Type, acl
       Object.keys(fields).forEach((key) => {
         formData.append(key, fields[key]);
       });
+      
+      // Ajouter le fichier EN DERNIER (important pour S3)
+      // Le nom du champ doit être 'file' pour S3 presigned POST
       formData.append('file', file);
 
+      // Utiliser le chemin relatif comme clé pour le suivi du progrès
+      const progressKey = file.webkitRelativePath || file.name;
+
       // Upload vers S3 sans credentials (authentification via URL présignée)
+      // IMPORTANT : Ne pas définir Content-Type dans les headers, laisser le navigateur le faire automatiquement
       await axios.post(upload_url, formData, {
         withCredentials: false, // Important : S3 n'accepte pas les credentials avec CORS wildcard
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        // Ne pas définir de headers - le navigateur définira automatiquement Content-Type avec la boundary
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
             (progressEvent.loaded * 100) / progressEvent.total
           );
           setProgress((prev) => ({
             ...prev,
-            [file.name]: {
+            [progressKey]: {
               progress: percentCompleted,
               complete: false,
               error: null,
@@ -81,7 +151,7 @@ export const useUpload = () => {
       // Marquer comme complété
       setProgress((prev) => ({
         ...prev,
-        [file.name]: {
+        [progressKey]: {
           progress: 100,
           complete: true,
           error: null,
@@ -90,32 +160,155 @@ export const useUpload = () => {
 
       return true;
     } catch (error) {
+      const progressKey = file.webkitRelativePath || file.name;
+      
+      // Extraire un message d'erreur plus détaillé
+      let errorMessage = error.message;
+      if (error.response) {
+        // Erreur de réponse HTTP
+        errorMessage = error.response.data?.error || error.response.statusText || error.message;
+      } else if (error.request) {
+        // Requête envoyée mais pas de réponse
+        errorMessage = 'Erreur de connexion au serveur S3';
+      }
+      
       setProgress((prev) => ({
         ...prev,
-        [file.name]: {
+        [progressKey]: {
           progress: 0,
           complete: false,
-          error: error.message,
+          error: errorMessage,
         },
       }));
       
       setErrors((prev) => ({
         ...prev,
-        [file.name]: error.message,
+        [progressKey]: errorMessage,
       }));
 
       return false;
     }
   };
 
+  // Créer les dossiers parents nécessaires de manière récursive
+  const ensureFoldersExist = async (folderPath, basePath) => {
+    if (!folderPath || folderPath === basePath) {
+      return; // Pas de dossiers à créer
+    }
+
+    // Normaliser les chemins
+    const normalizedBase = basePath ? basePath.replace(/\/$/, '') + '/' : '';
+    const normalizedFolder = folderPath.replace(/\/$/, '') + '/';
+    
+    // Extraire le chemin relatif
+    let relativePath = normalizedFolder;
+    if (normalizedBase && normalizedFolder.startsWith(normalizedBase)) {
+      relativePath = normalizedFolder.slice(normalizedBase.length);
+    }
+
+    // Diviser en parties
+    const parts = relativePath.split('/').filter(part => part);
+    
+    if (parts.length === 0) {
+      return;
+    }
+
+    // Créer chaque niveau de dossier récursivement
+    let currentParentPath = normalizedBase;
+    
+    for (const folderName of parts) {
+      const fullFolderPath = currentParentPath + folderName + '/';
+      
+      try {
+        await axios.post(
+          `${API_BASE_URL}/create-folder/`,
+          {
+            parent_path: currentParentPath,
+            folder_name: folderName,
+          },
+          {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken'),
+            },
+          }
+        );
+        // Mettre à jour le chemin parent pour le prochain niveau
+        currentParentPath = fullFolderPath;
+      } catch (error) {
+        // Si le dossier existe déjà, continuer quand même
+        currentParentPath = fullFolderPath;
+      }
+    }
+  };
+
   // Upload de plusieurs fichiers
   const uploadFiles = useCallback(async (files, currentPath) => {
+    // Filtrer pour ne garder que les fichiers (pas les dossiers)
+    // IMPORTANT : Quand on sélectionne un dossier avec webkitdirectory, le navigateur peut parfois
+    // retourner le dossier lui-même comme un "fichier" avec size=0 et webkitRelativePath=''
+    const validFiles = files.filter((file) => {
+      if (!file || !file.name) {
+        return false;
+      }
+      
+      // Si c'est un upload de dossier (webkitRelativePath existe), on doit avoir un chemin relatif
+      // Un vrai fichier dans un dossier a toujours un webkitRelativePath non vide
+      const hasRelativePath = file.webkitRelativePath && file.webkitRelativePath !== '';
+      
+      // Si on a un webkitRelativePath, c'est un fichier dans un dossier uploadé
+      if (hasRelativePath) {
+        // Vérifier que ce n'est pas un dossier (les dossiers ont parfois size=0 mais pas de webkitRelativePath)
+        return file.size !== undefined; // Même les fichiers vides sont valides s'ils ont un chemin relatif
+      }
+      
+      // Si pas de webkitRelativePath, c'est un upload de fichier simple
+      // Dans ce cas, on accepte les fichiers avec une taille >= 0 (y compris les fichiers vides)
+      // MAIS on rejette ceux avec size=0 ET pas de type (probablement un dossier)
+      if (file.size === 0 && (!file.type || file.type === '')) {
+        return false;
+      }
+      
+      // Fichier simple valide
+      return file.size !== undefined;
+    });
+    
+    if (validFiles.length === 0) {
+      return {
+        success: 0,
+        error: 0,
+        total: 0,
+      };
+    }
+    
     setUploading(true);
     setProgress({});
     setErrors({});
 
+    // Extraire le nom du dossier racine si c'est un upload de dossier
+    const rootFolderName = extractRootFolderName(validFiles);
+
+    // Collecter tous les chemins de dossiers uniques nécessaires
+    const folderPaths = new Set();
+    validFiles.forEach((file) => {
+      const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
+      
+      if (fileDestinationPath && fileDestinationPath !== (currentPath || '')) {
+        folderPaths.add(fileDestinationPath);
+      }
+    });
+
+    // Créer tous les dossiers nécessaires avant l'upload
+    if (folderPaths.size > 0) {
+      for (const folderPath of folderPaths) {
+        await ensureFoldersExist(folderPath, currentPath || '');
+      }
+    }
+
+    // Uploader tous les fichiers
     const results = await Promise.all(
-      files.map((file) => uploadFile(file, currentPath))
+      validFiles.map((file) => uploadFile(file, currentPath, rootFolderName))
     );
 
     setUploading(false);
@@ -126,7 +319,7 @@ export const useUpload = () => {
     return {
       success: successCount,
       error: errorCount,
-      total: files.length,
+      total: validFiles.length,
     };
   }, []);
 
