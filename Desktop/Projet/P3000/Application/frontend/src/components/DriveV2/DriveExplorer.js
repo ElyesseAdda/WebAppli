@@ -2,7 +2,7 @@
  * Drive Explorer - Affichage du contenu du drive
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   List,
@@ -15,6 +15,7 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Chip,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -41,6 +42,32 @@ const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   borderRadius: theme.spacing(1),
   border: isDragOver ? `2px dashed ${theme.palette.primary.main}` : 'none',
   transition: 'all 0.2s ease-in-out',
+  position: 'relative',
+}));
+
+const SelectionBox = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  border: `2px dashed ${theme.palette.primary.main}`,
+  backgroundColor: theme.palette.primary.light + '20',
+  pointerEvents: 'none',
+  zIndex: 10,
+}));
+
+const DragIndicator = styled(Box)(({ theme }) => ({
+  position: 'fixed',
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
+  padding: theme.spacing(1, 2),
+  borderRadius: theme.spacing(2),
+  boxShadow: theme.shadows[4],
+  pointerEvents: 'none',
+  zIndex: 2000,
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+  fontSize: '0.875rem',
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
 }));
 
 const ListHeader = styled(Paper)(({ theme }) => ({
@@ -54,17 +81,34 @@ const ListHeader = styled(Paper)(({ theme }) => ({
   position: 'sticky',
   top: 0,
   zIndex: 1,
+  minWidth: 0, // Permet au contenu de se rétrécir si nécessaire
+  overflow: 'hidden', // Évite le débordement
 }));
 
-const StyledListItem = styled(ListItem)(({ theme }) => ({
+const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver }) => ({
   display: 'grid',
   gridTemplateColumns: '1fr 100px 150px 100px',
   gap: theme.spacing(2),
   padding: theme.spacing(2),
+  marginLeft: theme.spacing(2), // Margin à gauche pour la zone de sélection
   borderBottom: `1px solid ${theme.palette.divider}`,
   cursor: 'pointer',
+  backgroundColor: isDragOver 
+    ? theme.palette.success.light + '30' 
+    : isSelected 
+      ? theme.palette.primary.main + '40' 
+      : 'transparent',
+  borderLeft: isDragOver 
+    ? `3px solid ${theme.palette.success.main}` 
+    : isSelected 
+      ? `3px solid ${theme.palette.primary.dark}` 
+      : 'none',
   '&:hover': {
-    backgroundColor: theme.palette.action.hover,
+    backgroundColor: isDragOver
+      ? theme.palette.success.light + '40'
+      : isSelected 
+        ? theme.palette.primary.main + '50' 
+        : theme.palette.action.hover,
   },
 }));
 
@@ -84,10 +128,24 @@ const DriveExplorer = ({
   onDeleteItem,
   onRefresh,
   onDropFiles,
+  currentPath = '',
 }) => {
   const [contextMenu, setContextMenu] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState(null);
+  const [selectionBox, setSelectionBox] = useState(null);
+  const [selectionStartPos, setSelectionStartPos] = useState(null);
+  const [wasSelectionBox, setWasSelectionBox] = useState(false);
+  const [justFinishedSelection, setJustFinishedSelection] = useState(false);
+  const [draggedItems, setDraggedItems] = useState(null);
+  const [dragOverFolder, setDragOverFolder] = useState(null);
+  const [dragPosition, setDragPosition] = useState(null);
+  const [mouseDownPos, setMouseDownPos] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
 
   // Précharger les fichiers Office dès l'affichage
@@ -96,6 +154,290 @@ const DriveExplorer = ({
       preloadOfficeFiles(files, 15); // Précharger les 15 premiers fichiers Office
     }
   }, [files]);
+
+  // Réinitialiser la sélection quand on change de dossier
+  useEffect(() => {
+    setSelectedFiles(new Set());
+  }, [currentPath]);
+
+  // Gérer la touche Escape pour désélectionner
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && selectedFiles.size > 0) {
+        setSelectedFiles(new Set());
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedFiles]);
+
+  // Gestion de la sélection multiple avec clic maintenu
+  const handleMouseDown = useCallback((event, item) => {
+    // Ignorer si c'est un clic droit ou si on clique sur un bouton
+    if (event.button !== 0 || event.target.closest('button') || event.target.closest('[role="button"]')) {
+      return;
+    }
+
+    // Enregistrer la position initiale pour détecter le drag
+    setMouseDownPos({ x: event.clientX, y: event.clientY });
+    setIsDragging(false);
+
+    // Si on clique sur un élément de liste, ne pas bloquer le drag natif
+    if (item) {
+      // Ne pas faire preventDefault() ni stopPropagation() pour permettre le drag natif
+      // La sélection sera gérée dans onClick si ce n'est pas un drag
+
+      // Ne pas gérer la sélection ici, elle sera gérée dans onClick si ce n'est pas un drag
+      // Cela permet au drag natif de fonctionner
+      return;
+    }
+
+      // Si on clique sur le conteneur (pas sur un élément), démarrer une sélection par zone
+    if (containerRef.current && (event.target === containerRef.current || event.target.closest('ul'))) {
+      event.preventDefault();
+      const rect = containerRef.current.getBoundingClientRect();
+      const startX = event.clientX - rect.left;
+      const startY = event.clientY - rect.top;
+      
+      setSelectionStartPos({ x: startX, y: startY });
+      setSelectionBox({ x: startX, y: startY, width: 0, height: 0 });
+      setIsSelecting(true);
+      setWasSelectionBox(true);
+    }
+  }, [selectedFiles, files, folders]);
+
+  const handleMouseMove = useCallback((event) => {
+    // Détecter si on est en train de faire un drag (mouvement significatif)
+    if (mouseDownPos && !isDragging) {
+      const deltaX = Math.abs(event.clientX - mouseDownPos.x);
+      const deltaY = Math.abs(event.clientY - mouseDownPos.y);
+      // Si mouvement > 5px, considérer comme un drag
+      if (deltaX > 5 || deltaY > 5) {
+        setIsDragging(true);
+      }
+    }
+
+    if (!isSelecting || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const currentX = event.clientX - rect.left;
+    const currentY = event.clientY - rect.top;
+
+    // Si on a une position de départ, créer la zone de sélection
+    if (selectionStartPos) {
+      const x = Math.min(selectionStartPos.x, currentX);
+      const y = Math.min(selectionStartPos.y, currentY);
+      const width = Math.abs(currentX - selectionStartPos.x);
+      const height = Math.abs(currentY - selectionStartPos.y);
+
+      setSelectionBox({ x, y, width, height });
+
+      // Trouver tous les éléments dans la zone de sélection
+      const allItems = [...files.map(f => ({ ...f, type: 'file' })), ...folders.map(f => ({ ...f, type: 'folder' }))];
+      const selectedPaths = new Set();
+
+      allItems.forEach(item => {
+        const listItem = document.querySelector(`[data-item-path="${item.path}"]`);
+        if (listItem) {
+          const itemRect = listItem.getBoundingClientRect();
+          const itemX = itemRect.left - rect.left;
+          const itemY = itemRect.top - rect.top;
+          const itemWidth = itemRect.width;
+          const itemHeight = itemRect.height;
+
+          // Vérifier si l'élément intersecte avec la zone de sélection
+          if (
+            itemX < x + width &&
+            itemX + itemWidth > x &&
+            itemY < y + height &&
+            itemY + itemHeight > y
+          ) {
+            selectedPaths.add(item.path);
+          }
+        }
+      });
+
+      setSelectedFiles(selectedPaths);
+    }
+  }, [isSelecting, selectionStartPos, files, folders, mouseDownPos, isDragging]);
+
+  const handleMouseUp = useCallback((event) => {
+    // Ne jamais perdre la sélection au relâchement du clic
+    // La sélection sera perdue seulement si on clique ailleurs (géré dans handleContainerClick)
+    const hadSelectionBox = selectionBox && (selectionBox.width > 5 || selectionBox.height > 5);
+    
+    // Si on vient de faire une sélection par zone, marquer qu'on vient de finir une sélection
+    if (hadSelectionBox || wasSelectionBox) {
+      setJustFinishedSelection(true);
+      // Réinitialiser le flag après un court délai pour permettre au onClick de l'ignorer
+      setTimeout(() => {
+        setJustFinishedSelection(false);
+      }, 100);
+    }
+    
+    setIsSelecting(false);
+    setSelectionStart(null);
+    setSelectionBox(null);
+    setSelectionStartPos(null);
+    setWasSelectionBox(false);
+    // Ne pas réinitialiser mouseDownPos ici, il sera réinitialisé dans onClick
+    // Cela permet à onClick d'avoir accès à mouseDownPos pour détecter les clics vs drags
+    setIsDragging(false);
+  }, [selectionBox, wasSelectionBox]);
+
+  // Ajouter les event listeners pour la sélection et détection du drag
+  useEffect(() => {
+    if (mouseDownPos || isSelecting) {
+      const handleMouseUpGlobal = (event) => {
+        handleMouseUp(event);
+      };
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUpGlobal);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUpGlobal);
+      };
+    }
+  }, [isSelecting, mouseDownPos, handleMouseMove, handleMouseUp]);
+
+  // Gestion du drag des fichiers sélectionnés
+  const handleDragStart = useCallback((event, item) => {
+    // Marquer qu'un drag est en cours
+    setIsDragging(true);
+    
+    // Si l'élément est sélectionné, on drag tous les éléments sélectionnés
+    const itemsToDrag = selectedFiles.has(item.path) && selectedFiles.size > 1
+      ? Array.from(selectedFiles).map(path => {
+          const file = files.find(f => f.path === path);
+          const folder = folders.find(f => f.path === path);
+          return file ? { ...file, type: 'file' } : folder ? { ...folder, type: 'folder' } : null;
+        }).filter(Boolean)
+      : [item];
+
+    setDraggedItems(itemsToDrag);
+    
+    // Position initiale de l'indicateur de drag
+    setDragPosition({
+      x: event.clientX + 10,
+      y: event.clientY + 10,
+    });
+    
+    // Créer un effet visuel de drag
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', ''); // Nécessaire pour Firefox
+    }
+  }, [selectedFiles, files, folders]);
+
+  // Suivre la position du curseur pendant le drag (au niveau global)
+  useEffect(() => {
+    if (draggedItems && draggedItems.length > 0) {
+      const handleDragGlobal = (event) => {
+        setDragPosition({
+          x: event.clientX + 10,
+          y: event.clientY + 10,
+        });
+      };
+
+      document.addEventListener('dragover', handleDragGlobal);
+      return () => {
+        document.removeEventListener('dragover', handleDragGlobal);
+      };
+    }
+  }, [draggedItems]);
+
+  // Réinitialiser la position du drag à la fin
+  const handleDragEnd = useCallback(() => {
+    setDragPosition(null);
+    setDraggedItems(null);
+    setIsDragging(false);
+    // Réinitialiser après un court délai pour permettre au onClick de détecter qu'il n'y a pas eu de drag
+    setTimeout(() => {
+      setMouseDownPos(null);
+    }, 100);
+  }, []);
+
+  // Gestion du drop sur un dossier
+  const handleDropOnFolder = useCallback(async (event, targetFolder) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverFolder(null);
+
+    if (!draggedItems || draggedItems.length === 0) return;
+
+    // Vérifier qu'on ne déplace pas un dossier dans lui-même ou dans un de ses sous-dossiers
+    const targetPath = targetFolder.path;
+    const invalidPaths = draggedItems.filter(item => {
+      if (item.type === 'folder') {
+        return targetPath.startsWith(item.path) || item.path === targetPath;
+      }
+      return false;
+    });
+
+    if (invalidPaths.length > 0) {
+      alert('Impossible de déplacer un dossier dans lui-même ou dans un de ses sous-dossiers');
+      setDraggedItems(null);
+      return;
+    }
+
+    // Déplacer chaque élément
+    try {
+      const movePromises = draggedItems.map(async (item) => {
+        const fileName = item.name;
+        const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
+        
+        const response = await fetch('/api/drive-v2/move-item/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            source_path: item.path,
+            dest_path: destPath,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors du déplacement');
+        }
+
+        return response.json();
+      });
+
+      await Promise.all(movePromises);
+      setSelectedFiles(new Set());
+      setDraggedItems(null);
+      setDragPosition(null);
+      onRefresh();
+    } catch (error) {
+      alert(`Erreur lors du déplacement: ${error.message}`);
+      setDraggedItems(null);
+      setDragPosition(null);
+    }
+  }, [draggedItems, onRefresh]);
+
+  // Utilitaire pour récupérer le token CSRF
+  const getCookie = (name) => {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === name + '=') {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  };
 
   // Fonction récursive pour parcourir l'arborescence d'un dossier
   const traverseFileTree = useCallback((item, path = '', allFiles = []) => {
@@ -411,101 +753,326 @@ const DriveExplorer = ({
     );
   }
 
+  // Désélectionner en cliquant sur le conteneur vide
+  const handleContainerClick = useCallback((event) => {
+    // Ignorer si on vient de faire une sélection par zone (pour éviter de réinitialiser la sélection)
+    if (justFinishedSelection) {
+      return;
+    }
+    
+    // Ne désélectionner que si on clique directement sur le conteneur (pas sur un élément de liste)
+    const clickedListItem = event.target.closest('[data-item-path]');
+    const clickedList = event.target.closest('ul');
+    const clickedButton = event.target.closest('button') || event.target.closest('[role="button"]');
+    
+    // Si on clique sur un élément de liste, la sélection a déjà été gérée dans handleMouseDown
+    // On ne fait rien ici pour les éléments de liste - la propagation a été stoppée
+    if (clickedListItem) {
+      return;
+    }
+    
+    // Si on clique sur la liste mais pas sur un élément, ou sur le conteneur vide, désélectionner
+    // Mais pas si on clique sur un bouton
+    if (!clickedButton && ((clickedList && !clickedListItem) || (!clickedList && !clickedListItem))) {
+      setSelectedFiles(new Set());
+    }
+  }, [selectedFiles, justFinishedSelection]);
+
   return (
     <ExplorerContainer
+      ref={containerRef}
       isDragOver={isDragOver}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onMouseDown={(e) => {
+        // Si on clique sur le conteneur (pas sur un élément), démarrer la sélection
+        if (!e.target.closest('[data-item-path]') && !e.target.closest('button')) {
+          handleMouseDown(e, null);
+        }
+      }}
+      onClick={(e) => {
+        // Ne traiter le clic sur le conteneur que si ce n'est pas sur un élément de liste
+        // Les éléments de liste ont déjà leur propre onClick qui stoppe la propagation
+        if (!e.target.closest('[data-item-path]')) {
+          handleContainerClick(e);
+        }
+      }}
     >
+      {/* Zone de sélection rectangulaire */}
+      {selectionBox && (
+        <SelectionBox
+          sx={{
+            left: `${selectionBox.x}px`,
+            top: `${selectionBox.y}px`,
+            width: `${selectionBox.width}px`,
+            height: `${selectionBox.height}px`,
+          }}
+        />
+      )}
+
+      {/* Indicateur de drag avec nombre d'éléments */}
+      {dragPosition && draggedItems && draggedItems.length > 0 && (
+        <DragIndicator
+          sx={{
+            left: `${dragPosition.x}px`,
+            top: `${dragPosition.y}px`,
+          }}
+        >
+          <FolderIcon sx={{ fontSize: 20 }} />
+          <Typography variant="body2">
+            {draggedItems.length} élément{draggedItems.length > 1 ? 's' : ''}
+          </Typography>
+        </DragIndicator>
+      )}
       {/* En-tête */}
       <ListHeader elevation={0}>
-        <Typography variant="subtitle2">Nom</Typography>
-        <Typography variant="subtitle2">Taille</Typography>
-        <Typography variant="subtitle2">Date</Typography>
-        <Typography variant="subtitle2">Actions</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden' }}>
+          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Nom</Typography>
+          {selectedFiles.size > 0 && (
+            <Chip 
+              label={`${selectedFiles.size} sélectionné${selectedFiles.size > 1 ? 's' : ''}`}
+              size="small"
+              color="primary"
+              sx={{ ml: 1, flexShrink: 0 }}
+            />
+          )}
+        </Box>
+        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Taille</Typography>
+        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Date</Typography>
+        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Actions</Typography>
       </ListHeader>
 
       {/* Liste */}
       <List sx={{ p: 0 }}>
         {/* Dossiers */}
-        {folders.map((folder) => (
-          <StyledListItem
-            key={folder.path}
-            onClick={() => onNavigateToFolder(folder.path)}
-            onContextMenu={(e) => handleContextMenu(e, folder)}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <FolderIcon color="primary" />
-              <Typography variant="body2">{folder.name}</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              --
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              --
-            </Typography>
-            <Box>
-              <Tooltip title="Supprimer">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleContextMenu(e, folder);
-                  }}
-                >
-                  <MoreVertIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </StyledListItem>
-        ))}
+        {folders.map((folder) => {
+          const folderItem = { ...folder, type: 'folder' };
+          const isSelected = selectedFiles.has(folder.path);
+          const isDragOverFolder = dragOverFolder === folder.path;
+          
+          return (
+            <StyledListItem
+              key={folder.path}
+              data-item-path={folder.path}
+              isSelected={isSelected}
+              isDragOver={isDragOverFolder}
+              draggable
+              onDragStart={(e) => handleDragStart(e, folderItem)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (draggedItems && draggedItems.length > 0) {
+                  setDragOverFolder(folder.path);
+                }
+              }}
+              onDragLeave={(e) => {
+                // Ne réinitialiser que si on quitte vraiment l'élément
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                  setDragOverFolder(null);
+                }
+              }}
+              onDrop={(e) => handleDropOnFolder(e, folderItem)}
+              onMouseDown={(e) => {
+                handleMouseDown(e, folderItem);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                
+                // Si on maintient Ctrl/Cmd ou Shift, toujours gérer la sélection (même si isDragging est true)
+                if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                  // Si on maintient Shift, on sélectionne une plage
+                  if (e.shiftKey && selectedFiles.size > 0) {
+                    const allItems = [...folders.map(f => ({ ...f, type: 'folder' })), ...files.map(f => ({ ...f, type: 'file' }))];
+                    const firstSelectedPath = Array.from(selectedFiles)[0];
+                    const firstIndex = allItems.findIndex(i => i.path === firstSelectedPath);
+                    const currentIndex = allItems.findIndex(i => i.path === folder.path);
+
+                    if (firstIndex !== -1 && currentIndex !== -1) {
+                      const minIndex = Math.min(firstIndex, currentIndex);
+                      const maxIndex = Math.max(firstIndex, currentIndex);
+                      const itemsToSelect = allItems.slice(minIndex, maxIndex + 1).map(i => i.path);
+                      setSelectedFiles(new Set(itemsToSelect));
+                    }
+                  }
+                  // Si on maintient Ctrl/Cmd, on toggle la sélection
+                  else if (e.ctrlKey || e.metaKey) {
+                    setSelectedFiles(prev => {
+                      const newSet = new Set(prev);
+                      if (newSet.has(folder.path)) {
+                        newSet.delete(folder.path);
+                      } else {
+                        newSet.add(folder.path);
+                      }
+                      return newSet;
+                    });
+                  }
+                }
+                // Sinon, gérer la sélection seulement si ce n'était pas un drag
+                else if (!isDragging && mouseDownPos) {
+                  const deltaX = Math.abs(e.clientX - mouseDownPos.x);
+                  const deltaY = Math.abs(e.clientY - mouseDownPos.y);
+                  
+                  // Si mouvement < 5px, c'est un clic, pas un drag
+                  if (deltaX < 5 && deltaY < 5) {
+                    // Si l'élément n'est pas déjà sélectionné, on remplace la sélection
+                    if (!selectedFiles.has(folder.path)) {
+                      setSelectedFiles(new Set([folder.path]));
+                    }
+                  }
+                }
+                // Réinitialiser mouseDownPos après le clic
+                setMouseDownPos(null);
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                // Double-clic pour naviguer dans le dossier
+                if (!isSelecting) {
+                  onNavigateToFolder(folder.path);
+                }
+              }}
+              onContextMenu={(e) => handleContextMenu(e, folderItem)}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FolderIcon color="primary" />
+                <Typography variant="body2">{folder.name}</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                --
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                --
+              </Typography>
+              <Box>
+                <Tooltip title="Supprimer">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleContextMenu(e, folderItem);
+                    }}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </StyledListItem>
+          );
+        })}
 
         {/* Fichiers */}
-        {files.map((file) => (
-          <StyledListItem
-            key={file.path}
-            onContextMenu={(e) => handleContextMenu(e, file)}
-            onDoubleClick={() => handleFileDoubleClick(file)}
-            sx={{ cursor: 'pointer' }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {getFileIcon(file.name)}
-              <Typography variant="body2">{file.name}</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {formatFileSize(file.size)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {formatDate(file.last_modified)}
-            </Typography>
-            <Box>
-              <Tooltip title="Télécharger">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedItem(file);
-                    handleDownload();
-                  }}
-                >
-                  <DownloadIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Plus d'actions">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleContextMenu(e, file);
-                  }}
-                >
-                  <MoreVertIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </StyledListItem>
-        ))}
+        {files.map((file) => {
+          const fileItem = { ...file, type: 'file' };
+          const isSelected = selectedFiles.has(file.path);
+          
+          return (
+            <StyledListItem
+              key={file.path}
+              data-item-path={file.path}
+              isSelected={isSelected}
+              draggable
+              onDragStart={(e) => handleDragStart(e, fileItem)}
+              onDragEnd={handleDragEnd}
+              onMouseDown={(e) => {
+                handleMouseDown(e, fileItem);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                
+                // Si on maintient Ctrl/Cmd ou Shift, toujours gérer la sélection (même si isDragging est true)
+                if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                  // Si on maintient Shift, on sélectionne une plage
+                  if (e.shiftKey && selectedFiles.size > 0) {
+                    const allItems = [...folders.map(f => ({ ...f, type: 'folder' })), ...files.map(f => ({ ...f, type: 'file' }))];
+                    const firstSelectedPath = Array.from(selectedFiles)[0];
+                    const firstIndex = allItems.findIndex(i => i.path === firstSelectedPath);
+                    const currentIndex = allItems.findIndex(i => i.path === file.path);
+
+                    if (firstIndex !== -1 && currentIndex !== -1) {
+                      const minIndex = Math.min(firstIndex, currentIndex);
+                      const maxIndex = Math.max(firstIndex, currentIndex);
+                      const itemsToSelect = allItems.slice(minIndex, maxIndex + 1).map(i => i.path);
+                      setSelectedFiles(new Set(itemsToSelect));
+                    }
+                  }
+                  // Si on maintient Ctrl/Cmd, on toggle la sélection
+                  else if (e.ctrlKey || e.metaKey) {
+                    setSelectedFiles(prev => {
+                      const newSet = new Set(prev);
+                      if (newSet.has(file.path)) {
+                        newSet.delete(file.path);
+                      } else {
+                        newSet.add(file.path);
+                      }
+                      return newSet;
+                    });
+                  }
+                }
+                // Sinon, gérer la sélection seulement si ce n'était pas un drag
+                else if (!isDragging && mouseDownPos) {
+                  const deltaX = Math.abs(e.clientX - mouseDownPos.x);
+                  const deltaY = Math.abs(e.clientY - mouseDownPos.y);
+                  
+                  // Si mouvement < 5px, c'est un clic, pas un drag
+                  if (deltaX < 5 && deltaY < 5) {
+                    // Si l'élément n'est pas déjà sélectionné, on remplace la sélection
+                    if (!selectedFiles.has(file.path)) {
+                      setSelectedFiles(new Set([file.path]));
+                    }
+                  }
+                }
+                // Réinitialiser mouseDownPos après le clic
+                setMouseDownPos(null);
+              }}
+              onContextMenu={(e) => handleContextMenu(e, fileItem)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                // Ne prévisualiser que si on n'est pas en train de sélectionner
+                if (!isSelecting) {
+                  handleFileDoubleClick(file);
+                }
+              }}
+              sx={{ cursor: 'pointer' }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {getFileIcon(file.name)}
+                <Typography variant="body2">{file.name}</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                {formatFileSize(file.size)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {formatDate(file.last_modified)}
+              </Typography>
+              <Box>
+                <Tooltip title="Télécharger">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedItem(fileItem);
+                      handleDownload();
+                    }}
+                  >
+                    <DownloadIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Plus d'actions">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleContextMenu(e, fileItem);
+                    }}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </StyledListItem>
+          );
+        })}
       </List>
 
       {/* Menu contextuel */}

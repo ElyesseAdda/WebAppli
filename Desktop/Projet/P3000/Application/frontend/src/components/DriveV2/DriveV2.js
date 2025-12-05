@@ -313,6 +313,7 @@ const DriveV2 = () => {
             onDeleteItem={deleteItem}
             onRefresh={refreshContent}
             onDropFiles={handleDropFiles}
+            currentPath={currentPath}
           />
         )}
       </DriveContent>
