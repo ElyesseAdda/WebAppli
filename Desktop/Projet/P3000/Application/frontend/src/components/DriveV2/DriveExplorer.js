@@ -2,7 +2,7 @@
  * Drive Explorer - Affichage du contenu du drive
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   List,
@@ -34,11 +34,13 @@ import {
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
 
-const ExplorerContainer = styled(Box)(({ theme }) => ({
+const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
   overflow: 'auto',
-  backgroundColor: '#fff',
+  backgroundColor: isDragOver ? theme.palette.primary.light + '10' : '#fff',
   borderRadius: theme.spacing(1),
+  border: isDragOver ? `2px dashed ${theme.palette.primary.main}` : 'none',
+  transition: 'all 0.2s ease-in-out',
 }));
 
 const ListHeader = styled(Paper)(({ theme }) => ({
@@ -81,9 +83,11 @@ const DriveExplorer = ({
   onNavigateToFolder,
   onDeleteItem,
   onRefresh,
+  onDropFiles,
 }) => {
   const [contextMenu, setContextMenu] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
 
   // Précharger les fichiers Office dès l'affichage
@@ -92,6 +96,166 @@ const DriveExplorer = ({
       preloadOfficeFiles(files, 15); // Précharger les 15 premiers fichiers Office
     }
   }, [files]);
+
+  // Fonction récursive pour parcourir l'arborescence d'un dossier
+  const traverseFileTree = useCallback((item, path = '', allFiles = []) => {
+    return new Promise((resolve) => {
+      if (item.isFile) {
+        // C'est un fichier
+        item.file((file) => {
+          // Si le path est vide, c'est un fichier simple (pas dans un dossier)
+          // On ne doit PAS ajouter de webkitRelativePath pour les fichiers simples
+          if (path === '') {
+            // Fichier simple : pas de webkitRelativePath
+            allFiles.push(file);
+          } else {
+            // Fichier dans un dossier : créer un objet File avec webkitRelativePath pour préserver la structure
+            const fileWithPath = new File([file], file.name, {
+              type: file.type,
+              lastModified: file.lastModified,
+            });
+            // Ajouter le chemin relatif seulement si le fichier est dans un dossier
+            Object.defineProperty(fileWithPath, 'webkitRelativePath', {
+              value: path + file.name,
+              writable: false,
+            });
+            allFiles.push(fileWithPath);
+          }
+          resolve();
+        }, () => {
+          resolve();
+        });
+      } else if (item.isDirectory) {
+        // C'est un dossier, parcourir récursivement
+        const dirReader = item.createReader();
+        const currentPath = path + item.name + '/';
+        
+        // Fonction récursive pour lire toutes les entrées (readEntries peut retourner par lots)
+        const readAllEntries = () => {
+          const entries = [];
+          
+          const readBatch = () => {
+            dirReader.readEntries((batch) => {
+              if (batch.length === 0) {
+                // Plus d'entrées, traiter toutes les entrées collectées
+                if (entries.length === 0) {
+                  resolve();
+                } else {
+                  const promises = entries.map((entry) => traverseFileTree(entry, currentPath, allFiles));
+                  Promise.all(promises).then(() => resolve());
+                }
+              } else {
+                // Ajouter ce lot d'entrées
+                entries.push(...batch);
+                // Lire le lot suivant
+                readBatch();
+              }
+            }, () => {
+              // Traiter les entrées déjà collectées
+              if (entries.length > 0) {
+                const promises = entries.map((entry) => traverseFileTree(entry, currentPath, allFiles));
+                Promise.all(promises).then(() => resolve());
+              } else {
+                resolve();
+              }
+            });
+          };
+          
+          readBatch();
+        };
+        
+        readAllEntries();
+      } else {
+        resolve();
+      }
+    });
+  }, []);
+
+  // Gestion du drag and drop
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Ne désactiver le drag over que si on quitte vraiment le conteneur
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(false);
+
+    if (!onDropFiles) return;
+
+    const items = event.dataTransfer.items;
+    
+    if (!items || items.length === 0) {
+      // Fallback : utiliser les fichiers si items n'est pas disponible
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length > 0) {
+        onDropFiles(files);
+      }
+      return;
+    }
+
+    // Vérifier si on peut utiliser webkitGetAsEntry (pour les dossiers)
+    const allFiles = [];
+    const promises = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      // Vérifier si c'est un fichier ou un dossier
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          if (entry.isDirectory) {
+            // C'est un dossier, parcourir récursivement avec traverseFileTree
+            promises.push(traverseFileTree(entry, '', allFiles));
+          } else if (entry.isFile) {
+            // C'est un fichier simple : utiliser getAsFile directement (pas traverseFileTree)
+            // pour éviter d'ajouter un webkitRelativePath inutile
+            const file = item.getAsFile();
+            if (file) {
+              allFiles.push(file);
+            }
+          }
+        } else {
+          // Fallback : utiliser getAsFile
+          const file = item.getAsFile();
+          if (file) {
+            allFiles.push(file);
+          }
+        }
+      } else {
+        // Fallback : utiliser getAsFile
+        const file = item.getAsFile();
+        if (file) {
+          allFiles.push(file);
+        }
+      }
+    }
+
+    // Attendre que tous les fichiers soient récupérés
+    await Promise.all(promises);
+    
+    if (allFiles.length > 0) {
+      onDropFiles(allFiles);
+    } else {
+      // Fallback final : utiliser dataTransfer.files
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length > 0) {
+        onDropFiles(files);
+      }
+    }
+  }, [onDropFiles, traverseFileTree]);
 
   // Icônes par type de fichier
   const getFileIcon = (fileName) => {
@@ -228,7 +392,12 @@ const DriveExplorer = ({
   // État vide
   if (folders.length === 0 && files.length === 0) {
     return (
-      <ExplorerContainer>
+      <ExplorerContainer
+        isDragOver={isDragOver}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <EmptyState>
           <UploadIcon sx={{ fontSize: 80, mb: 2 }} />
           <Typography variant="h6" gutterBottom>
@@ -243,7 +412,12 @@ const DriveExplorer = ({
   }
 
   return (
-    <ExplorerContainer>
+    <ExplorerContainer
+      isDragOver={isDragOver}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* En-tête */}
       <ListHeader elevation={0}>
         <Typography variant="subtitle2">Nom</Typography>

@@ -78,6 +78,7 @@ const DriveV2 = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState([]);
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [snackbar, setSnackbar] = useState({
@@ -157,6 +158,20 @@ const DriveV2 = () => {
   const handleCloseSearch = () => {
     setShowSearch(false);
     setSearchTerm('');
+  };
+
+  // Gérer le drop de fichiers depuis DriveExplorer
+  const handleDropFiles = useCallback((files) => {
+    if (files && files.length > 0) {
+      setDroppedFiles(files);
+      setUploadDialogOpen(true);
+    }
+  }, []);
+
+  // Réinitialiser les fichiers droppés quand le modal se ferme
+  const handleCloseUploadDialog = () => {
+    setUploadDialogOpen(false);
+    setDroppedFiles([]);
   };
 
   return (
@@ -257,7 +272,10 @@ const DriveV2 = () => {
           <Button
             variant="contained"
             startIcon={<UploadIcon />}
-            onClick={() => setUploadDialogOpen(true)}
+            onClick={() => {
+              setDroppedFiles([]);
+              setUploadDialogOpen(true);
+            }}
           >
             Upload
           </Button>
@@ -294,6 +312,7 @@ const DriveV2 = () => {
             onNavigateToFolder={handleNavigateToFolder}
             onDeleteItem={deleteItem}
             onRefresh={refreshContent}
+            onDropFiles={handleDropFiles}
           />
         )}
       </DriveContent>
@@ -355,11 +374,12 @@ const DriveV2 = () => {
       {uploadDialogOpen && (
         <DriveUploader
           currentPath={currentPath}
-          onClose={() => setUploadDialogOpen(false)}
+          onClose={handleCloseUploadDialog}
           onUploadComplete={() => {
-            setUploadDialogOpen(false);
+            handleCloseUploadDialog();
             refreshContent();
           }}
+          initialFiles={droppedFiles}
         />
       )}
 

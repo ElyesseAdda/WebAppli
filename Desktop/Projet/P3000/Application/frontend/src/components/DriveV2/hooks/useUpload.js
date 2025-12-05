@@ -32,8 +32,11 @@ export const useUpload = () => {
   const extractRootFolderName = (files) => {
     if (files.length === 0) return null;
     
-    // Prendre le premier fichier qui a un webkitRelativePath
-    const firstFileWithPath = files.find(f => f.webkitRelativePath);
+    // Prendre le premier fichier qui a un webkitRelativePath avec au moins un dossier (contient '/')
+    const firstFileWithPath = files.find(f => {
+      const path = f.webkitRelativePath;
+      return path && path !== '' && path.includes('/');
+    });
     if (!firstFileWithPath) return null;
     
     // Le premier élément du chemin relatif est le nom du dossier racine

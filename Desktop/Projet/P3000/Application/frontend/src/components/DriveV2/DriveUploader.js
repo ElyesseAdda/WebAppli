@@ -2,7 +2,7 @@
  * Drive Uploader - Composant d'upload de fichiers
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -63,11 +63,29 @@ const DropZone = styled(Box)(({ theme, isDragOver }) => ({
   },
 }));
 
-const DriveUploader = ({ currentPath, onClose, onUploadComplete }) => {
-  const [selectedFiles, setSelectedFiles] = useState([]);
+const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = [] }) => {
+  const [selectedFiles, setSelectedFiles] = useState(initialFiles);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadMode, setUploadMode] = useState('files'); // 'files' ou 'folder'
   const { uploadFiles, uploading, progress, errors } = useUpload();
+
+  // Mettre à jour les fichiers sélectionnés si initialFiles change
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      setSelectedFiles(initialFiles);
+      // Déterminer automatiquement le mode en fonction des fichiers
+      const hasRelativePath = initialFiles.some(f => f.webkitRelativePath && f.webkitRelativePath !== '');
+      if (hasRelativePath) {
+        setUploadMode('folder');
+      } else {
+        // Si aucun fichier n'a de chemin relatif, c'est un upload de fichiers simples
+        setUploadMode('files');
+      }
+    } else {
+      // Réinitialiser le mode si pas de fichiers
+      setUploadMode('files');
+    }
+  }, [initialFiles]);
 
   // Sélection de fichiers
   const handleFileSelect = (event) => {
