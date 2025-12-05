@@ -71,12 +71,21 @@ import { checkFileExists, findAvailableFileName } from './hooks/useUpload';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
-  overflow: 'auto',
+  overflowY: 'auto',
+  overflowX: 'hidden',
   backgroundColor: isDragOver ? theme.palette.primary.light + '10' : '#fff',
   borderRadius: theme.spacing(1),
   border: isDragOver ? `2px dashed ${theme.palette.primary.main}` : 'none',
   transition: 'all 0.2s ease-in-out',
   position: 'relative',
+  width: '100%',
+  maxWidth: '100%',
+  // Masquer la barre de scroll verticale
+  scrollbarWidth: 'none', // Firefox
+  '&::-webkit-scrollbar': {
+    display: 'none', // Chrome, Safari, Edge
+  },
+  msOverflowStyle: 'none', // IE et Edge (ancien)
 }));
 
 const SelectionBox = styled(Box)(({ theme }) => ({
@@ -106,7 +115,7 @@ const DragIndicator = styled(Box)(({ theme }) => ({
 
 const ListHeader = styled(Paper)(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: '1fr 100px 150px 100px',
+  gridTemplateColumns: '1fr minmax(80px, 100px) minmax(120px, 150px) minmax(80px, 100px)',
   gap: theme.spacing(2),
   padding: theme.spacing(2),
   backgroundColor: theme.palette.grey[100],
@@ -115,13 +124,16 @@ const ListHeader = styled(Paper)(({ theme }) => ({
   position: 'sticky',
   top: 0,
   zIndex: 1,
-  minWidth: 0, // Permet au contenu de se rétrécir si nécessaire
-  overflow: 'hidden', // Évite le débordement
+  minWidth: 0,
+  overflow: 'hidden',
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
 }));
 
 const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver }) => ({
   display: 'grid',
-  gridTemplateColumns: '1fr 100px 150px 100px',
+  gridTemplateColumns: '1fr minmax(80px, 100px) minmax(120px, 150px) minmax(80px, 100px)',
   gap: theme.spacing(2),
   padding: theme.spacing(2),
   marginLeft: theme.spacing(2), // Margin à gauche pour la zone de sélection
@@ -137,6 +149,10 @@ const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver }) => (
     : isSelected 
       ? `3px solid ${theme.palette.primary.dark}` 
       : 'none',
+  minWidth: 0,
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
   '&:hover': {
     backgroundColor: isDragOver
       ? theme.palette.success.light + '40'
@@ -1190,7 +1206,7 @@ const DriveExplorer = ({
       )}
       {/* En-tête */}
       <ListHeader elevation={0}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}>
           <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Nom</Typography>
           {selectedFiles.size > 0 && (
             <Chip 
@@ -1207,7 +1223,7 @@ const DriveExplorer = ({
       </ListHeader>
 
       {/* Liste */}
-      <List sx={{ p: 0 }}>
+      <List sx={{ p: 0, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
         {/* Dossiers */}
         {folders.map((folder) => {
           const folderItem = { ...folder, type: 'folder' };
@@ -1297,17 +1313,19 @@ const DriveExplorer = ({
               }}
               onContextMenu={(e) => handleContextMenu(e, folderItem)}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <FolderIcon color="primary" />
-                <Typography variant="body2">{displayFilename(folder.name)}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden' }}>
+                <FolderIcon color="primary" sx={{ flexShrink: 0 }} />
+                <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayFilename(folder.name)}
+                </Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 --
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 --
               </Typography>
-              <Box>
+              <Box sx={{ minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                 <Tooltip title="Supprimer">
                   <IconButton
                     size="small"
@@ -1398,28 +1416,19 @@ const DriveExplorer = ({
               }}
               sx={{ cursor: 'pointer' }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {getFileIcon(file.name)}
-                <Typography variant="body2">{displayFilename(file.name)}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden' }}>
+                <Box sx={{ flexShrink: 0 }}>{getFileIcon(file.name)}</Box>
+                <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayFilename(file.name)}
+                </Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {formatFileSize(file.size)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {formatDate(file.last_modified)}
               </Typography>
-              <Box>
-              <Tooltip title="Plus d'actions">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleContextMenu(e, fileItem);
-                    }}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+              <Box sx={{ minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                 <Tooltip title="Télécharger">
                   <IconButton
                     size="small"
@@ -1431,7 +1440,17 @@ const DriveExplorer = ({
                     <DownloadIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                
+                <Tooltip title="Plus d'actions">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleContextMenu(e, fileItem);
+                    }}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </Box>
             </StyledListItem>
           );

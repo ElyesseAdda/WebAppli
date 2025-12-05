@@ -36,11 +36,23 @@ import { useDrive } from './hooks/useDrive';
 
 // Styles personnalisés
 const DriveContainer = styled(Box)(({ theme }) => ({
-  height: '100vh',
+  height: '90vh',
+  maxHeight: '100%',
   display: 'flex',
   flexDirection: 'column',
   backgroundColor: theme.palette.grey[50],
   padding: theme.spacing(2),
+  overflow: 'hidden', // Empêcher le scroll sur le body
+  width: '97%',
+  maxWidth: '97%',
+  boxSizing: 'border-box',
+  position: 'relative',
+  // Masquer la barre de scroll verticale
+  scrollbarWidth: 'none', // Firefox
+  '&::-webkit-scrollbar': {
+    display: 'none', // Chrome, Safari, Edge
+  },
+  msOverflowStyle: 'none', // IE et Edge (ancien)
 }));
 
 const DriveHeader = styled(Paper)(({ theme }) => ({
@@ -53,6 +65,11 @@ const DriveHeader = styled(Paper)(({ theme }) => ({
   gap: theme.spacing(2),
   borderRadius: theme.spacing(1),
   boxShadow: theme.shadows[2],
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  overflow: 'hidden',
+  minWidth: 0,
 }));
 
 const DriveContent = styled(Box)(({ theme }) => ({
@@ -61,6 +78,10 @@ const DriveContent = styled(Box)(({ theme }) => ({
   flexDirection: 'column',
   overflow: 'hidden',
   borderRadius: theme.spacing(1),
+  width: '100%',
+  maxWidth: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
 }));
 
 const DriveV2 = () => {
@@ -92,6 +113,20 @@ const DriveV2 = () => {
   // Charger le contenu initial
   useEffect(() => {
     fetchFolderContent('');
+  }, []);
+
+  // Empêcher le scroll horizontal sur le body
+  useEffect(() => {
+    const originalOverflowX = document.body.style.overflowX;
+    const originalHtmlOverflowX = document.documentElement.style.overflowX;
+    
+    document.body.style.overflowX = 'hidden';
+    document.documentElement.style.overflowX = 'hidden';
+    
+    return () => {
+      document.body.style.overflowX = originalOverflowX;
+      document.documentElement.style.overflowX = originalHtmlOverflowX;
+    };
   }, []);
 
   // Gérer le drag end global pour réinitialiser l'état si on ne drop pas sur le breadcrumb
@@ -304,9 +339,9 @@ const DriveV2 = () => {
     <DriveContainer>
       {/* Header */}
       <DriveHeader elevation={2}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', flex: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', flex: 1, minWidth: 0, overflow: 'hidden', maxWidth: '100%' }}>
           {/* Titre et Badge */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
             <Typography variant="h5" component="h1">
               Drive V2
             </Typography>
@@ -315,7 +350,10 @@ const DriveV2 = () => {
 
           {/* Breadcrumb */}
           {!showSearch && (
-            <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />}>
+            <Breadcrumbs 
+              separator={<NavigateNextIcon fontSize="small" />}
+              sx={{ minWidth: 0, overflow: 'hidden', flex: 1, maxWidth: '100%' }}
+            >
               {buildBreadcrumb().map((item, index) => {
                 const isDragOver = dragOverBreadcrumbItem === item.path;
                 return (
@@ -338,6 +376,11 @@ const DriveV2 = () => {
                       backgroundColor: isDragOver ? theme.palette.action.selected : 'transparent',
                       border: isDragOver ? `2px dashed ${theme.palette.primary.main}` : '2px solid transparent',
                       transition: 'all 0.2s ease-in-out',
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '100%',
                       '&:hover': {
                         textDecoration: 'underline',
                         backgroundColor: isDragOver ? theme.palette.action.selected : theme.palette.action.hover,
@@ -358,7 +401,7 @@ const DriveV2 = () => {
         </Box>
 
         {/* Actions */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, minWidth: 0 }}>
           {/* Recherche */}
           <TextField
             size="small"
@@ -377,7 +420,7 @@ const DriveV2 = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{ minWidth: 200 }}
+            sx={{ minWidth: 200, maxWidth: 200, flexShrink: 0 }}
           />
           <Button
             variant="outlined"

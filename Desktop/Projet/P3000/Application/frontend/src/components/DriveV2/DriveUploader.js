@@ -53,6 +53,12 @@ const UploaderPaper = styled(Paper)(({ theme }) => ({
   maxHeight: '80vh',
   overflow: 'auto',
   padding: theme.spacing(3),
+  // Masquer la barre de scroll verticale
+  scrollbarWidth: 'none', // Firefox
+  '&::-webkit-scrollbar': {
+    display: 'none', // Chrome, Safari, Edge
+  },
+  msOverflowStyle: 'none', // IE et Edge (ancien)
 }));
 
 const DropZone = styled(Box)(({ theme, isDragOver }) => ({
@@ -506,7 +512,14 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
               </Alert>
             )}
             
-            <List dense sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
+            <List dense sx={{ 
+              maxHeight: 300, 
+              overflow: 'auto', 
+              mb: 2,
+              scrollbarWidth: 'none', // Firefox
+              '&::-webkit-scrollbar': { display: 'none' }, // Chrome, Safari, Edge
+              msOverflowStyle: 'none', // IE et Edge (ancien)
+            }}>
               {selectedFiles.map((file, index) => {
                 const displayPath = getFileDisplayPath(file);
                 const isInSubfolder = displayPath.includes('/');

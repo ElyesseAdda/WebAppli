@@ -36,6 +36,12 @@ const PreviewContent = styled(Box)(({ theme }) => ({
   backgroundColor: '#f5f5f5',
   overflow: 'auto',
   position: 'relative',
+  // Masquer la barre de scroll verticale
+  scrollbarWidth: 'none', // Firefox
+  '&::-webkit-scrollbar': {
+    display: 'none', // Chrome, Safari, Edge
+  },
+  msOverflowStyle: 'none', // IE et Edge (ancien)
 }));
 
 const FilePreviewPage = () => {
@@ -217,6 +223,9 @@ const FilePreviewPage = () => {
               justifyContent: 'center',
               overflow: 'auto',
               p: 2,
+              scrollbarWidth: 'none', // Firefox
+              '&::-webkit-scrollbar': { display: 'none' }, // Chrome, Safari, Edge
+              msOverflowStyle: 'none', // IE et Edge (ancien)
             }}
           >
             <img

@@ -436,7 +436,13 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
             <CircularProgress />
           </Box>
         ) : (
-          <Paper variant="outlined" sx={{ maxHeight: 400, overflow: 'auto' }}>
+          <Paper variant="outlined" sx={{ 
+            maxHeight: 400, 
+            overflow: 'auto',
+            scrollbarWidth: 'none', // Firefox
+            '&::-webkit-scrollbar': { display: 'none' }, // Chrome, Safari, Edge
+            msOverflowStyle: 'none', // IE et Edge (ancien)
+          }}>
             <List>
               {/* Option pour sélectionner le dossier actuel */}
               <StyledListItem

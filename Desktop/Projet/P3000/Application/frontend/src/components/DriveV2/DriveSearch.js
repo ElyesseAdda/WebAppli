@@ -29,6 +29,12 @@ const SearchContainer = styled(Box)(({ theme }) => ({
   borderRadius: theme.spacing(1),
   padding: theme.spacing(2),
   overflow: 'auto',
+  // Masquer la barre de scroll verticale
+  scrollbarWidth: 'none', // Firefox
+  '&::-webkit-scrollbar': {
+    display: 'none', // Chrome, Safari, Edge
+  },
+  msOverflowStyle: 'none', // IE et Edge (ancien)
 }));
 
 const DriveSearch = ({ searchTerm, onClose, onNavigate }) => {
