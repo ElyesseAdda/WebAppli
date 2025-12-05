@@ -394,6 +394,59 @@ urlpatterns += [
     }), name='drive-complete-rename-item'),
 ]
 
+# --- URLs POUR LE DRIVE V2 (NOUVEAU SYSTÈME) ---
+from .views_drive.views import DriveV2ViewSet, proxy_file_view, onlyoffice_callback_view
+
+urlpatterns += [
+    # Navigation et contenu
+    path('drive-v2/list-content/', DriveV2ViewSet.as_view({
+        'get': 'list_content'
+    }), name='drive-v2-list-content'),
+    
+    # Gestion des dossiers
+    path('drive-v2/create-folder/', DriveV2ViewSet.as_view({
+        'post': 'create_folder'
+    }), name='drive-v2-create-folder'),
+    
+    # Gestion des fichiers
+    path('drive-v2/delete-item/', DriveV2ViewSet.as_view({
+        'delete': 'delete_item'
+    }), name='drive-v2-delete-item'),
+    path('drive-v2/download-url/', DriveV2ViewSet.as_view({
+        'get': 'get_download_url'
+    }), name='drive-v2-download-url'),
+    path('drive-v2/display-url/', DriveV2ViewSet.as_view({
+        'get': 'get_display_url'
+    }), name='drive-v2-display-url'),
+    path('drive-v2/upload-url/', DriveV2ViewSet.as_view({
+        'post': 'get_upload_url'
+    }), name='drive-v2-upload-url'),
+    
+    # Recherche et manipulation
+    path('drive-v2/search/', DriveV2ViewSet.as_view({
+        'get': 'search_files'
+    }), name='drive-v2-search'),
+    path('drive-v2/move-item/', DriveV2ViewSet.as_view({
+        'post': 'move_item'
+    }), name='drive-v2-move-item'),
+    path('drive-v2/rename-item/', DriveV2ViewSet.as_view({
+        'post': 'rename_item'
+    }), name='drive-v2-rename-item'),
+    path('drive-v2/breadcrumb/', DriveV2ViewSet.as_view({
+        'get': 'get_breadcrumb'
+    }), name='drive-v2-breadcrumb'),
+    
+    # OnlyOffice Document Server Integration
+    path('drive-v2/proxy-file/', proxy_file_view, name='drive-v2-proxy-file'),  # Vue fonction simple
+    path('drive-v2/check-onlyoffice/', DriveV2ViewSet.as_view({
+        'get': 'check_onlyoffice'
+    }), name='drive-v2-check-onlyoffice'),
+    path('drive-v2/onlyoffice-config/', DriveV2ViewSet.as_view({
+        'post': 'get_onlyoffice_config'
+    }), name='drive-v2-onlyoffice-config'),
+    path('drive-v2/onlyoffice-callback/', onlyoffice_callback_view, name='drive-v2-onlyoffice-callback'),  # Vue fonction simple
+]
+
 # --- URLs POUR LES NOUVELLES VUES PDF AVEC STOCKAGE AWS S3 ---
 urlpatterns += [
     # Vues PDF avec stockage automatique dans AWS S3

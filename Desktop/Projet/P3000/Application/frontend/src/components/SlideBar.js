@@ -81,6 +81,12 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         href: "https://myp3000app.com/drive",
         external: true,
       },
+      {
+        key: "drive_v2",
+        label: "Drive V2",
+        icon: SiGoogledrive,
+        to: "/drive-v2",
+      },
     ],
     []
   );

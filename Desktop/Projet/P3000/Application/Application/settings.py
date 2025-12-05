@@ -39,7 +39,7 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 
 # Configuration ALLOWED_HOSTS
-ALLOWED_HOSTS = ['myp3000app.com', 'www.myp3000app.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['myp3000app.com', 'www.myp3000app.com', 'localhost', '127.0.0.1', 'host.docker.internal']
 
 
 # Application definition
@@ -112,7 +112,8 @@ CACHES = {
 # Configuration des cookies de sécurité
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+# Changé de 'DENY' à 'SAMEORIGIN' pour permettre OnlyOffice dans iframe
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 # Désactiver CSRF pour toutes les URLs API
 CSRF_EXEMPT_URLS = [
@@ -294,5 +295,11 @@ if not DEBUG:
 # https://docs.djangoproject.com/en/dev/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Configuration OnlyOffice Document Server
+ONLYOFFICE_SERVER_URL = os.getenv('ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
+ONLYOFFICE_JWT_SECRET = os.getenv('ONLYOFFICE_JWT_SECRET', 'votre-secret-jwt-super-long-et-complexe')
+ONLYOFFICE_JWT_ENABLED = os.getenv('ONLYOFFICE_JWT_ENABLED', 'true').lower() == 'true'
+ONLYOFFICE_JWT_HEADER = os.getenv('ONLYOFFICE_JWT_HEADER', 'Authorization')
 
 

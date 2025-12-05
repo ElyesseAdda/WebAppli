@@ -25,6 +25,9 @@ import DevisAvance from "./DevisAvance";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard";
 import Drive from "./Drive";
+import DriveV2 from "./DriveV2/DriveV2";
+import FilePreviewPage from "./DriveV2/FilePreviewPage";
+import OnlyOfficeEditor from "./DriveV2/OnlyOfficeEditor";
 import GestionAppelsOffres from "./GestionAppelsOffres";
 import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
@@ -433,6 +436,39 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <Drive />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-v2"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <DriveV2 />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-v2/preview"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <FilePreviewPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-v2/editor"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <OnlyOfficeEditor
+                  filePath={new URLSearchParams(window.location.search).get('file_path')}
+                  fileName={new URLSearchParams(window.location.search).get('file_name')}
+                  mode="edit"
+                />
               </ProtectedRoute>
             }
           />
