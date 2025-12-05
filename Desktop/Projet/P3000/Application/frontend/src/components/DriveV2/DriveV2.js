@@ -86,11 +86,33 @@ const DriveV2 = () => {
     message: '',
     severity: 'info',
   });
+  const [draggedItemsFromExplorer, setDraggedItemsFromExplorer] = useState(null);
+  const [dragOverBreadcrumbItem, setDragOverBreadcrumbItem] = useState(null);
 
   // Charger le contenu initial
   useEffect(() => {
     fetchFolderContent('');
   }, []);
+
+  // Gérer le drag end global pour réinitialiser l'état si on ne drop pas sur le breadcrumb
+  useEffect(() => {
+    const handleDragEndGlobal = (event) => {
+      // Réinitialiser après un court délai pour permettre le drop sur le breadcrumb
+      setTimeout(() => {
+        if (draggedItemsFromExplorer && !event.dataTransfer?.dropEffect) {
+          setDraggedItemsFromExplorer(null);
+          setDragOverBreadcrumbItem(null);
+        }
+      }, 100);
+    };
+
+    if (draggedItemsFromExplorer) {
+      document.addEventListener('dragend', handleDragEndGlobal);
+      return () => {
+        document.removeEventListener('dragend', handleDragEndGlobal);
+      };
+    }
+  }, [draggedItemsFromExplorer]);
 
   // Naviguer vers un dossier
   const handleNavigateToFolder = useCallback((folderPath) => {
@@ -168,6 +190,110 @@ const DriveV2 = () => {
     }
   }, []);
 
+  // Fonction utilitaire pour récupérer le token CSRF
+  const getCookie = (name) => {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === name + '=') {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  };
+
+  // Gérer le drop sur un élément du breadcrumb
+  const handleDropOnBreadcrumb = useCallback(async (event, targetPath) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverBreadcrumbItem(null);
+
+    if (!draggedItemsFromExplorer || draggedItemsFromExplorer.length === 0) return;
+
+    // Vérifier qu'on ne déplace pas un dossier dans lui-même ou dans un de ses sous-dossiers
+    const invalidPaths = draggedItemsFromExplorer.filter(item => {
+      if (item.type === 'folder') {
+        return targetPath.startsWith(item.path) || item.path === targetPath;
+      }
+      return false;
+    });
+
+    if (invalidPaths.length > 0) {
+      setSnackbar({
+        open: true,
+        message: 'Impossible de déplacer un dossier dans lui-même ou dans un de ses sous-dossiers',
+        severity: 'warning',
+      });
+      setDraggedItemsFromExplorer(null);
+      return;
+    }
+
+    // Déplacer chaque élément
+    try {
+      const movePromises = draggedItemsFromExplorer.map(async (item) => {
+        const fileName = item.name;
+        const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
+        
+        const response = await fetch('/api/drive-v2/move-item/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            source_path: item.path,
+            dest_path: destPath,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Erreur lors du déplacement');
+        }
+
+        return response.json();
+      });
+
+      await Promise.all(movePromises);
+      setDraggedItemsFromExplorer(null);
+      setSnackbar({
+        open: true,
+        message: `${draggedItemsFromExplorer.length} élément(s) déplacé(s) avec succès`,
+        severity: 'success',
+      });
+      refreshContent();
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: `Erreur lors du déplacement: ${error.message}`,
+        severity: 'error',
+      });
+      setDraggedItemsFromExplorer(null);
+    }
+  }, [draggedItemsFromExplorer, refreshContent]);
+
+  // Gérer le drag over sur un élément du breadcrumb
+  const handleDragOverBreadcrumb = useCallback((event, breadcrumbPath) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (draggedItemsFromExplorer && draggedItemsFromExplorer.length > 0) {
+      setDragOverBreadcrumbItem(breadcrumbPath);
+    }
+  }, [draggedItemsFromExplorer]);
+
+  // Gérer le drag leave sur un élément du breadcrumb
+  const handleDragLeaveBreadcrumb = useCallback((event) => {
+    // Ne réinitialiser que si on quitte vraiment l'élément
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setDragOverBreadcrumbItem(null);
+    }
+  }, []);
+
   // Réinitialiser les fichiers droppés quand le modal se ferme
   const handleCloseUploadDialog = () => {
     setUploadDialogOpen(false);
@@ -190,31 +316,43 @@ const DriveV2 = () => {
           {/* Breadcrumb */}
           {!showSearch && (
             <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />}>
-              {buildBreadcrumb().map((item, index) => (
-                <Link
-                  key={index}
-                  component="button"
-                  variant="body1"
-                  onClick={() => handleNavigateToFolder(item.path)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    cursor: 'pointer',
-                    textDecoration: 'none',
-                    '&:hover': {
-                      textDecoration: 'underline',
-                    },
-                  }}
-                >
-                  {index === 0 ? (
-                    <HomeIcon fontSize="small" />
-                  ) : (
-                    <FolderIcon fontSize="small" />
-                  )}
-                  {item.name}
-                </Link>
-              ))}
+              {buildBreadcrumb().map((item, index) => {
+                const isDragOver = dragOverBreadcrumbItem === item.path;
+                return (
+                  <Link
+                    key={index}
+                    component="button"
+                    variant="body1"
+                    onClick={() => handleNavigateToFolder(item.path)}
+                    onDragOver={(e) => handleDragOverBreadcrumb(e, item.path)}
+                    onDragLeave={handleDragLeaveBreadcrumb}
+                    onDrop={(e) => handleDropOnBreadcrumb(e, item.path)}
+                    sx={(theme) => ({
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: isDragOver ? theme.palette.action.selected : 'transparent',
+                      border: isDragOver ? `2px dashed ${theme.palette.primary.main}` : '2px solid transparent',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        textDecoration: 'underline',
+                        backgroundColor: isDragOver ? theme.palette.action.selected : theme.palette.action.hover,
+                      },
+                    })}
+                  >
+                    {index === 0 ? (
+                      <HomeIcon fontSize="small" />
+                    ) : (
+                      <FolderIcon fontSize="small" />
+                    )}
+                    {item.name}
+                  </Link>
+                );
+              })}
             </Breadcrumbs>
           )}
         </Box>
@@ -314,6 +452,7 @@ const DriveV2 = () => {
             onRefresh={refreshContent}
             onDropFiles={handleDropFiles}
             currentPath={currentPath}
+            onDraggedItemsChange={setDraggedItemsFromExplorer}
           />
         )}
       </DriveContent>

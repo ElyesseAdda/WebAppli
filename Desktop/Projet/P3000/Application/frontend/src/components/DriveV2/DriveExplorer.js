@@ -31,9 +31,11 @@ import {
   MoreVert as MoreVertIcon,
   CloudUpload as UploadIcon,
   Visibility as VisibilityIcon,
+  DriveFileMove as MoveIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
+import MoveDialog from './MoveDialog';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
@@ -129,9 +131,12 @@ const DriveExplorer = ({
   onRefresh,
   onDropFiles,
   currentPath = '',
+  onDraggedItemsChange,
 }) => {
   const [contextMenu, setContextMenu] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [itemsToMove, setItemsToMove] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
@@ -320,6 +325,11 @@ const DriveExplorer = ({
 
     setDraggedItems(itemsToDrag);
     
+    // Notifier le parent des items dragués pour permettre le drop sur le breadcrumb
+    if (onDraggedItemsChange) {
+      onDraggedItemsChange(itemsToDrag);
+    }
+    
     // Position initiale de l'indicateur de drag
     setDragPosition({
       x: event.clientX + 10,
@@ -331,7 +341,7 @@ const DriveExplorer = ({
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', ''); // Nécessaire pour Firefox
     }
-  }, [selectedFiles, files, folders]);
+  }, [selectedFiles, files, folders, onDraggedItemsChange]);
 
   // Suivre la position du curseur pendant le drag (au niveau global)
   useEffect(() => {
@@ -355,11 +365,23 @@ const DriveExplorer = ({
     setDragPosition(null);
     setDraggedItems(null);
     setIsDragging(false);
+    
+    // Notifier le parent que le drag est terminé
+    if (onDraggedItemsChange) {
+      // Ne pas réinitialiser immédiatement pour permettre le drop sur le breadcrumb
+      // Le breadcrumb réinitialisera après le drop
+      setTimeout(() => {
+        if (onDraggedItemsChange) {
+          onDraggedItemsChange(null);
+        }
+      }, 100);
+    }
+    
     // Réinitialiser après un court délai pour permettre au onClick de détecter qu'il n'y a pas eu de drag
     setTimeout(() => {
       setMouseDownPos(null);
     }, 100);
-  }, []);
+  }, [onDraggedItemsChange]);
 
   // Gestion du drop sur un dossier
   const handleDropOnFolder = useCallback(async (event, targetFolder) => {
@@ -415,6 +437,12 @@ const DriveExplorer = ({
       setSelectedFiles(new Set());
       setDraggedItems(null);
       setDragPosition(null);
+      
+      // Notifier le parent que le drag est terminé
+      if (onDraggedItemsChange) {
+        onDraggedItemsChange(null);
+      }
+      
       onRefresh();
     } catch (error) {
       alert(`Erreur lors du déplacement: ${error.message}`);
@@ -729,6 +757,42 @@ const DriveExplorer = ({
   // Double-clic sur un fichier
   const handleFileDoubleClick = (file) => {
     handlePreview(file);
+  };
+
+  // Ouvrir le dialog de déplacement
+  const handleMove = () => {
+    handleCloseContextMenu();
+    
+    // Si des éléments sont sélectionnés, les utiliser
+    if (selectedFiles.size > 0) {
+      const allItems = [
+        ...folders.map(f => ({ ...f, type: 'folder' })),
+        ...files.map(f => ({ ...f, type: 'file' }))
+      ];
+      const itemsToMoveList = allItems.filter(item => selectedFiles.has(item.path));
+      setItemsToMove(itemsToMoveList);
+    } else if (selectedItem) {
+      // Sinon, utiliser l'élément du menu contextuel
+      setItemsToMove([selectedItem]);
+    } else {
+      return;
+    }
+    
+    setMoveDialogOpen(true);
+  };
+
+  // Fermer le dialog de déplacement et rafraîchir
+  const handleMoveComplete = (destinationPath) => {
+    setMoveDialogOpen(false);
+    setItemsToMove([]);
+    setSelectedFiles(new Set());
+    
+    // Naviguer vers le dossier de destination
+    if (destinationPath !== null && destinationPath !== undefined) {
+      onNavigateToFolder(destinationPath);
+    } else {
+      onRefresh();
+    }
   };
 
   // État vide
@@ -1102,6 +1166,14 @@ const DriveExplorer = ({
             </MenuItem>
           </>
         )}
+        <MenuItem onClick={handleMove}>
+          <ListItemIcon>
+            <MoveIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>
+            Déplacer {selectedFiles.size > 0 ? `(${selectedFiles.size})` : ''}
+          </ListItemText>
+        </MenuItem>
         <MenuItem onClick={handleDelete}>
           <ListItemIcon>
             <DeleteIcon fontSize="small" color="error" />
@@ -1109,6 +1181,18 @@ const DriveExplorer = ({
           <ListItemText>Supprimer</ListItemText>
         </MenuItem>
       </Menu>
+
+      {/* Dialog de déplacement */}
+      <MoveDialog
+        open={moveDialogOpen}
+        onClose={() => {
+          setMoveDialogOpen(false);
+          setItemsToMove([]);
+        }}
+        itemsToMove={itemsToMove}
+        onMoveComplete={handleMoveComplete}
+        onNavigate={onNavigateToFolder}
+      />
     </ExplorerContainer>
   );
 };

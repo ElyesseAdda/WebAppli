@@ -320,55 +320,135 @@ class StorageManager:
         max_results: int = 100
     ) -> Dict:
         """
-        Recherche des objets par nom
+        Recherche récursive des objets par nom dans tous les niveaux
         
         Args:
             search_term: Terme de recherche
-            prefix: Préfixe pour limiter la recherche
+            prefix: Préfixe pour limiter la recherche (optionnel)
             max_results: Nombre maximum de résultats
             
         Returns:
             Dict avec files et folders trouvés
         """
         try:
-            # Liste tous les objets avec le préfixe
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name,
-                Prefix=prefix
-            )
-            
             folders = []
             files = []
             search_lower = search_term.lower()
+            seen_folders = set()  # Pour éviter les doublons de dossiers
             
-            if 'Contents' in response:
-                for obj in response['Contents']:
-                    # Extraire le nom du fichier
-                    file_name = obj['Key'].split('/')[-1]
-                    
-                    # Vérifier si le terme de recherche est dans le nom
-                    if search_lower in file_name.lower():
-                        # Déterminer si c'est un dossier ou un fichier
-                        if obj['Key'].endswith('/'):
-                            folders.append({
-                                'name': file_name,
-                                'path': obj['Key'],
-                                'type': 'folder'
-                            })
-                        elif not obj['Key'].endswith('/.keep'):
+            # Utiliser un paginator pour gérer la pagination
+            # SANS Delimiter pour parcourir récursivement tous les niveaux
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            page_iterator = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=prefix
+                # Pas de Delimiter pour recherche récursive
+            )
+            
+            for page in page_iterator:
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        key = obj['Key']
+                        
+                        # Ignorer les fichiers .keep (mais on les utilise pour identifier les dossiers)
+                        if key.endswith('/.keep'):
+                            # C'est un marqueur de dossier, extraire le chemin du dossier
+                            folder_path = key[:-6]  # Enlever '/.keep'
+                            if not folder_path.endswith('/'):
+                                folder_path += '/'
+                            
+                            # Extraire le nom du dossier
+                            folder_name = folder_path.rstrip('/').split('/')[-1] if folder_path.rstrip('/') else ''
+                            
+                            # Vérifier si le terme de recherche est dans le nom
+                            if folder_name and search_lower in folder_name.lower():
+                                # Éviter les doublons
+                                if folder_path not in seen_folders:
+                                    seen_folders.add(folder_path)
+                                    folders.append({
+                                        'name': folder_name,
+                                        'path': folder_path,
+                                        'type': 'folder'
+                                    })
+                                    
+                                    # Limiter les résultats
+                                    if len(files) + len(folders) >= max_results:
+                                        break
+                            continue
+                        
+                        # Ignorer les objets qui sont juste des marqueurs de dossier (clé se terminant par /)
+                        if key.endswith('/'):
+                            # C'est un dossier (marqueur S3)
+                            folder_path = key
+                            folder_name = folder_path.rstrip('/').split('/')[-1] if folder_path.rstrip('/') else ''
+                            
+                            # Vérifier si le terme de recherche est dans le nom
+                            if folder_name and search_lower in folder_name.lower():
+                                # Éviter les doublons
+                                if folder_path not in seen_folders:
+                                    seen_folders.add(folder_path)
+                                    folders.append({
+                                        'name': folder_name,
+                                        'path': folder_path,
+                                        'type': 'folder'
+                                    })
+                                    
+                                    # Limiter les résultats
+                                    if len(files) + len(folders) >= max_results:
+                                        break
+                            continue
+                        
+                        # C'est un fichier normal
+                        # Extraire tous les dossiers parents du chemin pour les vérifier aussi
+                        path_parts = key.split('/')
+                        if len(path_parts) > 1:  # S'il y a au moins un dossier parent
+                            # Parcourir tous les segments du chemin pour trouver les dossiers correspondants
+                            current_path = ''
+                            for i, part in enumerate(path_parts[:-1]):  # Exclure le dernier (nom du fichier)
+                                if part:  # Ignorer les segments vides
+                                    current_path += part + '/'
+                                    
+                                    # Vérifier si ce dossier correspond à la recherche
+                                    if search_lower in part.lower():
+                                        # Éviter les doublons
+                                        if current_path not in seen_folders:
+                                            seen_folders.add(current_path)
+                                            folders.append({
+                                                'name': part,
+                                                'path': current_path,
+                                                'type': 'folder'
+                                            })
+                                            
+                                            # Limiter les résultats
+                                            if len(files) + len(folders) >= max_results:
+                                                break
+                        
+                        # Extraire le nom du fichier
+                        file_name = key.split('/')[-1]
+                        
+                        # Vérifier si le terme de recherche est dans le nom
+                        if file_name and search_lower in file_name.lower():
                             content_type, _ = mimetypes.guess_type(file_name)
                             files.append({
                                 'name': file_name,
-                                'path': obj['Key'],
+                                'path': key,
                                 'size': obj['Size'],
                                 'last_modified': obj['LastModified'].isoformat(),
                                 'type': 'file',
                                 'content_type': content_type or 'application/octet-stream'
                             })
+                            
+                            # Limiter les résultats
+                            if len(files) + len(folders) >= max_results:
+                                break
                         
-                        # Limiter les résultats
+                        # Arrêter si on a atteint le maximum de résultats
                         if len(files) + len(folders) >= max_results:
                             break
+                
+                # Arrêter si on a atteint le maximum de résultats
+                if len(files) + len(folders) >= max_results:
+                    break
             
             return {
                 'folders': folders,
