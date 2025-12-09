@@ -2878,9 +2878,6 @@ def create_chantier_from_devis(request):
 @api_view(['POST'])
 def create_devis(request):
     try:
-        # Log pour déboguer les données reçues
-        logger.debug("Données reçues du frontend")
-        
         with transaction.atomic():
             devis_chantier = request.data.get('devis_chantier', False)
             
@@ -2909,9 +2906,6 @@ def create_devis(request):
                     'description': request.data.get('description', ''),
                     'statut': 'en_attente'
                 }
-                
-                # Log pour déboguer les données de l'appel d'offres
-                logger.debug("Données de l'appel d'offres traitées")
                 
                 appel_offres = AppelOffres.objects.create(**appel_offres_data)
                 
@@ -9994,8 +9988,8 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                     societe_name=societe_name,
                     appel_offres_name=appel_offres.nom
                 )
-        except Exception as e:
-            print(f"Erreur lors de la création automatique des dossiers: {str(e)}")
+        except Exception:
+            pass
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

@@ -53,7 +53,6 @@ const GestionAppelsOffres = () => {
       const response = await axios.get("/api/appels-offres/");
       setAppelsOffres(response.data);
     } catch (error) {
-      console.error("Erreur lors du chargement des appels d'offres:", error);
       showAlert("Erreur lors du chargement des appels d'offres", "error");
     } finally {
       setLoading(false);
@@ -93,7 +92,6 @@ const GestionAppelsOffres = () => {
       fetchAppelsOffres();
       showAlert("Statut mis à jour avec succès !");
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error);
       const errorMessage =
         error.response?.data?.error || "Erreur lors de la mise à jour";
       showAlert(errorMessage, "error");
@@ -109,7 +107,6 @@ const GestionAppelsOffres = () => {
       fetchAppelsOffres();
       showAlert("Appel d'offres supprimé avec succès !");
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error);
       const errorMessage =
         error.response?.data?.error || "Erreur lors de la suppression";
       showAlert(errorMessage, "error");

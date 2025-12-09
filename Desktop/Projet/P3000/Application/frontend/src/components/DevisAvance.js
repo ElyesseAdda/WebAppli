@@ -596,10 +596,14 @@ const DevisAvance = () => {
       codepostal_societe: societeData.codepostal_societe || "",
     };
     
-    // Mettre à jour pendingChantierData
+    // ✅ Préserver l'ID de la société s'il existe déjà dans pendingChantierData
     setPendingChantierData((prev) => ({
       ...prev,
-      societe: updatedSociete,
+      societe: {
+        ...updatedSociete,
+        // Préserver l'ID s'il existe déjà (cas où on a sélectionné un client existant)
+        ...(prev.societe?.id && { id: prev.societe.id }),
+      },
     }));
     
     // Mettre à jour aussi l'état societe pour l'affichage immédiat
@@ -644,6 +648,21 @@ const DevisAvance = () => {
               rue_societe: societe.rue_societe || "",
               codepostal_societe: societe.codepostal_societe || "",
             });
+            // ✅ Stocker l'ID de la société pour l'utiliser directement plus tard
+            if (societe.id) {
+              setSelectedSocieteId(societe.id);
+              // Mettre à jour pendingChantierData avec l'ID de la société
+              setPendingChantierData((prev) => ({
+                ...prev,
+                societe: {
+                  id: societe.id,
+                  nom_societe: societe.nom_societe || "",
+                  ville_societe: societe.ville_societe || "",
+                  rue_societe: societe.rue_societe || "",
+                  codepostal_societe: societe.codepostal_societe || "",
+                },
+              }));
+            }
           } else {
             // Plusieurs sociétés, les stocker pour sélection ultérieure
             setSelectedClientSocietes(societeData.societes);
@@ -656,6 +675,21 @@ const DevisAvance = () => {
             rue_societe: societeData.rue_societe || "",
             codepostal_societe: societeData.codepostal_societe || "",
           });
+          // ✅ Stocker l'ID de la société pour l'utiliser directement plus tard
+          if (societeData.id) {
+            setSelectedSocieteId(societeData.id);
+            // Mettre à jour pendingChantierData avec l'ID de la société
+            setPendingChantierData((prev) => ({
+              ...prev,
+              societe: {
+                id: societeData.id,
+                nom_societe: societeData.nom_societe || "",
+                ville_societe: societeData.ville_societe || "",
+                rue_societe: societeData.rue_societe || "",
+                codepostal_societe: societeData.codepostal_societe || "",
+              },
+            }));
+          }
         }
       }
 
@@ -698,6 +732,7 @@ const DevisAvance = () => {
       };
 
       const updatedSociete = {
+        id: societeId, // ✅ Stocker l'ID de la société
         nom_societe: societeData.nom_societe || "",
         ville_societe: societeData.ville_societe || "",
         rue_societe: societeData.rue_societe || "",
@@ -2348,28 +2383,39 @@ const DevisAvance = () => {
         }
 
         // 2. Vérifier si la société existe
-        const existingSociete = await checkSocieteExists(pendingChantierData.societe);
-        if (existingSociete) {
-          finalSocieteId = existingSociete.id;
+        // ✅ Si l'ID de la société est déjà disponible (cas où on a sélectionné un client existant), l'utiliser directement
+        if (pendingChantierData.societe?.id) {
+          finalSocieteId = pendingChantierData.societe.id;
+        } else if (selectedSocieteId) {
+          // ✅ Utiliser selectedSocieteId si disponible
+          finalSocieteId = selectedSocieteId;
         } else {
-          // Préparer les données de la société avec gestion sécurisée du code postal
-          const societeData = {
-            nom_societe: pendingChantierData.societe.nom_societe || "",
-            ville_societe: pendingChantierData.societe.ville_societe || "",
-            rue_societe: pendingChantierData.societe.rue_societe || "",
-            client_name: finalClientId,
-          };
-          
-          // Ajouter codepostal_societe seulement s'il existe et n'est pas vide
-          if (pendingChantierData.societe.codepostal_societe) {
-            societeData.codepostal_societe = pendingChantierData.societe.codepostal_societe.toString();
+          // Sinon, chercher si la société existe
+          const existingSociete = await checkSocieteExists(pendingChantierData.societe);
+          if (existingSociete) {
+            finalSocieteId = existingSociete.id;
+          } else {
+            // Préparer les données de la société avec gestion sécurisée du code postal
+            const societeData = {
+              nom_societe: pendingChantierData.societe.nom_societe || "",
+              ville_societe: pendingChantierData.societe.ville_societe || "",
+              rue_societe: pendingChantierData.societe.rue_societe || "",
+              client_name: finalClientId,
+            };
+            
+            // Ajouter codepostal_societe seulement s'il existe et n'est pas vide
+            if (pendingChantierData.societe.codepostal_societe) {
+              societeData.codepostal_societe = pendingChantierData.societe.codepostal_societe.toString();
+            }
+            
+            const societeResponse = await axios.post("/api/societe/", societeData);
+            finalSocieteId = societeResponse.data.id;
           }
-          
-          const societeResponse = await axios.post("/api/societe/", societeData);
-          finalSocieteId = societeResponse.data.id;
         }
 
         // 3. Créer le chantier SEULEMENT si ce n'est PAS un appel d'offres
+        // ✅ IMPORTANT : Ne jamais créer de chantier pour les appels d'offres
+        // Les chantiers sont créés uniquement lors de la transformation d'un appel d'offres validé en chantier
         if (devisType !== "chantier") {
           // Vérifier que finalSocieteId est bien défini avant de créer le chantier
           if (!finalSocieteId) {
@@ -2394,6 +2440,11 @@ const DevisAvance = () => {
             taux_fixe: tauxFixe !== null ? tauxFixe : 20,
           });
           finalChantierId = chantierResponse.data.id;
+        } else {
+          // ✅ Pour les appels d'offres, ne pas créer de chantier
+          // Le chantier sera créé uniquement lors de la transformation depuis GestionAppelsOffres.js
+          // Ne pas définir finalChantierId pour les appels d'offres
+          finalChantierId = null;
         }
       } else if (selectedChantierId) {
         // Récupérer l'ID du client et de la société depuis le chantier existant

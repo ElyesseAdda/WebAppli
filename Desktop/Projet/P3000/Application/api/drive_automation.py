@@ -93,26 +93,15 @@ class DriveAutomation:
             # Créer tous les sous-dossiers spécifiques aux appels d'offres
             for subfolder in self.APPEL_OFFRES_SUBFOLDERS:
                 subfolder_path = f"{appel_offres_path}/{subfolder}"
-                success = create_s3_folder_recursive(subfolder_path)
-                if not success:
-                    print(f"⚠️  Impossible de créer le sous-dossier: {subfolder_path}")
-                    # Continuer avec les autres dossiers
-                else:
-                    print(f"✅ Dossier créé: {subfolder_path}")
+                create_s3_folder_recursive(subfolder_path)
             
             # Créer le sous-dossier Devis_Marche dans le dossier Devis
             devis_marche_path = f"{appel_offres_path}/Devis/Devis_Marche"
-            success = create_s3_folder_recursive(devis_marche_path)
-            if not success:
-                print(f"⚠️  Impossible de créer le sous-dossier Devis_Marche: {devis_marche_path}")
-            else:
-                print(f"✅ Dossier Devis_Marche créé: {devis_marche_path}")
+            create_s3_folder_recursive(devis_marche_path)
             
-            print(f"🎯 Structure d'appel d'offres créée: {appel_offres_path}")
             return appel_offres_path
             
         except Exception as e:
-            print(f"❌ Erreur lors de la création de la structure d'appel d'offres: {str(e)}")
             raise
     
     def create_chantier_structure(self, societe_name: str, chantier_name: str, root_path: str = None) -> str:
@@ -136,18 +125,11 @@ class DriveAutomation:
             # Créer tous les sous-dossiers spécifiques aux chantiers
             for subfolder in self.CHANTIER_SUBFOLDERS:
                 subfolder_path = f"{chantier_path}/{subfolder}"
-                success = create_s3_folder_recursive(subfolder_path)
-                if not success:
-                    print(f"⚠️  Impossible de créer le sous-dossier: {subfolder_path}")
-                    # Continuer avec les autres dossiers
-                else:
-                    print(f"✅ Dossier créé: {subfolder_path}")
+                create_s3_folder_recursive(subfolder_path)
             
-            print(f"🏗️  Structure de chantier créée: {chantier_path}")
             return chantier_path
             
         except Exception as e:
-            print(f"❌ Erreur lors de la création de la structure de chantier: {str(e)}")
             raise
     
     def create_project_structure(self, societe_name: str, project_name: str, root_path: str) -> str:
@@ -186,8 +168,6 @@ class DriveAutomation:
             bool: True si le transfert a réussi
         """
         try:
-            print(f"🔄 Début du transfert: Appel d'offres {appel_offres_id} → Chantier {chantier_name}")
-            
             # Chemins source et destination
             source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{appel_offres_id:03d}_{custom_slugify(appel_offres_name)}"
             dest_societe_path = f"{self.chantiers_root}/{custom_slugify(societe_name)}"
@@ -199,14 +179,11 @@ class DriveAutomation:
             # Lister tout le contenu du projet source
             content = list_s3_folder_content(source_path)
             
-            print(f"📁 Contenu à transférer: {len(content['files'])} fichiers, {len(content['folders'])} dossiers")
-            
             # Transférer tous les fichiers
             for file in content['files']:
                 source_file_path = f"{source_path}/{file['name']}"
                 dest_file_path = f"{dest_chantier_path}/{file['name']}"
                 move_s3_file(source_file_path, dest_file_path)
-                print(f"📄 Fichier transféré: {file['name']}")
             
             # Transférer tous les dossiers (y compris les dossiers custom)
             for folder in content['folders']:
@@ -223,7 +200,6 @@ class DriveAutomation:
                     source_subfile_path = f"{source_folder_path}/{subfile['name']}"
                     dest_subfile_path = f"{dest_folder_path}/{subfile['name']}"
                     move_s3_file(source_subfile_path, dest_subfile_path)
-                    print(f"📄 Sous-fichier transféré: {folder['name']}/{subfile['name']}")
                 
                 # Transférer les sous-dossiers récursivement
                 for subfolder in folder_content['folders']:
@@ -231,17 +207,13 @@ class DriveAutomation:
                         f"{source_folder_path}/{subfolder['name']}",
                         f"{dest_folder_path}/{subfolder['name']}"
                     )
-                    print(f"📁 Sous-dossier transféré: {folder['name']}/{subfolder['name']}")
             
             # Supprimer le dossier source (appel d'offres)
             self._delete_folder_recursive(source_path)
-            print(f"🗑️  Dossier source supprimé: {source_path}")
             
-            print(f"✅ Transfert réussi: {source_path} → {dest_chantier_path}")
             return True
             
-        except Exception as e:
-            print(f"❌ Erreur lors du transfert: {str(e)}")
+        except Exception:
             return False
     
     def save_document_to_folder(self, document_path: str, target_folder: str, filename: str) -> bool:
@@ -255,8 +227,7 @@ class DriveAutomation:
             # Déplacer le fichier
             success = move_s3_file(document_path, destination_path)
             return success
-        except Exception as e:
-            print(f"Erreur lors de la sauvegarde du document: {str(e)}")
+        except Exception:
             return False
     
     def transfer_project_to_chantier(self, societe_name: str, project_name: str) -> bool:
@@ -309,8 +280,7 @@ class DriveAutomation:
             
             return True
             
-        except Exception as e:
-            print(f"Erreur lors du transfert: {str(e)}")
+        except Exception:
             return False
     
     def copy_appel_offres_to_chantier(self, societe_name: str, appel_offres_name: str, chantier_name: str) -> bool:
@@ -320,18 +290,10 @@ class DriveAutomation:
         Chemin destination: Chantier/Societe/nom_chantier
         """
         try:
-            print(f"🔄 Début de la copie: Appel d'offres → Chantier")
-            print(f"   Source: Appels_Offres/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}")
-            print(f"   Destination: Chantiers/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}")
-            
             # Chemins source et destination
             source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}"
             dest_societe_path = f"Chantiers/{custom_slugify(societe_name)}"
             dest_chantier_path = f"{dest_societe_path}/{custom_slugify(chantier_name)}"
-            
-            print(f"🔍 Chemins détaillés:")
-            print(f"   Source: {source_path}")
-            print(f"   Destination: {dest_chantier_path}")
             
             # S'assurer que les chemins se terminent par /
             if not source_path.endswith('/'):
@@ -339,36 +301,11 @@ class DriveAutomation:
             if not dest_chantier_path.endswith('/'):
                 dest_chantier_path += '/'
             
-            print(f"🔍 Chemins corrigés:")
-            print(f"   Source: {source_path}")
-            print(f"   Destination: {dest_chantier_path}")
-            
             # Lister tout le contenu du projet source AVANT de créer la structure
             content = list_s3_folder_content(source_path)
             
-            print(f"📁 Contenu à copier: {len(content['files'])} fichiers, {len(content['folders'])} dossiers")
-            print(f"🔍 Détail du contenu source:")
-            print(f"   Fichiers: {[f['name'] for f in content['files']]}")
-            print(f"   Dossiers: {[f['name'] for f in content['folders']]}")
-            
-            # Vérifier le contenu des dossiers Devis et DCE
-            for folder in content['folders']:
-                if folder['name'] in ['Devis', 'DCE']:
-                    folder_content = list_s3_folder_content(f"{source_path}/{folder['name']}")
-                    print(f"   📂 Contenu du dossier {folder['name']}: {len(folder_content['files'])} fichiers")
-                    for file in folder_content['files']:
-                        print(f"      📄 {file['name']}")
-                    
-                    # Vérifier aussi les sous-dossiers (comme Devis_Marche)
-                    for subfolder in folder_content['folders']:
-                        subfolder_content = list_s3_folder_content(f"{source_path}/{folder['name']}/{subfolder['name']}")
-                        print(f"   📂 Contenu du sous-dossier {folder['name']}/{subfolder['name']}: {len(subfolder_content['files'])} fichiers")
-                        for file in subfolder_content['files']:
-                            print(f"      📄 {file['name']}")
-            
             # Créer seulement le dossier racine du chantier
             create_s3_folder_recursive(dest_chantier_path)
-            print(f"✅ Dossier racine créé: {dest_chantier_path}")
             
             # Créer seulement les dossiers spécifiques au chantier (Situation, Sous Traitant, Facture)
             # Ne pas créer Devis et DCE car ils seront copiés depuis l'appel d'offres
@@ -379,33 +316,24 @@ class DriveAutomation:
                 if folder_name not in existing_folders:
                     folder_path = f"{dest_chantier_path.rstrip('/')}/{folder_name}"
                     create_s3_folder_recursive(folder_path)
-                    print(f"✅ Dossier créé: {folder_path}")
             
             # Copier tous les fichiers
             for file in content['files']:
                 source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
                 dest_file_path = f"{dest_chantier_path.rstrip('/')}/{file['name']}"
                 self._copy_s3_file(source_file_path, dest_file_path)
-                print(f"📄 Fichier copié: {file['name']}")
             
             # Copier tous les dossiers (Devis et DCE) directement dans le chantier
             for folder in content['folders']:
                 source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
                 dest_folder_path = f"{dest_chantier_path.rstrip('/')}/{folder['name']}"
                 
-                print(f"📂 Copie du dossier: {folder['name']}")
-                print(f"   Source: {source_folder_path}")
-                print(f"   Destination: {dest_folder_path}")
-                
                 # Copier le contenu du dossier récursivement
                 self._copy_folder_recursive(source_folder_path, dest_folder_path)
-                print(f"📁 Dossier copié: {folder['name']}")
             
-            print(f"✅ Copie réussie: {source_path} → {dest_chantier_path}")
             return True
             
-        except Exception as e:
-            print(f"❌ Erreur lors de la copie: {str(e)}")
+        except Exception:
             return False
     
     def _transfer_folder_recursive(self, source_folder: str, dest_folder: str):
@@ -454,8 +382,8 @@ class DriveAutomation:
             except:
                 pass
                 
-        except Exception as e:
-            print(f"Erreur lors de la suppression du dossier {folder_path}: {str(e)}")
+        except Exception:
+            pass
     
     def _copy_s3_file(self, source_path: str, dest_path: str) -> bool:
         """
@@ -477,8 +405,7 @@ class DriveAutomation:
             
             return True
             
-        except Exception as e:
-            print(f"Erreur lors de la copie du fichier {source_path} vers {dest_path}: {str(e)}")
+        except Exception:
             return False
     
     def _copy_folder_recursive(self, source_folder: str, dest_folder: str):
@@ -498,25 +425,21 @@ class DriveAutomation:
             # Lister le contenu
             content = list_s3_folder_content(source_folder)
             
-            print(f"   📁 Contenu du dossier {source_folder}: {len(content['files'])} fichiers, {len(content['folders'])} dossiers")
-            
             # Copier les fichiers
             for file in content['files']:
                 source_file_path = f"{source_folder.rstrip('/')}/{file['name']}"
                 dest_file_path = f"{dest_folder.rstrip('/')}/{file['name']}"
                 self._copy_s3_file(source_file_path, dest_file_path)
-                print(f"   📄 Fichier copié: {file['name']}")
             
             # Copier les sous-dossiers récursivement
             for subfolder in content['folders']:
-                print(f"   📂 Copie du sous-dossier: {subfolder['name']}")
                 self._copy_folder_recursive(
                     f"{source_folder.rstrip('/')}/{subfolder['name']}",
                     f"{dest_folder.rstrip('/')}/{subfolder['name']}"
                 )
                 
-        except Exception as e:
-            print(f"Erreur lors de la copie du dossier {source_folder}: {str(e)}")
+        except Exception:
+            pass
     
     def delete_appel_offres_structure(self, societe_name: str, appel_offres_name: str) -> bool:
         """
@@ -530,25 +453,20 @@ class DriveAutomation:
             bool: True si la suppression a réussi
         """
         try:
-            print(f"🗑️ Suppression de la structure d'appel d'offres: {appel_offres_name}")
-            
             # Construire le chemin de l'appel d'offres
             appel_offres_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}"
             
             # Vérifier si le dossier existe
             content = list_s3_folder_content(appel_offres_path)
             if not content['files'] and not content['folders']:
-                print(f"⚠️ Le dossier {appel_offres_path} n'existe pas ou est vide")
                 return True
             
             # Supprimer récursivement tout le contenu
             self._delete_folder_recursive(appel_offres_path)
             
-            print(f"✅ Structure d'appel d'offres supprimée: {appel_offres_path}")
             return True
             
-        except Exception as e:
-            print(f"❌ Erreur lors de la suppression de la structure d'appel d'offres: {str(e)}")
+        except Exception:
             return False
 
 

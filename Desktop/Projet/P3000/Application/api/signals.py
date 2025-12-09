@@ -17,27 +17,19 @@ def create_appel_offres_folders(sender, instance, created, **kwargs):
     """
     if created:
         try:
-            print(f"🎯 Création automatique des dossiers S3 pour l'appel d'offres: {instance.id}")
-            
             # Récupérer le nom de la société
             societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
             
             # Créer la structure de dossiers S3
-            folder_path = drive_automation.create_appel_offres_structure(
+            drive_automation.create_appel_offres_structure(
                 appel_offres_id=instance.id,
                 societe_name=societe_name,
                 appel_offres_name=instance.chantier_name
             )
             
-            print(f"✅ Dossiers S3 créés avec succès: {folder_path}")
-            
-            # Optionnel: Enregistrer le chemin dans le modèle (si vous voulez le garder)
-            # instance.folder_path = folder_path
-            # instance.save(update_fields=['folder_path'])
-            
-        except Exception as e:
-            print(f"❌ Erreur lors de la création des dossiers S3 pour l'appel d'offres {instance.id}: {str(e)}")
+        except Exception:
             # Ne pas faire échouer la création de l'appel d'offres à cause du Drive
+            pass
 
 
 @receiver(post_save, sender=Chantier)
@@ -47,22 +39,18 @@ def create_chantier_folders(sender, instance, created, **kwargs):
     """
     if created:
         try:
-            print(f"🏗️  Création automatique des dossiers S3 pour le chantier: {instance.chantier_name}")
-            
             # Récupérer le nom de la société
             societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
             
             # Créer la structure de dossiers S3
-            folder_path = drive_automation.create_chantier_structure(
+            drive_automation.create_chantier_structure(
                 societe_name=societe_name,
                 chantier_name=instance.chantier_name
             )
             
-            print(f"✅ Dossiers S3 créés avec succès: {folder_path}")
-            
-        except Exception as e:
-            print(f"❌ Erreur lors de la création des dossiers S3 pour le chantier {instance.chantier_name}: {str(e)}")
+        except Exception:
             # Ne pas faire échouer la création du chantier à cause du Drive
+            pass
 
 
 # Signal désactivé pour éviter les boucles infinies
@@ -105,8 +93,6 @@ def cleanup_appel_offres_folders(sender, instance, **kwargs):
     Nettoie les dossiers S3 lors de la suppression d'un appel d'offres
     """
     try:
-        print(f"🗑️  Nettoyage des dossiers S3 pour l'appel d'offres: {instance.id}")
-        
         # Récupérer le nom de la société
         societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
         
@@ -116,10 +102,8 @@ def cleanup_appel_offres_folders(sender, instance, **kwargs):
         # Supprimer le dossier et son contenu
         drive_automation._delete_folder_recursive(folder_path)
         
-        print(f"✅ Dossiers S3 supprimés: {folder_path}")
-        
-    except Exception as e:
-        print(f"❌ Erreur lors du nettoyage des dossiers S3 pour l'appel d'offres {instance.id}: {str(e)}")
+    except Exception:
+        pass
 
 
 @receiver(post_delete, sender=Chantier)
@@ -128,8 +112,6 @@ def cleanup_chantier_folders(sender, instance, **kwargs):
     Nettoie les dossiers S3 lors de la suppression d'un chantier
     """
     try:
-        print(f"🗑️  Nettoyage des dossiers S3 pour le chantier: {instance.chantier_name}")
-        
         # Récupérer le nom de la société
         societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
         
@@ -139,23 +121,21 @@ def cleanup_chantier_folders(sender, instance, **kwargs):
         # Supprimer le dossier et son contenu
         drive_automation._delete_folder_recursive(folder_path)
         
-        print(f"✅ Dossiers S3 supprimés: {folder_path}")
-        
-    except Exception as e:
-        print(f"❌ Erreur lors du nettoyage des dossiers S3 pour le chantier {instance.chantier_name}: {str(e)}")
+    except Exception:
+        pass
 
 
 def connect_signals():
     """
     Connecte tous les signaux (appelée dans apps.py)
     """
-    print("🔌 Connexion des signaux Drive automatique...")
     # Les signaux sont automatiquement connectés grâce aux décorateurs @receiver
+    pass
 
 
 def disconnect_signals():
     """
     Déconnecte tous les signaux (pour les tests)
     """
-    print("🔌 Déconnexion des signaux Drive automatique...")
     # Cette fonction peut être utile pour les tests
+    pass
