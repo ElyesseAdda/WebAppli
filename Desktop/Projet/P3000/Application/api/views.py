@@ -10016,6 +10016,16 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                     'error': 'Seuls les appels d\'offres validés peuvent être transformés en chantier'
                 }, status=400)
             
+            # ✅ Vérifier si l'appel d'offres a déjà été transformé en chantier
+            # Utiliser le champ chantier_transformé qui persiste même après rechargement
+            if appel_offres.chantier_transformé:
+                return Response({
+                    'error': f'Cet appel d\'offres a déjà été transformé en chantier : {appel_offres.chantier_transformé.chantier_name}',
+                    'chantier_id': appel_offres.chantier_transformé.id,
+                    'chantier_name': appel_offres.chantier_transformé.chantier_name,
+                    'deja_transforme': True
+                }, status=400)
+            
             chantier = appel_offres.transformer_en_chantier()
             
             # Mettre à jour le devis pour qu'il pointe vers le nouveau chantier

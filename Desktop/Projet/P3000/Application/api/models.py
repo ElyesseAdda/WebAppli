@@ -270,6 +270,18 @@ class AppelOffres(models.Model):
     date_validation = models.DateField(null=True, blank=True)
     raison_refus = models.TextField(blank=True, null=True)
     
+    # ✅ Champ pour marquer le chantier transformé (un seul chantier par appel d'offres)
+    # Si le chantier est supprimé, ce champ sera automatiquement mis à None (SET_NULL)
+    # ce qui permettra de transformer à nouveau l'appel d'offres
+    chantier_transformé = models.ForeignKey(
+        'Chantier',
+        on_delete=models.SET_NULL,  # ✅ Si le chantier est supprimé, permet une nouvelle transformation
+        null=True,
+        blank=True,
+        related_name='appel_offres_source',
+        verbose_name="Chantier transformé depuis cet appel d'offres"
+    )
+    
     def __str__(self):
         return f"Appel d'offres {self.id} - {self.chantier_name}"
     
@@ -284,6 +296,12 @@ class AppelOffres(models.Model):
         while Chantier.objects.filter(chantier_name=chantier_name).exists():
             chantier_name = f"{self.chantier_name} ({counter})"
             counter += 1
+        
+        # ✅ Vérifier si cet appel d'offres a déjà été transformé
+        # Si le chantier transformé a été supprimé, chantier_transformé sera automatiquement None
+        # (grâce à on_delete=models.SET_NULL) et la transformation sera à nouveau possible
+        if self.chantier_transformé:
+            raise ValueError(f"Cet appel d'offres a déjà été transformé en chantier : {self.chantier_transformé.chantier_name}")
         
         # Créer le chantier avec tous les champs de l'appel d'offres
         chantier = Chantier.objects.create(
@@ -307,10 +325,9 @@ class AppelOffres(models.Model):
             taux_fixe=self.taux_fixe,
         )
         
-        # Le statut est déjà géré par l'API, pas besoin de le modifier ici
-        # self.statut = 'valide'
-        # self.date_validation = timezone.now().date()
-        # self.save()
+        # ✅ Marquer cet appel d'offres comme transformé en liant le chantier
+        self.chantier_transformé = chantier
+        self.save()
         
         return chantier
 

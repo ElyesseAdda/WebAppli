@@ -94,7 +94,11 @@ class DevisSerializer(serializers.ModelSerializer):
     lignes_display = serializers.JSONField(required=False)
     parties_metadata = serializers.JSONField(required=False)
     client = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
-    chantier = serializers.PrimaryKeyRelatedField(queryset=Chantier.objects.all())
+    chantier = serializers.PrimaryKeyRelatedField(
+        queryset=Chantier.objects.all(),
+        allow_null=True,
+        required=False
+    )
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
 
@@ -1272,6 +1276,27 @@ class AppelOffresSerializer(serializers.ModelSerializer):
         source='societe',
         write_only=True
     )
+    # ✅ Champ calculé pour indiquer si l'appel d'offres a déjà été transformé
+    deja_transforme = serializers.SerializerMethodField()
+    chantier_transformé_id = serializers.SerializerMethodField()
+    chantier_transformé_name = serializers.SerializerMethodField()
+    
+    def get_deja_transforme(self, obj):
+        """Vérifie si l'appel d'offres a déjà été transformé en chantier"""
+        # ✅ Utiliser le champ chantier_transformé qui persiste même après rechargement
+        return obj.chantier_transformé is not None
+    
+    def get_chantier_transformé_id(self, obj):
+        """Retourne l'ID du chantier transformé si existant"""
+        if obj.chantier_transformé:
+            return obj.chantier_transformé.id
+        return None
+    
+    def get_chantier_transformé_name(self, obj):
+        """Retourne le nom du chantier transformé si existant"""
+        if obj.chantier_transformé:
+            return obj.chantier_transformé.chantier_name
+        return None
     
     class Meta:
         model = AppelOffres

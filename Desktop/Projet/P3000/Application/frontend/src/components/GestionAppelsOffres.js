@@ -42,6 +42,7 @@ const GestionAppelsOffres = () => {
   const [raisonRefus, setRaisonRefus] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [alertSeverity, setAlertSeverity] = useState("success");
+  const [transformingId, setTransformingId] = useState(null); // ✅ Pour empêcher les clics multiples
 
   useEffect(() => {
     fetchAppelsOffres();
@@ -66,7 +67,13 @@ const GestionAppelsOffres = () => {
   };
 
   const handleTransformerEnChantier = async (appelOffresId) => {
+    // ✅ Empêcher les clics multiples
+    if (transformingId === appelOffresId) {
+      return;
+    }
+    
     try {
+      setTransformingId(appelOffresId);
       const response = await axios.post(
         `/api/appels-offres/${appelOffresId}/transformer_en_chantier/`
       );
@@ -76,6 +83,13 @@ const GestionAppelsOffres = () => {
       const errorMessage =
         error.response?.data?.error || "Erreur lors de la transformation";
       showAlert(errorMessage, "error");
+      
+      // ✅ Si l'appel d'offres a déjà été transformé, recharger la liste pour mettre à jour l'état
+      if (error.response?.data?.deja_transforme) {
+        fetchAppelsOffres();
+      }
+    } finally {
+      setTransformingId(null);
     }
   };
 
@@ -211,12 +225,27 @@ const GestionAppelsOffres = () => {
                   appelsOffres.map((appelOffres) => (
                     <TableRow key={appelOffres.id}>
                       <TableCell>
-                        <Typography variant="subtitle1" fontWeight="bold">
-                          {appelOffres.chantier_name}
-                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            {appelOffres.chantier_name}
+                          </Typography>
+                          {appelOffres.deja_transforme && (
+                            <Chip
+                              label="Transformé"
+                              color="success"
+                              size="small"
+                              sx={{ fontSize: "0.7rem", height: "20px" }}
+                            />
+                          )}
+                        </Box>
                         {appelOffres.description && (
                           <Typography variant="body2" color="textSecondary">
                             {appelOffres.description}
+                          </Typography>
+                        )}
+                        {appelOffres.deja_transforme && appelOffres.chantier_transformé_name && (
+                          <Typography variant="body2" color="success.main" sx={{ mt: 0.5, fontStyle: "italic" }}>
+                            Chantier : {appelOffres.chantier_transformé_name}
                           </Typography>
                         )}
                       </TableCell>
@@ -250,16 +279,26 @@ const GestionAppelsOffres = () => {
                       <TableCell>
                         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                           {appelOffres.statut === "valide" && (
-                            <Tooltip title="Transformer en chantier">
-                              <IconButton
-                                color="success"
-                                onClick={() =>
-                                  handleTransformerEnChantier(appelOffres.id)
-                                }
-                                size="small"
-                              >
-                                <TransformIcon />
-                              </IconButton>
+                            <Tooltip 
+                              title={
+                                appelOffres.deja_transforme
+                                  ? `Déjà transformé en chantier : ${appelOffres.chantier_transformé_name || "N/A"}`
+                                  : "Transformer en chantier"
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  color={appelOffres.deja_transforme ? "default" : "success"}
+                                  onClick={() =>
+                                    !appelOffres.deja_transforme && 
+                                    handleTransformerEnChantier(appelOffres.id)
+                                  }
+                                  disabled={appelOffres.deja_transforme || transformingId === appelOffres.id}
+                                  size="small"
+                                >
+                                  <TransformIcon />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           )}
 
