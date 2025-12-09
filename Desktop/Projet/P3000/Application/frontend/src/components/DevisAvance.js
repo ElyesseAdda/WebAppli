@@ -559,13 +559,13 @@ const DevisAvance = () => {
         poste: clientData.poste || "",
       };
       
-      // Mettre à jour pendingChantierData avec tous les champs du client
+      // ✅ Mettre à jour pendingChantierData avec tous les champs du client
       setPendingChantierData((prev) => ({
         ...prev,
         client: updatedClient,
       }));
       
-      // Mettre à jour aussi l'état client pour l'affichage immédiat
+      // ✅ Mettre à jour aussi l'état client pour l'affichage immédiat
       setClient({
         name: updatedClient.name,
         surname: updatedClient.surname,
@@ -585,6 +585,7 @@ const DevisAvance = () => {
         setShowSocieteInfoModal(true);
       }
     } catch (error) {
+      console.error("Erreur lors de la soumission des informations client:", error);
     }
   };
 
@@ -596,15 +597,45 @@ const DevisAvance = () => {
       codepostal_societe: societeData.codepostal_societe || "",
     };
     
-    // ✅ Préserver l'ID de la société s'il existe déjà dans pendingChantierData
+    // ✅ Vérifier si la société existe déjà (par nom et code postal)
+    let existingSociete = null;
+    try {
+      existingSociete = await checkSocieteExists(updatedSociete);
+    } catch (error) {
+      console.error("Erreur lors de la vérification de la société:", error);
+    }
+    
+    // ✅ IMPORTANT : Si l'utilisateur a modifié les informations d'une société sélectionnée,
+    // on considère qu'il veut créer une nouvelle société (pas utiliser l'ID de l'ancienne)
+    const hadSelectedSocieteId = pendingChantierData.societe?.id && selectedSocieteId;
+    const societeWasModified = hadSelectedSocieteId && existingSociete && existingSociete.id !== selectedSocieteId;
+    
+    // ✅ Si la société existe ET qu'elle correspond à celle sélectionnée, utiliser son ID
+    // Sinon, créer une nouvelle société
+    const societeToStore = (existingSociete && !societeWasModified)
+      ? {
+          ...updatedSociete,
+          id: existingSociete.id, // ✅ Utiliser l'ID de la société existante
+        }
+      : {
+          ...updatedSociete,
+          // ✅ Pas d'ID = sera créée lors de la sauvegarde
+          needsCreation: true,
+        };
+    
+    // ✅ Si l'utilisateur a modifié une société sélectionnée, ne pas conserver l'ancien ID
     setPendingChantierData((prev) => ({
       ...prev,
-      societe: {
-        ...updatedSociete,
-        // Préserver l'ID s'il existe déjà (cas où on a sélectionné un client existant)
-        ...(prev.societe?.id && { id: prev.societe.id }),
-      },
+      societe: societeToStore,
     }));
+    
+    // ✅ Si une société existante a été trouvée ET qu'elle correspond à celle sélectionnée, mettre à jour selectedSocieteId
+    if (existingSociete && !societeWasModified) {
+      setSelectedSocieteId(existingSociete.id);
+    } else {
+      // ✅ Si nouvelle société ou société modifiée, réinitialiser selectedSocieteId
+      setSelectedSocieteId(null);
+    }
     
     // Mettre à jour aussi l'état societe pour l'affichage immédiat
     setSociete(updatedSociete);
@@ -622,80 +653,125 @@ const DevisAvance = () => {
   // Fonction pour gérer la sélection d'un client existant
   const handleSelectClient = async (clientData, societeData) => {
     try {
-      // Pré-remplir les données du client
+      // ✅ Pré-remplir TOUTES les données obligatoires du client
       const updatedClient = {
         name: clientData.name || "",
         surname: clientData.surname || "",
-        phone_Number: clientData.phone_Number || "",
+        phone_Number: clientData.phone_Number ? String(clientData.phone_Number) : "",
         client_mail: clientData.client_mail || "",
-        civilite: clientData.civilite || "",
+        civilite: clientData.civilite || "M.",
         poste: clientData.poste || "",
       };
 
-      // Stocker les données pré-remplies
+      // ✅ Mettre à jour immédiatement pendingChantierData avec le client
+      setPendingChantierData((prev) => ({
+        ...prev,
+        client: updatedClient,
+      }));
+
+      // ✅ Mettre à jour aussi l'état client pour l'affichage immédiat
+      setClient(updatedClient);
+
+      // Stocker les données pré-remplies pour le modal
       setPrefilledClientData(updatedClient);
 
       // Gérer les sociétés associées
       if (societeData) {
         if (societeData.multiple && societeData.societes && societeData.societes.length > 0) {
-          // Stocker les sociétés pour pré-remplissage
+          // ✅ Plusieurs sociétés trouvées : ouvrir directement le modal de sélection
           if (societeData.societes.length === 1) {
             // Une seule société, la pré-remplir directement
             const societe = societeData.societes[0];
-            setPrefilledSocieteData({
+            const updatedSociete = {
+              id: societe.id,
               nom_societe: societe.nom_societe || "",
               ville_societe: societe.ville_societe || "",
               rue_societe: societe.rue_societe || "",
               codepostal_societe: societe.codepostal_societe || "",
+            };
+            
+            setPrefilledSocieteData(updatedSociete);
+            setSelectedSocieteId(societe.id);
+            
+            // ✅ Mettre à jour pendingChantierData avec l'ID de la société
+            setPendingChantierData((prev) => ({
+              ...prev,
+              societe: updatedSociete,
+            }));
+            
+            // ✅ Mettre à jour aussi l'état societe pour l'affichage immédiat
+            setSociete({
+              nom_societe: updatedSociete.nom_societe,
+              ville_societe: updatedSociete.ville_societe,
+              rue_societe: updatedSociete.rue_societe,
+              codepostal_societe: updatedSociete.codepostal_societe,
             });
-            // ✅ Stocker l'ID de la société pour l'utiliser directement plus tard
-            if (societe.id) {
-              setSelectedSocieteId(societe.id);
-              // Mettre à jour pendingChantierData avec l'ID de la société
-              setPendingChantierData((prev) => ({
-                ...prev,
-                societe: {
-                  id: societe.id,
-                  nom_societe: societe.nom_societe || "",
-                  ville_societe: societe.ville_societe || "",
-                  rue_societe: societe.rue_societe || "",
-                  codepostal_societe: societe.codepostal_societe || "",
-                },
-              }));
-            }
+            
+            // Fermer le modal de sélection et ouvrir le modal client
+            setShowSelectClientModal(false);
+            setShowClientInfoModal(true);
           } else {
-            // Plusieurs sociétés, les stocker pour sélection ultérieure
+            // ✅ Plusieurs sociétés : stocker les sociétés et ouvrir directement SelectSocieteModal
             setSelectedClientSocietes(societeData.societes);
+            
+            // Fermer TOUS les modals (sélection client ET info client) et ouvrir directement le modal de sélection de société
+            setShowSelectClientModal(false);
+            setShowClientInfoModal(false); // ✅ Fermer aussi le modal client info
+            setShowSelectSocieteModal(true);
           }
         } else {
           // Société unique trouvée directement
-          setPrefilledSocieteData({
+          const updatedSociete = {
+            id: societeData.id,
             nom_societe: societeData.nom_societe || "",
             ville_societe: societeData.ville_societe || "",
             rue_societe: societeData.rue_societe || "",
             codepostal_societe: societeData.codepostal_societe || "",
-          });
+          };
+          
+          setPrefilledSocieteData(updatedSociete);
+          
           // ✅ Stocker l'ID de la société pour l'utiliser directement plus tard
           if (societeData.id) {
             setSelectedSocieteId(societeData.id);
             // Mettre à jour pendingChantierData avec l'ID de la société
             setPendingChantierData((prev) => ({
               ...prev,
-              societe: {
-                id: societeData.id,
-                nom_societe: societeData.nom_societe || "",
-                ville_societe: societeData.ville_societe || "",
-                rue_societe: societeData.rue_societe || "",
-                codepostal_societe: societeData.codepostal_societe || "",
-              },
+              societe: updatedSociete,
             }));
+            
+            // ✅ Mettre à jour aussi l'état societe pour l'affichage immédiat
+            setSociete({
+              nom_societe: updatedSociete.nom_societe,
+              ville_societe: updatedSociete.ville_societe,
+              rue_societe: updatedSociete.rue_societe,
+              codepostal_societe: updatedSociete.codepostal_societe,
+            });
           }
+          
+          // Fermer le modal de sélection et ouvrir le modal client
+          setShowSelectClientModal(false);
+          setShowClientInfoModal(true);
         }
+      } else {
+        // ✅ Aucune société trouvée : l'utilisateur devra en créer une nouvelle
+        // Réinitialiser les données de société pour permettre la création
+        setPrefilledSocieteData(null);
+        setSelectedSocieteId(null);
+        setPendingChantierData((prev) => ({
+          ...prev,
+          societe: {
+            nom_societe: "",
+            ville_societe: "",
+            rue_societe: "",
+            codepostal_societe: "",
+          },
+        }));
+        
+        // Fermer le modal de sélection et ouvrir le modal client
+        setShowSelectClientModal(false);
+        setShowClientInfoModal(true);
       }
-
-      // Fermer le modal de sélection et rouvrir le modal client avec les données pré-remplies
-      setShowSelectClientModal(false);
-      setShowClientInfoModal(true);
     } catch (error) {
       console.error("Erreur lors de la sélection du client:", error);
       alert("Erreur lors de la récupération des informations du client");
@@ -739,14 +815,20 @@ const DevisAvance = () => {
         codepostal_societe: societeData.codepostal_societe || "",
       };
 
-      // Mettre à jour pendingChantierData avec les données récupérées (incluant civilite et poste)
+      // ✅ IMPORTANT : Préserver le devisType si on est en mode "chantier" (appel d'offres)
+      // et s'assurer que selectedChantierId reste null pour les appels d'offres
+      const isAppelOffres = devisType === "chantier";
+      
+      // ✅ Mettre à jour pendingChantierData avec les données récupérées (incluant civilite et poste)
       setPendingChantierData((prev) => ({
         ...prev,
         client: updatedClient,
         societe: updatedSociete,
+        // ✅ Préserver le chantier existant dans pendingChantierData (important pour les appels d'offres)
+        chantier: prev.chantier || { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" }
       }));
 
-      // Mettre à jour aussi les états client et societe pour l'affichage immédiat
+      // ✅ Mettre à jour aussi les états client et societe pour l'affichage immédiat
       setClient({
         name: updatedClient.name,
         surname: updatedClient.surname,
@@ -756,13 +838,29 @@ const DevisAvance = () => {
         phone_Number: String(updatedClient.phone_Number)
       });
 
-      setSociete(updatedSociete);
+      setSociete({
+        nom_societe: updatedSociete.nom_societe,
+        ville_societe: updatedSociete.ville_societe,
+        rue_societe: updatedSociete.rue_societe,
+        codepostal_societe: updatedSociete.codepostal_societe,
+      });
 
       setSelectedSocieteId(societeId);
       setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
+      
+      // ✅ Pour les appels d'offres, s'assurer que selectedChantierId reste null
+      // et que devisType reste "chantier"
+      if (isAppelOffres) {
+        setSelectedChantierId(null);
+        // Ne pas changer devisType, il doit rester "chantier"
+      }
+      
+      // ✅ Fermer tous les modals (sélection société ET client info) avant d'ouvrir le formulaire chantier
       setShowSelectSocieteModal(false);
+      setShowClientInfoModal(false); // ✅ Fermer aussi le modal client
       setShowChantierForm(true);
     } catch (error) {
+      console.error("Erreur lors de la sélection de la société:", error);
       alert(
         "Erreur lors de la récupération des données du client et de la société"
       );
@@ -2353,7 +2451,15 @@ const DevisAvance = () => {
       const totals = calculateEstimatedTotals();
       
       // Gestion du client et de la société pour nouveau chantier OU appel d'offres
-      if (selectedChantierId === -1 || devisType === "chantier") {
+      // ✅ Pour les appels d'offres : devisType === "chantier" ET selectedChantierId est null ou -1
+      // ✅ Pour les nouveaux chantiers : selectedChantierId === -1 ET devisType !== "chantier"
+      const isAppelOffres = devisType === "chantier";
+      const isNouveauChantier = (selectedChantierId === -1 || selectedChantierId === null) && !isAppelOffres;
+      
+      // ✅ Condition pour gérer les appels d'offres (selectedChantierId peut être null) et les nouveaux chantiers
+      // Un appel d'offres a toujours selectedChantierId === null ou -1
+      // Un nouveau chantier a selectedChantierId === -1 et devisType !== "chantier"
+      if (isAppelOffres || isNouveauChantier || selectedChantierId === -1) {
         if (!pendingChantierData.client || !pendingChantierData.societe || !pendingChantierData.chantier) {
           const missingData = {
             client: !pendingChantierData.client ? "Client manquant" : null,
@@ -2364,7 +2470,7 @@ const DevisAvance = () => {
             `Données manquantes: ${Object.values(missingData).filter(Boolean).join(", ")}`
           );
         }
-
+        
         // 1. Vérifier si le client existe
         const existingClient = await checkClientExists(pendingChantierData.client);
         if (existingClient) {
@@ -2382,19 +2488,22 @@ const DevisAvance = () => {
           finalClientId = clientResponse.data.id;
         }
 
-        // 2. Vérifier si la société existe
+        // 2. Gérer la société : vérifier si elle existe, sinon la créer IMMÉDIATEMENT
+        // ✅ IMPORTANT : Pour les appels d'offres, la société DOIT avoir un ID avant de créer l'appel d'offres
         // ✅ Si l'ID de la société est déjà disponible (cas où on a sélectionné un client existant), l'utiliser directement
-        if (pendingChantierData.societe?.id) {
+        if (pendingChantierData.societe?.id && !pendingChantierData.societe?.needsCreation) {
           finalSocieteId = pendingChantierData.societe.id;
         } else if (selectedSocieteId) {
-          // ✅ Utiliser selectedSocieteId si disponible
+          // ✅ Utiliser selectedSocieteId si disponible (important pour les appels d'offres avec société sélectionnée)
           finalSocieteId = selectedSocieteId;
         } else {
-          // Sinon, chercher si la société existe
+          // ✅ Vérifier si la société existe (même si on a un ID, on vérifie pour être sûr)
           const existingSociete = await checkSocieteExists(pendingChantierData.societe);
           if (existingSociete) {
             finalSocieteId = existingSociete.id;
           } else {
+            // ✅ CRÉER LA SOCIÉTÉ IMMÉDIATEMENT si elle n'existe pas
+            // C'est crucial pour les appels d'offres qui ont besoin de l'ID de la société
             // Préparer les données de la société avec gestion sécurisée du code postal
             const societeData = {
               nom_societe: pendingChantierData.societe.nom_societe || "",
@@ -2408,9 +2517,28 @@ const DevisAvance = () => {
               societeData.codepostal_societe = pendingChantierData.societe.codepostal_societe.toString();
             }
             
+            // ✅ Créer la société et récupérer son ID immédiatement
             const societeResponse = await axios.post("/api/societe/", societeData);
             finalSocieteId = societeResponse.data.id;
+            
+            // ✅ Mettre à jour pendingChantierData avec le nouvel ID pour cohérence
+            setPendingChantierData((prev) => ({
+              ...prev,
+              societe: {
+                ...prev.societe,
+                id: finalSocieteId,
+                needsCreation: false,
+              },
+            }));
+            
+            // ✅ Mettre à jour aussi selectedSocieteId pour cohérence
+            setSelectedSocieteId(finalSocieteId);
           }
+        }
+        
+        // ✅ Vérification finale pour les appels d'offres : s'assurer que finalSocieteId est défini
+        if (isAppelOffres && !finalSocieteId) {
+          throw new Error("Erreur : L'ID de la société n'a pas pu être obtenu pour l'appel d'offres. Veuillez réessayer.");
         }
 
         // 3. Créer le chantier SEULEMENT si ce n'est PAS un appel d'offres
@@ -3161,8 +3289,11 @@ const DevisAvance = () => {
         open={showSelectClientModal}
         onClose={() => {
           setShowSelectClientModal(false);
-          // Rouvrir le modal client si on annule
-          setShowClientInfoModal(true);
+          // ✅ Ne rouvrir le modal client que si on n'est pas en train de sélectionner une société
+          // Si SelectSocieteModal est ouvert, ne pas rouvrir ClientInfoModal
+          if (!showSelectSocieteModal) {
+            setShowClientInfoModal(true);
+          }
         }}
         onSelectClient={handleSelectClient}
         onCreateNew={handleCreateNewClient}
@@ -3172,10 +3303,13 @@ const DevisAvance = () => {
         open={showClientInfoModal}
         onClose={() => {
           setShowClientInfoModal(false);
-          setPrefilledClientData(null);
-          setPrefilledSocieteData(null);
+          // ✅ Ne pas réinitialiser prefilledClientData et prefilledSocieteData ici
+          // pour permettre la réouverture avec les mêmes données
           // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
-          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
+          // ✅ MAIS conserver le devisType si l'utilisateur a déjà commencé le processus
+          const hasStartedProcess = pendingChantierData.client?.name || pendingChantierData.societe?.nom_societe;
+          if (devisType === "chantier" && !hasStartedProcess) {
+            // ✅ Seulement réinitialiser si vraiment rien n'a été fait
             setDevisType("normal");
             setSelectedChantierId(null);
             setPendingChantierData({
@@ -3184,6 +3318,8 @@ const DevisAvance = () => {
               chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
               devis: null,
             });
+            setPrefilledClientData(null);
+            setPrefilledSocieteData(null);
           }
         }}
         onSubmit={handleClientInfoSubmit}
@@ -3195,9 +3331,12 @@ const DevisAvance = () => {
         open={showSocieteInfoModal}
         onClose={() => {
           setShowSocieteInfoModal(false);
-          setPrefilledSocieteData(null);
+          // ✅ Ne pas réinitialiser prefilledSocieteData ici pour permettre la réouverture
           // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
-          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
+          // ✅ MAIS conserver le devisType si l'utilisateur a déjà commencé le processus
+          const hasStartedProcess = pendingChantierData.client?.name || pendingChantierData.societe?.nom_societe;
+          if (devisType === "chantier" && !hasStartedProcess) {
+            // ✅ Seulement réinitialiser si vraiment rien n'a été fait
             setDevisType("normal");
             setSelectedChantierId(null);
             setPendingChantierData({
@@ -3206,6 +3345,8 @@ const DevisAvance = () => {
               chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
               devis: null,
             });
+            setPrefilledClientData(null);
+            setPrefilledSocieteData(null);
           }
         }}
         onSubmit={handleSocieteInfoSubmit}
@@ -3217,20 +3358,17 @@ const DevisAvance = () => {
         onClose={() => {
           setShowSelectSocieteModal(false);
           setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
-          // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
-          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
-            setDevisType("normal");
-            setSelectedChantierId(null);
-            setPendingChantierData({
-              client: { name: "", surname: "", client_mail: "", phone_Number: "", civilite: "", poste: "" },
-              societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
-              chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
-              devis: null,
-            });
-          }
+          // ✅ Ne pas réinitialiser le processus si l'utilisateur a déjà commencé
+          // Le devisType doit être conservé
         }}
         onSocieteSelect={handleSocieteSelect}
         filteredSocietes={selectedClientSocietes}
+        onCreateNew={() => {
+          // ✅ Permettre de créer une nouvelle société même si plusieurs existent déjà
+          setShowSelectSocieteModal(false);
+          setShowClientInfoModal(false); // ✅ Fermer aussi le modal client
+          setShowSocieteInfoModal(true);
+        }}
       />
 
       {/* Modal de création de chantier */}
@@ -3238,17 +3376,8 @@ const DevisAvance = () => {
         open={showChantierForm}
         onClose={() => {
           setShowChantierForm(false);
-          // Si c'était un appel d'offres et que le processus n'est pas complété, réinitialiser
-          if (devisType === "chantier" && (!pendingChantierData.client?.name || !pendingChantierData.societe?.nom_societe || !pendingChantierData.chantier?.chantier_name)) {
-            setDevisType("normal");
-            setSelectedChantierId(null);
-            setPendingChantierData({
-              client: { name: "", surname: "", client_mail: "", phone_Number: "" },
-              societe: { nom_societe: "", ville_societe: "", rue_societe: "", codepostal_societe: "" },
-              chantier: { id: -1, chantier_name: "", ville: "", rue: "", code_postal: "" },
-              devis: null,
-            });
-          }
+          // ✅ Ne pas réinitialiser le processus si l'utilisateur a déjà commencé
+          // Le devisType doit être conservé tout au long du processus
         }}
         onSubmit={(chantierData) => {
           handleChantierCreation(chantierData);
