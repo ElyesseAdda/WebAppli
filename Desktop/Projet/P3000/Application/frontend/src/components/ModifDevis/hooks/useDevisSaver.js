@@ -94,6 +94,7 @@ export const useDevisSaver = (devisId) => {
   /**
    * Sauvegarde les modifications du devis
    * @param {Object} params - Paramètres de sauvegarde
+   * @param {string} oldDevisNumero - Ancien numéro du devis (pour déplacer l'ancien PDF)
    */
   const saveDevis = useCallback(async ({
     devisItems,
@@ -105,7 +106,8 @@ export const useDevisSaver = (devisId) => {
     tauxFixe = 20,
     devisType = 'normal',
     pendingChantierData = null,
-    societeId = null
+    societeId = null,
+    oldDevisNumero = null
   }) => {
     if (!devisId) {
       setSaveError('Aucun ID de devis fourni');
@@ -159,6 +161,25 @@ export const useDevisSaver = (devisId) => {
           await axios.post(`/api/devis/${devisId}/recalculer-couts/`);
         } catch (recalcError) {
           console.warn('Erreur lors du recalcul des coûts:', recalcError);
+        }
+
+        // Régénérer le PDF avec gestion de l'historique
+        try {
+          console.log('🔄 Régénération du PDF du devis modifié...');
+          const pdfResponse = await axios.post(`/api/devis/${devisId}/regenerate-pdf/`, {
+            old_devis_numero: oldDevisNumero
+          });
+          if (pdfResponse.data.success) {
+            console.log('✅ PDF régénéré avec succès:', pdfResponse.data.message);
+            if (pdfResponse.data.conflict_detected) {
+              console.log('📦 Ancien PDF déplacé vers Historique');
+            }
+          } else {
+            console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfResponse.data.error);
+          }
+        } catch (pdfError) {
+          console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfError);
+          // Ne pas bloquer la sauvegarde si la régénération du PDF échoue
         }
 
         setLastSaveTime(new Date());

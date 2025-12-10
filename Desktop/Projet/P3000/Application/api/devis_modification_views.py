@@ -18,14 +18,21 @@ logger = logging.getLogger(__name__)
 def regenerate_devis_pdf(request, devis_id):
     """
     Régénère le PDF d'un devis existant et le remplace dans le Drive
+    Déplace l'ancien PDF vers Historique si le nom a changé
     """
     try:
         logger.info(f"🔄 Début de la régénération du PDF pour le devis {devis_id}")
+        
+        # Récupérer l'ancien numéro du devis depuis le body de la requête
+        old_devis_numero = None
+        if request.data and isinstance(request.data, dict):
+            old_devis_numero = request.data.get('old_devis_numero')
         
         # Récupérer le devis existant
         try:
             devis = Devis.objects.get(id=devis_id)
             logger.info(f"✅ Devis trouvé: {devis.numero}, devis_chantier: {devis.devis_chantier}")
+            logger.info(f"📝 Ancien numéro reçu: {old_devis_numero}, Nouveau numéro: {devis.numero}")
         except Devis.DoesNotExist:
             logger.error(f"❌ Devis {devis_id} non trouvé")
             return Response({
@@ -78,13 +85,48 @@ def regenerate_devis_pdf(request, devis_id):
                 'numero': devis.numero
             }
             
+            # Déplacer l'ancien PDF vers Historique si le nom a changé
+            pdf_manager = PDFManager()
+            if old_devis_numero and old_devis_numero != devis.numero:
+                logger.info(f"📝 Le nom du devis a changé: '{old_devis_numero}' → '{devis.numero}'")
+                logger.info("🔍 Recherche de l'ancien PDF...")
+                
+                # Calculer le chemin de l'ancien PDF
+                old_filename = pdf_manager.generate_pdf_filename('devis_marche', numero=old_devis_numero)
+                old_s3_folder_path = pdf_manager.get_s3_folder_path('devis_marche', societe_name, 
+                                                                     chantier_id=chantier_id,
+                                                                     chantier_name=chantier_name)
+                old_s3_file_path = f"{old_s3_folder_path}/{old_filename}"
+                
+                logger.info(f"🔍 Chemin de l'ancien PDF: {old_s3_file_path}")
+                
+                # Vérifier si l'ancien PDF existe et le déplacer vers Historique
+                if pdf_manager.check_file_conflict(old_s3_file_path):
+                    logger.info(f"✅ Ancien PDF trouvé, déplacement vers Historique...")
+                    try:
+                        historique_path = "Historique"
+                        from .utils import create_s3_folder_recursive
+                        create_s3_folder_recursive(historique_path)
+                        
+                        from datetime import datetime
+                        old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        old_historique_filename = f"Ancien_{old_filename.replace('.pdf', '')}_{old_timestamp}.pdf"
+                        old_historique_path = f"{historique_path}/{old_historique_filename}"
+                        
+                        logger.info(f"📦 Déplacement: {old_s3_file_path} → {old_historique_path}")
+                        pdf_manager.move_file_in_s3(old_s3_file_path, old_historique_path)
+                        logger.info(f"✅ Ancien PDF déplacé vers Historique: {old_historique_path}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erreur lors du déplacement de l'ancien PDF: {str(e)}")
+                else:
+                    logger.info(f"ℹ️ Ancien PDF non trouvé à {old_s3_file_path}, peut-être déjà déplacé ou inexistant")
+            
             # URL de prévisualisation
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis.id}/")
             logger.info(f"🔗 URL de prévisualisation: {preview_url}")
             
             # Générer le PDF avec le PDF Manager
-            logger.info("🚀 Début de la génération du PDF...")
-            pdf_manager = PDFManager()
+            logger.info("🚀 Début de la génération du nouveau PDF...")
             success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
                 document_type='devis_marche',
                 preview_url=preview_url,
@@ -136,13 +178,48 @@ def regenerate_devis_pdf(request, devis_id):
                 'numero': devis.numero
             }
             
+            # Déplacer l'ancien PDF vers Historique si le nom a changé
+            pdf_manager = PDFManager()
+            if old_devis_numero and old_devis_numero != devis.numero:
+                logger.info(f"📝 Le nom du devis a changé: '{old_devis_numero}' → '{devis.numero}'")
+                logger.info("🔍 Recherche de l'ancien PDF...")
+                
+                # Calculer le chemin de l'ancien PDF
+                old_filename = pdf_manager.generate_pdf_filename('devis_travaux', devis_numero=old_devis_numero)
+                old_s3_folder_path = pdf_manager.get_s3_folder_path('devis_travaux', societe_name, 
+                                                                     chantier_id=chantier_id,
+                                                                     chantier_name=chantier_name)
+                old_s3_file_path = f"{old_s3_folder_path}/{old_filename}"
+                
+                logger.info(f"🔍 Chemin de l'ancien PDF: {old_s3_file_path}")
+                
+                # Vérifier si l'ancien PDF existe et le déplacer vers Historique
+                if pdf_manager.check_file_conflict(old_s3_file_path):
+                    logger.info(f"✅ Ancien PDF trouvé, déplacement vers Historique...")
+                    try:
+                        historique_path = "Historique"
+                        from .utils import create_s3_folder_recursive
+                        create_s3_folder_recursive(historique_path)
+                        
+                        from datetime import datetime
+                        old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        old_historique_filename = f"Ancien_{old_filename.replace('.pdf', '')}_{old_timestamp}.pdf"
+                        old_historique_path = f"{historique_path}/{old_historique_filename}"
+                        
+                        logger.info(f"📦 Déplacement: {old_s3_file_path} → {old_historique_path}")
+                        pdf_manager.move_file_in_s3(old_s3_file_path, old_historique_path)
+                        logger.info(f"✅ Ancien PDF déplacé vers Historique: {old_historique_path}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erreur lors du déplacement de l'ancien PDF: {str(e)}")
+                else:
+                    logger.info(f"ℹ️ Ancien PDF non trouvé à {old_s3_file_path}, peut-être déjà déplacé ou inexistant")
+            
             # URL de prévisualisation
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis.id}/")
             logger.info(f"🔗 URL de prévisualisation: {preview_url}")
             
             # Générer le PDF avec le PDF Manager
-            logger.info("🚀 Début de la génération du PDF...")
-            pdf_manager = PDFManager()
+            logger.info("🚀 Début de la génération du nouveau PDF...")
             success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
                 document_type='devis_travaux',
                 preview_url=preview_url,
@@ -151,7 +228,7 @@ def regenerate_devis_pdf(request, devis_id):
                 devis_id=devis.id,
                 chantier_id=chantier_id,
                 chantier_name=chantier_name,
-                numero=devis.numero
+                devis_numero=devis.numero
             )
             logger.info(f"📄 Résultat génération PDF: success={success}, message={message}")
         

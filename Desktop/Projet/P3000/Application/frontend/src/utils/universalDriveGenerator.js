@@ -504,6 +504,11 @@ const buildFilePath = (documentType, data, fileName) => {
       const fournisseurSlug = customSlugify(data.fournisseurName);
       return `Chantiers/${societeBonCommandeSlug}/${chantierBonCommandeSlug}/Bon_Commande/${fournisseurSlug}/${fileName}`;
 
+    case "facture":
+      const societeFactureSlug = customSlugify(data.societeName);
+      const chantierFactureSlug = customSlugify(data.chantierName);
+      return `Chantiers/${societeFactureSlug}/${chantierFactureSlug}/Facture/${fileName}`;
+
     case "planning_hebdo":
       return `Agents/Document_Generaux/PlanningHebdo/${data.year}/${fileName}`;
 
@@ -574,6 +579,15 @@ const getDocumentSpecificData = (documentType, data) => {
         societeName: data.societeName,
         numeroBonCommande: data.numeroBonCommande,
         fournisseurName: data.fournisseurName,
+      };
+
+    case "facture":
+      return {
+        factureId: data.factureId,
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
+        societeName: data.societeName,
+        numero: data.numero,
       };
 
     case "planning_hebdo":

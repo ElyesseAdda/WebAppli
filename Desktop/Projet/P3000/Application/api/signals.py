@@ -3,17 +3,38 @@ Signaux Django pour l'automatisation du Drive
 Déclenche automatiquement la création de dossiers S3
 """
 
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist
 from .models import AppelOffres, Chantier, Societe
 from .drive_automation import drive_automation
+from .drive_rename_manager import drive_rename_manager
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@receiver(pre_save, sender=AppelOffres)
+def capture_old_appel_offres_name(sender, instance, **kwargs):
+    """
+    Capture l'ancien nom de l'appel d'offres avant la sauvegarde pour détecter les changements
+    """
+    if instance.pk:  # Si c'est une mise à jour (pas une création)
+        try:
+            old_instance = AppelOffres.objects.get(pk=instance.pk)
+            # Stocker l'ancien nom dans l'instance pour l'utiliser dans post_save
+            instance._old_chantier_name = old_instance.chantier_name
+            instance._old_societe = old_instance.societe
+        except AppelOffres.DoesNotExist:
+            instance._old_chantier_name = None
+            instance._old_societe = None
 
 
 @receiver(post_save, sender=AppelOffres)
 def create_appel_offres_folders(sender, instance, created, **kwargs):
     """
     Crée automatiquement la structure de dossiers S3 lors de la création d'un appel d'offres
+    Ou déplace les fichiers si le nom a changé
     """
     if created:
         try:
@@ -22,7 +43,6 @@ def create_appel_offres_folders(sender, instance, created, **kwargs):
             
             # Créer la structure de dossiers S3
             drive_automation.create_appel_offres_structure(
-                appel_offres_id=instance.id,
                 societe_name=societe_name,
                 appel_offres_name=instance.chantier_name
             )
@@ -30,12 +50,82 @@ def create_appel_offres_folders(sender, instance, created, **kwargs):
         except Exception:
             # Ne pas faire échouer la création de l'appel d'offres à cause du Drive
             pass
+    else:
+        # C'est une mise à jour - vérifier si le nom a changé
+        old_chantier_name = getattr(instance, '_old_chantier_name', None)
+        old_societe = getattr(instance, '_old_societe', None)
+        
+        if old_chantier_name and old_chantier_name != instance.chantier_name:
+            # Le nom de l'appel d'offres a changé
+            try:
+                old_societe_name = old_societe.nom_societe if old_societe else "Société par défaut"
+                new_societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
+                
+                logger.info(f"🔄 Renommage de l'appel d'offres détecté: '{old_chantier_name}' → '{instance.chantier_name}'")
+                
+                # Déplacer tous les fichiers vers le nouveau chemin
+                moved_count, error_count = drive_rename_manager.rename_appel_offres_path(
+                    old_societe_name=old_societe_name,
+                    old_appel_offres_name=old_chantier_name,
+                    new_societe_name=new_societe_name,
+                    new_appel_offres_name=instance.chantier_name
+                )
+                
+                if moved_count > 0:
+                    logger.info(f"✅ {moved_count} fichiers déplacés pour l'appel d'offres {instance.id}")
+                if error_count > 0:
+                    logger.warning(f"⚠️ {error_count} erreurs lors du déplacement des fichiers")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur lors du renommage de l'appel d'offres {instance.id}: {str(e)}")
+        
+        # Vérifier si la société a changé
+        if old_societe and instance.societe and old_societe.id != instance.societe.id:
+            # La société de l'appel d'offres a changé
+            try:
+                old_societe_name = old_societe.nom_societe if old_societe else "Société par défaut"
+                new_societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
+                
+                logger.info(f"🔄 Changement de société détecté pour l'appel d'offres {instance.id}: '{old_societe_name}' → '{new_societe_name}'")
+                
+                # Déplacer tous les fichiers vers le nouveau chemin
+                moved_count, error_count = drive_rename_manager.rename_appel_offres_path(
+                    old_societe_name=old_societe_name,
+                    old_appel_offres_name=instance.chantier_name,
+                    new_societe_name=new_societe_name,
+                    new_appel_offres_name=instance.chantier_name
+                )
+                
+                if moved_count > 0:
+                    logger.info(f"✅ {moved_count} fichiers déplacés pour l'appel d'offres {instance.id}")
+                if error_count > 0:
+                    logger.warning(f"⚠️ {error_count} erreurs lors du déplacement des fichiers")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur lors du changement de société de l'appel d'offres {instance.id}: {str(e)}")
+
+
+@receiver(pre_save, sender=Chantier)
+def capture_old_chantier_name(sender, instance, **kwargs):
+    """
+    Capture l'ancien nom du chantier avant la sauvegarde pour détecter les changements
+    """
+    if instance.pk:  # Si c'est une mise à jour (pas une création)
+        try:
+            old_instance = Chantier.objects.get(pk=instance.pk)
+            # Stocker l'ancien nom dans l'instance pour l'utiliser dans post_save
+            instance._old_chantier_name = old_instance.chantier_name
+            instance._old_societe = old_instance.societe
+        except Chantier.DoesNotExist:
+            instance._old_chantier_name = None
+            instance._old_societe = None
 
 
 @receiver(post_save, sender=Chantier)
 def create_chantier_folders(sender, instance, created, **kwargs):
     """
     Crée automatiquement la structure de dossiers S3 lors de la création d'un chantier
+    Ou déplace les fichiers si le nom a changé
     """
     if created:
         try:
@@ -51,6 +141,59 @@ def create_chantier_folders(sender, instance, created, **kwargs):
         except Exception:
             # Ne pas faire échouer la création du chantier à cause du Drive
             pass
+    else:
+        # C'est une mise à jour - vérifier si le nom a changé
+        old_chantier_name = getattr(instance, '_old_chantier_name', None)
+        old_societe = getattr(instance, '_old_societe', None)
+        
+        if old_chantier_name and old_chantier_name != instance.chantier_name:
+            # Le nom du chantier a changé
+            try:
+                old_societe_name = old_societe.nom_societe if old_societe else "Société par défaut"
+                new_societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
+                
+                logger.info(f"🔄 Renommage du chantier détecté: '{old_chantier_name}' → '{instance.chantier_name}'")
+                
+                # Déplacer tous les fichiers vers le nouveau chemin
+                moved_count, error_count = drive_rename_manager.rename_chantier_path(
+                    old_societe_name=old_societe_name,
+                    old_chantier_name=old_chantier_name,
+                    new_societe_name=new_societe_name,
+                    new_chantier_name=instance.chantier_name
+                )
+                
+                if moved_count > 0:
+                    logger.info(f"✅ {moved_count} fichiers déplacés pour le chantier {instance.id}")
+                if error_count > 0:
+                    logger.warning(f"⚠️ {error_count} erreurs lors du déplacement des fichiers")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur lors du renommage du chantier {instance.id}: {str(e)}")
+        
+        # Vérifier si la société a changé
+        if old_societe and instance.societe and old_societe.id != instance.societe.id:
+            # La société du chantier a changé
+            try:
+                old_societe_name = old_societe.nom_societe if old_societe else "Société par défaut"
+                new_societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
+                
+                logger.info(f"🔄 Changement de société détecté pour le chantier {instance.id}: '{old_societe_name}' → '{new_societe_name}'")
+                
+                # Déplacer tous les fichiers vers le nouveau chemin
+                moved_count, error_count = drive_rename_manager.rename_chantier_path(
+                    old_societe_name=old_societe_name,
+                    old_chantier_name=instance.chantier_name,
+                    new_societe_name=new_societe_name,
+                    new_chantier_name=instance.chantier_name
+                )
+                
+                if moved_count > 0:
+                    logger.info(f"✅ {moved_count} fichiers déplacés pour le chantier {instance.id}")
+                if error_count > 0:
+                    logger.warning(f"⚠️ {error_count} erreurs lors du déplacement des fichiers")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur lors du changement de société du chantier {instance.id}: {str(e)}")
 
 
 # Signal désactivé pour éviter les boucles infinies
@@ -96,14 +239,56 @@ def cleanup_appel_offres_folders(sender, instance, **kwargs):
         # Récupérer le nom de la société
         societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
         
-        # Construire le chemin du dossier à supprimer
-        folder_path = f"Appels_Offres/{drive_automation.custom_slugify(societe_name)}/{instance.id:03d}_{drive_automation.custom_slugify(instance.chantier_name)}"
+        # Construire le chemin du dossier à supprimer (sans ID pour cohérence)
+        folder_path = f"Appels_Offres/{drive_automation.custom_slugify(societe_name)}/{drive_automation.custom_slugify(instance.chantier_name)}"
         
         # Supprimer le dossier et son contenu
         drive_automation._delete_folder_recursive(folder_path)
         
     except Exception:
         pass
+
+
+@receiver(pre_save, sender=Societe)
+def capture_old_societe_name(sender, instance, **kwargs):
+    """
+    Capture l'ancien nom de la société avant la sauvegarde pour détecter les changements
+    """
+    if instance.pk:  # Si c'est une mise à jour (pas une création)
+        try:
+            old_instance = Societe.objects.get(pk=instance.pk)
+            # Stocker l'ancien nom dans l'instance pour l'utiliser dans post_save
+            instance._old_nom_societe = old_instance.nom_societe
+        except Societe.DoesNotExist:
+            instance._old_nom_societe = None
+
+
+@receiver(post_save, sender=Societe)
+def handle_societe_rename(sender, instance, created, **kwargs):
+    """
+    Gère le renommage d'une société en déplaçant tous les fichiers associés
+    """
+    if not created:
+        old_nom_societe = getattr(instance, '_old_nom_societe', None)
+        
+        if old_nom_societe and old_nom_societe != instance.nom_societe:
+            # Le nom de la société a changé
+            try:
+                logger.info(f"🔄 Renommage de la société détecté: '{old_nom_societe}' → '{instance.nom_societe}'")
+                
+                # Déplacer tous les fichiers de tous les chantiers de cette société
+                moved_count, error_count = drive_rename_manager.rename_societe_path(
+                    old_societe_name=old_nom_societe,
+                    new_societe_name=instance.nom_societe
+                )
+                
+                if moved_count > 0:
+                    logger.info(f"✅ {moved_count} fichiers déplacés pour la société {instance.id}")
+                if error_count > 0:
+                    logger.warning(f"⚠️ {error_count} erreurs lors du déplacement des fichiers")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur lors du renommage de la société {instance.id}: {str(e)}")
 
 
 @receiver(post_delete, sender=Chantier)
@@ -115,8 +300,8 @@ def cleanup_chantier_folders(sender, instance, **kwargs):
         # Récupérer le nom de la société
         societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
         
-        # Construire le chemin du dossier à supprimer (utilise maintenant "Sociétés")
-        folder_path = f"Sociétés/{drive_automation.custom_slugify(societe_name)}/{drive_automation.custom_slugify(instance.chantier_name)}"
+        # Construire le chemin du dossier à supprimer (utilise maintenant "Chantiers")
+        folder_path = f"Chantiers/{drive_automation.custom_slugify(societe_name)}/{drive_automation.custom_slugify(instance.chantier_name)}"
         
         # Supprimer le dossier et son contenu
         drive_automation._delete_folder_recursive(folder_path)

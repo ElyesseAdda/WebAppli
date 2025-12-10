@@ -2393,6 +2393,9 @@ const SituationCreationModal = ({
         total_avancement: formatNumber(totalAvancement),
       };
 
+      // Capturer l'ancien numéro avant la mise à jour
+      const oldNumeroSituation = existingSituation?.numero_situation || null;
+      
       let response;
       if (existingSituation) {
         // Mise à jour d'une situation existante
@@ -2400,6 +2403,27 @@ const SituationCreationModal = ({
           `/api/situations/${existingSituation.id}/update/`,
           situationData
         );
+        
+        // Régénérer le PDF avec gestion de l'historique si le numéro a changé
+        if (oldNumeroSituation && response.data.numero_situation && oldNumeroSituation !== response.data.numero_situation) {
+          try {
+            console.log('🔄 Régénération du PDF de la situation modifiée...');
+            const pdfResponse = await axios.post(
+              `/api/situation/${response.data.id}/regenerate-pdf/`,
+              { old_numero_situation: oldNumeroSituation }
+            );
+            if (pdfResponse.data.success) {
+              console.log('✅ PDF régénéré avec succès:', pdfResponse.data.message);
+              if (pdfResponse.data.conflict_detected) {
+                console.log('📦 Ancien PDF déplacé vers Historique');
+              }
+            } else {
+              console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfResponse.data.error);
+            }
+          } catch (pdfError) {
+            console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfError);
+          }
+        }
       } else {
         // Création d'une nouvelle situation
         response = await axios.post("/api/situations/", situationData);

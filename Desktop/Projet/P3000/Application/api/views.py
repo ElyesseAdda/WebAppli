@@ -9974,22 +9974,9 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         appel_offres = self.perform_create(serializer)
         
-        # Créer automatiquement la structure de dossiers dans le drive
-        try:
-            if appel_offres.nom:
-                # Utiliser la société du devis associé ou une société par défaut
-                societe_name = "Société par défaut"  # À adapter selon votre logique
-                if hasattr(appel_offres, 'devis') and appel_offres.devis.first():
-                    devis = appel_offres.devis.first()
-                    if devis.societe:
-                        societe_name = devis.societe.nom
-                
-                drive_automation.create_appel_offres_structure(
-                    societe_name=societe_name,
-                    appel_offres_name=appel_offres.nom
-                )
-        except Exception:
-            pass
+        # Note: La création de la structure de dossiers est gérée automatiquement
+        # par le signal Django dans signals.py (create_appel_offres_folders)
+        # Pas besoin de le faire ici pour éviter les doublons
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

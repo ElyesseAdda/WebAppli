@@ -44,8 +44,8 @@ class PDFManager:
             'facture': 'Facture',
             'avenant': 'Avenant',
             'rapport_chantier': 'Documents_Execution',
-            'contrat_sous_traitance': 'Contrats',
-            'avenant_sous_traitance': 'Avenants'
+            'contrat_sous_traitance': 'Sous_Traitant',
+            'avenant_sous_traitance': 'Sous_Traitant'
         }
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:
@@ -197,13 +197,19 @@ class PDFManager:
                 
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
-        elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance']:
+        elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance', 'contrat', 'contrats']:
             # Pour les contrats et avenants de sous-traitance
-            # Chemin: Chantiers/{Societe}/{Chantier}/Contrats/ ou Avenants/
+            # Chemin: Chantiers/{Societe}/{Chantier}/Sous_Traitant/{Entreprise}/
+            # Protection: gérer aussi les cas où document_type est 'contrat' ou 'contrats' (ancien code)
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             chantier_slug = custom_slugify(chantier_name)
-            subfolder = self.document_type_folders.get(document_type, 'Sous_Traitant')
-            return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
+            sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName')
+            if not sous_traitant_name:
+                # Si sous_traitant_name n'est pas fourni, utiliser un fallback sécurisé
+                print(f"⚠️ ATTENTION: sous_traitant_name manquant pour {document_type}, utilisation du fallback")
+                sous_traitant_name = 'SousTraitant'
+            sous_traitant_slug = custom_slugify(sous_traitant_name)
+            return f"Chantiers/{societe_slug}/{chantier_slug}/Sous_Traitant/{sous_traitant_slug}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
             # Ces documents sont maintenant stockés dans Agents/Document_Generaux/

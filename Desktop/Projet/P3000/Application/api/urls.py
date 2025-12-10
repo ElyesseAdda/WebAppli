@@ -118,6 +118,24 @@ from .pdf_views import (
     get_existing_file_name,
 )
 
+# Import des vues de modification de devis
+from .devis_modification_views import (
+    regenerate_devis_pdf,
+    get_devis_modification_info,
+)
+
+# Import des vues de modification de situations
+from .situation_modification_views import (
+    regenerate_situation_pdf,
+    get_situation_modification_info,
+)
+
+# Import des vues de modification de bons de commande
+from .bon_commande_modification_views import (
+    regenerate_bon_commande_pdf,
+    get_bon_commande_modification_info,
+)
+
 # Import de la vue de recherche
 from .search_views import search_in_drive
 
@@ -455,6 +473,12 @@ urlpatterns += [
     path('generate-devis-travaux-pdf-drive/', generate_devis_travaux_pdf_drive, name='generate_devis_travaux_pdf_drive'),
     path('generate-devis-marche-pdf-drive/', generate_devis_marche_pdf_drive, name='generate_devis_marche_pdf_drive'),
     path('generate-devis-marche-auto/', generate_devis_marche_auto, name='generate_devis_marche_auto'),
+    path('devis/<int:devis_id>/regenerate-pdf/', regenerate_devis_pdf, name='regenerate_devis_pdf'),
+    path('devis/<int:devis_id>/modification-info/', get_devis_modification_info, name='get_devis_modification_info'),
+    path('situation/<int:situation_id>/regenerate-pdf/', regenerate_situation_pdf, name='regenerate_situation_pdf'),
+    path('situation/<int:situation_id>/modification-info/', get_situation_modification_info, name='get_situation_modification_info'),
+    path('bon-commande/<int:bon_commande_id>/regenerate-pdf/', regenerate_bon_commande_pdf, name='regenerate_bon_commande_pdf'),
+    path('bon-commande/<int:bon_commande_id>/modification-info/', get_bon_commande_modification_info, name='get_bon_commande_modification_info'),
     path('generate-contrat-sous-traitance-pdf-drive/', generate_contrat_sous_traitance_pdf_drive, name='generate_contrat_sous_traitance_pdf_drive'),
     path('generate-avenant-sous-traitance-pdf-drive/', generate_avenant_sous_traitance_pdf_drive, name='generate_avenant_sous_traitance_pdf_drive'),
     path('generate-situation-pdf-drive/', generate_situation_pdf_drive, name='generate_situation_pdf_drive'),

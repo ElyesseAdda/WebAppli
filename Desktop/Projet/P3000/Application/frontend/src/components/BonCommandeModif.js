@@ -163,6 +163,9 @@ const BonCommandeModif = () => {
 
   const handleSave = async () => {
     try {
+      // Capturer l'ancien numéro avant la mise à jour
+      const oldNumeroBonCommande = bonCommande?.numero || null;
+      
       const selectedItems = allProducts
         .filter((product) => selectedProducts[product.id])
         .map((product) => ({
@@ -184,34 +187,58 @@ const BonCommandeModif = () => {
 
       console.log("Données envoyées au serveur:", updatedBC);
 
-      await axios.patch(`/api/update-bon-commande/${id}/`, updatedBC);
+      const response = await axios.patch(`/api/update-bon-commande/${id}/`, updatedBC);
       
-      // Générer automatiquement le PDF et le stocker dans le Drive
-      try {
-        await generatePDFDrive(
-          "bon_commande",
-          {
-            bonCommandeId: id,
-            chantierId: bonCommande.chantier,
-            chantierName: bonCommande.chantier_name || "Chantier",
-            societeName: bonCommande.societe_name || "Société par défaut",
-            numeroBonCommande: numeroBonCommande,
-            fournisseurName: bonCommande.fournisseur,
-          },
-          {
-            onSuccess: (response) => {
-              console.log("✅ PDF généré et stocké dans le Drive:", response);
-              alert("Bon de commande mis à jour et PDF généré avec succès !");
-            },
-            onError: (error) => {
-              console.error("❌ Erreur lors de la génération du PDF:", error);
-              alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
-            },
+      // Régénérer le PDF avec gestion de l'historique si le numéro a changé
+      if (oldNumeroBonCommande && numeroBonCommande && oldNumeroBonCommande !== numeroBonCommande) {
+        try {
+          console.log('🔄 Régénération du PDF du bon de commande modifié...');
+          const pdfResponse = await axios.post(
+            `/api/bon-commande/${id}/regenerate-pdf/`,
+            { old_numero_bon_commande: oldNumeroBonCommande }
+          );
+          if (pdfResponse.data.success) {
+            console.log('✅ PDF régénéré avec succès:', pdfResponse.data.message);
+            if (pdfResponse.data.conflict_detected) {
+              console.log('📦 Ancien PDF déplacé vers Historique');
+            }
+            alert("Bon de commande mis à jour et PDF régénéré avec succès !");
+          } else {
+            console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfResponse.data.error);
+            alert("Bon de commande mis à jour, mais erreur lors de la régénération du PDF.");
           }
-        );
-      } catch (pdfError) {
-        console.error("Erreur lors de la génération du PDF:", pdfError);
-        alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
+        } catch (pdfError) {
+          console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfError);
+          alert("Bon de commande mis à jour, mais erreur lors de la régénération du PDF.");
+        }
+      } else {
+        // Si le numéro n'a pas changé, utiliser l'ancienne méthode
+        try {
+          await generatePDFDrive(
+            "bon_commande",
+            {
+              bonCommandeId: id,
+              chantierId: bonCommande.chantier,
+              chantierName: bonCommande.chantier_name || "Chantier",
+              societeName: bonCommande.societe_name || "Société par défaut",
+              numeroBonCommande: numeroBonCommande,
+              fournisseurName: bonCommande.fournisseur,
+            },
+            {
+              onSuccess: (response) => {
+                console.log("✅ PDF généré et stocké dans le Drive:", response);
+                alert("Bon de commande mis à jour et PDF généré avec succès !");
+              },
+              onError: (error) => {
+                console.error("❌ Erreur lors de la génération du PDF:", error);
+                alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
+              },
+            }
+          );
+        } catch (pdfError) {
+          console.error("Erreur lors de la génération du PDF:", pdfError);
+          alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
+        }
       }
       
       window.location.href = "/BonCommande";

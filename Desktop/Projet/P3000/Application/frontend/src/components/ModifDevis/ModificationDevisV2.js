@@ -612,6 +612,9 @@ const ModificationDevisV2 = () => {
       return;
     }
 
+    // Récupérer l'ancien numéro du devis avant modification
+    const oldDevisNumero = loadedDevisData?.numero || null;
+
     const result = await saveDevis({
       devisItems,
       devisData: {
@@ -624,7 +627,8 @@ const ModificationDevisV2 = () => {
       totalHt,
       totalTtc,
       tauxFixe,
-      devisType
+      devisType,
+      oldDevisNumero
     });
 
     if (result.success) {

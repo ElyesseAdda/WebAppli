@@ -29,7 +29,7 @@ class DriveAutomation:
     CHANTIER_SUBFOLDERS = [
         "Devis",
         "Situation",
-        "Sous Traitant",
+        "Sous_Traitant",
         "Facture"
     ]
     
@@ -65,14 +65,14 @@ class DriveAutomation:
         
         return societe_path
     
-    def create_appel_offres_structure(self, appel_offres_id: int, societe_name: str, appel_offres_name: str) -> str:
+    def create_appel_offres_structure(self, societe_name: str, appel_offres_name: str, appel_offres_id: Optional[int] = None) -> str:
         """
         Crée la structure complète pour un appel d'offres
         
         Args:
-            appel_offres_id: ID de l'appel d'offres
             societe_name: Nom de la société
             appel_offres_name: Nom de l'appel d'offres
+            appel_offres_id: ID de l'appel d'offres (optionnel, non utilisé dans le chemin)
             
         Returns:
             str: Chemin complet créé
@@ -81,8 +81,8 @@ class DriveAutomation:
             # Créer le dossier société s'il n'existe pas
             societe_path = self.create_societe_folder_if_not_exists(societe_name, self.appels_offres_root)
             
-            # Créer le dossier de l'appel d'offres avec format: 001_Nom_Appel_Offre
-            appel_offres_folder = f"{appel_offres_id:03d}_{custom_slugify(appel_offres_name)}"
+            # Créer le dossier de l'appel d'offres avec format: Nom_Appel_Offre (sans ID pour cohérence)
+            appel_offres_folder = custom_slugify(appel_offres_name)
             appel_offres_path = f"{societe_path}/{appel_offres_folder}"
             
             # Créer le dossier principal de l'appel d'offres
@@ -154,22 +154,22 @@ class DriveAutomation:
         
         return project_path
     
-    def transfer_appel_offres_to_chantier(self, appel_offres_id: int, societe_name: str, appel_offres_name: str, chantier_name: str) -> bool:
+    def transfer_appel_offres_to_chantier(self, societe_name: str, appel_offres_name: str, chantier_name: str, appel_offres_id: Optional[int] = None) -> bool:
         """
-        Transfère un appel d'offres vers un chantier
+        Transfère un appel d'offres vers un chantier (DÉPLACE les fichiers et supprime l'original)
         
         Args:
-            appel_offres_id: ID de l'appel d'offres
             societe_name: Nom de la société
             appel_offres_name: Nom de l'appel d'offres
             chantier_name: Nom du chantier
+            appel_offres_id: ID de l'appel d'offres (optionnel, non utilisé dans le chemin)
             
         Returns:
             bool: True si le transfert a réussi
         """
         try:
-            # Chemins source et destination
-            source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{appel_offres_id:03d}_{custom_slugify(appel_offres_name)}"
+            # Chemins source et destination (sans ID pour cohérence)
+            source_path = f"{self.appels_offres_root}/{custom_slugify(societe_name)}/{custom_slugify(appel_offres_name)}"
             dest_societe_path = f"{self.chantiers_root}/{custom_slugify(societe_name)}"
             dest_chantier_path = f"{dest_societe_path}/{custom_slugify(chantier_name)}"
             
@@ -307,10 +307,10 @@ class DriveAutomation:
             # Créer seulement le dossier racine du chantier
             create_s3_folder_recursive(dest_chantier_path)
             
-            # Créer seulement les dossiers spécifiques au chantier (Situation, Sous Traitant, Facture)
+            # Créer seulement les dossiers spécifiques au chantier (Situation, Sous_Traitant, Facture)
             # Ne pas créer Devis et DCE car ils seront copiés depuis l'appel d'offres
             existing_folders = [f['name'] for f in content['folders']]
-            chantier_specific_folders = ["Situation", "Sous Traitant", "Facture"]
+            chantier_specific_folders = ["Situation", "Sous_Traitant", "Facture"]
             
             for folder_name in chantier_specific_folders:
                 if folder_name not in existing_folders:

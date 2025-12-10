@@ -92,7 +92,9 @@ class DocumentAutomation:
             if bon_commande.chantier:
                 societe_name = bon_commande.chantier.societe.nom if bon_commande.chantier.societe else "Société par défaut"
                 chantier_name = bon_commande.chantier.nom
-                target_folder = f"Chantiers/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}/Bons de commande"
+                fournisseur_name = bon_commande.fournisseur if bon_commande.fournisseur else "Fournisseur"
+                # Chemin: Chantiers/{Societe}/{Chantier}/Bon_Commande/{Fournisseur}/
+                target_folder = f"Chantiers/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}/Bon_Commande/{custom_slugify(fournisseur_name)}"
                 
                 return self.drive_automation.save_document_to_folder(file_path, target_folder, filename)
             
@@ -128,7 +130,7 @@ class DocumentAutomation:
             if contrat.chantier:
                 societe_name = contrat.chantier.societe.nom if contrat.chantier.societe else "Société par défaut"
                 chantier_name = contrat.chantier.nom
-                target_folder = f"Chantiers/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}/Sous Traitant"
+                target_folder = f"Chantiers/{custom_slugify(societe_name)}/{custom_slugify(chantier_name)}/Sous_Traitant"
                 
                 return self.drive_automation.save_document_to_folder(file_path, target_folder, filename)
             
