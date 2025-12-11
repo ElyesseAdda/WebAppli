@@ -8814,26 +8814,22 @@ class RecapFinancierChantierAPIView(APIView):
         bc_payes = bc_qs.filter(statut_paiement='paye')
         bc_reste = bc_qs.exclude(statut_paiement='paye')
 
-        # 2. Situation (Entrées) - filtrage sur la date de paiement estimée
+        # 2. Situation (Entrées) - filtrage sur la date d'envoi (pas la date de paiement réelle)
         situations = Situation.objects.filter(chantier=chantier)
         situations_in_periode = []
         for s in situations:
-            # Si on a une date de paiement réelle, on l'utilise pour le filtrage
-            if s.date_paiement_reel:
-                date_paiement_filtre = s.date_paiement_reel
-            # Sinon, on utilise la date de paiement estimée
-            elif s.date_envoi and s.delai_paiement is not None:
-                try:
-                    date_paiement_filtre = s.date_envoi + timedelta(days=s.delai_paiement)
-                except Exception:
-                    continue
-            else:
-                # Si aucune date n'est disponible, on inclut la situation
-                date_paiement_filtre = None
+            # Filtrer toujours sur la date d'envoi, pas sur la date de paiement réelle
+            # Les situations doivent être comptabilisées dans le mois de leur date d'envoi
+            date_filtre = s.date_envoi
             
             # Filtrage par période si spécifiée
-            if date_debut and date_fin and date_paiement_filtre:
-                if not (date_debut <= date_paiement_filtre <= date_fin):
+            if date_debut and date_fin:
+                if date_filtre:
+                    # Filtrer sur la date d'envoi
+                    if not (date_debut <= date_filtre <= date_fin):
+                        continue
+                else:
+                    # Si pas de date d'envoi, exclure de la période
                     continue
             
             # Calculer la date de paiement estimée pour l'affichage
