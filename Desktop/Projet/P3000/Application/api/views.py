@@ -6407,16 +6407,27 @@ def get_next_numero(request, chantier_id=None):
             
         if chantier_id:
             # Pour une situation, on ajoute le numéro de situation spécifique au chantier
+            # Le numéro de situation continue la numérotation même après un changement d'année
+            # On cherche donc toutes les situations du chantier, toutes années confondues
             last_situation = Situation.objects.filter(
-                chantier_id=chantier_id
+                chantier_id=chantier_id,
+                numero_situation__contains='Situation n°'
             ).order_by('-id').first()  # Tri par ID au lieu de numero_situation
             
             next_sit_num = 1
             if last_situation and last_situation.numero_situation:
                 try:
-                    current_sit_num = int(last_situation.numero_situation.split('n°')[1])
-                    next_sit_num = current_sit_num + 1
-                except (IndexError, ValueError):
+                    # Format attendu: "Facture n°14.2025 - Situation n°01"
+                    # Extraire la partie après "Situation n°"
+                    if 'Situation n°' in last_situation.numero_situation:
+                        sit_part = last_situation.numero_situation.split('Situation n°')[1].strip()
+                        # Prendre seulement les chiffres (au cas où il y aurait d'autres caractères)
+                        sit_num_str = ''.join(filter(str.isdigit, sit_part))
+                        if sit_num_str:
+                            current_sit_num = int(sit_num_str)
+                            next_sit_num = current_sit_num + 1
+                except (IndexError, ValueError) as e:
+                    # En cas d'erreur, on recommence à 1
                     next_sit_num = 1
             
             numero = f"{base_numero} - Situation n°{next_sit_num:02d}"
