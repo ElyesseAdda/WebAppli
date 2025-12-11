@@ -2382,8 +2382,20 @@ class PaiementFournisseurMateriel(models.Model):
     fournisseur = models.CharField(max_length=255)
     mois = models.IntegerField()
     annee = models.IntegerField()
-    montant = models.DecimalField(max_digits=12, decimal_places=2)
+    montant = models.DecimalField(max_digits=12, decimal_places=2)  # Montant payé
+    montant_a_payer = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=0)  # Montant à payer saisi par l'utilisateur
+    date_paiement = models.DateField(null=True, blank=True)  # Date de paiement saisie par l'utilisateur
+    date_envoi = models.DateField(null=True, blank=True)  # Date d'envoi saisie par l'utilisateur
+    date_paiement_prevue = models.DateField(null=True, blank=True)  # Date de paiement prévue (calculée : date_envoi + 45 jours)
     date_saisie = models.DateTimeField(auto_now=True)
+    date_modification = models.DateTimeField(auto_now=True)  # Date de dernière modification
+    
+    def save(self, *args, **kwargs):
+        # Calculer automatiquement date_paiement_prevue si date_envoi est définie
+        if self.date_envoi:
+            from datetime import timedelta
+            self.date_paiement_prevue = self.date_envoi + timedelta(days=45)
+        super().save(*args, **kwargs)
 
     class Meta:
         unique_together = ('chantier', 'fournisseur', 'mois', 'annee')
@@ -2392,6 +2404,43 @@ class PaiementFournisseurMateriel(models.Model):
 
     def __str__(self):
         return f"{self.chantier} - {self.fournisseur} - {self.mois}/{self.annee}: {self.montant} €"
+    
+    @property
+    def montant_a_payer_ttc(self):
+        """Calcule le montant à payer TTC (HT + 20% TVA)"""
+        if self.montant_a_payer:
+            return float(self.montant_a_payer) * 1.20
+        return 0
+
+class FactureFournisseurMateriel(models.Model):
+    """Modèle pour gérer les factures liées aux paiements fournisseur matériel"""
+    paiement = models.ForeignKey(PaiementFournisseurMateriel, on_delete=models.CASCADE, related_name='factures')
+    numero_facture = models.CharField(max_length=255)  # Numéro de facture
+    montant_facture = models.DecimalField(max_digits=12, decimal_places=2, default=0, null=True, blank=True)  # Montant de la facture
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Facture Fournisseur Matériel'
+        verbose_name_plural = 'Factures Fournisseurs Matériel'
+        unique_together = ('paiement', 'numero_facture')
+
+    def __str__(self):
+        return f"{self.paiement} - Facture {self.numero_facture} ({self.montant_facture} €)"
+
+class HistoriqueModificationPaiementFournisseur(models.Model):
+    """Modèle pour stocker l'historique des modifications de date de paiement fournisseur"""
+    paiement = models.ForeignKey(PaiementFournisseurMateriel, on_delete=models.CASCADE, related_name='historique_modifications')
+    date_modification = models.DateTimeField(auto_now_add=True)  # Date de la modification
+    date_paiement_avant = models.DateField(null=True, blank=True)  # Date de paiement avant modification
+    date_paiement_apres = models.DateField(null=True, blank=True)  # Date de paiement après modification (nouvelle date)
+    
+    class Meta:
+        verbose_name = 'Historique Modification Paiement Fournisseur'
+        verbose_name_plural = 'Historiques Modifications Paiements Fournisseurs'
+        ordering = ['-date_modification']  # Plus récent en premier
+    
+    def __str__(self):
+        return f"Modification {self.paiement} - {self.date_modification}"
 
 @receiver([post_save, post_delete], sender=PaiementFournisseurMateriel)
 def update_chantier_cout_materiel(sender, instance, **kwargs):

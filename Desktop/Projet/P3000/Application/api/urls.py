@@ -34,6 +34,7 @@ from .views import (
     SituationLigneSupplementaireViewSet,
     get_devis_structure,
     get_situations_chantier,
+    get_all_situations_by_year,
     get_situation_detail,
     FactureTSViewSet,
     delete_devis,
@@ -69,6 +70,9 @@ from .views import (
     RecapFinancierChantierAPIView,
     PaiementFournisseurMaterielAPIView,
     fournisseurs,
+    tableau_fournisseur,
+    tableau_fournisseur_global,
+    delete_historique_modification_paiement_fournisseur,
     FournisseurViewSet,
     get_decomposition_couts,
     recalculer_couts_devis,
@@ -193,6 +197,8 @@ auth_urlpatterns = [
 urlpatterns = [
     path('csrf-token/', csrf_token_view, name='csrf-token'),
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
+    # Route spécifique situations AVANT le routeur pour éviter les conflits
+    path('situations/by-year/', get_all_situations_by_year, name='get-all-situations-by-year'),
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
     path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),
     path('dashboard/resume/', DashboardViewSet.as_view({'get': 'resume'})),
@@ -261,15 +267,17 @@ urlpatterns = [
     path('create-facture-cie/', create_facture_cie, name='create-facture-cie'),
     path('devis-structure/<int:devis_id>/structure/', get_devis_structure, name='devis-structure'),
     path('chantier/<int:chantier_id>/situations/', get_situations_chantier, name='list-situations'),
+    path('situations/create/', create_situation, name='create-situation'),
+    # Routes situations avec paramètres
     path('situations/<int:situation_id>/details/', get_situation_detail, name='situation-detail'),
     path('situations/<int:pk>/update/', update_situation, name='update-situation'),
     path('situations/<int:situation_id>/delete/', delete_situation, name='delete-situation'),
+    # Route générale situations EN DERNIER
+    path('situations/', get_situations_list, name='situations-list'),
     path('devis/<int:devis_id>/', delete_devis, name='delete_devis'),
     path('chantier/<int:chantier_id>/lignes-default/', get_chantier_lignes_default, name='get-chantier-lignes-default'),
     path('chantier/<int:chantier_id>/lignes-default/update/', update_chantier_lignes_default, name='update-chantier-lignes-default'),
     path('chantier/<int:chantier_id>/factures-cie/', get_factures_cie, name='get-factures-cie'),
-    path('situations/', get_situations_list, name='situations-list'),
-    path('situations/create/', create_situation, name='create-situation'),
     path('next-numero/', get_next_numero, name='next-numero'),
     path('next-numero/chantier/<int:chantier_id>/', get_next_numero, name='next-situation-numero'),
     path('chantier/<int:chantier_id>/situations/by-month/', get_situations, name='get-situations-by-month'),
@@ -294,6 +302,9 @@ urlpatterns = [
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
+    path('chantier/<int:chantier_id>/tableau-fournisseur/', tableau_fournisseur, name='tableau-fournisseur'),
+    path('tableau-fournisseur-global/', tableau_fournisseur_global, name='tableau-fournisseur-global'),
+    path('historique-modification-paiement-fournisseur/<int:historique_id>/', delete_historique_modification_paiement_fournisseur, name='delete-historique-modification-paiement-fournisseur'),
     path('chantier/<int:chantier_id>/decomposition-couts/', get_decomposition_couts, name='chantier-decomposition-couts'),
     path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='chantier-recalculer-couts-estimes'),
     path('devis/<int:devis_id>/recalculer-couts/', recalculer_couts_devis, name='devis-recalculer-couts'),

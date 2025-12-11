@@ -27,6 +27,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           { label: "Dashboard", to: "/" },
           { label: "Récap Chantier", to: "/ChantierDetail/1" },
           { label: "Tableau Facturation", to: "/TableauFacturation" },
+          { label: "Tableau", to: "/TableauFournisseur" },
           { label: "Appel d'Offre", to: "/GestionAppelsOffres" },
           { label: "Agence", to: "/AgencyExpenses" },
         ],

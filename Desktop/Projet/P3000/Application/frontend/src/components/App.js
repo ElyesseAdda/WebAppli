@@ -16,6 +16,7 @@ import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";
 import CalendrierAgentContainer from "./CalendrierAgentContainer";
 import TableauFacturation from "./chantier/TableauFacturation";
+import TableauFournisseurPage from "./TableauFournisseurPage";
 import ChantierDetail from "./ChantierDetail";
 import ChantierInfo from "./ChantierInfo";
 import ChantiersDashboard from "./ChantiersDashboard";
@@ -402,6 +403,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <TableauFacturation />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/TableauFournisseur"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TableauFournisseurPage />
                 </Layout>
               </ProtectedRoute>
             }

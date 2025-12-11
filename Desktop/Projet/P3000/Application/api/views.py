@@ -44,7 +44,7 @@ from .models import (
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale,
+    AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -6646,6 +6646,73 @@ def get_chantier_situations(request, chantier_id):
         return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
+def get_all_situations_by_year(request):
+    """Récupère toutes les situations pour une année donnée avec les informations des chantiers
+    et toutes les situations de chaque chantier (nécessaire pour le calcul des cumuls)"""
+    try:
+        annee = request.GET.get('annee')
+        if not annee:
+            return Response({'error': 'Le paramètre annee est requis'}, status=400)
+        
+        annee = int(annee)
+        
+        # Récupérer toutes les situations de l'année avec les informations du chantier
+        # Utilisation de select_related pour éviter les requêtes N+1
+        situations_annee = (Situation.objects
+                           .filter(annee=annee)
+                           .select_related('chantier')
+                           .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes_avenant', 'lignes_supplementaires')
+                           .order_by('chantier__chantier_name', 'mois', 'numero_situation'))
+        
+        # Récupérer tous les IDs de chantiers concernés
+        chantier_ids = situations_annee.values_list('chantier_id', flat=True).distinct()
+        
+        # Récupérer TOUTES les situations de ces chantiers (nécessaire pour le calcul des cumuls)
+        all_situations_by_chantier = {}
+        if chantier_ids:
+            all_situations = (Situation.objects
+                            .filter(chantier_id__in=chantier_ids)
+                            .select_related('chantier')
+                            .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes_avenant', 'lignes_supplementaires')
+                            .order_by('annee', 'mois', 'numero_situation'))
+            
+            # Grouper par chantier
+            for situation in all_situations:
+                chantier_id = situation.chantier_id
+                if chantier_id not in all_situations_by_chantier:
+                    all_situations_by_chantier[chantier_id] = []
+                all_situations_by_chantier[chantier_id].append(situation)
+        
+        # Sérialiser les situations de l'année
+        serializer = SituationSerializer(situations_annee, many=True)
+        
+        # Enrichir les données avec les informations du chantier et toutes les situations du chantier
+        result = []
+        for situation_data in serializer.data:
+            situation_obj = next((s for s in situations_annee if s.id == situation_data['id']), None)
+            if situation_obj and situation_obj.chantier:
+                situation_data['chantier_name'] = situation_obj.chantier.chantier_name
+                situation_data['chantier_id'] = situation_obj.chantier.id
+                
+                # Ajouter toutes les situations du chantier (sérialisées) pour le calcul des cumuls
+                chantier_id = situation_obj.chantier.id
+                if chantier_id in all_situations_by_chantier:
+                    all_situations_chantier = all_situations_by_chantier[chantier_id]
+                    situation_data['allSituationsChantier'] = SituationSerializer(
+                        all_situations_chantier, many=True
+                    ).data
+                else:
+                    situation_data['allSituationsChantier'] = []
+            
+            result.append(situation_data)
+        
+        return Response(result)
+    except ValueError:
+        return Response({'error': 'Format invalide pour l\'année'}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
 def get_situations_list(request):
     situations = (Situation.objects
                  .prefetch_related('lignes', 
@@ -9027,7 +9094,8 @@ class RecapFinancierChantierAPIView(APIView):
                 "id": pm.id,
                 "numero": None,
                 "date": pm.date_saisie.date() if hasattr(pm.date_saisie, 'date') else pm.date_saisie,
-                "montant": float(pm.montant),
+                "montant": float(pm.montant),  # Montant payé (non modifiable)
+                "montant_a_payer": float(pm.montant_a_payer) if pm.montant_a_payer else 0,  # Montant à payer (modifiable)
                 "statut": "payé",  # On considère que tout paiement saisi est payé
                 "fournisseur": pm.fournisseur,
             }
@@ -9124,22 +9192,273 @@ class PaiementFournisseurMaterielAPIView(APIView):
         results = []
         for paiement_data in data:
             paiement_data['chantier'] = chantier_id
+            
+            # Récupérer les valeurs existantes si l'objet existe déjà
+            try:
+                existing = PaiementFournisseurMateriel.objects.get(
+                    chantier_id=chantier_id,
+                    fournisseur=paiement_data['fournisseur'],
+                    mois=paiement_data['mois'],
+                    annee=paiement_data['annee']
+                )
+                montant_paye_existant = existing.montant
+                date_paiement_existante = existing.date_paiement
+                date_envoi_existante = existing.date_envoi
+            except PaiementFournisseurMateriel.DoesNotExist:
+                montant_paye_existant = 0
+                date_paiement_existante = None
+                date_envoi_existante = None
+            
+            # Récupérer le nouveau montant payé
+            nouveau_montant = paiement_data.get('montant', montant_paye_existant)
+            
+            # Récupérer la date de paiement si fournie
+            date_paiement_str = paiement_data.get('date_paiement')
+            date_paiement = None
+            if date_paiement_str:
+                from datetime import datetime
+                try:
+                    date_paiement = datetime.strptime(date_paiement_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    date_paiement = date_paiement_existante
+            elif date_paiement_existante is not None:
+                # Conserver la date existante si aucune nouvelle date n'est fournie
+                date_paiement = date_paiement_existante
+            # Si date_paiement_existante est None et aucune date n'est fournie, date_paiement reste None
+            
+            # Récupérer la date d'envoi si fournie
+            date_envoi_str = paiement_data.get('date_envoi')
+            date_envoi = None
+            if date_envoi_str:
+                from datetime import datetime
+                try:
+                    date_envoi = datetime.strptime(date_envoi_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    # En cas d'erreur de parsing, conserver la date existante si elle existe
+                    date_envoi = date_envoi_existante if date_envoi_existante is not None else None
+            elif 'date_envoi' in paiement_data and paiement_data.get('date_envoi') is None:
+                # Si date_envoi est explicitement None dans les données, mettre à None
+                date_envoi = None
+            elif date_envoi_existante is not None:
+                # Conserver la date existante si aucune nouvelle date n'est fournie
+                date_envoi = date_envoi_existante
+            # Si date_envoi_existante est None et aucune date n'est fournie, date_envoi reste None
+            
+            # Calculer date_paiement_prevue (date_envoi + 45 jours)
+            date_paiement_prevue = None
+            if date_envoi:
+                from datetime import timedelta
+                date_paiement_prevue = date_envoi + timedelta(days=45)
+            
+            defaults = {
+                # Montant payé (modifiable par l'utilisateur)
+                'montant': nouveau_montant,
+                # Les montants saisis par l'utilisateur sont toujours les montants à payer
+                'montant_a_payer': paiement_data.get('montant_a_payer', 0),
+                # Date de paiement
+                'date_paiement': date_paiement,
+                # Date d'envoi
+                'date_envoi': date_envoi,
+                # Date de paiement prévue (calculée automatiquement)
+                'date_paiement_prevue': date_paiement_prevue
+            }
+            
             obj, created = PaiementFournisseurMateriel.objects.update_or_create(
                 chantier_id=chantier_id,
                 fournisseur=paiement_data['fournisseur'],
                 mois=paiement_data['mois'],
                 annee=paiement_data['annee'],
-                defaults={
-                    'montant': paiement_data['montant']
-                }
+                defaults=defaults
             )
+            
+            # Créer une entrée d'historique si la date de paiement a changé (après création)
+            if not created and date_paiement_existante is not None and date_paiement != date_paiement_existante:
+                from api.models import HistoriqueModificationPaiementFournisseur
+                HistoriqueModificationPaiementFournisseur.objects.create(
+                    paiement=obj,
+                    date_paiement_avant=date_paiement_existante,
+                    date_paiement_apres=date_paiement
+                )
+            
+            # Gérer les factures si fournies
+            if 'factures' in paiement_data and isinstance(paiement_data['factures'], list):
+                # Supprimer les anciennes factures
+                FactureFournisseurMateriel.objects.filter(paiement=obj).delete()
+                # Créer les nouvelles factures
+                for facture_data in paiement_data['factures']:
+                    # Support des deux formats : string (ancien) ou objet (nouveau)
+                    if isinstance(facture_data, dict):
+                        num_facture = facture_data.get('numero_facture', '').strip()
+                        montant_facture = facture_data.get('montant_facture', 0) or 0
+                    else:
+                        num_facture = str(facture_data).strip()
+                        montant_facture = 0
+                    
+                    if num_facture:  # Ignorer les factures vides
+                        FactureFournisseurMateriel.objects.create(
+                            paiement=obj,
+                            numero_facture=num_facture,
+                            montant_facture=montant_facture
+                        )
+            
             results.append(obj)
         serializer = PaiementFournisseurMaterielSerializer(results, many=True)
         return Response(serializer.data)
 
+def _get_tableau_fournisseur_data(chantier_id=None):
+    """
+    Fonction utilitaire pour récupérer les données du tableau fournisseur
+    Si chantier_id est fourni, retourne pour ce chantier uniquement
+    Sinon, retourne pour tous les chantiers
+    Groupé par mois, puis par fournisseur, puis par chantier
+    Utilise les montants saisis par l'utilisateur (montant_a_payer et montant)
+    """
+    from collections import defaultdict
+    from decimal import Decimal
+    
+    # Récupérer tous les paiements matériel
+    if chantier_id:
+        paiements = PaiementFournisseurMateriel.objects.filter(chantier_id=chantier_id)
+    else:
+        paiements = PaiementFournisseurMateriel.objects.all()
+    
+    # Structure pour stocker les données : {mois_annee: {fournisseur: {chantier_id: {a_payer, paye, ecart, chantier_name, factures, date_paiement, date_envoi, date_paiement_prevue, ecart_paiement_reel, date_modification, historique_modifications}}}}
+    data = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {
+        'a_payer': Decimal('0'),
+        'paye': Decimal('0'),
+        'ecart': Decimal('0'),
+        'chantier_name': '',
+        'factures': [],
+        'date_paiement': None,
+        'date_envoi': None,
+        'date_paiement_prevue': None,
+        'ecart_paiement_reel': None,
+        'date_modification': None,
+        'historique_modifications': []
+    })))
+    
+    # Traiter les paiements pour calculer les montants à payer et payés
+    for paiement in paiements.select_related('chantier').prefetch_related('factures', 'historique_modifications'):
+        # Format: MM/YY (ex: 12/25 pour décembre 2025)
+        annee_2_digits = str(paiement.annee)[-2:]
+        key = f"{paiement.mois:02d}/{annee_2_digits}"
+        
+        # Montant à payer : utiliser montant_a_payer si défini, sinon 0
+        montant_a_payer = Decimal(str(paiement.montant_a_payer)) if paiement.montant_a_payer else Decimal('0')
+        
+        # Montant payé : utiliser le champ montant
+        montant_paye = Decimal(str(paiement.montant)) if paiement.montant else Decimal('0')
+        
+        chantier_name = paiement.chantier.chantier_name if paiement.chantier else f"Chantier {paiement.chantier_id}"
+        
+        # Récupérer les factures pour ce paiement (avec numéro et montant)
+        factures_list = [
+            {
+                'id': f.id,
+                'numero_facture': f.numero_facture,
+                'montant_facture': float(f.montant_facture) if f.montant_facture else 0.0
+            }
+            for f in paiement.factures.all()
+        ]
+        
+        data[key][paiement.fournisseur][paiement.chantier_id]['a_payer'] += montant_a_payer
+        data[key][paiement.fournisseur][paiement.chantier_id]['paye'] += montant_paye
+        data[key][paiement.fournisseur][paiement.chantier_id]['chantier_name'] = chantier_name
+        # Stocker les factures (liste d'objets avec id, numero_facture, montant_facture)
+        if 'factures' not in data[key][paiement.fournisseur][paiement.chantier_id]:
+            data[key][paiement.fournisseur][paiement.chantier_id]['factures'] = []
+        data[key][paiement.fournisseur][paiement.chantier_id]['factures'] = factures_list
+        # Stocker la date de paiement et l'historique
+        data[key][paiement.fournisseur][paiement.chantier_id]['date_paiement'] = paiement.date_paiement.isoformat() if paiement.date_paiement else None
+        data[key][paiement.fournisseur][paiement.chantier_id]['date_envoi'] = paiement.date_envoi.isoformat() if paiement.date_envoi else None
+        data[key][paiement.fournisseur][paiement.chantier_id]['date_paiement_prevue'] = paiement.date_paiement_prevue.isoformat() if paiement.date_paiement_prevue else None
+        data[key][paiement.fournisseur][paiement.chantier_id]['date_modification'] = paiement.date_modification.isoformat() if paiement.date_modification else None
+        # Calculer l'écart paiement réel (en jours)
+        ecart_paiement_reel = None
+        if paiement.date_paiement_prevue and paiement.date_paiement:
+            ecart_paiement_reel = (paiement.date_paiement - paiement.date_paiement_prevue).days
+        data[key][paiement.fournisseur][paiement.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
+        # Récupérer l'historique des modifications de date de paiement
+        historique_list = [
+            {
+                'id': h.id,
+                'date_modification': h.date_modification.isoformat() if h.date_modification else None,
+                'date_paiement_avant': h.date_paiement_avant.isoformat() if h.date_paiement_avant else None,
+                'date_paiement_apres': h.date_paiement_apres.isoformat() if h.date_paiement_apres else None,
+            }
+            for h in paiement.historique_modifications.all()[:10]  # Limiter à 10 dernières
+        ]
+        data[key][paiement.fournisseur][paiement.chantier_id]['historique_modifications'] = historique_list
+    
+    # Calculer les écarts et préparer la réponse
+    result = []
+    for mois_key, fournisseurs_data in data.items():
+        for fournisseur, chantiers_data in fournisseurs_data.items():
+            for chantier_id_val, valeurs in chantiers_data.items():
+                valeurs['ecart'] = valeurs['a_payer'] - valeurs['paye']
+                # Les factures sont déjà des listes d'objets, pas besoin de dédupliquer
+                result.append({
+                    'mois': mois_key,
+                    'fournisseur': fournisseur,
+                    'chantier_id': chantier_id_val,
+                    'chantier_name': valeurs['chantier_name'],
+                    'a_payer': float(valeurs['a_payer']),
+                    'a_payer_ttc': float(valeurs['a_payer'] * Decimal('1.20')),  # TTC = HT + 20%
+                    'paye': float(valeurs['paye']),
+                    'ecart': float(valeurs['ecart']),
+                    'factures': valeurs.get('factures', []),
+                    'date_paiement': valeurs.get('date_paiement'),
+                    'date_envoi': valeurs.get('date_envoi'),
+                    'date_paiement_prevue': valeurs.get('date_paiement_prevue'),
+                    'ecart_paiement_reel': valeurs.get('ecart_paiement_reel'),
+                    'date_modification': valeurs.get('date_modification'),
+                    'historique_modifications': valeurs.get('historique_modifications', []),
+                })
+    
+    return result
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def tableau_fournisseur(request, chantier_id):
+    """
+    Retourne les données pour le tableau récapitulatif des paiements fournisseur
+    pour un chantier spécifique
+    Groupé par mois, puis par fournisseur, puis par chantier
+    Utilise les montants saisis par l'utilisateur (montant_a_payer et montant)
+    """
+    result = _get_tableau_fournisseur_data(chantier_id=chantier_id)
+    return Response(result)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def tableau_fournisseur_global(request):
+    """
+    Retourne les données pour le tableau récapitulatif des paiements fournisseur
+    pour TOUS les chantiers
+    Groupé par mois, puis par fournisseur, puis par chantier
+    """
+    result = _get_tableau_fournisseur_data(chantier_id=None)
+    return Response(result)
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def delete_historique_modification_paiement_fournisseur(request, historique_id):
+    """
+    Supprime une entrée d'historique de modification de paiement fournisseur
+    """
+    try:
+        from api.models import HistoriqueModificationPaiementFournisseur
+        historique = HistoriqueModificationPaiementFournisseur.objects.get(id=historique_id)
+        historique.delete()
+        return Response({"message": "Historique supprimé avec succès"}, status=status.HTTP_204_NO_CONTENT)
+    except HistoriqueModificationPaiementFournisseur.DoesNotExist:
+        return Response({"error": "Historique non trouvé"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 def fournisseurs(request):
-    fournisseurs = Fournisseur.objects.all().values('id', 'name_fournisseur', 'Fournisseur_mail', 'description_fournisseur')
+    fournisseurs = Fournisseur.objects.all().values('id', 'name', 'Fournisseur_mail', 'description_fournisseur')
     return Response(list(fournisseurs))
 
 class BanqueViewSet(viewsets.ModelViewSet):

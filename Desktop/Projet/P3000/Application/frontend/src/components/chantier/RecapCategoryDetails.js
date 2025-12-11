@@ -237,11 +237,12 @@ const RecapCategoryDetails = ({
         // On suppose que chaque fournisseur a un champ name_fournisseur
         const fournisseursList = res.data.map((f) => f.name);
         setFournisseurs(fournisseursList);
-        // Pré-remplir avec les montants existants
+        // Pré-remplir avec les montants À PAYER existants (pas les montants payés)
         const paiementsInit = {};
         documents.forEach((doc) => {
           if (doc.fournisseur) {
-            paiementsInit[doc.fournisseur] = doc.montant;
+            // Utiliser montant_a_payer si disponible, sinon 0 (les montants saisis sont les montants à payer)
+            paiementsInit[doc.fournisseur] = doc.montant_a_payer || 0;
           }
         });
         setPaiements(paiementsInit);
@@ -263,7 +264,8 @@ const RecapCategoryDetails = ({
         .filter((f) => paiements[f] && !isNaN(Number(paiements[f])))
         .map((f) => ({
           fournisseur: f,
-          montant: Number(paiements[f]),
+          montant: 0, // Montant payé reste à 0 (non modifiable par l'utilisateur ici)
+          montant_a_payer: Number(paiements[f]), // Les montants saisis sont les montants à payer
           mois: periode.mois,
           annee: periode.annee,
         }));

@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
-    PaiementFournisseurMateriel, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
+    PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale
 )
@@ -1264,10 +1264,43 @@ class RecapFinancierSerializer(serializers.Serializer):
     taux_fixe = serializers.FloatField()
     montant_taux_fixe = serializers.FloatField()
 
+class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FactureFournisseurMateriel
+        fields = ['id', 'paiement', 'numero_facture', 'montant_facture']
+
+
 class PaiementFournisseurMaterielSerializer(serializers.ModelSerializer):
+    montant_a_payer_ttc = serializers.ReadOnlyField()
+    factures = serializers.SerializerMethodField()
+    historique_modifications = serializers.SerializerMethodField()
+    
     class Meta:
         model = PaiementFournisseurMateriel
-        fields = ['id', 'chantier', 'fournisseur', 'mois', 'annee', 'montant', 'date_saisie']
+        fields = ['id', 'chantier', 'fournisseur', 'mois', 'annee', 'montant', 'montant_a_payer', 'montant_a_payer_ttc', 'date_paiement', 'date_envoi', 'date_paiement_prevue', 'date_saisie', 'date_modification', 'factures', 'historique_modifications']
+    
+    def get_factures(self, obj):
+        """Retourne la liste des factures avec numéro et montant"""
+        return [
+            {
+                'id': f.id,
+                'numero_facture': f.numero_facture,
+                'montant_facture': float(f.montant_facture) if f.montant_facture else 0.0
+            }
+            for f in obj.factures.all()
+        ]
+    
+    def get_historique_modifications(self, obj):
+        """Retourne l'historique des modifications de date de paiement"""
+        return [
+            {
+                'id': h.id,
+                'date_modification': h.date_modification,
+                'date_paiement_avant': h.date_paiement_avant.isoformat() if h.date_paiement_avant else None,
+                'date_paiement_apres': h.date_paiement_apres.isoformat() if h.date_paiement_apres else None,
+            }
+            for h in obj.historique_modifications.all()[:10]  # Limiter à 10 dernières modifications
+        ]
 
 class AppelOffresSerializer(serializers.ModelSerializer):
     societe = SocieteSerializer(read_only=True)
