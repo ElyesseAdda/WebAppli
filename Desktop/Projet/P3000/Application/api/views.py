@@ -9100,7 +9100,12 @@ class RecapFinancierChantierAPIView(APIView):
                 "fournisseur": pm.fournisseur,
             }
         
-        total_materiel = float(sum(pm.montant for pm in paiements_materiel))
+        # Utiliser montant_a_payer pour le total car c'est ce que l'utilisateur saisit comme dépense
+        # Si montant_a_payer n'existe pas, utiliser montant comme fallback
+        total_materiel = float(sum(
+            (pm.montant_a_payer if pm.montant_a_payer else pm.montant) 
+            for pm in paiements_materiel
+        ))
         documents_materiel = [paiement_materiel_to_doc(pm) for pm in paiements_materiel]
 
         sorties = {

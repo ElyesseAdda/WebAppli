@@ -96,9 +96,8 @@ const RecapCategoryDetails = ({
       
       const response = await axios.get("/api/agent-primes/", { params });
       setPrimes(response.data || []);
-    } catch (error) {
-      console.error("Erreur lors du chargement des primes:", error);
-      setPrimes([]);
+      } catch (error) {
+        setPrimes([]);
     } finally {
       setLoadingPrimes(false);
     }
@@ -230,26 +229,88 @@ const RecapCategoryDetails = ({
   const [saveError, setSaveError] = React.useState(null);
   const [saveSuccess, setSaveSuccess] = React.useState(false);
 
-  React.useEffect(() => {
-    if (category === "materiel" && open) {
-      // Récupérer tous les fournisseurs depuis le modèle Fournisseur
-      axios.get("/api/fournisseurs/").then((res) => {
-        // On suppose que chaque fournisseur a un champ name_fournisseur
-        const fournisseursList = res.data.map((f) => f.name);
+  // Fonction pour charger les paiements depuis l'API
+  const loadPaiements = React.useCallback(async () => {
+    if (category === "materiel" && open && chantierId) {
+      try {
+        // Récupérer tous les fournisseurs depuis le modèle Fournisseur
+        const fournisseursRes = await axios.get("/api/fournisseurs/");
+        const fournisseursList = fournisseursRes.data.map((f) => f.name);
         setFournisseurs(fournisseursList);
-        // Pré-remplir avec les montants À PAYER existants (pas les montants payés)
+
+        // Initialiser tous les fournisseurs à 0 pour éviter les champs vides
         const paiementsInit = {};
-        documents.forEach((doc) => {
-          if (doc.fournisseur) {
-            // Utiliser montant_a_payer si disponible, sinon 0 (les montants saisis sont les montants à payer)
-            paiementsInit[doc.fournisseur] = doc.montant_a_payer || 0;
+        fournisseursList.forEach((f) => {
+          paiementsInit[f] = 0;
+        });
+
+        // Récupérer les paiements sauvegardés depuis l'API pour la période courante
+        let paiementsUrl = `/api/chantier/${chantierId}/paiements-materiel/`;
+        if (!global && periode?.mois && periode?.annee) {
+          paiementsUrl += `?mois=${periode.mois}&annee=${periode.annee}`;
+        }
+        
+        const paiementsRes = await axios.get(paiementsUrl);
+        const paiementsSauvegardes = paiementsRes.data || [];
+
+        // Mettre à jour avec les montants À PAYER existants depuis l'API
+        paiementsSauvegardes.forEach((paiement) => {
+          if (paiement.fournisseur) {
+            // Utiliser montant_a_payer si disponible, sinon 0 - CONVERTIR EN NOMBRE
+            const montant = parseFloat(paiement.montant_a_payer) || 0;
+            // En mode global, additionner tous les montants pour chaque fournisseur
+            // En mode période, remplacer (car un seul paiement par fournisseur/mois)
+            if (global) {
+              // Initialiser si pas encore présent dans paiementsInit
+              if (!paiementsInit.hasOwnProperty(paiement.fournisseur)) {
+                paiementsInit[paiement.fournisseur] = 0;
+              }
+              // Convertir en nombre avant l'addition pour éviter la concaténation de chaînes
+              paiementsInit[paiement.fournisseur] = Number(paiementsInit[paiement.fournisseur]) + Number(montant);
+            } else {
+              // En mode période, s'assurer que le fournisseur existe dans paiementsInit
+              if (paiementsInit.hasOwnProperty(paiement.fournisseur)) {
+                paiementsInit[paiement.fournisseur] = Number(montant);
+              }
+            }
           }
         });
+
         setPaiements(paiementsInit);
-      });
+      } catch (error) {
+        // En cas d'erreur, initialiser tous les fournisseurs à 0
+        const paiementsInit = {};
+        // Utiliser l'état fournisseurs si disponible, sinon utiliser les documents pour extraire les fournisseurs
+        const fournisseursToUse = fournisseurs.length > 0 ? fournisseurs : 
+          (documents ? [...new Set(documents.map(d => d.fournisseur).filter(Boolean))] : []);
+        
+        fournisseursToUse.forEach((f) => {
+          paiementsInit[f] = 0;
+        });
+        
+        // Utiliser les documents passés en props si disponibles
+        if (documents) {
+          documents.forEach((doc) => {
+            if (doc.fournisseur) {
+              // Convertir en nombre pour éviter la concaténation de chaînes
+              const montant = parseFloat(doc.montant_a_payer) || 0;
+              if (global) {
+                paiementsInit[doc.fournisseur] = Number(paiementsInit[doc.fournisseur] || 0) + Number(montant);
+              } else {
+                paiementsInit[doc.fournisseur] = Number(montant);
+              }
+            }
+          });
+        }
+        setPaiements(paiementsInit);
+      }
     }
-    // eslint-disable-next-line
-  }, [category, open, documents]);
+  }, [category, open, chantierId, periode, global, documents]);
+
+  React.useEffect(() => {
+    loadPaiements();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, open, chantierId, periode?.mois, periode?.annee, global, loadPaiements]);
 
   const handleChangeMontant = (fournisseur, value) => {
     setPaiements((prev) => ({ ...prev, [fournisseur]: value }));
@@ -274,7 +335,17 @@ const RecapCategoryDetails = ({
         payload
       );
       setSaveSuccess(true);
-      if (refreshRecap) refreshRecap();
+      
+      // Recharger les paiements depuis l'API pour afficher les valeurs sauvegardées
+      await loadPaiements();
+      
+      // Attendre un peu pour s'assurer que la base de données est à jour
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Rafraîchir le récapitulatif global (piechart et autres infos)
+      if (refreshRecap) {
+        await refreshRecap();
+      }
     } catch (e) {
       setSaveError("Erreur lors de la sauvegarde des paiements matériel.");
     } finally {
@@ -332,7 +403,7 @@ const RecapCategoryDetails = ({
                             type="number"
                             min={0}
                             step={0.01}
-                            value={paiements[f] || ""}
+                            value={paiements[f] !== undefined && paiements[f] !== null ? paiements[f] : ""}
                             onChange={(e) =>
                               handleChangeMontant(f, e.target.value)
                             }

@@ -81,6 +81,13 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
       }
       const res = await axios.get(url);
       setData(res.data);
+      
+      // Recharger aussi la main d'oeuvre depuis les mêmes données
+      const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || {
+        total: 0,
+        documents: [],
+      };
+      setMainOeuvreData(mainOeuvre);
     } catch (err) {
       setError("Erreur lors du chargement des données financières.");
     } finally {
@@ -112,7 +119,6 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
 
         setMainOeuvreData(mainOeuvre);
       } catch (e) {
-        console.error("Erreur lors du chargement de la main d'oeuvre:", e);
         setMainOeuvreData({ total: 0, documents: [] });
       }
     };

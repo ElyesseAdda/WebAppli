@@ -7,6 +7,7 @@ import {
   MdEventAvailable,
   MdFolderOpen,
   MdBusiness,
+  MdTableChart,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { NavLink, useLocation } from "react-router-dom";
@@ -26,10 +27,17 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         children: [
           { label: "Dashboard", to: "/" },
           { label: "Récap Chantier", to: "/ChantierDetail/1" },
-          { label: "Tableau Facturation", to: "/TableauFacturation" },
-          { label: "Tableau", to: "/TableauFournisseur" },
           { label: "Appel d'Offre", to: "/GestionAppelsOffres" },
           { label: "Agence", to: "/AgencyExpenses" },
+        ],
+      },
+      {
+        key: "tableau",
+        label: "Tableau",
+        icon: MdTableChart,
+        children: [
+          { label: "Tableau Facturation", to: "/TableauFacturation" },
+          { label: "Tableau Fournisseur", to: "/TableauFournisseur" },
         ],
       },
       {

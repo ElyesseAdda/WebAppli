@@ -21,7 +21,6 @@ import ChantierCommandesTab from "./chantier/ChantierCommandesTab";
 import ChantierDocumentsTab from "./chantier/ChantierDocumentsTab";
 import ChantierInfoTab from "./chantier/ChantierInfoTab";
 import ChantierRecapFinancierTab from "./chantier/ChantierRecapFinancierTab";
-import TableauFournisseur from "./chantier/TableauFournisseur";
 
 // Déplace TabPanel en dehors du composant ChantierDetail
 const TabPanel = ({ children, value, index }) => (
@@ -504,7 +503,6 @@ const ChantierDetail = () => {
                 <Tab label="Documents" />
                 <Tab label="Commandes" />
                 <Tab label="Récap Financier" />
-                <Tab label="Tableau" />
               </Tabs>
             </Box>
           </AppBar>
@@ -558,9 +556,6 @@ const ChantierDetail = () => {
             </TabPanel>
             <TabPanel value={selectedTab} index={3}>
               <ChantierRecapFinancierTab chantierId={id} />
-            </TabPanel>
-            <TabPanel value={selectedTab} index={4}>
-              <TableauFournisseur chantierId={id} />
             </TabPanel>
           </Paper>
         </Box>
