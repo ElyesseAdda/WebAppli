@@ -85,7 +85,10 @@ const PaiementModal = ({ open, onClose, situation, onSubmit }) => {
     if (situation) {
       // Si la situation n'a pas de date de paiement réelle, préremplir avec la date du jour
       const dateAujourdhui = new Date().toISOString().split("T")[0];
-      setMontantRecu(situation.montant_reel_ht || "");
+      // Préremplir le montant reçu avec montant_reel_ht s'il existe, sinon avec montant_apres_retenues (montant HT situation)
+      setMontantRecu(
+        situation.montant_reel_ht || situation.montant_apres_retenues || ""
+      );
       setDatePaiementReel(situation.date_paiement_reel || dateAujourdhui);
     }
   }, [situation]);
@@ -551,16 +554,11 @@ const TableauSuivi = () => {
     };
 
     const calculerPourcentageAvancement = () => {
-      const montantTotalMarche = calculerMontantTotalMarche();
-      if (montantTotalMarche === 0) return 0;
-
-      // Calculer le montant total cumulé avec montant_apres_retenues
-      const montantTotalCumulHT = calculerCumulSituationHT(
-        situationsTriees,
-        situationsTriees.length - 1
-      );
-
-      return (montantTotalCumulHT / montantTotalMarche) * 100;
+      // Utiliser le pourcentage d'avancement de la dernière situation au lieu de calculer
+      if (situationsTriees.length === 0) return 0;
+      
+      const derniereSituation = situationsTriees[situationsTriees.length - 1];
+      return parseFloat(derniereSituation.pourcentage_avancement) || 0;
     };
 
     // Fonction pour obtenir toutes les lignes supplémentaires uniques
