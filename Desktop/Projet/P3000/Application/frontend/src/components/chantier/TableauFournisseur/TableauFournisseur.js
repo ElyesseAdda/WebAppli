@@ -1046,9 +1046,6 @@ const TableauFournisseur = () => {
                     Montant à payer
                   </TableCell>
                   <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
-                    Montant à payer TTC
-                  </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Montant payé
                   </TableCell>
                   <TableCell sx={{ ...commonCellStyle, minWidth: 350, backgroundColor: "rgba(27, 120, 188, 1)" }}>
@@ -1078,7 +1075,7 @@ const TableauFournisseur = () => {
                 {tableRows.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={13}
+                      colSpan={12}
                       align="center"
                       sx={commonBodyCellStyle}
                     >
@@ -1146,17 +1143,6 @@ const TableauFournisseur = () => {
                               }}
                             >
                               {formatNumber(row.totaux.totalAPayer)} €
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontWeight: "bold",
-                                fontSize: "0.9rem",
-                                color: "#ffffff",
-                              }}
-                            >
-                              {formatNumber(row.totaux.totalAPayerTTC)} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
@@ -1285,17 +1271,6 @@ const TableauFournisseur = () => {
                               }}
                             >
                               {formatNumber(item.a_payer)} €
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontSize: "0.8rem",
-                                color: "text.primary",
-                                textAlign: "center",
-                              }}
-                            >
-                              {formatNumber(item.a_payer_ttc)} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
