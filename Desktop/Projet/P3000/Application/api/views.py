@@ -9302,15 +9302,21 @@ class PaiementFournisseurMaterielAPIView(APIView):
                     if isinstance(facture_data, dict):
                         num_facture = facture_data.get('numero_facture', '').strip()
                         montant_facture = facture_data.get('montant_facture', 0) or 0
+                        payee = facture_data.get('payee', False)
+                        date_paiement_facture = facture_data.get('date_paiement_facture', None)
                     else:
                         num_facture = str(facture_data).strip()
                         montant_facture = 0
+                        payee = False
+                        date_paiement_facture = None
                     
                     if num_facture:  # Ignorer les factures vides
                         FactureFournisseurMateriel.objects.create(
                             paiement=obj,
                             numero_facture=num_facture,
-                            montant_facture=montant_facture
+                            montant_facture=montant_facture,
+                            payee=payee,
+                            date_paiement_facture=date_paiement_facture
                         )
             
             results.append(obj)
@@ -9363,12 +9369,14 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         
         chantier_name = paiement.chantier.chantier_name if paiement.chantier else f"Chantier {paiement.chantier_id}"
         
-        # Récupérer les factures pour ce paiement (avec numéro et montant)
+        # Récupérer les factures pour ce paiement (avec numéro, montant, payee, date_paiement_facture)
         factures_list = [
             {
                 'id': f.id,
                 'numero_facture': f.numero_facture,
-                'montant_facture': float(f.montant_facture) if f.montant_facture else 0.0
+                'montant_facture': float(f.montant_facture) if f.montant_facture else 0.0,
+                'payee': f.payee if f.payee else False,
+                'date_paiement_facture': f.date_paiement_facture.isoformat() if f.date_paiement_facture else None
             }
             for f in paiement.factures.all()
         ]

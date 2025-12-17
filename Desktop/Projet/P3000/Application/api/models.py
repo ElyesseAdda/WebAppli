@@ -2417,6 +2417,8 @@ class FactureFournisseurMateriel(models.Model):
     paiement = models.ForeignKey(PaiementFournisseurMateriel, on_delete=models.CASCADE, related_name='factures')
     numero_facture = models.CharField(max_length=255)  # Numéro de facture
     montant_facture = models.DecimalField(max_digits=12, decimal_places=2, default=0, null=True, blank=True)  # Montant de la facture
+    payee = models.BooleanField(default=False, verbose_name="Facture payée")  # Indique si la facture est payée
+    date_paiement_facture = models.DateField(null=True, blank=True, verbose_name="Date de paiement de la facture")  # Date de paiement de la facture
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

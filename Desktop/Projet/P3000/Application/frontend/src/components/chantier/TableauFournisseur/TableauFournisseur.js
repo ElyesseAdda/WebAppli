@@ -16,11 +16,17 @@ import {
   MenuItem,
   Select,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from "@mui/material";
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
-import { Add as AddIcon, Close as CloseIcon } from "@mui/icons-material";
+import RecapFournisseur from "./RecapFournisseur";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -48,6 +54,10 @@ const TableauFournisseur = () => {
   const [dateEnvoiModalOpen, setDateEnvoiModalOpen] = useState(false);
   const [currentEnvoi, setCurrentEnvoi] = useState(null); // {mois, fournisseur, chantierId, dateEnvoi}
   
+  // État pour le modal de confirmation de remplissage automatique
+  const [confirmFillModalOpen, setConfirmFillModalOpen] = useState(false);
+  const [pendingFillAction, setPendingFillAction] = useState(null); // {mois, fournisseur}
+  
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
 
@@ -65,11 +75,13 @@ const TableauFournisseur = () => {
       res.data.forEach((item) => {
         const key = `${item.mois}_${item.fournisseur}_${item.chantier_id}`;
         initialValuesPaye[key] = item.paye;
-        // Initialiser les factures (liste d'objets avec id, numero_facture, montant_facture)
+        // Initialiser les factures (liste d'objets avec id, numero_facture, montant_facture, payee, date_paiement_facture)
         initialFactures[key] = (item.factures || []).map(f => ({
           id: f.id || null,
           numero_facture: f.numero_facture || f,
-          montant_facture: f.montant_facture || 0
+          montant_facture: f.montant_facture || 0,
+          payee: f.payee || false,
+          date_paiement_facture: f.date_paiement_facture || null
         }));
       });
       setEditedValuesPaye(initialValuesPaye);
@@ -167,16 +179,20 @@ const TableauFournisseur = () => {
             }
             return f && String(f).trim();
           }).map(f => {
-            // Normaliser le format (objet avec numero_facture et montant_facture)
+            // Normaliser le format (objet avec numero_facture, montant_facture, payee, date_paiement_facture)
             if (typeof f === 'object' && f !== null) {
               return {
                 numero_facture: String(f.numero_facture || '').trim(),
-                montant_facture: parseFloat(f.montant_facture) || 0
+                montant_facture: parseFloat(f.montant_facture) || 0,
+                payee: f.payee || false,
+                date_paiement_facture: f.date_paiement_facture || null
               };
             }
             return {
               numero_facture: String(f).trim(),
-              montant_facture: 0
+              montant_facture: 0,
+              payee: false,
+              date_paiement_facture: null
             };
           }),
         }];
@@ -194,6 +210,20 @@ const TableauFournisseur = () => {
           const annee2digits = anneeComplete.toString().slice(-2);
           const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digits}`;
           
+          // Mettre à jour les factures dans editedFactures
+          if (updatedPaiement.factures && updatedPaiement.factures.length > 0) {
+            setEditedFactures((prev) => {
+              const updatedFactures = (updatedPaiement.factures || []).map(f => ({
+                id: f.id || null,
+                numero_facture: f.numero_facture || f,
+                montant_facture: f.montant_facture || 0,
+                payee: f.payee || false,
+                date_paiement_facture: f.date_paiement_facture || null
+              }));
+              return { ...prev, [key]: updatedFactures };
+            });
+          }
+          
           setData((prevData) => {
             return prevData.map((item) => {
               if (
@@ -201,12 +231,21 @@ const TableauFournisseur = () => {
                 item.fournisseur === fournisseur &&
                 item.chantier_id === chantierId
               ) {
+                // Mapper les factures avec les champs payee et date_paiement_facture
+                const facturesMapped = (updatedPaiement.factures || []).map(f => ({
+                  id: f.id || null,
+                  numero_facture: f.numero_facture || f,
+                  montant_facture: f.montant_facture || 0,
+                  payee: f.payee || false,
+                  date_paiement_facture: f.date_paiement_facture || null
+                }));
+                
                 return {
                   ...item,
                   paye: parseFloat(updatedPaiement.montant) || 0,
                   a_payer: parseFloat(updatedPaiement.montant_a_payer) || item.a_payer,
                   ecart: (parseFloat(updatedPaiement.montant_a_payer) || item.a_payer) - (parseFloat(updatedPaiement.montant) || 0),
-                  factures: updatedPaiement.factures || item.factures || [],
+                  factures: facturesMapped.length > 0 ? facturesMapped : (item.factures || []),
                   date_paiement: updatedPaiement.date_paiement || item.date_paiement || null,
                   date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : item.date_envoi,
                   date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : item.date_paiement_prevue,
@@ -244,7 +283,7 @@ const TableauFournisseur = () => {
       mois,
       fournisseur,
       chantierId,
-      montantPaye: currentData?.paye || 0,
+      montantPaye: currentData?.a_payer || 0, // Préremplir avec le montant à payer
       datePaiement: currentData?.date_paiement || null
     });
     setDatePaiementModalOpen(true);
@@ -311,6 +350,165 @@ const TableauFournisseur = () => {
     setCurrentEnvoi(null);
   };
 
+  // Ouvrir le modal de confirmation avant de remplir toutes les lignes
+  const handleFillAllFournisseurMois = (mois, fournisseur) => {
+    // Trouver toutes les lignes correspondant à ce mois et ce fournisseur
+    const lignesFournisseur = data.filter(d => 
+      d.mois === mois && 
+      d.fournisseur === fournisseur
+    );
+
+    if (lignesFournisseur.length === 0) {
+      return;
+    }
+
+    // Ouvrir le modal de confirmation
+    setPendingFillAction({ mois, fournisseur });
+    setConfirmFillModalOpen(true);
+  };
+
+  // Exécuter réellement le remplissage après confirmation
+  const executeFillAllFournisseurMois = async () => {
+    if (!pendingFillAction) {
+      return;
+    }
+
+    const { mois, fournisseur } = pendingFillAction;
+    
+    // Fermer le modal
+    setConfirmFillModalOpen(false);
+    
+    // Trouver toutes les lignes correspondant à ce mois et ce fournisseur
+    const lignesFournisseur = data.filter(d => 
+      d.mois === mois && 
+      d.fournisseur === fournisseur
+    );
+
+    if (lignesFournisseur.length === 0) {
+      setPendingFillAction(null);
+      return;
+    }
+
+    setSaving(true);
+    setSaveSuccess(false);
+    setError(null);
+
+    try {
+      const [moisNum, annee2digits] = mois.split("/").map(Number);
+      const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+      const dateDuJour = new Date().toISOString().split('T')[0];
+
+      // Préparer toutes les mises à jour d'état
+      const updatedValuesPaye = { ...editedValuesPaye };
+      const updatedData = [...data];
+
+      // Mettre à jour toutes les lignes
+      const updatePromises = lignesFournisseur.map(async (ligne) => {
+        const key = `${mois}_${fournisseur}_${ligne.chantier_id}`;
+        const montantAPayer = ligne.a_payer || 0;
+        
+        // Mettre à jour les valeurs payées
+        updatedValuesPaye[key] = montantAPayer;
+        
+        // Récupérer les factures actuelles
+        const facturesList = editedFactures[key] !== undefined 
+          ? editedFactures[key] 
+          : ((ligne.factures || []).map(f => ({
+              id: f.id || null,
+              numero_facture: f.numero_facture || f,
+              montant_facture: f.montant_facture || 0,
+              payee: f.payee || false,
+              date_paiement_facture: f.date_paiement_facture || null
+            })));
+        
+        // Préparer le payload
+        const payload = [{
+          fournisseur: fournisseur,
+          mois: moisNum,
+          annee: anneeComplete,
+          montant: montantAPayer,
+          montant_a_payer: montantAPayer,
+          date_paiement: dateDuJour,
+          date_envoi: ligne.date_envoi || null,
+          factures: facturesList.filter(f => {
+            if (typeof f === 'object' && f !== null) {
+              return f.numero_facture && String(f.numero_facture).trim();
+            }
+            return f && String(f).trim();
+          }).map(f => {
+            if (typeof f === 'object' && f !== null) {
+              return {
+                numero_facture: String(f.numero_facture || '').trim(),
+                montant_facture: parseFloat(f.montant_facture) || 0,
+                payee: f.payee || false,
+                date_paiement_facture: f.date_paiement_facture || null
+              };
+            }
+            return {
+              numero_facture: String(f).trim(),
+              montant_facture: 0,
+              payee: false,
+              date_paiement_facture: null
+            };
+          }),
+        }];
+
+        // Appel API direct (sans debounce)
+        const response = await axios.post(
+          `/api/chantier/${ligne.chantier_id}/paiements-materiel/`,
+          payload
+        );
+
+        // Mettre à jour les données locales
+        if (response.data && response.data.length > 0) {
+          const updatedPaiement = response.data[0];
+          const annee2digits = anneeComplete.toString().slice(-2);
+          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digits}`;
+          
+          const dataIndex = updatedData.findIndex(item => 
+            item.mois === moisKey &&
+            item.fournisseur === fournisseur &&
+            item.chantier_id === ligne.chantier_id
+          );
+          
+          if (dataIndex !== -1) {
+            updatedData[dataIndex] = {
+              ...updatedData[dataIndex],
+              paye: parseFloat(updatedPaiement.montant) || 0,
+              a_payer: parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer,
+              ecart: (parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer) - (parseFloat(updatedPaiement.montant) || 0),
+              factures: updatedPaiement.factures || updatedData[dataIndex].factures || [],
+              date_paiement: updatedPaiement.date_paiement || updatedData[dataIndex].date_paiement || null,
+              date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : updatedData[dataIndex].date_envoi,
+              date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : updatedData[dataIndex].date_paiement_prevue,
+              ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : updatedData[dataIndex].ecart_paiement_reel,
+              date_modification: updatedPaiement.date_modification || updatedData[dataIndex].date_modification || null,
+              historique_modifications: updatedPaiement.historique_modifications || updatedData[dataIndex].historique_modifications || [],
+            };
+          }
+        }
+      });
+
+      // Attendre que toutes les mises à jour soient terminées
+      await Promise.all(updatePromises);
+
+      // Appliquer toutes les mises à jour d'état en une seule fois
+      setEditedValuesPaye(updatedValuesPaye);
+      setData(updatedData);
+
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 2000);
+    } catch (err) {
+      setError("Erreur lors de la sauvegarde des paiements.");
+      console.error(err);
+    } finally {
+      setSaving(false);
+      setPendingFillAction(null);
+    }
+  };
+
   // Ouvrir le modal pour ajouter/modifier une facture
   const handleOpenFactureModal = (mois, fournisseur, chantierId, factureIndex = null) => {
     const key = `${mois}_${fournisseur}_${chantierId}`;
@@ -350,10 +548,14 @@ const TableauFournisseur = () => {
     
     setEditedFactures((prev) => {
       const currentFactures = prev[key] || [];
+      const existingFacture = factureIndex !== null && currentFactures[factureIndex] ? currentFactures[factureIndex] : null;
       const newFacture = {
-        id: factureIndex !== null && currentFactures[factureIndex] ? currentFactures[factureIndex].id : null,
+        id: existingFacture ? existingFacture.id : null,
         numero_facture: factureModalData.numero.trim(),
-        montant_facture: parseFloat(factureModalData.montant) || 0
+        montant_facture: parseFloat(factureModalData.montant) || 0,
+        // Préserver les champs de paiement lors de la modification
+        payee: existingFacture ? (existingFacture.payee || false) : false,
+        date_paiement_facture: existingFacture ? (existingFacture.date_paiement_facture || null) : null
       };
       
       let newFactures;
@@ -373,6 +575,64 @@ const TableauFournisseur = () => {
     });
     
     handleCloseFactureModal();
+  };
+
+  // Marquer une facture comme payée
+  const handleMarkFactureAsPaid = async (mois, fournisseur, chantierId, factureIndex) => {
+    const key = `${mois}_${fournisseur}_${chantierId}`;
+    const currentFactures = editedFactures[key] || [];
+    
+    if (factureIndex < 0 || factureIndex >= currentFactures.length) {
+      return;
+    }
+
+    const facture = currentFactures[factureIndex];
+    
+    // Si la facture est déjà payée, ne rien faire
+    if (facture.payee) {
+      return;
+    }
+
+    // Date du jour
+    const dateDuJour = new Date().toISOString().split('T')[0];
+    const montantFacture = parseFloat(facture.montant_facture) || 0;
+
+    // Récupérer le montant payé actuel
+    const currentData = data.find(d => 
+      d.mois === mois && 
+      d.fournisseur === fournisseur && 
+      d.chantier_id === chantierId
+    );
+    
+    const montantPayeActuel = editedValuesPaye[key] !== undefined 
+      ? editedValuesPaye[key] 
+      : (currentData?.paye || 0);
+    
+    // Ajouter le montant de la facture au montant payé total
+    const nouveauMontantPaye = montantPayeActuel + montantFacture;
+    
+    // Préparer les factures mises à jour AVANT de mettre à jour l'état
+    const updatedFactures = [...currentFactures];
+    updatedFactures[factureIndex] = {
+      ...updatedFactures[factureIndex],
+      payee: true,
+      date_paiement_facture: dateDuJour
+    };
+
+    // Mettre à jour l'état local
+    setEditedFactures((prev) => ({
+      ...prev,
+      [key]: updatedFactures,
+    }));
+    
+    // Mettre à jour le montant payé
+    setEditedValuesPaye((prev) => ({
+      ...prev,
+      [key]: nouveauMontantPaye,
+    }));
+
+    // Sauvegarder avec le nouveau montant payé et les factures mises à jour
+    savePaiement(mois, fournisseur, chantierId, nouveauMontantPaye, updatedFactures, currentData?.date_paiement || null, currentData?.date_envoi || null);
   };
 
   // Supprimer une entrée d'historique de modification
@@ -465,7 +725,9 @@ const TableauFournisseur = () => {
         : ((item.factures || []).map(f => ({
             id: f.id || null,
             numero_facture: f.numero_facture || f,
-            montant_facture: f.montant_facture || 0
+            montant_facture: f.montant_facture || 0,
+            payee: f.payee || false,
+            date_paiement_facture: f.date_paiement_facture || null
           })));
 
       organized[item.mois][item.fournisseur].push({
@@ -519,12 +781,13 @@ const TableauFournisseur = () => {
   const commonCellStyle = {
     color: "white",
     maxWidth: "150px",
-    padding: "6px 8px",
+    padding: "4px 6px",
     whiteSpace: "normal",
     wordWrap: "break-word",
     textAlign: "center",
-    minHeight: "60px",
+    minHeight: "45px",
     verticalAlign: "middle",
+    fontSize: "0.85rem",
   };
 
   // Formater un montant avec couleur (style TableauFacturation)
@@ -666,7 +929,7 @@ const TableauFournisseur = () => {
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography
           variant="h5"
           gutterBottom
@@ -674,6 +937,8 @@ const TableauFournisseur = () => {
             fontFamily: "Merriweather, serif",
             color: "white",
             fontWeight: "bold",
+            fontSize: "1.5rem",
+            mb: 1,
           }}
         >
           TABLEAU FOURNISSEUR{" "}
@@ -681,7 +946,7 @@ const TableauFournisseur = () => {
         </Typography>
 
         {/* Sélecteur d'année */}
-        <Box sx={{ display: "flex", gap: 2, mb: 2, alignItems: "center" }}>
+        <Box sx={{ display: "flex", gap: 2, mb: 1.5, alignItems: "center" }}>
           <Select
             value={selectedAnnee}
             onChange={(e) => setSelectedAnnee(e.target.value)}
@@ -738,53 +1003,73 @@ const TableauFournisseur = () => {
         <>
           <TableContainer
             component={Paper}
-            sx={{ maxWidth: "100%", overflowX: "auto" }}
+            sx={{ 
+              maxWidth: "100%", 
+              overflowX: "auto",
+              maxHeight: "calc(100vh - 180px)",
+              height: "calc(100vh - 180px)",
+              overflowY: "auto",
+              position: "relative",
+              // Masquer la scrollbar tout en gardant le scroll fonctionnel
+              scrollbarWidth: "none", // Firefox
+              "&::-webkit-scrollbar": {
+                display: "none", // Chrome, Safari, Edge
+              },
+              msOverflowStyle: "none", // IE et Edge (ancien)
+            }}
           >
             <Table size="small" sx={{ tableLayout: "fixed" }}>
-              <TableHead>
+              <TableHead
+                sx={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 10,
+                  backgroundColor: "rgba(27, 120, 188, 1)",
+                }}
+              >
                 <TableRow
                   sx={{
                     backgroundColor: "rgba(27, 120, 188, 1)",
                     color: "white",
                   }}
                 >
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 100 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 100, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Mois
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 200 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 200, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Fournisseur
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 200 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 200, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Chantier
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Montant à payer
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Montant à payer TTC
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Montant payé
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 350 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 350, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Facture
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Écart
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Date d'envoi
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 180 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 180, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Date de paiement
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Date paiement prévue
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Écart paiement réel
                   </TableCell>
-                  <TableCell sx={{ ...commonCellStyle, minWidth: 150 }}>
+                  <TableCell sx={{ ...commonCellStyle, minWidth: 150, backgroundColor: "rgba(27, 120, 188, 1)" }}>
                     Total Fournisseur/Mois
                   </TableCell>
                 </TableRow>
@@ -1057,59 +1342,102 @@ const TableauFournisseur = () => {
                           <TableCell sx={commonBodyCellStyle}>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8, alignItems: "stretch" }}>
                               {item.factures && item.factures.length > 0 ? (
-                                item.factures.map((facture, idx) => (
-                                  <Box
-                                    key={idx}
-                                    sx={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 0.5,
-                                      padding: "4px 8px",
-                                      borderRadius: "4px",
-                                      backgroundColor: "rgba(0, 0, 0, 0.02)",
-                                      border: "1px solid rgba(0, 0, 0, 0.08)",
-                                      transition: "all 0.2s ease",
-                                      "&:hover": {
-                                        backgroundColor: "rgba(27, 120, 188, 0.05)",
-                                        borderColor: "rgba(27, 120, 188, 0.2)",
-                                      },
-                                    }}
-                                  >
+                                item.factures.map((facture, idx) => {
+                                  const isPaid = facture.payee || false;
+                                  return (
                                     <Box
+                                      key={idx}
                                       sx={{
-                                        flex: 1,
                                         display: "flex",
-                                        flexDirection: "column",
-                                        gap: 0.2,
-                                        cursor: "pointer",
-                                        minWidth: 0,
+                                        alignItems: "center",
+                                        gap: 0.5,
+                                        padding: "4px 8px",
+                                        borderRadius: "4px",
+                                        backgroundColor: isPaid 
+                                          ? "rgba(46, 125, 50, 0.1)" // Vert clair si payée
+                                          : "rgba(211, 47, 47, 0.1)", // Rouge clair si non payée
+                                        border: isPaid
+                                          ? "1px solid rgba(46, 125, 50, 0.3)"
+                                          : "1px solid rgba(211, 47, 47, 0.3)",
+                                        transition: "all 0.2s ease",
+                                        "&:hover": {
+                                          backgroundColor: isPaid
+                                            ? "rgba(46, 125, 50, 0.15)"
+                                            : "rgba(211, 47, 47, 0.15)",
+                                          borderColor: isPaid
+                                            ? "rgba(46, 125, 50, 0.5)"
+                                            : "rgba(211, 47, 47, 0.5)",
+                                        },
                                       }}
-                                      onClick={() => handleOpenFactureModal(row.mois, row.fournisseur, item.chantier_id, idx)}
                                     >
-                                      <Typography
+                                      <Box
                                         sx={{
-                                          fontSize: "0.75rem",
-                                          fontWeight: 500,
-                                          color: "rgba(27, 120, 188, 1)",
-                                          lineHeight: 1.2,
+                                          flex: 1,
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          gap: 0.2,
+                                          cursor: "pointer",
+                                          minWidth: 0,
                                         }}
+                                        onClick={() => handleOpenFactureModal(row.mois, row.fournisseur, item.chantier_id, idx)}
                                       >
-                                        {facture.numero_facture || facture}
-                                      </Typography>
-                                      {facture.montant_facture ? (
                                         <Typography
                                           sx={{
-                                            fontSize: "0.7rem",
-                                            color: "text.secondary",
+                                            fontSize: "0.75rem",
+                                            fontWeight: 500,
+                                            color: isPaid 
+                                              ? "rgba(46, 125, 50, 1)" // Vert foncé si payée
+                                              : "rgba(211, 47, 47, 1)", // Rouge foncé si non payée
                                             lineHeight: 1.2,
                                           }}
                                         >
-                                          {formatNumber(facture.montant_facture)} €
+                                          {facture.numero_facture || facture}
                                         </Typography>
-                                      ) : null}
+                                        {facture.montant_facture ? (
+                                          <Typography
+                                            sx={{
+                                              fontSize: "0.7rem",
+                                              color: isPaid 
+                                                ? "rgba(46, 125, 50, 0.8)"
+                                                : "text.secondary",
+                                              lineHeight: 1.2,
+                                            }}
+                                          >
+                                            {formatNumber(facture.montant_facture)} €
+                                          </Typography>
+                                        ) : null}
+                                      </Box>
+                                      {isPaid ? (
+                                        <CheckCircleIcon
+                                          sx={{
+                                            fontSize: "1.2rem",
+                                            color: "rgba(46, 125, 50, 1)",
+                                            flexShrink: 0,
+                                          }}
+                                        />
+                                      ) : (
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleMarkFactureAsPaid(row.mois, row.fournisseur, item.chantier_id, idx);
+                                          }}
+                                          sx={{
+                                            padding: "4px",
+                                            color: "rgba(211, 47, 47, 0.7)",
+                                            "&:hover": {
+                                              backgroundColor: "rgba(211, 47, 47, 0.1)",
+                                              color: "rgba(211, 47, 47, 1)",
+                                            },
+                                          }}
+                                          title="Marquer comme payée"
+                                        >
+                                          <CheckCircleIcon sx={{ fontSize: "1.2rem" }} />
+                                        </IconButton>
+                                      )}
                                     </Box>
-                                  </Box>
-                                ))
+                                  );
+                                })
                               ) : null}
                               <Box
                                 sx={{
@@ -1179,7 +1507,52 @@ const TableauFournisseur = () => {
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "center" }}>
-                              {item.date_paiement ? (
+                              {/* Afficher les dates de paiement des factures */}
+                              {item.factures && item.factures.some(f => f.payee && f.date_paiement_facture) ? (
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, width: "100%" }}>
+                                  {item.factures
+                                    .filter(f => f.payee && f.date_paiement_facture)
+                                    .map((facture, idx) => {
+                                      const datePaiement = facture.date_paiement_facture;
+                                      return (
+                                        <Box
+                                          key={facture.id || idx}
+                                          sx={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 0.1,
+                                            padding: "2px 4px",
+                                            borderRadius: "3px",
+                                            backgroundColor: "rgba(46, 125, 50, 0.1)",
+                                            border: "1px solid rgba(46, 125, 50, 0.3)",
+                                          }}
+                                        >
+                                          <Typography
+                                            sx={{
+                                              fontSize: "0.65rem",
+                                              color: "rgba(46, 125, 50, 0.9)",
+                                              fontWeight: 500,
+                                            }}
+                                          >
+                                            {facture.numero_facture || `Facture ${idx + 1}`}
+                                          </Typography>
+                                          <Typography
+                                            sx={{
+                                              fontSize: "0.7rem",
+                                              color: "rgba(46, 125, 50, 1)",
+                                              fontWeight: 500,
+                                            }}
+                                          >
+                                            {datePaiement ? new Date(datePaiement).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                                          </Typography>
+                                        </Box>
+                                      );
+                                    })}
+                                </Box>
+                              ) : null}
+                              
+                              {/* Afficher la date de paiement principale si elle existe et qu'aucune facture n'est payée */}
+                              {item.date_paiement && (!item.factures || !item.factures.some(f => f.payee && f.date_paiement_facture)) ? (
                                 <Typography
                                   sx={{
                                     fontSize: "0.75rem",
@@ -1200,7 +1573,7 @@ const TableauFournisseur = () => {
                                 >
                                   {new Date(item.date_paiement).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                 </Typography>
-                              ) : (
+                              ) : !item.date_paiement && (!item.factures || !item.factures.some(f => f.payee && f.date_paiement_facture)) ? (
                                 <Typography
                                   sx={{
                                     fontSize: "0.75rem",
@@ -1221,7 +1594,7 @@ const TableauFournisseur = () => {
                                 >
                                   Non renseignée
                                 </Typography>
-                              )}
+                              ) : null}
                               {item.historique_modifications && item.historique_modifications.length > 0 && (
                                 <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, mt: 0.5 }}>
                                   {item.historique_modifications.slice(0, 3).map((hist, idx) => (
@@ -1338,12 +1711,19 @@ const TableauFournisseur = () => {
                             return (
                               <TableCell
                                 rowSpan={rowSpanFournisseur}
+                                onClick={() => handleFillAllFournisseurMois(row.mois, row.fournisseur)}
                                 sx={{
                                   ...commonBodyCellStyle,
                                   verticalAlign: "middle",
                                   textAlign: "center",
                                   fontWeight: "bold",
                                   backgroundColor: totalBackgroundColor,
+                                  cursor: "pointer",
+                                  "&:hover": {
+                                    backgroundColor: isPayeComplet 
+                                      ? "rgba(46, 125, 50, 0.3)" 
+                                      : "rgba(27, 120, 188, 0.2)",
+                                  },
                                 }}
                               >
                                 <Typography
@@ -1368,6 +1748,16 @@ const TableauFournisseur = () => {
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Récapitulatif par fournisseur */}
+          {tableRows.length > 0 && (
+            <RecapFournisseur
+              data={data}
+              selectedAnnee={selectedAnnee}
+              organized={organized}
+              moisSorted={moisSorted}
+            />
+          )}
 
           {/* Modal pour ajouter/modifier une facture */}
           <FactureModal
@@ -1410,6 +1800,64 @@ const TableauFournisseur = () => {
             onSave={handleSaveDateEnvoi}
             dateEnvoi={currentEnvoi?.dateEnvoi || null}
           />
+
+          {/* Modal de confirmation pour le remplissage automatique */}
+          <Dialog
+            open={confirmFillModalOpen}
+            onClose={() => {
+              setConfirmFillModalOpen(false);
+              setPendingFillAction(null);
+            }}
+          >
+            <DialogTitle>
+              Confirmer le remplissage automatique
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                {pendingFillAction && (() => {
+                  const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
+                  const moisName = getMoisName(moisNum);
+                  const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+                  const lignesCount = data.filter(d => 
+                    d.mois === pendingFillAction.mois && 
+                    d.fournisseur === pendingFillAction.fournisseur
+                  ).length;
+                  
+                  return (
+                    <>
+                      Êtes-vous sûr de vouloir remplir automatiquement toutes les lignes du fournisseur <strong>{pendingFillAction.fournisseur}</strong> pour le mois de <strong>{moisName} {anneeComplete}</strong> ?
+                      <br /><br />
+                      Cette action va :
+                      <ul style={{ marginTop: "8px", marginBottom: "8px" }}>
+                        <li>Remplir le montant payé avec le montant à payer pour chaque ligne ({lignesCount} ligne{lignesCount > 1 ? 's' : ''})</li>
+                        <li>Définir la date de paiement à aujourd'hui</li>
+                      </ul>
+                      Cette action est irréversible.
+                    </>
+                  );
+                })()}
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => {
+                  setConfirmFillModalOpen(false);
+                  setPendingFillAction(null);
+                }}
+                color="secondary"
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={executeFillAllFournisseurMois}
+                color="primary"
+                variant="contained"
+                autoFocus
+              >
+                Confirmer
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           {saveSuccess && (
             <Alert severity="success" sx={{ mt: 2 }}>

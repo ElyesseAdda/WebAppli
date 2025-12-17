@@ -1267,7 +1267,7 @@ class RecapFinancierSerializer(serializers.Serializer):
 class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:
         model = FactureFournisseurMateriel
-        fields = ['id', 'paiement', 'numero_facture', 'montant_facture']
+        fields = ['id', 'paiement', 'numero_facture', 'montant_facture', 'payee', 'date_paiement_facture']
 
 
 class PaiementFournisseurMaterielSerializer(serializers.ModelSerializer):
@@ -1280,12 +1280,14 @@ class PaiementFournisseurMaterielSerializer(serializers.ModelSerializer):
         fields = ['id', 'chantier', 'fournisseur', 'mois', 'annee', 'montant', 'montant_a_payer', 'montant_a_payer_ttc', 'date_paiement', 'date_envoi', 'date_paiement_prevue', 'date_saisie', 'date_modification', 'factures', 'historique_modifications']
     
     def get_factures(self, obj):
-        """Retourne la liste des factures avec numéro et montant"""
+        """Retourne la liste des factures avec numéro, montant, payee et date_paiement_facture"""
         return [
             {
                 'id': f.id,
                 'numero_facture': f.numero_facture,
-                'montant_facture': float(f.montant_facture) if f.montant_facture else 0.0
+                'montant_facture': float(f.montant_facture) if f.montant_facture else 0.0,
+                'payee': f.payee if f.payee else False,
+                'date_paiement_facture': f.date_paiement_facture.isoformat() if f.date_paiement_facture else None
             }
             for f in obj.factures.all()
         ]
