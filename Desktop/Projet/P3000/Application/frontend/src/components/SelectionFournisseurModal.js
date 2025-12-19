@@ -34,6 +34,8 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
   const [contactType, setContactType] = useState("");
   const [contactAgent, setContactAgent] = useState("");
   const [contactSousTraitant, setContactSousTraitant] = useState("");
+  const [contactSousTraitantContact, setContactSousTraitantContact] = useState("");
+  const [sousTraitantContacts, setSousTraitantContacts] = useState([]);
   const [numeroBonCommande, setNumeroBonCommande] = useState(numeroBC);
   const [openFournisseurModal, setOpenFournisseurModal] = useState(false);
   const [sousTraitants, setSousTraitants] = useState([]);
@@ -106,6 +108,24 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
     const selectedFournisseur = fournisseurs.find(
       (f) => f.id === selectedData.fournisseur
     );
+    
+    // Pour le contact sous-traitant :
+    // - contact_sous_traitant : toujours l'ID du sous-traitant (requis par le backend)
+    // - contact_sous_traitant_contact : l'ID du contact si ce n'est pas le représentant, null si c'est le représentant
+    // - is_representant : true si c'est le représentant, false sinon
+    let contactSousTraitantContactFinal = null;
+    let isRepresentant = false;
+    
+    if (contactType === "sous_traitant" && contactSousTraitant) {
+      if (contactSousTraitantContact === "representant") {
+        // Si c'est le représentant, on ne passe pas d'ID de contact
+        isRepresentant = true;
+      } else if (contactSousTraitantContact) {
+        // Sinon, on passe l'ID du contact
+        contactSousTraitantContactFinal = contactSousTraitantContact;
+      }
+    }
+    
     onSubmit({
       fournisseur: selectedData.fournisseur,
       fournisseurName: selectedFournisseur ? selectedFournisseur.name : "",
@@ -117,8 +137,9 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       numero_bon_commande: numeroBonCommande,
       contact_type: contactType,
       contact_agent: contactType === "agent" ? contactAgent : null,
-      contact_sous_traitant:
-        contactType === "sous_traitant" ? contactSousTraitant : null,
+      contact_sous_traitant: contactType === "sous_traitant" ? contactSousTraitant : null,
+      contact_sous_traitant_contact: contactSousTraitantContactFinal,
+      is_representant: isRepresentant,
     });
     onClose();
   };
@@ -135,6 +156,17 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       .then((data) => setFournisseurs(data));
     handleCloseFournisseurModal();
   };
+
+  // Réinitialiser les états quand le modal se ferme
+  useEffect(() => {
+    if (!open) {
+      setContactType("");
+      setContactAgent("");
+      setContactSousTraitant("");
+      setContactSousTraitantContact("");
+      setSousTraitantContacts([]);
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -288,21 +320,102 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
             </FormControl>
           )}
 
-          {contactType === "sous_traitant" && (
-            <FormControl fullWidth>
-              <InputLabel>Sous-traitant Réceptionnaire</InputLabel>
-              <Select
-                value={contactSousTraitant}
-                onChange={(e) => setContactSousTraitant(e.target.value)}
-                label="Sous-traitant Réceptionnaire"
-              >
-                {sousTraitants.map((sousTraitant) => (
-                  <MenuItem key={sousTraitant.id} value={sousTraitant.id}>
-                    {sousTraitant.representant} - {sousTraitant.entreprise}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              {contactType === "sous_traitant" && (
+            <>
+              <FormControl fullWidth>
+                <InputLabel>Sous-traitant Réceptionnaire</InputLabel>
+                <Select
+                  value={contactSousTraitant}
+                  onChange={(e) => {
+                    setContactSousTraitant(e.target.value);
+                    // Charger les contacts du sous-traitant sélectionné
+                    if (e.target.value) {
+                      fetch(`/api/contacts-sous-traitant/?sous_traitant=${e.target.value}`)
+                        .then((response) => response.json())
+                        .then((data) => {
+                          setSousTraitantContacts(data);
+                          // Trouver le sous-traitant sélectionné pour récupérer le représentant
+                          const selectedST = sousTraitants.find((st) => st.id === e.target.value);
+                          // Par défaut, sélectionner le représentant (on utilisera une valeur spéciale)
+                          if (selectedST && selectedST.representant) {
+                            setContactSousTraitantContact("representant");
+                          } else if (data.length > 0) {
+                            // Sinon, sélectionner le premier contact
+                            setContactSousTraitantContact(data[0].id.toString());
+                          } else {
+                            setContactSousTraitantContact("");
+                          }
+                        })
+                        .catch((error) => {
+                          console.error("Erreur lors du chargement des contacts:", error);
+                          setSousTraitantContacts([]);
+                          setContactSousTraitantContact("");
+                        });
+                    } else {
+                      setSousTraitantContacts([]);
+                      setContactSousTraitantContact("");
+                    }
+                  }}
+                  label="Sous-traitant Réceptionnaire"
+                >
+                  {sousTraitants.map((sousTraitant) => (
+                    <MenuItem key={sousTraitant.id} value={sousTraitant.id}>
+                      {sousTraitant.entreprise}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {contactSousTraitant && (
+                <FormControl fullWidth>
+                  <InputLabel>Contact</InputLabel>
+                  <Select
+                    value={contactSousTraitantContact}
+                    onChange={(e) => setContactSousTraitantContact(e.target.value)}
+                    label="Contact"
+                    renderValue={(selected) => {
+                      if (selected === "representant") {
+                        const selectedST = sousTraitants.find((st) => st.id === contactSousTraitant);
+                        return selectedST ? selectedST.representant : "";
+                      }
+                      const contact = sousTraitantContacts.find((c) => c.id.toString() === selected);
+                      if (contact) {
+                        const nomComplet = contact.prenom
+                          ? `${contact.prenom} ${contact.nom}`.trim()
+                          : contact.nom;
+                        return contact.poste
+                          ? `${nomComplet} (${contact.poste})`
+                          : nomComplet;
+                      }
+                      return "";
+                    }}
+                  >
+                    {/* Option représentant par défaut */}
+                    {(() => {
+                      const selectedST = sousTraitants.find((st) => st.id === contactSousTraitant);
+                      return selectedST && selectedST.representant ? (
+                        <MenuItem value="representant">
+                          {selectedST.representant} (Représentant)
+                        </MenuItem>
+                      ) : null;
+                    })()}
+                    {/* Liste des contacts */}
+                    {sousTraitantContacts.map((contact) => {
+                      const nomComplet = contact.prenom
+                        ? `${contact.prenom} ${contact.nom}`.trim()
+                        : contact.nom;
+                      return (
+                        <MenuItem key={contact.id} value={contact.id.toString()}>
+                          {contact.poste
+                            ? `${nomComplet} (${contact.poste})`
+                            : nomComplet}
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                </FormControl>
+              )}
+            </>
           )}
 
           <TextField

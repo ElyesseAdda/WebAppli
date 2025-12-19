@@ -39,6 +39,8 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       contact_type: data.contact_type,
       contact_agent: data.contact_agent,
       contact_sous_traitant: data.contact_sous_traitant,
+      contact_sous_traitant_contact: data.contact_sous_traitant_contact,
+      is_representant: data.is_representant,
     });
     setStep(2);
     setIsModalOpen(true);
@@ -69,6 +71,8 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,
       contact_sous_traitant: selectedData.contact_sous_traitant,
+      contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
+      is_representant: selectedData.is_representant,
       lignes: products.map((product) => ({
         produit: product.produit,
         designation: product.designation,
@@ -98,6 +102,8 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,
       contact_sous_traitant: selectedData.contact_sous_traitant,
+      contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
+      is_representant: selectedData.is_representant,
       lignes: selectedProducts.map((product) => ({
         produit: product.produit,
         designation: product.designation,
