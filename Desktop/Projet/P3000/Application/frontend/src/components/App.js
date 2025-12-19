@@ -38,6 +38,7 @@ import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
 import ListeFournisseurs from "./ListeFournisseurs";
+import ListeSousTraitants from "./ListeSousTraitants";
 import Login from "./Login";
 import ModificationDevis from "./ModificationDevis";
 import ModificationDevisV2 from "./ModifDevis/ModificationDevisV2";
@@ -381,6 +382,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeFournisseurs />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ListeSousTraitants"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeSousTraitants />
                 </Layout>
               </ProtectedRoute>
             }

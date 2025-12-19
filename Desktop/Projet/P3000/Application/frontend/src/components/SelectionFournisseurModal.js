@@ -14,12 +14,14 @@ import {
 import React, { useEffect, useState } from "react";
 import NewFournisseurForm from "./Founisseur/NewFournisseurForm";
 
-function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
+function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialChantierId }) {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [chantiers, setChantiers] = useState([]);
+  // Convertir initialChantierId en nombre si fourni
+  const initialChantierIdNum = initialChantierId ? Number(initialChantierId) : null;
   const [selectedData, setSelectedData] = useState({
     fournisseur: "",
-    chantier: "",
+    chantier: initialChantierIdNum || "",
     agent: "",
     statut: "en_attente", // Statut par défaut
   });
@@ -59,7 +61,9 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
     // Charger la liste des chantiers
     fetch("/api/chantier/")
       .then((response) => response.json())
-      .then((data) => setChantiers(data))
+      .then((data) => {
+        setChantiers(data);
+      })
       .catch((error) => console.error("Erreur:", error));
 
     // Charger la liste des sous-traitants
@@ -80,6 +84,16 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC }) {
       .then((data) => setEmetteurs(data))
       .catch((error) => console.error("Erreur:", error));
   }, []);
+
+  // Mettre à jour le chantier lorsque initialChantierId change ou lorsque le modal s'ouvre
+  useEffect(() => {
+    if (open && initialChantierIdNum) {
+      setSelectedData((prev) => ({
+        ...prev,
+        chantier: initialChantierIdNum,
+      }));
+    }
+  }, [open, initialChantierIdNum]);
 
   const handleChange = (event) => {
     setSelectedData({

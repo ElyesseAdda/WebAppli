@@ -80,6 +80,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         icon: MdBusiness,
         children: [
           { label: "Liste Fournisseurs", to: "/ListeFournisseurs" },
+          { label: "Sous traitant", to: "/ListeSousTraitants" },
         ],
       },
       {

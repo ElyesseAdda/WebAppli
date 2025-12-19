@@ -1,6 +1,6 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { MdConstruction, MdEventAvailable, MdFolderOpen } from "react-icons/md";
+import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { useLocation, useParams } from "react-router-dom";
 import "./../../static/css/breadcrumb.css";
@@ -45,6 +45,15 @@ const sectionConfigs = [
     ],
   },
   {
+    key: "fournisseurs",
+    label: "Fournisseurs",
+    icon: MdBusiness,
+    prefixes: [
+      "/ListeFournisseurs",
+      "/ListeSousTraitants",
+    ],
+  },
+  {
     key: "drive",
     label: "Drive",
     icon: SiGoogledrive,
@@ -65,6 +74,8 @@ const pageLabelByPrefix = [
   { prefix: "/ListeDevis", label: "Liste Devis" },
   { prefix: "/ListeSituation", label: "Liste Situation" },
   { prefix: "/ListeFactures", label: "Liste facture" },
+  { prefix: "/ListeFournisseurs", label: "Liste Fournisseurs" },
+  { prefix: "/ListeSousTraitants", label: "Sous traitant" },
   { prefix: "/paiements-sous-traitant", label: "Paiements sous-traitant" },
 ];
 

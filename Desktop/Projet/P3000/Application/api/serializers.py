@@ -1099,6 +1099,7 @@ class SousTraitantSerializer(serializers.ModelSerializer):
             'date_modification',
             'forme_juridique',
             'email',
+            'phone_Number',
             'type'
         ]
 

@@ -5,7 +5,7 @@ import { bonCommandeService } from "../services/bonCommandeService";
 import ProduitSelectionTable from "./ProduitSelectionTable";
 import SelectionFournisseurModal from "./SelectionFournisseurModal";
 
-function BonCommandeForm({ onBonCommandeCreated, modal }) {
+function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
   const [step, setStep] = useState(1);
   const [openModal, setOpenModal] = useState(false);
   const [selectedData, setSelectedData] = useState(null);
@@ -143,6 +143,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
         onClose={onBonCommandeCreated}
         onSubmit={handleInitialSelection}
         numeroBC={numeroBC}
+        initialChantierId={chantierId}
       />
     );
   }
@@ -203,6 +204,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal }) {
         onClose={handleCloseModal}
         onSubmit={handleInitialSelection}
         numeroBC={numeroBC}
+        initialChantierId={chantierId}
       />
     </Box>
   );
