@@ -1,6 +1,6 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness } from "react-icons/md";
+import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness, MdTableChart } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { useLocation, useParams } from "react-router-dom";
 import "./../../static/css/breadcrumb.css";
@@ -19,7 +19,6 @@ const sectionConfigs = [
     prefixes: [
       "/",
       "/ChantierDetail",
-      "/TableauFacturation",
       "/GestionAppelsOffres",
       "/AgencyExpenses",
       "/ChantiersDashboard",
@@ -27,10 +26,19 @@ const sectionConfigs = [
     ],
   },
   {
+    key: "tableau",
+    label: "Tableau",
+    icon: MdTableChart,
+    prefixes: [
+      "/TableauFacturation",
+      "/TableauFournisseur",
+    ],
+  },
+  {
     key: "agent_planning",
     label: "Agent et planning",
     icon: MdEventAvailable,
-    prefixes: ["/Agent", "/PlanningContainer"],
+    prefixes: ["/Agent", "/PlanningContainer", "/CalendrierAgentContainer"],
   },
   {
     key: "document",
@@ -42,6 +50,8 @@ const sectionConfigs = [
       "/ListeDevis",
       "/ListeSituation",
       "/ListeFactures",
+      "/ListeBonCommande",
+      "/DevisAvance",
     ],
   },
   {
@@ -65,12 +75,16 @@ const pageLabelByPrefix = [
   { prefix: "/", label: "Dashboard" },
   { prefix: "/ChantierDetail", label: "Récap Chantier" },
   { prefix: "/TableauFacturation", label: "Tableau Facturation" },
+  { prefix: "/TableauFournisseur", label: "Tableau Fournisseur" },
   { prefix: "/GestionAppelsOffres", label: "Liste Appel offres" },
   { prefix: "/AgencyExpenses", label: "Agence" },
   { prefix: "/Agent", label: "Gestion agent" },
+  { prefix: "/CalendrierAgentContainer", label: "Gestion agent" },
   { prefix: "/PlanningContainer", label: "Planning hebdo" },
   { prefix: "/CreationDevis", label: "Devis (création)" },
   { prefix: "/BonCommande", label: "Liste BC" },
+  { prefix: "/ListeBonCommande", label: "Liste Bon de Commande" },
+  { prefix: "/DevisAvance", label: "Devis" },
   { prefix: "/ListeDevis", label: "Liste Devis" },
   { prefix: "/ListeSituation", label: "Liste Situation" },
   { prefix: "/ListeFactures", label: "Liste facture" },
