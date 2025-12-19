@@ -16,6 +16,7 @@ import DevisTable from '../Devis/DevisTable';
 import DevisRecap from '../Devis/DevisRecap';
 import TableauOption from '../Devis/TableauOption';
 import DevisCostPieChart from '../Devis/DevisCostPieChart';
+import ContactSocieteModal from '../ContactSocieteModal';
 
 // Hooks personnalisés
 import { useDevisLoader } from './hooks/useDevisLoader';
@@ -117,6 +118,12 @@ const ModificationDevisV2 = () => {
   // État pour le PieChart - ligne sélectionnée (au clic)
   const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
   const [isPieChartVisible, setIsPieChartVisible] = useState(true);
+
+  // ✅ États pour la gestion des contacts de société
+  const [contactsSociete, setContactsSociete] = useState([]);
+  const [selectedContactId, setSelectedContactId] = useState(null);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [currentSocieteId, setCurrentSocieteId] = useState(null);
 
   // Hook de chargement
   const {
@@ -432,6 +439,25 @@ const ModificationDevisV2 = () => {
       }));
   }, [enrichedDevisItems]);
 
+  // ✅ Fonction pour charger les contacts de la société
+  const fetchContactsSociete = useCallback(async (societeId) => {
+    if (!societeId) {
+      setContactsSociete([]);
+      setSelectedContactId(null);
+      setCurrentSocieteId(null);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/contacts-societe/?societe=${societeId}`);
+      setContactsSociete(response.data);
+      setCurrentSocieteId(societeId);
+    } catch (error) {
+      console.error('Erreur lors du chargement des contacts:', error);
+      setContactsSociete([]);
+      setCurrentSocieteId(societeId);
+    }
+  }, []);
+
   // Initialiser les données quand le devis est chargé
   useEffect(() => {
     if (loadedDevisData) {
@@ -443,10 +469,22 @@ const ModificationDevisV2 = () => {
         // ✅ Utiliser ?? au lieu de || pour permettre tva_rate = 0
         tva_rate: loadedDevisData.tva_rate ?? 20,
         price_ht: loadedDevisData.price_ht ?? 0,
-        price_ttc: loadedDevisData.price_ttc ?? 0
+        price_ttc: loadedDevisData.price_ttc ?? 0,
+        contact_societe: loadedDevisData.contact_societe || null
       });
       setSelectedChantierId(loadedDevisData.chantier);
       setDevisType(loadedDevisData.devis_chantier ? 'chantier' : 'normal');
+      
+      // ✅ Initialiser le contact sélectionné si présent
+      if (loadedDevisData.contact_societe) {
+        // Gérer le cas où contact_societe peut être un ID (nombre) ou un objet avec un id
+        const contactId = typeof loadedDevisData.contact_societe === 'object' 
+          ? loadedDevisData.contact_societe.id 
+          : loadedDevisData.contact_societe;
+        if (contactId) {
+          setSelectedContactId(contactId);
+        }
+      }
     }
   }, [loadedDevisData]);
 
@@ -473,8 +511,14 @@ const ModificationDevisV2 = () => {
         codepostal_societe: societeData.codepostal_societe || '',
         ville_societe: societeData.ville_societe || ''
       });
+      
+      // ✅ Charger les contacts de la société
+      const societeIdValue = societeData.id || null;
+      if (societeIdValue) {
+        fetchContactsSociete(societeIdValue);
+      }
     }
-  }, [societeData]);
+  }, [societeData, fetchContactsSociete]);
 
   useEffect(() => {
     if (chantierData) {
@@ -620,7 +664,8 @@ const ModificationDevisV2 = () => {
       devisData: {
         ...devisData,
         price_ht: totalHt,
-        price_ttc: totalTtc
+        price_ttc: totalTtc,
+        contact_societe: selectedContactId || null // ✅ Ajouter le contact sélectionné
       },
       selectedChantierId,
       clientId,
@@ -792,6 +837,11 @@ const ModificationDevisV2 = () => {
               societe={societe} 
               formatPhoneNumber={formatPhoneNumber}
               isEditable={false}
+              contacts={contactsSociete}
+              selectedContactId={selectedContactId}
+              onContactSelect={setSelectedContactId}
+              onOpenContactModal={() => setShowContactModal(true)}
+              societeId={currentSocieteId}
             />
           </div>
 
@@ -1069,6 +1119,17 @@ const ModificationDevisV2 = () => {
         isVisible={isPieChartVisible}
         onClose={() => setIsPieChartVisible(false)}
       />
+
+      {/* ✅ Modal de gestion des contacts de société */}
+      {currentSocieteId && (
+        <ContactSocieteModal
+          open={showContactModal}
+          onClose={() => setShowContactModal(false)}
+          societeId={currentSocieteId}
+          societeName={societe.nom_societe || ''}
+          onContactChange={() => fetchContactsSociete(currentSocieteId)}
+        />
+      )}
     </div>
   );
 };
