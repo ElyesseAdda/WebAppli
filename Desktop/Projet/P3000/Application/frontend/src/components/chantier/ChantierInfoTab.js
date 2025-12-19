@@ -1239,7 +1239,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           startIcon={<FaFileInvoice />}
           onClick={() => {
             window.open(
-              `/CreationDevis?chantier_id=${chantierData?.id}`,
+              `/DevisAvance`,
               "_blank"
             );
           }}
