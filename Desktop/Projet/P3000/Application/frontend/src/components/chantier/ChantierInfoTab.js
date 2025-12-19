@@ -41,6 +41,7 @@ import { useSituationsManager } from "../../hooks/useSituationsManager";
 import universalDriveGenerator from "../../utils/universalDriveGenerator";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
+import ContactSocieteModal from "../ContactSocieteModal";
 
 // Fonction utilitaire pour vérifier les permissions selon le statut du chantier
 const canPerformAction = (statut, action) => {
@@ -231,6 +232,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
+  
+  // États pour la gestion des contacts de société
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [societeId, setSocieteId] = useState(null);
+  const [societeName, setSocieteName] = useState("");
 
   // Données de modification
   const [editData, setEditData] = useState({
@@ -630,6 +636,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         poste: clientPoste,
       },
     });
+    
+    // ✅ Récupérer l'ID de la société pour la gestion des contacts
+    const societeIdValue = societeData?.id || societeData?.societe_id || null;
+    setSocieteId(societeIdValue);
+    setSocieteName(societeData?.nom_societe || "");
+    
     setOpenEditModal(true);
   };
 
@@ -2240,9 +2252,21 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               </Grid>
             </Grid>
 
-            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
-              Informations de la société
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Typography variant="h6" sx={{ color: "#1976d2" }}>
+                Informations de la société
+              </Typography>
+              {societeId && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setShowContactModal(true)}
+                  sx={{ ml: 2 }}
+                >
+                  Gérer les contacts
+                </Button>
+              )}
+            </Box>
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -2566,6 +2590,22 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ✅ Modal de gestion des contacts de société */}
+      {societeId && (
+        <ContactSocieteModal
+          open={showContactModal}
+          onClose={() => setShowContactModal(false)}
+          societeId={societeId}
+          societeName={societeName}
+          onContactChange={() => {
+            // Recharger les données du chantier après modification des contacts
+            if (onUpdate) {
+              onUpdate();
+            }
+          }}
+        />
+      )}
     </Box>
   );
 };

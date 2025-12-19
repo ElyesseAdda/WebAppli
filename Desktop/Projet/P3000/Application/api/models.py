@@ -55,7 +55,38 @@ class Societe(models.Model):
     
     def __str__(self):
         return self.nom_societe
+
+class ContactSociete(models.Model):
+    """
+    Modèle pour gérer les contacts associés aux sociétés.
+    Permet d'avoir plusieurs contacts par société.
+    """
+    CIVILITE_CHOICES = [
+        ('', ''),
+        ('M.', 'Monsieur'),
+        ('Mme', 'Madame'),
+        ('Mlle', 'Mademoiselle'),
+    ]
     
+    societe = models.ForeignKey(Societe, on_delete=models.CASCADE, related_name='contacts')
+    civilite = models.CharField(max_length=10, choices=CIVILITE_CHOICES, blank=True, default='', verbose_name="Civilité")
+    nom = models.CharField(max_length=100, verbose_name="Nom")
+    prenom = models.CharField(max_length=100, blank=True, null=True, verbose_name="Prénom")
+    poste = models.CharField(max_length=100, blank=True, null=True, verbose_name="Poste")
+    email = models.EmailField(max_length=254, blank=True, null=True, verbose_name="Email")
+    telephone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Téléphone")
+    date_creation = models.DateTimeField(auto_now_add=True)
+    date_modification = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Contact Société"
+        verbose_name_plural = "Contacts Sociétés"
+        ordering = ['nom', 'prenom']
+
+    def __str__(self):
+        civilite_display = f"{self.civilite} " if self.civilite else ""
+        nom_complet = f"{self.prenom} {self.nom}".strip() if self.prenom else self.nom
+        return f"{civilite_display}{nom_complet} - {self.societe.nom_societe}"
 
 class Chantier(models.Model):
     chantier_name = models.CharField(max_length=255, unique=True)
@@ -553,6 +584,9 @@ class Devis(models.Model):
     parties_metadata = models.JSONField(default=dict, blank=True)  # Métadonnées des parties (numéros, ordre, etc.)
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
     
+    # Contact de la société (optionnel, remplace le client par défaut)
+    contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='devis', verbose_name="Contact société")
+    
     # NOUVEAUX CHAMPS pour le système de lignes spéciales amélioré
     lignes_speciales_v2 = models.JSONField(default=dict, blank=True, null=True, verbose_name="Lignes spéciales v2")
     version_systeme_lignes = models.IntegerField(default=1, choices=[(1, 'Ancien'), (2, 'Nouveau')], verbose_name="Version système lignes spéciales")
@@ -918,6 +952,9 @@ class Facture(models.Model):
     mois_situation = models.IntegerField(null=True, blank=True)  # 1-12 pour le mois
     annee_situation = models.IntegerField(null=True, blank=True)  # année de la situation
     
+    # Contact de la société (optionnel, remplace le client par défaut)
+    contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='factures', verbose_name="Contact société")
+    
     # NOUVEAUX CHAMPS pour les coûts estimés
     cout_estime_main_oeuvre = models.DecimalField(
         max_digits=10, 
@@ -1038,6 +1075,9 @@ class Situation(models.Model):
     delai_paiement = models.IntegerField(default=45,null=True,blank=True)
     montant_reel_ht = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     date_paiement_reel = models.DateField(null=True, blank=True)
+    
+    # Contact de la société (optionnel, remplace le client par défaut)
+    contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='situations', verbose_name="Contact société")
     
     # Montants calculés
     montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)

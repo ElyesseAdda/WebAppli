@@ -63,10 +63,14 @@ def preview_situation_v2(request, situation_id):
     Utilise parties_metadata comme preview_saved_devis_v2 pour un affichage cohérent
     """
     try:
-        situation = get_object_or_404(Situation, id=situation_id)
+        # ✅ Charger contact_societe avec select_related pour optimiser la requête
+        situation = get_object_or_404(Situation.objects.select_related('contact_societe', 'devis__contact_societe'), id=situation_id)
         devis = situation.devis
         chantier = situation.chantier
         societe = chantier.societe if chantier else None
+        
+        # ✅ Récupérer le contact_societe (priorité à celui de la situation, sinon celui du devis)
+        contact_societe = situation.contact_societe if hasattr(situation, 'contact_societe') and situation.contact_societe else (devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None)
         
         # Récupérer le client
         clients_devis = list(devis.client.all())
@@ -645,6 +649,27 @@ def preview_situation_v2(request, situation_id):
         # total_montant_avancement_avenants est déjà calculé précédemment
         montant_total_travaux_ht = total_montant_avancement_parties + total_montant_avancement_lignes_speciales + total_montant_avancement_avenants
         
+        # ✅ Créer un objet situation avec contact_societe pour le template
+        # Le template utilise situation.contact_societe et d'autres propriétés, donc on crée un objet qui a toutes ces propriétés
+        class SituationForTemplate:
+            def __init__(self, situation_obj, contact, montant_ht_mois_value):
+                self.id = situation_obj.id
+                self.numero = situation_obj.numero
+                self.mois = situation_obj.mois
+                self.annee = situation_obj.annee
+                self.numero_situation = situation_obj.numero_situation
+                self.date_creation = situation_obj.date_creation
+                self.statut = situation_obj.statut
+                self.date_validation = situation_obj.date_validation
+                self.contact_societe = contact
+                # Propriétés utilisées par le template
+                self.pourcentage_avancement = situation_obj.pourcentage_avancement
+                self.montant_total_cumul_ht = situation_obj.montant_total_cumul_ht
+                self.cumul_precedent = situation_obj.cumul_precedent
+                self.montant_ht_mois = montant_ht_mois_value
+        
+        situation_for_template = SituationForTemplate(situation, contact_societe, montant_ht_mois)
+        
         context = {
             'chantier': {
                 'nom': chantier.chantier_name,
@@ -669,7 +694,8 @@ def preview_situation_v2(request, situation_id):
                 'numero': devis.numero,
                 'nature_travaux': devis.nature_travaux,
             },
-            'situation': {
+            'situation': situation_for_template,
+            'situation_data': {
                 'id': situation.id,
                 'numero': situation.numero,
                 'mois': situation.mois,

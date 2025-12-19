@@ -34,9 +34,9 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
 from .models import (
-    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
@@ -240,6 +240,20 @@ class FactureViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
     
     def create(self, request, *args, **kwargs):
+        # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
+        data = request.data.copy()
+        if 'contact_societe' not in data or not data.get('contact_societe'):
+            devis_id = data.get('devis')
+            if devis_id:
+                try:
+                    devis = Devis.objects.get(id=devis_id)
+                    if devis.contact_societe:
+                        data['contact_societe'] = devis.contact_societe.id
+                except Devis.DoesNotExist:
+                    pass
+        
+        # Créer une nouvelle requête avec les données modifiées
+        request._full_data = data
         response = super().create(request, *args, **kwargs)
         if response.status_code == 201:
             # Calculer les coûts de la nouvelle facture
@@ -2958,6 +2972,10 @@ def create_devis(request):
                     'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0')))
                 }
                 
+                # ✅ Ajouter contact_societe si fourni
+                if 'contact_societe' in request.data and request.data['contact_societe']:
+                    devis_data['contact_societe_id'] = request.data['contact_societe']
+                
                 # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
                 # Si non fournie, le modèle utilisera auto_now_add=True
                 if 'date_creation' in request.data and request.data['date_creation']:
@@ -3018,6 +3036,10 @@ def create_devis(request):
                     'cout_estime_main_oeuvre': Decimal(str(request.data.get('cout_estime_main_oeuvre', '0'))),
                     'cout_estime_materiel': Decimal(str(request.data.get('cout_estime_materiel', '0')))
                 }
+                
+                # ✅ Ajouter contact_societe si fourni
+                if 'contact_societe' in request.data and request.data['contact_societe']:
+                    devis_data['contact_societe_id'] = request.data['contact_societe']
                 
                 # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
                 # Si non fournie, le modèle utilisera auto_now_add=True
@@ -3539,20 +3561,23 @@ def create_facture(request):
                 'error': 'Une facture existe déjà pour ce devis'
             }, status=400)
         
-        # Créer la facture
-        facture = Facture.objects.create(
-            numero=request.data.get('numero'),
-            devis=devis,
-            date_echeance=request.data.get('date_echeance'),
-            mode_paiement=request.data.get('mode_paiement'),
-            # Les champs suivants seront automatiquement remplis par la méthode save()
-            # price_ht = devis.price_ht
-            # price_ttc = devis.price_ttc
-            # chantier = devis.chantier
+        # ✅ Préparer les données de la facture avec contact_societe depuis le devis
+        facture_data = {
+            'numero': request.data.get('numero'),
+            'devis': devis,
+            'date_echeance': request.data.get('date_echeance'),
+            'mode_paiement': request.data.get('mode_paiement'),
             # Transférer les coûts estimés du devis
-            cout_estime_main_oeuvre=devis.cout_estime_main_oeuvre,
-            cout_estime_materiel=devis.cout_estime_materiel
-        )
+            'cout_estime_main_oeuvre': devis.cout_estime_main_oeuvre,
+            'cout_estime_materiel': devis.cout_estime_materiel
+        }
+        
+        # ✅ Copier contact_societe depuis le devis si disponible
+        if devis.contact_societe:
+            facture_data['contact_societe'] = devis.contact_societe
+        
+        # Créer la facture
+        facture = Facture.objects.create(**facture_data)
 
         # Sérialiser la réponse
         serializer = FactureSerializer(facture)
@@ -3575,14 +3600,20 @@ def preview_facture(request, facture_id):
     selon le système utilisé par le devis (ancien ou nouveau)
     """
     try:
+        # ✅ Charger contact_societe avec select_related pour optimiser la requête
         facture = Facture.objects.select_related(
             'devis',
             'devis__chantier',
             'devis__chantier__societe',
-            'devis__chantier__societe__client_name'
+            'devis__chantier__societe__client_name',
+            'contact_societe',
+            'devis__contact_societe'
         ).get(id=facture_id)
         
         devis = facture.devis
+        
+        # ✅ Récupérer le contact_societe (priorité à celui de la facture, sinon celui du devis)
+        contact_societe = facture.contact_societe if hasattr(facture, 'contact_societe') and facture.contact_societe else (devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None)
         
         # Détecter si le devis utilise le nouveau système
         from .Devis_views import is_new_system_devis
@@ -3770,8 +3801,21 @@ def preview_facture(request, facture_id):
         tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
         montant_ttc = total_ht + tva  # Changé de total_ttc à montant_ttc
 
+        # ✅ Créer un objet facture avec contact_societe pour le template
+        class FactureForTemplate:
+            def __init__(self, facture_obj, contact):
+                self.id = facture_obj.id
+                self.numero = facture_obj.numero
+                self.date_creation = facture_obj.date_creation
+                self.date_echeance = facture_obj.date_echeance
+                self.date_paiement = facture_obj.date_paiement
+                self.state_facture = facture_obj.state_facture
+                self.contact_societe = contact
+        
+        facture_for_template = FactureForTemplate(facture, contact_societe)
+
         context = {
-            'facture': facture,
+            'facture': facture_for_template,
             'devis': devis,
             'chantier': chantier,
             'societe': societe,
@@ -3800,16 +3844,22 @@ def preview_facture_v2(request, facture_id):
     try:
         from .Devis_views import build_inline_style
         
+        # ✅ Charger contact_societe avec select_related pour optimiser la requête
         facture = Facture.objects.select_related(
             'devis',
             'devis__chantier',
             'devis__chantier__societe',
-            'devis__chantier__societe__client_name'
+            'devis__chantier__societe__client_name',
+            'contact_societe',
+            'devis__contact_societe'
         ).get(id=facture_id)
         
         devis = facture.devis
         chantier = devis.chantier
         societe = chantier.societe if chantier else None
+        
+        # ✅ Récupérer le contact_societe (priorité à celui de la facture, sinon celui du devis)
+        contact_societe = facture.contact_societe if hasattr(facture, 'contact_societe') and facture.contact_societe else (devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None)
         
         # Priorité au client directement associé au devis, sinon utiliser celui de la société
         clients_devis = list(devis.client.all())
@@ -4113,8 +4163,21 @@ def preview_facture_v2(request, facture_id):
         tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
         montant_ttc = total_ht + tva
 
+        # ✅ Créer un objet facture avec contact_societe pour le template
+        class FactureForTemplate:
+            def __init__(self, facture_obj, contact):
+                self.id = facture_obj.id
+                self.numero = facture_obj.numero
+                self.date_creation = facture_obj.date_creation
+                self.date_echeance = facture_obj.date_echeance
+                self.date_paiement = facture_obj.date_paiement
+                self.state_facture = facture_obj.state_facture
+                self.contact_societe = contact
+        
+        facture_for_template = FactureForTemplate(facture, contact_societe)
+
         context = {
-            'facture': facture,
+            'facture': facture_for_template,
             'devis': devis,
             'chantier': chantier,
             'societe': societe,
@@ -5453,21 +5516,28 @@ def create_facture_cie(request):
             
        
 
-        # Créer la facture CIE
-        facture_cie = Facture.objects.create(
-            numero=cie_number,
-            devis=devis,
-            chantier_id=chantier_id,
-            type_facture='cie',
-            price_ht=devis.price_ht,
-            price_ttc=devis.price_ttc,
-            designation=designation,
-            mois_situation=mois,
-            annee_situation=annee,
+        # ✅ Préparer les données de la facture CIE avec contact_societe depuis le devis
+        facture_cie_data = {
+            'numero': cie_number,
+            'devis': devis,
+            'chantier_id': chantier_id,
+            'type_facture': 'cie',
+            'price_ht': devis.price_ht,
+            'price_ttc': devis.price_ttc,
+            'designation': designation,
+            'mois_situation': mois,
+            'annee_situation': annee,
             # Transférer les coûts estimés du devis
-            cout_estime_main_oeuvre=devis.cout_estime_main_oeuvre,
-            cout_estime_materiel=devis.cout_estime_materiel
-        )
+            'cout_estime_main_oeuvre': devis.cout_estime_main_oeuvre,
+            'cout_estime_materiel': devis.cout_estime_materiel
+        }
+        
+        # ✅ Copier contact_societe depuis le devis si disponible
+        if devis.contact_societe:
+            facture_cie_data['contact_societe'] = devis.contact_societe
+        
+        # Créer la facture CIE
+        facture_cie = Facture.objects.create(**facture_cie_data)
 
         return Response({
             "success": True,
@@ -5504,6 +5574,17 @@ class SituationViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         try:
             data = request.data.copy()
+            
+            # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
+            if 'contact_societe' not in data or not data.get('contact_societe'):
+                devis_id = data.get('devis')
+                if devis_id:
+                    try:
+                        devis = Devis.objects.get(id=devis_id)
+                        if devis.contact_societe:
+                            data['contact_societe'] = devis.contact_societe.id
+                    except Devis.DoesNotExist:
+                        pass
             
             # Utiliser le SituationCreateSerializer pour la validation et la création
             serializer = SituationCreateSerializer(data=data)
@@ -5725,8 +5806,17 @@ def create_situation(request):
     try:
         data = request.data.copy()
         
+        # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
+        if 'contact_societe' not in data or not data.get('contact_societe'):
+            devis_id = data.get('devis')
+            if devis_id:
+                try:
+                    devis = Devis.objects.get(id=devis_id)
+                    if devis.contact_societe:
+                        data['contact_societe'] = devis.contact_societe.id
+                except Devis.DoesNotExist:
+                    pass
 
-        
         # Utiliser le SituationCreateSerializer au lieu de SituationSerializer
         serializer = SituationCreateSerializer(data=data)
         if not serializer.is_valid():
@@ -8112,6 +8202,17 @@ class ContactSousTraitantViewSet(viewsets.ModelViewSet):
         sous_traitant_id = self.request.query_params.get('sous_traitant')
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        return queryset
+
+class ContactSocieteViewSet(viewsets.ModelViewSet):
+    queryset = ContactSociete.objects.all()
+    serializer_class = ContactSocieteSerializer
+    
+    def get_queryset(self):
+        queryset = ContactSociete.objects.all()
+        societe_id = self.request.query_params.get('societe')
+        if societe_id:
+            queryset = queryset.filter(societe_id=societe_id)
         return queryset
 
 class ContratSousTraitanceViewSet(viewsets.ModelViewSet):

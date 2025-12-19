@@ -6,7 +6,7 @@ from .models import (
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
-    SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
+    SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant, ContactSociete,
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale
@@ -109,7 +109,8 @@ class DevisSerializer(serializers.ModelSerializer):
             'tva_rate', 'nature_travaux', 'description', 'status',
             'chantier', 'appel_offres', 'chantier_name', 'client_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
-            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes'
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
+            'contact_societe'
         ]
         read_only_fields = ['date_creation', 'client']
 
@@ -346,8 +347,35 @@ class DevisSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance
+
+class ContactSocieteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactSociete
+        fields = [
+            'id',
+            'societe',
+            'civilite',
+            'nom',
+            'prenom',
+            'poste',
+            'email',
+            'telephone',
+            'date_creation',
+            'date_modification'
+        ]
+        extra_kwargs = {
+            'societe': {'required': True},
+            'civilite': {'required': False, 'allow_blank': True},
+            'nom': {'required': True},
+            'prenom': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'poste': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'email': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'telephone': {'required': False, 'allow_blank': True, 'allow_null': True},
+        }
     
 class SocieteSerializer(serializers.ModelSerializer):
+    contacts = ContactSocieteSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Societe
         fields = '__all__'
@@ -627,7 +655,7 @@ class FactureSerializer(serializers.ModelSerializer):
             'date_echeance', 'date_paiement', 'date_envoi', 'delai_paiement', 
             'mode_paiement', 'devis', 'price_ht', 'price_ttc', 'chantier', 
             'chantier_name', 'devis_numero', 'type_facture', 'designation',
-            'cout_estime_main_oeuvre', 'cout_estime_materiel'
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'contact_societe'
         ]
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 
@@ -990,6 +1018,11 @@ class SituationCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
+            # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
+            if 'contact_societe' not in validated_data or validated_data.get('contact_societe') is None:
+                devis = validated_data.get('devis')
+                if devis and hasattr(devis, 'contact_societe') and devis.contact_societe:
+                    validated_data['contact_societe'] = devis.contact_societe
             return super().create(validated_data)
         except Exception as e:
             print(f"Erreur lors de la création: {str(e)}")

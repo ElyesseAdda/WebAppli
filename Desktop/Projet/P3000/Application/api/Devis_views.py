@@ -305,7 +305,8 @@ def preview_saved_devis_v2(request, devis_id):
     Utilise parties_metadata comme preview_devis_v2 pour un affichage cohérent
     """
     try:
-        devis = get_object_or_404(Devis, id=devis_id)
+        # ✅ Charger contact_societe avec select_related pour optimiser la requête
+        devis = get_object_or_404(Devis.objects.select_related('contact_societe'), id=devis_id)
         
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
         if devis.devis_chantier and devis.appel_offres:
@@ -330,6 +331,9 @@ def preview_saved_devis_v2(request, devis_id):
                 client = clients_devis[0]
             else:
                 client = societe.client_name if societe else None
+
+        # ✅ Récupérer le contact_societe si défini dans le devis
+        contact_societe = devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None
 
         total_ht = Decimal('0')
         parties_data = []
@@ -973,6 +977,16 @@ def preview_devis_v2(request):
             tva = total_ht * (tva_rate / Decimal('100'))
             montant_ttc = total_ht + tva
 
+            # ✅ Récupérer le contact_societe si fourni dans les données
+            contact_societe = None
+            contact_societe_id = devis_data.get('contact_societe')
+            if contact_societe_id:
+                try:
+                    from .models import ContactSociete
+                    contact_societe = ContactSociete.objects.get(id=contact_societe_id)
+                except ContactSociete.DoesNotExist:
+                    contact_societe = None
+            
             # Créer un objet devis temporaire pour le template
             class TempDevis:
                 def __init__(self, data):
@@ -980,6 +994,8 @@ def preview_devis_v2(request):
                     self.date_creation = data.get('date_creation')
                     self.nature_travaux = data.get('nature_travaux', '')
                     self.tva_rate = float(tva_rate)
+                    # ✅ Ajouter contact_societe au devis temporaire
+                    self.contact_societe = contact_societe
 
             temp_devis = TempDevis(devis_data)
 

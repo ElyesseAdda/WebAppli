@@ -578,12 +578,23 @@
 
              <div class="contact-info">
          <h3>Contact:</h3>
-         <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.name }} {{ client.surname }}</p>
-         {% if client.poste %}<p>Poste: {{ client.poste }}</p>{% endif %}
-         <p class="client-mail">Mail: {{ client.client_mail }}</p>
-         <p>
-           Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
-         </p>
+         {% if facture.contact_societe %}
+           {# Utiliser le contact de la société si disponible #}
+           <p>{% if facture.contact_societe.civilite %}{{ facture.contact_societe.civilite }} {% endif %}{% if facture.contact_societe.prenom %}{{ facture.contact_societe.prenom }} {% endif %}{{ facture.contact_societe.nom }}</p>
+           {% if facture.contact_societe.poste %}<p>Poste: {{ facture.contact_societe.poste }}</p>{% endif %}
+           {% if facture.contact_societe.email %}<p class="client-mail">Mail: {{ facture.contact_societe.email }}</p>{% endif %}
+           {% if facture.contact_societe.telephone %}
+             <p>Tél: <span id="phone-number">{{ facture.contact_societe.telephone }}</span></p>
+           {% endif %}
+         {% else %}
+           {# Fallback sur le client par défaut #}
+           <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.name }} {{ client.surname }}</p>
+           {% if client.poste %}<p>Poste: {{ client.poste }}</p>{% endif %}
+           <p class="client-mail">Mail: {{ client.client_mail }}</p>
+           <p>
+             Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
+           </p>
+         {% endif %}
        </div>
     </div>
 

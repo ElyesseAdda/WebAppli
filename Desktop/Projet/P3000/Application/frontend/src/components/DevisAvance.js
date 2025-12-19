@@ -15,6 +15,7 @@ import ClientInfoModal from './ClientInfoModal';
 import SocieteInfoModal from './SocieteInfoModal';
 import SelectSocieteModal from './SelectSocieteModal';
 import SelectClientModal from './SelectClientModal';
+import ContactSocieteModal from './ContactSocieteModal';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
 
@@ -191,6 +192,12 @@ const DevisAvance = () => {
   const [selectedClientSocietes, setSelectedClientSocietes] = useState(null);
   const [prefilledClientData, setPrefilledClientData] = useState(null);
   const [prefilledSocieteData, setPrefilledSocieteData] = useState(null);
+  
+  // États pour la gestion des contacts de société
+  const [contactsSociete, setContactsSociete] = useState([]);
+  const [selectedContactId, setSelectedContactId] = useState(null);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [currentSocieteId, setCurrentSocieteId] = useState(null);
 
   // États pour la gestion du devis
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
@@ -353,6 +360,24 @@ const DevisAvance = () => {
     }
   };
 
+  // Charger les contacts d'une société
+  const fetchContactsSociete = async (societeId) => {
+    if (!societeId) {
+      setContactsSociete([]);
+      setCurrentSocieteId(null);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/contacts-societe/?societe=${societeId}`);
+      setContactsSociete(response.data);
+      setCurrentSocieteId(societeId);
+    } catch (error) {
+      console.error('Erreur lors du chargement des contacts:', error);
+      setContactsSociete([]);
+      setCurrentSocieteId(societeId);
+    }
+  };
+
   // Gérer la sélection d'un chantier
   const handleChantierSelection = async (chantierId) => {
     setSelectedChantierId(chantierId);
@@ -423,6 +448,8 @@ const DevisAvance = () => {
               codepostal_societe: chantierData.societe.codepostal_societe || '',
               ville_societe: chantierData.societe.ville_societe || ''
             });
+            // Charger les contacts de la société
+            await fetchContactsSociete(chantierData.societe.id);
             
             // Récupérer les informations du client
             if (chantierData.societe.client_name) {
@@ -458,6 +485,8 @@ const DevisAvance = () => {
               codepostal_societe: societeData.codepostal_societe || '',
               ville_societe: societeData.ville_societe || ''
             });
+            // Charger les contacts de la société
+            await fetchContactsSociete(chantierData.societe);
             
             if (societeData.client_name) {
               const clientId = typeof societeData.client_name === 'object' 
@@ -820,6 +849,9 @@ const DevisAvance = () => {
         rue_societe: societeData.rue_societe || "",
         codepostal_societe: societeData.codepostal_societe || "",
       };
+      
+      // Charger les contacts de la société
+      await fetchContactsSociete(societeId);
 
       // ✅ IMPORTANT : Préserver le devisType si on est en mode "chantier" (appel d'offres)
       // et s'assurer que selectedChantierId reste null pour les appels d'offres
@@ -853,6 +885,9 @@ const DevisAvance = () => {
 
       setSelectedSocieteId(societeId);
       setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
+      
+      // Charger les contacts de la société
+      await fetchContactsSociete(societeId);
       
       // ✅ Pour les appels d'offres, s'assurer que selectedChantierId reste null
       // et que devisType reste "chantier"
@@ -2605,7 +2640,8 @@ const DevisAvance = () => {
         devisData: {
           ...devisData,
           price_ht: total_ht,
-          price_ttc: montant_ttc
+          price_ttc: montant_ttc,
+          contact_societe: selectedContactId || null, // Ajouter le contact sélectionné
         },
         selectedChantierId: finalChantierId,
         clientIds: finalClientId ? [finalClientId] : [],
@@ -2919,6 +2955,15 @@ const DevisAvance = () => {
               societe={societe} 
               formatPhoneNumber={formatPhoneNumber}
               isEditable={selectedChantierId === -1}
+              contacts={contactsSociete}
+              selectedContactId={selectedContactId}
+              societeId={currentSocieteId || selectedSocieteId || (pendingChantierData.societe?.id)}
+              onContactSelect={(contactId) => {
+                setSelectedContactId(contactId || null);
+              }}
+              onOpenContactModal={() => {
+                setShowContactModal(true);
+              }}
               onClientChange={(updatedClient) => {
                 setClient(updatedClient);
                 // Mettre à jour pendingChantierData avec tous les champs (incluant civilite et poste)
@@ -3220,7 +3265,8 @@ const DevisAvance = () => {
                       devisData: {
                         ...devisData,
                         price_ht: total_ht,
-                        price_ttc: montant_ttc
+                        price_ttc: montant_ttc,
+                        contact_societe: selectedContactId || null, // Ajouter le contact sélectionné
                       },
                       selectedChantierId,
                       clientIds: finalClientId ? [finalClientId] : []
@@ -3399,6 +3445,21 @@ const DevisAvance = () => {
         }}
         societeId={selectedSocieteId}
         chantierData={pendingChantierData.chantier}
+      />
+
+      {/* Modal de gestion des contacts de société */}
+      <ContactSocieteModal
+        open={showContactModal}
+        onClose={() => setShowContactModal(false)}
+        societeId={currentSocieteId || selectedSocieteId || (pendingChantierData.societe?.id)}
+        societeName={societe.nom_societe || ''}
+        onContactChange={() => {
+          // Recharger les contacts après modification
+          const societeIdToFetch = currentSocieteId || selectedSocieteId || (pendingChantierData.societe?.id);
+          if (societeIdToFetch) {
+            fetchContactsSociete(societeIdToFetch);
+          }
+        }}
       />
 
       {/* PieChart flottant pour la répartition des coûts */}
