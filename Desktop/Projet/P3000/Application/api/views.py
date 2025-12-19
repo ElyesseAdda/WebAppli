@@ -9007,9 +9007,10 @@ class RecapFinancierChantierAPIView(APIView):
         
         for facture in factures_qs:
             # Paiements effectués dans la période
+            # Filtrer par date de réception de la facture (pas la date de paiement réelle)
             for paiement in facture.paiements.all():
-                # Filtrer par date de paiement réelle
-                if not date_debut or not date_fin or (date_debut <= paiement.date_paiement_reel <= date_fin):
+                # Filtrer par date de réception de la facture
+                if not date_debut or not date_fin or (date_debut <= facture.date_reception <= date_fin):
                     paiements_periode.append(paiement)
             
             # Factures avec échéance dans la période et pas entièrement payées
@@ -9185,7 +9186,7 @@ class RecapFinancierChantierAPIView(APIView):
             return {
                 "id": paiement.id,
                 "numero": f"{getattr(paiement.facture.sous_traitant, 'entreprise', str(paiement.facture.sous_traitant))}-{paiement.facture.numero_facture}",
-                "date": paiement.date_paiement_reel,
+                "date": paiement.facture.date_reception,  # Utiliser la date de réception de la facture
                 "montant": float(paiement.montant_paye),
                 "statut": "payé",
                 "sous_traitant": getattr(paiement.facture.sous_traitant, 'entreprise', None),
