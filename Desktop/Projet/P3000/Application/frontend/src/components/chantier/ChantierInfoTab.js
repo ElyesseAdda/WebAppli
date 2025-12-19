@@ -1045,7 +1045,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   fontFamily: "Roboto Slab, serif",
                 }}
               >
-                Nom client :
+                Maître d'œuvre :
               </Typography>
               <Typography
                 variant="h6"
@@ -1071,7 +1071,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   fontFamily: "Roboto Slab, serif",
                 }}
               >
-                Société :
+                Maîtrise d'ouvrage :
               </Typography>
               <Typography
                 variant="h6"
@@ -2254,7 +2254,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
               <Typography variant="h6" sx={{ color: "#1976d2" }}>
-                Informations de la société
+                Informations de la maîtrise d'ouvrage
               </Typography>
               {societeId && (
                 <Button
@@ -2271,7 +2271,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Nom de la société"
+                  label="Nom de la maîtrise d'ouvrage"
                   value={editData.societe.nom}
                   onChange={(e) =>
                     setEditData({
@@ -2387,7 +2387,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             </Grid>
 
             <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
-              Informations du client
+              Informations du maître d'œuvre
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
