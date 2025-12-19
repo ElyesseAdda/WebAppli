@@ -32,7 +32,16 @@ html {
   transform: translateX(0);
   transition: transform 0.35s ease;
   z-index: 900;
+  overflow-x: hidden;
   overflow-y: auto;
+  /* Masquer la barre de défilement mais garder le scroll fonctionnel */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE et Edge */
+}
+
+/* Masquer la barre de défilement pour Chrome, Safari et Opera */
+.slide-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .slide-bar.hidden {

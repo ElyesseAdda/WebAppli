@@ -66,8 +66,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           {
             label: "Créer document",
             children: [
-              { label: "Devis", to: "/CreationDevis" },
-              { label: "Devis Avancé", to: "/DevisAvance" },
+              { label: "Devis", to: "/DevisAvance" },
               { label: "Bon de commande", to: "/BonCommande" },
             ],
             icon: MdCreateNewFolder,
@@ -84,15 +83,8 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         ],
       },
       {
-        key: "drive",
-        label: "Drive",
-        icon: SiGoogledrive,
-        href: "https://myp3000app.com/drive",
-        external: true,
-      },
-      {
         key: "drive_v2",
-        label: "Drive V2",
+        label: "Drive",
         icon: SiGoogledrive,
         to: "/drive-v2",
       },
