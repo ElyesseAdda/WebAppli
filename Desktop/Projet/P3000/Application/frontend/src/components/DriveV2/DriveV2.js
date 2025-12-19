@@ -15,7 +15,6 @@ import {
   CircularProgress,
   Breadcrumbs,
   Link,
-  Chip,
   Alert,
   Snackbar,
 } from '@mui/material';
@@ -340,12 +339,11 @@ const DriveV2 = () => {
       {/* Header */}
       <DriveHeader elevation={2}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', flex: 1, minWidth: 0, overflow: 'hidden', maxWidth: '100%' }}>
-          {/* Titre et Badge */}
+          {/* Titre */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
             <Typography variant="h5" component="h1">
-              Drive V2
+              Drive
             </Typography>
-            <Chip label="Beta" color="primary" size="small" />
           </Box>
 
           {/* Breadcrumb */}
@@ -372,18 +370,29 @@ const DriveV2 = () => {
                       cursor: 'pointer',
                       textDecoration: 'none',
                       padding: '4px 8px',
-                      borderRadius: '4px',
-                      backgroundColor: isDragOver ? theme.palette.action.selected : 'transparent',
-                      border: isDragOver ? `2px dashed ${theme.palette.primary.main}` : '2px solid transparent',
+                      borderRadius: '6px',
+                      backgroundColor: isDragOver 
+                        ? theme.palette.success.light + '20' 
+                        : 'transparent',
+                      border: isDragOver 
+                        ? `2px solid ${theme.palette.success.main}` 
+                        : '2px solid transparent',
+                      boxShadow: isDragOver 
+                        ? `0 2px 8px ${theme.palette.success.main}40` 
+                        : 'none',
+                      transform: isDragOver ? 'scale(1.05)' : 'scale(1)',
                       transition: 'all 0.2s ease-in-out',
                       minWidth: 0,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                       maxWidth: '100%',
+                      fontWeight: isDragOver ? 600 : 400,
                       '&:hover': {
                         textDecoration: 'underline',
-                        backgroundColor: isDragOver ? theme.palette.action.selected : theme.palette.action.hover,
+                        backgroundColor: isDragOver 
+                          ? theme.palette.success.light + '30' 
+                          : theme.palette.action.hover,
                       },
                     })}
                   >

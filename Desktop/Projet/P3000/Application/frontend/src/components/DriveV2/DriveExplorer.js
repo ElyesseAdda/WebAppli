@@ -96,22 +96,6 @@ const SelectionBox = styled(Box)(({ theme }) => ({
   zIndex: 10,
 }));
 
-const DragIndicator = styled(Box)(({ theme }) => ({
-  position: 'fixed',
-  backgroundColor: theme.palette.primary.main,
-  color: theme.palette.primary.contrastText,
-  padding: theme.spacing(1, 2),
-  borderRadius: theme.spacing(2),
-  boxShadow: theme.shadows[4],
-  pointerEvents: 'none',
-  zIndex: 2000,
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.spacing(1),
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-}));
 
 const ListHeader = styled(Paper)(({ theme }) => ({
   display: 'grid',
@@ -131,7 +115,7 @@ const ListHeader = styled(Paper)(({ theme }) => ({
   boxSizing: 'border-box',
 }));
 
-const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver }) => ({
+const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver, isDragging }) => ({
   display: 'grid',
   gridTemplateColumns: '1fr minmax(80px, 100px) minmax(120px, 150px) minmax(80px, 100px)',
   gap: theme.spacing(2),
@@ -153,6 +137,9 @@ const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver }) => (
   width: '100%',
   maxWidth: '100%',
   boxSizing: 'border-box',
+  opacity: isDragging ? 0.5 : 1,
+  transform: isDragging ? 'scale(0.98)' : 'scale(1)',
+  transition: 'all 0.2s ease-in-out',
   '&:hover': {
     backgroundColor: isDragOver
       ? theme.palette.success.light + '40'
@@ -198,7 +185,6 @@ const DriveExplorer = ({
   const [justFinishedSelection, setJustFinishedSelection] = useState(false);
   const [draggedItems, setDraggedItems] = useState(null);
   const [dragOverFolder, setDragOverFolder] = useState(null);
-  const [dragPosition, setDragPosition] = useState(null);
   const [mouseDownPos, setMouseDownPos] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
@@ -381,12 +367,6 @@ const DriveExplorer = ({
       onDraggedItemsChange(itemsToDrag);
     }
     
-    // Position initiale de l'indicateur de drag
-    setDragPosition({
-      x: event.clientX + 10,
-      y: event.clientY + 10,
-    });
-    
     // Créer un effet visuel de drag
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -394,26 +374,9 @@ const DriveExplorer = ({
     }
   }, [selectedFiles, files, folders, onDraggedItemsChange]);
 
-  // Suivre la position du curseur pendant le drag (au niveau global)
-  useEffect(() => {
-    if (draggedItems && draggedItems.length > 0) {
-      const handleDragGlobal = (event) => {
-        setDragPosition({
-          x: event.clientX + 10,
-          y: event.clientY + 10,
-        });
-      };
-
-      document.addEventListener('dragover', handleDragGlobal);
-      return () => {
-        document.removeEventListener('dragover', handleDragGlobal);
-      };
-    }
-  }, [draggedItems]);
 
   // Réinitialiser la position du drag à la fin
   const handleDragEnd = useCallback(() => {
-    setDragPosition(null);
     setDraggedItems(null);
     setIsDragging(false);
     
@@ -487,7 +450,6 @@ const DriveExplorer = ({
       await Promise.all(movePromises);
       setSelectedFiles(new Set());
       setDraggedItems(null);
-      setDragPosition(null);
       
       // Notifier le parent que le drag est terminé
       if (onDraggedItemsChange) {
@@ -498,7 +460,6 @@ const DriveExplorer = ({
     } catch (error) {
       alert(`Erreur lors du déplacement: ${error.message}`);
       setDraggedItems(null);
-      setDragPosition(null);
     }
   }, [draggedItems, onRefresh]);
 
@@ -799,10 +760,38 @@ const DriveExplorer = ({
     handleCloseContextMenu();
   };
 
+  // Vérifier si un dossier est protégé contre la suppression
+  const isProtectedFolder = (item) => {
+    if (!item || item.type !== 'folder') return false;
+    
+    // Liste des dossiers protégés à la racine (noms normalisés avec underscores)
+    const protectedFolders = ['Agents', 'Appels_Offres', 'Chantiers', 'Historique'];
+    
+    // Vérifier si le nom correspond à un dossier protégé
+    if (!protectedFolders.includes(item.name)) {
+      return false;
+    }
+    
+    // Vérifier si le dossier est à la racine
+    // Un dossier est à la racine si son path est exactement "nom_du_dossier/" ou "nom_du_dossier"
+    const path = item.path || '';
+    const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
+    const isRootFolder = normalizedPath === item.name || normalizedPath === '';
+    
+    return isRootFolder;
+  };
+
   const handleDelete = async () => {
     if (!selectedItem) return;
 
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedItem.name} ?`)) {
+    // Vérifier si le dossier est protégé
+    if (isProtectedFolder(selectedItem)) {
+      alert(`Le dossier "${displayFilename(selectedItem.name)}" est protégé et ne peut pas être supprimé.`);
+      handleCloseContextMenu();
+      return;
+    }
+
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${displayFilename(selectedItem.name)} ?`)) {
       try {
         await onDeleteItem(selectedItem.path, selectedItem.type === 'folder');
         onRefresh();
@@ -1190,20 +1179,6 @@ const DriveExplorer = ({
         />
       )}
 
-      {/* Indicateur de drag avec nombre d'éléments */}
-      {dragPosition && draggedItems && draggedItems.length > 0 && (
-        <DragIndicator
-          sx={{
-            left: `${dragPosition.x}px`,
-            top: `${dragPosition.y}px`,
-          }}
-        >
-          <FolderIcon sx={{ fontSize: 20 }} />
-          <Typography variant="body2">
-            {draggedItems.length} élément{draggedItems.length > 1 ? 's' : ''}
-          </Typography>
-        </DragIndicator>
-      )}
       {/* En-tête */}
       <ListHeader elevation={0}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}>
@@ -1229,6 +1204,7 @@ const DriveExplorer = ({
           const folderItem = { ...folder, type: 'folder' };
           const isSelected = selectedFiles.has(folder.path);
           const isDragOverFolder = dragOverFolder === folder.path;
+          const isDragging = draggedItems?.some(item => item.path === folder.path) || false;
           
           return (
             <StyledListItem
@@ -1236,6 +1212,7 @@ const DriveExplorer = ({
               data-item-path={folder.path}
               isSelected={isSelected}
               isDragOver={isDragOverFolder}
+              isDragging={isDragging}
               draggable
               onDragStart={(e) => handleDragStart(e, folderItem)}
               onDragEnd={handleDragEnd}
@@ -1346,12 +1323,14 @@ const DriveExplorer = ({
         {files.map((file) => {
           const fileItem = { ...file, type: 'file' };
           const isSelected = selectedFiles.has(file.path);
+          const isDragging = draggedItems?.some(item => item.path === file.path) || false;
           
           return (
             <StyledListItem
               key={file.path}
               data-item-path={file.path}
               isSelected={isSelected}
+              isDragging={isDragging}
               draggable
               onDragStart={(e) => handleDragStart(e, fileItem)}
               onDragEnd={handleDragEnd}
@@ -1498,11 +1477,17 @@ const DriveExplorer = ({
             Déplacer {selectedFiles.size > 0 ? `(${selectedFiles.size})` : ''}
           </ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleDelete}>
+        <MenuItem 
+          onClick={handleDelete}
+          disabled={isProtectedFolder(selectedItem)}
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" color="error" />
           </ListItemIcon>
-          <ListItemText>Supprimer</ListItemText>
+          <ListItemText>
+            Supprimer
+            {isProtectedFolder(selectedItem) && ' (protégé)'}
+          </ListItemText>
         </MenuItem>
       </Menu>
 
