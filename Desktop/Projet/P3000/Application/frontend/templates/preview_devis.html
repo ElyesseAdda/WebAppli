@@ -765,6 +765,12 @@
                 phoneElement.textContent = formatted;
             }
         }
+
+        // Retirer le symbole € de la colonne Prix unitaire
+        const prixElements = document.querySelectorAll('.prixtableau');
+        prixElements.forEach(element => {
+            element.textContent = element.textContent.replace(/\s*€/g, '').trim();
+        });
     });
     </script>
   </body>

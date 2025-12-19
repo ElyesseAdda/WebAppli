@@ -945,6 +945,12 @@
             }
         }
 
+        // Retirer le symbole € de la colonne Prix unitaire
+        const prixElements = document.querySelectorAll('.prixtableau');
+        prixElements.forEach(element => {
+            element.textContent = element.textContent.replace(/\s*€/g, '').trim();
+        });
+
         // Appliquer les styles dynamiques transmis via data-style
         document.querySelectorAll('[data-style]').forEach((element) => {
             const styleValue = element.getAttribute('data-style');
