@@ -25,6 +25,7 @@ import {
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
+import DatePaiementFactureModal from "./DatePaiementFactureModal";
 import RecapFournisseur from "./RecapFournisseur";
 import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon } from "@mui/icons-material";
 import axios from "axios";
@@ -57,6 +58,10 @@ const TableauFournisseur = () => {
   // État pour le modal de confirmation de remplissage automatique
   const [confirmFillModalOpen, setConfirmFillModalOpen] = useState(false);
   const [pendingFillAction, setPendingFillAction] = useState(null); // {mois, fournisseur}
+  
+  // État pour le modal de date de paiement de facture
+  const [datePaiementFactureModalOpen, setDatePaiementFactureModalOpen] = useState(false);
+  const [currentFacturePaiement, setCurrentFacturePaiement] = useState(null); // {mois, fournisseur, chantierId, factureIndex}
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -577,8 +582,8 @@ const TableauFournisseur = () => {
     handleCloseFactureModal();
   };
 
-  // Marquer une facture comme payée
-  const handleMarkFactureAsPaid = async (mois, fournisseur, chantierId, factureIndex) => {
+  // Ouvrir le modal pour saisir la date de paiement de la facture
+  const handleMarkFactureAsPaid = (mois, fournisseur, chantierId, factureIndex) => {
     const key = `${mois}_${fournisseur}_${chantierId}`;
     const currentFactures = editedFactures[key] || [];
     
@@ -593,8 +598,26 @@ const TableauFournisseur = () => {
       return;
     }
 
-    // Date du jour
-    const dateDuJour = new Date().toISOString().split('T')[0];
+    // Ouvrir le modal pour saisir la date de paiement
+    setCurrentFacturePaiement({ mois, fournisseur, chantierId, factureIndex });
+    setDatePaiementFactureModalOpen(true);
+  };
+
+  // Sauvegarder la facture avec la date de paiement saisie
+  const handleSaveFacturePaiement = (datePaiementFacture) => {
+    if (!currentFacturePaiement) {
+      return;
+    }
+
+    const { mois, fournisseur, chantierId, factureIndex } = currentFacturePaiement;
+    const key = `${mois}_${fournisseur}_${chantierId}`;
+    const currentFactures = editedFactures[key] || [];
+    const facture = currentFactures[factureIndex];
+    
+    if (!facture) {
+      return;
+    }
+
     const montantFacture = parseFloat(facture.montant_facture) || 0;
 
     // Récupérer le montant payé actuel
@@ -616,7 +639,7 @@ const TableauFournisseur = () => {
     updatedFactures[factureIndex] = {
       ...updatedFactures[factureIndex],
       payee: true,
-      date_paiement_facture: dateDuJour
+      date_paiement_facture: datePaiementFacture
     };
 
     // Mettre à jour l'état local
@@ -633,6 +656,10 @@ const TableauFournisseur = () => {
 
     // Sauvegarder avec le nouveau montant payé et les factures mises à jour
     savePaiement(mois, fournisseur, chantierId, nouveauMontantPaye, updatedFactures, currentData?.date_paiement || null, currentData?.date_envoi || null);
+    
+    // Fermer le modal
+    setDatePaiementFactureModalOpen(false);
+    setCurrentFacturePaiement(null);
   };
 
   // Supprimer une entrée d'historique de modification
@@ -1774,6 +1801,22 @@ const TableauFournisseur = () => {
             }}
             onSave={handleSaveDateEnvoi}
             dateEnvoi={currentEnvoi?.dateEnvoi || null}
+          />
+
+          {/* Modal pour saisir la date de paiement de la facture */}
+          <DatePaiementFactureModal
+            open={datePaiementFactureModalOpen}
+            onClose={() => {
+              setDatePaiementFactureModalOpen(false);
+              setCurrentFacturePaiement(null);
+            }}
+            onSave={handleSaveFacturePaiement}
+            datePaiement={currentFacturePaiement ? (() => {
+              const key = `${currentFacturePaiement.mois}_${currentFacturePaiement.fournisseur}_${currentFacturePaiement.chantierId}`;
+              const factures = editedFactures[key] || [];
+              const facture = factures[currentFacturePaiement.factureIndex];
+              return facture?.date_paiement_facture || null;
+            })() : null}
           />
 
           {/* Modal de confirmation pour le remplissage automatique */}
