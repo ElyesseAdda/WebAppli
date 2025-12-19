@@ -289,6 +289,8 @@ function ProduitSelectionTable({
         contact_type: selectedData.contact_type,
         contact_agent: selectedData.contact_agent,
         contact_sous_traitant: selectedData.contact_sous_traitant,
+        contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
+        is_representant: selectedData.is_representant,
         lignes: selectedItems,
         montant_total: parseFloat(
           selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)

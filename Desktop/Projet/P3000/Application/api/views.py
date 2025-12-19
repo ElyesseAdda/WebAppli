@@ -4481,7 +4481,7 @@ def bon_commande_view(request):
 
 
 class BonCommandeViewSet(viewsets.ModelViewSet):
-    queryset = BonCommande.objects.select_related('chantier', 'emetteur', 'contact_agent', 'contact_sous_traitant').all()
+    queryset = BonCommande.objects.select_related('chantier', 'emetteur', 'contact_agent', 'contact_sous_traitant', 'contact_sous_traitant_contact').all()
     serializer_class = BonCommandeSerializer
 
     def create(self, request, *args, **kwargs):
@@ -4509,6 +4509,9 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     
                 if request.data.get('contact_sous_traitant'):
                     bon_commande_data['contact_sous_traitant_id'] = request.data.get('contact_sous_traitant')
+                    # Si un contact spécifique est fourni (et ce n'est pas le représentant)
+                    if request.data.get('contact_sous_traitant_contact') and not request.data.get('is_representant', False):
+                        bon_commande_data['contact_sous_traitant_contact_id'] = request.data.get('contact_sous_traitant_contact')
                     
                 if request.data.get('date_creation_personnalisee'):
                     bon_commande_data['date_creation_personnalisee'] = request.data.get('date_creation_personnalisee')
@@ -4665,6 +4668,7 @@ def preview_bon_commande(request):
         # Récupérer les informations de contact
         contact_agent = None
         contact_sous_traitant = None
+        contact_sous_traitant_contact = None
         contact_type = bon_commande_data.get('contact_type')
         
         if contact_type == 'agent' and bon_commande_data.get('contact_agent'):
@@ -4676,8 +4680,15 @@ def preview_bon_commande(request):
         elif contact_type == 'sous_traitant' and bon_commande_data.get('contact_sous_traitant'):
             try:
                 contact_sous_traitant = get_object_or_404(SousTraitant, id=bon_commande_data['contact_sous_traitant'])
+                # Si un contact spécifique est fourni (et ce n'est pas le représentant)
+                if bon_commande_data.get('contact_sous_traitant_contact') and not bon_commande_data.get('is_representant', False):
+                    try:
+                        contact_sous_traitant_contact = get_object_or_404(ContactSousTraitant, id=bon_commande_data['contact_sous_traitant_contact'])
+                    except:
+                        contact_sous_traitant_contact = None
             except:
                 contact_sous_traitant = None
+                contact_sous_traitant_contact = None
 
         # Date de création personnalisée
         date_creation_personnalisee = bon_commande_data.get('date_creation_personnalisee')
@@ -4737,6 +4748,7 @@ def preview_bon_commande(request):
             'contact_type': contact_type,
             'contact_agent': contact_agent,
             'contact_sous_traitant': contact_sous_traitant,
+            'contact_sous_traitant_contact': contact_sous_traitant_contact,
             'date_creation_personnalisee': date_creation_personnalisee,
         }
         
@@ -4796,11 +4808,13 @@ def create_bon_commande(request):
             
         if data.get('contact_agent'):
             bon_commande_data['contact_agent_id'] = data['contact_agent']
-            print(f"DEBUG - Ajout contact_agent_id: {data['contact_agent']}")
             
         if data.get('contact_sous_traitant'):
             bon_commande_data['contact_sous_traitant_id'] = data['contact_sous_traitant']
-            print(f"DEBUG - Ajout contact_sous_traitant_id: {data['contact_sous_traitant']}")
+            
+            # Si un contact spécifique est fourni (et ce n'est pas le représentant)
+            if data.get('contact_sous_traitant_contact') and not data.get('is_representant', False):
+                bon_commande_data['contact_sous_traitant_contact_id'] = data['contact_sous_traitant_contact']
         
         # LOG: Données finales avant création
         print("DEBUG create_bon_commande - DONNÉES FINALES BONCOMMANDE:")
@@ -4848,7 +4862,7 @@ def create_bon_commande(request):
 def preview_saved_bon_commande(request, id):
     try:
         bon_commande = get_object_or_404(
-            BonCommande.objects.select_related('contact_agent', 'contact_sous_traitant', 'chantier', 'emetteur'), 
+            BonCommande.objects.select_related('contact_agent', 'contact_sous_traitant', 'contact_sous_traitant_contact', 'chantier', 'emetteur'), 
             id=id
         )
         lignes = bon_commande.lignes.all()
@@ -4864,10 +4878,10 @@ def preview_saved_bon_commande(request, id):
         print(f"DEBUG preview_saved - contact_type: {bon_commande.contact_type}")
         print(f"DEBUG preview_saved - contact_agent: {bon_commande.contact_agent}")
         print(f"DEBUG preview_saved - contact_sous_traitant: {bon_commande.contact_sous_traitant}")
-        
         # Si contact_agent ou contact_sous_traitant est None, essayer de récupérer depuis l'agent principal
         contact_agent = bon_commande.contact_agent
         contact_sous_traitant = bon_commande.contact_sous_traitant
+        contact_sous_traitant_contact = bon_commande.contact_sous_traitant_contact
         
         # Note: Le champ agent n'existe plus, on utilise seulement les contacts spécifiques
         # Si pas de contact spécifique, on laisse vide
@@ -4920,6 +4934,7 @@ def preview_saved_bon_commande(request, id):
             'contact_type': bon_commande.contact_type,
             'contact_agent': contact_agent,
             'contact_sous_traitant': contact_sous_traitant,
+            'contact_sous_traitant_contact': contact_sous_traitant_contact,
             'date_creation_personnalisee': bon_commande.date_creation_personnalisee or bon_commande.date_creation.date(),
         }
         

@@ -1572,6 +1572,7 @@ class BonCommande(models.Model):
     contact_type = models.CharField(max_length=20, choices=CONTACT_TYPE_CHOICES, null=True, blank=True)
     contact_agent = models.ForeignKey('Agent', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande_contact')
     contact_sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande_contact')
+    contact_sous_traitant_contact = models.ForeignKey('ContactSousTraitant', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande_contact', help_text="Contact spécifique du sous-traitant (si différent du représentant)")
     
     # Date de création personnalisable (pour antidater)
     date_creation_personnalisee = models.DateField(null=True, blank=True, verbose_name="Date de création du document")

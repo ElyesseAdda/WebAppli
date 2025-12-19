@@ -73,7 +73,7 @@
         }
 
         .client-info {
-          line-height: 8px;
+          line-height: 7px;
 
           grid-area: 1 / 1 / 2 / 2;
           h3 {
@@ -294,15 +294,43 @@
     <div class="client-info">
       <h3>Contact qui réceptionne:</h3>
       {% if contact_type == 'agent' and contact_agent %}
-        <p>{{ contact_agent.name }} {{ contact_agent.surname }}</p>
+        <p>Mr {{ contact_agent.name }} {{ contact_agent.surname }}</p>
+        {% if contact_agent.email %}
+          <p>Mail: {{ contact_agent.email }}</p>
+        {% endif %}
         {% if contact_agent.phone_Number %}
           <p>Tél: {{ contact_agent.phone_Number|format_phone }}</p>
         {% endif %}
       {% elif contact_type == 'sous_traitant' and contact_sous_traitant %}
-        <p>{{ contact_sous_traitant.representant }}</p>
-        <p>{{ contact_sous_traitant.entreprise }}</p>
-        {% if contact_sous_traitant.phone_Number %}
+        {# Nom du contact ou représentant #}
+        {% if contact_sous_traitant_contact %}
+          <p>Mr {% if contact_sous_traitant_contact.prenom %}{{ contact_sous_traitant_contact.prenom }} {% endif %}{{ contact_sous_traitant_contact.nom }}</p>
+        {% else %}
+          <p>Mr {{ contact_sous_traitant.representant }}</p>
+        {% endif %}
+        
+        {# Poste #}
+        {% if contact_sous_traitant_contact and contact_sous_traitant_contact.poste %}
+          <p>Poste: {{ contact_sous_traitant_contact.poste }}</p>
+        {% endif %}
+        
+        {# Société #}
+        {% if contact_sous_traitant.entreprise %}
+          <p>Société: {{ contact_sous_traitant.entreprise }}</p>
+        {% endif %}
+        
+        {# Téléphone #}
+        {% if contact_sous_traitant_contact and contact_sous_traitant_contact.telephone %}
+          <p>Tél: {{ contact_sous_traitant_contact.telephone|format_phone }}</p>
+        {% elif contact_sous_traitant.phone_Number %}
           <p>Tél: {{ contact_sous_traitant.phone_Number|format_phone }}</p>
+        {% endif %}
+        
+        {# Email #}
+        {% if contact_sous_traitant_contact and contact_sous_traitant_contact.email %}
+          <p>Mail: {{ contact_sous_traitant_contact.email }}</p>
+        {% elif contact_sous_traitant.email %}
+          <p>Mail: {{ contact_sous_traitant.email }}</p>
         {% endif %}
       {% else %}
         <p>Aucun contact spécifié</p>
