@@ -153,7 +153,13 @@ const PlanningHebdoAgent = ({
     const fetchChantiers = async () => {
       try {
         const response = await axios.get("/api/chantier/"); // URL de votre API pour les chantiers
-        setChantiers(response.data);
+        // Filtrer les chantiers avec le statut "Terminé" ou "En attente"
+        const filteredChantiers = response.data.filter(
+          (chantier) =>
+            chantier.state_chantier !== "Terminé" &&
+            chantier.state_chantier !== "En attente"
+        );
+        setChantiers(filteredChantiers);
       } catch (error) {
         console.error("Erreur lors de la récupération des chantiers :", error);
       }
@@ -1245,11 +1251,17 @@ const PlanningHebdoAgent = ({
               }}
             >
               <option value="">--Sélectionner un chantier--</option>
-              {chantiers.map((chantier) => (
-                <option key={chantier.id} value={chantier.id}>
-                  {chantier.chantier_name}
-                </option>
-              ))}
+              {chantiers
+                .filter(
+                  (chantier) =>
+                    chantier.state_chantier !== "Terminé" &&
+                    chantier.state_chantier !== "En attente"
+                )
+                .map((chantier) => (
+                  <option key={chantier.id} value={chantier.id}>
+                    {chantier.chantier_name}
+                  </option>
+                ))}
             </select>
 
             {/* Champ Heures Supplémentaires */}

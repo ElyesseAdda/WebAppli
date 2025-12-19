@@ -42,6 +42,52 @@ import universalDriveGenerator from "../../utils/universalDriveGenerator";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 
+// Fonction utilitaire pour vérifier les permissions selon le statut du chantier
+const canPerformAction = (statut, action) => {
+  // Configuration des permissions par statut
+  const permissions = {
+    "En attente": {
+      canCreateSituation: false, // Pas de création de situations en attente
+      canCreateDevis: false, // Pas de création de devis en attente
+      canManageSousTraitance: false, // Pas de gestion de sous-traitance en attente
+      canViewDrive: true, // Consultation du Drive autorisée
+      canViewTableauSuivi: true, // Consultation du tableau de suivi autorisée
+      canViewTableauFacturation: true, // Consultation du tableau de facturation autorisée
+      canEditInfo: true, // Modification des informations de base autorisée
+    },
+    "En Cours": {
+      canCreateSituation: true,
+      canCreateDevis: true,
+      canManageSousTraitance: true,
+      canViewDrive: true,
+      canViewTableauSuivi: true,
+      canViewTableauFacturation: true,
+      canEditInfo: true,
+    },
+    "Terminé": {
+      canCreateSituation: false, // Pas de création de situations pour un chantier terminé
+      canCreateDevis: false, // Pas de création de devis pour un chantier terminé
+      canManageSousTraitance: false, // Pas de gestion de sous-traitance pour un chantier terminé
+      canViewDrive: true,
+      canViewTableauSuivi: true,
+      canViewTableauFacturation: true,
+      canEditInfo: true, // Modification des informations toujours possible
+    },
+    "Facturé": {
+      canCreateSituation: false,
+      canCreateDevis: false,
+      canManageSousTraitance: false,
+      canViewDrive: true,
+      canViewTableauSuivi: true,
+      canViewTableauFacturation: true,
+      canEditInfo: true,
+    },
+  };
+
+  const statutPermissions = permissions[statut] || permissions["En Cours"];
+  return statutPermissions[action] !== undefined ? statutPermissions[action] : true;
+};
+
 const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const {
     openSousTraitance = false,
@@ -212,6 +258,19 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         poste: "",
       },
   });
+
+  // Initialiser le statut dans editData quand le modal de statut s'ouvre
+  useEffect(() => {
+    if (openStatusModal && chantierData?.statut) {
+      setEditData((prev) => ({
+        ...prev,
+        chantier: {
+          ...prev.chantier,
+          statut: chantierData.statut,
+        },
+      }));
+    }
+  }, [openStatusModal, chantierData?.statut]);
 
   const hasLoadedTaux = useRef(false);
   useEffect(() => {
@@ -1074,12 +1133,16 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                         ? "rgba(46, 125, 50, 0.1)"
                         : chantierData?.statut === "Terminé"
                         ? "rgba(211, 47, 47, 0.1)"
+                        : chantierData?.statut === "En attente"
+                        ? "rgba(255, 152, 0, 0.1)"
                         : "#e0e0e0",
                     color:
                       chantierData?.statut === "En Cours"
                         ? "#2e7d32"
                         : chantierData?.statut === "Terminé"
                         ? "#d32f2f"
+                        : chantierData?.statut === "En attente"
+                        ? "#ff9800"
                         : "#757575",
                     borderRadius: 8,
                     padding: "2px 12px",
@@ -1108,6 +1171,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           variant="contained"
           startIcon={<FaHandshake />}
           onClick={() => setOpenSousTraitance(true)}
+          disabled={!canPerformAction(chantierData?.statut, "canManageSousTraitance")}
           sx={{
             backgroundColor: "#1976d2",
             boxShadow: 3,
@@ -1115,7 +1179,18 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               backgroundColor: "#1565c0",
               boxShadow: 5,
             },
+            "&:disabled": {
+              backgroundColor: "#e0e0e0",
+              color: "#9e9e9e",
+            },
           }}
+          title={
+            !canPerformAction(chantierData?.statut, "canManageSousTraitance")
+              ? "Cette action n'est pas disponible pour un chantier avec le statut '" +
+                chantierData?.statut +
+                "'"
+              : "Gérer les sous-traitants"
+          }
         >
           Gérer les sous-traitants
         </Button>
@@ -1124,6 +1199,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           startIcon={<FaClipboardList />}
           color="success"
           onClick={() => setOpenSituationModal(true)}
+          disabled={!canPerformAction(chantierData?.statut, "canCreateSituation")}
           sx={{
             backgroundColor: "#388e3c",
             boxShadow: 3,
@@ -1131,7 +1207,18 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               backgroundColor: "#2e7d32",
               boxShadow: 5,
             },
+            "&:disabled": {
+              backgroundColor: "#e0e0e0",
+              color: "#9e9e9e",
+            },
           }}
+          title={
+            !canPerformAction(chantierData?.statut, "canCreateSituation")
+              ? "Cette action n'est pas disponible pour un chantier avec le statut '" +
+                chantierData?.statut +
+                "'"
+              : "Gérer les situations"
+          }
         >
           Gérer les situations
         </Button>
@@ -1144,6 +1231,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               "_blank"
             );
           }}
+          disabled={!canPerformAction(chantierData?.statut, "canCreateDevis")}
           sx={{
             backgroundColor: "#ff9800",
             color: "white",
@@ -1152,7 +1240,18 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               backgroundColor: "#fb8c00",
               boxShadow: 5,
             },
+            "&:disabled": {
+              backgroundColor: "#e0e0e0",
+              color: "#9e9e9e",
+            },
           }}
+          title={
+            !canPerformAction(chantierData?.statut, "canCreateDevis")
+              ? "Cette action n'est pas disponible pour un chantier avec le statut '" +
+                chantierData?.statut +
+                "'"
+              : "Créer un nouveau devis"
+          }
         >
           Créer un nouveau devis
         </Button>
@@ -2133,6 +2232,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                     }
                     label="Statut"
                   >
+                    <MenuItem value="En attente">En attente</MenuItem>
                     <MenuItem value="En Cours">En Cours</MenuItem>
                     <MenuItem value="Terminé">Terminé</MenuItem>
                   </Select>
@@ -2446,6 +2546,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 }
                 label="Nouveau statut"
               >
+                <MenuItem value="En attente">En attente</MenuItem>
                 <MenuItem value="En Cours">En Cours</MenuItem>
                 <MenuItem value="Terminé">Terminé</MenuItem>
               </Select>

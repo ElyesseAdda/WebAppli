@@ -64,7 +64,11 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
     fetch("/api/chantier/")
       .then((response) => response.json())
       .then((data) => {
-        setChantiers(data);
+        // Filtrer les chantiers avec le statut "Terminé"
+        const filteredChantiers = data.filter(
+          (chantier) => chantier.state_chantier !== "Terminé"
+        );
+        setChantiers(filteredChantiers);
       })
       .catch((error) => console.error("Erreur:", error));
 
@@ -208,11 +212,13 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
               }
               label="Chantier"
             >
-              {chantiers.map((chantier) => (
-                <MenuItem key={chantier.id} value={chantier.id}>
-                  {chantier.chantier_name}
-                </MenuItem>
-              ))}
+              {chantiers
+                .filter((chantier) => chantier.state_chantier !== "Terminé")
+                .map((chantier) => (
+                  <MenuItem key={chantier.id} value={chantier.id}>
+                    {chantier.chantier_name}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
 

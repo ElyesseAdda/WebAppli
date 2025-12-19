@@ -339,7 +339,13 @@ const DevisAvance = () => {
     try {
       setIsLoadingChantiers(true);
       const response = await axios.get('/api/chantier/');
-      setChantiers(response.data);
+      // Filtrer les chantiers avec le statut "Terminé" ou "En attente"
+      const filteredChantiers = response.data.filter(
+        (chantier) =>
+          chantier.state_chantier !== "Terminé" &&
+          chantier.state_chantier !== "En attente"
+      );
+      setChantiers(filteredChantiers);
     } catch (error) {
       // Erreur lors du chargement des chantiers
     } finally {
@@ -2820,6 +2826,11 @@ const DevisAvance = () => {
                   </MenuItem>
                   {chantiers
                     .filter((chantier) => chantier.chantier_name !== "École - Formation")
+                    .filter(
+                      (chantier) =>
+                        chantier.state_chantier !== "Terminé" &&
+                        chantier.state_chantier !== "En attente"
+                    )
                     .map((chantier) => (
                       <MenuItem key={chantier.id} value={chantier.id}>
                         {chantier.chantier_name}
