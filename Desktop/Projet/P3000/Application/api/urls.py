@@ -57,6 +57,7 @@ from .views import (
     get_chantier_bons_commande,
     get_chantier_stats,
     SousTraitantViewSet,
+    ContactSousTraitantViewSet,
     ContratSousTraitanceViewSet,
     AvenantSousTraitanceViewSet,
     preview_contrat,
@@ -173,6 +174,7 @@ router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
 router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'sous-traitants', SousTraitantViewSet)
+router.register(r'contacts-sous-traitant', ContactSousTraitantViewSet, basename='contacts-sous-traitant')
 router.register(r'contrats-sous-traitance', ContratSousTraitanceViewSet)
 router.register(r'avenants-sous-traitance', AvenantSousTraitanceViewSet)
 router.register(r'banques', BanqueViewSet)

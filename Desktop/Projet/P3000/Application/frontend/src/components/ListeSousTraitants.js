@@ -26,6 +26,7 @@ import {
   InputLabel,
   InputAdornment,
   CircularProgress,
+  Collapse,
 } from "@mui/material";
 import {
   MdAdd,
@@ -33,6 +34,9 @@ import {
   MdDelete,
   MdBusiness,
   MdSearch,
+  MdPerson,
+  MdKeyboardArrowDown,
+  MdKeyboardArrowUp,
 } from "react-icons/md";
 import axios from "axios";
 
@@ -66,13 +70,32 @@ const ListeSousTraitants = () => {
   const [orderBy, setOrderBy] = useState("");
   const [order, setOrder] = useState("asc");
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedRows, setExpandedRows] = useState({}); // Pour gérer les lignes expandues
+  
+  // États pour la gestion des contacts
+  const [contacts, setContacts] = useState([]);
+  const [openContactModal, setOpenContactModal] = useState(false);
+  const [editingContact, setEditingContact] = useState(null);
+  const [contactFormData, setContactFormData] = useState({
+    nom: "",
+    prenom: "",
+    poste: "",
+    email: "",
+    telephone: "",
+  });
 
   // Charger les sous-traitants
   const fetchSousTraitants = async () => {
     try {
       setLoading(true);
       const response = await axios.get("/api/sous-traitants/");
-      setSousTraitants(response.data);
+      // S'assurer que les contacts sont bien présents pour chaque sous-traitant
+      const sousTraitantsAvecContacts = response.data.map(st => ({
+        ...st,
+        contacts: st.contacts || []
+      }));
+      console.log("Sous-traitants chargés:", sousTraitantsAvecContacts);
+      setSousTraitants(sousTraitantsAvecContacts);
     } catch (error) {
       console.error("Erreur lors du chargement des sous-traitants:", error);
       showSnackbar("Erreur lors du chargement des sous-traitants", "error");
@@ -93,7 +116,7 @@ const ListeSousTraitants = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleOpenModal = (sousTraitant = null) => {
+  const handleOpenModal = async (sousTraitant = null) => {
     setEditingSousTraitant(sousTraitant);
     if (sousTraitant) {
       setFormData({
@@ -109,6 +132,8 @@ const ListeSousTraitants = () => {
         phone_Number: sousTraitant.phone_Number || "",
         type: sousTraitant.type || "",
       });
+      // Charger les contacts du sous-traitant
+      await fetchContacts(sousTraitant.id);
     } else {
       setFormData({
         entreprise: "",
@@ -123,13 +148,25 @@ const ListeSousTraitants = () => {
         phone_Number: "",
         type: "",
       });
+      setContacts([]);
     }
     setOpenModal(true);
+  };
+
+  // Charger les contacts d'un sous-traitant
+  const fetchContacts = async (sousTraitantId) => {
+    try {
+      const response = await axios.get(`/api/contacts-sous-traitant/?sous_traitant=${sousTraitantId}`);
+      setContacts(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des contacts:", error);
+    }
   };
 
   const handleCloseModal = () => {
     setOpenModal(false);
     setEditingSousTraitant(null);
+    setContacts([]);
     setFormData({
       entreprise: "",
       capital: "",
@@ -143,6 +180,104 @@ const ListeSousTraitants = () => {
       phone_Number: "",
       type: "",
     });
+  };
+
+  // Gestion des contacts
+  const handleOpenContactModal = (contact = null) => {
+    setEditingContact(contact);
+    if (contact) {
+      setContactFormData({
+        nom: contact.nom || "",
+        prenom: contact.prenom || "",
+        poste: contact.poste || "",
+        email: contact.email || "",
+        telephone: contact.telephone || "",
+      });
+    } else {
+      setContactFormData({
+        nom: "",
+        prenom: "",
+        poste: "",
+        email: "",
+        telephone: "",
+      });
+    }
+    setOpenContactModal(true);
+  };
+
+  const handleCloseContactModal = () => {
+    setOpenContactModal(false);
+    setEditingContact(null);
+    setContactFormData({
+      nom: "",
+      prenom: "",
+      poste: "",
+      email: "",
+      telephone: "",
+    });
+  };
+
+  const handleContactInputChange = (e) => {
+    const { name, value } = e.target;
+    setContactFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingSousTraitant) {
+      showSnackbar("Veuillez d'abord créer le sous-traitant", "error");
+      return;
+    }
+
+    try {
+      const dataToSend = {
+        ...contactFormData,
+        sous_traitant: editingSousTraitant.id,
+      };
+
+      if (editingContact) {
+        await axios.put(`/api/contacts-sous-traitant/${editingContact.id}/`, dataToSend);
+        showSnackbar("Contact modifié avec succès", "success");
+      } else {
+        await axios.post("/api/contacts-sous-traitant/", dataToSend);
+        showSnackbar("Contact créé avec succès", "success");
+      }
+      
+      handleCloseContactModal();
+      // Rafraîchir les contacts dans le modal si ouvert
+      if (openModal && editingSousTraitant) {
+        await fetchContacts(editingSousTraitant.id);
+      }
+      // Rafraîchir le tableau principal pour afficher les changements
+      await fetchSousTraitants();
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde du contact:", error);
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.nom?.[0] ||
+                          "Erreur lors de la sauvegarde du contact";
+      showSnackbar(errorMessage, "error");
+    }
+  };
+
+  const handleDeleteContact = async (contactId) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce contact ?")) {
+      try {
+        await axios.delete(`/api/contacts-sous-traitant/${contactId}/`);
+        showSnackbar("Contact supprimé avec succès", "success");
+        // Rafraîchir les contacts dans le modal si ouvert
+        if (openModal && editingSousTraitant) {
+          await fetchContacts(editingSousTraitant.id);
+        }
+        // Rafraîchir le tableau principal pour afficher les changements
+        await fetchSousTraitants();
+      } catch (error) {
+        console.error("Erreur lors de la suppression du contact:", error);
+        showSnackbar("Erreur lors de la suppression du contact", "error");
+      }
+    }
   };
 
   const handleInputChange = (e) => {
@@ -181,7 +316,8 @@ const ListeSousTraitants = () => {
       }
       
       handleCloseModal();
-      fetchSousTraitants();
+      // Rafraîchir le tableau pour afficher les changements
+      await fetchSousTraitants();
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
       const errorMessage = error.response?.data?.detail || 
@@ -196,7 +332,14 @@ const ListeSousTraitants = () => {
       try {
         await axios.delete(`/api/sous-traitants/${id}/`);
         showSnackbar("Sous-traitant supprimé avec succès", "success");
-        fetchSousTraitants();
+        // Retirer la ligne de l'état d'expansion si elle était ouverte
+        setExpandedRows(prev => {
+          const newState = { ...prev };
+          delete newState[id];
+          return newState;
+        });
+        // Rafraîchir le tableau pour afficher les changements
+        await fetchSousTraitants();
       } catch (error) {
         console.error("Erreur lors de la suppression:", error);
         showSnackbar("Erreur lors de la suppression du sous-traitant", "error");
@@ -247,35 +390,100 @@ const ListeSousTraitants = () => {
       : (a, b) => -descendingComparator(a, b, orderBy);
   };
 
-  // Filtrage et tri des données
-  const filteredAndSortedSousTraitants = useMemo(() => {
-    let filtered = sousTraitants;
+  // Fonction pour vérifier si un contact est le représentant
+  const isRepresentant = (contact, representant) => {
+    if (!representant || !contact) return false;
+    const representantLower = representant.toLowerCase().trim();
+    const contactNomComplet = `${contact.prenom || ""} ${contact.nom || ""}`.trim().toLowerCase();
+    const contactNom = (contact.nom || "").toLowerCase().trim();
+    
+    // Vérifier si le nom complet ou le nom seul correspond au représentant
+    return contactNomComplet === representantLower || 
+           contactNom === representantLower ||
+           representantLower.includes(contactNom) ||
+           contactNomComplet.includes(representantLower);
+  };
 
-    // Filtrage par recherche
+  // Transformer les sous-traitants en lignes principales (une ligne par sous-traitant avec ses contacts)
+  const tableRows = useMemo(() => {
+    return sousTraitants.map((st) => {
+      const contacts = st.contacts || [];
+      // Filtrer les contacts (exclure le représentant s'il est dans les contacts)
+      const autresContacts = contacts.filter(contact => !isRepresentant(contact, st.representant));
+      
+      return {
+        id: st.id,
+        sousTraitant: st,
+        contacts: autresContacts,
+      };
+    });
+  }, [sousTraitants]);
+
+  // Fonction pour toggle l'expansion d'une ligne
+  const handleToggleExpand = (id) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  // Filtrage et tri des données
+  const filteredAndSortedRows = useMemo(() => {
+    let filtered = tableRows;
+
+    // Filtrage par recherche (inclut les contacts)
     if (searchTerm) {
-      filtered = sousTraitants.filter((st) =>
-        Object.values(st).some((value) =>
-          value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
+      const searchLower = searchTerm.toLowerCase();
+      filtered = tableRows.filter((row) => {
+        const st = row.sousTraitant;
+        const contacts = row.contacts || [];
+        
+        // Recherche dans les données du sous-traitant
+        const stMatches = Object.values(st).some((value) =>
+          value?.toString().toLowerCase().includes(searchLower)
+        );
+        
+        // Recherche dans les contacts
+        const contactsMatches = contacts.some(contact => 
+          Object.values(contact).some((value) =>
+            value?.toString().toLowerCase().includes(searchLower)
+          )
+        );
+        
+        return stMatches || contactsMatches;
+      });
     }
 
     // Tri
     if (orderBy) {
-      const comparator = getComparator(order, orderBy);
-      filtered = [...filtered].sort(comparator);
+      filtered = [...filtered].sort((a, b) => {
+        let aValue = a.sousTraitant[orderBy];
+        let bValue = b.sousTraitant[orderBy];
+        
+        // Gérer les valeurs null/undefined
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
+        
+        // Comparaison normale
+        if (order === "desc") {
+          return bValue < aValue ? -1 : bValue > aValue ? 1 : 0;
+        } else {
+          return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+        }
+      });
     }
 
     return filtered;
-  }, [sousTraitants, searchTerm, order, orderBy]);
+  }, [tableRows, searchTerm, order, orderBy]);
 
   // Pagination des données
-  const paginatedSousTraitants = useMemo(() => {
-    return filteredAndSortedSousTraitants.slice(
+  const paginatedRows = useMemo(() => {
+    return filteredAndSortedRows.slice(
       page * rowsPerPage,
       page * rowsPerPage + rowsPerPage
     );
-  }, [filteredAndSortedSousTraitants, page, rowsPerPage]);
+  }, [filteredAndSortedRows, page, rowsPerPage]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -321,7 +529,7 @@ const ListeSousTraitants = () => {
         <TextField
           fullWidth
           variant="outlined"
-          placeholder="Rechercher un sous-traitant..."
+          placeholder="Rechercher un sous-traitant ou un contact..."
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
@@ -386,9 +594,9 @@ const ListeSousTraitants = () => {
               </TableCell>
               <TableCell sx={{ fontWeight: "bold", color: "white" }}>
                 <TableSortLabel
-                  active={orderBy === "representant"}
-                  direction={orderBy === "representant" ? order : "asc"}
-                  onClick={() => handleRequestSort("representant")}
+                  active={orderBy === "nom"}
+                  direction={orderBy === "nom" ? order : "asc"}
+                  onClick={() => handleRequestSort("nom")}
                   sx={{
                     color: "white",
                     "& .MuiTableSortLabel-icon": {
@@ -399,7 +607,25 @@ const ListeSousTraitants = () => {
                     },
                   }}
                 >
-                  Représentant
+                  Nom / Représentant
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "white" }}>
+                <TableSortLabel
+                  active={orderBy === "poste"}
+                  direction={orderBy === "poste" ? order : "asc"}
+                  onClick={() => handleRequestSort("poste")}
+                  sx={{
+                    color: "white",
+                    "& .MuiTableSortLabel-icon": {
+                      color: "white !important",
+                    },
+                    "&:hover": {
+                      color: "rgba(255, 255, 255, 0.8)",
+                    },
+                  }}
+                >
+                  Poste
                 </TableSortLabel>
               </TableCell>
               <TableCell sx={{ fontWeight: "bold", color: "white" }}>
@@ -422,9 +648,9 @@ const ListeSousTraitants = () => {
               </TableCell>
               <TableCell sx={{ fontWeight: "bold", color: "white" }}>
                 <TableSortLabel
-                  active={orderBy === "phone_Number"}
-                  direction={orderBy === "phone_Number" ? order : "asc"}
-                  onClick={() => handleRequestSort("phone_Number")}
+                  active={orderBy === "telephone"}
+                  direction={orderBy === "telephone" ? order : "asc"}
+                  onClick={() => handleRequestSort("telephone")}
                   sx={{
                     color: "white",
                     "& .MuiTableSortLabel-icon": {
@@ -498,55 +724,159 @@ const ListeSousTraitants = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredAndSortedSousTraitants.length === 0 ? (
+            {filteredAndSortedRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} sx={{ textAlign: "center", py: 4 }}>
+                <TableCell colSpan={9} sx={{ textAlign: "center", py: 4 }}>
                   <Typography variant="body1" color="text.secondary">
                     {searchTerm
-                      ? "Aucun sous-traitant ne correspond à votre recherche"
+                      ? "Aucun résultat ne correspond à votre recherche"
                       : "Aucun sous-traitant trouvé"}
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedSousTraitants.map((sousTraitant) => (
-                <TableRow key={sousTraitant.id} hover>
-                  <TableCell sx={{ fontWeight: "medium" }}>
-                    {sousTraitant.entreprise}
-                  </TableCell>
-                  <TableCell>{sousTraitant.representant || "-"}</TableCell>
-                  <TableCell>{sousTraitant.email || "-"}</TableCell>
-                  <TableCell>{sousTraitant.phone_Number || "-"}</TableCell>
-                  <TableCell>{sousTraitant.numero_rcs || "-"}</TableCell>
-                  <TableCell>{getTypeLabel(sousTraitant.type)}</TableCell>
-                  <TableCell>{sousTraitant.ville || "-"}</TableCell>
-                  <TableCell sx={{ textAlign: "center" }}>
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenModal(sousTraitant)}
-                      size="small"
-                      sx={{ mr: 1 }}
-                      title="Modifier"
+              paginatedRows.map((row) => {
+                const st = row.sousTraitant;
+                const contacts = row.contacts || [];
+                const isExpanded = expandedRows[st.id];
+                
+                return (
+                  <React.Fragment key={st.id}>
+                    {/* Ligne principale - Représentant */}
+                    <TableRow 
+                      hover
+                      sx={{
+                        backgroundColor: 'rgba(25, 118, 210, 0.05)',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => handleToggleExpand(st.id)}
                     >
-                      <MdEdit />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(sousTraitant.id)}
-                      size="small"
-                      title="Supprimer"
-                    >
-                      <MdDelete />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
+                      <TableCell>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleExpand(st.id);
+                            }}
+                          >
+                            {isExpanded ? <MdKeyboardArrowUp /> : <MdKeyboardArrowDown />}
+                          </IconButton>
+                          <Typography sx={{ fontWeight: "bold" }}>
+                            {st.entreprise}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "medium" }}>
+                        {st.representant || "-"}
+                      </TableCell>
+                      <TableCell>Représentant</TableCell>
+                      <TableCell>{st.email || "-"}</TableCell>
+                      <TableCell>{st.phone_Number || "-"}</TableCell>
+                      <TableCell>{st.numero_rcs || "-"}</TableCell>
+                      <TableCell>{getTypeLabel(st.type)}</TableCell>
+                      <TableCell>{st.ville || "-"}</TableCell>
+                      <TableCell sx={{ textAlign: "center" }}>
+                        <IconButton
+                          color="primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenModal(st);
+                          }}
+                          size="small"
+                          sx={{ mr: 1 }}
+                          title="Modifier"
+                        >
+                          <MdEdit />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(st.id);
+                          }}
+                          size="small"
+                          title="Supprimer"
+                        >
+                          <MdDelete />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Lignes des contacts (collapsible) */}
+                    <TableRow>
+                      <TableCell 
+                        style={{ paddingBottom: 0, paddingTop: 0 }} 
+                        colSpan={9}
+                      >
+                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                          <Box sx={{ margin: 2 }}>
+                            {contacts.length === 0 ? (
+                              <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
+                                Aucun contact pour ce sous-traitant
+                              </Typography>
+                            ) : (
+                              <Table size="small" aria-label="contacts">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell sx={{ fontWeight: "bold" }}>Nom</TableCell>
+                                    <TableCell sx={{ fontWeight: "bold" }}>Poste</TableCell>
+                                    <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
+                                    <TableCell sx={{ fontWeight: "bold" }}>Téléphone</TableCell>
+                                    <TableCell></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {contacts.map((contact) => (
+                                    <TableRow key={contact.id}>
+                                      <TableCell>
+                                        {`${contact.prenom || ""} ${contact.nom}`.trim() || contact.nom}
+                                      </TableCell>
+                                      <TableCell>{contact.poste || "-"}</TableCell>
+                                      <TableCell>{contact.email || "-"}</TableCell>
+                                      <TableCell>{contact.telephone || "-"}</TableCell>
+                                      <TableCell sx={{ textAlign: "center" }}>
+                                        <IconButton
+                                          color="primary"
+                                          onClick={() => {
+                                            handleOpenModal(st);
+                                            setTimeout(() => {
+                                              handleOpenContactModal(contact);
+                                            }, 100);
+                                          }}
+                                          size="small"
+                                          sx={{ mr: 1 }}
+                                          title="Modifier"
+                                        >
+                                          <MdEdit />
+                                        </IconButton>
+                                        <IconButton
+                                          color="error"
+                                          onClick={() => handleDeleteContact(contact.id)}
+                                          size="small"
+                                          title="Supprimer"
+                                        >
+                                          <MdDelete />
+                                        </IconButton>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </React.Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>
         <TablePagination
           component="div"
-          count={filteredAndSortedSousTraitants.length}
+          count={filteredAndSortedRows.length}
           page={page}
           onPageChange={handleChangePage}
           rowsPerPage={rowsPerPage}
@@ -686,6 +1016,83 @@ const ListeSousTraitants = () => {
                   <MenuItem value="AUTRE">Autre</MenuItem>
                 </Select>
               </FormControl>
+
+              {/* Section Contacts - affichée uniquement en mode édition */}
+              {editingSousTraitant && (
+                <Box sx={{ mt: 3, pt: 2, borderTop: "1px solid #e0e0e0" }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                    <Typography variant="h6" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <MdPerson /> Contacts ({contacts.length})
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<MdAdd />}
+                      onClick={() => handleOpenContactModal()}
+                      sx={{ backgroundColor: "white" }}
+                    >
+                      Ajouter un Contact
+                    </Button>
+                  </Box>
+                  {contacts.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 2 }}>
+                      Aucun contact pour ce sous-traitant
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {contacts.map((contact) => (
+                        <Box
+                          key={contact.id}
+                          sx={{
+                            p: 2,
+                            border: "1px solid #e0e0e0",
+                            borderRadius: 1,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: "medium" }}>
+                              {contact.prenom ? `${contact.prenom} ${contact.nom}` : contact.nom}
+                              {contact.poste && ` - ${contact.poste}`}
+                            </Typography>
+                            {contact.email && (
+                              <Typography variant="body2" color="text.secondary">
+                                📧 {contact.email}
+                              </Typography>
+                            )}
+                            {contact.telephone && (
+                              <Typography variant="body2" color="text.secondary">
+                                📞 {contact.telephone}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Box>
+                            <IconButton
+                              color="primary"
+                              onClick={() => handleOpenContactModal(contact)}
+                              size="small"
+                              sx={{ mr: 1 }}
+                              title="Modifier"
+                            >
+                              <MdEdit />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={() => handleDeleteContact(contact.id)}
+                              size="small"
+                              title="Supprimer"
+                            >
+                              <MdDelete />
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
             </Box>
           </DialogContent>
           <DialogActions sx={{ p: 3 }}>
@@ -703,6 +1110,78 @@ const ListeSousTraitants = () => {
               }}
             >
               {editingSousTraitant ? "Modifier" : "Créer"}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Modal de création/édition de contact */}
+      <Dialog open={openContactModal} onClose={handleCloseContactModal} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {editingContact ? "Modifier le Contact" : "Nouveau Contact"}
+        </DialogTitle>
+        <form onSubmit={handleContactSubmit}>
+          <DialogContent>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+              <TextField
+                name="nom"
+                label="Nom *"
+                value={contactFormData.nom}
+                onChange={handleContactInputChange}
+                required
+                fullWidth
+                variant="outlined"
+              />
+              <TextField
+                name="prenom"
+                label="Prénom"
+                value={contactFormData.prenom}
+                onChange={handleContactInputChange}
+                fullWidth
+                variant="outlined"
+              />
+              <TextField
+                name="poste"
+                label="Poste"
+                value={contactFormData.poste}
+                onChange={handleContactInputChange}
+                fullWidth
+                variant="outlined"
+              />
+              <TextField
+                name="email"
+                label="Email"
+                type="email"
+                value={contactFormData.email}
+                onChange={handleContactInputChange}
+                fullWidth
+                variant="outlined"
+              />
+              <TextField
+                name="telephone"
+                label="Téléphone"
+                value={contactFormData.telephone}
+                onChange={handleContactInputChange}
+                fullWidth
+                variant="outlined"
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={handleCloseContactModal} color="inherit">
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              sx={{
+                backgroundColor: "#1976d2",
+                "&:hover": {
+                  backgroundColor: "#1565c0",
+                },
+              }}
+            >
+              {editingContact ? "Modifier" : "Créer"}
             </Button>
           </DialogActions>
         </form>

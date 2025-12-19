@@ -34,9 +34,9 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
 from .models import (
-    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
+    AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
     StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
@@ -8057,17 +8057,17 @@ class SousTraitantViewSet(viewsets.ModelViewSet):
     serializer_class = SousTraitantSerializer
 
     def get_queryset(self):
-        queryset = SousTraitant.objects.all()
+        queryset = SousTraitant.objects.prefetch_related('contacts').all()
         chantier_id = self.request.query_params.get('chantier')
         
         if chantier_id:
             # Récupérer tous les sous-traitants qui ont des contrats avec ce chantier
-            sous_traitants_avec_contrats = SousTraitant.objects.filter(
+            sous_traitants_avec_contrats = SousTraitant.objects.prefetch_related('contacts').filter(
                 contrats__chantier_id=chantier_id
             ).distinct()
             
             # Récupérer tous les sous-traitants existants
-            tous_sous_traitants = SousTraitant.objects.all()
+            tous_sous_traitants = SousTraitant.objects.prefetch_related('contacts').all()
             
             # Combiner les deux listes sans doublons
             queryset = (sous_traitants_avec_contrats | tous_sous_traitants).distinct()
@@ -8087,6 +8087,17 @@ class SousTraitantViewSet(viewsets.ModelViewSet):
         sous_traitants = SousTraitant.objects.all()
         serializer = self.get_serializer(sous_traitants, many=True)
         return Response(serializer.data)
+
+class ContactSousTraitantViewSet(viewsets.ModelViewSet):
+    queryset = ContactSousTraitant.objects.all()
+    serializer_class = ContactSousTraitantSerializer
+    
+    def get_queryset(self):
+        queryset = ContactSousTraitant.objects.all()
+        sous_traitant_id = self.request.query_params.get('sous_traitant')
+        if sous_traitant_id:
+            queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        return queryset
 
 class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
     queryset = ContratSousTraitance.objects.all()

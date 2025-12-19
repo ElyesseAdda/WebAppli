@@ -2028,6 +2028,29 @@ class SousTraitant(models.Model):
     def __str__(self):
         return f"{self.entreprise} - {self.numero_rcs}"
 
+class ContactSousTraitant(models.Model):
+    """
+    Modèle pour gérer les contacts associés aux sous-traitants.
+    Permet d'avoir plusieurs contacts par société de sous-traitance.
+    """
+    sous_traitant = models.ForeignKey(SousTraitant, on_delete=models.CASCADE, related_name='contacts')
+    nom = models.CharField(max_length=255, verbose_name="Nom")
+    prenom = models.CharField(max_length=255, blank=True, null=True, verbose_name="Prénom")
+    poste = models.CharField(max_length=255, blank=True, null=True, verbose_name="Poste")
+    email = models.EmailField(max_length=254, blank=True, null=True, verbose_name="Email")
+    telephone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Téléphone")
+    date_creation = models.DateTimeField(auto_now_add=True)
+    date_modification = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Contact Sous-Traitant"
+        verbose_name_plural = "Contacts Sous-Traitants"
+        ordering = ['nom', 'prenom']
+
+    def __str__(self):
+        nom_complet = f"{self.prenom} {self.nom}".strip() if self.prenom else self.nom
+        return f"{nom_complet} - {self.sous_traitant.entreprise}"
+
 class ContratSousTraitance(models.Model):
     TYPE_CHOICES = [
         ('BTP', 'BTP'),

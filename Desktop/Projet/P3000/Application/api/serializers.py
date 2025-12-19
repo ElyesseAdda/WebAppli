@@ -6,7 +6,7 @@ from .models import (
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
-    SousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
+    SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant,
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale
@@ -1083,7 +1083,32 @@ class AgencyExpenseAggregateSerializer(serializers.ModelSerializer):
         model = AgencyExpenseAggregate
         fields = '__all__'
 
+class ContactSousTraitantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactSousTraitant
+        fields = [
+            'id',
+            'sous_traitant',
+            'nom',
+            'prenom',
+            'poste',
+            'email',
+            'telephone',
+            'date_creation',
+            'date_modification'
+        ]
+        extra_kwargs = {
+            'sous_traitant': {'required': True},
+            'nom': {'required': True},
+            'prenom': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'poste': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'email': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'telephone': {'required': False, 'allow_blank': True, 'allow_null': True},
+        }
+
 class SousTraitantSerializer(serializers.ModelSerializer):
+    contacts = ContactSousTraitantSerializer(many=True, read_only=True)
+    
     class Meta:
         model = SousTraitant
         fields = [
@@ -1100,7 +1125,8 @@ class SousTraitantSerializer(serializers.ModelSerializer):
             'forme_juridique',
             'email',
             'phone_Number',
-            'type'
+            'type',
+            'contacts'
         ]
 
 class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
