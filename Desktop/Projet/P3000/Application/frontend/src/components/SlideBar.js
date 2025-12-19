@@ -10,6 +10,7 @@ import {
   MdTableChart,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
+import { FaHandshake } from "react-icons/fa";
 import { NavLink, useLocation } from "react-router-dom";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
@@ -76,8 +77,8 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
 
       {
         key: "fournisseurs",
-        label: "Fournisseurs",
-        icon: MdBusiness,
+        label: "Collaborateur",
+        icon: FaHandshake,
         children: [
           { label: "Liste Fournisseurs", to: "/ListeFournisseurs" },
           { label: "Sous traitant", to: "/ListeSousTraitants" },
