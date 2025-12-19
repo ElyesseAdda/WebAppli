@@ -2623,8 +2623,7 @@ const DevisAvance = () => {
       if (response.data) {
         // Succès : mettre à jour l'ID du devis pour les futures modifications
         setDevisData(prev => ({ ...prev, id: response.data.id }));
-        clearDraftStorage();
-
+        
         // Recalculer automatiquement les coûts du devis créé
         try {
           await axios.post(`/api/devis/${response.data.id}/recalculer-couts/`);
@@ -2633,6 +2632,11 @@ const DevisAvance = () => {
         }
 
         const devisId = response.data.id;
+        
+        // Réinitialiser complètement l'état de la page (comme le bouton Réinitialiser)
+        resetDevisFormState();
+        clearDraftStorage();
+        await generateDevisNumber(null);
         
         // Gestion auto-download pour les appels d'offres (devisType "chantier")
         if (devisType === "chantier") {
