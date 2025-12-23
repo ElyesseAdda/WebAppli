@@ -2,7 +2,7 @@
  * Drive Uploader - Composant d'upload de fichiers
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -11,6 +11,7 @@ import {
   LinearProgress,
   List,
   ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   IconButton,
@@ -20,6 +21,8 @@ import {
   DialogContent,
   DialogActions,
   DialogContentText,
+  Divider,
+  Collapse,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -29,10 +32,142 @@ import {
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
+  ExpandLess,
+  ExpandMore,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useUpload } from './hooks/useUpload';
 import { displayFilename } from './DriveExplorer';
+import { normalizeFilename } from './services/pathNormalizationService';
+
+// Helper pour construire l'arborescence
+const buildFileTree = (files) => {
+  const root = { name: 'root', children: {}, files: [] };
+
+  files.forEach(file => {
+    const path = file.webkitRelativePath || '';
+    if (!path) {
+      root.files.push(file);
+      return;
+    }
+
+    const parts = path.split('/');
+    let current = root;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (!current.children[part]) {
+        current.children[part] = { name: part, children: {}, files: [] };
+      }
+      current = current.children[part];
+    }
+
+    current.files.push(file);
+  });
+
+  return root;
+};
+
+const FileTreeItem = ({ name, node, level, getFileStatus, formatFileSize, uploading }) => {
+  const [open, setOpen] = React.useState(false);
+  const hasContent = Object.keys(node.children).length > 0 || node.files.length > 0;
+
+  if (name === 'root') {
+    return (
+      <>
+        {Object.entries(node.children).map(([childName, childNode]) => (
+          <FileTreeItem
+            key={childName}
+            name={childName}
+            node={childNode}
+            level={0}
+            getFileStatus={getFileStatus}
+            formatFileSize={formatFileSize}
+            uploading={uploading}
+          />
+        ))}
+        {node.files.map((file, idx) => (
+          <FileItem
+            key={idx}
+            file={file}
+            level={0}
+            getFileStatus={getFileStatus}
+            formatFileSize={formatFileSize}
+          />
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ListItemButton
+        onClick={() => setOpen(!open)}
+        sx={{ pl: level * 2 + 2, py: 0.5 }}
+      >
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          <FolderIcon sx={{ color: 'amber.500', fontSize: 20 }} />
+        </ListItemIcon>
+        <ListItemText 
+          primary={name} 
+          primaryTypographyProps={{ sx: { fontSize: '0.875rem', fontWeight: 600 } }}
+        />
+        {hasContent && (open ? <ExpandLess sx={{ fontSize: 18 }} /> : <ExpandMore sx={{ fontSize: 18 }} />)}
+      </ListItemButton>
+      <Collapse in={open} timeout="auto" unmountOnExit>
+        <List component="div" disablePadding>
+          {Object.entries(node.children).map(([childName, childNode]) => (
+            <FileTreeItem
+              key={childName}
+              name={childName}
+              node={childNode}
+              level={level + 1}
+              getFileStatus={getFileStatus}
+              formatFileSize={formatFileSize}
+              uploading={uploading}
+            />
+          ))}
+          {node.files.map((file, idx) => (
+            <FileItem
+              key={idx}
+              file={file}
+              level={level + 1}
+              getFileStatus={getFileStatus}
+              formatFileSize={formatFileSize}
+            />
+          ))}
+        </List>
+      </Collapse>
+    </>
+  );
+};
+
+const FileItem = ({ file, level, getFileStatus, formatFileSize }) => {
+  return (
+    <ListItem
+      secondaryAction={getFileStatus(file)}
+      sx={{ pl: level * 2 + 2, py: 0.5 }}
+    >
+      <ListItemIcon sx={{ minWidth: 32 }}>
+        <FileIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+      </ListItemIcon>
+      <ListItemText
+        primary={file.name}
+        secondary={formatFileSize(file.size)}
+        primaryTypographyProps={{
+          sx: {
+            fontSize: '0.8125rem',
+            fontWeight: 400,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }
+        }}
+        secondaryTypographyProps={{ sx: { fontSize: '0.7rem' } }}
+      />
+    </ListItem>
+  );
+};
 
 const UploaderContainer = styled(Box)(({ theme }) => ({
   position: 'fixed',
@@ -50,29 +185,33 @@ const UploaderContainer = styled(Box)(({ theme }) => ({
 const UploaderPaper = styled(Paper)(({ theme }) => ({
   width: '90%',
   maxWidth: 600,
-  maxHeight: '80vh',
-  overflow: 'auto',
-  padding: theme.spacing(3),
-  // Masquer la barre de scroll verticale
-  scrollbarWidth: 'none', // Firefox
-  '&::-webkit-scrollbar': {
-    display: 'none', // Chrome, Safari, Edge
-  },
-  msOverflowStyle: 'none', // IE et Edge (ancien)
+  maxHeight: '90vh',
+  overflow: 'hidden', // On cache l'overflow pour gérer le défilement dans le contenu
+  padding: 0, // Le padding sera géré par les sous-blocs
+  borderRadius: theme.spacing(2),
+  boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+  display: 'flex',
+  flexDirection: 'column',
 }));
 
 const DropZone = styled(Box)(({ theme, isDragOver }) => ({
   border: `2px dashed ${isDragOver ? theme.palette.primary.main : theme.palette.grey[300]}`,
-  borderRadius: theme.spacing(1),
-  padding: theme.spacing(4),
+  borderRadius: theme.spacing(1.5),
+  padding: theme.spacing(5, 3),
   textAlign: 'center',
   cursor: 'pointer',
-  backgroundColor: isDragOver ? theme.palette.primary.light + '20' : 'transparent',
-  transition: 'all 0.2s ease-in-out',
-  marginBottom: theme.spacing(2),
+  backgroundColor: isDragOver ? theme.palette.primary.light + '10' : theme.palette.grey[50],
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  margin: theme.spacing(2),
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: theme.spacing(1),
   '&:hover': {
-    backgroundColor: theme.palette.grey[50],
+    backgroundColor: theme.palette.primary.light + '05',
     borderColor: theme.palette.primary.main,
+    transform: 'translateY(-2px)',
   },
 }));
 
@@ -84,6 +223,23 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [conflicts, setConflicts] = useState([]);
   const [filesToReplace, setFilesToReplace] = useState(new Set());
+
+  // Calcul du progrès global
+  const totalProgress = useMemo(() => {
+    if (selectedFiles.length === 0) return 0;
+    const progressValues = Object.values(progress);
+    if (progressValues.length === 0) return 0;
+    
+    // Calculer la moyenne du progrès de tous les fichiers sélectionnés
+    const sum = progressValues.reduce((acc, curr) => acc + (curr.progress || 0), 0);
+    return Math.round(sum / selectedFiles.length);
+  }, [progress, selectedFiles]);
+
+  const completedCount = useMemo(() => {
+    return Object.values(progress).filter(p => p.complete).length;
+  }, [progress]);
+
+  const fileTree = useMemo(() => buildFileTree(selectedFiles), [selectedFiles]);
 
   // Mettre à jour les fichiers sélectionnés si initialFiles change
   useEffect(() => {
@@ -134,11 +290,13 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
         // C'est un fichier
         item.file((file) => {
           // Créer un objet File avec webkitRelativePath pour préserver la structure
+          // Note: Le chemin 'path' contient déjà les noms de dossiers originaux
+          // La normalisation sera faite lors de l'upload
           const fileWithPath = new File([file], file.name, {
             type: file.type,
             lastModified: file.lastModified,
           });
-          // Ajouter le chemin relatif
+          // Ajouter le chemin relatif (non normalisé pour l'instant)
           Object.defineProperty(fileWithPath, 'webkitRelativePath', {
             value: path + file.name,
             writable: false,
@@ -290,10 +448,13 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
             type: file.type,
             lastModified: file.lastModified,
           });
-          // Préserver le webkitRelativePath si présent
+          // Préserver le webkitRelativePath si présent (avec le nouveau nom normalisé)
           if (file.webkitRelativePath) {
+            const pathParts = file.webkitRelativePath.split('/');
+            pathParts[pathParts.length - 1] = newFileName;
+            const newRelativePath = pathParts.join('/');
             Object.defineProperty(renamedFile, 'webkitRelativePath', {
-              value: file.webkitRelativePath.replace(file.name, newFileName),
+              value: newRelativePath,
               writable: false,
             });
           }
@@ -414,169 +575,196 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
     <UploaderContainer onClick={onClose}>
       <UploaderPaper onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">
-            Upload de fichiers
-          </Typography>
-          <IconButton onClick={onClose} size="small">
+        <Box sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Upload de fichiers
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Destination : {currentPath || 'Racine'}
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} size="small" disabled={uploading} sx={{ color: 'text.secondary' }}>
             <CloseIcon />
           </IconButton>
         </Box>
 
-        {/* Destination */}
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Destination: {currentPath || 'Racine'}
-        </Alert>
+        <Box sx={{ overflowY: 'auto', flexGrow: 1, p: 2 }}>
+          {/* Mode de sélection */}
+          {!uploading && (
+            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <Button
+                variant={uploadMode === 'files' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setUploadMode('files');
+                  setSelectedFiles([]);
+                }}
+                size="small"
+                sx={{ borderRadius: 2 }}
+              >
+                Fichiers
+              </Button>
+              <Button
+                variant={uploadMode === 'folder' ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setUploadMode('folder');
+                  setSelectedFiles([]);
+                }}
+                size="small"
+                startIcon={<FolderIcon />}
+                sx={{ borderRadius: 2 }}
+              >
+                Dossier
+              </Button>
+            </Box>
+          )}
 
-        {/* Mode de sélection */}
-        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-          <Button
-            variant={uploadMode === 'files' ? 'contained' : 'outlined'}
-            onClick={() => {
-              setUploadMode('files');
-              setSelectedFiles([]);
-            }}
-            size="small"
-          >
-            Fichiers
-          </Button>
-          <Button
-            variant={uploadMode === 'folder' ? 'contained' : 'outlined'}
-            onClick={() => {
-              setUploadMode('folder');
-              setSelectedFiles([]);
-            }}
-            size="small"
-            startIcon={<FolderIcon />}
-          >
-            Dossier
-          </Button>
+          {/* Drop Zone */}
+          {!uploading && (
+            <DropZone
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => {
+                if (uploadMode === 'folder') {
+                  document.getElementById('folder-input').click();
+                } else {
+                  document.getElementById('file-input').click();
+                }
+              }}
+            >
+              <Box sx={{ 
+                width: 64, 
+                height: 64, 
+                borderRadius: '50%', 
+                backgroundColor: 'primary.light', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                mb: 1,
+                opacity: 0.15
+              }}>
+                <UploadIcon sx={{ fontSize: 32, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+                {uploadMode === 'folder' 
+                  ? 'Glissez-déposez un dossier ici'
+                  : 'Glissez-déposez vos fichiers ici'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                ou cliquez pour parcourir
+              </Typography>
+            </DropZone>
+          )}
+
+          {/* Progress Global */}
+          {uploading && (
+            <Box sx={{ mb: 4, mt: 2, px: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mb: 1.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main' }}>
+                  {totalProgress === 100 ? 'Traitement final...' : `Upload en cours... ${completedCount}/${selectedFiles.length}`}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                  {totalProgress}%
+                </Typography>
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={totalProgress} 
+                sx={{ 
+                  height: 8, 
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(0,0,0,0.05)',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                  }
+                }} 
+              />
+            </Box>
+          )}
+
+          {/* Input cachés */}
+          <input
+            type="file"
+            id="file-input"
+            multiple
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+          <input
+            type="file"
+            id="folder-input"
+            webkitdirectory="true"
+            directory=""
+            multiple
+            onChange={handleFolderSelect}
+            style={{ display: 'none' }}
+          />
+
+          {/* Liste des fichiers sélectionnés */}
+          {selectedFiles.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                {uploadMode === 'folder' ? 'Contenu du dossier' : 'Fichiers sélectionnés'} ({selectedFiles.length})
+              </Typography>
+              
+              {uploadMode === 'folder' && selectedFiles.filter(f => f.webkitRelativePath && f.webkitRelativePath !== '').length === 0 && (
+                <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+                  Aucun fichier détecté dans le dossier.
+                </Alert>
+              )}
+              
+              <List sx={{ 
+                bgcolor: 'grey.50',
+                borderRadius: 2,
+                maxHeight: 400, 
+                overflow: 'auto',
+                border: '1px solid',
+                borderColor: 'divider',
+                p: 0
+              }}>
+                <FileTreeItem 
+                  name="root" 
+                  node={fileTree} 
+                  level={0} 
+                  getFileStatus={getFileStatus} 
+                  formatFileSize={formatFileSize}
+                  uploading={uploading}
+                />
+              </List>
+            </Box>
+          )}
+
+          {/* Erreurs */}
+          {Object.keys(errors).length > 0 && (
+            <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>
+              {Object.keys(errors).length} fichier(s) n'ont pas pu être uploadés.
+            </Alert>
+          )}
         </Box>
 
-        {/* Drop Zone */}
-        <DropZone
-          isDragOver={isDragOver}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => {
-            if (uploadMode === 'folder') {
-              document.getElementById('folder-input').click();
-            } else {
-              document.getElementById('file-input').click();
-            }
-          }}
-        >
-          <UploadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-          <Typography variant="h6" gutterBottom>
-            {uploadMode === 'folder' 
-              ? 'Glissez-déposez un dossier ici'
-              : 'Glissez-déposez vos fichiers ici'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            ou cliquez pour sélectionner {uploadMode === 'folder' ? 'un dossier' : 'des fichiers'}
-          </Typography>
-        </DropZone>
-
-        {/* Input caché pour fichiers */}
-        <input
-          type="file"
-          id="file-input"
-          multiple
-          onChange={handleFileSelect}
-          style={{ display: 'none' }}
-        />
-
-        {/* Input caché pour dossier */}
-        <input
-          type="file"
-          id="folder-input"
-          webkitdirectory="true"
-          directory=""
-          multiple
-          onChange={handleFolderSelect}
-          style={{ display: 'none' }}
-        />
-
-        {/* Liste des fichiers sélectionnés */}
-        {selectedFiles.length > 0 && (
-          <>
-            <Typography variant="subtitle1" gutterBottom>
-              {uploadMode === 'folder' ? 'Contenu du dossier' : 'Fichiers sélectionnés'} ({selectedFiles.length})
-            </Typography>
-            
-            {/* Avertissement si mode dossier mais pas de fichiers avec chemin relatif */}
-            {uploadMode === 'folder' && selectedFiles.filter(f => f.webkitRelativePath && f.webkitRelativePath !== '').length === 0 && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                Aucun fichier détecté dans le dossier. Assurez-vous que le dossier contient des fichiers et réessayez.
-              </Alert>
-            )}
-            
-            <List dense sx={{ 
-              maxHeight: 300, 
-              overflow: 'auto', 
-              mb: 2,
-              scrollbarWidth: 'none', // Firefox
-              '&::-webkit-scrollbar': { display: 'none' }, // Chrome, Safari, Edge
-              msOverflowStyle: 'none', // IE et Edge (ancien)
-            }}>
-              {selectedFiles.map((file, index) => {
-                const displayPath = getFileDisplayPath(file);
-                const isInSubfolder = displayPath.includes('/');
-                const hasRelativePath = file.webkitRelativePath && file.webkitRelativePath !== '';
-                
-                return (
-                  <ListItem
-                    key={index}
-                    secondaryAction={getFileStatus(file)}
-                    sx={{
-                      opacity: (!hasRelativePath && uploadMode === 'folder') ? 0.5 : 1,
-                    }}
-                  >
-                    <ListItemIcon>
-                      {isInSubfolder ? <FolderIcon color="primary" /> : <FileIcon />}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={displayPath}
-                      secondary={
-                        uploadMode === 'folder' && !hasRelativePath 
-                          ? '⚠️ Dossier vide ou non détecté' 
-                          : formatFileSize(file.size)
-                      }
-                      primaryTypographyProps={{
-                        sx: {
-                          fontFamily: isInSubfolder ? 'monospace' : 'inherit',
-                          fontSize: isInSubfolder ? '0.875rem' : 'inherit',
-                        }
-                      }}
-                    />
-                  </ListItem>
-                );
-              })}
-            </List>
-          </>
-        )}
-
-        {/* Erreurs */}
-        {Object.keys(errors).length > 0 && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {Object.keys(errors).length} fichier(s) en erreur
-          </Alert>
-        )}
-
         {/* Actions */}
-        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-          <Button onClick={onClose} disabled={uploading}>
-            Annuler
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleUpload}
-            disabled={selectedFiles.length === 0 || uploading}
-            startIcon={uploading ? null : <UploadIcon />}
+        <Box sx={{ p: 2, display: 'flex', gap: 1.5, justifyContent: 'flex-end', borderTop: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+          <Button 
+            onClick={onClose} 
+            disabled={uploading}
+            variant="text"
+            sx={{ borderRadius: 2, px: 3 }}
           >
-            {uploading ? 'Upload en cours...' : 'Upload'}
+            {uploading ? 'Fermer' : 'Annuler'}
           </Button>
+          {!uploading && (
+            <Button
+              variant="contained"
+              onClick={handleUpload}
+              disabled={selectedFiles.length === 0}
+              startIcon={<UploadIcon />}
+              sx={{ borderRadius: 2, px: 4, boxShadow: 2 }}
+            >
+              Démarrer l'upload
+            </Button>
+          )}
         </Box>
       </UploaderPaper>
 
@@ -586,79 +774,114 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
         onClose={handleReplaceCancel}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }
+        }}
       >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <WarningIcon color="warning" />
-            <Typography variant="h6">
+        <DialogTitle sx={{ p: 3, pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: '50%', 
+              backgroundColor: 'warning.light', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              opacity: 0.2
+            }}>
+              <WarningIcon sx={{ color: 'warning.main' }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
               Fichiers existants détectés
             </Typography>
           </Box>
         </DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            {conflicts.length} fichier{conflicts.length > 1 ? 's' : ''} avec le même nom existe{conflicts.length > 1 ? 'nt' : ''} déjà dans le drive.
-            Que souhaitez-vous faire ?
+        <DialogContent sx={{ p: 3 }}>
+          <DialogContentText sx={{ mb: 3 }}>
+            {conflicts.length} fichier{conflicts.length > 1 ? 's' : ''} existe{conflicts.length > 1 ? 'nt' : ''} déjà dans la destination.
+            Sélectionnez ceux que vous souhaitez remplacer ou choisissez une option globale.
           </DialogContentText>
           
-          <List dense>
+          <List sx={{ 
+            bgcolor: 'grey.50', 
+            borderRadius: 2, 
+            border: '1px solid', 
+            borderColor: 'divider',
+            maxHeight: 300,
+            overflow: 'auto'
+          }}>
             {conflicts.map((conflict, index) => {
               const fileKey = conflict.file.name || conflict.file.webkitRelativePath;
               const isSelected = filesToReplace.has(fileKey);
               
               return (
-                <ListItem
-                  key={index}
-                  button
-                  onClick={() => toggleFileReplace(conflict)}
-                  sx={{
-                    backgroundColor: isSelected ? 'action.selected' : 'transparent',
-                    borderRadius: 1,
-                    mb: 1,
-                  }}
-                >
-                  <ListItemIcon>
-                    <FileIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={displayFilename(conflict.file.name)}
-                    secondary={conflict.destinationPath || currentPath || 'Racine'}
-                  />
-                  {isSelected && (
-                    <CheckIcon color="primary" />
-                  )}
-                </ListItem>
+                <React.Fragment key={index}>
+                  {index > 0 && <Divider />}
+                  <ListItem
+                    button
+                    onClick={() => toggleFileReplace(conflict)}
+                    sx={{
+                      backgroundColor: isSelected ? 'primary.light' : 'transparent',
+                      '&:hover': {
+                        backgroundColor: isSelected ? 'primary.light' : 'action.hover',
+                      },
+                      transition: 'background-color 0.2s',
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      <FileIcon sx={{ color: isSelected ? 'primary.main' : 'text.secondary' }} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={displayFilename(conflict.file.name)}
+                      secondary={conflict.destinationPath || currentPath || 'Racine'}
+                      primaryTypographyProps={{
+                        sx: { fontWeight: isSelected ? 600 : 500, fontSize: '0.875rem' }
+                      }}
+                      secondaryTypographyProps={{
+                        sx: { fontSize: '0.75rem' }
+                      }}
+                    />
+                    {isSelected && (
+                      <CheckIcon color="primary" sx={{ fontSize: 20 }} />
+                    )}
+                  </ListItem>
+                </React.Fragment>
               );
             })}
           </List>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleReplaceCancel}>
-            Annuler l'upload
+        <DialogActions sx={{ p: 3, pt: 1, gap: 1 }}>
+          <Button onClick={handleReplaceCancel} variant="text" sx={{ borderRadius: 2 }}>
+            Annuler
           </Button>
+          <Box sx={{ flexGrow: 1 }} />
           <Button
             variant="outlined"
             onClick={handleContinueWithoutReplace}
-            color="primary"
+            sx={{ borderRadius: 2 }}
           >
-            Continuer sans remplacer
+            Conserver les deux
           </Button>
-          {filesToReplace.size > 0 && (
+          {filesToReplace.size > 0 ? (
             <Button
               variant="contained"
               onClick={handleReplaceConfirm}
               color="primary"
+              sx={{ borderRadius: 2, px: 3 }}
             >
-              Remplacer {filesToReplace.size} fichier{filesToReplace.size > 1 ? 's' : ''}
+              Remplacer ({filesToReplace.size})
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              onClick={handleReplaceAll}
+              color="error"
+              sx={{ borderRadius: 2, px: 3 }}
+            >
+              Tout remplacer
             </Button>
           )}
-          <Button
-            variant="contained"
-            onClick={handleReplaceAll}
-            color="error"
-          >
-            Remplacer tous les fichiers
-          </Button>
         </DialogActions>
       </Dialog>
     </UploaderContainer>

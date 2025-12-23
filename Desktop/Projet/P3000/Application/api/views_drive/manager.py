@@ -10,7 +10,9 @@ import re
 def normalize_filename(filename: str) -> str:
     """
     Normalise un nom de fichier ou dossier en remplaçant les espaces par des underscores
-    et en préservant les parenthèses pour les numéros de version
+    
+    RÈGLE : Remplacer UNIQUEMENT les espaces par des underscores
+    AWS S3 accepte tous les caractères spéciaux SAUF les espaces
     
     Args:
         filename: Nom du fichier/dossier à normaliser
@@ -21,28 +23,9 @@ def normalize_filename(filename: str) -> str:
     if not filename:
         return filename
     
-    # Remplacer les espaces par des underscores
+    # Remplacer UNIQUEMENT les espaces par des underscores
+    # Tous les autres caractères spéciaux (&, @, #, etc.) sont autorisés par AWS S3
     normalized = filename.replace(' ', '_')
-    
-    # Nettoyer les caractères problématiques (garder alphanumériques, underscores, tirets, points, parenthèses)
-    normalized = re.sub(r'[^a-zA-Z0-9_\-\.\(\)]', '_', normalized)
-    
-    # Éviter les underscores multiples consécutifs (mais pas entre parenthèses)
-    # Remplacer les séquences d'underscores sauf celles qui sont dans des parenthèses
-    parts = re.split(r'(\([^)]*\))', normalized)
-    normalized_parts = []
-    for part in parts:
-        if part.startswith('(') and part.endswith(')'):
-            # Garder les parenthèses telles quelles
-            normalized_parts.append(part)
-        else:
-            # Nettoyer les underscores multiples dans les autres parties
-            cleaned = re.sub(r'_+', '_', part)
-            normalized_parts.append(cleaned)
-    normalized = ''.join(normalized_parts)
-    
-    # Supprimer les underscores au début et à la fin
-    normalized = normalized.strip('_')
     
     return normalized
 

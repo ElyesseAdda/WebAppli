@@ -72,6 +72,7 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',  // Inclure les cookies de session pour l'authentification
           body: JSON.stringify({
             file_path: filePath,
             file_name: fileName,

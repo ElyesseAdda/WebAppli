@@ -68,6 +68,7 @@ import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
 import MoveDialog from './MoveDialog';
 import { checkFileExists, findAvailableFileName } from './hooks/useUpload';
+import { normalizeFilename } from './services/pathNormalizationService';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
@@ -167,6 +168,8 @@ const DriveExplorer = ({
   onDropFiles,
   currentPath = '',
   onDraggedItemsChange,
+  onCopyItems = null,
+  copiedItems = [],
 }) => {
   const [contextMenu, setContextMenu] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -202,11 +205,41 @@ const DriveExplorer = ({
     setSelectedFiles(new Set());
   }, [currentPath]);
 
-  // Gérer la touche Escape pour désélectionner
+  // Gérer les touches clavier (Escape pour désélectionner, Ctrl+C pour copier)
   useEffect(() => {
     const handleKeyDown = (event) => {
+      // Ignorer si on est dans un champ de texte
+      const activeElement = document.activeElement;
+      const isInputField = 
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.isContentEditable ||
+        activeElement.getAttribute('contenteditable') === 'true';
+
+      if (isInputField) {
+        return;
+      }
+
+      // Escape : désélectionner
       if (event.key === 'Escape' && selectedFiles.size > 0) {
         setSelectedFiles(new Set());
+      }
+
+      // Ctrl+C ou Cmd+C : copier les éléments sélectionnés
+      if ((event.ctrlKey || event.metaKey) && event.key === 'c' && selectedFiles.size > 0 && onCopyItems) {
+        event.preventDefault();
+        
+        // Récupérer les éléments sélectionnés
+        const itemsToCopy = Array.from(selectedFiles).map(path => {
+          const file = files.find(f => f.path === path);
+          const folder = folders.find(f => f.path === path);
+          return file ? { ...file, type: 'file' } : folder ? { ...folder, type: 'folder' } : null;
+        }).filter(Boolean);
+
+        onCopyItems(itemsToCopy);
+        
+        // Feedback visuel temporaire (optionnel)
+        console.log(`${itemsToCopy.length} élément(s) copié(s) dans le Drive`);
       }
     };
 
@@ -214,7 +247,7 @@ const DriveExplorer = ({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedFiles]);
+  }, [selectedFiles, files, folders, onCopyItems]);
 
   // Gestion de la sélection multiple avec clic maintenu
   const handleMouseDown = useCallback((event, item) => {
@@ -871,7 +904,7 @@ const DriveExplorer = ({
     
     // Vérifier si un fichier/dossier avec ce nom existe déjà (sauf si c'est le même élément)
     const isFolder = selectedItem.type === 'folder';
-    const normalizedNewName = trimmedName.replace(/ /g, '_');
+    const normalizedNewName = normalizeFilename(trimmedName);
     
     // Construire le chemin complet du nouveau nom
     const newPath = parentPath + normalizedNewName + (isFolder ? '/' : '');
@@ -902,7 +935,7 @@ const DriveExplorer = ({
         
         // Vérifier si un élément avec ce nom existe déjà (et ce n'est pas l'élément actuel)
         const conflict = items.find(item => {
-          const itemNormalizedName = item.name.replace(/ /g, '_');
+          const itemNormalizedName = normalizeFilename(item.name);
           return itemNormalizedName === normalizedNewName && item.path !== selectedItem.path;
         });
 
@@ -912,7 +945,7 @@ const DriveExplorer = ({
           let suggestedName;
           if (isFolder) {
             // Pour les dossiers, créer un nom avec numéro entre parenthèses
-            const normalizedBaseName = trimmedName.replace(/ /g, '_');
+            const normalizedBaseName = normalizeFilename(trimmedName);
             for (let i = 1; i <= 1000; i++) {
               const candidateName = `${normalizedBaseName}_(${i})`;
               const candidatePath = parentPath + candidateName + '/';
@@ -979,7 +1012,7 @@ const DriveExplorer = ({
           
           if (isFolder) {
             // Pour les dossiers, créer un nom avec numéro entre parenthèses
-            const normalizedBaseName = nameToUse.replace(/ /g, '_');
+            const normalizedBaseName = normalizeFilename(nameToUse);
             for (let i = 1; i <= 1000; i++) {
               const candidateName = `${normalizedBaseName}_(${i})`;
               const candidatePath = parentPath + candidateName + '/';
@@ -1047,7 +1080,7 @@ const DriveExplorer = ({
 
     const trimmedName = newName.trim();
     const parentPath = selectedItem.path.substring(0, selectedItem.path.lastIndexOf('/') + 1);
-    const normalizedNewName = trimmedName.replace(/ /g, '_');
+    const normalizedNewName = normalizeFilename(trimmedName);
     const isFolder = selectedItem.type === 'folder';
     const newPath = parentPath + normalizedNewName + (isFolder ? '/' : '');
 
@@ -1067,7 +1100,7 @@ const DriveExplorer = ({
         const data = await response.json();
         const items = isFolder ? (data.folders || []) : (data.files || []);
         const conflictItem = items.find(item => {
-          const itemNormalizedName = item.name.replace(/ /g, '_');
+          const itemNormalizedName = normalizeFilename(item.name);
           return itemNormalizedName === normalizedNewName && item.path !== selectedItem.path;
         });
 

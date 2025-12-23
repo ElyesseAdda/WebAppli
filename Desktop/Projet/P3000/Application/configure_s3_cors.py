@@ -23,6 +23,9 @@ def configure_s3_cors():
                 "http://localhost:8000", 
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
+                "http://localhost:8080",  # OnlyOffice local
+                "http://127.0.0.1:8080",  # OnlyOffice local
+                "http://72.60.90.127:8080",  # OnlyOffice production
                 "https://myp3000app.com",
                 "https://www.myp3000app.com"
             ],

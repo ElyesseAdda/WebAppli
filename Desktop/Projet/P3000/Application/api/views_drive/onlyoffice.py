@@ -239,6 +239,7 @@ class OnlyOfficeManager:
                     "modifyFilter": mode == 'edit',
                     "print": True,
                     "review": mode == 'edit',
+                    "chat": False,  # Désactiver chat (déplacé depuis customization)
                 }
             },
             "documentType": OnlyOfficeManager.get_document_type(file_name),
@@ -259,7 +260,6 @@ class OnlyOfficeManager:
                         "url": ""
                     },
                     "zoom": 100,
-                    "chat": False,  # OPTIMISATION : Désactiver chat
                     "plugins": False,  # OPTIMISATION : Désactiver plugins
                 },
                 "callbackUrl": OnlyOfficeManager.normalize_callback_url(callback_url),
@@ -340,7 +340,54 @@ class OnlyOfficeManager:
                 
                 try:
                     # Télécharger le fichier modifié depuis OnlyOffice
-                    response = requests.get(download_url, timeout=30)
+                    # Préparer les headers pour la requête
+                    headers = {}
+                    final_url = download_url
+                    
+                    # Si JWT est activé, OnlyOffice nécessite le token dans l'URL
+                    # OnlyOffice signe automatiquement les URLs qu'il génère, mais
+                    # on doit vérifier si l'URL est déjà signée
+                    if settings.ONLYOFFICE_JWT_ENABLED:
+                        # Vérifier si l'URL contient déjà un token
+                        parsed = urlparse(download_url)
+                        query_params = parse_qs(parsed.query)
+                        
+                        # Si pas de token dans l'URL, l'ajouter
+                        if 'token' not in query_params:
+                            # Créer un token JWT pour l'accès au fichier
+                            token_payload = {
+                                'url': download_url,
+                                'iat': int(time.time())
+                            }
+                            jwt_token = jwt.encode(
+                                token_payload,
+                                settings.ONLYOFFICE_JWT_SECRET,
+                                algorithm='HS256'
+                            )
+                            
+                            # Ajouter le token à l'URL
+                            query_params['token'] = jwt_token
+                            new_query = urlencode(query_params, doseq=True)
+                            final_url = urlunparse((
+                                parsed.scheme,
+                                parsed.netloc,
+                                parsed.path,
+                                parsed.params,
+                                new_query,
+                                parsed.fragment
+                            ))
+                        else:
+                            # L'URL contient déjà un token, l'utiliser telle quelle
+                            final_url = download_url
+                    
+                    # Faire la requête avec l'URL signée
+                    response = requests.get(final_url, headers=headers, timeout=30)
+                    
+                    # Si erreur 403, essayer sans token (au cas où OnlyOffice ne nécessite pas JWT pour cet endpoint)
+                    if response.status_code == 403 and settings.ONLYOFFICE_JWT_ENABLED:
+                        # Réessayer sans token JWT
+                        response = requests.get(download_url, timeout=30)
+                    
                     response.raise_for_status()
                     
                     # Upload le fichier modifié sur S3
@@ -356,6 +403,10 @@ class OnlyOfficeManager:
                         return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
                     
                 except requests.RequestException as e:
+                    # Logger l'erreur pour diagnostic
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erreur lors du téléchargement depuis OnlyOffice: {e}, URL: {download_url}")
                     return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Pour tous les autres status, on retourne success

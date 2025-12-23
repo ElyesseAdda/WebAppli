@@ -4,6 +4,13 @@
 
 import { useState, useCallback } from 'react';
 import axios from 'axios';
+import {
+  normalizeFilename,
+  calculateNormalizedFilePath,
+  extractRootFolderName,
+  buildFilePath,
+  collectFolderPaths,
+} from '../services/pathNormalizationService';
 
 const API_BASE_URL = '/api/drive-v2';
 
@@ -28,59 +35,9 @@ export const useUpload = () => {
     return cookieValue;
   };
 
-  // Extraire le nom du dossier racine depuis les fichiers
-  const extractRootFolderName = (files) => {
-    if (files.length === 0) return null;
-    
-    // Prendre le premier fichier qui a un webkitRelativePath avec au moins un dossier (contient '/')
-    const firstFileWithPath = files.find(f => {
-      const path = f.webkitRelativePath;
-      return path && path !== '' && path.includes('/');
-    });
-    if (!firstFileWithPath) return null;
-    
-    // Le premier élément du chemin relatif est le nom du dossier racine
-    const pathParts = firstFileWithPath.webkitRelativePath.split('/');
-    return pathParts[0];
-  };
-
-  // Calculer le chemin de destination d'un fichier
-  const calculateFilePath = (file, currentPath, rootFolderName = null) => {
-    // Si le fichier a un chemin relatif (dans un dossier uploadé)
-    if (file.webkitRelativePath) {
-      const relativePath = file.webkitRelativePath;
-      const pathParts = relativePath.split('/');
-      
-      // Si le fichier est dans un sous-dossier, préserver la structure
-      if (pathParts.length > 1) {
-        // Enlever le nom du fichier pour obtenir le chemin du dossier
-        const folderPath = pathParts.slice(0, -1).join('/');
-        
-        // Si on a un nom de dossier racine, on l'utilise comme base
-        // Sinon, on combine avec le chemin actuel
-        if (rootFolderName) {
-          // Le chemin relatif inclut déjà le nom du dossier racine
-          // On le combine avec le chemin actuel
-          const normalizedCurrentPath = currentPath ? currentPath.replace(/\/$/, '') + '/' : '';
-          return normalizedCurrentPath + folderPath + '/';
-        } else {
-          // Pas de dossier racine, utiliser le chemin actuel
-          const normalizedCurrentPath = currentPath ? currentPath.replace(/\/$/, '') + '/' : '';
-          return normalizedCurrentPath + folderPath + '/';
-        }
-      } else {
-        // Fichier à la racine du dossier sélectionné
-        // Utiliser le nom du dossier racine comme chemin
-        if (rootFolderName) {
-          const normalizedCurrentPath = currentPath ? currentPath.replace(/\/$/, '') + '/' : '';
-          return normalizedCurrentPath + rootFolderName + '/';
-        }
-      }
-    }
-    
-    // Sinon, utiliser le chemin actuel normal
-    return currentPath || '';
-  };
+  // SUPPRIMÉ: extractRootFolderName et calculateFilePath
+  // Ces fonctions sont maintenant dans pathNormalizationService.js
+  // et sont importées en haut du fichier
 
   // Vérifier si un fichier existe déjà
   const checkFileExists = async (fileName, filePath) => {
@@ -94,13 +51,12 @@ export const useUpload = () => {
       );
       
       const files = response.data.files || [];
-      // Normaliser le nom du fichier pour la comparaison (remplacer espaces par underscores)
-      // Le backend normalise automatiquement les noms avec des underscores
-      const normalizedFileName = fileName.replace(/ /g, '_');
+      // Normaliser le nom du fichier avec le service centralisé
+      const normalizedFileName = normalizeFilename(fileName);
       
       return files.some(f => {
-        // Les noms dans le backend sont déjà normalisés avec des underscores
-        // Comparer directement (les noms sont déjà normalisés côté backend)
+        // Les noms dans le backend sont déjà normalisés
+        // Comparer directement
         return f.name === normalizedFileName;
       });
     } catch (error) {
@@ -118,19 +74,16 @@ export const useUpload = () => {
     const baseName = hasExtension ? originalFileName.substring(0, lastDotIndex) : originalFileName;
     const extension = hasExtension ? originalFileName.substring(lastDotIndex) : '';
     
-    // Normaliser le nom de base
-    const normalizedBaseName = baseName.replace(/ /g, '_');
-    
     // Essayer avec des numéros incrémentaux entre parenthèses
     for (let i = 1; i <= 1000; i++) {
-      // Le nom normalisé avec parenthèses (le backend normalisera les parenthèses en underscores)
-      const candidateName = `${normalizedBaseName}_(${i})${extension}`;
-      const exists = await checkFileExists(candidateName, filePath);
+      const candidateName = `${baseName}_(${i})${extension}`;
+      // Normaliser le nom candidat avec le service centralisé
+      const normalizedCandidateName = normalizeFilename(candidateName);
+      const exists = await checkFileExists(normalizedCandidateName, filePath);
       
       if (!exists) {
-        // Retourner le nom avec espaces et parenthèses pour l'affichage
-        // Le backend normalisera automatiquement les espaces et parenthèses
-        return `${baseName}_(${i})${extension}`;
+        // Retourner le nom original (sera normalisé plus tard)
+        return candidateName;
       }
     }
     
@@ -142,11 +95,11 @@ export const useUpload = () => {
   // Upload d'un fichier
   const uploadFile = async (file, currentPath, rootFolderName = null, replaceExisting = false, newFileName = null) => {
     try {
-      // Calculer le chemin de destination (peut inclure des sous-dossiers)
-      const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
+      // Calculer le chemin de destination normalisé (peut inclure des sous-dossiers)
+      const fileDestinationPath = calculateNormalizedFilePath(file, currentPath, rootFolderName);
       
-      // Déterminer le nom du fichier à utiliser
-      const fileNameToUse = newFileName || file.name;
+      // Déterminer le nom du fichier à utiliser (normalisé)
+      const fileNameToUse = normalizeFilename(newFileName || file.name);
       
       // Déterminer le Content-Type du fichier
       // S'assurer qu'on utilise un type valide, sinon utiliser application/octet-stream
@@ -159,9 +112,8 @@ export const useUpload = () => {
       // Si on doit remplacer un fichier existant, le supprimer d'abord
       if (replaceExisting) {
         try {
-          // Normaliser le nom du fichier original pour construire le chemin
-          const normalizedFileName = file.name.replace(/ /g, '_');
-          const fullFilePath = fileDestinationPath + normalizedFileName;
+          // Construire le chemin complet normalisé avec le service centralisé
+          const fullFilePath = buildFilePath(fileDestinationPath, file.name);
           
           await axios.delete(
             `${API_BASE_URL}/delete-item/`,
@@ -295,7 +247,7 @@ export const useUpload = () => {
       relativePath = normalizedFolder.slice(normalizedBase.length);
     }
 
-    // Diviser en parties
+    // Diviser en parties (les noms sont déjà normalisés dans le chemin)
     const parts = relativePath.split('/').filter(part => part);
     
     if (parts.length === 0) {
@@ -309,11 +261,12 @@ export const useUpload = () => {
       const fullFolderPath = currentParentPath + folderName + '/';
       
       try {
+        // Note: folderName est déjà normalisé car il provient d'un chemin normalisé
         await axios.post(
           `${API_BASE_URL}/create-folder/`,
           {
             parent_path: currentParentPath,
-            folder_name: folderName,
+            folder_name: folderName, // Déjà normalisé
           },
           {
             withCredentials: true,
@@ -338,7 +291,7 @@ export const useUpload = () => {
     const conflicts = [];
 
     for (const file of files) {
-      const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
+      const fileDestinationPath = calculateNormalizedFilePath(file, currentPath, rootFolderName);
       const exists = await checkFileExists(file.name, fileDestinationPath);
       
       if (exists) {
@@ -359,6 +312,7 @@ export const useUpload = () => {
     // retourner le dossier lui-même comme un "fichier" avec size=0 et webkitRelativePath=''
     const validFiles = files.filter((file) => {
       if (!file || !file.name) {
+        console.warn('Fichier rejeté : pas de nom', file);
         return false;
       }
       
@@ -369,19 +323,30 @@ export const useUpload = () => {
       // Si on a un webkitRelativePath, c'est un fichier dans un dossier uploadé
       if (hasRelativePath) {
         // Vérifier que ce n'est pas un dossier (les dossiers ont parfois size=0 mais pas de webkitRelativePath)
-        return file.size !== undefined; // Même les fichiers vides sont valides s'ils ont un chemin relatif
+        const isValid = file.size !== undefined; // Même les fichiers vides sont valides s'ils ont un chemin relatif
+        if (!isValid) {
+          console.warn('Fichier rejeté : dossier détecté', file.name);
+        }
+        return isValid;
       }
       
       // Si pas de webkitRelativePath, c'est un upload de fichier simple
       // Dans ce cas, on accepte les fichiers avec une taille >= 0 (y compris les fichiers vides)
       // MAIS on rejette ceux avec size=0 ET pas de type (probablement un dossier)
       if (file.size === 0 && (!file.type || file.type === '')) {
+        console.warn('Fichier rejeté : probablement un dossier (size=0, no type)', file.name);
         return false;
       }
       
       // Fichier simple valide
       return file.size !== undefined;
     });
+    
+    // Logger les fichiers filtrés
+    if (files.length !== validFiles.length) {
+      console.log(`Upload: ${validFiles.length} fichiers valides sur ${files.length} sélectionnés`);
+      console.log('Fichiers rejetés:', files.length - validFiles.length);
+    }
     
     if (validFiles.length === 0) {
       return {
@@ -396,18 +361,11 @@ export const useUpload = () => {
     setProgress({});
     setErrors({});
 
-    // Extraire le nom du dossier racine si c'est un upload de dossier
+    // Extraire le nom du dossier racine si c'est un upload de dossier (normalisé)
     const rootFolderName = extractRootFolderName(validFiles);
 
-    // Collecter tous les chemins de dossiers uniques nécessaires
-    const folderPaths = new Set();
-    validFiles.forEach((file) => {
-      const fileDestinationPath = calculateFilePath(file, currentPath, rootFolderName);
-      
-      if (fileDestinationPath && fileDestinationPath !== (currentPath || '')) {
-        folderPaths.add(fileDestinationPath);
-      }
-    });
+    // Collecter tous les chemins de dossiers uniques nécessaires (normalisés)
+    const folderPaths = collectFolderPaths(validFiles, currentPath, rootFolderName);
 
     // Créer tous les dossiers nécessaires avant l'upload
     if (folderPaths.size > 0) {
