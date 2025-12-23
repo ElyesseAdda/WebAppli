@@ -482,14 +482,32 @@ def check_onlyoffice_view(request):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     try:
+        # Vérifier que les settings sont configurés
+        if not hasattr(settings, 'ONLYOFFICE_SERVER_URL'):
+            return JsonResponse({
+                'available': False,
+                'error': 'OnlyOffice configuration not found in settings',
+                'server_url': 'Not configured',
+                'jwt_enabled': False
+            }, status=200)  # Status 200 car ce n'est pas une erreur serveur, juste une config manquante
+        
         result = OnlyOfficeManager.check_availability()
         return JsonResponse(result, status=200)
+    except AttributeError as e:
+        # Gérer le cas où les settings ne sont pas définis
+        return JsonResponse({
+            'available': False,
+            'error': f'OnlyOffice configuration error: {str(e)}',
+            'server_url': getattr(settings, 'ONLYOFFICE_SERVER_URL', 'Not configured'),
+            'jwt_enabled': getattr(settings, 'ONLYOFFICE_JWT_ENABLED', False)
+        }, status=200)
     except Exception as e:
         return JsonResponse({
             'available': False,
             'error': str(e),
-            'server_url': settings.ONLYOFFICE_SERVER_URL if hasattr(settings, 'ONLYOFFICE_SERVER_URL') else 'Not configured'
-        }, status=500)
+            'server_url': getattr(settings, 'ONLYOFFICE_SERVER_URL', 'Not configured'),
+            'jwt_enabled': getattr(settings, 'ONLYOFFICE_JWT_ENABLED', False)
+        }, status=200)  # Status 200 pour permettre au frontend de gérer l'erreur
 
 
 # Vue fonction pour le proxy (en dehors du ViewSet pour éviter les problèmes de permissions)
