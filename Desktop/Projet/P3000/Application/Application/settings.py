@@ -69,6 +69,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.onlyoffice_middleware.OnlyOfficeFrameOptionsMiddleware',  # Autoriser OnlyOffice dans iframe
 ]
 
 # Configuration CORS optimisée
@@ -301,5 +302,10 @@ ONLYOFFICE_SERVER_URL = os.getenv('ONLYOFFICE_SERVER_URL', 'http://localhost:808
 ONLYOFFICE_JWT_SECRET = os.getenv('ONLYOFFICE_JWT_SECRET', 'votre-secret-jwt-super-long-et-complexe')
 ONLYOFFICE_JWT_ENABLED = os.getenv('ONLYOFFICE_JWT_ENABLED', 'true').lower() == 'true'
 ONLYOFFICE_JWT_HEADER = os.getenv('ONLYOFFICE_JWT_HEADER', 'Authorization')
+
+# Configuration X-Frame-Options pour autoriser OnlyOffice dans un iframe
+# Le middleware OnlyOfficeFrameOptionsMiddleware gère spécifiquement les pages OnlyOffice
+# Pour les autres pages, on garde DENY par défaut pour la sécurité
+X_FRAME_OPTIONS = 'DENY'
 
 
