@@ -482,31 +482,53 @@ def check_onlyoffice_view(request):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     try:
-        # Vérifier que les settings sont configurés
-        if not hasattr(settings, 'ONLYOFFICE_SERVER_URL'):
+        # Charger les variables depuis os.environ si elles ne sont pas dans settings
+        # (pour gérer le cas où Gunicorn ne charge pas le .env correctement)
+        import os
+        onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', None)
+        if not onlyoffice_url:
+            onlyoffice_url = os.getenv('ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
+        
+        jwt_enabled = getattr(settings, 'ONLYOFFICE_JWT_ENABLED', None)
+        if jwt_enabled is None:
+            jwt_enabled_str = os.getenv('ONLYOFFICE_JWT_ENABLED', 'true')
+            jwt_enabled = jwt_enabled_str.lower() == 'true'
+        
+        # Si les variables ne sont toujours pas trouvées
+        if not onlyoffice_url or onlyoffice_url == 'http://localhost:8080':
             return JsonResponse({
                 'available': False,
-                'error': 'OnlyOffice configuration not found in settings',
+                'error': 'OnlyOffice configuration not found',
                 'server_url': 'Not configured',
                 'jwt_enabled': False
-            }, status=200)  # Status 200 car ce n'est pas une erreur serveur, juste une config manquante
+            }, status=200)
         
-        result = OnlyOfficeManager.check_availability()
-        return JsonResponse(result, status=200)
-    except AttributeError as e:
-        # Gérer le cas où les settings ne sont pas définis
-        return JsonResponse({
-            'available': False,
-            'error': f'OnlyOffice configuration error: {str(e)}',
-            'server_url': getattr(settings, 'ONLYOFFICE_SERVER_URL', 'Not configured'),
-            'jwt_enabled': getattr(settings, 'ONLYOFFICE_JWT_ENABLED', False)
-        }, status=200)
+        # Tester la connexion directement
+        import requests
+        healthcheck_url = f"{onlyoffice_url}/healthcheck"
+        try:
+            response = requests.get(healthcheck_url, timeout=5)
+            is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
+            
+            return JsonResponse({
+                'available': is_available,
+                'server_url': onlyoffice_url,
+                'jwt_enabled': jwt_enabled
+            }, status=200)
+        except requests.RequestException as e:
+            return JsonResponse({
+                'available': False,
+                'error': f'OnlyOffice server is unreachable: {str(e)}',
+                'server_url': onlyoffice_url,
+                'jwt_enabled': jwt_enabled
+            }, status=200)
+        
     except Exception as e:
         return JsonResponse({
             'available': False,
             'error': str(e),
-            'server_url': getattr(settings, 'ONLYOFFICE_SERVER_URL', 'Not configured'),
-            'jwt_enabled': getattr(settings, 'ONLYOFFICE_JWT_ENABLED', False)
+            'server_url': 'Not configured',
+            'jwt_enabled': False
         }, status=200)  # Status 200 pour permettre au frontend de gérer l'erreur
 
 
