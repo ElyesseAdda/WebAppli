@@ -471,6 +471,27 @@ class DriveV2ViewSet(viewsets.ViewSet):
         return Response(result, status=status.HTTP_200_OK)
 
 
+# Vue fonction pour vérifier OnlyOffice (en dehors du ViewSet pour éviter les problèmes de permissions)
+@csrf_exempt
+def check_onlyoffice_view(request):
+    """
+    Vérifie si OnlyOffice est disponible et accessible
+    Pas d'authentification requise pour permettre la vérification depuis le frontend
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        result = OnlyOfficeManager.check_availability()
+        return JsonResponse(result, status=200)
+    except Exception as e:
+        return JsonResponse({
+            'available': False,
+            'error': str(e),
+            'server_url': settings.ONLYOFFICE_SERVER_URL if hasattr(settings, 'ONLYOFFICE_SERVER_URL') else 'Not configured'
+        }, status=500)
+
+
 # Vue fonction pour le proxy (en dehors du ViewSet pour éviter les problèmes de permissions)
 @csrf_exempt
 def proxy_file_view(request):

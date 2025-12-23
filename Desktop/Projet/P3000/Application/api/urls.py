@@ -428,7 +428,7 @@ urlpatterns += [
 ]
 
 # --- URLs POUR LE DRIVE V2 (NOUVEAU SYSTÈME) ---
-from .views_drive.views import DriveV2ViewSet, proxy_file_view, onlyoffice_callback_view
+from .views_drive.views import DriveV2ViewSet, proxy_file_view, onlyoffice_callback_view, check_onlyoffice_view
 
 urlpatterns += [
     # Navigation et contenu
@@ -471,9 +471,7 @@ urlpatterns += [
     
     # OnlyOffice Document Server Integration
     path('drive-v2/proxy-file/', proxy_file_view, name='drive-v2-proxy-file'),  # Vue fonction simple
-    path('drive-v2/check-onlyoffice/', DriveV2ViewSet.as_view({
-        'get': 'check_onlyoffice'
-    }), name='drive-v2-check-onlyoffice'),
+    path('drive-v2/check-onlyoffice/', check_onlyoffice_view, name='drive-v2-check-onlyoffice'),
     path('drive-v2/onlyoffice-config/', DriveV2ViewSet.as_view({
         'post': 'get_onlyoffice_config'
     }), name='drive-v2-onlyoffice-config'),
