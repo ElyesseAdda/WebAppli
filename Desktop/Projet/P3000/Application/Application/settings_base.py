@@ -31,7 +31,9 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production'
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Configuration ALLOWED_HOSTS
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# Par défaut, inclure l'IP du serveur de production et les domaines
+default_hosts = 'myp3000app.com,www.myp3000app.com,72.60.90.127,localhost,127.0.0.1,host.docker.internal'
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', default_hosts).split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -58,6 +60,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.onlyoffice_middleware.OnlyOfficeFrameOptionsMiddleware',  # Autoriser OnlyOffice dans iframe
 ]
 
 # Configuration CORS
@@ -173,6 +176,17 @@ REST_FRAMEWORK = {
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Configuration OnlyOffice Document Server
+ONLYOFFICE_SERVER_URL = os.getenv('ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
+ONLYOFFICE_JWT_SECRET = os.getenv('ONLYOFFICE_JWT_SECRET', 'votre-secret-jwt-super-long-et-complexe')
+ONLYOFFICE_JWT_ENABLED = os.getenv('ONLYOFFICE_JWT_ENABLED', 'true').lower() == 'true'
+ONLYOFFICE_JWT_HEADER = os.getenv('ONLYOFFICE_JWT_HEADER', 'Authorization')
+
+# Configuration X-Frame-Options pour autoriser OnlyOffice dans un iframe
+# Le middleware OnlyOfficeFrameOptionsMiddleware gère spécifiquement les pages OnlyOffice
+# Pour les autres pages, on garde DENY par défaut pour la sécurité
+X_FRAME_OPTIONS = 'DENY'
 
 # Version de l'application
 VERSION = '1.0.0'
