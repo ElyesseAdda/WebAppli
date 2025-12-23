@@ -10,12 +10,59 @@ import jwt
 import time
 import requests
 import re
+from urllib.parse import urlparse
 
 
 class OnlyOfficeManager:
     """
     Gestionnaire OnlyOffice pour l'édition de documents
     """
+    
+    @staticmethod
+    def normalize_callback_url(url: str) -> str:
+        """
+        Normalise l'URL de callback pour qu'elle soit accessible depuis le conteneur Docker.
+        
+        En développement local (Docker Desktop Windows/Mac) : utilise host.docker.internal
+        En production (Linux) : utilise localhost si Django et OnlyOffice sont sur le même serveur
+        
+        Args:
+            url: URL de callback originale
+            
+        Returns:
+            URL normalisée pour Docker
+        """
+        parsed = urlparse(url)
+        is_production = not settings.DEBUG
+        
+        # Si l'URL contient 127.0.0.1 ou localhost
+        if parsed.hostname in ('127.0.0.1', 'localhost'):
+            if is_production:
+                # En production : utiliser localhost (Docker sur Linux peut accéder au host)
+                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                return f"{parsed.scheme}://localhost:{port}{parsed.path}"
+            else:
+                # En développement : utiliser host.docker.internal (Docker Desktop)
+                return url.replace('127.0.0.1', 'host.docker.internal').replace('localhost', 'host.docker.internal')
+        
+        # Si l'URL utilise une IP externe (comme 72.60.90.127)
+        # En production, si OnlyOffice et Django sont sur le même serveur,
+        # remplacer l'IP par localhost pour que Docker puisse accéder au host
+        if is_production and parsed.hostname:
+            onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
+            onlyoffice_parsed = urlparse(onlyoffice_url)
+            
+            # Si l'IP de l'URL correspond à l'IP du serveur OnlyOffice
+            # OU si OnlyOffice utilise aussi cette IP, alors on est sur le même serveur
+            if (parsed.hostname == onlyoffice_parsed.hostname or 
+                (onlyoffice_parsed.hostname in settings.ALLOWED_HOSTS and 
+                 parsed.hostname in settings.ALLOWED_HOSTS)):
+                # Utiliser localhost car on est sur le même serveur
+                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                return f"{parsed.scheme}://localhost:{port}{parsed.path}"
+        
+        # Si l'URL utilise déjà un domaine/IP externe différent, la retourner telle quelle
+        return url
     
     @staticmethod
     def get_document_type(file_name: str) -> str:
@@ -26,15 +73,18 @@ class OnlyOfficeManager:
             file_name: Nom du fichier
             
         Returns:
-            Type de document (word, cell, slide)
+            Type de document (word, cell, slide, pdf)
         """
         extension = file_name.split('.')[-1].lower()
         
         word_extensions = ['doc', 'docx', 'docm', 'dot', 'dotx', 'dotm', 'odt', 'fodt', 'ott', 'rtf', 'txt']
         cell_extensions = ['xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm', 'ods', 'fods', 'ots', 'csv']
         slide_extensions = ['ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm', 'odp', 'fodp', 'otp']
+        pdf_extensions = ['pdf']
         
-        if extension in word_extensions:
+        if extension in pdf_extensions:
+            return 'pdf'
+        elif extension in word_extensions:
             return 'word'
         elif extension in cell_extensions:
             return 'cell'
@@ -59,7 +109,8 @@ class OnlyOfficeManager:
             'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
             'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
             'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
-            'odt', 'ods', 'odp', 'rtf', 'txt', 'csv'
+            'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
+            'pdf'  # Support PDF depuis OnlyOffice 8.1+
         ]
         return extension in editable_extensions
     
@@ -211,7 +262,7 @@ class OnlyOfficeManager:
                     "chat": False,  # OPTIMISATION : Désactiver chat
                     "plugins": False,  # OPTIMISATION : Désactiver plugins
                 },
-                "callbackUrl": callback_url.replace('127.0.0.1', 'host.docker.internal').replace('localhost', 'host.docker.internal'),
+                "callbackUrl": OnlyOfficeManager.normalize_callback_url(callback_url),
                 "lang": "fr",
                 "mode": mode,
             },

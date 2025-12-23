@@ -61,9 +61,11 @@ class FrontendAppView(TemplateView):
                     'has_vendors': bool(vendors_files),  # Indicateur de présence
                 })
         
+        # Ajouter l'URL du serveur OnlyOffice pour le template
         context.update({
             'debug': settings.DEBUG,
             'version': getattr(settings, 'VERSION', '1.0.0'),
+            'onlyoffice_server_url': getattr(settings, 'ONLYOFFICE_SERVER_URL', None),
         })
         return context
 

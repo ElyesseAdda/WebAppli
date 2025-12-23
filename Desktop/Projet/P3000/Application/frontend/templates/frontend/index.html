@@ -13,7 +13,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&family=Merriweather:wght@400;500;700&display=swap" rel="stylesheet">
     
     <!-- OnlyOffice Document Editor API -->
+    {% if onlyoffice_server_url %}
+    <script type="text/javascript" src="{{ onlyoffice_server_url }}/web-apps/apps/api/documents/api.js"></script>
+    {% else %}
     <script type="text/javascript" src="http://localhost:8080/web-apps/apps/api/documents/api.js"></script>
+    {% endif %}
 
     <!-- Django global CSS -->
     <link rel="stylesheet" href="{% static 'css/index.css' %}" />

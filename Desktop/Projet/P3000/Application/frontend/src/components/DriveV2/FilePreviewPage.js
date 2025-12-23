@@ -1,7 +1,6 @@
 /**
  * File Preview Page - Page dédiée à la prévisualisation de fichiers
  */
-
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -152,7 +151,8 @@ const FilePreviewPage = () => {
       'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
       'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
       'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
-      'odt', 'ods', 'odp', 'rtf', 'txt', 'csv'
+      'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
+      'pdf'  // Support PDF depuis OnlyOffice 8.1+
     ];
     return editableExtensions.includes(extension);
   };
@@ -200,6 +200,21 @@ const FilePreviewPage = () => {
 
     switch (fileType) {
       case 'pdf':
+        // Si OnlyOffice est disponible, l'utiliser directement
+        if (onlyOfficeAvailable) {
+          return (
+            <iframe
+              src={`/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`}
+              title={fileName}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+            />
+          );
+        }
+        // Sinon, preview native
         return (
           <iframe
             src={displayUrl}

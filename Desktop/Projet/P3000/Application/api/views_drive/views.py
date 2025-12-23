@@ -412,13 +412,16 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 from urllib.parse import urlencode
                 params = urlencode({'file_path': file_path})
                 file_url = request.build_absolute_uri(f'/api/drive-v2/proxy-file/?{params}')
-                file_url = file_url.replace('127.0.0.1', 'host.docker.internal').replace('localhost', 'host.docker.internal')
+                # Normaliser l'URL pour qu'elle soit accessible depuis Docker
+                file_url = OnlyOfficeManager.normalize_callback_url(file_url)
             else:
                 # URL S3 directe (valide 24h)
                 file_url = self.drive_manager.get_onlyoffice_url(file_path, expires_in=86400)
             
             # URL de callback pour sauvegarder les modifications
             callback_url = request.build_absolute_uri('/api/drive-v2/onlyoffice-callback/')
+            # Normaliser l'URL pour qu'elle soit accessible depuis Docker
+            callback_url = OnlyOfficeManager.normalize_callback_url(callback_url)
             
             # Créer la configuration via OnlyOfficeManager
             result = OnlyOfficeManager.create_config(
