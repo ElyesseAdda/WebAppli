@@ -39,7 +39,7 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 
 # Configuration ALLOWED_HOSTS
-ALLOWED_HOSTS = ['myp3000app.com', 'www.myp3000app.com', 'localhost', '127.0.0.1', 'host.docker.internal']
+ALLOWED_HOSTS = ['myp3000app.com', 'www.myp3000app.com', '72.60.90.127', 'localhost', '127.0.0.1', 'host.docker.internal']
 
 
 # Application definition

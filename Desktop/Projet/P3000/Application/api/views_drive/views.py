@@ -462,7 +462,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({'error': 1}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    @action(detail=False, methods=['get'], url_path='check-onlyoffice')
+    @action(detail=False, methods=['get'], url_path='check-onlyoffice', permission_classes=[AllowAny])
     def check_onlyoffice(self, request):
         """
         Vérifie si OnlyOffice est disponible et accessible

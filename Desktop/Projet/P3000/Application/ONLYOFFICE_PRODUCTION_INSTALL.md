@@ -166,9 +166,33 @@ sudo usermod -aG docker $USER
 
 ### 2.1 Création du répertoire de configuration
 
+**📍 Important :** OnlyOffice doit être installé dans un répertoire **séparé** de votre projet Django, de préférence dans `/opt/onlyoffice` (standard Linux pour les applications système).
+
+**Pourquoi séparé ?**
+- OnlyOffice est un service indépendant qui peut servir plusieurs applications
+- Facilite la maintenance et les mises à jour
+- Meilleure organisation et sécurité
+- Permet de redémarrer OnlyOffice sans affecter Django
+
 ```bash
+# Créer le répertoire OnlyOffice (SÉPARÉ du projet Django)
 sudo mkdir -p /opt/onlyoffice
 cd /opt/onlyoffice
+```
+
+**Structure recommandée :**
+```
+/
+├── opt/
+│   └── onlyoffice/          # ← OnlyOffice ici (service système)
+│       ├── docker-compose.yml
+│       └── ...
+├── home/
+│   └── votre-user/
+│       └── votre-projet/    # ← Votre projet Django reste ici
+│           ├── Application/
+│           ├── api/
+│           └── ...
 ```
 
 ### 2.2 Création du fichier docker-compose.yml
