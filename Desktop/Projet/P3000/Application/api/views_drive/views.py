@@ -485,17 +485,41 @@ def check_onlyoffice_view(request):
         # Charger les variables depuis os.environ si elles ne sont pas dans settings
         # (pour gérer le cas où Gunicorn ne charge pas le .env correctement)
         import os
-        onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', None)
-        if not onlyoffice_url:
-            onlyoffice_url = os.getenv('ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
+        from pathlib import Path
         
+        # Essayer d'abord depuis settings
+        onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', None)
         jwt_enabled = getattr(settings, 'ONLYOFFICE_JWT_ENABLED', None)
+        
+        # Si pas trouvé dans settings, charger depuis os.environ
+        if not onlyoffice_url:
+            onlyoffice_url = os.getenv('ONLYOFFICE_SERVER_URL', None)
+        
         if jwt_enabled is None:
             jwt_enabled_str = os.getenv('ONLYOFFICE_JWT_ENABLED', 'true')
-            jwt_enabled = jwt_enabled_str.lower() == 'true'
+            jwt_enabled = jwt_enabled_str.lower() == 'true' if jwt_enabled_str else True
+        
+        # Si toujours pas trouvé, essayer de charger directement depuis .env
+        if not onlyoffice_url:
+            try:
+                env_file = Path(settings.BASE_DIR) / '.env'
+                if env_file.exists():
+                    with open(env_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith('#') and '=' in line:
+                                key, value = line.split('=', 1)
+                                key = key.strip()
+                                value = value.strip().strip('"').strip("'")
+                                if key == 'ONLYOFFICE_SERVER_URL' and not onlyoffice_url:
+                                    onlyoffice_url = value
+                                elif key == 'ONLYOFFICE_JWT_ENABLED' and jwt_enabled is None:
+                                    jwt_enabled = value.lower() == 'true'
+            except Exception:
+                pass  # Ignorer les erreurs de lecture du .env
         
         # Si les variables ne sont toujours pas trouvées
-        if not onlyoffice_url or onlyoffice_url == 'http://localhost:8080':
+        if not onlyoffice_url:
             return JsonResponse({
                 'available': False,
                 'error': 'OnlyOffice configuration not found',
