@@ -8424,10 +8424,13 @@ def labor_costs_monthly_summary(request):
     import datetime
     first_day = datetime.date(year, month, 1)
     last_day = datetime.date(year, month, monthrange(year, month)[1])
-    weeks = set()
+    # Collecter les semaines avec leur année ISO pour gérer les semaines qui chevauchent les années
+    week_year_pairs = set()
     d = first_day
     while d <= last_day:
-        weeks.add(d.isocalendar()[1])
+        iso_week = d.isocalendar()[1]
+        iso_year = d.isocalendar()[0]  # Année ISO
+        week_year_pairs.add((iso_year, iso_week))
         d += datetime.timedelta(days=1)
 
     # Fonction utilitaire pour obtenir la date réelle d'un LaborCost (lundi de la semaine)
@@ -8437,8 +8440,14 @@ def labor_costs_monthly_summary(request):
         lundi = datetime.datetime.strptime(f'{year}-W{int(week):02d}-1', "%G-W%V-%u")
         return (lundi + datetime.timedelta(days=day_index)).date()
 
+    # Construire une requête Q pour filtrer par (year, week) dans les paires collectées
+    from django.db.models import Q
+    q_objects = Q()
+    for iso_year, iso_week in week_year_pairs:
+        q_objects |= Q(year=iso_year, week=iso_week)
+    
     labor_costs = (LaborCost.objects
-        .filter(year=year, week__in=list(weeks))
+        .filter(q_objects)
         .select_related('chantier', 'agent'))
 
     chantier_map = {}
@@ -9641,18 +9650,22 @@ def recalculate_labor_costs_month(request):
     import datetime
     first_day = datetime.date(year, month, 1)
     last_day = datetime.date(year, month, monthrange(year, month)[1])
-    weeks = set()
+    # Collecter les semaines avec leur année ISO pour gérer les semaines qui chevauchent les années
+    week_year_pairs = set()
     d = first_day
     while d <= last_day:
-        weeks.add(d.isocalendar()[1])
+        iso_week = d.isocalendar()[1]
+        iso_year = d.isocalendar()[0]  # Année ISO
+        week_year_pairs.add((iso_year, iso_week))
         d += datetime.timedelta(days=1)
     # Pour chaque agent, chaque semaine du mois, recalculer
     # Note: Les agents journaliers sont inclus ici car ils ont besoin de LaborCost pour les récaps chantiers
     agents = Agent.objects.all()
     for agent in agents:
-        for week in weeks:
+        for iso_year, week in week_year_pairs:
             # On peut réutiliser la logique de recalculate_labor_costs
-            schedules = Schedule.objects.filter(agent=agent, year=year, week=week)
+            # Utiliser l'année ISO réelle de la semaine, pas l'année du mois
+            schedules = Schedule.objects.filter(agent=agent, year=iso_year, week=week)
             # Regrouper par chantier
             chantier_hours = {}
             for s in schedules:
@@ -9679,7 +9692,7 @@ def recalculate_labor_costs_month(request):
                     hours_for_display = hours_or_days
                 
                 LaborCost.objects.update_or_create(
-                    agent=agent, chantier=chantier, week=week, year=year,
+                    agent=agent, chantier=chantier, week=week, year=iso_year,
                     defaults={
                         'hours_normal': hours_for_display,  # Pour simplifier, tout en normal ici
                         'hours_samedi': 0,
@@ -9726,15 +9739,22 @@ def schedule_monthly_summary(request):
         return (lundi + td(days=day_index)).date()
 
     # Récupérer tous les Schedule du mois (toutes semaines qui touchent le mois)
-    weeks = set()
+    # Important : collecter les semaines avec leur année ISO pour gérer les semaines qui chevauchent les années
+    week_year_pairs = set()
     d = first_day
     while d <= last_day:
-        weeks.add(d.isocalendar()[1])
+        iso_week = d.isocalendar()[1]
+        iso_year = d.isocalendar()[0]  # Année ISO
+        week_year_pairs.add((iso_year, iso_week))
         d += td(days=1)
 
+    # Construire une requête Q pour filtrer par (year, week) dans les paires collectées
+    from django.db.models import Q
+    q_objects = Q()
+    for iso_year, iso_week in week_year_pairs:
+        q_objects |= Q(year=iso_year, week=iso_week)
     
-
-    schedules = Schedule.objects.filter(year=year, week__in=list(weeks)).select_related('agent', 'chantier')
+    schedules = Schedule.objects.filter(q_objects).select_related('agent', 'chantier')
     if agent_id_filter:
         schedules = schedules.filter(agent_id=agent_id_filter)
     if chantier_id_filter:

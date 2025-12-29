@@ -148,6 +148,24 @@ const PlanningHebdoAgent = ({
     fetchAgents();
   }, []);
 
+  // Fonction utilitaire pour convertir semaine/année ISO en date de début de semaine
+  // Utilise une approche basée sur le 4 janvier pour gérer correctement les semaines qui chevauchent les années
+  const getWeekStartDate = (week, year) => {
+    // La semaine 1 d'une année ISO est celle qui contient le 4 janvier
+    // On calcule à partir du 4 janvier de l'année donnée
+    const jan4 = dayjs().year(year).month(0).date(4);
+    // Trouver le lundi de la semaine qui contient le 4 janvier
+    // day() retourne 0 pour dimanche, 1 pour lundi, etc.
+    const jan4Day = jan4.day(); // 0 = dimanche, 1 = lundi, 2 = mardi, etc.
+    // Calculer le lundi de la semaine 1
+    // Si jan4 est lundi (1), on soustrait 0 jours
+    // Si jan4 est dimanche (0), on soustrait 6 jours pour remonter au lundi précédent
+    const daysToSubtract = jan4Day === 0 ? 6 : jan4Day - 1;
+    const week1Start = jan4.subtract(daysToSubtract, 'day');
+    // Ajouter (week - 1) semaines pour obtenir le début de la semaine demandée
+    return week1Start.add(week - 1, 'week');
+  };
+
   // Récupérer les chantiers depuis l'API
   useEffect(() => {
     const fetchChantiers = async () => {
@@ -231,10 +249,8 @@ const PlanningHebdoAgent = ({
           });
 
           // Récupérer les événements de la semaine
-          const startOfWeek = dayjs()
-            .year(selectedYear)
-            .isoWeek(selectedWeek)
-            .startOf("isoWeek");
+          // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+          const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
           const endOfWeek = startOfWeek.add(6, "day").endOf("day");
 
           const eventsResponse = await axios.get("/api/events/", {
@@ -300,10 +316,8 @@ const PlanningHebdoAgent = ({
 
   // Fonction pour générer les dates de la semaine
   const getDatesOfWeek = (weekNumber) => {
-    const startOfWeek = dayjs()
-      .year(selectedYear)
-      .isoWeek(weekNumber)
-      .startOf("isoWeek");
+    // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+    const startOfWeek = getWeekStartDate(weekNumber, selectedYear).startOf("isoWeek");
     return daysOfWeek.map((_, index) =>
       startOfWeek.add(index, "day").format("DD/MM/YYYY")
     );
@@ -550,10 +564,8 @@ const PlanningHebdoAgent = ({
 
       const updates = validCells.map((cell) => {
         // Calculer la date réelle du créneau
-        const startOfWeek = dayjs()
-          .year(selectedYear)
-          .isoWeek(selectedWeek)
-          .startOf("isoWeek");
+        // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+        const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
         const dayIndex = daysOfWeek.indexOf(cell.day);
         const date = startOfWeek.add(dayIndex, "day");
         const weekISO = date.isoWeek();
@@ -630,10 +642,8 @@ const PlanningHebdoAgent = ({
     // Préparer les données à envoyer
     const deletions = selectedCells.map((cell) => {
       // Calculer la date réelle du créneau
-      const startOfWeek = dayjs()
-        .year(selectedYear)
-        .isoWeek(selectedWeek)
-        .startOf("isoWeek");
+      // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+      const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
       const dayIndex = daysOfWeek.indexOf(cell.day);
       const date = startOfWeek.add(dayIndex, "day");
       const weekISO = date.isoWeek();
@@ -740,10 +750,8 @@ const PlanningHebdoAgent = ({
     }
 
     // Convertir le format de date pour la comparaison
-    const startOfWeek = dayjs()
-      .year(selectedYear)
-      .isoWeek(selectedWeek)
-      .startOf("isoWeek");
+    // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+    const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
     const dayIndex = daysOfWeek.indexOf(day) + 1; // Lundi = 1
     const currentDate = startOfWeek
       .add(dayIndex - 1, "day")
@@ -852,25 +860,34 @@ const PlanningHebdoAgent = ({
   };
 
   // Ajout des fonctions de navigation de semaine
+  // Utiliser les dates ISO pour gérer correctement les semaines qui chevauchent les années
   const handlePrevWeek = () => {
-    let week = selectedWeek - 1;
-    let year = selectedYear;
-    if (week < 1) {
-      week = 52; // ou 53 selon ton calendrier
-      year = selectedYear - 1;
-    }
+    // Calculer la date de début de la semaine actuelle
+    const currentWeekStart = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
+    
+    // Soustraire une semaine
+    const prevWeekStart = currentWeekStart.subtract(1, "week");
+    
+    // Récupérer la semaine et l'année ISO de la semaine précédente
+    const week = prevWeekStart.isoWeek();
+    const year = prevWeekStart.isoWeekYear();
+    
     if (typeof onSelectionChange === "function") {
       onSelectionChange(selectedAgentId, week, year);
     }
   };
 
   const handleNextWeek = () => {
-    let week = selectedWeek + 1;
-    let year = selectedYear;
-    if (week > 52) {
-      week = 1;
-      year = selectedYear + 1;
-    }
+    // Calculer la date de début de la semaine actuelle
+    const currentWeekStart = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
+    
+    // Ajouter une semaine
+    const nextWeekStart = currentWeekStart.add(1, "week");
+    
+    // Récupérer la semaine et l'année ISO de la semaine suivante
+    const week = nextWeekStart.isoWeek();
+    const year = nextWeekStart.isoWeekYear();
+    
     if (typeof onSelectionChange === "function") {
       onSelectionChange(selectedAgentId, week, year);
     }
@@ -878,10 +895,8 @@ const PlanningHebdoAgent = ({
 
   const getCurrentMonthYear = () => {
     // Trouve le mois et l'année correspondant à la semaine sélectionnée
-    const startOfWeek = dayjs()
-      .year(selectedYear)
-      .isoWeek(selectedWeek)
-      .startOf("isoWeek");
+    // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+    const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
     return { month: startOfWeek.month() + 1, year: startOfWeek.year() };
   };
 
@@ -1112,10 +1127,8 @@ const PlanningHebdoAgent = ({
                     <td className="hour-cell">{formatHourDisplay(hour)}</td>
                     {daysOfWeek.map((day) => {
                       // Détermination de l'événement pour la cellule
-                      const startOfWeek = dayjs()
-                        .year(selectedYear)
-                        .isoWeek(selectedWeek)
-                        .startOf("isoWeek");
+                      // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+                      const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
                       const dayIndex = daysOfWeek.indexOf(day) + 1;
                       const currentDate = startOfWeek
                         .add(dayIndex - 1, "day")

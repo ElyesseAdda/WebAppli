@@ -45,8 +45,9 @@ const ButtonGroup = styled("div")({
 });
 
 const PlanningContainer = () => {
+  // Utiliser isoWeekYear() pour obtenir l'année ISO correcte (gère les semaines qui chevauchent les années)
   const [selectedWeek, setSelectedWeek] = useState(dayjs().isoWeek());
-  const [selectedYear, setSelectedYear] = useState(dayjs().year());
+  const [selectedYear, setSelectedYear] = useState(dayjs().isoWeekYear());
   const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [schedule, setSchedule] = useState({});
   const [laborCosts, setLaborCosts] = useState({});
@@ -58,7 +59,7 @@ const PlanningContainer = () => {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [targetAgentId, setTargetAgentId] = useState(null);
   const [targetWeek, setTargetWeek] = useState(dayjs().isoWeek());
-  const [targetYear, setTargetYear] = useState(dayjs().year());
+  const [targetYear, setTargetYear] = useState(dayjs().isoWeekYear());
   const [isCopying, setIsCopying] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
   const [selectedReportYear, setSelectedReportYear] = useState(dayjs().year());
@@ -70,9 +71,22 @@ const PlanningContainer = () => {
   // État pour le modal de gestion des primes
   const [isPrimeModalOpen, setIsPrimeModalOpen] = useState(false);
 
-  // Fonction utilitaire pour convertir semaine/année en date de début de semaine
+  // Fonction utilitaire pour convertir semaine/année ISO en date de début de semaine
+  // Utilise une approche basée sur le 4 janvier pour gérer correctement les semaines qui chevauchent les années
   const getWeekStartDate = (week, year) => {
-    return dayjs().year(year).isoWeek(week).startOf('isoWeek').toDate();
+    // La semaine 1 d'une année ISO est celle qui contient le 4 janvier
+    // On calcule à partir du 4 janvier de l'année donnée
+    const jan4 = dayjs().year(year).month(0).date(4);
+    // Trouver le lundi de la semaine qui contient le 4 janvier
+    // day() retourne 0 pour dimanche, 1 pour lundi, etc.
+    const jan4Day = jan4.day(); // 0 = dimanche, 1 = lundi, 2 = mardi, etc.
+    // Calculer le lundi de la semaine 1
+    // Si jan4 est lundi (1), on soustrait 0 jours
+    // Si jan4 est dimanche (0), on soustrait 6 jours pour remonter au lundi précédent
+    const daysToSubtract = jan4Day === 0 ? 6 : jan4Day - 1;
+    const week1Start = jan4.subtract(daysToSubtract, 'day');
+    // Ajouter (week - 1) semaines pour obtenir le début de la semaine demandée
+    return week1Start.add(week - 1, 'week').toDate();
   };
 
   // Fonction pour filtrer les agents selon la période (logique précise jour par jour)
@@ -154,7 +168,13 @@ const PlanningContainer = () => {
   const handleSelectionChange = (agentId, week, year) => {
     setSelectedAgentId(agentId);
     setSelectedWeek(week);
-    setSelectedYear(year);
+    
+    // Calculer l'année ISO réelle de la semaine pour synchroniser correctement
+    // Cela gère les cas où la semaine chevauche deux années (ex: semaine 1 de 2026 commence en déc 2025)
+    const weekStartDate = getWeekStartDate(week, year);
+    const actualIsoYear = dayjs(weekStartDate).isoWeekYear();
+    
+    setSelectedYear(actualIsoYear);
   };
 
   const handleTargetAgentChange = (e) => {
@@ -634,7 +654,8 @@ const PlanningContainer = () => {
               if (!selectedAgent.date_desactivation) return null;
               
               const desactivationDate = dayjs(selectedAgent.date_desactivation);
-              let currentDate = dayjs().year(selectedYear).isoWeek(selectedWeek);
+              // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+              let currentDate = dayjs(getWeekStartDate(selectedWeek, selectedYear));
               
               // Chercher en remontant jusqu'à 10 semaines en arrière
               for (let i = 0; i < 10; i++) {
@@ -642,7 +663,7 @@ const PlanningContainer = () => {
                 if (desactivationDate.isAfter(weekStartDate)) {
                   return {
                     week: currentDate.isoWeek(),
-                    year: currentDate.year()
+                    year: currentDate.isoWeekYear() // Utiliser isoWeekYear() au lieu de year()
                   };
                 }
                 currentDate = currentDate.subtract(1, 'week');
@@ -654,8 +675,8 @@ const PlanningContainer = () => {
             
             const handleGoToLastVisibleWeek = () => {
               if (lastVisibleWeek) {
-                setSelectedWeek(lastVisibleWeek.week);
-                setSelectedYear(lastVisibleWeek.year);
+                // Utiliser handleSelectionChange pour synchroniser automatiquement l'année ISO
+                handleSelectionChange(selectedAgentId, lastVisibleWeek.week, lastVisibleWeek.year);
               }
             };
             
