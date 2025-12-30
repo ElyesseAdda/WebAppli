@@ -22,7 +22,7 @@ from .utils import build_document_key, generate_presigned_url, generate_presigne
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Avg, Count, Min, Sum, F, Max, Q
+from django.db.models import Avg, Count, Min, Sum, F, Max, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -34,7 +34,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, EmetteurSerializer, ColorSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -42,9 +42,10 @@ from .models import (
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
-    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
+    ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,AgencyExpenseMonth,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -986,7 +987,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Avg, Count, Min, Sum, F, Max, Q
+from django.db.models import Avg, Count, Min, Sum, F, Max, Q, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -4879,25 +4880,12 @@ def create_bon_commande(request):
             if data.get('contact_sous_traitant_contact') and not data.get('is_representant', False):
                 bon_commande_data['contact_sous_traitant_contact_id'] = data['contact_sous_traitant_contact']
         
-        # LOG: Données finales avant création
-        print("DEBUG create_bon_commande - DONNÉES FINALES BONCOMMANDE:")
-        print(f"bon_commande_data final: {bon_commande_data}")
-        print("-"*30)
-        
         # Créer le bon de commande
-        print("DEBUG - Tentative de création BonCommande...")
         bon_commande = BonCommande.objects.create(**bon_commande_data)
-        print(f"DEBUG - BonCommande créé avec succès, ID: {bon_commande.id}")
-        print(f"DEBUG - BonCommande.emetteur_id: {bon_commande.emetteur_id}")
-        print(f"DEBUG - BonCommande.contact_type: {bon_commande.contact_type}")
-        print(f"DEBUG - BonCommande.contact_agent: {bon_commande.contact_agent}")
-        print(f"DEBUG - BonCommande.contact_sous_traitant: {bon_commande.contact_sous_traitant}")
 
         # Créer les lignes de bon de commande
-        print(f"DEBUG - Création des lignes, nombre de lignes: {len(data['lignes'])}")
-        for i, ligne in enumerate(data['lignes']):
-            print(f"DEBUG - Ligne {i+1}: {ligne}")
-            ligne_obj = LigneBonCommande.objects.create(
+        for ligne in data['lignes']:
+            LigneBonCommande.objects.create(
                 bon_commande=bon_commande,
                 produit_id=ligne['produit'],
                 designation=ligne['designation'],
@@ -4905,19 +4893,10 @@ def create_bon_commande(request):
                 prix_unitaire=ligne['prix_unitaire'],
                 total=ligne['total']
             )
-            print(f"DEBUG - LigneBonCommande créée, ID: {ligne_obj.id}")
-
-        print("DEBUG create_bon_commande - CRÉATION TERMINÉE AVEC SUCCÈS")
-        print("="*50)
         
         return Response({'message': 'Bon de commande créé avec succès'}, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        print("DEBUG create_bon_commande - ERREUR DÉTECTÉE:")
-        print(f"Type d'erreur: {type(e).__name__}")
-        print(f"Message d'erreur: {str(e)}")
-        print(f"Données reçues au moment de l'erreur: {data}")
-        print("="*50)
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -4935,21 +4914,11 @@ def preview_saved_bon_commande(request, id):
         
         # Récupérer l'émetteur depuis le nouveau modèle Emetteur
         agent = bon_commande.emetteur if bon_commande.emetteur else None
-        print(f"DEBUG preview_saved - Émetteur trouvé: {agent}")
 
         # Les objets contact sont automatiquement récupérés via les ForeignKey
-        print(f"DEBUG preview_saved - contact_type: {bon_commande.contact_type}")
-        print(f"DEBUG preview_saved - contact_agent: {bon_commande.contact_agent}")
-        print(f"DEBUG preview_saved - contact_sous_traitant: {bon_commande.contact_sous_traitant}")
-        # Si contact_agent ou contact_sous_traitant est None, essayer de récupérer depuis l'agent principal
         contact_agent = bon_commande.contact_agent
         contact_sous_traitant = bon_commande.contact_sous_traitant
         contact_sous_traitant_contact = bon_commande.contact_sous_traitant_contact
-        
-        # Note: Le champ agent n'existe plus, on utilise seulement les contacts spécifiques
-        # Si pas de contact spécifique, on laisse vide
-        if not contact_agent and not contact_sous_traitant:
-            print("DEBUG preview_saved - Aucun contact spécifique défini")
 
         # Formatage de la date de commande
         formatted_date_commande = None
@@ -7621,8 +7590,60 @@ class AgencyExpenseViewSet(viewsets.ModelViewSet):
         )
         
         return Response(status=status.HTTP_200_OK)
+    
+    
+    def perform_destroy(self, instance):
+        """
+        Surcharge pour gérer la suppression d'une AgencyExpense avec sous-traitant
+        La suppression sera automatiquement reflétée dans le TableauSousTraitant
+        """
+        instance.delete()
 
+class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
+    queryset = AgencyExpenseMonth.objects.all()
+    serializer_class = AgencyExpenseMonthSerializer
+    permission_classes = [AllowAny]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        month = self.request.query_params.get('month')
+        year = self.request.query_params.get('year')
+        category = self.request.query_params.get('category')
+        
+        if month:
+            queryset = queryset.filter(month=int(month))
+        if year:
+            queryset = queryset.filter(year=int(year))
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        return queryset.order_by('year', 'month', 'description')
+
+    @action(detail=False, methods=['get'])
+    def monthly_summary(self, request):
+        """Résumé mensuel des dépenses"""
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        
+        if not month or not year:
+            return Response({"error": "Month and year are required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        expenses = self.queryset.filter(month=int(month), year=int(year))
+        
+        total = sum(float(e.amount) for e in expenses)
+        totals_by_category = {}
+        
+        for expense in expenses:
+            cat = expense.category
+            if cat not in totals_by_category:
+                totals_by_category[cat] = 0
+            totals_by_category[cat] += float(expense.amount)
+        
+        return Response({
+            'expenses': self.serializer_class(expenses, many=True).data,
+            'totals_by_category': [{'category': k, 'total': v} for k, v in totals_by_category.items()],
+            'total': total
+        })
 
 class DashboardViewSet(viewsets.ViewSet):
     def list(self, request):
@@ -8928,6 +8949,90 @@ class PaiementFactureSousTraitantViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(facture_id=facture_id)
         return queryset
 
+
+class SuiviPaiementSousTraitantMensuelViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les suivis de paiements sous-traitants mensuels
+    Ces données sont spécifiques au tableau sous-traitant et indépendantes des autres sources
+    """
+    queryset = SuiviPaiementSousTraitantMensuel.objects.all()
+    serializer_class = SuiviPaiementSousTraitantMensuelSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtres
+        chantier_id = self.request.query_params.get('chantier')
+        mois = self.request.query_params.get('mois')
+        annee = self.request.query_params.get('annee')
+        sous_traitant = self.request.query_params.get('sous_traitant')
+        
+        if chantier_id:
+            queryset = queryset.filter(chantier_id=chantier_id)
+        if mois:
+            queryset = queryset.filter(mois=mois)
+        if annee:
+            queryset = queryset.filter(annee=annee)
+        if sous_traitant:
+            queryset = queryset.filter(sous_traitant__icontains=sous_traitant)
+        
+        return queryset.prefetch_related('factures_suivi').select_related('chantier')
+    
+    @action(detail=False, methods=['post'])
+    def update_or_create_suivi(self, request):
+        """
+        Crée ou met à jour un suivi de paiement
+        Paramètres attendus : mois, annee, sous_traitant, chantier_id (optionnel), et autres champs
+        """
+        mois = request.data.get('mois')
+        annee = request.data.get('annee')
+        sous_traitant = request.data.get('sous_traitant')
+        chantier_id = request.data.get('chantier_id')
+        
+        if not all([mois, annee, sous_traitant]):
+            return Response(
+                {'error': 'mois, annee et sous_traitant sont requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Filtrer les champs à mettre à jour
+        update_fields = {}
+        for field in ['montant_paye_ht', 'date_paiement_reel', 'date_envoi_facture', 'delai_paiement']:
+            if field in request.data:
+                update_fields[field] = request.data[field]
+        
+        # Créer ou mettre à jour
+        suivi, created = SuiviPaiementSousTraitantMensuel.objects.update_or_create(
+            mois=mois,
+            annee=annee,
+            sous_traitant=sous_traitant,
+            chantier_id=chantier_id if chantier_id else None,
+            defaults=update_fields
+        )
+        
+        serializer = self.get_serializer(suivi)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class FactureSuiviSousTraitantViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les factures saisies dans le tableau sous-traitant
+    """
+    queryset = FactureSuiviSousTraitant.objects.all()
+    serializer_class = FactureSuiviSousTraitantSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        suivi_paiement_id = self.request.query_params.get('suivi_paiement')
+        
+        if suivi_paiement_id:
+            queryset = queryset.filter(suivi_paiement_id=suivi_paiement_id)
+        
+        return queryset.select_related('suivi_paiement')
+
+
 class RecapFinancierChantierAPIView(APIView):
     permission_classes = []
 
@@ -9595,6 +9700,465 @@ def tableau_fournisseur_global(request):
     Groupé par mois, puis par fournisseur, puis par chantier
     """
     result = _get_tableau_fournisseur_data(chantier_id=None)
+    return Response(result)
+
+def _get_tableau_sous_traitant_data(chantier_id=None):
+    """
+    Fonction utilitaire pour récupérer les données du tableau sous-traitant
+    Si chantier_id est fourni, retourne pour ce chantier uniquement
+    Sinon, retourne pour tous les chantiers
+    Groupé par mois, puis par sous-traitant, puis par chantier
+    Sources de données :
+    1. FactureSousTraitant - Factures des sous-traitants
+    2. LaborCost - Agents journaliers (traités comme sous-traitants)
+    3. AgencyExpenseMonth - Dépenses de sous-traitance depuis les frais de structure
+    4. PaiementSousTraitant - Paiements historiques
+    5. SuiviPaiementSousTraitantMensuel - Données de suivi saisies manuellement (PRIORITÉ)
+    """
+    from collections import defaultdict
+    from decimal import Decimal
+    from datetime import datetime, timedelta, date
+    
+    # Structure pour stocker les données : {mois_annee: {sous_traitant: {chantier_id: {a_payer, paye, ecart, chantier_name, factures, date_paiement, date_envoi, date_paiement_prevue, ecart_paiement_reel, delai_paiement, source_type}}}}
+    data = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {
+        'a_payer': Decimal('0'),
+        'paye': Decimal('0'),
+        'ecart': Decimal('0'),
+        'chantier_name': '',
+        'factures': [],
+        'date_paiement': None,
+        'date_envoi': None,
+        'date_paiement_prevue': None,
+        'ecart_paiement_reel': None,
+        'delai_paiement': 45,
+        'source_type': None  # 'facture_sous_traitant' ou 'agent_journalier'
+    })))
+    
+    # 1. Récupérer les factures des sous-traitants (FactureSousTraitant)
+    if chantier_id:
+        factures = FactureSousTraitant.objects.filter(chantier_id=chantier_id)
+    else:
+        factures = FactureSousTraitant.objects.all()
+    
+    factures = factures.select_related('chantier', 'sous_traitant').prefetch_related(
+        Prefetch('paiements', queryset=PaiementFactureSousTraitant.objects.all().order_by('-date_paiement_reel'))
+    )
+    
+    for facture in factures:
+        # Format: MM/YY (ex: 12/25 pour décembre 2025)
+        annee_2_digits = str(facture.annee)[-2:]
+        key = f"{facture.mois:02d}/{annee_2_digits}"
+        
+        # Nom du sous-traitant (entreprise)
+        sous_traitant_nom = facture.sous_traitant.entreprise if hasattr(facture.sous_traitant, 'entreprise') else str(facture.sous_traitant)
+        chantier_name = facture.chantier.chantier_name if facture.chantier else f"Chantier {facture.chantier_id}"
+        
+        # Montant à payer = montant de la facture HT
+        montant_a_payer = Decimal(str(facture.montant_facture_ht)) if facture.montant_facture_ht else Decimal('0')
+        
+        # Montant payé = somme des paiements de cette facture
+        montant_total_paye = facture.montant_total_paye
+        montant_paye = Decimal(str(montant_total_paye)) if montant_total_paye else Decimal('0')
+        
+        # Récupérer les factures avec leur statut de paiement
+        # Récupérer la date de paiement depuis PaiementFactureSousTraitant (le dernier paiement)
+        date_paiement_facture = None
+        # Accéder directement aux paiements préchargés
+        paiements_facture = list(facture.paiements.all())
+        
+        if paiements_facture:
+            # Trier par date_paiement_reel décroissante pour obtenir le dernier paiement
+            dernier_paiement = max(paiements_facture, key=lambda p: p.date_paiement_reel if p.date_paiement_reel else date.min)
+            
+            if dernier_paiement and dernier_paiement.date_paiement_reel:
+                date_paiement_facture = dernier_paiement.date_paiement_reel.isoformat()
+        
+        factures_list = [
+            {
+                'id': facture.id,
+                'numero_facture': facture.numero_facture,
+                'montant_facture': float(facture.montant_facture_ht) if facture.montant_facture_ht else 0.0,
+                'payee': facture.est_soldee,
+                'date_paiement_facture': date_paiement_facture
+            }
+        ]
+        
+        # Récupérer le paiement associé (PaiementSousTraitant) pour les dates
+        # Chercher un paiement correspondant au mois/année/sous-traitant/chantier
+        paiement = PaiementSousTraitant.objects.filter(
+            sous_traitant=facture.sous_traitant,
+            chantier=facture.chantier,
+            mois=facture.mois,
+            annee=facture.annee
+        ).first()
+        
+        date_paiement = None
+        date_envoi = None
+        date_paiement_prevue = None
+        ecart_paiement_reel = None
+        delai_paiement = facture.delai_paiement if facture.delai_paiement else 45
+        
+        if paiement:
+            date_paiement = paiement.date_paiement_reel.isoformat() if paiement.date_paiement_reel else None
+            date_envoi = paiement.date_envoi_facture.isoformat() if paiement.date_envoi_facture else None
+            # Calculer date_paiement_prevue à partir de date_envoi_facture + delai_paiement
+            if paiement.date_envoi_facture and paiement.delai_paiement:
+                date_paiement_prevue = (paiement.date_envoi_facture + timedelta(days=paiement.delai_paiement)).isoformat()
+            else:
+                date_paiement_prevue = None
+        else:
+            # Utiliser les dates de la facture si pas de paiement
+            date_envoi = facture.date_reception.isoformat() if facture.date_reception else None
+            date_paiement_prevue = facture.date_paiement_prevue.isoformat() if facture.date_paiement_prevue else None
+        
+        # PRIORITÉ : Utiliser la date depuis les paiements de factures (PaiementFactureSousTraitant) si elle existe
+        # Car c'est la date réelle de paiement de la facture
+        if date_paiement_facture:
+            date_paiement = date_paiement_facture
+        
+        # Calculer l'écart paiement réel avec la date de paiement définie
+        if date_paiement_prevue and date_paiement:
+            try:
+                date_prevue = datetime.fromisoformat(date_paiement_prevue.replace('Z', '+00:00')).date() if isinstance(date_paiement_prevue, str) else date_paiement_prevue
+                date_reel = datetime.fromisoformat(date_paiement.replace('Z', '+00:00')).date() if isinstance(date_paiement, str) else date_paiement
+                ecart_paiement_reel = (date_reel - date_prevue).days
+            except:
+                ecart_paiement_reel = None
+        
+        # Agrégation par mois/sous-traitant/chantier
+        data[key][sous_traitant_nom][facture.chantier_id]['a_payer'] += montant_a_payer
+        data[key][sous_traitant_nom][facture.chantier_id]['paye'] += montant_paye
+        data[key][sous_traitant_nom][facture.chantier_id]['chantier_name'] = chantier_name
+        data[key][sous_traitant_nom][facture.chantier_id]['delai_paiement'] = delai_paiement
+        data[key][sous_traitant_nom][facture.chantier_id]['source_type'] = 'facture_sous_traitant'
+        
+        # Ajouter les factures (éviter les doublons)
+        if 'factures' not in data[key][sous_traitant_nom][facture.chantier_id] or not data[key][sous_traitant_nom][facture.chantier_id]['factures']:
+            data[key][sous_traitant_nom][facture.chantier_id]['factures'] = []
+        
+        # Vérifier si cette facture n'est pas déjà dans la liste
+        facture_exists = any(f.get('id') == facture.id for f in data[key][sous_traitant_nom][facture.chantier_id]['factures'])
+        if not facture_exists:
+            data[key][sous_traitant_nom][facture.chantier_id]['factures'].extend(factures_list)
+        
+        # Mettre à jour les dates si elles ne sont pas déjà définies ou si elles sont plus récentes
+        # Comparer les dates en format ISO pour s'assurer que la plus récente est utilisée
+        current_date_paiement = data[key][sous_traitant_nom][facture.chantier_id]['date_paiement']
+        if not current_date_paiement:
+            data[key][sous_traitant_nom][facture.chantier_id]['date_paiement'] = date_paiement
+        elif date_paiement:
+            # Comparer les dates pour garder la plus récente
+            try:
+                current_date = datetime.fromisoformat(current_date_paiement.replace('Z', '+00:00')).date() if isinstance(current_date_paiement, str) else current_date_paiement
+                new_date = datetime.fromisoformat(date_paiement.replace('Z', '+00:00')).date() if isinstance(date_paiement, str) else date_paiement
+                if new_date > current_date:
+                    data[key][sous_traitant_nom][facture.chantier_id]['date_paiement'] = date_paiement
+            except Exception as e:
+                # Si la comparaison échoue, utiliser la nouvelle date si elle existe
+                if date_paiement > current_date_paiement:
+                    data[key][sous_traitant_nom][facture.chantier_id]['date_paiement'] = date_paiement
+        if not data[key][sous_traitant_nom][facture.chantier_id]['date_envoi'] or (date_envoi and date_envoi > data[key][sous_traitant_nom][facture.chantier_id]['date_envoi']):
+            data[key][sous_traitant_nom][facture.chantier_id]['date_envoi'] = date_envoi
+        if not data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue'] or (date_paiement_prevue and date_paiement_prevue > data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue']):
+            data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue'] = date_paiement_prevue
+        if ecart_paiement_reel is not None:
+            data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
+    
+    # 2. Récupérer les agents journaliers (LaborCost) - traités comme sous-traitants
+    if chantier_id:
+        labor_costs = LaborCost.objects.filter(chantier_id=chantier_id)
+    else:
+        labor_costs = LaborCost.objects.all()
+    
+    # Filtrer uniquement les agents journaliers
+    labor_costs = labor_costs.filter(agent__type_paiement='journalier').select_related('agent', 'chantier')
+    
+    for lc in labor_costs:
+        # Convertir semaine ISO → mois/année
+        # Calculer la date du lundi de la semaine ISO
+        try:
+            lundi = datetime.strptime(f'{lc.year}-W{int(lc.week):02d}-1', "%G-W%V-%u")
+            mois = lundi.month
+            annee = lundi.year
+        except:
+            # Fallback: utiliser l'année de la semaine
+            mois = 1
+            annee = lc.year
+        
+        # Format: MM/YY
+        annee_2_digits = str(annee)[-2:]
+        key = f"{mois:02d}/{annee_2_digits}"
+        
+        # Nom de l'agent comme sous-traitant
+        agent_nom = f"{lc.agent.name} {lc.agent.surname}".strip() if lc.agent else f"Agent {lc.agent_id}"
+        chantier_name = lc.chantier.chantier_name if lc.chantier else f"Chantier {lc.chantier_id}"
+        
+        # Montant à payer = coût total (somme de tous les coûts)
+        total_cost = (
+            Decimal(str(lc.cost_normal or 0)) +
+            Decimal(str(lc.cost_samedi or 0)) +
+            Decimal(str(lc.cost_dimanche or 0)) +
+            Decimal(str(lc.cost_ferie or 0)) +
+            Decimal(str(lc.cost_overtime or 0))
+        )
+        
+        # Montant payé = 0 par défaut (pas de paiement pour les agents journaliers dans ce tableau)
+        montant_paye = Decimal('0')
+        
+        # Agrégation par mois/agent/chantier
+        data[key][agent_nom][lc.chantier_id]['a_payer'] += total_cost
+        data[key][agent_nom][lc.chantier_id]['paye'] += montant_paye
+        data[key][agent_nom][lc.chantier_id]['chantier_name'] = chantier_name
+        data[key][agent_nom][lc.chantier_id]['source_type'] = 'agent_journalier'
+        if not data[key][agent_nom][lc.chantier_id]['factures']:
+            data[key][agent_nom][lc.chantier_id]['factures'] = []
+    
+    # 3. Récupérer les AgencyExpenseMonth avec catégorie "Sous-traitant"
+    if chantier_id:
+        agency_expenses_month = AgencyExpenseMonth.objects.filter(
+            category='Sous-traitant',
+            chantier_id=chantier_id
+        )
+    else:
+        agency_expenses_month = AgencyExpenseMonth.objects.filter(category='Sous-traitant')
+    
+    agency_expenses_month = agency_expenses_month.select_related('chantier', 'sous_traitant')
+    
+    for expense_month in agency_expenses_month:
+        # Format: MM/YY
+        annee_2_digits = str(expense_month.year)[-2:]
+        key = f"{expense_month.month:02d}/{annee_2_digits}"
+        
+        # Utiliser la description comme nom de "sous-traitant" dans le tableau
+        sous_traitant_nom = expense_month.description
+        chantier_id_val = 0  # Toujours 0 pour AgencyExpenseMonth (pas de chantier spécifique)
+        chantier_name = "Agence"
+        
+        montant = Decimal(str(expense_month.amount))
+        
+        # Agrégation par mois/description/chantier
+        data[key][sous_traitant_nom][chantier_id_val]['a_payer'] += montant
+        # ✅ NE PAS définir automatiquement 'paye' pour AgencyExpenseMonth
+        # Le montant payé doit provenir du système de suivi (SuiviPaiementSousTraitantMensuel)
+        # data[key][sous_traitant_nom][chantier_id_val]['paye'] += montant  # SUPPRIMÉ
+        data[key][sous_traitant_nom][chantier_id_val]['chantier_name'] = chantier_name
+        data[key][sous_traitant_nom][chantier_id_val]['source_type'] = 'agency_expense'
+        data[key][sous_traitant_nom][chantier_id_val]['agency_expense_id'] = expense_month.id  # ID pour modification
+        
+        # Récupérer les factures depuis AgencyExpenseMonth
+        if not data[key][sous_traitant_nom][chantier_id_val]['factures']:
+            data[key][sous_traitant_nom][chantier_id_val]['factures'] = []
+        # Ajouter les factures stockées dans AgencyExpenseMonth
+        if expense_month.factures and isinstance(expense_month.factures, list):
+            data[key][sous_traitant_nom][chantier_id_val]['factures'].extend(expense_month.factures)
+        
+        # Dates : utiliser les nouveaux champs en priorité, sinon fallback sur l'ancien
+        # Date de réception (envoi) : date_reception_facture OU date_paiement (ancien champ mal nommé)
+        date_reception = (expense_month.date_reception_facture or expense_month.date_paiement).isoformat() if (expense_month.date_reception_facture or expense_month.date_paiement) else None
+        data[key][sous_traitant_nom][chantier_id_val]['date_envoi'] = date_reception
+        
+        # Date de paiement réel
+        date_paiement_reel = expense_month.date_paiement_reel.isoformat() if expense_month.date_paiement_reel else None
+        data[key][sous_traitant_nom][chantier_id_val]['date_paiement'] = date_paiement_reel
+        
+        # Délai de paiement
+        delai = expense_month.delai_paiement if hasattr(expense_month, 'delai_paiement') and expense_month.delai_paiement else 45
+        data[key][sous_traitant_nom][chantier_id_val]['delai_paiement'] = delai
+        
+        # Calculer date_paiement_prevue si on a la date de réception
+        if date_reception and delai:
+            try:
+                from datetime import datetime, timedelta
+                date_reception_obj = datetime.fromisoformat(date_reception).date()
+                date_prevue = date_reception_obj + timedelta(days=delai)
+                data[key][sous_traitant_nom][chantier_id_val]['date_paiement_prevue'] = date_prevue.isoformat()
+                
+                # Calculer l'écart si on a aussi la date de paiement réel
+                if date_paiement_reel:
+                    date_reel_obj = datetime.fromisoformat(date_paiement_reel).date()
+                    ecart_jours = (date_reel_obj - date_prevue).days
+                    data[key][sous_traitant_nom][chantier_id_val]['ecart_paiement_reel'] = ecart_jours
+            except Exception as e:
+                pass
+    
+    # 4. Récupérer les paiements (PaiementSousTraitant) pour mettre à jour les montants payés et dates
+    if chantier_id:
+        paiements = PaiementSousTraitant.objects.filter(chantier_id=chantier_id)
+    else:
+        paiements = PaiementSousTraitant.objects.all()
+    
+    paiements = paiements.select_related('chantier', 'sous_traitant')
+    
+    for paiement in paiements:
+        # Utiliser mois/annee si disponibles, sinon extraire de date_paiement
+        if paiement.mois and paiement.annee:
+            annee_2_digits = str(paiement.annee)[-2:]
+            key = f"{paiement.mois:02d}/{annee_2_digits}"
+        elif paiement.date_paiement:
+            key = f"{paiement.date_paiement.month:02d}/{str(paiement.date_paiement.year)[-2:]}"
+        else:
+            continue
+        
+        sous_traitant_nom = paiement.sous_traitant.entreprise if hasattr(paiement.sous_traitant, 'entreprise') else str(paiement.sous_traitant)
+        chantier_name = paiement.chantier.chantier_name if paiement.chantier else f"Chantier {paiement.chantier_id}"
+        
+        # Montant payé
+        montant_paye = Decimal(str(paiement.montant_paye_ht)) if paiement.montant_paye_ht else Decimal('0')
+        
+        # Mettre à jour les montants payés et dates
+        if key in data and sous_traitant_nom in data[key] and paiement.chantier_id in data[key][sous_traitant_nom]:
+            data[key][sous_traitant_nom][paiement.chantier_id]['paye'] = montant_paye
+            # Ne pas écraser date_paiement si elle vient déjà des paiements de factures (PaiementFactureSousTraitant)
+            # La date des paiements de factures a la priorité car c'est la date réelle de paiement
+            current_date_paiement = data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']
+            if not current_date_paiement:  # Seulement si pas déjà définie depuis les factures
+                data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement'] = paiement.date_paiement_reel.isoformat() if paiement.date_paiement_reel else None
+            data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'] = paiement.date_envoi_facture.isoformat() if paiement.date_envoi_facture else None
+            data[key][sous_traitant_nom][paiement.chantier_id]['delai_paiement'] = paiement.delai_paiement if paiement.delai_paiement else 45
+            
+            # Calculer date_paiement_prevue si date_envoi et delai_paiement sont disponibles
+            if data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'] and data[key][sous_traitant_nom][paiement.chantier_id]['delai_paiement']:
+                try:
+                    date_envoi_obj = datetime.fromisoformat(data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'].replace('Z', '+00:00')).date() if isinstance(data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'], str) else data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi']
+                    delai = data[key][sous_traitant_nom][paiement.chantier_id]['delai_paiement']
+                    date_prevue = date_envoi_obj + timedelta(days=delai)
+                    data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement_prevue'] = date_prevue.isoformat()
+                    
+                    # Calculer l'écart paiement réel
+                    if data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']:
+                        date_paiement_obj = datetime.fromisoformat(data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement'].replace('Z', '+00:00')).date() if isinstance(data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement'], str) else data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']
+                        ecart_paiement_reel = (date_paiement_obj - date_prevue).days
+                        data[key][sous_traitant_nom][paiement.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
+                except:
+                    pass
+    
+    # 5. Récupérer les suivis de paiements mensuels (SuiviPaiementSousTraitantMensuel)
+    # Ces données ont la PRIORITÉ car elles sont saisies manuellement dans le tableau
+    if chantier_id:
+        suivis = SuiviPaiementSousTraitantMensuel.objects.filter(chantier_id=chantier_id)
+    else:
+        suivis = SuiviPaiementSousTraitantMensuel.objects.all()
+    
+    suivis = suivis.prefetch_related('factures_suivi').select_related('chantier')
+    
+    for suivi in suivis:
+        # Format: MM/YY
+        annee_2_digits = str(suivi.annee)[-2:]
+        key = f"{suivi.mois:02d}/{annee_2_digits}"
+        sous_traitant_nom = suivi.sous_traitant
+        chantier_id_val = suivi.chantier_id if suivi.chantier else 0
+        
+        # Si cette entrée n'existe pas encore dans data, la créer
+        if key not in data or sous_traitant_nom not in data[key] or chantier_id_val not in data[key][sous_traitant_nom]:
+            # Créer une nouvelle entrée si elle n'existe pas (cas où le suivi est créé avant les autres sources)
+            if chantier_id_val != 0 and suivi.chantier:
+                chantier_name = suivi.chantier.chantier_name
+            else:
+                chantier_name = "Agence" if chantier_id_val == 0 else f"Chantier {chantier_id_val}"
+            
+            data[key][sous_traitant_nom][chantier_id_val] = {
+                'a_payer': Decimal('0'),
+                'paye': Decimal('0'),
+                'ecart': Decimal('0'),
+                'chantier_name': chantier_name,
+                'factures': [],
+                'date_paiement': None,
+                'date_envoi': None,
+                'date_paiement_prevue': None,
+                'ecart_paiement_reel': None,
+                'delai_paiement': 45,
+                'source_type': None
+            }
+        
+        # Mettre à jour avec les données du suivi (PRIORITÉ sur les autres sources)
+        if suivi.montant_paye_ht is not None:
+            data[key][sous_traitant_nom][chantier_id_val]['paye'] = Decimal(str(suivi.montant_paye_ht))
+        
+        if suivi.date_paiement_reel:
+            data[key][sous_traitant_nom][chantier_id_val]['date_paiement'] = suivi.date_paiement_reel.isoformat()
+        
+        if suivi.date_envoi_facture:
+            data[key][sous_traitant_nom][chantier_id_val]['date_envoi'] = suivi.date_envoi_facture.isoformat()
+        
+        if suivi.date_paiement_prevue:
+            data[key][sous_traitant_nom][chantier_id_val]['date_paiement_prevue'] = suivi.date_paiement_prevue.isoformat()
+        
+        if suivi.delai_paiement:
+            data[key][sous_traitant_nom][chantier_id_val]['delai_paiement'] = suivi.delai_paiement
+        
+        # Calculer l'écart de paiement réel
+        ecart_jours = suivi.ecart_paiement_jours
+        if ecart_jours is not None:
+            data[key][sous_traitant_nom][chantier_id_val]['ecart_paiement_reel'] = ecart_jours
+        
+        # Ajouter les factures de suivi (fusionner avec les factures existantes)
+        factures_suivi = []
+        for f in suivi.factures_suivi.all():
+            factures_suivi.append({
+                'id': f'suivi_{f.id}',  # Préfixe pour différencier des factures FactureSousTraitant
+                'numero_facture': f.numero_facture,
+                'montant_facture': float(f.montant_facture_ht),
+                'payee': f.payee,
+                'date_paiement_facture': f.date_paiement_facture.isoformat() if f.date_paiement_facture else None
+            })
+        
+        # Fusionner les factures (éviter les doublons par numéro de facture)
+        existing_factures = data[key][sous_traitant_nom][chantier_id_val].get('factures', [])
+        existing_numeros = {f.get('numero_facture') for f in existing_factures if f.get('numero_facture')}
+        
+        for facture_suivi in factures_suivi:
+            # Ajouter seulement si le numéro n'existe pas déjà
+            if facture_suivi['numero_facture'] not in existing_numeros:
+                existing_factures.append(facture_suivi)
+                existing_numeros.add(facture_suivi['numero_facture'])
+        
+        data[key][sous_traitant_nom][chantier_id_val]['factures'] = existing_factures
+        
+        # Ajouter l'ID du suivi pour permettre les mises à jour depuis le frontend
+        data[key][sous_traitant_nom][chantier_id_val]['suivi_paiement_id'] = suivi.id
+    
+    # Calculer les écarts et préparer la réponse
+    result = []
+    for mois_key, sous_traitants_data in data.items():
+        for sous_traitant, chantiers_data in sous_traitants_data.items():
+            for chantier_id_val, valeurs in chantiers_data.items():
+                valeurs['ecart'] = valeurs['a_payer'] - valeurs['paye']
+                result.append({
+                    'mois': mois_key,
+                    'sous_traitant': sous_traitant,
+                    'chantier_id': chantier_id_val,
+                    'chantier_name': valeurs['chantier_name'],
+                    'a_payer': float(valeurs['a_payer']),
+                    'paye': float(valeurs['paye']),
+                    'ecart': float(valeurs['ecart']),
+                    'factures': valeurs.get('factures', []),
+                    'date_paiement': valeurs.get('date_paiement'),
+                    'date_envoi': valeurs.get('date_envoi'),
+                    'date_paiement_prevue': valeurs.get('date_paiement_prevue'),
+                    'ecart_paiement_reel': valeurs.get('ecart_paiement_reel'),
+                    'delai_paiement': valeurs.get('delai_paiement', 45),
+                    'source_type': valeurs.get('source_type', 'facture_sous_traitant'),  # Par défaut facture_sous_traitant
+                    'agency_expense_id': valeurs.get('agency_expense_id'),  # ID pour modification des AgencyExpenseMonth
+                    'suivi_paiement_id': valeurs.get('suivi_paiement_id'),  # ID du suivi de paiement pour mise à jour
+                })
+    
+    return result
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def tableau_sous_traitant_global(request):
+    """
+    Retourne les données pour le tableau récapitulatif des paiements sous-traitant
+    pour TOUS les chantiers
+    Groupé par mois, puis par sous-traitant, puis par chantier
+    Sources de données :
+    1. FactureSousTraitant - Factures des sous-traitants
+    2. LaborCost - Agents journaliers (traités comme sous-traitants)
+    3. AgencyExpenseMonth - Dépenses de sous-traitance depuis les frais de structure
+    4. PaiementSousTraitant - Paiements historiques
+    5. SuiviPaiementSousTraitantMensuel - Données de suivi saisies manuellement (PRIORITÉ)
+    """
+    result = _get_tableau_sous_traitant_data(chantier_id=None)
     return Response(result)
 
 @api_view(['DELETE'])

@@ -39,6 +39,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         children: [
           { label: "Tableau Facturation", to: "/TableauFacturation" },
           { label: "Tableau Fournisseur", to: "/TableauFournisseur" },
+          { label: "Tableau Sous-Traitant", to: "/TableauSousTraitant" },
         ],
       },
       {

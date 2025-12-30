@@ -23,7 +23,7 @@ import React, { useEffect, useState } from "react";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
-const AgencyExpenses = () => {
+const AgencyExpensesMonth = () => {
   const [expenses, setExpenses] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -44,7 +44,6 @@ const AgencyExpenses = () => {
   const [originalExpenses, setOriginalExpenses] = useState([]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
-  const [yearlyTotal, setYearlyTotal] = useState(0);
 
   // Catégories de dépenses
   const categories = [
@@ -62,28 +61,21 @@ const AgencyExpenses = () => {
 
   // Charger les données à chaque changement de mois/année
   useEffect(() => {
-    fetchMonthlyExpenses();
-    updateYearlyTotal();
+    fetchExpenses();
   }, [selectedMonth, selectedYear]);
 
-  const updateYearlyTotal = async () => {
-    const total = await calculateYearlyTotal();
-    setYearlyTotal(total);
-  };
-
-  const fetchMonthlyExpenses = async () => {
+  const fetchExpenses = async () => {
     try {
       setLoading(true);
       const response = await axios.get(
-        `/api/agency-expenses-month/monthly_summary/?month=${
-          selectedMonth + 1
-        }&year=${selectedYear}`
+        `/api/agency-expenses-month/?month=${selectedMonth + 1}&year=${selectedYear}`
       );
-      const fetched = response.data?.expenses || [];
-      setOriginalExpenses(fetched);
-      setExpenses(fetched);
+      const fetchedExpenses = response.data || [];
+      setOriginalExpenses(fetchedExpenses);
+      setExpenses(fetchedExpenses);
     } catch (error) {
       console.error("Erreur lors du chargement des dépenses:", error);
+      alert("Erreur lors du chargement des dépenses");
     } finally {
       setLoading(false);
     }
@@ -98,20 +90,15 @@ const AgencyExpenses = () => {
     try {
       setLoading(true);
       const expenseData = {
-        description: newExpense.description,
+        ...newExpense,
         amount: parseFloat(newExpense.amount),
-        category: newExpense.category,
         month: selectedMonth + 1,
         year: selectedYear,
-        date_paiement: new Date(selectedYear, selectedMonth, 1)
-          .toISOString()
-          .split("T")[0],
       };
 
       await axios.post("/api/agency-expenses-month/", expenseData);
       setOpenDialog(false);
-      await fetchMonthlyExpenses();
-      await updateYearlyTotal();
+      await fetchExpenses();
 
       setNewExpense({
         description: "",
@@ -130,8 +117,7 @@ const AgencyExpenses = () => {
     try {
       setLoading(true);
       await axios.delete(`/api/agency-expenses-month/${id}/`);
-      await fetchMonthlyExpenses();
-      await updateYearlyTotal();
+      await fetchExpenses();
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
       alert("Erreur lors de la suppression de la dépense");
@@ -155,9 +141,6 @@ const AgencyExpenses = () => {
   const handleEditExpense = (expense) => {
     setEditingExpense({
       ...expense,
-      description: expense.description,
-      amount: expense.amount,
-      category: expense.category,
     });
     setIsEditing(true);
     setOpenDialog(true);
@@ -172,6 +155,8 @@ const AgencyExpenses = () => {
           description: editingExpense.description,
           amount: parseFloat(editingExpense.amount),
           category: editingExpense.category,
+          month: selectedMonth + 1,
+          year: selectedYear,
         };
 
         await axios.patch(
@@ -180,8 +165,7 @@ const AgencyExpenses = () => {
         );
 
         setOpenDialog(false);
-        await fetchMonthlyExpenses();
-        await updateYearlyTotal();
+        await fetchExpenses();
         setIsEditing(false);
         setEditingExpense(null);
       } catch (error) {
@@ -197,59 +181,8 @@ const AgencyExpenses = () => {
 
   const calculateMonthlyTotal = () => {
     return expenses.reduce((total, expense) => {
-      return total + parseFloat(expense.amount || 0);
+      return total + parseFloat(expense.amount);
     }, 0);
-  };
-
-  const calculateYearlyTotal = async () => {
-    if (!selectedYear) return 0;
-
-    try {
-      const monthlyTotals = await Promise.all(
-        Array.from({ length: 12 }, async (_, monthIndex) => {
-          try {
-            const response = await axios.get(
-              `/api/agency-expenses-month/monthly_summary/?month=${
-                monthIndex + 1
-              }&year=${selectedYear}`
-            );
-            return response.data?.total || 0;
-          } catch (error) {
-            console.error(`Erreur pour le mois ${monthIndex + 1}:`, error);
-            return 0;
-          }
-        })
-      );
-
-      return monthlyTotals.reduce((sum, monthTotal) => sum + monthTotal, 0);
-    } catch (error) {
-      console.error("Erreur lors du calcul du total annuel:", error);
-      return 0;
-    }
-  };
-
-  const getExpenseCommentaire = (expense) => {
-    if (expense.category === "Prime" && expense.description) {
-      const parts = expense.description.split(" - ");
-      if (parts.length >= 3) {
-        let description = parts.slice(2).join(" - ");
-        description = description
-          .replace(/\s*\[(PRIME_)?ID:\d+\]\s*$/g, "")
-          .trim();
-        return description || "-";
-      }
-    }
-    return "-";
-  };
-
-  const getExpenseDescriptionCourte = (expense) => {
-    if (expense.category === "Prime" && expense.description) {
-      const parts = expense.description.split(" - ");
-      if (parts.length >= 2) {
-        return `${parts[0]} - ${parts[1]}`;
-      }
-    }
-    return expense.description;
   };
 
   const handleFilterChange = (field) => (event) => {
@@ -293,7 +226,7 @@ const AgencyExpenses = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography sx={{ fontWeight: "bold", color: "white" }} variant="h5">
-          Dépenses de l'Agence (Système Mensuel)
+          Dépenses Mensuelles de l'Agence
         </Typography>
         <Button variant="contained" onClick={() => setOpenDialog(true)}>
           Ajouter une dépense
@@ -421,7 +354,7 @@ const AgencyExpenses = () => {
                     color: "rgba(27, 120, 188, 1)",
                   }}
                 >
-                  {getExpenseDescriptionCourte(expense)}
+                  {expense.description}
                 </TableCell>
                 <TableCell align="center">{expense.category}</TableCell>
                 <TableCell align="center">
@@ -480,25 +413,10 @@ const AgencyExpenses = () => {
         </Table>
       </TableContainer>
 
-      {/* Résumé annuel */}
-      <Paper sx={{ mt: 3, p: 2 }} elevation={0}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Total annuel ({selectedYear})
-        </Typography>
-        <Typography
-          variant="body1"
-          sx={{ fontWeight: 600, color: "primary.main" }}
-        >
-          {yearlyTotal.toFixed(2)} €
-        </Typography>
-      </Paper>
-
       {/* Dialog pour ajouter/modifier une dépense */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>
-          {isEditing
-            ? "Modifier la dépense"
-            : "Ajouter une nouvelle dépense"}
+          {isEditing ? "Modifier la dépense" : "Ajouter une nouvelle dépense"}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
@@ -554,6 +472,15 @@ const AgencyExpenses = () => {
               fullWidth
               inputProps={{ step: "0.01", min: "0" }}
             />
+            <Typography variant="caption" sx={{ color: "#666", mt: 1 }}>
+              Cette dépense sera créée pour le mois de{" "}
+              <strong>
+                {new Date(selectedYear, selectedMonth).toLocaleString(
+                  "default",
+                  { month: "long", year: "numeric" }
+                )}
+              </strong>
+            </Typography>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -581,14 +508,11 @@ const AgencyExpenses = () => {
         <DialogContent>
           <Typography>
             Êtes-vous sûr de vouloir supprimer cette dépense pour le mois de{" "}
-            {new Date(selectedYear, selectedMonth)
-              .toLocaleString("default", { month: "long" })
-              .charAt(0)
-              .toUpperCase() +
-              new Date(selectedYear, selectedMonth)
-                .toLocaleString("default", { month: "long" })
-                .slice(1)}{" "}
-            {selectedYear} ?
+            {new Date(selectedYear, selectedMonth).toLocaleString("default", {
+              month: "long",
+              year: "numeric",
+            })}
+            ?
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -607,4 +531,5 @@ const AgencyExpenses = () => {
   );
 };
 
-export default AgencyExpenses;
+export default AgencyExpensesMonth;
+

@@ -32,6 +32,7 @@ const sectionConfigs = [
     prefixes: [
       "/TableauFacturation",
       "/TableauFournisseur",
+      "/TableauSousTraitant",
     ],
   },
   {
@@ -76,6 +77,7 @@ const pageLabelByPrefix = [
   { prefix: "/ChantierDetail", label: "Récap Chantier" },
   { prefix: "/TableauFacturation", label: "Tableau Facturation" },
   { prefix: "/TableauFournisseur", label: "Tableau Fournisseur" },
+  { prefix: "/TableauSousTraitant", label: "Tableau Sous-Traitant" },
   { prefix: "/GestionAppelsOffres", label: "Liste Appel offres" },
   { prefix: "/AgencyExpenses", label: "Agence" },
   { prefix: "/Agent", label: "Gestion agent" },

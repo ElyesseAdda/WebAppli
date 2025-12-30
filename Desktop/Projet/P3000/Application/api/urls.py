@@ -74,6 +74,7 @@ from .views import (
     fournisseurs,
     tableau_fournisseur,
     tableau_fournisseur_global,
+    tableau_sous_traitant_global,
     delete_historique_modification_paiement_fournisseur,
     FournisseurViewSet,
     get_decomposition_couts,
@@ -90,6 +91,8 @@ from .views import (
     PaiementGlobalSousTraitantViewSet,
     FactureSousTraitantViewSet,
     PaiementFactureSousTraitantViewSet,
+    SuiviPaiementSousTraitantMensuelViewSet,
+    FactureSuiviSousTraitantViewSet,
     create_ecole_event,
     delete_ecole_event,
     get_ecole_hours,
@@ -103,6 +106,7 @@ from .views import (
     create_ligne_speciale,
     update_ligne_speciale,
     delete_ligne_speciale,
+    AgencyExpenseMonthViewSet,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -174,6 +178,7 @@ router.register(r'situation-lignes-supplementaires', SituationLigneSupplementair
 router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
 router.register(r'agency-expenses', AgencyExpenseViewSet)
+router.register(r'agency-expenses-month', AgencyExpenseMonthViewSet, basename='agency-expenses-month')
 router.register(r'sous-traitants', SousTraitantViewSet)
 router.register(r'contacts-sous-traitant', ContactSousTraitantViewSet, basename='contacts-sous-traitant')
 router.register(r'contacts-societe', ContactSocieteViewSet, basename='contacts-societe')
@@ -184,6 +189,8 @@ router.register(r'paiements-sous-traitant', PaiementSousTraitantViewSet, basenam
 router.register(r'paiements-globaux-sous-traitant', PaiementGlobalSousTraitantViewSet, basename='paiements-globaux-sous-traitant')
 router.register(r'factures-sous-traitant', FactureSousTraitantViewSet, basename='factures-sous-traitant')
 router.register(r'paiements-facture-sous-traitant', PaiementFactureSousTraitantViewSet, basename='paiements-facture-sous-traitant')
+router.register(r'suivi-paiements-sous-traitant-mensuel', SuiviPaiementSousTraitantMensuelViewSet, basename='suivi-paiements-sous-traitant-mensuel')
+router.register(r'factures-suivi-sous-traitant', FactureSuiviSousTraitantViewSet, basename='factures-suivi-sous-traitant')
 router.register(r'fournisseurs', FournisseurViewSet)
 router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 router.register(r'drive', DriveViewSet, basename='drive')
@@ -308,6 +315,7 @@ urlpatterns = [
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
     path('chantier/<int:chantier_id>/tableau-fournisseur/', tableau_fournisseur, name='tableau-fournisseur'),
     path('tableau-fournisseur-global/', tableau_fournisseur_global, name='tableau-fournisseur-global'),
+    path('tableau-sous-traitant-global/', tableau_sous_traitant_global, name='tableau-sous-traitant-global'),
     path('historique-modification-paiement-fournisseur/<int:historique_id>/', delete_historique_modification_paiement_fournisseur, name='delete-historique-modification-paiement-fournisseur'),
     path('chantier/<int:chantier_id>/decomposition-couts/', get_decomposition_couts, name='chantier-decomposition-couts'),
     path('chantier/<int:chantier_id>/recalculer-couts-estimes/', recalculer_couts_estimes, name='chantier-recalculer-couts-estimes'),

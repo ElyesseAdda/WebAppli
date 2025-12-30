@@ -1753,6 +1753,8 @@ class AgencyExpense(models.Model):
     end_date = models.DateField(null=True, blank=True)
     category = models.CharField(max_length=50)
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE, null=True, blank=True)
+    sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1763,6 +1765,54 @@ class AgencyExpense(models.Model):
 
     def __str__(self):
         return f"{self.description} - {self.amount}€ ({self.get_type_display()})"
+
+
+class AgencyExpenseMonth(models.Model):
+    """
+    Modèle pour stocker les dépenses mensuelles de l'agence
+    Chaque ligne représente une dépense pour un mois spécifique
+    Permet la modification indépendante de chaque mois
+    """
+    description = models.CharField(max_length=500)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    category = models.CharField(max_length=50)
+    month = models.IntegerField()  # 1-12
+    year = models.IntegerField()
+    
+    # ⚠️ ATTENTION : Mal nommé historiquement - ce champ stocke la DATE DE RÉCEPTION de la facture
+    # Pour compatibilité ascendante, on le garde mais on ajoutera date_reception pour clarifier
+    date_paiement = models.DateField(null=True, blank=True, help_text="Date de réception de la facture (mal nommé pour compatibilité)")
+    
+    # 🆕 Nouveaux champs pour un suivi complet
+    date_reception_facture = models.DateField(null=True, blank=True, help_text="Date de réception de la facture (clarification)")
+    date_paiement_reel = models.DateField(null=True, blank=True, help_text="Date de paiement effectif")
+    delai_paiement = models.IntegerField(default=45, help_text="Délai de paiement en jours")
+    
+    factures = models.JSONField(default=list, blank=True)  # Liste de factures [{"numero_facture": "...", "montant_facture": ..., "payee": bool}]
+    agent = models.ForeignKey('Agent', on_delete=models.CASCADE, null=True, blank=True)
+    sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
+    is_ecole_expense = models.BooleanField(default=False)
+    ecole_hours = models.FloatField(null=True, blank=True)
+    
+    # Lien vers la dépense source (si générée depuis AgencyExpense)
+    source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-year', '-month']
+        unique_together = ('description', 'category', 'month', 'year')
+        verbose_name = "Dépense Mensuelle Agence"
+        verbose_name_plural = "Dépenses Mensuelles Agence"
+        indexes = [
+            models.Index(fields=['year', 'month']),
+            models.Index(fields=['category', 'year', 'month']),
+        ]
+
+    def __str__(self):
+        return f"{self.description} - {self.amount}€ ({self.month:02d}/{self.year})"
 
 class AgencyExpenseOverride(models.Model):
     expense = models.ForeignKey(AgencyExpense, on_delete=models.CASCADE, related_name='overrides')
@@ -2439,6 +2489,100 @@ class PaiementFactureSousTraitant(models.Model):
             diff = (self.date_paiement_reel - self.facture.date_paiement_prevue).days
             return diff
         return 0
+
+
+class SuiviPaiementSousTraitantMensuel(models.Model):
+    """
+    Modèle pour stocker les informations de suivi des paiements sous-traitants mensuels
+    dans le tableau sous-traitant global.
+    Ce modèle est indépendant de la source des données (FactureSousTraitant, LaborCost, AgencyExpenseMonth)
+    et stocke uniquement les informations de suivi saisies dans le tableau.
+    """
+    # Identification unique d'une ligne du tableau
+    mois = models.IntegerField()  # Mois (1-12)
+    annee = models.IntegerField()  # Année complète (ex: 2025)
+    sous_traitant = models.CharField(max_length=255)  # Nom du sous-traitant
+    chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='suivis_paiements_sous_traitant', null=True, blank=True)
+    # Note: chantier peut être null pour les agents journaliers regroupés ou certaines dépenses d'agence
+    
+    # Informations de suivi spécifiques au tableau
+    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=0)  # Montant payé saisi
+    date_paiement_reel = models.DateField(null=True, blank=True)  # Date de paiement réel saisie
+    date_envoi_facture = models.DateField(null=True, blank=True)  # Date de réception de la facture
+    date_paiement_prevue = models.DateField(null=True, blank=True)  # Date de paiement prévue (calculée)
+    delai_paiement = models.IntegerField(default=45)  # Délai de paiement en jours (45 ou 60)
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Suivi Paiement Sous-Traitant Mensuel"
+        verbose_name_plural = "Suivis Paiements Sous-Traitants Mensuels"
+        ordering = ['annee', 'mois', 'sous_traitant', 'chantier']
+        # Une seule ligne par combinaison mois/année/sous-traitant/chantier
+        # Utiliser chantier_id dans le unique_together (null autorisé pour agents journaliers)
+        indexes = [
+            models.Index(fields=['mois', 'annee', 'sous_traitant']),
+            models.Index(fields=['chantier', 'mois', 'annee']),
+        ]
+    
+    def __str__(self):
+        chantier_info = f" - {self.chantier.chantier_name}" if self.chantier else " - (Global)"
+        return f"{self.sous_traitant} - {self.mois:02d}/{self.annee}{chantier_info}"
+    
+    def save(self, *args, **kwargs):
+        # Calculer automatiquement date_paiement_prevue si date_envoi est définie
+        if self.date_envoi_facture and self.delai_paiement:
+            from datetime import timedelta, date as date_type
+            # Convertir en date si c'est une string
+            if isinstance(self.date_envoi_facture, str):
+                from datetime import datetime
+                date_envoi = datetime.fromisoformat(self.date_envoi_facture.replace('Z', '+00:00')).date()
+            else:
+                date_envoi = self.date_envoi_facture
+            self.date_paiement_prevue = date_envoi + timedelta(days=self.delai_paiement)
+        super().save(*args, **kwargs)
+    
+    @property
+    def ecart_paiement_jours(self):
+        """Calcule l'écart en jours entre la date de paiement prévue et la date de paiement réel"""
+        if self.date_paiement_reel and self.date_paiement_prevue:
+            return (self.date_paiement_reel - self.date_paiement_prevue).days
+        return None
+    
+    @property
+    def mois_annee(self):
+        """Retourne le format mois/année utilisé dans le tableau (MM/YY)"""
+        annee_2_digits = str(self.annee)[-2:]
+        return f"{self.mois:02d}/{annee_2_digits}"
+
+
+class FactureSuiviSousTraitant(models.Model):
+    """
+    Modèle pour stocker les factures saisies dans le tableau sous-traitant.
+    Lié au suivi mensuel, indépendant des FactureSousTraitant du système.
+    """
+    suivi_paiement = models.ForeignKey(
+        SuiviPaiementSousTraitantMensuel,
+        on_delete=models.CASCADE,
+        related_name='factures_suivi'
+    )
+    numero_facture = models.CharField(max_length=255)  # Numéro de facture saisi
+    montant_facture_ht = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # Montant HT
+    payee = models.BooleanField(default=False)  # Facture payée ou non
+    date_paiement_facture = models.DateField(null=True, blank=True)  # Date de paiement de cette facture
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Facture Suivi Sous-Traitant"
+        verbose_name_plural = "Factures Suivi Sous-Traitants"
+        ordering = ['suivi_paiement', 'created_at']
+    
+    def __str__(self):
+        status = "Payée" if self.payee else "Non payée"
+        return f"Facture {self.numero_facture} - {self.montant_facture_ht}€ ({status})"
 
 
 class PaiementFournisseurMateriel(models.Model):

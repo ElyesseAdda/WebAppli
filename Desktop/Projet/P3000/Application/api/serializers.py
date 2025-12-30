@@ -9,7 +9,7 @@ from .models import (
     SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant, ContactSociete,
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgentPrime, Color, LigneSpeciale
+    AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -1100,15 +1100,54 @@ class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
 
 class AgencyExpenseSerializer(serializers.ModelSerializer):
     current_override = serializers.SerializerMethodField()
+    sous_traitant_name = serializers.CharField(source='sous_traitant.entreprise', read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
 
     class Meta:
         model = AgencyExpense
-        fields = ['id', 'description', 'amount', 'type', 'date', 'end_date', 'category', 'current_override']
+        fields = [
+            'id', 'description', 'amount', 'type', 'date', 'end_date', 
+            'category', 'current_override', 'sous_traitant', 'sous_traitant_name',
+            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours'
+        ]
 
     def get_current_override(self, obj):
         request = self.context.get('request')
         if request and hasattr(obj, 'current_override'):
             return obj.current_override
+        return None
+
+
+class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
+    sous_traitant_name = serializers.CharField(source='sous_traitant.entreprise', read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    agent_name = serializers.SerializerMethodField()
+    date_paiement_prevue = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AgencyExpenseMonth
+        fields = [
+            'id', 'description', 'amount', 'category', 'month', 'year', 
+            'date_paiement', 'date_reception_facture', 'date_paiement_reel', 'delai_paiement',
+            'date_paiement_prevue', 'factures',
+            'sous_traitant', 'sous_traitant_name', 'chantier', 'chantier_name',
+            'agent', 'agent_name', 'is_ecole_expense', 'ecole_hours',
+            'source_expense', 'created_at', 'updated_at'
+        ]
+    
+    def get_agent_name(self, obj):
+        if obj.agent:
+            return f"{obj.agent.name} {obj.agent.surname}"
+        return None
+    
+    def get_date_paiement_prevue(self, obj):
+        """Calcule la date de paiement prévue"""
+        # Utiliser date_reception_facture en priorité, sinon date_paiement (ancien champ)
+        date_reception = obj.date_reception_facture or obj.date_paiement
+        if date_reception and obj.delai_paiement:
+            from datetime import timedelta
+            date_prevue = date_reception + timedelta(days=obj.delai_paiement)
+            return date_prevue.isoformat()
         return None
 
 class AgencyExpenseAggregateSerializer(serializers.ModelSerializer):
@@ -1567,3 +1606,65 @@ class ColorSerializer(serializers.ModelSerializer):
         if request and hasattr(request, 'user'):
             validated_data['user'] = request.user
         return super().create(validated_data)
+
+
+class FactureSuiviSousTraitantSerializer(serializers.ModelSerializer):
+    """Serializer pour les factures du suivi sous-traitant"""
+    class Meta:
+        model = FactureSuiviSousTraitant
+        fields = [
+            'id',
+            'numero_facture',
+            'montant_facture_ht',
+            'payee',
+            'date_paiement_facture',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
+    """Serializer pour le suivi des paiements sous-traitants mensuels"""
+    factures_suivi = FactureSuiviSousTraitantSerializer(many=True, read_only=True)
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    mois_annee = serializers.CharField(read_only=True)
+    ecart_paiement_jours = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = SuiviPaiementSousTraitantMensuel
+        fields = [
+            'id',
+            'mois',
+            'annee',
+            'sous_traitant',
+            'chantier',
+            'chantier_name',
+            'montant_paye_ht',
+            'date_paiement_reel',
+            'date_envoi_facture',
+            'date_paiement_prevue',
+            'delai_paiement',
+            'factures_suivi',
+            'mois_annee',
+            'ecart_paiement_jours',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'date_paiement_prevue', 'mois_annee', 'ecart_paiement_jours', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        """Validation des données"""
+        # Vérifier que le mois est entre 1 et 12
+        if 'mois' in data and (data['mois'] < 1 or data['mois'] > 12):
+            raise serializers.ValidationError({
+                'mois': "Le mois doit être entre 1 et 12"
+            })
+        
+        # Vérifier que l'année est valide
+        if 'annee' in data and (data['annee'] < 2000 or data['annee'] > 2100):
+            raise serializers.ValidationError({
+                'annee': "L'année doit être entre 2000 et 2100"
+            })
+        
+        return data

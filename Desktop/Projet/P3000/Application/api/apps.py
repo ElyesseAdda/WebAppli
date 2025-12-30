@@ -14,8 +14,8 @@ class ApiConfig(AppConfig):
         try:
             # Importer les signaux pour qu'ils soient automatiquement connectés
             import api.signals
-            print("🔌 Signaux Drive automatique chargés avec succès")
+            print("[OK] Signaux Drive automatique charges avec succes")
         except ImportError as e:
-            print(f"⚠️  Impossible de charger les signaux Drive: {e}")
+            print(f"[WARNING] Impossible de charger les signaux Drive: {e}")
         except Exception as e:
-            print(f"❌ Erreur lors du chargement des signaux Drive: {e}")
+            print(f"[ERROR] Erreur lors du chargement des signaux Drive: {e}")
