@@ -27,7 +27,7 @@ import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
 // import RecapSousTraitant from "./RecapSousTraitant"; // À créer plus tard
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -2178,7 +2178,16 @@ const TableauSousTraitant = () => {
                               />
                             )}
                           </TableCell>
-                          <TableCell sx={commonBodyCellStyle}>
+                          <TableCell 
+                            sx={{ 
+                              ...commonBodyCellStyle,
+                              position: "relative",
+                              "&:hover .add-facture-btn": {
+                                opacity: 1,
+                                visibility: "visible",
+                              }
+                            }}
+                          >
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8, alignItems: "stretch" }}>
                               {item.factures && item.factures.length > 0 ? (
                                 item.factures.map((facture, idx) => {
@@ -2277,30 +2286,45 @@ const TableauSousTraitant = () => {
                                     </Box>
                                   );
                                 })
-                              ) : null}
+                              ) : (
+                                <Typography sx={{ fontSize: "0.7rem", color: "text.disabled", fontStyle: "italic", textAlign: "center", py: 1 }}>
+                                  -
+                                </Typography>
+                              )}
                               <Box
+                                className="add-facture-btn"
                                 sx={{
+                                  position: "absolute",
+                                  bottom: 4,
+                                  right: 4,
+                                  opacity: 0,
+                                  visibility: "hidden",
+                                  transition: "all 0.2s ease",
+                                  backgroundColor: "rgba(255, 255, 255, 0.95)",
+                                  borderRadius: "4px",
+                                  border: "1px solid rgba(27, 120, 188, 0.2)",
+                                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                                  zIndex: 2,
                                   display: "flex",
+                                  alignItems: "center",
                                   justifyContent: "center",
-                                  padding: "4px",
                                 }}
                               >
                                 <IconButton
                                   size="small"
                                   onClick={() => handleOpenFactureModal(row.mois, row.sous_traitant, item.isAgentJournalier ? 0 : item.chantier_id, null)}
                                   sx={{
-                                    padding: "6px",
-                                    color: "rgba(27, 120, 188, 0.7)",
-                                    border: "1px dashed rgba(27, 120, 188, 0.3)",
+                                    padding: "2px 6px",
                                     borderRadius: "4px",
+                                    color: "rgba(27, 120, 188, 0.8)",
                                     "&:hover": {
-                                      backgroundColor: "rgba(27, 120, 188, 0.1)",
-                                      borderColor: "rgba(27, 120, 188, 0.5)",
                                       color: "rgba(27, 120, 188, 1)",
+                                      backgroundColor: "rgba(27, 120, 188, 0.1)",
                                     },
                                   }}
+                                  title="Ajouter une facture"
                                 >
-                                  <AddIcon sx={{ fontSize: "1rem" }} />
+                                  <AddCircleOutlineIcon sx={{ fontSize: "1rem" }} />
                                 </IconButton>
                               </Box>
                             </Box>
