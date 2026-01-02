@@ -43,6 +43,8 @@ const StatusChangeModal = ({
         {title ||
           (type === "facture"
             ? "Modifier l'état de la facture"
+            : type === "situation"
+            ? "Modifier le statut de la situation"
             : "Modifier l'état du devis")}
       </DialogTitle>
       <DialogContent>
@@ -50,14 +52,19 @@ const StatusChangeModal = ({
           value={selectedStatus}
           onChange={(e) => setSelectedStatus(e.target.value)}
         >
-          {(statusOptions || getStatusOptions()).map((status) => (
-            <FormControlLabel
-              key={status}
-              value={status}
-              control={<Radio />}
-              label={status}
-            />
-          ))}
+          {(statusOptions || getStatusOptions()).map((status) => {
+            // Support pour les objets {value, label} ou les strings simples
+            const value = typeof status === 'object' ? status.value : status;
+            const label = typeof status === 'object' ? status.label : status;
+            return (
+              <FormControlLabel
+                key={value}
+                value={value}
+                control={<Radio />}
+                label={label}
+              />
+            );
+          })}
         </RadioGroup>
       </DialogContent>
       <DialogActions>

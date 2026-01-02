@@ -65,6 +65,74 @@ const ChantierListeBonCommande = ({
   const [openFournisseurModal, setOpenFournisseurModal] = useState(false);
   const [fournisseurMap, setFournisseurMap] = useState({});
 
+  // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
+  const getStatusStyles = (statut) => {
+    return {
+      display: "inline-block",
+      px: 1.5,
+      py: 0.5,
+      borderRadius: 1,
+      backgroundColor:
+        statut === "livre_chantier"
+          ? "success.light"
+          : statut === "retrait_magasin"
+          ? "info.light"
+          : "warning.light",
+      color:
+        statut === "livre_chantier"
+          ? "success.dark"
+          : statut === "retrait_magasin"
+          ? "info.dark"
+          : "warning.dark",
+      fontWeight: 500,
+      textTransform: "capitalize",
+    };
+  };
+
+  // Fonction pour formater les labels de statut
+  const getStatusLabel = (statut) => {
+    const labels = {
+      en_attente: "En attente Livraison",
+      livre_chantier: "Livré Chantier",
+      retrait_magasin: "Retrait Magasin",
+    };
+    return labels[statut] || statut;
+  };
+
+  // Fonction pour obtenir les styles de statut de paiement
+  const getPaymentStatusStyles = (statutPaiement) => {
+    return {
+      display: "inline-block",
+      px: 1.5,
+      py: 0.5,
+      borderRadius: 1,
+      backgroundColor:
+        statutPaiement === "paye"
+          ? "success.light"
+          : statutPaiement === "paye_partiel"
+          ? "warning.light"
+          : "error.light",
+      color:
+        statutPaiement === "paye"
+          ? "success.dark"
+          : statutPaiement === "paye_partiel"
+          ? "warning.dark"
+          : "error.dark",
+      fontWeight: 500,
+      textTransform: "capitalize",
+    };
+  };
+
+  // Fonction pour formater les labels de statut de paiement
+  const getPaymentStatusLabel = (statutPaiement) => {
+    const labels = {
+      non_paye: "Non Payé",
+      paye: "Payé",
+      paye_partiel: "Payé Partiellement",
+    };
+    return labels[statutPaiement] || statutPaiement;
+  };
+
   useEffect(() => {
     if (firstMount.current || chantierId !== prevChantierId.current) {
       setFilters(initialFilters);
@@ -433,80 +501,20 @@ const ChantierListeBonCommande = ({
                   {parseFloat(bc.montant_total).toFixed(2)} €
                 </CenteredTableCell>
                 <CenteredTableCell>
-                  {bc.statut === "en_attente" && (
-                    <span
-                      style={{
-                        color: "#FFA500",
-                        fontWeight: "bold",
-                        fontSize: "14px",
-                      }}
-                    >
-                      En attente Livraison
-                    </span>
-                  )}
-                  {bc.statut === "livre_chantier" && (
-                    <span
-                      style={{
-                        color: "#4CAF50",
-                        fontWeight: "bold",
-                        fontSize: "14px",
-                      }}
-                    >
-                      Livré Chantier
-                    </span>
-                  )}
-                  {bc.statut === "retrait_magasin" && (
-                    <span
-                      style={{
-                        color: "rgba(27, 120, 188, 1)",
-                        fontWeight: "bold",
-                        fontSize: "14px",
-                      }}
-                    >
-                      Retrait Magasin
-                    </span>
-                  )}
+                  <Typography
+                    variant="body2"
+                    sx={getStatusStyles(bc.statut || "en_attente")}
+                  >
+                    {getStatusLabel(bc.statut || "en_attente")}
+                  </Typography>
                 </CenteredTableCell>
                 <CenteredTableCell>
-                  {bc.statut_paiement === "non_paye" && (
-                    <span
-                      style={{
-                        color: "#FF0000",
-                        fontSize: "14px",
-                        whiteSpace: "nowrap",
-                        display: "block",
-                        textAlign: "center",
-                      }}
-                    >
-                      Non Payé
-                    </span>
-                  )}
-                  {bc.statut_paiement === "paye" && (
-                    <span
-                      style={{
-                        color: "#4CAF50",
-                        fontSize: "14px",
-                        whiteSpace: "nowrap",
-                        display: "block",
-                        textAlign: "center",
-                      }}
-                    >
-                      Payé
-                    </span>
-                  )}
-                  {bc.statut_paiement === "paye_partiel" && (
-                    <span
-                      style={{
-                        color: "#FFA500",
-                        fontSize: "14px",
-                        whiteSpace: "nowrap",
-                        display: "block",
-                        textAlign: "center",
-                      }}
-                    >
-                      Payé Partiellement
-                    </span>
-                  )}
+                  <Typography
+                    variant="body2"
+                    sx={getPaymentStatusStyles(bc.statut_paiement || "non_paye")}
+                  >
+                    {getPaymentStatusLabel(bc.statut_paiement || "non_paye")}
+                  </Typography>
                 </CenteredTableCell>
                 <CenteredTableCell
                   sx={{ whiteSpace: "nowrap", textAlign: "center" }}

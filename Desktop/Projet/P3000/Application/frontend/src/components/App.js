@@ -25,7 +25,7 @@ import ChantierTabs from "./ChantierTabs";
 import CreationDevis from "./CreationDevis";
 import DevisAvance from "./DevisAvance";
 import CreationPartie from "./CreationPartie";
-import Dashboard from "./Dashboard";
+import Dashboard from "./Dashboard/Dashboard";
 import Drive from "./Drive";
 import DriveV2 from "./DriveV2/DriveV2";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";

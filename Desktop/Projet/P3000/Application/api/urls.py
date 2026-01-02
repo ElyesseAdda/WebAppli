@@ -2,6 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .Devis_views import preview_saved_devis_v2, preview_devis_v2
 from .SituationViews import preview_situation_v2
+# Import des vues du dashboard depuis le module dédié
+from .dashboard.views import DashboardViewSet
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
@@ -53,7 +55,6 @@ from .views import (
     preview_situation,
     generate_situation_pdf,
     AgencyExpenseViewSet,
-    DashboardViewSet,
     get_chantier_bons_commande,
     get_chantier_stats,
     SousTraitantViewSet,

@@ -10,7 +10,7 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   const [selectedTab, setSelectedTab] = useState(state.selectedTab || 0);
 
   // Utiliser le hook centralisé pour les situations
-  const { situations, loading: loadingSituations, loadSituations } = useSituationsManager(
+  const { situations, loading: loadingSituations, loadSituations, updateSituation } = useSituationsManager(
     chantierData?.id
   );
 
@@ -187,6 +187,8 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
               isLoaded={!loadingSituations}
               setIsLoaded={setIsLoadedSituations}
               onSaveFilters={saveFiltersSituations}
+              updateSituation={updateSituation}
+              loadSituations={loadSituations}
             />
           )}
           {selectedTab === 1 && (

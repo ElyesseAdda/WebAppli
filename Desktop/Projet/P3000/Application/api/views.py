@@ -5922,7 +5922,7 @@ def update_situation(request, pk):
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
-                     'pourcentage_avancement', 'taux_prorata']:
+                     'pourcentage_avancement', 'taux_prorata', 'statut']:
             if field in data:
                 setattr(situation, field, data[field])
         situation.save()

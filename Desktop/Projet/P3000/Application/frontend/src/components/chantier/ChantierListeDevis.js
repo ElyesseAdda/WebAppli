@@ -1,6 +1,5 @@
 import {
-  Button,
-  ButtonGroup,
+  IconButton,
   Menu,
   MenuItem,
   Paper,
@@ -23,7 +22,6 @@ import {
   DevisNumber,
   FilterCell,
   PriceTextField,
-  StatusCell,
   StyledBox,
   StyledSelect,
   StyledTableContainer,
@@ -70,6 +68,30 @@ const ChantierListeDevis = ({
     useState(null);
   const statusOptions = ["En attente", "Validé", "Refusé"];
   const [pendingSave, setPendingSave] = useState(false);
+
+  // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
+  const getStatusStyles = (status) => {
+    return {
+      display: "inline-block",
+      px: 1.5,
+      py: 0.5,
+      borderRadius: 1,
+      backgroundColor:
+        status === "Validé"
+          ? "info.light"
+          : status === "Refusé"
+          ? "error.light"
+          : "warning.light",
+      color:
+        status === "Validé"
+          ? "info.dark"
+          : status === "Refusé"
+          ? "error.dark"
+          : "warning.dark",
+      fontWeight: 500,
+      textTransform: "capitalize",
+    };
+  };
 
   useEffect(() => {
     if (!isLoaded && chantierData?.id) {
@@ -546,7 +568,14 @@ const ChantierListeDevis = ({
                   >
                     {formatNumber(devis.price_ht)} €
                   </CenteredTableCell>
-                  <StatusCell status={devis.status}>{devis.status}</StatusCell>
+                  <CenteredTableCell>
+                    <Typography
+                      variant="body2"
+                      sx={getStatusStyles(devis.status || "En attente")}
+                    >
+                      {devis.status || "En attente"}
+                    </Typography>
+                  </CenteredTableCell>
                   <CenteredTableCell
                     sx={{
                       width: "60px",
@@ -556,36 +585,21 @@ const ChantierListeDevis = ({
                       justifyContent: "center",
                     }}
                   >
-                    <ButtonGroup
-                      variant="outlined"
-                      size="small"
-                      aria-label="actions button group"
-                      sx={{
-                        paddingTop: "10px",
-                        "& .MuiButtonGroup-grouped": {
-                          minWidth: "35px",
-                          padding: "4px",
-                          border: "none",
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                      <IconButton
+                        onClick={(e) => handleMoreClick(e, devis)}
+                        size="small"
+                        sx={{
                           "&:hover": {
                             backgroundColor: "rgba(0, 0, 0, 0.04)",
-                          },
-                        },
-                      }}
-                    >
-                      <Button
-                        onClick={(e) => handleMoreClick(e, devis)}
-                        sx={{
-                          backgroundColor: "rgba(0, 0, 0, 0.04)",
-                          "&:hover": {
-                            backgroundColor: "rgba(0, 0, 0, 0.08)",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                           },
                         }}
                       >
                         <TfiMore size={16} color="#666" />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton
                         onClick={() => handlePreviewDevis(devis.id)}
+                        size="small"
                         sx={{
                           color: "primary.main",
                           "&:hover": {
@@ -593,9 +607,9 @@ const ChantierListeDevis = ({
                           },
                         }}
                       >
-                        <AiFillFilePdf style={{ fontSize: "24px" }} />
-                      </Button>
-                    </ButtonGroup>
+                        <AiFillFilePdf style={{ fontSize: "20px" }} />
+                      </IconButton>
+                    </div>
                   </CenteredTableCell>
                 </TableRow>
               ))}
@@ -612,7 +626,7 @@ const ChantierListeDevis = ({
         )}
         <MenuItem onClick={handleEditCIE}>Éditer en CIE</MenuItem>
         <MenuItem onClick={handleConvertToBonCommande}>Convertir en bon de commande</MenuItem>
-        <MenuItem onClick={handleChangeStatus}>Modifier l'état</MenuItem>
+        <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
       </Menu>
 
       <StatusChangeModal
@@ -624,7 +638,7 @@ const ChantierListeDevis = ({
         currentStatus={devisToUpdate?.status}
         onStatusChange={handleStatusUpdate}
         type="devis"
-        title="Modifier l'état du devis"
+        title="Modifier le statut du devis"
       />
 
       <TransformationTSModal

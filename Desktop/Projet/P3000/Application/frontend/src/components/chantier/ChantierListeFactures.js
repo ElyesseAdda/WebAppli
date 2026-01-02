@@ -27,7 +27,6 @@ import {
   DevisNumber,
   FilterCell,
   PriceTextField,
-  StatusCell,
   StyledBox,
   StyledSelect,
   StyledTableContainer,
@@ -61,6 +60,30 @@ const ChantierListeFactures = ({
   const [factureToUpdate, setFactureToUpdate] = useState(null);
   const statusOptions = ["En cours", "Attente paiement", "Payée"];
   const [pendingSave, setPendingSave] = useState(false);
+
+  // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
+  const getStatusStyles = (stateFacture) => {
+    return {
+      display: "inline-block",
+      px: 1.5,
+      py: 0.5,
+      borderRadius: 1,
+      backgroundColor:
+        stateFacture === "Payée"
+          ? "success.light"
+          : stateFacture === "Attente paiement"
+          ? "warning.light"
+          : "error.light",
+      color:
+        stateFacture === "Payée"
+          ? "success.dark"
+          : stateFacture === "Attente paiement"
+          ? "warning.dark"
+          : "error.dark",
+      fontWeight: 500,
+      textTransform: "capitalize",
+    };
+  };
 
   useEffect(() => {
     if (!isLoaded && chantierData?.id) {
@@ -398,21 +421,14 @@ const ChantierListeFactures = ({
                       ? "Classique"
                       : "TS"}
                   </CenteredTableCell>
-                  <StatusCell
-                    sx={{
-                      color:
-                        facture.state_facture === "Payée"
-                          ? "#4caf50"
-                          : facture.state_facture === "Attente paiement"
-                          ? "#ff9800"
-                          : facture.state_facture === "En cours"
-                          ? "#f44336"
-                          : "#666",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {facture.state_facture}
-                  </StatusCell>
+                  <CenteredTableCell>
+                    <Typography
+                      variant="body2"
+                      sx={getStatusStyles(facture.state_facture || "En cours")}
+                    >
+                      {facture.state_facture || "En cours"}
+                    </Typography>
+                  </CenteredTableCell>
                   <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
                     <IconButton onClick={(e) => handleMenuClick(e, facture)}>
                       <TfiMore size={16} color="#666" />

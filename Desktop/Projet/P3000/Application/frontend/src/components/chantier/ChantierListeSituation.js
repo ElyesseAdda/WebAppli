@@ -1,4 +1,7 @@
 import {
+  IconButton,
+  Menu,
+  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -10,13 +13,13 @@ import {
 import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { TfiMore } from "react-icons/tfi";
 import {
   AlignedCell,
   CenteredTableCell,
   DevisNumber,
   FilterCell,
   PriceTextField,
-  StatusCell,
   StyledBox,
   StyledSelect,
   StyledTableContainer,
@@ -24,6 +27,7 @@ import {
 } from "../../styles/tableStyles";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
+import StatusChangeModal from "../StatusChangeModal";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -60,12 +64,55 @@ const ChantierListeSituation = ({
   isLoaded,
   setIsLoaded,
   onSaveFilters,
+  updateSituation,
+  loadSituations,
 }) => {
   const [filteredSituations, setFilteredSituations] = useState([]);
   const [orderBy, setOrderBy] = useState("date_creation");
   const [order, setOrder] = useState("desc");
   const statusOptions = ["brouillon", "validee", "facturee"];
+  
+  // Fonction pour formater les labels de statut
+  const formatStatusLabel = (status) => {
+    const labels = {
+      brouillon: "En attente",
+      validee: "Validée",
+      facturee: "Facturée",
+    };
+    return labels[status] || status;
+  };
+  
+  // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
+  const getStatusStyles = (statut) => {
+    return {
+      display: "inline-block",
+      px: 1.5,
+      py: 0.5,
+      borderRadius: 1,
+      backgroundColor:
+        statut === "facturee"
+          ? "success.light"
+          : statut === "validee"
+          ? "info.light"
+          : "warning.light",
+      color:
+        statut === "facturee"
+          ? "success.dark"
+          : statut === "validee"
+          ? "info.dark"
+          : "warning.dark",
+      fontWeight: 500,
+      textTransform: "capitalize",
+    };
+  };
+  
   const [pendingSave, setPendingSave] = useState(false);
+  
+  // États pour le menu "more"
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedSituation, setSelectedSituation] = useState(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [situationToUpdate, setSituationToUpdate] = useState(null);
 
   useEffect(() => {
     if (!isLoaded && chantierData?.id) {
@@ -190,6 +237,38 @@ const ChantierListeSituation = ({
     window.open(`/api/preview-situation/${situationId}/`, "_blank");
   };
 
+  // Handlers pour le menu "more"
+  const handleMenuClick = (event, situation) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedSituation(situation);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+    setSelectedSituation(null);
+  };
+
+  const handleChangeStatus = () => {
+    setSituationToUpdate(selectedSituation);
+    setShowStatusModal(true);
+    handleClose();
+  };
+
+  const handleStatusUpdate = async (newStatus) => {
+    try {
+      if (!situationToUpdate || !updateSituation) return;
+      await updateSituation(situationToUpdate.id, { statut: newStatus });
+      if (loadSituations) {
+        loadSituations();
+      }
+      setShowStatusModal(false);
+      setSituationToUpdate(null);
+    } catch (error) {
+      console.error("Erreur lors de la modification du statut:", error);
+      alert("Erreur lors de la modification du statut");
+    }
+  };
+
   return (
     <div
       style={{
@@ -287,7 +366,7 @@ const ChantierListeSituation = ({
                     <option value="Tous">Tous</option>
                     {statusOptions.map((status) => (
                       <option key={status} value={status}>
-                        {status}
+                        {formatStatusLabel(status)}
                       </option>
                     ))}
                   </StyledSelect>
@@ -332,24 +411,35 @@ const ChantierListeSituation = ({
                   >
                     {formatNumber(situation.montant_apres_retenues)} €
                   </CenteredTableCell>
-                  <StatusCell status={situation.statut}>
-                    {situation.statut}
-                  </StatusCell>
                   <CenteredTableCell>
-                    {/* Bouton de régénération dans le Drive */}
-                    <RegeneratePDFIconButton
-                      documentType={DOCUMENT_TYPES.SITUATION}
-                      documentData={{
-                        ...situation,
-                        chantier: chantierData,
-                      }}
-                      size="small"
-                      color="primary"
-                      tooltipPlacement="top"
-                      onSuccess={() => {
-                        console.log('✅ Situation régénérée avec succès');
-                      }}
-                    />
+                    <Typography
+                      variant="body2"
+                      sx={getStatusStyles(situation.statut)}
+                    >
+                      {formatStatusLabel(situation.statut || "brouillon")}
+                    </Typography>
+                  </CenteredTableCell>
+                  <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                      {/* Bouton de régénération dans le Drive */}
+                      <RegeneratePDFIconButton
+                        documentType={DOCUMENT_TYPES.SITUATION}
+                        documentData={{
+                          ...situation,
+                          chantier: chantierData,
+                        }}
+                        size="small"
+                        color="primary"
+                        tooltipPlacement="top"
+                        onSuccess={() => {
+                          console.log('✅ Situation régénérée avec succès');
+                        }}
+                      />
+                      {/* Bouton "more" */}
+                      <IconButton onClick={(e) => handleMenuClick(e, situation)} size="small">
+                        <TfiMore size={16} color="#666" />
+                      </IconButton>
+                    </div>
                   </CenteredTableCell>
                 </TableRow>
               ))}
@@ -357,6 +447,39 @@ const ChantierListeSituation = ({
           </Table>
         </StyledTableContainer>
       </StyledBox>
+
+      {/* Menu "more" */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleClose}
+        PaperProps={{
+          elevation: 3,
+          sx: {
+            borderRadius: 2,
+            minWidth: 150,
+          },
+        }}
+      >
+        <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
+      </Menu>
+
+      {/* Modal de modification du statut */}
+      <StatusChangeModal
+        open={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setSituationToUpdate(null);
+        }}
+        currentStatus={situationToUpdate?.statut}
+        onStatusChange={handleStatusUpdate}
+        statusOptions={statusOptions.map(status => ({
+          value: status,
+          label: formatStatusLabel(status)
+        }))}
+        title="Modifier le statut de la situation"
+        type="situation"
+      />
     </div>
   );
 };
