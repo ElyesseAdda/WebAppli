@@ -179,6 +179,7 @@ const SituationsEvolutionChart = () => {
         border: "1px solid #f1f5f9",
         boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
         width: "1280px",
+        overflow: "visible",
       }}
     >
       {/* En-tête avec icône et titre */}
@@ -256,6 +257,7 @@ const SituationsEvolutionChart = () => {
           position: "relative",
           width: "100%",
           overflowX: "auto",
+          overflowY: "visible",
         }}
       >
         <svg
@@ -353,40 +355,71 @@ const SituationsEvolutionChart = () => {
             strokeLinejoin="round"
           />
 
-          {/* Points sur la courbe avec zones cliquables */}
-          {points.map((point, index) => (
-            <g key={index}>
-              {/* Zone invisible pour le hover (plus grande que le point) */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r="15"
-                fill="transparent"
-                style={{ cursor: "pointer" }}
-                onMouseMove={(e) => handleMouseMove(e, point)}
-                onMouseLeave={handleMouseLeave}
+          {/* Lignes en pointillés depuis les axes vers le point survolé */}
+          {tooltipData && (
+            <g>
+              {/* Ligne verticale depuis l'axe X vers le point */}
+              <line
+                x1={tooltipData.x}
+                y1={padding.top + graphHeight}
+                x2={tooltipData.x}
+                y2={tooltipData.y}
+                stroke="#94a3b8"
+                strokeWidth="1"
+                strokeDasharray="4,4"
+                opacity="0.6"
               />
-              {/* Point visible */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r="5"
-                fill="#1976d2"
-                stroke="white"
-                strokeWidth="2"
-                style={{ pointerEvents: "none" }}
+              {/* Ligne horizontale depuis l'axe Y vers le point */}
+              <line
+                x1={padding.left}
+                y1={tooltipData.y}
+                x2={tooltipData.x}
+                y2={tooltipData.y}
+                stroke="#94a3b8"
+                strokeWidth="1"
+                strokeDasharray="4,4"
+                opacity="0.6"
               />
             </g>
-          ))}
+          )}
+
+          {/* Points sur la courbe avec zones cliquables */}
+          {points.map((point, index) => {
+            const isHovered = tooltipData && tooltipData.month === point.month && tooltipData.year === point.year;
+            return (
+              <g key={index}>
+                {/* Zone invisible pour le hover (plus grande que le point) */}
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r="15"
+                  fill="transparent"
+                  style={{ cursor: "pointer" }}
+                  onMouseMove={(e) => handleMouseMove(e, point)}
+                  onMouseLeave={handleMouseLeave}
+                />
+                {/* Point visible */}
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={isHovered ? "6" : "5"}
+                  fill="#1976d2"
+                  stroke="white"
+                  strokeWidth={isHovered ? "3" : "2"}
+                  style={{ pointerEvents: "none", transition: "r 0.2s, stroke-width 0.2s" }}
+                />
+              </g>
+            );
+          })}
         </svg>
 
-        {/* Tooltip */}
+        {/* Tooltip sur l'axe Y */}
         {tooltipData && (
           <Box
             sx={{
               position: "absolute",
-              left: `${Math.min(tooltipPosition.x + 10, chartWidth - 150)}px`,
-              top: `${Math.max(tooltipPosition.y - 60, 10)}px`,
+              left: `${padding.left - 0}px`, // À gauche de l'axe Y
+              top: `${tooltipData.y - 25}px`, // À la hauteur du point survolé
               backgroundColor: "rgba(0, 0, 0, 0.8)",
               color: "white",
               padding: "8px 12px",
