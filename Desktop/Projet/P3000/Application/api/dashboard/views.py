@@ -1,14 +1,15 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.db.models import Sum, Q
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from ..models import (
     Chantier,
     Facture,
     BonCommande,
     Event,
+    Situation,
 )
 
 
@@ -503,4 +504,107 @@ class DashboardViewSet(viewsets.ViewSet):
             stats[year_key][month_key]['cout_sous_traitance'] = cout_sous_traitance
         
         return stats
+
+
+@api_view(['GET'])
+def get_pending_payments(request):
+    """
+    Récupère les situations et factures en attente de paiement.
+    Paramètres de requête:
+    - annee: année de la date de paiement attendue (optionnel, si non spécifié, toutes les années sont incluses)
+    """
+    try:
+        annee_param = request.query_params.get('annee')
+        annee = int(annee_param) if annee_param else None
+        
+        result = []
+        today = date.today()
+        
+        # 1. Récupérer les situations en attente de paiement (toutes les situations, peu importe le statut)
+        situations_query = Situation.objects.filter(
+            date_paiement_reel__isnull=True
+        ).select_related('chantier').order_by('annee', 'mois', 'numero_situation')
+        
+        for situation in situations_query:
+            # Calculer la date de paiement attendue
+            date_paiement_attendue = None
+            if situation.date_envoi and situation.delai_paiement:
+                date_paiement_attendue = situation.date_envoi + timedelta(days=situation.delai_paiement)
+            
+            # Filtrer : uniquement les situations avec date de paiement attendue dans le futur
+            if date_paiement_attendue is None or date_paiement_attendue <= today:
+                continue
+            
+            # Filtrer par année de la date de paiement attendue si spécifié
+            if annee and date_paiement_attendue.year != annee:
+                continue
+            
+            montant = float(situation.montant_apres_retenues or situation.montant_total or 0)
+            
+            result.append({
+                'id': situation.id,
+                'type': 'situation',
+                'numero': situation.numero_situation,
+                'chantier_id': situation.chantier.id,
+                'chantier_name': situation.chantier.chantier_name,
+                'mois': situation.mois,
+                'annee': situation.annee,
+                'montant_ht': montant,
+                'date_paiement_attendue': date_paiement_attendue.isoformat(),
+                'date_envoi': situation.date_envoi.isoformat() if situation.date_envoi else None,
+                'statut': situation.statut,
+            })
+        
+        # 2. Récupérer les factures en attente de paiement
+        factures_query = Facture.objects.filter(
+            date_paiement__isnull=True,
+            type_facture='classique'  # Seulement les factures classiques
+        ).select_related('chantier').order_by('date_creation')
+        
+        for facture in factures_query:
+            # Calculer la date de paiement attendue (même logique que pour les situations)
+            date_paiement_attendue = None
+            if facture.date_echeance:
+                # Priorité à date_echeance si elle existe
+                date_paiement_attendue = facture.date_echeance
+            elif facture.date_envoi and facture.delai_paiement:
+                # Sinon, calculer à partir de date_envoi + delai_paiement
+                date_paiement_attendue = facture.date_envoi + timedelta(days=facture.delai_paiement)
+            
+            # Filtrer : uniquement les factures avec date de paiement attendue dans le futur
+            if date_paiement_attendue is None or date_paiement_attendue <= today:
+                continue
+            
+            # Filtrer par année de la date de paiement attendue si spécifié
+            if annee and date_paiement_attendue.year != annee:
+                continue
+            
+            montant = float(facture.price_ht or 0)
+            
+            result.append({
+                'id': facture.id,
+                'type': 'facture',
+                'numero': facture.numero,
+                'chantier_id': facture.chantier.id,
+                'chantier_name': facture.chantier.chantier_name,
+                'mois': None,
+                'annee': facture.date_creation.year if facture.date_creation else None,
+                'montant_ht': montant,
+                'date_paiement_attendue': date_paiement_attendue.isoformat(),
+                'date_envoi': facture.date_envoi.isoformat() if facture.date_envoi else None,
+                'state_facture': facture.state_facture,
+            })
+        
+        # 3. Trier par date de paiement attendue (les plus urgentes en premier)
+        result.sort(key=lambda x: (
+            x['date_paiement_attendue'] if x['date_paiement_attendue'] else '9999-12-31',
+            x['chantier_name'],
+            x['numero']
+        ))
+        
+        return Response(result)
+    except ValueError:
+        return Response({'error': 'Format invalide pour l\'année'}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 

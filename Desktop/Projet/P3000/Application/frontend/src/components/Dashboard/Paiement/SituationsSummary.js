@@ -275,7 +275,7 @@ const SituationsSummary = () => {
             alignSelf: "flex-start", // Alignée en haut
             position: "relative",
             bottom: "30px",
-            right: "-20px",
+            right: "-40px",
             
           }}
         >

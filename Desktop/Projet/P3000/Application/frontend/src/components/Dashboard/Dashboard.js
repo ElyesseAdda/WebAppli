@@ -17,10 +17,11 @@ import {
   useDashboardFilters,
 } from "./DashboardFiltersContext";
 import SituationsSummary from "./Paiement/SituationsSummary";
+import PendingPaymentsSummary from "./Paiement/PendingPaymentsSummary";
 
 // Composant interne qui utilise les filtres
 const DashboardContent = () => {
-  const { selectedYear } = useDashboardFilters();
+  const { selectedYear, openAccordion } = useDashboardFilters();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
@@ -68,12 +69,25 @@ const DashboardContent = () => {
 
   return (
     <Box sx={{ position: "relative" }}>
-      {/* Section Paiement - Situations */}
-      <Box sx={{ mb: 4, position: "relative" }}>
-        <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 2 }}>
-         
-        </Typography>
-        <SituationsSummary />
+      {/* Section Paiement - Situations et Paiements en Attente */}
+      <Box 
+        sx={{ 
+          mb: 4, 
+          position: "relative",
+          display: "flex",
+          gap: 3,
+          flexWrap: "nowrap",
+          alignItems: "flex-start",
+        }}
+      >
+        {/* Masquer SituationsSummary quand PendingPaymentsSummary est ouvert */}
+        {openAccordion !== "pending-payments-summary" && (
+          <SituationsSummary />
+        )}
+        {/* Masquer PendingPaymentsSummary quand SituationsSummary est ouvert */}
+        {openAccordion !== "situations-summary" && (
+          <PendingPaymentsSummary />
+        )}
       </Box>
 
       {/* Autres sections du dashboard */}

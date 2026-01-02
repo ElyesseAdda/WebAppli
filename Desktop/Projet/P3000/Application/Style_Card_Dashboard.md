@@ -519,6 +519,77 @@ const expanded = openAccordion === accordionId;
 - Factures : `"factures-summary"`
 - Autres modules : `"[module-name]-summary"`
 
+### Comportement des Cartes sur une Même Ligne
+
+**⚠️ Important** : Quand plusieurs cartes sont sur la même ligne (dans un conteneur flex), elles ont un comportement spécial d'affichage mutuel.
+
+#### Comportement
+
+Quand une carte s'ouvre (accordéon expanded) :
+1. **Les autres cartes de la même ligne sont masquées** (disparaissent visuellement)
+2. **La carte ouverte prend toute la largeur disponible** (1200px) comme si elle était seule
+3. **Elle se comporte visuellement comme si elle était la seule carte sur la ligne**
+
+Quand la carte se ferme :
+1. **Toutes les cartes de la ligne réapparaissent**
+2. **Chaque carte reprend sa largeur normale** (400px)
+3. **Les cartes sont à nouveau côte à côte**
+
+#### Implémentation dans le Dashboard
+
+Dans le composant parent (ex: `Dashboard.js`), utiliser des conditions pour masquer les autres cartes :
+
+```javascript
+const DashboardContent = () => {
+  const { selectedYear, openAccordion } = useDashboardFilters();
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        gap: 3,
+        flexWrap: "nowrap",
+        alignItems: "flex-start",
+      }}
+    >
+      {/* Masquer SituationsSummary quand PendingPaymentsSummary est ouvert */}
+      {openAccordion !== "pending-payments-summary" && (
+        <SituationsSummary />
+      )}
+      
+      {/* Masquer PendingPaymentsSummary quand SituationsSummary est ouvert */}
+      {openAccordion !== "situations-summary" && (
+        <PendingPaymentsSummary />
+      )}
+    </Box>
+  );
+};
+```
+
+#### Règles à Suivre
+
+1. **Toujours masquer les autres cartes de la ligne** quand une carte s'ouvre
+2. **Utiliser l'ID de l'accordéon** pour la condition de masquage (`openAccordion !== "autre-accordion-id"`)
+3. **La largeur de la carte ouverte** doit être de 1200px (comme défini dans les styles)
+4. **Le conteneur flex** doit avoir `flexWrap: "nowrap"` pour éviter le retour à la ligne
+
+#### Structure du Conteneur
+
+```javascript
+<Box 
+  sx={{ 
+    mb: 4, 
+    position: "relative",
+    display: "flex",
+    gap: 3,
+    flexWrap: "nowrap", // Important : pas de retour à la ligne
+    alignItems: "flex-start",
+  }}
+>
+  {/* Cartes conditionnelles selon l'accordéon ouvert */}
+</Box>
+```
+
 ---
 
 ## 📋 Checklist pour Créer une Nouvelle Carte
@@ -528,6 +599,7 @@ const expanded = openAccordion === accordionId;
 - [ ] Utiliser la même structure Paper avec les mêmes styles
 - [ ] Ajouter un ID unique pour l'accordéon
 - [ ] Utiliser `toggleAccordion` du contexte
+- [ ] Si la carte est sur une ligne avec d'autres cartes, s'assurer que le Dashboard masque les autres cartes quand celle-ci s'ouvre
 
 ### Styles
 - [ ] Titre avec `#64748b` (text-slate-500)
@@ -812,4 +884,5 @@ const [ModuleName]Summary = () => {
 - Ajustements du Paper : `pb: 4.5` pour laisser de la place à la barre, `overflow: "visible"` et `overflowY` conditionnel
 - Position du bouton : `bottom: 18` au lieu de `12` pour être au-dessus de la barre de progression
 - **Changement de statut depuis le tableau** : Ajout de la fonctionnalité permettant de modifier le statut d'un élément directement depuis le tableau en cliquant sur le label du statut. Utilise le composant `StatusChangeModal` réutilisable.
+- **Comportement des cartes sur une même ligne** : Ajout du comportement mutuel entre cartes sur une même ligne. Quand une carte s'ouvre, les autres cartes de la ligne sont masquées pour laisser la carte ouverte prendre toute la largeur (1200px). Implémentation avec des conditions dans le composant parent utilisant `openAccordion` du contexte.
 
