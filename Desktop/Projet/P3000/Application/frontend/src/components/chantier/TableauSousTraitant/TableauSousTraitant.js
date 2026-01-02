@@ -2435,6 +2435,7 @@ const TableauSousTraitant = () => {
                             sx={{ 
                               ...commonBodyCellStyle,
                               position: "relative",
+                              overflow: "visible", // Permettre au bouton de sortir de la div
                               "&:hover .add-facture-btn": {
                                 opacity: 1,
                                 visibility: "visible",
@@ -2549,7 +2550,7 @@ const TableauSousTraitant = () => {
                                 sx={{
                                   position: "absolute",
                                   bottom: 4,
-                                  right: 4,
+                                  right: -15, // 5px sur la droite, sort de la div
                                   opacity: 0,
                                   visibility: "hidden",
                                   transition: "all 0.2s ease",
