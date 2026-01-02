@@ -2561,7 +2561,19 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
     def ecart_paiement_jours(self):
         """Calcule l'écart en jours entre la date de paiement prévue et la date de paiement réel"""
         if self.date_paiement_reel and self.date_paiement_prevue:
-            return (self.date_paiement_reel - self.date_paiement_prevue).days
+            # Convertir en date si c'est une chaîne
+            date_reel = self.date_paiement_reel
+            date_prevue = self.date_paiement_prevue
+            
+            if isinstance(date_reel, str):
+                from datetime import datetime
+                date_reel = datetime.strptime(date_reel, '%Y-%m-%d').date()
+            
+            if isinstance(date_prevue, str):
+                from datetime import datetime
+                date_prevue = datetime.strptime(date_prevue, '%Y-%m-%d').date()
+            
+            return (date_reel - date_prevue).days
         return None
     
     @property

@@ -1281,6 +1281,71 @@ const TableauSousTraitant = () => {
       } finally {
         setSaving(false);
       }
+    } else if (currentData?.source_type === 'facture_sous_traitant' && facture.id && !isNaN(Number(facture.id))) {
+      // ✅ NOUVEAU : Factures de sous-traitants réels (FactureSousTraitant)
+      // Créer un PaiementFactureSousTraitant dans la base de données
+      try {
+        setSaving(true);
+        
+        const montantFacture = parseFloat(facture.montant_facture) || 0;
+        
+        // Créer le paiement via l'API PaiementFactureSousTraitant
+        const paiementResponse = await axios.post('/api/paiements-facture-sous-traitant/', {
+          facture: facture.id,
+          montant_paye: montantFacture,
+          date_paiement_reel: datePaiementFacture,
+          commentaire: `Paiement validé depuis TableauSousTraitant`
+        });
+        
+        // Calculer le nouveau montant payé total
+        const montantPayeActuel = parseFloat(currentData?.paye || 0);
+        const nouveauMontantPaye = montantPayeActuel + montantFacture;
+        
+        // Mettre à jour les factures localement
+        const updatedFactures = [...currentFactures];
+        updatedFactures[factureIndex] = {
+          ...updatedFactures[factureIndex],
+          payee: true,
+          date_paiement_facture: datePaiementFacture
+        };
+        
+        // ✅ Mise à jour dynamique de data
+        setData((prevData) => {
+          return prevData.map((item) => {
+            if (
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId
+            ) {
+              return {
+                ...item,
+                factures: updatedFactures,
+                paye: nouveauMontantPaye,
+                date_paiement: datePaiementFacture
+              };
+            }
+            return item;
+          });
+        });
+        
+        setEditedFactures((prev) => ({
+          ...prev,
+          [key]: updatedFactures,
+        }));
+        
+        setEditedValuesPaye((prev) => ({
+          ...prev,
+          [key]: nouveauMontantPaye,
+        }));
+        
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+      } catch (error) {
+        console.error("Erreur lors de la création du paiement:", error);
+        setError("Erreur lors de la création du paiement dans la base de données");
+      } finally {
+        setSaving(false);
+      }
     } else {
       // Ancienne méthode pour les factures non-suivi (rétrocompatibilité)
       const montantFacture = parseFloat(facture.montant_facture) || 0;
@@ -1291,7 +1356,7 @@ const TableauSousTraitant = () => {
         editedValuesPaye[keyPaye] !== undefined 
           ? editedValuesPaye[keyPaye] 
           : (currentData?.paye || 0)
-      ) || 0;  // ✅ CORRECTION: Convertir en nombre
+      ) || 0;
       
       const nouveauMontantPaye = montantPayeActuel + montantFacture;
       
@@ -2668,14 +2733,16 @@ const TableauSousTraitant = () => {
                                       .filter(f => f.payee && f.date_paiement_facture)
                                       .map((facture, idx) => {
                                         const datePaiement = facture.date_paiement_facture;
-                                        // ✅ Pour AgencyExpenseMonth, afficher TOUTES les factures payées
+                                        // ✅ Pour AgencyExpenseMonth et facture_sous_traitant, afficher TOUTES les factures payées
                                         // Pour les autres, afficher seulement si la date est différente
                                         const isDifferentFromMain = !item.date_paiement || datePaiement !== item.date_paiement;
                                         const isAgencyExpense = item.source_type === 'agency_expense';
-                                        if (!isAgencyExpense && !isDifferentFromMain) return null;
+                                        const isFactureSousTraitant = item.source_type === 'facture_sous_traitant';
+                                        // Toujours afficher pour AgencyExpense et FactureSousTraitant
+                                        if (!isAgencyExpense && !isFactureSousTraitant && !isDifferentFromMain) return null;
                                         
-                                        // ✅ Pour AgencyExpenseMonth, mettre en évidence la facture avec la date la plus récente
-                                        const isLatestDate = item.source_type === 'agency_expense' && datePaiement === item.date_paiement;
+                                        // ✅ Pour AgencyExpenseMonth et FactureSousTraitant, mettre en évidence la facture avec la date la plus récente
+                                        const isLatestDate = (item.source_type === 'agency_expense' || item.source_type === 'facture_sous_traitant') && datePaiement === item.date_paiement;
                                         
                                         return (
                                           <Box

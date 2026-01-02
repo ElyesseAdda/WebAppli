@@ -9165,6 +9165,7 @@ class PaiementFactureSousTraitantViewSet(viewsets.ModelViewSet):
         if facture_id:
             queryset = queryset.filter(facture_id=facture_id)
         return queryset
+    
 
 
 class SuiviPaiementSousTraitantMensuelViewSet(viewsets.ModelViewSet):
@@ -10061,8 +10062,11 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         # Mettre à jour les dates si elles ne sont pas déjà définies ou si elles sont plus récentes
         # Comparer les dates en format ISO pour s'assurer que la plus récente est utilisée
         current_date_paiement = data[key][sous_traitant_nom][facture.chantier_id]['date_paiement']
+        date_paiement_updated = False
         if not current_date_paiement:
+            # Si pas de date actuelle, utiliser celle de cette facture (même si None)
             data[key][sous_traitant_nom][facture.chantier_id]['date_paiement'] = date_paiement
+            date_paiement_updated = True
         elif date_paiement:
             # Comparer les dates pour garder la plus récente
             try:
@@ -10070,15 +10074,34 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                 new_date = datetime.fromisoformat(date_paiement.replace('Z', '+00:00')).date() if isinstance(date_paiement, str) else date_paiement
                 if new_date > current_date:
                     data[key][sous_traitant_nom][facture.chantier_id]['date_paiement'] = date_paiement
+                    date_paiement_updated = True
             except Exception as e:
                 # Si la comparaison échoue, utiliser la nouvelle date si elle existe
                 if date_paiement > current_date_paiement:
                     data[key][sous_traitant_nom][facture.chantier_id]['date_paiement'] = date_paiement
+                    date_paiement_updated = True
+        # ✅ Si date_paiement est None (facture sans paiements), ne pas écraser la date existante
+        # La date sera recalculée à la fin avec toutes les factures
         if not data[key][sous_traitant_nom][facture.chantier_id]['date_envoi'] or (date_envoi and date_envoi > data[key][sous_traitant_nom][facture.chantier_id]['date_envoi']):
             data[key][sous_traitant_nom][facture.chantier_id]['date_envoi'] = date_envoi
         if not data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue'] or (date_paiement_prevue and date_paiement_prevue > data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue']):
             data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue'] = date_paiement_prevue
-        if ecart_paiement_reel is not None:
+        
+        # ✅ Recalculer l'écart de paiement réel avec les dates finales agrégées
+        # (date de paiement réelle la plus récente et date de paiement prévue)
+        final_date_paiement = data[key][sous_traitant_nom][facture.chantier_id]['date_paiement']
+        final_date_paiement_prevue = data[key][sous_traitant_nom][facture.chantier_id]['date_paiement_prevue']
+        if final_date_paiement and final_date_paiement_prevue:
+            try:
+                date_prevue = datetime.fromisoformat(final_date_paiement_prevue.replace('Z', '+00:00')).date() if isinstance(final_date_paiement_prevue, str) else final_date_paiement_prevue
+                date_reel = datetime.fromisoformat(final_date_paiement.replace('Z', '+00:00')).date() if isinstance(final_date_paiement, str) else final_date_paiement
+                data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] = (date_reel - date_prevue).days
+            except:
+                # Si le calcul échoue, garder l'écart précédent s'il existe
+                if data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] is None and ecart_paiement_reel is not None:
+                    data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
+        elif ecart_paiement_reel is not None and data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] is None:
+            # Si on n'a pas les deux dates finales, utiliser l'écart calculé pour cette facture
             data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
     
     # 2. Récupérer les agents journaliers depuis Schedule (pour avoir la date réelle de chaque créneau)
@@ -10273,7 +10296,12 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         
         # Mettre à jour les montants payés et dates
         if key in data and sous_traitant_nom in data[key] and paiement.chantier_id in data[key][sous_traitant_nom]:
-            data[key][sous_traitant_nom][paiement.chantier_id]['paye'] = montant_paye
+            # ✅ Ne pas écraser le montant payé si source_type === 'facture_sous_traitant'
+            # Car le montant a déjà été calculé depuis PaiementFactureSousTraitant (plus précis)
+            source_type = data[key][sous_traitant_nom][paiement.chantier_id].get('source_type')
+            if source_type != 'facture_sous_traitant':
+                data[key][sous_traitant_nom][paiement.chantier_id]['paye'] = montant_paye
+            
             # Ne pas écraser date_paiement si elle vient déjà des paiements de factures (PaiementFactureSousTraitant)
             # La date des paiements de factures a la priorité car c'est la date réelle de paiement
             current_date_paiement = data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']
@@ -10283,6 +10311,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
             data[key][sous_traitant_nom][paiement.chantier_id]['delai_paiement'] = paiement.delai_paiement if paiement.delai_paiement else 45
             
             # Calculer date_paiement_prevue si date_envoi et delai_paiement sont disponibles
+            # ✅ Ne pas recalculer l'écart si source_type === 'facture_sous_traitant'
+            # Car l'écart a déjà été calculé correctement depuis les PaiementFactureSousTraitant
             if data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'] and data[key][sous_traitant_nom][paiement.chantier_id]['delai_paiement']:
                 try:
                     date_envoi_obj = datetime.fromisoformat(data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'].replace('Z', '+00:00')).date() if isinstance(data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi'], str) else data[key][sous_traitant_nom][paiement.chantier_id]['date_envoi']
@@ -10290,8 +10320,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     date_prevue = date_envoi_obj + timedelta(days=delai)
                     data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement_prevue'] = date_prevue.isoformat()
                     
-                    # Calculer l'écart paiement réel
-                    if data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']:
+                    # Calculer l'écart paiement réel seulement si ce n'est pas une facture_sous_traitant
+                    if source_type != 'facture_sous_traitant' and data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']:
                         date_paiement_obj = datetime.fromisoformat(data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement'].replace('Z', '+00:00')).date() if isinstance(data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement'], str) else data[key][sous_traitant_nom][paiement.chantier_id]['date_paiement']
                         ecart_paiement_reel = (date_paiement_obj - date_prevue).days
                         data[key][sous_traitant_nom][paiement.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
@@ -10337,8 +10367,16 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
             }
         
         # Mettre à jour avec les données du suivi (PRIORITÉ sur les autres sources)
+        # ✅ Ne pas écraser si source_type === 'facture_sous_traitant' et que le suivi n'a pas de montant défini
+        # Car le montant a déjà été calculé depuis PaiementFactureSousTraitant (plus précis)
+        source_type = data[key][sous_traitant_nom][chantier_id_val].get('source_type')
         if suivi.montant_paye_ht is not None:
-            data[key][sous_traitant_nom][chantier_id_val]['paye'] = Decimal(str(suivi.montant_paye_ht))
+            # Si c'est une facture_sous_traitant et que le suivi a un montant de 0, ne pas écraser
+            if source_type == 'facture_sous_traitant' and suivi.montant_paye_ht == 0:
+                # Ne pas écraser, garder le montant calculé depuis les factures
+                pass
+            else:
+                data[key][sous_traitant_nom][chantier_id_val]['paye'] = Decimal(str(suivi.montant_paye_ht))
         
         if suivi.date_paiement_reel:
             data[key][sous_traitant_nom][chantier_id_val]['date_paiement'] = suivi.date_paiement_reel.isoformat()
@@ -10353,9 +10391,12 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
             data[key][sous_traitant_nom][chantier_id_val]['delai_paiement'] = suivi.delai_paiement
         
         # Calculer l'écart de paiement réel
-        ecart_jours = suivi.ecart_paiement_jours
-        if ecart_jours is not None:
-            data[key][sous_traitant_nom][chantier_id_val]['ecart_paiement_reel'] = ecart_jours
+        # ✅ Ne pas écraser l'écart si source_type === 'facture_sous_traitant'
+        # Car l'écart a déjà été calculé correctement depuis les PaiementFactureSousTraitant
+        if source_type != 'facture_sous_traitant':
+            ecart_jours = suivi.ecart_paiement_jours
+            if ecart_jours is not None:
+                data[key][sous_traitant_nom][chantier_id_val]['ecart_paiement_reel'] = ecart_jours
         
         # Ajouter les factures de suivi (fusionner avec les factures existantes)
         factures_suivi = []
@@ -10389,6 +10430,39 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         for sous_traitant, chantiers_data in sous_traitants_data.items():
             for chantier_id_val, valeurs in chantiers_data.items():
                 valeurs['ecart'] = valeurs['a_payer'] - valeurs['paye']
+                
+                # ✅ Recalculer la date de paiement réelle finale et l'écart pour facture_sous_traitant
+                # Cela garantit que la date est la plus récente parmi toutes les factures qui ont encore des paiements
+                if valeurs.get('source_type') == 'facture_sous_traitant':
+                    # Recalculer la date de paiement réelle : prendre la date la plus récente parmi toutes les factures
+                    factures = valeurs.get('factures', [])
+                    dates_paiement_factures = []
+                    for f in factures:
+                        if f.get('payee') and f.get('date_paiement_facture'):
+                            try:
+                                date_facture = datetime.fromisoformat(f['date_paiement_facture'].replace('Z', '+00:00')).date() if isinstance(f['date_paiement_facture'], str) else f['date_paiement_facture']
+                                dates_paiement_factures.append(date_facture)
+                            except:
+                                pass
+                    
+                    # Prendre la date la plus récente
+                    if dates_paiement_factures:
+                        date_paiement_recalculee = max(dates_paiement_factures).isoformat()
+                        valeurs['date_paiement'] = date_paiement_recalculee
+                    else:
+                        # Si aucune facture n'a de paiement, mettre à None
+                        valeurs['date_paiement'] = None
+                    
+                    final_date_paiement = valeurs.get('date_paiement')
+                    final_date_paiement_prevue = valeurs.get('date_paiement_prevue')
+                    
+                    if final_date_paiement and final_date_paiement_prevue:
+                        try:
+                            date_prevue = datetime.fromisoformat(final_date_paiement_prevue.replace('Z', '+00:00')).date() if isinstance(final_date_paiement_prevue, str) else final_date_paiement_prevue
+                            date_reel = datetime.fromisoformat(final_date_paiement.replace('Z', '+00:00')).date() if isinstance(final_date_paiement, str) else final_date_paiement
+                            valeurs['ecart_paiement_reel'] = (date_reel - date_prevue).days
+                        except:
+                            pass  # Garder l'écart existant si le calcul échoue
                 
                 item = {
                     'mois': mois_key,

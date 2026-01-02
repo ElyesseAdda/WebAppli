@@ -863,14 +863,37 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
 
         // Mettre à jour la facture en retirant le paiement
         setFactures((prev) =>
-          prev.map((f) =>
-            f.id === factureId
-              ? {
-                  ...f,
-                  paiements: f.paiements.filter((p) => p.id !== paiementId),
+          prev.map((f) => {
+            if (f.id === factureId) {
+              // Filtrer les paiements pour retirer celui supprimé
+              const paiementsRestants = f.paiements.filter((p) => p.id !== paiementId);
+              
+              // ✅ Recalculer la date de paiement réelle : prendre la date la plus récente parmi les paiements restants
+              let datePaiementReelle = null;
+              if (paiementsRestants.length > 0) {
+                // Trier par date_paiement_reel décroissante et prendre la plus récente
+                const paiementsTries = paiementsRestants
+                  .filter(p => p.date_paiement_reel)
+                  .sort((a, b) => {
+                    const dateA = new Date(a.date_paiement_reel);
+                    const dateB = new Date(b.date_paiement_reel);
+                    return dateB - dateA; // Décroissant
+                  });
+                
+                if (paiementsTries.length > 0) {
+                  datePaiementReelle = paiementsTries[0].date_paiement_reel;
                 }
-              : f
-          )
+              }
+              
+              return {
+                ...f,
+                paiements: paiementsRestants,
+                // Mettre à jour la date de paiement réelle si elle existe dans les données de la facture
+                date_paiement_reel: datePaiementReelle || f.date_paiement_reel || null
+              };
+            }
+            return f;
+          })
         );
       } catch (error) {
         alert("Erreur lors de la suppression du paiement.");
