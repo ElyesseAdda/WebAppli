@@ -2541,29 +2541,55 @@ const TableauSousTraitant = () => {
                                   );
                                 })
                               ) : (
-                                <Typography sx={{ fontSize: "0.7rem", color: "text.disabled", fontStyle: "italic", textAlign: "center", py: 1 }}>
-                                  -
-                                </Typography>
+                                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%" }}>
+                                  <Button
+                                    size="small"
+                                    onClick={() => handleOpenFactureModal(row.mois, row.sous_traitant, item.isAgentJournalier ? 0 : item.chantier_id, null)}
+                                    sx={{
+                                      color: "rgba(27, 120, 188, 0.6)",
+                                      fontWeight: "normal",
+                                      fontSize: "1.2rem",
+                                      textTransform: "none",
+                                      minWidth: "30px",
+                                      width: "30px",
+                                      height: "30px",
+                                      padding: 0,
+                                      borderRadius: "5px",
+                                      border: "1px dashed rgba(27, 120, 188, 0.3)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      "&:hover": {
+                                        backgroundColor: "rgba(27, 120, 188, 0.1)",
+                                        borderColor: "rgba(27, 120, 188, 0.5)",
+                                      },
+                                    }}
+                                  >
+                                    +
+                                  </Button>
+                                </Box>
                               )}
-                              <Box
-                                className="add-facture-btn"
-                                sx={{
-                                  position: "absolute",
-                                  bottom: 4,
-                                  right: -15, // 5px sur la droite, sort de la div
-                                  opacity: 0,
-                                  visibility: "hidden",
-                                  transition: "all 0.2s ease",
-                                  backgroundColor: "rgba(255, 255, 255, 0.95)",
-                                  borderRadius: "4px",
-                                  border: "1px solid rgba(27, 120, 188, 0.2)",
-                                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                                  zIndex: 2,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
+                              {/* Afficher le bouton hover seulement s'il y a des factures */}
+                              {item.factures && item.factures.length > 0 && (
+                                <Box
+                                  className="add-facture-btn"
+                                  sx={{
+                                    position: "absolute",
+                                    bottom: 4,
+                                    right: -15, // 5px sur la droite, sort de la div
+                                    opacity: 0,
+                                    visibility: "hidden",
+                                    transition: "all 0.2s ease",
+                                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                                    borderRadius: "4px",
+                                    border: "1px solid rgba(27, 120, 188, 0.2)",
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                                    zIndex: 2,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
                                 <IconButton
                                   size="small"
                                   onClick={() => handleOpenFactureModal(row.mois, row.sous_traitant, item.isAgentJournalier ? 0 : item.chantier_id, null)}
@@ -2580,7 +2606,8 @@ const TableauSousTraitant = () => {
                                 >
                                   <AddCircleOutlineIcon sx={{ fontSize: "1rem" }} />
                                 </IconButton>
-                              </Box>
+                                </Box>
+                              )}
                             </Box>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>

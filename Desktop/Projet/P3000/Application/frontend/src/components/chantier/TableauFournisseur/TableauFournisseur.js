@@ -1341,7 +1341,17 @@ const TableauFournisseur = () => {
                               }}
                             />
                           </TableCell>
-                          <TableCell sx={commonBodyCellStyle}>
+                          <TableCell 
+                            sx={{ 
+                              ...commonBodyCellStyle,
+                              position: "relative",
+                              overflow: "visible", // Permettre au bouton de sortir de la div
+                              "&:hover .add-facture-btn": {
+                                opacity: 1,
+                                visibility: "visible",
+                              }
+                            }}
+                          >
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8, alignItems: "stretch" }}>
                               {item.factures && item.factures.length > 0 ? (
                                 item.factures.map((facture, idx) => {
@@ -1440,32 +1450,74 @@ const TableauFournisseur = () => {
                                     </Box>
                                   );
                                 })
-                              ) : null}
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  justifyContent: "center",
-                                  padding: "4px",
-                                }}
-                              >
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenFactureModal(row.mois, row.fournisseur, item.chantier_id, null)}
+                              ) : (
+                                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%" }}>
+                                  <Button
+                                    size="small"
+                                    onClick={() => handleOpenFactureModal(row.mois, row.fournisseur, item.chantier_id, null)}
+                                    sx={{
+                                      color: "rgba(27, 120, 188, 0.6)",
+                                      fontWeight: "normal",
+                                      fontSize: "1.2rem",
+                                      textTransform: "none",
+                                      minWidth: "30px",
+                                      width: "30px",
+                                      height: "30px",
+                                      padding: 0,
+                                      borderRadius: "5px",
+                                      border: "1px dashed rgba(27, 120, 188, 0.3)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      "&:hover": {
+                                        backgroundColor: "rgba(27, 120, 188, 0.1)",
+                                        borderColor: "rgba(27, 120, 188, 0.5)",
+                                      },
+                                    }}
+                                  >
+                                    +
+                                  </Button>
+                                </Box>
+                              )}
+                              {/* Afficher le bouton hover seulement s'il y a des factures */}
+                              {item.factures && item.factures.length > 0 && (
+                                <Box
+                                  className="add-facture-btn"
                                   sx={{
-                                    padding: "6px",
-                                    color: "rgba(27, 120, 188, 0.7)",
-                                    border: "1px dashed rgba(27, 120, 188, 0.3)",
+                                    position: "absolute",
+                                    bottom: 4,
+                                    right: -15, // 15px sur la droite, sort de la div
+                                    opacity: 0,
+                                    visibility: "hidden",
+                                    transition: "all 0.2s ease",
+                                    backgroundColor: "rgba(255, 255, 255, 0.95)",
                                     borderRadius: "4px",
-                                    "&:hover": {
-                                      backgroundColor: "rgba(27, 120, 188, 0.1)",
-                                      borderColor: "rgba(27, 120, 188, 0.5)",
-                                      color: "rgba(27, 120, 188, 1)",
-                                    },
+                                    border: "1px solid rgba(27, 120, 188, 0.2)",
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                                    zIndex: 2,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
                                   }}
                                 >
-                                  <AddIcon sx={{ fontSize: "1rem" }} />
-                                </IconButton>
-                              </Box>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenFactureModal(row.mois, row.fournisseur, item.chantier_id, null)}
+                                    sx={{
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      color: "rgba(27, 120, 188, 0.8)",
+                                      "&:hover": {
+                                        color: "rgba(27, 120, 188, 1)",
+                                        backgroundColor: "rgba(27, 120, 188, 0.1)",
+                                      },
+                                    }}
+                                    title="Ajouter une facture"
+                                  >
+                                    <AddIcon sx={{ fontSize: "1rem" }} />
+                                  </IconButton>
+                                </Box>
+                              )}
                             </Box>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
