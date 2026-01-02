@@ -178,7 +178,7 @@ const SituationsEvolutionChart = () => {
         borderRadius: "16px",
         border: "1px solid #f1f5f9",
         boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-        width: "1280px",
+        width: "1360px",
         overflow: "visible",
       }}
     >

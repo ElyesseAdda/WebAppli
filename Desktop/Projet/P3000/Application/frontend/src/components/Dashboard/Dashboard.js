@@ -75,9 +75,10 @@ const DashboardContent = () => {
       <Box 
         sx={{ 
           mb: 4, 
+          paddingLeft: 3,
           position: "relative",
           display: "flex",
-          gap: 5,
+          gap: 7,
           flexWrap: "nowrap",
           alignItems: "flex-start",
         }}
@@ -166,6 +167,7 @@ const Dashboard = () => {
             justifyContent: "space-between",
             mb: 4,
             gap: 2,
+            maxWidth: "1360px",
           }}
         >
           <Typography variant="h4" component="h1" sx={{ color: "white", fontWeight: "bold" }}>
