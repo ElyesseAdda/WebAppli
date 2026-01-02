@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .Devis_views import preview_saved_devis_v2, preview_devis_v2
 from .SituationViews import preview_situation_v2
 # Import des vues du dashboard depuis le module dédié
-from .dashboard.views import DashboardViewSet, get_pending_payments
+from .dashboard.views import DashboardViewSet, get_pending_payments, get_late_payments, get_situations_monthly_evolution
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
@@ -213,6 +213,8 @@ urlpatterns = [
     # Route spécifique situations AVANT le routeur pour éviter les conflits
     path('situations/by-year/', get_all_situations_by_year, name='get-all-situations-by-year'),
     path('pending-payments/', get_pending_payments, name='get-pending-payments'),
+    path('late-payments/', get_late_payments, name='get-late-payments'),
+    path('situations-monthly-evolution/', get_situations_monthly_evolution, name='get-situations-monthly-evolution'),
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
     path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),
     path('dashboard/resume/', DashboardViewSet.as_view({'get': 'resume'})),

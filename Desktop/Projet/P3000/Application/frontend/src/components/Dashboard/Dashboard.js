@@ -18,6 +18,8 @@ import {
 } from "./DashboardFiltersContext";
 import SituationsSummary from "./Paiement/SituationsSummary";
 import PendingPaymentsSummary from "./Paiement/PendingPaymentsSummary";
+import LatePaymentsSummary from "./Paiement/LatePaymentsSummary";
+import SituationsEvolutionChart from "./Paiement/SituationsEvolutionChart";
 
 // Composant interne qui utilise les filtres
 const DashboardContent = () => {
@@ -69,7 +71,7 @@ const DashboardContent = () => {
 
   return (
     <Box sx={{ position: "relative" }}>
-      {/* Section Paiement - Situations et Paiements en Attente */}
+      {/* Section Paiement - Situations, Paiements en Attente et Paiements en Retard */}
       <Box 
         sx={{ 
           mb: 4, 
@@ -80,15 +82,22 @@ const DashboardContent = () => {
           alignItems: "flex-start",
         }}
       >
-        {/* Masquer SituationsSummary quand PendingPaymentsSummary est ouvert */}
-        {openAccordion !== "pending-payments-summary" && (
+        {/* Masquer SituationsSummary quand un autre accordéon est ouvert */}
+        {openAccordion !== "pending-payments-summary" && openAccordion !== "late-payments-summary" && (
           <SituationsSummary />
         )}
-        {/* Masquer PendingPaymentsSummary quand SituationsSummary est ouvert */}
-        {openAccordion !== "situations-summary" && (
+        {/* Masquer PendingPaymentsSummary quand un autre accordéon est ouvert */}
+        {openAccordion !== "situations-summary" && openAccordion !== "late-payments-summary" && (
           <PendingPaymentsSummary />
         )}
+        {/* Masquer LatePaymentsSummary quand un autre accordéon est ouvert */}
+        {openAccordion !== "situations-summary" && openAccordion !== "pending-payments-summary" && (
+          <LatePaymentsSummary />
+        )}
       </Box>
+
+      {/* Courbe d'évolution des situations émises */}
+      <SituationsEvolutionChart />
 
       {/* Autres sections du dashboard */}
       {dashboardData && (

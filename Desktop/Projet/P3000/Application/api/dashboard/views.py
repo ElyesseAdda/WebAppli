@@ -608,3 +608,159 @@ def get_pending_payments(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+
+@api_view(['GET'])
+def get_late_payments(request):
+    """
+    Récupère les situations et factures en retard de paiement.
+    Critères : date de paiement attendue/prévue < date du jour ET pas de date de paiement réelle.
+    Les paiements en retard sont affichés quelle que soit l'année, tant qu'ils ne sont pas payés.
+    """
+    try:
+        result = []
+        today = date.today()
+        
+        # 1. Récupérer les situations en retard de paiement
+        situations_query = Situation.objects.filter(
+            date_paiement_reel__isnull=True
+        ).select_related('chantier').order_by('annee', 'mois', 'numero_situation')
+        
+        for situation in situations_query:
+            # Calculer la date de paiement attendue
+            date_paiement_attendue = None
+            if situation.date_envoi and situation.delai_paiement:
+                date_paiement_attendue = situation.date_envoi + timedelta(days=situation.delai_paiement)
+            
+            # Filtrer : uniquement les situations avec date de paiement attendue dans le passé
+            if date_paiement_attendue is None or date_paiement_attendue >= today:
+                continue
+            
+            montant = float(situation.montant_apres_retenues or situation.montant_total or 0)
+            
+            result.append({
+                'id': situation.id,
+                'type': 'situation',
+                'numero': situation.numero_situation,
+                'chantier_id': situation.chantier.id,
+                'chantier_name': situation.chantier.chantier_name,
+                'mois': situation.mois,
+                'annee': situation.annee,
+                'montant_ht': montant,
+                'date_paiement_attendue': date_paiement_attendue.isoformat(),
+                'date_envoi': situation.date_envoi.isoformat() if situation.date_envoi else None,
+                'statut': situation.statut,
+            })
+        
+        # 2. Récupérer les factures en retard de paiement
+        factures_query = Facture.objects.filter(
+            date_paiement__isnull=True,
+            type_facture='classique'  # Seulement les factures classiques
+        ).select_related('chantier').order_by('date_creation')
+        
+        for facture in factures_query:
+            # Calculer la date de paiement attendue (même logique que pour les situations)
+            date_paiement_attendue = None
+            if facture.date_echeance:
+                # Priorité à date_echeance si elle existe
+                date_paiement_attendue = facture.date_echeance
+            elif facture.date_envoi and facture.delai_paiement:
+                # Sinon, calculer à partir de date_envoi + delai_paiement
+                date_paiement_attendue = facture.date_envoi + timedelta(days=facture.delai_paiement)
+            
+            # Filtrer : uniquement les factures avec date de paiement attendue dans le passé
+            if date_paiement_attendue is None or date_paiement_attendue >= today:
+                continue
+            
+            montant = float(facture.price_ht or 0)
+            
+            result.append({
+                'id': facture.id,
+                'type': 'facture',
+                'numero': facture.numero,
+                'chantier_id': facture.chantier.id,
+                'chantier_name': facture.chantier.chantier_name,
+                'mois': None,
+                'annee': facture.date_creation.year if facture.date_creation else None,
+                'montant_ht': montant,
+                'date_paiement_attendue': date_paiement_attendue.isoformat(),
+                'date_envoi': facture.date_envoi.isoformat() if facture.date_envoi else None,
+                'state_facture': facture.state_facture,
+            })
+        
+        # 3. Trier par date de paiement attendue (les plus anciennes en premier, donc les plus en retard)
+        result.sort(key=lambda x: (
+            x['date_paiement_attendue'] if x['date_paiement_attendue'] else '1900-01-01',
+            x['chantier_name'],
+            x['numero']
+        ))
+        
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
+def get_situations_monthly_evolution(request):
+    """
+    Récupère l'évolution mensuelle des situations émises.
+    Groupe les situations par mois (champ "mois") pour l'année donnée.
+    Paramètres de requête:
+    - year: année (défaut: année actuelle)
+    """
+    try:
+        year_param = request.query_params.get('year')
+        year = int(year_param) if year_param else datetime.now().year
+        
+        # Récupérer toutes les situations de l'année
+        situations = Situation.objects.filter(
+            annee=year
+        ).select_related('chantier')
+        
+        # Initialiser les données mensuelles (tous les mois de l'année)
+        monthly_data = {}
+        for month in range(1, 13):
+            month_key = f"{year}-{month:02d}"
+            monthly_data[month_key] = {
+                'month': month,
+                'year': year,
+                'montant_total': 0,
+                'nombre_situations': 0
+            }
+        
+        # Grouper les situations par mois (champ "mois")
+        for situation in situations:
+            # Utiliser le champ "mois" de la situation
+            mois = situation.mois
+            
+            # Vérifier que le mois est valide (1-12)
+            if not mois or mois < 1 or mois > 12:
+                continue
+            
+            # Clé du mois (YYYY-MM)
+            month_key = f"{year}-{mois:02d}"
+            
+            # Ajouter le montant et incrémenter le compteur
+            montant = float(situation.montant_apres_retenues or situation.montant_total or 0)
+            if month_key in monthly_data:
+                monthly_data[month_key]['montant_total'] += montant
+                monthly_data[month_key]['nombre_situations'] += 1
+        
+        # Convertir en liste et trier par mois
+        result = []
+        for month in range(1, 13):
+            month_key = f"{year}-{month:02d}"
+            if month_key in monthly_data:
+                data = monthly_data[month_key]
+                result.append({
+                    'month': data['month'],
+                    'year': data['year'],
+                    'montant_total': data['montant_total'],
+                    'nombre_situations': data['nombre_situations'],
+                    'label': datetime(year, month, 1).strftime('%b')  # Format: Jan, Feb, etc.
+                })
+        
+        return Response(result)
+    except ValueError:
+        return Response({'error': 'Format invalide pour l\'année'}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
