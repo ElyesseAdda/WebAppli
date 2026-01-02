@@ -77,7 +77,7 @@ const DashboardContent = () => {
           mb: 4, 
           position: "relative",
           display: "flex",
-          gap: 3,
+          gap: 5,
           flexWrap: "nowrap",
           alignItems: "flex-start",
         }}
