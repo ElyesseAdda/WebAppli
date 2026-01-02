@@ -1797,6 +1797,19 @@ class AgencyExpenseMonth(models.Model):
     
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
+
+    # Champs de récurrence (optionnels)
+    is_recurring_template = models.BooleanField(default=False)
+    recurrence_start = models.DateField(null=True, blank=True)
+    recurrence_end = models.DateField(null=True, blank=True)
+    closed_until = models.DateField(null=True, blank=True)
+    recurrence_parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='recurrence_children'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

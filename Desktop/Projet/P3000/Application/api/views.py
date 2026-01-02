@@ -7604,6 +7604,120 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
     serializer_class = AgencyExpenseMonthSerializer
     permission_classes = [AllowAny]
 
+    def _generate_from_template(self, template: AgencyExpenseMonth, horizon_months: int = 60):
+        """
+        Génère ou met à jour les occurrences mensuelles à partir d'un template.
+        Conserve le template en l'état si on tombe sur son mois/année.
+        """
+        print(
+            f"[generate_template] template_id={template.id} "
+            f"is_template={template.is_recurring_template} "
+            f"start={template.recurrence_start or date(template.year, template.month, 1)} "
+            f"end={template.recurrence_end} "
+            f"closed_until={template.closed_until} "
+            f"horizon={horizon_months}",
+            flush=True,
+        )
+        # Déterminer le début
+        start_date = template.recurrence_start or date(template.year, template.month, 1)
+
+        # Déterminer la fin
+        if template.recurrence_end:
+            end_date = date(template.recurrence_end.year, template.recurrence_end.month, 1)
+        else:
+            y, m = start_date.year, start_date.month
+            for _ in range(max(horizon_months - 1, 0)):
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+            end_date = date(y, m, 1)
+
+        # Prendre en compte closed_until (exclut les mois après closed_until)
+        if template.closed_until:
+            cutoff_start = date(template.closed_until.year, template.closed_until.month, 1)
+            if cutoff_start <= start_date:
+                print(f"[generate_template] skip: closed_until <= start ({cutoff_start} <= {start_date})", flush=True)
+                return []
+            prev_m = cutoff_start.month - 1
+            prev_y = cutoff_start.year
+            if prev_m == 0:
+                prev_m = 12
+                prev_y -= 1
+            cutoff_end = date(prev_y, prev_m, 1)
+            if cutoff_end < end_date:
+                end_date = cutoff_end
+
+        generated_ids = []
+        for y, m in self._iter_months(start_date, end_date):
+            obj, _created = AgencyExpenseMonth.objects.update_or_create(
+                description=template.description,
+                category=template.category,
+                month=m,
+                year=y,
+                defaults={
+                    'amount': template.amount,
+                    'date_paiement': date(y, m, 1),
+                    'date_reception_facture': template.date_reception_facture,
+                    'date_paiement_reel': template.date_paiement_reel,
+                    'delai_paiement': template.delai_paiement,
+                    'factures': template.factures,
+                    'agent': template.agent,
+                    'sous_traitant': template.sous_traitant,
+                    'chantier': template.chantier,
+                    'is_ecole_expense': template.is_ecole_expense,
+                    'ecole_hours': template.ecole_hours,
+                    'is_recurring_template': False,
+                    'recurrence_start': None,
+                    'recurrence_end': None,
+                    'closed_until': None,
+                    'recurrence_parent': template,
+                    'source_expense': template.source_expense,
+                }
+            )
+            # Si on retombe sur le template lui-même, ne pas le dégrader
+            if obj.id == template.id and template.is_recurring_template:
+                obj.is_recurring_template = True
+                obj.recurrence_parent = None
+                obj.recurrence_start = template.recurrence_start
+                obj.recurrence_end = template.recurrence_end
+                obj.closed_until = template.closed_until
+                obj.save(
+                    update_fields=[
+                        'is_recurring_template',
+                        'recurrence_parent',
+                        'recurrence_start',
+                        'recurrence_end',
+                        'closed_until',
+                    ]
+                )
+                continue
+            # S'assurer que l'occurrence pointe vers le template
+            if obj.recurrence_parent_id != template.id:
+                obj.recurrence_parent = template
+                obj.save(update_fields=['recurrence_parent'])
+            generated_ids.append(obj.id)
+
+        print(
+            f"[generate_template] done template_id={template.id} generated={len(generated_ids)} "
+            f"range={start_date}->{end_date}",
+            flush=True,
+        )
+
+        return generated_ids
+
+    @staticmethod
+    def _iter_months(start_date, end_date):
+        """Itère sur les (année, mois) inclusivement."""
+        y, m = start_date.year, start_date.month
+        end_y, end_m = end_date.year, end_date.month
+        while (y < end_y) or (y == end_y and m <= end_m):
+            yield y, m
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+
     def get_queryset(self):
         queryset = super().get_queryset()
         month = self.request.query_params.get('month')
@@ -7628,7 +7742,10 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         if not month or not year:
             return Response({"error": "Month and year are required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        expenses = self.queryset.filter(month=int(month), year=int(year))
+        expenses = self.queryset.filter(
+            month=int(month),
+            year=int(year)
+        )
         
         total = sum(float(e.amount) for e in expenses)
         totals_by_category = {}
@@ -7644,6 +7761,151 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             'totals_by_category': [{'category': k, 'total': v} for k, v in totals_by_category.items()],
             'total': total
         })
+
+    @action(detail=True, methods=['post'])
+    def recurring_generate(self, request, pk=None):
+        """
+        Génère ou met à jour les lignes mensuelles à partir d'un template récurrent.
+        - horizon_months : optionnel, défaut 60 (5 ans) si aucune date de fin.
+        """
+        template = self.get_object()
+        if not template.is_recurring_template:
+            return Response({"error": "Cet enregistrement n'est pas un template de récurrence"}, status=status.HTTP_400_BAD_REQUEST)
+
+        horizon_months = int(request.data.get('horizon_months', 60))
+
+        generated_ids = self._generate_from_template(template, horizon_months)
+        return Response({"generated": generated_ids}, status=status.HTTP_200_OK)
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        if instance.is_recurring_template:
+            horizon = 60
+            print(
+                f"[perform_create] new template id={instance.id} "
+                f"start={instance.recurrence_start} end={instance.recurrence_end} "
+                f"month={instance.month} year={instance.year}",
+                flush=True,
+            )
+            self._generate_from_template(instance, horizon_months=horizon)
+        return instance
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        if instance.is_recurring_template:
+            horizon = 60
+            print(
+                f"[perform_update] template id={instance.id} "
+                f"start={instance.recurrence_start} end={instance.recurrence_end} "
+                f"month={instance.month} year={instance.year}",
+                flush=True,
+            )
+            self._generate_from_template(instance, horizon_months=horizon)
+        return instance
+
+    @action(detail=True, methods=['post'])
+    def close_at_month(self, request, pk=None):
+        """
+        Arrête la récurrence avant le mois fourni (le mois indiqué est exclu).
+        Supprime les lignes générées à partir de ce mois.
+        """
+        instance = self.get_object()
+        debug_info = {
+            "instance_id": instance.id,
+            "instance_is_template": instance.is_recurring_template,
+            "parent_id": getattr(instance.recurrence_parent, 'id', None),
+            "description": instance.description,
+            "category": instance.category,
+            "month": instance.month,
+            "year": instance.year,
+        }
+        print(f"[close_at_month] start {debug_info}", flush=True)
+        # Accepter qu'on appelle avec une occurrence : on remonte au template
+        template = instance
+        if not template.is_recurring_template:
+            if instance.recurrence_parent and instance.recurrence_parent.is_recurring_template:
+                template = instance.recurrence_parent
+            elif instance.recurrence_parent_id == instance.id:
+                # Cas auto-référence (template écrasé) : considérer l'instance comme template
+                template = instance
+            else:
+                # Tentative de retrouver un template par description/catégorie
+                template = AgencyExpenseMonth.objects.filter(
+                    is_recurring_template=True,
+                    recurrence_children__id=instance.id
+                ).first()
+                if not template:
+                    template = (
+                        AgencyExpenseMonth.objects.filter(
+                            is_recurring_template=True,
+                            description=instance.description,
+                            category=instance.category,
+                        )
+                        .order_by('recurrence_start', 'year', 'month')
+                        .first()
+                    )
+                debug_info["fallback_template_id"] = getattr(template, 'id', None)
+                print(f"[close_at_month] fallback template id={debug_info.get('fallback_template_id')}", flush=True)
+                if not template:
+                    return Response(
+                        {
+                            "error": "Cet enregistrement n'est pas un template de récurrence",
+                            "debug": debug_info,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+        stop_date_str = request.data.get('stop_date')
+        if not stop_date_str:
+            return Response({"error": "stop_date est requis (format ISO YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            stop_date = datetime.fromisoformat(stop_date_str).date()
+        except ValueError:
+            return Response({"error": "Format de date invalide (attendu YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # On conserve le mois fourni (dernier mois payé) et on supprime ce qui est POSTÉRIEUR.
+        keep_month = date(stop_date.year, stop_date.month, 1)
+
+        # Mettre à jour les bornes du template : fin = mois conservé
+        template.closed_until = keep_month  # on arrête de générer après ce mois
+        template.recurrence_end = keep_month
+        template.save(update_fields=['closed_until', 'recurrence_end', 'updated_at'])
+
+        # Supprimer les lignes générées postérieures au mois conservé
+        AgencyExpenseMonth.objects.filter(
+            recurrence_parent=template
+        ).filter(
+            models.Q(year__gt=keep_month.year) |
+            models.Q(year=keep_month.year, month__gt=keep_month.month)
+        ).delete()
+
+        return Response(
+            {
+                "closed_until": template.closed_until,
+                "recurrence_end": template.recurrence_end
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def perform_destroy(self, instance):
+        """
+        - Si on supprime un template récurrent : supprimer toutes ses occurrences.
+        - Si on supprime une occurrence liée à un template : supprimer le template et toutes ses occurrences.
+        - Sinon : suppression simple.
+        """
+        if instance.is_recurring_template:
+            AgencyExpenseMonth.objects.filter(recurrence_parent=instance).delete()
+            instance.delete()
+            return
+
+        if instance.recurrence_parent:
+            parent = instance.recurrence_parent
+            AgencyExpenseMonth.objects.filter(recurrence_parent=parent).delete()
+            parent.delete()
+            return
+
+        instance.delete()
 
 class DashboardViewSet(viewsets.ViewSet):
     def list(self, request):

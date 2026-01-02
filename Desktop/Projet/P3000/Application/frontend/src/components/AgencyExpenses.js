@@ -6,6 +6,8 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  FormControlLabel,
+  Checkbox,
   MenuItem,
   Paper,
   Select,
@@ -45,6 +47,9 @@ const AgencyExpenses = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceStart, setRecurrenceStart] = useState("");
+  const [recurrenceEnd, setRecurrenceEnd] = useState("");
 
   // Catégories de dépenses
   const categories = [
@@ -97,18 +102,58 @@ const AgencyExpenses = () => {
 
     try {
       setLoading(true);
+
+      // Extraire mois/année de la date de début (en gérant les fuseaux horaires)
+      let startMonth, startYear;
+      if (recurrenceStart) {
+        // Parser la date YYYY-MM-DD directement sans conversion de fuseau horaire
+        const [yearStr, monthStr] = recurrenceStart.split("-");
+        startYear = parseInt(yearStr, 10);
+        startMonth = parseInt(monthStr, 10) - 1; // 0-indexed pour JS
+      } else {
+        startMonth = selectedMonth;
+        startYear = selectedYear;
+      }
+
+      // Normaliser les dates au premier du mois (format YYYY-MM-DD)
+      const startDateNormalized = `${startYear}-${String(startMonth + 1).padStart(2, "0")}-01`;
+      
+      // Traiter la date de fin de la même manière
+      let endDateNormalized = null;
+      if (recurrenceEnd) {
+        const [endYearStr, endMonthStr] = recurrenceEnd.split("-");
+        const endYear = parseInt(endYearStr, 10);
+        const endMonth = parseInt(endMonthStr, 10);
+        endDateNormalized = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
+      }
+
+      // Si une date de fin est spécifiée, c'est automatiquement récurrent
+      const effectiveIsRecurring = isRecurring || !!endDateNormalized;
+
       const expenseData = {
         description: newExpense.description,
         amount: parseFloat(newExpense.amount),
         category: newExpense.category,
-        month: selectedMonth + 1,
-        year: selectedYear,
-        date_paiement: new Date(selectedYear, selectedMonth, 1)
-          .toISOString()
-          .split("T")[0],
+        month: startMonth + 1,
+        year: startYear,
+        date_paiement: startDateNormalized,
+        is_recurring_template: effectiveIsRecurring,
+        recurrence_start: effectiveIsRecurring ? startDateNormalized : null,
+        recurrence_end: effectiveIsRecurring && endDateNormalized ? endDateNormalized : null,
       };
 
-      await axios.post("/api/agency-expenses-month/", expenseData);
+      const response = await axios.post("/api/agency-expenses-month/", expenseData);
+
+      // Générer les occurrences si c'est un template récurrent
+      if (effectiveIsRecurring && response?.data?.id) {
+        await axios.post(
+          `/api/agency-expenses-month/${response.data.id}/recurring_generate/`,
+          {
+            horizon_months: 60, // 5 ans
+          }
+        );
+      }
+
       setOpenDialog(false);
       await fetchMonthlyExpenses();
       await updateYearlyTotal();
@@ -118,6 +163,9 @@ const AgencyExpenses = () => {
         amount: "",
         category: "Salaire",
       });
+      setIsRecurring(false);
+      setRecurrenceStart("");
+      setRecurrenceEnd("");
     } catch (error) {
       console.error("Erreur lors de l'ajout de la dépense:", error);
       alert("Erreur lors de l'ajout de la dépense");
@@ -159,6 +207,9 @@ const AgencyExpenses = () => {
       amount: expense.amount,
       category: expense.category,
     });
+    setIsRecurring(false);
+    setRecurrenceStart("");
+    setRecurrenceEnd("");
     setIsEditing(true);
     setOpenDialog(true);
   };
@@ -192,6 +243,36 @@ const AgencyExpenses = () => {
       }
     } else {
       handleAddExpense();
+    }
+  };
+
+  const handleCloseRecurrence = async () => {
+    const targetId =
+      editingExpense?.recurrence_parent || editingExpense?.id || null;
+    if (!targetId) {
+      alert("Aucune récurrence associée à cette dépense.");
+      return;
+    }
+    try {
+      setLoading(true);
+      // Normaliser au premier du mois sans problème de fuseau horaire
+      const stopDate = `${editingExpense.year}-${String(editingExpense.month).padStart(2, "0")}-01`;
+      await axios.post(
+        `/api/agency-expenses-month/${targetId}/close_at_month/`,
+        {
+          stop_date: stopDate,
+        }
+      );
+      setOpenDialog(false);
+      setIsEditing(false);
+      setEditingExpense(null);
+      await fetchMonthlyExpenses();
+      await updateYearlyTotal();
+    } catch (error) {
+      console.error("Erreur lors de l'arrêt de la récurrence:", error);
+      alert("Erreur lors de l'arrêt de la récurrence");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -554,6 +635,43 @@ const AgencyExpenses = () => {
               fullWidth
               inputProps={{ step: "0.01", min: "0" }}
             />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  disabled={isEditing}
+                />
+              }
+              label="Dépense récurrente"
+            />
+            <TextField
+              label="Date de début"
+              type="date"
+              disabled={isEditing}
+              value={
+                isEditing
+                  ? `${editingExpense.year}-${String(editingExpense.month).padStart(2, "0")}-01`
+                  : recurrenceStart ||
+                    `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`
+              }
+              onChange={(e) => setRecurrenceStart(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <TextField
+              label="Date de fin (optionnelle)"
+              type="date"
+              disabled={isEditing}
+              value={
+                isEditing
+                  ? editingExpense.recurrence_end || ""
+                  : recurrenceEnd
+              }
+              onChange={(e) => setRecurrenceEnd(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -562,10 +680,22 @@ const AgencyExpenses = () => {
               setOpenDialog(false);
               setIsEditing(false);
               setEditingExpense(null);
+              setIsRecurring(false);
+              setRecurrenceStart("");
+              setRecurrenceEnd("");
             }}
           >
             Annuler
           </Button>
+          {isEditing && editingExpense?.recurrence_parent && (
+            <Button
+              onClick={handleCloseRecurrence}
+              color="warning"
+              disabled={loading}
+            >
+              Arrêter la récurrence à ce mois
+            </Button>
+          )}
           <Button onClick={handleSaveExpense} variant="contained">
             {isEditing ? "Modifier" : "Ajouter"}
           </Button>

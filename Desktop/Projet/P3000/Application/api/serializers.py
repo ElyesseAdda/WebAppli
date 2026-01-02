@@ -1123,6 +1123,7 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
     agent_name = serializers.SerializerMethodField()
     date_paiement_prevue = serializers.SerializerMethodField()
+    recurrence_parent = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = AgencyExpenseMonth
@@ -1132,7 +1133,10 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
             'date_paiement_prevue', 'factures',
             'sous_traitant', 'sous_traitant_name', 'chantier', 'chantier_name',
             'agent', 'agent_name', 'is_ecole_expense', 'ecole_hours',
-            'source_expense', 'created_at', 'updated_at'
+            'source_expense',
+            'is_recurring_template', 'recurrence_start', 'recurrence_end',
+            'closed_until', 'recurrence_parent',
+            'created_at', 'updated_at'
         ]
     
     def get_agent_name(self, obj):
