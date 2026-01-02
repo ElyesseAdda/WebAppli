@@ -7609,15 +7609,6 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         Génère ou met à jour les occurrences mensuelles à partir d'un template.
         Conserve le template en l'état si on tombe sur son mois/année.
         """
-        print(
-            f"[generate_template] template_id={template.id} "
-            f"is_template={template.is_recurring_template} "
-            f"start={template.recurrence_start or date(template.year, template.month, 1)} "
-            f"end={template.recurrence_end} "
-            f"closed_until={template.closed_until} "
-            f"horizon={horizon_months}",
-            flush=True,
-        )
         # Déterminer le début
         start_date = template.recurrence_start or date(template.year, template.month, 1)
 
@@ -7637,7 +7628,6 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         if template.closed_until:
             cutoff_start = date(template.closed_until.year, template.closed_until.month, 1)
             if cutoff_start <= start_date:
-                print(f"[generate_template] skip: closed_until <= start ({cutoff_start} <= {start_date})", flush=True)
                 return []
             prev_m = cutoff_start.month - 1
             prev_y = cutoff_start.year
@@ -7697,12 +7687,6 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 obj.recurrence_parent = template
                 obj.save(update_fields=['recurrence_parent'])
             generated_ids.append(obj.id)
-
-        print(
-            f"[generate_template] done template_id={template.id} generated={len(generated_ids)} "
-            f"range={start_date}->{end_date}",
-            flush=True,
-        )
 
         return generated_ids
 
@@ -7780,27 +7764,13 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save()
         if instance.is_recurring_template:
-            horizon = 60
-            print(
-                f"[perform_create] new template id={instance.id} "
-                f"start={instance.recurrence_start} end={instance.recurrence_end} "
-                f"month={instance.month} year={instance.year}",
-                flush=True,
-            )
-            self._generate_from_template(instance, horizon_months=horizon)
+            self._generate_from_template(instance, horizon_months=60)
         return instance
 
     def perform_update(self, serializer):
         instance = serializer.save()
         if instance.is_recurring_template:
-            horizon = 60
-            print(
-                f"[perform_update] template id={instance.id} "
-                f"start={instance.recurrence_start} end={instance.recurrence_end} "
-                f"month={instance.month} year={instance.year}",
-                flush=True,
-            )
-            self._generate_from_template(instance, horizon_months=horizon)
+            self._generate_from_template(instance, horizon_months=60)
         return instance
 
     @action(detail=True, methods=['post'])
@@ -7810,16 +7780,6 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         Supprime les lignes générées à partir de ce mois.
         """
         instance = self.get_object()
-        debug_info = {
-            "instance_id": instance.id,
-            "instance_is_template": instance.is_recurring_template,
-            "parent_id": getattr(instance.recurrence_parent, 'id', None),
-            "description": instance.description,
-            "category": instance.category,
-            "month": instance.month,
-            "year": instance.year,
-        }
-        print(f"[close_at_month] start {debug_info}", flush=True)
         # Accepter qu'on appelle avec une occurrence : on remonte au template
         template = instance
         if not template.is_recurring_template:
@@ -7844,14 +7804,9 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                         .order_by('recurrence_start', 'year', 'month')
                         .first()
                     )
-                debug_info["fallback_template_id"] = getattr(template, 'id', None)
-                print(f"[close_at_month] fallback template id={debug_info.get('fallback_template_id')}", flush=True)
                 if not template:
                     return Response(
-                        {
-                            "error": "Cet enregistrement n'est pas un template de récurrence",
-                            "debug": debug_info,
-                        },
+                        {"error": "Cet enregistrement n'est pas un template de récurrence"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
@@ -10126,54 +10081,103 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         if ecart_paiement_reel is not None:
             data[key][sous_traitant_nom][facture.chantier_id]['ecart_paiement_reel'] = ecart_paiement_reel
     
-    # 2. Récupérer les agents journaliers (LaborCost) - traités comme sous-traitants
+    # 2. Récupérer les agents journaliers depuis Schedule (pour avoir la date réelle de chaque créneau)
+    # Ceci corrige le bug des semaines chevauchant deux mois (ex: semaine 1 de 2026 = 29 déc - 4 jan)
     if chantier_id:
-        labor_costs = LaborCost.objects.filter(chantier_id=chantier_id)
+        schedules_journaliers = Schedule.objects.filter(chantier_id=chantier_id, agent__type_paiement='journalier')
     else:
-        labor_costs = LaborCost.objects.all()
+        schedules_journaliers = Schedule.objects.filter(agent__type_paiement='journalier')
     
-    # Filtrer uniquement les agents journaliers
-    labor_costs = labor_costs.filter(agent__type_paiement='journalier').select_related('agent', 'chantier')
+    schedules_journaliers = schedules_journaliers.select_related('agent', 'chantier')
     
-    for lc in labor_costs:
-        # Convertir semaine ISO → mois/année
-        # Calculer la date du lundi de la semaine ISO
+    # Fonction pour calculer la date réelle d'un créneau
+    def get_date_from_schedule(year, week, day_name):
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        day_index = days_of_week.index(day_name) if day_name in days_of_week else 0
+        lundi = datetime.strptime(f'{year}-W{int(week):02d}-1', "%G-W%V-%u")
+        return (lundi + timedelta(days=day_index)).date()
+    
+    # Structure pour stocker les infos par agent/mois pour les ajustements
+    agents_mois_info = {}  # {(agent_id, mois, annee): agent_nom}
+    
+    for s in schedules_journaliers:
+        if not s.chantier:
+            continue
+        
+        # Calculer la date réelle du créneau (pas le lundi de la semaine!)
         try:
-            lundi = datetime.strptime(f'{lc.year}-W{int(lc.week):02d}-1', "%G-W%V-%u")
-            mois = lundi.month
-            annee = lundi.year
+            date_creneau = get_date_from_schedule(s.year, s.week, s.day)
+            mois = date_creneau.month
+            annee = date_creneau.year
         except:
             # Fallback: utiliser l'année de la semaine
             mois = 1
-            annee = lc.year
+            annee = s.year
         
         # Format: MM/YY
         annee_2_digits = str(annee)[-2:]
         key = f"{mois:02d}/{annee_2_digits}"
         
         # Nom de l'agent comme sous-traitant
-        agent_nom = f"{lc.agent.name} {lc.agent.surname}".strip() if lc.agent else f"Agent {lc.agent_id}"
-        chantier_name = lc.chantier.chantier_name if lc.chantier else f"Chantier {lc.chantier_id}"
+        agent_nom = f"{s.agent.name} {s.agent.surname}".strip() if s.agent else f"Agent {s.agent_id}"
+        chantier_name = s.chantier.chantier_name if s.chantier else f"Chantier {s.chantier_id}"
         
-        # Montant à payer = coût total (somme de tous les coûts)
-        total_cost = (
-            Decimal(str(lc.cost_normal or 0)) +
-            Decimal(str(lc.cost_samedi or 0)) +
-            Decimal(str(lc.cost_dimanche or 0)) +
-            Decimal(str(lc.cost_ferie or 0)) +
-            Decimal(str(lc.cost_overtime or 0))
-        )
+        # Stocker l'info agent pour récupérer les ajustements plus tard
+        agents_mois_info[(s.agent_id, mois, annee)] = agent_nom
         
-        # Montant payé = 0 par défaut (pas de paiement pour les agents journaliers dans ce tableau)
-        montant_paye = Decimal('0')
+        # Calculer le coût pour ce créneau (0.5 jour = 4h équivalent pour agents journaliers)
+        taux_journalier = Decimal(str(s.agent.taux_journalier or 0))
+        # Un créneau = demi-journée = 0.5 jour
+        cout_creneau = taux_journalier / 2
         
         # Agrégation par mois/agent/chantier
-        data[key][agent_nom][lc.chantier_id]['a_payer'] += total_cost
-        data[key][agent_nom][lc.chantier_id]['paye'] += montant_paye
-        data[key][agent_nom][lc.chantier_id]['chantier_name'] = chantier_name
-        data[key][agent_nom][lc.chantier_id]['source_type'] = 'agent_journalier'
-        if not data[key][agent_nom][lc.chantier_id]['factures']:
-            data[key][agent_nom][lc.chantier_id]['factures'] = []
+        data[key][agent_nom][s.chantier_id]['a_payer'] += cout_creneau
+        data[key][agent_nom][s.chantier_id]['chantier_name'] = chantier_name
+        data[key][agent_nom][s.chantier_id]['source_type'] = 'agent_journalier'
+        data[key][agent_nom][s.chantier_id]['agent_id'] = s.agent_id  # ID de l'agent pour les ajustements
+        if not data[key][agent_nom][s.chantier_id]['factures']:
+            data[key][agent_nom][s.chantier_id]['factures'] = []
+    
+    # 2b. Récupérer les ajustements des agents journaliers depuis AgencyExpenseMonth
+    # Les ajustements sont stockés avec category='Ajustement Sous-traitant' et liés à l'agent
+    ajustements_agency = AgencyExpenseMonth.objects.filter(
+        category='Ajustement Sous-traitant',
+        agent__isnull=False
+    ).select_related('agent')
+    
+    ajustements_map = {}  # {(agent_id, mois, annee): {montant, description, id}}
+    for ajust in ajustements_agency:
+        ajust_key = (ajust.agent_id, ajust.month, ajust.year)
+        # Extraire la description en enlevant le préfixe "Nom Agent - "
+        raw_description = ajust.description or ''
+        agent_nom_prefix = f"{ajust.agent.name} {ajust.agent.surname}".strip() if ajust.agent else ''
+        if raw_description.startswith(f"{agent_nom_prefix} - "):
+            clean_description = raw_description[len(f"{agent_nom_prefix} - "):]
+        else:
+            clean_description = raw_description
+        
+        ajustements_map[ajust_key] = {
+            'id': ajust.id,  # ID de AgencyExpenseMonth
+            'montant': Decimal(str(ajust.amount)),
+            'description': clean_description
+        }
+    
+    # Appliquer les ajustements aux données des agents journaliers
+    for (agent_id, mois, annee), agent_nom in agents_mois_info.items():
+        annee_2_digits = str(annee)[-2:]
+        key = f"{mois:02d}/{annee_2_digits}"
+        
+        ajust_key = (agent_id, mois, annee)
+        if ajust_key in ajustements_map:
+            ajust_data = ajustements_map[ajust_key]
+            # Appliquer l'ajustement à chaque chantier de cet agent/mois
+            # L'ajustement est global pour l'agent/mois, on le stocke pour le premier chantier
+            # (le frontend regroupera et l'appliquera au total)
+            if agent_nom in data[key]:
+                for chantier_id_agent in data[key][agent_nom]:
+                    data[key][agent_nom][chantier_id_agent]['ajustement_id'] = ajust_data['id']
+                    data[key][agent_nom][chantier_id_agent]['ajustement_montant'] = float(ajust_data['montant'])
+                    data[key][agent_nom][chantier_id_agent]['ajustement_description'] = ajust_data['description']
     
     # 3. Récupérer les AgencyExpenseMonth avec catégorie "Sous-traitant"
     if chantier_id:
@@ -10385,7 +10389,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         for sous_traitant, chantiers_data in sous_traitants_data.items():
             for chantier_id_val, valeurs in chantiers_data.items():
                 valeurs['ecart'] = valeurs['a_payer'] - valeurs['paye']
-                result.append({
+                
+                item = {
                     'mois': mois_key,
                     'sous_traitant': sous_traitant,
                     'chantier_id': chantier_id_val,
@@ -10402,7 +10407,16 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     'source_type': valeurs.get('source_type', 'facture_sous_traitant'),  # Par défaut facture_sous_traitant
                     'agency_expense_id': valeurs.get('agency_expense_id'),  # ID pour modification des AgencyExpenseMonth
                     'suivi_paiement_id': valeurs.get('suivi_paiement_id'),  # ID du suivi de paiement pour mise à jour
-                })
+                }
+                
+                # Ajouter les champs spécifiques aux agents journaliers
+                if valeurs.get('source_type') == 'agent_journalier':
+                    item['agent_id'] = valeurs.get('agent_id')
+                    item['ajustement_id'] = valeurs.get('ajustement_id')
+                    item['ajustement_montant'] = valeurs.get('ajustement_montant', 0)
+                    item['ajustement_description'] = valeurs.get('ajustement_description', '')
+                
+                result.append(item)
     
     return result
 
@@ -10422,6 +10436,142 @@ def tableau_sous_traitant_global(request):
     """
     result = _get_tableau_sous_traitant_data(chantier_id=None)
     return Response(result)
+
+
+@api_view(['POST', 'PUT', 'DELETE'])
+@permission_classes([AllowAny])
+def ajustement_agent_journalier(request):
+    """
+    Endpoint pour gérer les ajustements des agents journaliers.
+    Les ajustements sont stockés dans AgencyExpenseMonth avec category='Ajustement Sous-traitant'.
+    Cela permet la synchronisation bidirectionnelle : suppression depuis AgencyExpense ou TableauSousTraitant.
+    
+    POST/PUT: Créer ou mettre à jour un ajustement
+    Body: {
+        "agent_id": 1,
+        "mois": 9,
+        "annee": 2025,
+        "montant_ajustement": 60.00,
+        "description": "Gasoil"
+    }
+    
+    DELETE: Supprimer un ajustement
+    Body: {
+        "ajustement_id": 1
+    }
+    ou
+    Body: {
+        "agent_id": 1,
+        "mois": 9,
+        "annee": 2025
+    }
+    """
+    from decimal import Decimal
+    
+    if request.method == 'DELETE':
+        ajustement_id = request.data.get('ajustement_id')
+        agent_id = request.data.get('agent_id')
+        mois = request.data.get('mois')
+        annee = request.data.get('annee')
+        
+        try:
+            if ajustement_id:
+                # Supprimer par ID AgencyExpenseMonth
+                ajustement = AgencyExpenseMonth.objects.get(
+                    id=ajustement_id,
+                    category='Ajustement Sous-traitant'
+                )
+            elif agent_id and mois and annee:
+                # Supprimer par agent/mois/annee
+                ajustement = AgencyExpenseMonth.objects.get(
+                    agent_id=agent_id,
+                    month=mois,
+                    year=annee,
+                    category='Ajustement Sous-traitant'
+                )
+            else:
+                return Response(
+                    {"error": "Veuillez fournir ajustement_id ou (agent_id, mois, annee)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            ajustement.delete()
+            return Response({"message": "Ajustement supprimé avec succès"}, status=status.HTTP_204_NO_CONTENT)
+        except AgencyExpenseMonth.DoesNotExist:
+            return Response({"error": "Ajustement non trouvé"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # POST ou PUT - Créer ou mettre à jour
+    agent_id = request.data.get('agent_id')
+    mois = request.data.get('mois')
+    annee = request.data.get('annee')
+    montant_ajustement = request.data.get('montant_ajustement', 0)
+    description = request.data.get('description', '')
+    
+    if not agent_id or not mois or not annee:
+        return Response(
+            {"error": "agent_id, mois et annee sont requis"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Vérifier que l'agent existe et est journalier
+        agent = Agent.objects.get(id=agent_id)
+        if agent.type_paiement != 'journalier':
+            return Response(
+                {"error": "Cet agent n'est pas un agent journalier"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Construire la description pour AgencyExpenseMonth
+        agent_nom = f"{agent.name} {agent.surname}".strip()
+        expense_description = f"{agent_nom} - {description}" if description else agent_nom
+        
+        # Chercher un ajustement existant pour cet agent/mois/année
+        existing = AgencyExpenseMonth.objects.filter(
+            agent_id=agent_id,
+            month=mois,
+            year=annee,
+            category='Ajustement Sous-traitant'
+        ).first()
+        
+        if existing:
+            # Mettre à jour l'existant
+            existing.amount = Decimal(str(montant_ajustement))
+            existing.description = expense_description
+            existing.save()
+            ajustement = existing
+            created = False
+        else:
+            # Créer un nouveau
+            ajustement = AgencyExpenseMonth.objects.create(
+                description=expense_description,
+                amount=Decimal(str(montant_ajustement)),
+                category='Ajustement Sous-traitant',
+                month=mois,
+                year=annee,
+                agent_id=agent_id,
+                chantier=None,  # Pas de chantier spécifique
+            )
+            created = True
+        
+        return Response({
+            "id": ajustement.id,
+            "agent_id": ajustement.agent_id,
+            "agent_nom": agent_nom,
+            "mois": ajustement.month,
+            "annee": ajustement.year,
+            "montant_ajustement": float(ajustement.amount),
+            "description": description,  # Retourner la description originale (sans le nom de l'agent)
+            "created": created
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        
+    except Agent.DoesNotExist:
+        return Response({"error": "Agent non trouvé"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['DELETE'])
 @permission_classes([AllowAny])

@@ -21,6 +21,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Tooltip,
 } from "@mui/material";
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
@@ -62,6 +63,12 @@ const TableauSousTraitant = () => {
   // État pour le modal de date de paiement de facture
   const [datePaiementFactureModalOpen, setDatePaiementFactureModalOpen] = useState(false);
   const [currentFacturePaiement, setCurrentFacturePaiement] = useState(null); // {mois, sous_traitant, chantierId, factureIndex}
+  
+  // État pour le modal d'ajustement agent journalier
+  const [ajustementModalOpen, setAjustementModalOpen] = useState(false);
+  const [currentAjustement, setCurrentAjustement] = useState(null); // {agent_id, mois, annee, sous_traitant, a_payer_labor_cost, ajustement_montant, ajustement_description, chantiersDetails}
+  const [ajustementFormData, setAjustementFormData] = useState({ montant: "", description: "" });
+  const [savingAjustement, setSavingAjustement] = useState(false);
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -740,6 +747,96 @@ const TableauSousTraitant = () => {
     setFactureModalOpen(false);
     setCurrentFacture(null);
     setFactureModalData({ numero: "", montant: "" });
+  };
+
+  // === HANDLERS POUR AJUSTEMENT AGENT JOURNALIER ===
+  
+  // Ouvrir le modal d'ajustement
+  const handleOpenAjustementModal = (item) => {
+    // Parser le mois pour obtenir mois/annee numériques
+    const [moisStr, anneeStr] = item.mois.split("/");
+    const mois = parseInt(moisStr, 10);
+    const annee = parseInt("20" + anneeStr, 10); // Convertir YY en 20YY
+    
+    setCurrentAjustement({
+      agent_id: item.agent_id,
+      mois: mois,
+      annee: annee,
+      sous_traitant: item.sous_traitant,
+      a_payer_labor_cost: item.a_payer_labor_cost || item.a_payer,
+      ajustement_id: item.ajustement_id,
+      ajustement_montant: item.ajustement_montant || 0,
+      ajustement_description: item.ajustement_description || "",
+      chantiersDetails: item.chantiersDetails || [],
+    });
+    setAjustementFormData({
+      montant: item.ajustement_montant || "",
+      description: item.ajustement_description || ""
+    });
+    setAjustementModalOpen(true);
+  };
+  
+  // Fermer le modal d'ajustement
+  const handleCloseAjustementModal = () => {
+    setAjustementModalOpen(false);
+    setCurrentAjustement(null);
+    setAjustementFormData({ montant: "", description: "" });
+  };
+  
+  // Sauvegarder l'ajustement
+  const handleSaveAjustement = async () => {
+    if (!currentAjustement || !currentAjustement.agent_id) {
+      return;
+    }
+    
+    setSavingAjustement(true);
+    try {
+      const response = await axios.post("/api/ajustement-agent-journalier/", {
+        agent_id: currentAjustement.agent_id,
+        mois: currentAjustement.mois,
+        annee: currentAjustement.annee,
+        montant_ajustement: parseFloat(ajustementFormData.montant) || 0,
+        description: ajustementFormData.description.trim()
+      });
+      
+      // Rafraîchir les données
+      await fetchData();
+      
+      handleCloseAjustementModal();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err) {
+      console.error("Erreur lors de la sauvegarde de l'ajustement:", err);
+      setError("Erreur lors de la sauvegarde de l'ajustement.");
+    } finally {
+      setSavingAjustement(false);
+    }
+  };
+  
+  // Supprimer l'ajustement
+  const handleDeleteAjustement = async () => {
+    if (!currentAjustement || !currentAjustement.ajustement_id) {
+      return;
+    }
+    
+    setSavingAjustement(true);
+    try {
+      await axios.delete("/api/ajustement-agent-journalier/", {
+        data: { ajustement_id: currentAjustement.ajustement_id }
+      });
+      
+      // Rafraîchir les données
+      await fetchData();
+      
+      handleCloseAjustementModal();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err) {
+      console.error("Erreur lors de la suppression de l'ajustement:", err);
+      setError("Erreur lors de la suppression de l'ajustement.");
+    } finally {
+      setSavingAjustement(false);
+    }
   };
 
   // Sauvegarder la facture depuis le modal
@@ -1448,15 +1545,21 @@ const TableauSousTraitant = () => {
       Object.keys(agentsJournaliers[mois]).forEach((sous_traitant) => {
         const chantiers = agentsJournaliers[mois][sous_traitant];
         
-        // Calculer les totaux pour tous les chantiers
-        let totalAPayer = 0;
+        // Calculer les totaux pour tous les chantiers (montant LaborCost de base)
+        let totalLaborCost = 0;
         let totalPaye = 0;
         let totalEcart = 0;
         const chantiersDetails = [];
         const allFactures = [];
         
+        // Récupérer les infos d'ajustement depuis le premier chantier (elles sont identiques pour tous)
+        const ajustementId = chantiers[0]?.ajustement_id || null;
+        const ajustementMontant = chantiers[0]?.ajustement_montant || 0;
+        const ajustementDescription = chantiers[0]?.ajustement_description || '';
+        const agentId = chantiers[0]?.agent_id || null;
+        
         chantiers.forEach((chantier) => {
-          totalAPayer += chantier.a_payer || 0;
+          totalLaborCost += chantier.a_payer || 0;
           totalPaye += chantier.paye || 0;
           totalEcart += chantier.ecart || 0;
           
@@ -1473,6 +1576,9 @@ const TableauSousTraitant = () => {
             allFactures.push(...chantier.factures);
           }
         });
+        
+        // Montant total à payer = LaborCost + ajustement
+        const totalAPayer = totalLaborCost + ajustementMontant;
         
         // Pour les agents journaliers, utiliser une clé sans chantier_id pour le montant payé et les factures
         const keyAgentJournalier = `${mois}_${sous_traitant}_AGENT_JOURNALIER`;
@@ -1492,6 +1598,7 @@ const TableauSousTraitant = () => {
           chantier_id: 0, // Utiliser 0 pour identifier les agents journaliers (au lieu de null)
           chantier_name: null, // Sera remplacé par la liste des chantiers
           a_payer: totalAPayer,
+          a_payer_labor_cost: totalLaborCost, // Montant original de LaborCost (avant ajustement)
           paye: payeValueAgent,
           ecart: totalAPayer - payeValueAgent,
           a_payer_ttc: totalAPayer * 1.20,
@@ -1505,6 +1612,11 @@ const TableauSousTraitant = () => {
           isAgentJournalier: true, // Flag pour identifier les agents journaliers (rétrocompatibilité)
           chantiersDetails: chantiersDetails, // Liste de tous les chantiers avec leurs montants
           keyAgentJournalier: keyAgentJournalier, // Clé pour la gestion du montant payé
+          // Infos d'ajustement
+          agent_id: agentId,
+          ajustement_id: ajustementId,
+          ajustement_montant: ajustementMontant,
+          ajustement_description: ajustementDescription,
         }];
       });
     });
@@ -2080,6 +2192,82 @@ const TableauSousTraitant = () => {
                               >
                                 {formatNumber(item.a_payer)} €
                               </Typography>
+                            ) : item.isAgentJournalier ? (
+                              // Pour les agents journaliers, afficher avec Tooltip détaillé et clic pour ajustement
+                              <Tooltip
+                                title={
+                                  <Box sx={{ p: 1 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, borderBottom: '1px solid rgba(255,255,255,0.3)', pb: 0.5 }}>
+                                      {item.sous_traitant} - Détail
+                                    </Typography>
+                                    {item.chantiersDetails && item.chantiersDetails.length > 0 && (
+                                      <Box sx={{ mb: 1 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>
+                                          Par chantier :
+                                        </Typography>
+                                        {item.chantiersDetails.map((ch, idx) => (
+                                          <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', pl: 1 }}>
+                                            <span>{ch.chantier_name}</span>
+                                            <span style={{ marginLeft: 8, fontWeight: 500 }}>{formatNumber(ch.a_payer)} €</span>
+                                          </Box>
+                                        ))}
+                                      </Box>
+                                    )}
+                                    <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.3)', pt: 0.5, mt: 0.5 }}>
+                                      <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                        <span>Total planning :</span>
+                                        <span style={{ fontWeight: 600 }}>{formatNumber(item.a_payer_labor_cost || item.a_payer)} €</span>
+                                      </Box>
+                                      {(item.ajustement_montant !== 0 && item.ajustement_montant !== undefined) && (
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: item.ajustement_montant > 0 ? '#4caf50' : '#f44336' }}>
+                                          <span>Ajustement ({item.ajustement_description || 'Manuel'}) :</span>
+                                          <span style={{ fontWeight: 600 }}>
+                                            {item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)} €
+                                          </span>
+                                        </Box>
+                                      )}
+                                      <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 700, mt: 0.5, pt: 0.5, borderTop: '1px dashed rgba(255,255,255,0.3)' }}>
+                                        <span>TOTAL À PAYER :</span>
+                                        <span>{formatNumber(item.a_payer)} €</span>
+                                      </Box>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ display: 'block', mt: 1, fontStyle: 'italic', opacity: 0.8 }}>
+                                      Cliquez pour modifier l'ajustement
+                                    </Typography>
+                                  </Box>
+                                }
+                                arrow
+                                placement="top"
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.8rem",
+                                    color: item.ajustement_montant ? "rgba(27, 120, 188, 1)" : "text.primary",
+                                    textAlign: "center",
+                                    cursor: "pointer",
+                                    fontWeight: item.ajustement_montant ? 500 : 400,
+                                    "&:hover": {
+                                      backgroundColor: "rgba(27, 120, 188, 0.1)",
+                                      borderRadius: "4px",
+                                    },
+                                  }}
+                                  onClick={() => handleOpenAjustementModal(item)}
+                                >
+                                  {formatNumber(item.a_payer)} €
+                                  {item.ajustement_montant !== 0 && item.ajustement_montant !== undefined && (
+                                    <Typography 
+                                      component="span" 
+                                      sx={{ 
+                                        fontSize: "0.65rem", 
+                                        color: item.ajustement_montant > 0 ? "#4caf50" : "#f44336",
+                                        ml: 0.5 
+                                      }}
+                                    >
+                                      ({item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)})
+                                    </Typography>
+                                  )}
+                                </Typography>
+                              </Tooltip>
                             ) : (
                               // Pour les autres lignes, affichage normal
                               <Typography
@@ -2728,6 +2916,125 @@ const TableauSousTraitant = () => {
                 autoFocus
               >
                 Confirmer
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Modal d'ajustement pour les agents journaliers */}
+          <Dialog
+            open={ajustementModalOpen}
+            onClose={handleCloseAjustementModal}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle sx={{ borderBottom: '1px solid #e0e0e0', pb: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6">
+                  Ajustement - {currentAjustement?.sous_traitant}
+                </Typography>
+                <IconButton onClick={handleCloseAjustementModal} size="small">
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {currentAjustement && `${String(currentAjustement.mois).padStart(2, '0')}/${currentAjustement.annee}`}
+              </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ pt: 2 }}>
+              {/* Détail par chantier */}
+              {currentAjustement?.chantiersDetails && currentAjustement.chantiersDetails.length > 0 && (
+                <Box sx={{ mb: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Détail par chantier
+                  </Typography>
+                  {currentAjustement.chantiersDetails.map((ch, idx) => (
+                    <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+                      <Typography variant="body2">{ch.chantier_name}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {formatNumber(ch.a_payer)} €
+                      </Typography>
+                    </Box>
+                  ))}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, mt: 1, borderTop: '1px solid #ddd' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Total planning</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {formatNumber(currentAjustement.a_payer_labor_cost)} €
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+              
+              {/* Formulaire d'ajustement */}
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                Ajustement manuel
+              </Typography>
+              
+              <TextField
+                label="Montant de l'ajustement (€)"
+                type="number"
+                fullWidth
+                value={ajustementFormData.montant}
+                onChange={(e) => setAjustementFormData(prev => ({ ...prev, montant: e.target.value }))}
+                placeholder="Ex: 60 pour ajouter, -50 pour déduire"
+                sx={{ mb: 2 }}
+                inputProps={{ step: 0.01 }}
+                helperText="Positif pour ajouter (ex: gasoil), négatif pour déduire"
+              />
+              
+              <TextField
+                label="Description"
+                fullWidth
+                value={ajustementFormData.description}
+                onChange={(e) => setAjustementFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Ex: Gasoil, Prime, Déduction..."
+                sx={{ mb: 2 }}
+              />
+              
+              {/* Récapitulatif */}
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography variant="body2">Total planning :</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {formatNumber(currentAjustement?.a_payer_labor_cost || 0)} €
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
+                  <Typography variant="body2">
+                    Ajustement {ajustementFormData.description ? `(${ajustementFormData.description})` : ''} :
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {(parseFloat(ajustementFormData.montant) || 0) >= 0 ? '+' : ''}{formatNumber(parseFloat(ajustementFormData.montant) || 0)} €
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, mt: 1, borderTop: '1px dashed #90caf9' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 700 }}>TOTAL À PAYER :</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                    {formatNumber((currentAjustement?.a_payer_labor_cost || 0) + (parseFloat(ajustementFormData.montant) || 0))} €
+                  </Typography>
+                </Box>
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
+              {currentAjustement?.ajustement_id && (
+                <Button
+                  onClick={handleDeleteAjustement}
+                  color="error"
+                  disabled={savingAjustement}
+                  sx={{ mr: 'auto' }}
+                >
+                  Supprimer l'ajustement
+                </Button>
+              )}
+              <Button onClick={handleCloseAjustementModal} color="secondary">
+                Annuler
+              </Button>
+              <Button
+                onClick={handleSaveAjustement}
+                color="primary"
+                variant="contained"
+                disabled={savingAjustement}
+              >
+                {savingAjustement ? <CircularProgress size={20} /> : 'Sauvegarder'}
               </Button>
             </DialogActions>
           </Dialog>

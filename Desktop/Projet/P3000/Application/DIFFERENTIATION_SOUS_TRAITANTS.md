@@ -2,7 +2,7 @@
 
 ## 📊 Vue d'ensemble
 
-Le tableau des sous-traitants agrège des données provenant de **deux sources distinctes** :
+Le tableau des sous-traitants agrège des données provenant de **trois sources distinctes** :
 
 ### 1️⃣ **Factures de sous-traitants** (`FactureSousTraitant`)
 - **Source** : Entreprises sous-traitantes avec contrats
@@ -22,11 +22,21 @@ Le tableau des sous-traitants agrège des données provenant de **deux sources d
   - Coûts calculés depuis le planning (heures normales, samedi, dimanche, férié, heures sup)
   - Convertis de semaines ISO en mois
 
+### 3️⃣ **Dépenses de sous-traitance Agence** (`AgencyExpenseMonth`)
+- **Source** : Frais de structure avec catégorie "Sous-traitant"
+- **Modèle Django** : `AgencyExpenseMonth` (filtré sur `category='Sous-traitant'`)
+- **Caractéristiques** :
+  - Description utilisée comme nom de sous-traitant
+  - Chantier = "Agence" (chantier_id = 0)
+  - Montant à payer depuis `amount`
+  - Factures stockées dans le champ JSON `factures`
+  - Dates : `date_reception_facture`, `date_paiement_reel`, `delai_paiement`
+
 ---
 
 ## 🔧 Solution : Champ `source_type`
 
-Pour différencier clairement ces deux sources, un champ **`source_type`** a été ajouté dans les données retournées par le backend.
+Pour différencier clairement ces trois sources, un champ **`source_type`** a été ajouté dans les données retournées par le backend.
 
 ### Valeurs possibles :
 
@@ -34,6 +44,7 @@ Pour différencier clairement ces deux sources, un champ **`source_type`** a ét
 |---------------|--------|-------------|
 | `'facture_sous_traitant'` | `FactureSousTraitant` | Sous-traitant avec factures |
 | `'agent_journalier'` | `LaborCost` | Agent journalier du planning |
+| `'agency_expense'` | `AgencyExpenseMonth` | Dépense de sous-traitance depuis les frais de structure |
 
 ---
 
@@ -43,27 +54,41 @@ Pour différencier clairement ces deux sources, un champ **`source_type`** a ét
 
 **Fichier** : `api/views.py`, fonction `_get_tableau_sous_traitant_data()`
 
-#### Étape 1 : Récupérer les factures des sous-traitants (lignes 9628-9784)
+#### Étape 1 : Récupérer les factures des sous-traitants
 ```python
 factures = FactureSousTraitant.objects.all()
 # ...
 data[key][sous_traitant_nom][facture.chantier_id]['source_type'] = 'facture_sous_traitant'
 ```
 
-#### Étape 2 : Récupérer les agents journaliers (lignes 9786-9832)
+#### Étape 2 : Récupérer les agents journaliers
 ```python
 labor_costs = LaborCost.objects.filter(agent__type_paiement='journalier')
 # ...
 data[key][agent_nom][lc.chantier_id]['source_type'] = 'agent_journalier'
 ```
 
-#### Étape 3 : Mettre à jour avec les paiements (lignes 9834-9883)
+#### Étape 3 : Récupérer les dépenses agence (AgencyExpenseMonth)
+```python
+agency_expenses_month = AgencyExpenseMonth.objects.filter(category='Sous-traitant')
+# ...
+data[key][sous_traitant_nom][chantier_id_val]['source_type'] = 'agency_expense'
+data[key][sous_traitant_nom][chantier_id_val]['agency_expense_id'] = expense_month.id
+```
+
+#### Étape 4 : Mettre à jour avec les paiements (PaiementSousTraitant)
 ```python
 paiements = PaiementSousTraitant.objects.all()
 # Met à jour les montants payés et dates (sans écraser source_type)
 ```
 
-#### Étape 4 : Retourner les données avec `source_type` (lignes 9885-9914)
+#### Étape 5 : Mettre à jour avec les suivis mensuels (SuiviPaiementSousTraitantMensuel)
+```python
+suivis = SuiviPaiementSousTraitantMensuel.objects.all()
+# Met à jour avec les données saisies manuellement (PRIORITÉ)
+```
+
+#### Étape 6 : Retourner les données avec `source_type`
 ```python
 result.append({
     'mois': mois_key,
@@ -71,6 +96,8 @@ result.append({
     'chantier_id': chantier_id_val,
     # ...
     'source_type': valeurs.get('source_type', 'facture_sous_traitant'),
+    'agency_expense_id': valeurs.get('agency_expense_id'),  # Pour AgencyExpenseMonth
+    'suivi_paiement_id': valeurs.get('suivi_paiement_id'),  # Pour suivi manuel
 })
 ```
 
@@ -80,23 +107,19 @@ result.append({
 
 ### Fichier : `frontend/src/components/chantier/TableauSousTraitant/TableauSousTraitant.js`
 
-#### 1️⃣ Initialisation des données (ligne 89)
+#### 1️⃣ Différenciation par source_type
 ```javascript
 res.data.forEach((item) => {
-  // ✅ Utiliser source_type au lieu de isAgentJournalier()
+  // ✅ Utiliser source_type pour différencier
   const isAgent = item.source_type === 'agent_journalier';
+  const isAgencyExpense = item.source_type === 'agency_expense';
+  const isFacture = item.source_type === 'facture_sous_traitant';
   
-  if (isAgent) {
-    // Regrouper les agents journaliers par mois/nom
-    agentsJournaliersData[keyAgent] = { ... };
-  } else {
-    // Garder les sous-traitants séparés par chantier
-    autresData.push(item);
-  }
+  // Traitement selon le type...
 });
 ```
 
-#### 2️⃣ Organisation des données (ligne 752)
+#### 2️⃣ Organisation des données
 ```javascript
 filteredData.forEach((item) => {
   // ✅ Utiliser source_type pour différencier
@@ -106,22 +129,11 @@ filteredData.forEach((item) => {
 });
 ```
 
-#### 3️⃣ Ligne regroupée pour agents journaliers (ligne 873)
-```javascript
-organized[mois][sous_traitant] = [{
-  // ...
-  source_type: 'agent_journalier',  // Type de source depuis le backend
-  isAgentJournalier: true,           // Flag pour rétrocompatibilité
-  chantiersDetails: chantiersDetails, // Liste des chantiers
-  // ...
-}];
-```
-
 ---
 
 ## 📝 Format des données retournées
 
-### Sous-traitant avec factures
+### Sous-traitant avec factures (`facture_sous_traitant`)
 ```json
 {
   "mois": "09/25",
@@ -145,11 +157,11 @@ organized[mois][sous_traitant] = [{
   "date_paiement_prevue": "2025-10-30",
   "ecart_paiement_reel": -2,
   "delai_paiement": 45,
-  "source_type": "facture_sous_traitant"  // ✅ Identifiant explicite
+  "source_type": "facture_sous_traitant"
 }
 ```
 
-### Agent journalier du planning
+### Agent journalier du planning (`agent_journalier`)
 ```json
 {
   "mois": "09/25",
@@ -159,13 +171,39 @@ organized[mois][sous_traitant] = [{
   "a_payer": 2450.00,
   "paye": 0.00,
   "ecart": 2450.00,
-  "factures": [],  // Pas de factures pour les agents
+  "factures": [],
   "date_paiement": null,
   "date_envoi": null,
   "date_paiement_prevue": null,
   "ecart_paiement_reel": null,
   "delai_paiement": 45,
-  "source_type": "agent_journalier"  // ✅ Identifiant explicite
+  "source_type": "agent_journalier"
+}
+```
+
+### Dépense agence (`agency_expense`)
+```json
+{
+  "mois": "09/25",
+  "sous_traitant": "Service Nettoyage Express",
+  "chantier_id": 0,
+  "chantier_name": "Agence",
+  "a_payer": 850.00,
+  "paye": 0.00,
+  "ecart": 850.00,
+  "factures": [
+    {
+      "numero": "FA-2025-123",
+      "montant": 850.00
+    }
+  ],
+  "date_paiement": null,
+  "date_envoi": "2025-09-10",
+  "date_paiement_prevue": "2025-10-25",
+  "ecart_paiement_reel": null,
+  "delai_paiement": 45,
+  "source_type": "agency_expense",
+  "agency_expense_id": 42
 }
 ```
 
@@ -181,7 +219,7 @@ Avant, la différenciation se faisait par **détection du format du nom** :
 
 **Problèmes** :
 - ❌ Fragile : "STAR CLEAN" contient un espace
-- ❌ Nécessite des exceptions codées en dur (ligne 731)
+- ❌ Nécessite des exceptions codées en dur
 - ❌ Pas robuste si changement de format des noms
 
 **Maintenant remplacée par** : `item.source_type === 'agent_journalier'`
@@ -202,13 +240,7 @@ Avant, la différenciation se faisait par **détection du format du nom** :
 
 Pour vérifier que la différenciation fonctionne :
 
-1. **Dans la console du backend** (terminal Django) :
-   ```
-   === RÉSUMÉ FINAL DES DATES DE PAIEMENT ===
-   09/25 | STAR CLEAN | Chantier 39: date_paiement = 2025-10-28
-   ```
-
-2. **Dans la console du navigateur** :
+1. **Dans la console du navigateur** :
    ```javascript
    // Afficher toutes les données
    console.log("Données API:", data);
@@ -216,24 +248,23 @@ Pour vérifier que la différenciation fonctionne :
    // Filtrer par source
    const factures = data.filter(item => item.source_type === 'facture_sous_traitant');
    const agents = data.filter(item => item.source_type === 'agent_journalier');
+   const agencyExpenses = data.filter(item => item.source_type === 'agency_expense');
    
    console.log("Sous-traitants avec factures:", factures.length);
    console.log("Agents journaliers:", agents.length);
+   console.log("Dépenses agence:", agencyExpenses.length);
    ```
 
 ---
 
 ## 📌 Résumé
 
-| Aspect | Avant | Maintenant |
-|--------|-------|-----------|
-| **Différenciation** | Par format du nom (fragile) | Par champ `source_type` (explicite) |
-| **Robustesse** | ❌ Dépend du format | ✅ Indépendant du format |
-| **Maintenabilité** | ❌ Exceptions en dur | ✅ Pas d'exceptions nécessaires |
-| **Clarté** | ⚠️ Implicite | ✅ Explicite |
-| **Traçabilité** | ❌ Difficile | ✅ Facile |
+| `source_type` | Modèle | Chantier | Factures | Caractéristique |
+|---------------|--------|----------|----------|-----------------|
+| `facture_sous_traitant` | `FactureSousTraitant` | Variable | Oui | Entreprises sous-traitantes |
+| `agent_journalier` | `LaborCost` | Variable | Non | Agents du planning |
+| `agency_expense` | `AgencyExpenseMonth` | "Agence" (0) | Optionnel | Frais de structure |
 
 ---
 
-**Date de mise à jour** : 29 décembre 2025
-
+**Date de mise à jour** : 2 janvier 2026

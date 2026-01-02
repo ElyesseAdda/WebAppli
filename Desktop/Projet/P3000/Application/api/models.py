@@ -2598,6 +2598,55 @@ class FactureSuiviSousTraitant(models.Model):
         return f"Facture {self.numero_facture} - {self.montant_facture_ht}€ ({status})"
 
 
+class AjustementAgentJournalier(models.Model):
+    """
+    Modèle pour stocker les ajustements manuels des montants des agents journaliers.
+    Permet d'ajouter des frais supplémentaires (ex: gasoil, primes) ou des déductions
+    au montant calculé automatiquement depuis LaborCost.
+    """
+    # Identification unique : agent + mois/année
+    agent = models.ForeignKey('Agent', on_delete=models.CASCADE, related_name='ajustements_journalier')
+    mois = models.IntegerField()  # Mois (1-12)
+    annee = models.IntegerField()  # Année complète (ex: 2025)
+    
+    # Ajustement
+    montant_ajustement = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Montant de l'ajustement (positif ou négatif)"
+    )
+    description = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True,
+        help_text="Description de l'ajustement (ex: Gasoil, Prime, Déduction)"
+    )
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Ajustement Agent Journalier"
+        verbose_name_plural = "Ajustements Agents Journaliers"
+        ordering = ['annee', 'mois', 'agent']
+        unique_together = ('agent', 'mois', 'annee')
+        indexes = [
+            models.Index(fields=['agent', 'mois', 'annee']),
+        ]
+    
+    def __str__(self):
+        signe = "+" if self.montant_ajustement >= 0 else ""
+        return f"{self.agent.name} {self.agent.surname} - {self.mois:02d}/{self.annee} : {signe}{self.montant_ajustement}€ ({self.description or 'Sans description'})"
+    
+    @property
+    def mois_annee(self):
+        """Retourne le format mois/année utilisé dans le tableau (MM/YY)"""
+        annee_2_digits = str(self.annee)[-2:]
+        return f"{self.mois:02d}/{annee_2_digits}"
+
+
 class PaiementFournisseurMateriel(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='paiements_materiel')
     fournisseur = models.CharField(max_length=255)
