@@ -13110,3 +13110,41 @@ def delete_ligne_speciale(request, devis_id, ligne_id):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_chantiers_drive_paths(request):
+    """
+    Récupère les chemins de drive pour tous les chantiers
+    
+    Returns:
+        Liste des chantiers avec leurs chemins de drive correspondants
+    """
+    try:
+        chantiers = Chantier.objects.select_related('societe').all()
+        
+        result = []
+        for chantier in chantiers:
+            # Construire le chemin de drive
+            if chantier.societe:
+                societe_slug = custom_slugify(chantier.societe.nom_societe)
+                chantier_slug = custom_slugify(chantier.chantier_name)
+                drive_path = f"Chantiers/{societe_slug}/{chantier_slug}"
+            else:
+                drive_path = None
+            
+            result.append({
+                'id': chantier.id,
+                'chantier_name': chantier.chantier_name,
+                'societe_id': chantier.societe.id if chantier.societe else None,
+                'societe_nom': chantier.societe.nom_societe if chantier.societe else None,
+                'drive_path': drive_path,
+                'state_chantier': chantier.state_chantier,
+                'date_debut': chantier.date_debut.isoformat() if chantier.date_debut else None,
+            })
+        
+        return Response(result, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

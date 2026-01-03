@@ -11,6 +11,7 @@ import {
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
+import { MdFolderShared } from "react-icons/md";
 import { NavLink, useLocation } from "react-router-dom";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
@@ -90,6 +91,12 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         label: "Drive",
         icon: SiGoogledrive,
         to: "/drive-v2",
+      },
+      {
+        key: "chantiers_drive_paths",
+        label: "Chemins Drive",
+        icon: MdFolderShared,
+        to: "/ChantiersDrivePaths",
       },
     ],
     []

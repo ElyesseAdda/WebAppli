@@ -50,6 +50,7 @@ import TableauSuivi from "./TableauSuivi";
 import Test from "./Test";
 import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
+import ChantiersDrivePaths from "./ChantiersDrivePaths";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -438,6 +439,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <TableauSousTraitantPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ChantiersDrivePaths"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ChantiersDrivePaths />
                 </Layout>
               </ProtectedRoute>
             }
