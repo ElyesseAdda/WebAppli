@@ -57,16 +57,8 @@ const DevisModal = ({
           },
         });
 
-        let newNumero = response.data.numero;
-
-        // Si c'est un devis de chantier, toujours utiliser "Devis travaux"
-        if (devisData.devis_chantier) {
-          newNumero = `${newNumero} - Devis travaux`;
-        }
-        // Si c'est un devis normal lié à un chantier existant (TS)
-        else if (!devisData.devis_chantier && devisData.chantier !== -1) {
-          newNumero = `${newNumero} - TS N°${response.data.next_ts || "001"}`;
-        }
+        // Le numéro est maintenant directement au bon format (sans suffixe)
+        const newNumero = response.data.numero;
 
         setFullNumero(newNumero);
         setLastRequestTime(new Date().getTime());
@@ -80,10 +72,15 @@ const DevisModal = ({
         });
       } catch (error) {
         console.error("Erreur lors de la récupération du numéro:", error);
-        const defaultNumero = `DEV-001-${new Date()
-          .getFullYear()
-          .toString()
-          .slice(-2)}`;
+        const currentYear = new Date().getFullYear();
+        // Déterminer le format de fallback selon le type
+        const isChantierExistant = devisData.chantier && devisData.chantier !== -1;
+        let defaultNumero;
+        if (devisData.devis_chantier || !isChantierExistant) {
+          defaultNumero = `Devis de travaux n°001.${currentYear}`;
+        } else {
+          defaultNumero = `Devis TS n°001.${currentYear}`;
+        }
         setFullNumero(defaultNumero);
         handleChange({
           target: {

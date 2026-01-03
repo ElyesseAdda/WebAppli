@@ -915,44 +915,40 @@ const DevisAvance = () => {
       
       const chantierIdToUse = chantierIdParam !== null ? chantierIdParam : selectedChantierId;
       
-      // ✅ NOUVEAU : Si c'est un appel d'offres, utiliser le format "Devis travaux"
-      if (devisType === "chantier") {
-        const params = { devis_chantier: 'true' };
-        const response = await axios.get("/api/get-next-devis-number/", { params });
-        const baseNumber = response.data.numero;
-        const finalNumber = `${baseNumber} - Devis travaux`;
-        setDevisData(prev => ({ ...prev, numero: finalNumber }));
-        return finalNumber;
-      }
-      
-      // Logique existante pour les devis normaux
+      // Déterminer les paramètres selon le type de devis
       const isChantierExistant = chantierIdToUse && chantierIdToUse !== -1;
       
       const params = {};
-      if (isChantierExistant) {
+      if (devisType === "chantier" || !isChantierExistant) {
+        // Devis de travaux (appel d'offres ou pas de chantier existant)
+        params.devis_chantier = 'true';
+      } else {
+        // Devis TS (chantier existant)
         params.chantier_id = chantierIdToUse;
         params.devis_chantier = 'false';
-      } else {
-        params.devis_chantier = 'true';
       }
       
       const response = await axios.get("/api/get-next-devis-number/", { params });
       
-      let baseNumber = response.data.numero;
+      // Le numéro est maintenant directement au bon format (sans suffixe)
+      const numero = response.data.numero;
       
-      if (isChantierExistant && response.data.next_ts) {
-        baseNumber = `${baseNumber} - TS n°${response.data.next_ts}`;
-        setNextTsNumber(response.data.next_ts);
-      } else if (!isChantierExistant) {
-        baseNumber = `${baseNumber} - Devis travaux`;
-      }
-      
-      setDevisData(prev => ({ ...prev, numero: baseNumber }));
-      return baseNumber;
+      setDevisData(prev => ({ ...prev, numero: numero }));
+      return numero;
     } catch (error) {
       // Erreur lors de la génération du numéro de devis
       const currentYear = new Date().getFullYear();
-      const fallbackNumber = `Devis n°001.${currentYear}`;
+      const chantierIdToUse = chantierIdParam !== null ? chantierIdParam : selectedChantierId;
+      const isChantierExistant = chantierIdToUse && chantierIdToUse !== -1;
+      
+      // Déterminer le format de fallback selon le type
+      let fallbackNumber;
+      if (devisType === "chantier" || !isChantierExistant) {
+        fallbackNumber = `Devis de travaux n°001.${currentYear}`;
+      } else {
+        fallbackNumber = `Devis TS n°001.${currentYear}`;
+      }
+      
       setDevisData(prev => ({ ...prev, numero: fallbackNumber }));
       return fallbackNumber;
     } finally {

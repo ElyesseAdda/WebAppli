@@ -3164,35 +3164,64 @@ def get_next_devis_number(request):
         current_year = timezone.now().year
         year_suffix = str(current_year)[-2:]
         
-        # Récupérer le dernier devis créé pour l'année courante
-        # Chercher d'abord le nouveau format "Devis n°017.2025"
+        # Déterminer le type de devis et le préfixe correspondant
+        is_ts_devis = chantier_id and not devis_chantier
+        if is_ts_devis:
+            # Devis TS : format "Devis TS n°XXX.2025"
+            prefix_search = "Devis TS n°"
+        else:
+            # Devis de travaux : format "Devis de travaux n°XXX.2025"
+            prefix_search = "Devis de travaux n°"
+        
+        # Récupérer le dernier devis du même type pour l'année courante
+        # Chercher d'abord le nouveau format avec le préfixe approprié
         last_devis_new_format = Devis.objects.filter(
+            numero__startswith=prefix_search,
             numero__contains=f".{current_year}"
         ).order_by('-id').first()
         
-        # Si pas de devis au nouveau format, chercher l'ancien format "DEV-001-25"
+        # Si pas de devis au nouveau format, chercher l'ancien format "Devis n°017.2025" ou "DEV-001-25"
         if not last_devis_new_format:
-            last_devis_old_format = Devis.objects.filter(
-                numero__startswith=f"DEV-"
+            # Chercher l'ancien format générique "Devis n°017.2025"
+            last_devis_old_generic = Devis.objects.filter(
+                numero__startswith="Devis n°",
+                numero__contains=f".{current_year}"
             ).order_by('-id').first()
             
-            if last_devis_old_format:
+            if last_devis_old_generic:
                 try:
-                    # Extraire le numéro de l'ancien format (ex: "001" de "DEV-001-25")
-                    old_sequence_match = re.search(r'DEV-(\d+)-', last_devis_old_format.numero)
-                    if old_sequence_match:
-                        sequence = int(old_sequence_match.group(1))
+                    # Extraire le numéro de séquence de l'ancien format générique
+                    sequence_match = re.search(r'Devis n°(\d+)\.', last_devis_old_generic.numero)
+                    if sequence_match:
+                        sequence = int(sequence_match.group(1))
                         next_sequence = sequence + 1
                     else:
                         next_sequence = 1
                 except (ValueError, AttributeError):
                     next_sequence = 1
             else:
-                next_sequence = 1
+                # Chercher l'ancien format "DEV-001-25"
+                last_devis_old_format = Devis.objects.filter(
+                    numero__startswith=f"DEV-"
+                ).order_by('-id').first()
+                
+                if last_devis_old_format:
+                    try:
+                        # Extraire le numéro de l'ancien format (ex: "001" de "DEV-001-25")
+                        old_sequence_match = re.search(r'DEV-(\d+)-', last_devis_old_format.numero)
+                        if old_sequence_match:
+                            sequence = int(old_sequence_match.group(1))
+                            next_sequence = sequence + 1
+                        else:
+                            next_sequence = 1
+                    except (ValueError, AttributeError):
+                        next_sequence = 1
+                else:
+                    next_sequence = 1
         else:
             try:
-                # Extraire le numéro de séquence du nouveau format (ex: "017" de "Devis n°017.2025")
-                sequence_match = re.search(r'Devis n°(\d+)\.', last_devis_new_format.numero)
+                # Extraire le numéro de séquence du nouveau format (ex: "017" de "Devis de travaux n°017.2025" ou "Devis TS n°017.2025")
+                sequence_match = re.search(r'n°(\d+)\.', last_devis_new_format.numero)
                 if sequence_match:
                     sequence = int(sequence_match.group(1))
                     next_sequence = sequence + 1
@@ -3201,20 +3230,16 @@ def get_next_devis_number(request):
             except (ValueError, AttributeError):
                 next_sequence = 1
             
-        # Formater le nouveau numéro selon le format demandé
-        numero = f"Devis n°{str(next_sequence).zfill(3)}.{current_year}"
-        print(f"Génération du numéro de devis: {numero} (séquence: {next_sequence}, année: {current_year})")
+        # Formater le nouveau numéro selon le type de devis
+        if is_ts_devis:
+            numero = f"Devis TS n°{str(next_sequence).zfill(3)}.{current_year}"
+        else:
+            numero = f"Devis de travaux n°{str(next_sequence).zfill(3)}.{current_year}"
         
-        # Si c'est un TS (chantier existant), calculer le prochain numéro de TS
+        print(f"Génération du numéro de devis: {numero} (séquence: {next_sequence}, année: {current_year}, type: {'TS' if is_ts_devis else 'travaux'})")
+        
+        # next_ts n'est plus nécessaire car le format est maintenant directement dans le numéro
         next_ts = None
-        if chantier_id and not devis_chantier:
-            # Trouver le dernier TS pour ce chantier
-            last_ts = Devis.objects.filter(
-                chantier_id=chantier_id,
-                devis_chantier=False
-            ).count()
-            next_ts = str(last_ts + 1).zfill(3)
-            print(f"Calcul TS pour chantier {chantier_id}: {next_ts}")
         
         return Response({
             'numero': numero,
@@ -3225,10 +3250,20 @@ def get_next_devis_number(request):
         
     except Exception as e:
         print(f"Erreur dans get_next_devis_number: {str(e)}")
+        import traceback
+        traceback.print_exc()
         current_year = timezone.now().year
+        # Déterminer le format selon le type
+        chantier_id = request.GET.get('chantier_id')
+        devis_chantier = request.GET.get('devis_chantier') == 'true'
+        is_ts_devis = chantier_id and not devis_chantier
+        if is_ts_devis:
+            fallback_numero = f"Devis TS n°001.{current_year}"
+        else:
+            fallback_numero = f"Devis de travaux n°001.{current_year}"
         return Response({
-            'numero': f"Devis n°001.{current_year}",
-            'next_ts': "001",
+            'numero': fallback_numero,
+            'next_ts': None,
             'sequence': "001",
             'year': current_year
         })
