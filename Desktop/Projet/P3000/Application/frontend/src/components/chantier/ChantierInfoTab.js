@@ -123,32 +123,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   // Récupérer les informations complètes du chantier
   useEffect(() => {
     if (chantierData?.id) {
-      console.log(
-        "🔍 DEBUG ChantierInfoTab - Récupération des détails du chantier ID:",
-        chantierData.id
-      );
       axios
         .get(`/api/chantier/${chantierData.id}/details/`)
         .then((response) => {
-          console.log(
-            "✅ DEBUG ChantierInfoTab - Détails du chantier récupérés:",
-            response.data
-          );
           setFullChantierData(response.data);
         })
         .catch((error) => {
-          console.error(
-            "❌ DEBUG ChantierInfoTab - Erreur lors de la récupération des informations du chantier:",
-            error
-          );
-          console.log(
-            "❌ DEBUG ChantierInfoTab - ID utilisé:",
-            chantierData.id
-          );
-          console.log(
-            "❌ DEBUG ChantierInfoTab - URL appelée:",
-            `/api/chantier/${chantierData.id}/details/`
-          );
+          // Erreur silencieuse
         });
     }
   }, [chantierData?.id]);
@@ -168,13 +149,8 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
            lastCoutsUpdate.materiel !== currentCouts.materiel ||
            lastCoutsUpdate.marge !== currentCouts.marge)) {
         
-        console.log("🔄 ChantierInfoTab - Détection de changement dans les coûts estimés");
-        console.log("Ancien:", lastCoutsUpdate);
-        console.log("Nouveau:", currentCouts);
-        
         // Recharger les données du chantier
         if (onUpdate) {
-          console.log("🔄 ChantierInfoTab - Déclenchement du rechargement via onUpdate");
           onUpdate();
         }
       }
@@ -192,7 +168,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       const response = await axios.get(`/api/chantier/${chantierData.id}/decomposition-couts/`);
       setDecompositionData(response.data);
     } catch (error) {
-      console.error("Erreur lors de la récupération de la décomposition:", error);
+      // Erreur silencieuse
     } finally {
       setLoadingDecomposition(false);
     }
@@ -250,6 +226,18 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       rue: "",
       code_postal: "",
     },
+    societe_contact: {
+      nom_societe: "",
+      telephone: "",
+      email: "",
+      contact: "",
+    },
+    assistance_maitrise_ouvrage: {
+      nom_societe: "",
+      telephone: "",
+      email: "",
+      contact: "",
+    },
     chantier_adresse: {
       ville: "",
       rue: "",
@@ -262,6 +250,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         email: "",
         telephone: "",
         poste: "",
+      },
+      client_societe: {
+        nom_societe: "",
+        telephone: "",
+        email: "",
+        contact: "",
       },
   });
 
@@ -330,10 +324,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || { total: 0 };
         setMainOeuvreReelle(mainOeuvre.total || 0);
       } catch (error) {
-        console.error(
-          "Erreur lors du chargement de la main d'œuvre réelle:",
-          error
-        );
         setMainOeuvreReelle(0);
       } finally {
         setLoadingMainOeuvre(false);
@@ -557,27 +547,17 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               );
               completeData.societe_complete.client_data = clientResponse.data;
             } catch (clientError) {
-              console.warn(
-                "Erreur lors de la récupération du client:",
-                clientError
-              );
+              // Erreur silencieuse
             }
           }
         } catch (societeError) {
-          console.warn(
-            "Erreur lors de la récupération de la société:",
-            societeError
-          );
+          // Erreur silencieuse
         }
       }
 
       setCompleteChantierData(completeData);
       return completeData;
     } catch (error) {
-      console.error(
-        "Erreur lors de la récupération des données complètes:",
-        error
-      );
       return null;
     } finally {
       setLoadingCompleteData(false);
@@ -586,16 +566,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
 
   // Fonction pour ouvrir le modal d'édition
   const handleOpenEditModal = async () => {
-    // Debug: afficher la structure des données
-    console.log("Structure chantierData:", chantierData);
-    console.log("Société:", chantierData?.societe);
-    console.log("Client:", chantierData?.societe?.client);
-
     // Récupérer les données complètes
     const completeData = await fetchCompleteChantierData();
     const dataToUse = completeData || chantierData;
-
-    console.log("Données complètes récupérées:", completeData);
 
     // Récupérer les données du client depuis les données complètes
     const societeData = dataToUse?.societe_complete || dataToUse?.societe || {};
@@ -621,6 +594,18 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         rue: societeData?.rue_societe || "",
         code_postal: societeData?.codepostal_societe || "",
       },
+      societe_contact: {
+        nom_societe: dataToUse?.maitre_ouvrage_nom_societe ?? "",
+        telephone: dataToUse?.maitre_ouvrage_telephone ?? "",
+        email: dataToUse?.maitre_ouvrage_email ?? "",
+        contact: dataToUse?.maitre_ouvrage_contact ?? "",
+      },
+      assistance_maitrise_ouvrage: {
+        nom_societe: dataToUse?.assistance_maitrise_ouvrage_nom_societe ?? "",
+        telephone: dataToUse?.assistance_maitrise_ouvrage_telephone ?? "",
+        email: dataToUse?.assistance_maitrise_ouvrage_email ?? "",
+        contact: dataToUse?.assistance_maitrise_ouvrage_contact ?? "",
+      },
       chantier_adresse: {
         ville: dataToUse?.adresse?.ville || dataToUse?.ville || "",
         rue: dataToUse?.adresse?.rue || dataToUse?.rue || "",
@@ -634,6 +619,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         email: clientData.client_mail || "",
         telephone: clientData.phone_Number?.toString() || "",
         poste: clientPoste,
+      },
+      client_societe: {
+        nom_societe: dataToUse?.maitre_oeuvre_nom_societe ?? "",
+        telephone: dataToUse?.maitre_oeuvre_telephone ?? "",
+        email: dataToUse?.maitre_oeuvre_email ?? "",
+        contact: dataToUse?.maitre_oeuvre_contact ?? "",
       },
     });
     
@@ -672,32 +663,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         const currentTelephone = currentClient.phone_Number?.toString() || "";
         const currentPoste = currentClient.poste || "";
 
-        console.log("=== COMPARAISON CLIENT ===");
-        console.log("Actuel:", {
-          civilite: currentCivilite,
-          nom: currentNom,
-          prenom: currentPrenom,
-          email: currentEmail,
-          telephone: currentTelephone,
-          poste: currentPoste,
-        });
-        console.log("Nouveau:", {
-          civilite: editData.client.civilite,
-          nom: editData.client.nom,
-          prenom: editData.client.prenom,
-          email: editData.client.email,
-          telephone: editData.client.telephone,
-          poste: editData.client.poste,
-        });
-
         // Vérifier les changements et construire les données à envoyer
         if (editData.client.civilite !== currentCivilite) {
-          console.log("Civilité client modifiée:", editData.client.civilite);
           clientData.civilite = editData.client.civilite || "";
         }
 
         if (editData.client.nom && editData.client.nom.trim() !== currentNom) {
-          console.log("Nom client modifié:", editData.client.nom);
           clientData.name = editData.client.nom;
         }
 
@@ -705,7 +676,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.client.prenom &&
           editData.client.prenom.trim() !== currentPrenom
         ) {
-          console.log("Prénom client modifié:", editData.client.prenom);
           clientData.surname = editData.client.prenom;
         }
 
@@ -713,7 +683,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.client.email &&
           editData.client.email.trim() !== currentEmail
         ) {
-          console.log("Email client modifié:", editData.client.email);
           clientData.client_mail = editData.client.email;
         }
 
@@ -721,7 +690,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.client.telephone &&
           editData.client.telephone.trim() !== currentTelephone
         ) {
-          console.log("Téléphone client modifié:", editData.client.telephone);
           clientData.phone_Number = parseInt(editData.client.telephone) || 0;
         }
 
@@ -729,13 +697,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.client.poste &&
           editData.client.poste.trim() !== currentPoste
         ) {
-          console.log("Poste client modifié:", editData.client.poste);
           clientData.poste = editData.client.poste;
         }
 
         // Envoyer la requête seulement s'il y a des changements
         if (Object.keys(clientData).length > 0) {
-          console.log("Envoi des données client:", clientData);
           await axios.patch(`/api/client/${clientId}/`, clientData);
         }
       }
@@ -751,58 +717,34 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         const currentRue = currentSociete.rue_societe || "";
         const currentCodePostal = currentSociete.codepostal_societe || "";
 
-        console.log("=== COMPARAISON SOCIÉTÉ ===");
-        console.log("Actuel:", {
-          nom: currentNom,
-          ville: currentVille,
-          rue: currentRue,
-          code_postal: currentCodePostal,
-        });
-        console.log("Nouveau:", {
-          nom: editData.societe.nom,
-          ville: editData.societe.ville,
-          rue: editData.societe.rue,
-          code_postal: editData.societe.code_postal,
-        });
-
         if (
           editData.societe.nom &&
           editData.societe.nom.trim() !== currentNom
         ) {
-          console.log("Nom société modifié:", editData.societe.nom);
           societeData.nom_societe = editData.societe.nom;
         }
         if (
           editData.societe.ville &&
           editData.societe.ville.trim() !== currentVille
         ) {
-          console.log("Ville société modifiée:", editData.societe.ville);
           societeData.ville_societe = editData.societe.ville;
         }
         if (
           editData.societe.rue &&
           editData.societe.rue.trim() !== currentRue
         ) {
-          console.log("Rue société modifiée:", editData.societe.rue);
           societeData.rue_societe = editData.societe.rue;
         }
         if (
           editData.societe.code_postal &&
           editData.societe.code_postal.trim() !== currentCodePostal
         ) {
-          console.log(
-            "Code postal société modifié:",
-            editData.societe.code_postal
-          );
           societeData.codepostal_societe = editData.societe.code_postal;
         }
 
         // Envoyer la requête seulement s'il y a des changements
         if (Object.keys(societeData).length > 0) {
-          console.log("Envoi des données société:", societeData);
           await axios.patch(`/api/societe/${societeForSave.id}/`, societeData);
-        } else {
-          console.log("Aucune modification détectée pour la société");
         }
       }
 
@@ -810,22 +752,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       if (chantierData?.id) {
         const chantierDataToUpdate = {};
 
-        // Debug: afficher les valeurs pour comparaison
-        console.log("Valeurs actuelles:", {
-          nom: chantierData.nom,
-          statut: chantierData.state_chantier,
-        });
-        console.log("Nouvelles valeurs:", {
-          nom: editData.chantier.nom,
-          statut: editData.chantier.statut,
-        });
-
         // Comparer avec les valeurs actuelles
         if (
           editData.chantier.nom &&
           editData.chantier.nom.trim() !== (chantierData.nom || "")
         ) {
-          console.log("Nom du chantier modifié:", editData.chantier.nom);
           chantierDataToUpdate.chantier_name = editData.chantier.nom;
         }
         if (
@@ -833,7 +764,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.chantier.statut.trim() !==
             (chantierData.state_chantier || "")
         ) {
-          console.log("Statut du chantier modifié:", editData.chantier.statut);
           chantierDataToUpdate.state_chantier = editData.chantier.statut;
         }
 
@@ -843,10 +773,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.chantier_adresse.ville.trim() !==
             (chantierData.adresse?.ville || "")
         ) {
-          console.log(
-            "Ville chantier modifiée:",
-            editData.chantier_adresse.ville
-          );
           chantierDataToUpdate.ville = editData.chantier_adresse.ville;
         }
         if (
@@ -854,7 +780,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.chantier_adresse.rue.trim() !==
             (chantierData.adresse?.rue || "")
         ) {
-          console.log("Rue chantier modifiée:", editData.chantier_adresse.rue);
           chantierDataToUpdate.rue = editData.chantier_adresse.rue;
         }
         if (
@@ -862,26 +787,33 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           editData.chantier_adresse.code_postal.trim() !==
             (chantierData.adresse?.code_postal || "")
         ) {
-          console.log(
-            "Code postal chantier modifié:",
-            editData.chantier_adresse.code_postal
-          );
           chantierDataToUpdate.code_postal =
             editData.chantier_adresse.code_postal;
         }
 
-        console.log("Données à mettre à jour:", chantierDataToUpdate);
+        // Ajouter les champs Maitre d'ouvrage (toujours envoyés pour sauvegarde)
+        chantierDataToUpdate.maitre_ouvrage_nom_societe = editData.societe_contact.nom_societe?.trim() || null;
+        chantierDataToUpdate.maitre_ouvrage_telephone = editData.societe_contact.telephone?.trim() || null;
+        chantierDataToUpdate.maitre_ouvrage_email = editData.societe_contact.email?.trim() || null;
+        chantierDataToUpdate.maitre_ouvrage_contact = editData.societe_contact.contact?.trim() || null;
 
-        // Envoyer la requête seulement s'il y a des changements
-        if (Object.keys(chantierDataToUpdate).length > 0) {
-          console.log("Envoi de la requête de mise à jour du chantier");
-          await axios.patch(
-            `/api/chantier/${chantierData.id}/`,
-            chantierDataToUpdate
-          );
-        } else {
-          console.log("Aucune modification détectée pour le chantier");
-        }
+        // Ajouter les champs Assistance à la maîtrise d'ouvrage (toujours envoyés pour sauvegarde)
+        chantierDataToUpdate.assistance_maitrise_ouvrage_nom_societe = editData.assistance_maitrise_ouvrage.nom_societe?.trim() || null;
+        chantierDataToUpdate.assistance_maitrise_ouvrage_telephone = editData.assistance_maitrise_ouvrage.telephone?.trim() || null;
+        chantierDataToUpdate.assistance_maitrise_ouvrage_email = editData.assistance_maitrise_ouvrage.email?.trim() || null;
+        chantierDataToUpdate.assistance_maitrise_ouvrage_contact = editData.assistance_maitrise_ouvrage.contact?.trim() || null;
+
+        // Ajouter les champs Maitre d'oeuvre (toujours envoyés pour sauvegarde)
+        chantierDataToUpdate.maitre_oeuvre_nom_societe = editData.client_societe.nom_societe?.trim() || null;
+        chantierDataToUpdate.maitre_oeuvre_telephone = editData.client_societe.telephone?.trim() || null;
+        chantierDataToUpdate.maitre_oeuvre_email = editData.client_societe.email?.trim() || null;
+        chantierDataToUpdate.maitre_oeuvre_contact = editData.client_societe.contact?.trim() || null;
+
+        // Toujours envoyer la requête car les nouveaux champs sont toujours inclus
+        await axios.patch(
+          `/api/chantier/${chantierData.id}/`,
+          chantierDataToUpdate
+        );
       }
 
       setOpenEditModal(false);
@@ -890,7 +822,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         onUpdate();
       }
     } catch (error) {
-      console.error("Erreur lors de la modification:", error);
       if (error.response?.data) {
         // Afficher les erreurs spécifiques de validation
         const errorMessages = Object.values(error.response.data)
@@ -914,7 +845,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       // Rediriger vers la liste des chantiers
       window.location.href = "/chantiers";
     } catch (error) {
-      console.error("Erreur lors de la suppression:", error);
       alert("Erreur lors de la suppression du chantier");
     } finally {
       setLoadingDelete(false);
@@ -934,7 +864,6 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         onUpdate();
       }
     } catch (error) {
-      console.error("Erreur lors de la modification du statut:", error);
       if (error.response?.data) {
         const errorMessages = Object.values(error.response.data)
           .flat()
@@ -953,14 +882,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     // Utiliser les données complètes du chantier si disponibles, sinon les données de base
     const chantierInfo = fullChantierData || chantierData;
 
-    console.log("🔍 DEBUG handleOpenDrive - chantierInfo:", chantierInfo);
-    console.log("🔍 DEBUG handleOpenDrive - societe:", chantierInfo?.societe);
-    console.log("🔍 DEBUG handleOpenDrive - nom:", chantierInfo?.nom);
-
     if (!chantierInfo?.societe?.nom || !chantierInfo?.nom) {
-      console.error("❌ DEBUG handleOpenDrive - Données manquantes:");
-      console.error("  - societe?.nom:", chantierInfo?.societe?.nom);
-      console.error("  - nom:", chantierInfo?.nom);
       alert(
         "Impossible d'ouvrir le Drive : informations du chantier manquantes"
       );
@@ -977,13 +899,10 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
 
     const drivePath = `Chantiers/${societeSlug}/${chantierSlug}`;
 
-    console.log("🔍 DEBUG handleOpenDrive - drivePath:", drivePath);
-
     // Ouvrir le Drive dans une nouvelle fenêtre
     const driveUrl = `/drive?path=${encodeURIComponent(
       drivePath
     )}&sidebar=closed`;
-    console.log("🔍 DEBUG handleOpenDrive - driveUrl:", driveUrl);
     window.open(driveUrl, "_blank", "width=1200,height=800");
   };
 
@@ -1034,33 +953,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               </Typography>
             </Grid>
 
-            {/* Nom client */}
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  fontWeight: 600,
-                  color: "#6e6e6e",
-                  mb: 1,
-                  fontFamily: "Roboto Slab, serif",
-                }}
-              >
-                Maître d'œuvre :
-              </Typography>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontFamily: "Roboto, Arial, sans-serif",
-                  fontWeight: 700,
-                  fontSize: "1.1rem",
-                  color: "text.primary",
-                }}
-              >
-                {chantierData?.societe?.client?.nom || "Non défini"}
-              </Typography>
-            </Grid>
-
-            {/* Société */}
+            {/* Maîtrise d'ouvrage */}
             <Grid item xs={12} sm={6} md={2.4}>
               <Typography
                 variant="subtitle2"
@@ -1082,8 +975,37 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   color: "text.primary",
                 }}
               >
-                {chantierData?.societe?.nom ||
+                {chantierData?.maitre_ouvrage_nom_societe ||
+                  chantierData?.societe?.nom ||
                   chantierData?.societe?.nom_societe ||
+                  "Non défini"}
+              </Typography>
+            </Grid>
+
+            {/* Maître d'œuvre */}
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                  color: "#6e6e6e",
+                  mb: 1,
+                  fontFamily: "Roboto Slab, serif",
+                }}
+              >
+                Maître d'œuvre :
+              </Typography>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontFamily: "Roboto, Arial, sans-serif",
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                  color: "text.primary",
+                }}
+              >
+                {chantierData?.maitre_oeuvre_nom_societe ||
+                  chantierData?.societe?.client?.nom ||
                   "Non défini"}
               </Typography>
             </Grid>
@@ -2252,21 +2174,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               </Grid>
             </Grid>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="h6" sx={{ color: "#1976d2" }}>
-                Informations de la maîtrise d'ouvrage
-              </Typography>
-              {societeId && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => setShowContactModal(true)}
-                  sx={{ ml: 2 }}
-                >
-                  Gérer les contacts
-                </Button>
-              )}
-            </Box>
+            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+              Informations de la maîtrise d'ouvrage
+            </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -2321,6 +2231,238 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       societe: {
                         ...editData.societe,
                         code_postal: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+            </Grid>
+
+            {/* Section Contact Société */}
+            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+Maitre d'ouvrage
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nom de société"
+                  value={editData.societe_contact.nom_societe}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe_contact: {
+                        ...editData.societe_contact,
+                        nom_societe: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Téléphone"
+                  type="tel"
+                  value={editData.societe_contact.telephone}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe_contact: {
+                        ...editData.societe_contact,
+                        telephone: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  type="email"
+                  value={editData.societe_contact.email}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe_contact: {
+                        ...editData.societe_contact,
+                        email: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Contact"
+                  value={editData.societe_contact.contact}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      societe_contact: {
+                        ...editData.societe_contact,
+                        contact: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+            </Grid>
+
+            {/* Section Assistance à la maîtrise d'ouvrage */}
+            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+              Assistance à la maîtrise d'ouvrage
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nom de la société"
+                  value={editData.assistance_maitrise_ouvrage.nom_societe}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      assistance_maitrise_ouvrage: {
+                        ...editData.assistance_maitrise_ouvrage,
+                        nom_societe: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Téléphone"
+                  type="tel"
+                  value={editData.assistance_maitrise_ouvrage.telephone}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      assistance_maitrise_ouvrage: {
+                        ...editData.assistance_maitrise_ouvrage,
+                        telephone: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  type="email"
+                  value={editData.assistance_maitrise_ouvrage.email}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      assistance_maitrise_ouvrage: {
+                        ...editData.assistance_maitrise_ouvrage,
+                        email: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Contact"
+                  value={editData.assistance_maitrise_ouvrage.contact}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      assistance_maitrise_ouvrage: {
+                        ...editData.assistance_maitrise_ouvrage,
+                        contact: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+            </Grid>
+
+            {/* Section Maitre d'oeuvre */}
+            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+              Maitre d'oeuvre
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Nom de société"
+                  value={editData.client_societe.nom_societe}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client_societe: {
+                        ...editData.client_societe,
+                        nom_societe: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Téléphone"
+                  type="tel"
+                  value={editData.client_societe.telephone}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client_societe: {
+                        ...editData.client_societe,
+                        telephone: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  type="email"
+                  value={editData.client_societe.email}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client_societe: {
+                        ...editData.client_societe,
+                        email: e.target.value,
+                      },
+                    })
+                  }
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Contact"
+                  value={editData.client_societe.contact}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      client_societe: {
+                        ...editData.client_societe,
+                        contact: e.target.value,
                       },
                     })
                   }
@@ -2386,10 +2528,22 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               </Grid>
             </Grid>
 
-            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
-              Informations du maître d'œuvre
-            </Typography>
-            <Grid container spacing={2}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Typography variant="h6" sx={{ color: "#1976d2" }}>
+                Contact Devis
+              </Typography>
+              {societeId && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setShowContactModal(true)}
+                  sx={{ ml: 2 }}
+                >
+                  Gérer les contacts
+                </Button>
+              )}
+            </Box>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Civilité</InputLabel>

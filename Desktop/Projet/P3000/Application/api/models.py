@@ -138,6 +138,24 @@ class Chantier(models.Model):
     
     description = models.TextField(null=True)
     taux_fixe = models.FloatField(null=True, blank=True)
+    
+    # Champs pour Maitre d'ouvrage (Contact Société)
+    maitre_ouvrage_nom_societe = models.CharField(max_length=255, blank=True, null=True, verbose_name="Nom société maître d'ouvrage")
+    maitre_ouvrage_telephone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Téléphone maître d'ouvrage")
+    maitre_ouvrage_email = models.EmailField(max_length=254, blank=True, null=True, verbose_name="Email maître d'ouvrage")
+    maitre_ouvrage_contact = models.CharField(max_length=500, blank=True, null=True, verbose_name="Contact maître d'ouvrage")
+    
+    # Champs pour Assistance à la maîtrise d'ouvrage
+    assistance_maitrise_ouvrage_nom_societe = models.CharField(max_length=255, blank=True, null=True, verbose_name="Nom société assistance maîtrise d'ouvrage")
+    assistance_maitrise_ouvrage_telephone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Téléphone assistance maîtrise d'ouvrage")
+    assistance_maitrise_ouvrage_email = models.EmailField(max_length=254, blank=True, null=True, verbose_name="Email assistance maîtrise d'ouvrage")
+    assistance_maitrise_ouvrage_contact = models.CharField(max_length=500, blank=True, null=True, verbose_name="Contact assistance maîtrise d'ouvrage")
+    
+    # Champs pour Maitre d'oeuvre
+    maitre_oeuvre_nom_societe = models.CharField(max_length=255, blank=True, null=True, verbose_name="Nom société maître d'oeuvre")
+    maitre_oeuvre_telephone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Téléphone maître d'oeuvre")
+    maitre_oeuvre_email = models.EmailField(max_length=254, blank=True, null=True, verbose_name="Email maître d'oeuvre")
+    maitre_oeuvre_contact = models.CharField(max_length=500, blank=True, null=True, verbose_name="Contact maître d'oeuvre")
 
     #Partie validation des informations
     @property

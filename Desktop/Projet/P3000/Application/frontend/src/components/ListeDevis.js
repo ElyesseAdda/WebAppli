@@ -251,6 +251,8 @@ const ListeDevis = () => {
         // Vérifier si c'est un devis de chantier ou un devis normal
         if (devisId && appelOffresId && appelOffresName && societeName) {
           // C'est un devis de chantier
+          // Récupérer le chemin personnalisé si fourni
+          const customPath = urlParams.get('customPath') || '';
           // Attendre que les devis soient chargés
           setTimeout(async () => {
             try {
@@ -263,6 +265,7 @@ const ListeDevis = () => {
                   appelOffresName: appelOffresName,
                   societeName: societeName,
                   numero: numero || `DEV-${devisId}`,
+                  customPath: customPath,
                 },
                 {
                   onSuccess: (response) => {
@@ -293,6 +296,8 @@ const ListeDevis = () => {
           }, 2000); // Attendre 2 secondes pour que les devis soient chargés
         } else if (devisId && chantierId && chantierName && societeName) {
           // C'est un devis normal
+          // Récupérer le chemin personnalisé si fourni
+          const customPath = urlParams.get('customPath') || '';
           // Attendre que les devis soient chargés
           setTimeout(async () => {
             try {
@@ -305,6 +310,7 @@ const ListeDevis = () => {
                   chantierName: chantierName,
                   societeName: societeName,
                   numero: numero || `DEV-${devisId}`,
+                  customPath: customPath,
                 },
                 {
                   onSuccess: (response) => {

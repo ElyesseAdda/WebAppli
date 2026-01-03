@@ -4378,6 +4378,21 @@ def get_chantier_details(request, chantier_id):
             'cout_materiel': chantier.cout_materiel,
             'cout_estime_main_oeuvre': chantier.cout_estime_main_oeuvre,
             'cout_estime_materiel': chantier.cout_estime_materiel,
+            # Champs Maitre d'ouvrage
+            'maitre_ouvrage_nom_societe': chantier.maitre_ouvrage_nom_societe,
+            'maitre_ouvrage_telephone': chantier.maitre_ouvrage_telephone,
+            'maitre_ouvrage_email': chantier.maitre_ouvrage_email,
+            'maitre_ouvrage_contact': chantier.maitre_ouvrage_contact,
+            # Champs Assistance à la maîtrise d'ouvrage
+            'assistance_maitrise_ouvrage_nom_societe': chantier.assistance_maitrise_ouvrage_nom_societe,
+            'assistance_maitrise_ouvrage_telephone': chantier.assistance_maitrise_ouvrage_telephone,
+            'assistance_maitrise_ouvrage_email': chantier.assistance_maitrise_ouvrage_email,
+            'assistance_maitrise_ouvrage_contact': chantier.assistance_maitrise_ouvrage_contact,
+            # Champs Maitre d'oeuvre
+            'maitre_oeuvre_nom_societe': chantier.maitre_oeuvre_nom_societe,
+            'maitre_oeuvre_telephone': chantier.maitre_oeuvre_telephone,
+            'maitre_oeuvre_email': chantier.maitre_oeuvre_email,
+            'maitre_oeuvre_contact': chantier.maitre_oeuvre_contact,
             'societe': {
                 'id': chantier.societe.id if chantier.societe else None,
                 'nom': chantier.societe.nom_societe if chantier.societe else None,

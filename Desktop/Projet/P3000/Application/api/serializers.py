@@ -392,7 +392,10 @@ class ChantierSerializer(serializers.ModelSerializer):
             'code_postal', 'cout_materiel', 'cout_main_oeuvre', 
             'cout_sous_traitance', 'description',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'marge_estimee',
-            'marge_fourniture', 'taux_fixe'
+            'marge_fourniture', 'taux_fixe',
+            'maitre_ouvrage_nom_societe', 'maitre_ouvrage_telephone', 'maitre_ouvrage_email', 'maitre_ouvrage_contact',
+            'assistance_maitrise_ouvrage_nom_societe', 'assistance_maitrise_ouvrage_telephone', 'assistance_maitrise_ouvrage_email', 'assistance_maitrise_ouvrage_contact',
+            'maitre_oeuvre_nom_societe', 'maitre_oeuvre_telephone', 'maitre_oeuvre_email', 'maitre_oeuvre_contact'
         ]
 
     def get_marge_fourniture(self, obj):

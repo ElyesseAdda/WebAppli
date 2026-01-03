@@ -16,6 +16,7 @@ import SocieteInfoModal from './SocieteInfoModal';
 import SelectSocieteModal from './SelectSocieteModal';
 import SelectClientModal from './SelectClientModal';
 import ContactSocieteModal from './ContactSocieteModal';
+import DrivePathSelector from './Devis/DrivePathSelector';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
 
@@ -142,6 +143,22 @@ const getNextSousPartieNumero = (items = [], partieId) => {
   return `${parentNumero}.${nextIndex}`;
 };
 
+// Fonction pour slugifier un texte (similaire à custom_slugify du backend)
+const customSlugify = (text) => {
+  if (!text) return '';
+  // Remplacer les espaces multiples par un seul espace
+  text = text.trim().replace(/\s+/g, ' ');
+  // Remplacer les espaces par des tirets
+  text = text.replace(/\s/g, '-');
+  // Supprimer les caractères spéciaux sauf les tirets
+  text = text.replace(/[^a-zA-Z0-9-]/g, '');
+  // Supprimer les tirets multiples
+  text = text.replace(/-+/g, '-');
+  // Supprimer les tirets en début et fin
+  text = text.replace(/^-+|-+$/g, '');
+  return text;
+};
+
 const DevisAvance = () => {
   // États pour les données du devis
   const [devisData, setDevisData] = useState(() => createInitialDevisData());
@@ -216,6 +233,10 @@ const DevisAvance = () => {
   const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
   const [isPieChartVisible, setIsPieChartVisible] = useState(true);
   
+  // États pour le chemin personnalisé du drive
+  const [customDrivePath, setCustomDrivePath] = useState(null);
+  const [showDrivePathSelector, setShowDrivePathSelector] = useState(false);
+  
   // États liés à la persistance locale
   const [sessionUser, setSessionUser] = useState(null);
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
@@ -269,6 +290,32 @@ const DevisAvance = () => {
     }
     return 'devisAvanceDraft_global';
   }, [sessionUser]);
+  
+  // Calculer le chemin par défaut du drive : /societe/nom du chantier
+  const defaultDrivePath = React.useMemo(() => {
+    const societeName = societe.nom_societe || pendingChantierData?.societe?.nom_societe || '';
+    const chantierName = chantier.chantier_name || pendingChantierData?.chantier?.chantier_name || '';
+    
+    if (!societeName && !chantierName) {
+      return '';
+    }
+    
+    const societeSlug = customSlugify(societeName);
+    const chantierSlug = customSlugify(chantierName);
+    
+    if (societeSlug && chantierSlug) {
+      return `${societeSlug}/${chantierSlug}`;
+    } else if (societeSlug) {
+      return societeSlug;
+    } else if (chantierSlug) {
+      return chantierSlug;
+    }
+    
+    return '';
+  }, [societe.nom_societe, chantier.chantier_name, pendingChantierData]);
+  
+  // Chemin effectif à utiliser (personnalisé ou par défaut)
+  const effectiveDrivePath = customDrivePath !== null ? customDrivePath : defaultDrivePath;
   
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -2688,6 +2735,10 @@ const DevisAvance = () => {
                 societeName: societeName,
                 numero: devisData.numero,
               });
+              // Ajouter le chemin personnalisé du drive si défini
+              if (effectiveDrivePath) {
+                urlParams.append('customPath', effectiveDrivePath);
+              }
               alert(
                 "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
               );
@@ -2735,6 +2786,10 @@ const DevisAvance = () => {
                 "Société",
               numero: devisData.numero,
             });
+            // Ajouter le chemin personnalisé du drive si défini
+            if (effectiveDrivePath) {
+              urlParams.append('customPath', effectiveDrivePath);
+            }
 
             alert(
               "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
@@ -3071,7 +3126,79 @@ const DevisAvance = () => {
             </div>
           </div>
 
-          {/* Section 4: Détail du devis */}
+          {/* Section 4: Chemin du drive */}
+          <div style={{
+            backgroundColor: '#f8f9fa',
+            border: '1px solid #e9ecef',
+            borderRadius: '8px',
+            padding: '25px',
+            marginBottom: '30px'
+          }}>
+            <h2 style={{
+              color: '#1976d2',
+              fontSize: '20px',
+              fontWeight: 'bold',
+              margin: '0 0 20px 0',
+              paddingBottom: '10px',
+              borderBottom: '2px solid #1976d2'
+            }}>
+              📁 Chemin du drive pour les documents
+            </h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div style={{
+                backgroundColor: 'white',
+                border: '1px solid #dee2e6',
+                borderRadius: '6px',
+                padding: '15px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <Typography variant="body2" color="text.secondary" style={{ marginBottom: '5px' }}>
+                    Chemin actuel :
+                  </Typography>
+                  <Typography variant="body1" style={{ 
+                    fontFamily: 'monospace',
+                    color: effectiveDrivePath ? '#1976d2' : '#6c757d'
+                  }}>
+                    {effectiveDrivePath || '(Chemin par défaut non disponible)'}
+                  </Typography>
+                  {customDrivePath === null && defaultDrivePath && (
+                    <Typography variant="caption" color="text.secondary" style={{ marginTop: '5px', display: 'block' }}>
+                      Chemin par défaut : {defaultDrivePath}
+                    </Typography>
+                  )}
+                </div>
+                <Button
+                  variant="outlined"
+                  onClick={() => setShowDrivePathSelector(true)}
+                  style={{
+                    marginLeft: '15px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  Modifier le chemin
+                </Button>
+              </div>
+              
+              {customDrivePath !== null && (
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => {
+                    setCustomDrivePath(null);
+                  }}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  Réinitialiser au chemin par défaut
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Section 5: Détail du devis */}
           <div style={{
             backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
@@ -3160,7 +3287,7 @@ const DevisAvance = () => {
             />
           </div>
 
-          {/* Section 5: Récapitulatif */}
+          {/* Section 6: Récapitulatif */}
           <div style={{
             backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
@@ -3191,7 +3318,7 @@ const DevisAvance = () => {
             />
           </div>
 
-          {/* Section 6: Options (prestations supplémentaires) */}
+          {/* Section 7: Options (prestations supplémentaires) */}
           <TableauOption
             devisData={devisData}
             devisItems={devisItems}
@@ -3456,6 +3583,17 @@ const DevisAvance = () => {
             fetchContactsSociete(societeIdToFetch);
           }
         }}
+      />
+
+      {/* Modal de sélection du chemin du drive */}
+      <DrivePathSelector
+        open={showDrivePathSelector}
+        onClose={() => setShowDrivePathSelector(false)}
+        onSelect={(path) => {
+          setCustomDrivePath(path);
+          setShowDrivePathSelector(false);
+        }}
+        defaultPath={defaultDrivePath}
       />
 
       {/* PieChart flottant pour la répartition des coûts */}

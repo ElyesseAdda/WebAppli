@@ -14,6 +14,7 @@ from django.http import StreamingHttpResponse, JsonResponse
 import requests
 from .manager import DriveManager
 from .onlyoffice import OnlyOfficeManager
+from ..utils import encode_filename_for_content_disposition
 
 
 class DriveV2ViewSet(viewsets.ViewSet):
@@ -365,7 +366,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
             
             # Ajouter les headers
             response['Content-Length'] = s3_response['ContentLength']
-            response['Content-Disposition'] = f'inline; filename="{file_path.split("/")[-1]}"'
+            filename = file_path.split("/")[-1]
+            response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
             response['Accept-Ranges'] = 'bytes'
             
             return response
@@ -593,7 +595,8 @@ def proxy_file_view(request):
         
         # Ajouter les headers
         response['Content-Length'] = s3_response['ContentLength']
-        response['Content-Disposition'] = f'inline; filename="{file_path.split("/")[-1]}"'
+        filename = file_path.split("/")[-1]
+        response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
         response['Accept-Ranges'] = 'bytes'
         response['Cache-Control'] = 'no-cache'
         

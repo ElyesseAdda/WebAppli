@@ -5,6 +5,7 @@ Drive Manager - Gestionnaire principal du Drive V2
 from typing import Dict, List, Optional
 from .storage import StorageManager
 import re
+from ..utils import encode_filename_for_content_disposition
 
 
 def normalize_filename(filename: str) -> str:
@@ -250,7 +251,8 @@ class DriveManager:
         try:
             # Extraire le nom du fichier pour le Content-Disposition
             file_name = file_path.split('/')[-1]
-            disposition = f'attachment; filename="{file_name}"'
+            # Pour les URLs présignées S3, utiliser for_presigned_url=True
+            disposition = encode_filename_for_content_disposition(file_name, for_presigned_url=True)
             
             url = self.storage.get_presigned_url(
                 key=file_path,

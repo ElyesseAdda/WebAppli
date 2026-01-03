@@ -255,20 +255,30 @@ export const generatePDFDrive = async (
 const buildApiParams = (documentType, data) => {
   switch (documentType) {
     case "devis_chantier":
-      return {
+      const paramsChantier = {
         devis_id: data.devisId,
         appel_offres_id: data.appelOffresId,
         appel_offres_name: data.appelOffresName,
         societe_name: data.societeName,
       };
+      // Ajouter le chemin personnalisé si fourni
+      if (data.customPath) {
+        paramsChantier.custom_path = data.customPath;
+      }
+      return paramsChantier;
 
     case "devis_normal":
-      return {
+      const paramsNormal = {
         devis_id: data.devisId,
         chantier_id: data.chantierId,
         chantier_name: data.chantierName,
         societe_name: data.societeName,
       };
+      // Ajouter le chemin personnalisé si fourni
+      if (data.customPath) {
+        paramsNormal.custom_path = data.customPath;
+      }
+      return paramsNormal;
 
     case "contrat_sous_traitance":
       return {

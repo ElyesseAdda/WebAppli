@@ -33,6 +33,8 @@ from pathlib import Path
 import json
 import re
 from datetime import datetime
+from urllib.parse import quote
+import unicodedata
 
 # Dossier local pour le stockage de test (sans importer settings)
 LOCAL_STORAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'local_storage')
@@ -72,6 +74,53 @@ def custom_slugify(text):
         text = '-'.join(capitalized_parts)
     
     return text or "Dossier"
+
+def encode_filename_for_content_disposition(filename, disposition_type='attachment', for_presigned_url=False):
+    """
+    Encode un nom de fichier pour l'en-tête Content-Disposition selon RFC 5987.
+    Gère correctement les caractères accentués et spéciaux pour AWS S3.
+    
+    Args:
+        filename: Nom du fichier à encoder
+        disposition_type: Type de disposition ('attachment' ou 'inline')
+        for_presigned_url: Si True, encode pour une URL présignée S3 (format différent)
+        
+    Returns:
+        String encodée pour Content-Disposition
+    """
+    if not filename:
+        return f'{disposition_type}; filename=""'
+    
+    # Pour les URLs présignées S3, utiliser un encodage URL simple
+    if for_presigned_url:
+        # AWS S3 nécessite que ResponseContentDisposition soit compatible ISO-8859-1
+        # Pour les caractères non-ASCII, on doit les translittérer en ASCII
+        try:
+            filename.encode('ascii')
+            # Pas de caractères spéciaux, utiliser le format simple
+            return f'{disposition_type}; filename="{filename}"'
+        except UnicodeEncodeError:
+            # Pour les URLs présignées S3, translittérer les caractères accentués en ASCII
+            # Cela évite les problèmes d'encodage avec AWS S3
+            # Exemple: "DÉPENSE" -> "DEPENSE"
+            ascii_filename = unicodedata.normalize('NFKD', filename)
+            ascii_filename = ascii_filename.encode('ascii', 'ignore').decode('ascii')
+            # Si après translittération le nom est vide, utiliser le nom original encodé en URL
+            if not ascii_filename:
+                ascii_filename = quote(filename, safe='')
+            return f'{disposition_type}; filename="{ascii_filename}"'
+    
+    # Pour les en-têtes HTTP directs, utiliser RFC 5987
+    try:
+        filename.encode('ascii')
+        # Pas de caractères spéciaux, utiliser le format simple
+        return f'{disposition_type}; filename="{filename}"'
+    except UnicodeEncodeError:
+        # Contient des caractères non-ASCII, utiliser RFC 5987
+        # Encoder en UTF-8 puis en pourcentage
+        encoded_filename = quote(filename.encode('utf-8'), safe='')
+        # Utiliser le format filename* avec UTF-8
+        return f'{disposition_type}; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
 def ensure_local_storage():
     """Crée le dossier de stockage local s'il n'existe pas"""

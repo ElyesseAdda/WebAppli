@@ -169,6 +169,7 @@ def generate_devis_travaux_pdf_drive(request):
         chantier_name = request.GET.get('chantier_name', 'Chantier')
         societe_name = request.GET.get('societe_name', 'Société par défaut')
         devis_id = request.GET.get('devis_id')
+        custom_path = request.GET.get('custom_path', '')  # Chemin personnalisé du drive
         
         if not devis_id:
             return JsonResponse({
@@ -190,14 +191,23 @@ def generate_devis_travaux_pdf_drive(request):
         # URL de prévisualisation pour les devis de travaux
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
         
+        # Préparer les paramètres pour la génération du PDF
+        pdf_kwargs = {
+            'chantier_id': chantier_id,
+            'chantier_name': chantier_name,
+            'devis_numero': devis_numero
+        }
+        
+        # Ajouter le chemin personnalisé si fourni
+        if custom_path:
+            pdf_kwargs['custom_path'] = custom_path
+        
         # Générer le PDF et le stocker dans AWS S3
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='devis_travaux',
             preview_url=preview_url,
             societe_name=societe_name,
-            chantier_id=chantier_id,
-            chantier_name=chantier_name,
-            devis_numero=devis_numero
+            **pdf_kwargs
         )
         
         if success:
@@ -266,15 +276,25 @@ def generate_devis_marche_pdf_drive(request):
         # URL de prévisualisation - utiliser l'ID du devis
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
         
+        # Préparer les paramètres pour la génération du PDF
+        pdf_kwargs = {
+            'appel_offres_id': appel_offres_id,
+            'appel_offres_name': appel_offres_name,
+            'devis_name': devis_name  # Passer le nom du devis depuis la DB
+        }
+        
+        # Ajouter le chemin personnalisé si fourni
+        custom_path = request.GET.get('custom_path', '')
+        if custom_path:
+            pdf_kwargs['custom_path'] = custom_path
+        
         # Générer le PDF et le stocker dans AWS S3
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='devis_marche',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
-            appel_offres_id=appel_offres_id,
-            appel_offres_name=appel_offres_name,
-            devis_name=devis_name  # Passer le nom du devis depuis la DB
+            **pdf_kwargs
         )
         
         if success:
@@ -438,7 +458,7 @@ def download_pdf_from_s3(request):
             # Retourner le PDF pour téléchargement
             response = HttpResponse(pdf_content, content_type='application/pdf')
             filename = s3_path.split('/')[-1]
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response['Content-Disposition'] = encode_filename_for_content_disposition(filename)
             return response
         else:
             return JsonResponse({'error': message}, status=500)
@@ -565,7 +585,7 @@ def download_file_from_drive(request):
         
         if success:
             response = HttpResponse(file_content, content_type=content_type)
-            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+            response['Content-Disposition'] = encode_filename_for_content_disposition(file_name)
             return response
         else:
             return JsonResponse({'error': 'Fichier non trouvé'}, status=404)

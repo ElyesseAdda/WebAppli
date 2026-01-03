@@ -161,11 +161,21 @@ class PDFManager:
         Args:
             document_type: Type de document
             societe_name: Nom de la société
-            **kwargs: Paramètres supplémentaires (chantier_name, appel_offres_name, etc.)
+            **kwargs: Paramètres supplémentaires (chantier_name, appel_offres_name, custom_path, etc.)
+                - custom_path: Chemin personnalisé dans le drive (optionnel). Si fourni, ce chemin sera utilisé directement.
         
         Returns:
-            str: Chemin S3 complet
+            str: Chemin S3 complet (sans le nom du fichier)
         """
+        # Si un chemin personnalisé est fourni, l'utiliser directement
+        if 'custom_path' in kwargs and kwargs['custom_path']:
+            custom_path = kwargs['custom_path'].strip()
+            # Nettoyer le chemin (supprimer les slashes en début/fin)
+            custom_path = custom_path.strip('/')
+            # Ajouter le sous-dossier du type de document si nécessaire
+            subfolder = self.document_type_folders.get(document_type, 'Devis')
+            return f"{custom_path}/{subfolder}" if custom_path else subfolder
+        
         societe_slug = custom_slugify(societe_name)
         
         # Déterminer le dossier racine et le sous-dossier
