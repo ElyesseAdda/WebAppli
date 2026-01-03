@@ -79,7 +79,7 @@ const DevisModal = ({
         if (devisData.devis_chantier || !isChantierExistant) {
           defaultNumero = `Devis de travaux n°001.${currentYear}`;
         } else {
-          defaultNumero = `Devis TS n°001.${currentYear}`;
+          defaultNumero = `Devis de travaux n°001.${currentYear} - TS n°01`;
         }
         setFullNumero(defaultNumero);
         handleChange({

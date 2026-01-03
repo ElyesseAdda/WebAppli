@@ -946,7 +946,7 @@ const DevisAvance = () => {
       if (devisType === "chantier" || !isChantierExistant) {
         fallbackNumber = `Devis de travaux n°001.${currentYear}`;
       } else {
-        fallbackNumber = `Devis TS n°001.${currentYear}`;
+        fallbackNumber = `Devis de travaux n°001.${currentYear} - TS n°01`;
       }
       
       setDevisData(prev => ({ ...prev, numero: fallbackNumber }));
