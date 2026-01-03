@@ -527,7 +527,9 @@ class PDFManager:
             'rar': 'application/x-rar-compressed',
             '7z': 'application/x-7z-compressed',
             'tar': 'application/x-tar',
-            'gz': 'application/gzip'
+            'gz': 'application/gzip',
+            'dwg': 'application/acad',
+            'dxf': 'application/dxf'
         }
         
         return mime_types.get(extension, 'application/octet-stream')

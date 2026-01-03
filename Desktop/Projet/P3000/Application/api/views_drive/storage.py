@@ -8,6 +8,31 @@ from typing import Optional, Dict, List, BinaryIO
 from datetime import datetime, timedelta
 import mimetypes
 
+# Mapping personnalisé pour les types MIME non reconnus par mimetypes
+CUSTOM_MIME_TYPES = {
+    '.dwg': 'application/acad',
+    '.dxf': 'application/dxf',
+}
+
+def get_content_type(filename: str) -> str:
+    """
+    Détermine le type MIME d'un fichier en utilisant mimetypes et un mapping personnalisé
+    
+    Args:
+        filename: Nom du fichier avec extension
+        
+    Returns:
+        Type MIME du fichier
+    """
+    # Vérifier d'abord le mapping personnalisé
+    extension = os.path.splitext(filename)[1].lower()
+    if extension in CUSTOM_MIME_TYPES:
+        return CUSTOM_MIME_TYPES[extension]
+    
+    # Utiliser mimetypes standard
+    content_type, _ = mimetypes.guess_type(filename)
+    return content_type or 'application/octet-stream'
+
 
 class StorageManager:
     """
@@ -87,7 +112,7 @@ class StorageManager:
                         file_name = obj['Key'].split('/')[-1]
                         
                         # Déterminer le type de contenu
-                        content_type, _ = mimetypes.guess_type(file_name)
+                        content_type = get_content_type(file_name)
                         
                         files.append({
                             'name': file_name,
@@ -95,7 +120,7 @@ class StorageManager:
                             'size': obj['Size'],
                             'last_modified': obj['LastModified'].isoformat(),
                             'type': 'file',
-                            'content_type': content_type or 'application/octet-stream'
+                            'content_type': content_type
                         })
             
             return {
@@ -481,14 +506,14 @@ class StorageManager:
                         
                         # Vérifier si le terme de recherche est dans le nom
                         if file_name and search_lower in file_name.lower():
-                            content_type, _ = mimetypes.guess_type(file_name)
+                            content_type = get_content_type(file_name)
                             files.append({
                                 'name': file_name,
                                 'path': key,
                                 'size': obj['Size'],
                                 'last_modified': obj['LastModified'].isoformat(),
                                 'type': 'file',
-                                'content_type': content_type or 'application/octet-stream'
+                                'content_type': content_type
                             })
                             
                             # Limiter les résultats
@@ -551,13 +576,13 @@ class StorageManager:
         """
         try:
             # Déterminer le content type
-            content_type, _ = mimetypes.guess_type(key)
+            content_type = get_content_type(key)
             
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
                 Key=key,
                 Body=content,
-                ContentType=content_type or 'application/octet-stream'
+                ContentType=content_type
             )
             
             return True

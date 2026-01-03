@@ -104,9 +104,21 @@ export const useUpload = () => {
       // Déterminer le Content-Type du fichier
       // S'assurer qu'on utilise un type valide, sinon utiliser application/octet-stream
       let fileContentType = file.type || 'application/octet-stream';
-      // Si le type est vide ou invalide, utiliser application/octet-stream
-      if (!fileContentType || fileContentType === '') {
-        fileContentType = 'application/octet-stream';
+      // Si le type est vide ou invalide, détecter par extension
+      if (!fileContentType || fileContentType === '' || fileContentType === 'application/octet-stream') {
+        const extension = fileNameToUse.split('.').pop()?.toLowerCase();
+        const mimeTypeMap = {
+          'dwg': 'application/acad',
+          'dxf': 'application/dxf',
+          'pdf': 'application/pdf',
+          'doc': 'application/msword',
+          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'xls': 'application/vnd.ms-excel',
+          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'ppt': 'application/vnd.ms-powerpoint',
+          'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        };
+        fileContentType = mimeTypeMap[extension] || 'application/octet-stream';
       }
       
       // Si on doit remplacer un fichier existant, le supprimer d'abord
