@@ -100,7 +100,7 @@ class PDFManager:
                 custom_name += '.pdf'
             # Nettoyer le nom pour qu'il soit compatible avec S3
             clean_name = clean_filename_for_s3(custom_name)
-            print(f"📝 Nom de fichier personnalisé nettoyé: '{custom_name}' -> '{clean_name}'")
+            # print(f"📝 Nom de fichier personnalisé nettoyé: '{custom_name}' -> '{clean_name}'")
             return clean_name
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -142,17 +142,17 @@ class PDFManager:
         elif document_type == 'devis_travaux':
             # Utiliser le numéro du devis depuis la DB (sans timestamp ni ID)
             devis_numero = kwargs.get('devis_numero', 'devis_travaux')
-            print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
             return f"{devis_numero}.pdf"
         
         elif document_type == 'devis_marche':
             # Utiliser le numéro du devis depuis la DB (sans timestamp ni ID)
             devis_numero = kwargs.get('numero', kwargs.get('devis_name', 'devis_marche'))
-            print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
-            print(f"🔍 DEBUG generate_pdf_filename - kwargs: {kwargs}")
+            # print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - kwargs: {kwargs}")
             # Nettoyer le nom pour qu'il soit compatible avec S3, mais préserver le nom original
             clean_name = clean_filename_for_s3(devis_numero)
-            print(f"🔍 DEBUG generate_pdf_filename - clean_name après nettoyage: '{clean_name}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - clean_name après nettoyage: '{clean_name}'")
             return f"{clean_name}.pdf"
         
         elif document_type == 'contrat_sous_traitance':
@@ -162,7 +162,7 @@ class PDFManager:
             sous_traitant_slug = custom_slugify(sous_traitant_name)
             chantier_slug = custom_slugify(chantier_name)
             filename = f"Contrat_{sous_traitant_slug}_{chantier_slug}.pdf"
-            print(f"🔍 DEBUG generate_pdf_filename - Contrat ST: '{filename}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - Contrat ST: '{filename}'")
             return filename
         
         elif document_type == 'avenant_sous_traitance':
@@ -173,25 +173,25 @@ class PDFManager:
             sous_traitant_slug = custom_slugify(sous_traitant_name)
             chantier_slug = custom_slugify(chantier_name)
             filename = f"Avenant_{avenant_numero}_{sous_traitant_slug}_{chantier_slug}.pdf"
-            print(f"🔍 DEBUG generate_pdf_filename - Avenant ST: '{filename}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - Avenant ST: '{filename}'")
             return filename
         
         elif document_type == 'situation':
             # Utiliser le numero_situation depuis la DB (sans timestamp ni ID)
             numero_situation = kwargs.get('numero_situation', 'situation')
-            print(f"🔍 DEBUG generate_pdf_filename - numero_situation reçu: '{numero_situation}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - numero_situation reçu: '{numero_situation}'")
             return f"{numero_situation}.pdf"
         
         elif document_type == 'bon_commande':
             # Utiliser le numero_bon_commande depuis la DB (sans timestamp ni ID)
             numero_bon_commande = kwargs.get('numero_bon_commande', 'bon_commande')
-            print(f"🔍 DEBUG generate_pdf_filename - numero_bon_commande reçu: '{numero_bon_commande}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - numero_bon_commande reçu: '{numero_bon_commande}'")
             return f"{numero_bon_commande}.pdf"
         
         elif document_type == 'facture':
             # Utiliser le numéro de la facture depuis la DB (sans timestamp ni ID)
             numero = kwargs.get('numero', 'Facture n°01.2025')
-            print(f"🔍 DEBUG generate_pdf_filename - numero facture reçu: '{numero}'")
+            # print(f"🔍 DEBUG generate_pdf_filename - numero facture reçu: '{numero}'")
             return f"{numero}.pdf"
         
         else:
@@ -381,7 +381,7 @@ class PDFManager:
         for node_path in node_paths:
             try:
                 result = subprocess.run([node_path, '--version'], check=True, capture_output=True, text=True)
-                print(f"✅ Node.js trouvé: {node_path} - Version: {result.stdout.strip()}")
+                # print(f"✅ Node.js trouvé: {node_path} - Version: {result.stdout.strip()}")
                 node_found = True
                 break
             except (subprocess.CalledProcessError, FileNotFoundError):
@@ -445,7 +445,7 @@ class PDFManager:
             temp_pdf_path = os.path.join(self.temp_dir, output_filename)
             
             # 3. Générer le PDF avec Puppeteer
-            print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
+            # print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
             command = ['node', script_path, preview_url, temp_pdf_path]
             
             result = subprocess.run(
@@ -459,7 +459,7 @@ class PDFManager:
             if not os.path.exists(temp_pdf_path):
                 return False, "Le fichier PDF n'a pas été généré par Puppeteer", "", False
             
-            print(f"✅ PDF généré avec succès: {temp_pdf_path}")
+            # print(f"✅ PDF généré avec succès: {temp_pdf_path}")
             
             # 4. Déterminer le nom et l'emplacement S3
             filename = self.generate_pdf_filename(document_type, **kwargs)
@@ -477,16 +477,16 @@ class PDFManager:
             if has_custom_filename:
                 # Nom personnalisé fourni : pas de vérification de conflit
                 conflict_detected = False
-                print(f"📝 Nom de fichier personnalisé fourni: {filename} - Pas de vérification de conflit")
+                # print(f"📝 Nom de fichier personnalisé fourni: {filename} - Pas de vérification de conflit")
             else:
                 # Vérifier s'il y a un conflit avec le nom généré automatiquement
                 conflict_detected = self.check_file_conflict(s3_file_path)
             
             if conflict_detected:
-                print(f"⚠️ Conflit détecté: {s3_file_path}")
+                # print(f"⚠️ Conflit détecté: {s3_file_path}")
                 
                 if force_replace:
-                    print(f"🔄 Remplacement forcé activé - déplacement de l'ancien fichier vers l'historique")
+                    # print(f"🔄 Remplacement forcé activé - déplacement de l'ancien fichier vers l'historique")
                     # Déplacer l'ancien fichier vers l'historique au lieu de le supprimer
                     try:
                         # Créer le dossier Historique à la racine du Drive
@@ -498,12 +498,12 @@ class PDFManager:
                         old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
                         old_s3_path = f"{historique_path}/{old_filename}"
                         
-                        print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
+                        # print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
                         self.move_file_in_s3(s3_file_path, old_s3_path)
-                        print(f"🗑️ Ancien fichier déplacé vers l'historique: {old_s3_path}")
+                        # print(f"🗑️ Ancien fichier déplacé vers l'historique: {old_s3_path}")
                         conflict_detected = False  # Plus de conflit après déplacement
                     except Exception as e:
-                        print(f"❌ Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}")
+                        # print(f"❌ Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}")
                         return False, f"Erreur lors du déplacement de l'ancien fichier vers l'historique: {str(e)}", "", False
                 else:
                 # Retourner immédiatement avec l'information de conflit
@@ -511,7 +511,7 @@ class PDFManager:
                     return False, "Conflit de fichier détecté - confirmation requise", s3_file_path, True
             
             # 7. Uploader le nouveau PDF dans S3 (seulement si pas de conflit)
-            print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
+            # print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
             success = upload_file_to_s3_robust(temp_pdf_path, s3_file_path)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", "", False
@@ -519,11 +519,11 @@ class PDFManager:
             # 8. Nettoyer le fichier temporaire
             try:
                 os.remove(temp_pdf_path)
-                print(f"🧹 Fichier temporaire supprimé: {temp_pdf_path}")
+                # print(f"🧹 Fichier temporaire supprimé: {temp_pdf_path}")
             except:
                 pass
             
-            print(f"🎉 PDF stocké avec succès dans S3: {s3_file_path}")
+            # print(f"🎉 PDF stocké avec succès dans S3: {s3_file_path}")
             return True, "PDF généré et stocké avec succès", s3_file_path, conflict_detected
             
         except subprocess.TimeoutExpired:
@@ -674,7 +674,7 @@ class PDFManager:
                 return False  # Pas de conflit
                 
         except Exception as e:
-            print(f"❌ Erreur lors de la vérification du conflit: {str(e)}")
+            # print(f"❌ Erreur lors de la vérification du conflit: {str(e)}")
             return False
 
     def move_file_in_s3(self, old_path: str, new_path: str) -> bool:
@@ -699,11 +699,11 @@ class PDFManager:
             # Supprimer l'ancien fichier
             s3_client.delete_object(Bucket=bucket_name, Key=old_path)
             
-            print(f"✅ Fichier déplacé avec succès: {old_path} → {new_path}")
+            # print(f"✅ Fichier déplacé avec succès: {old_path} → {new_path}")
             return True
             
         except Exception as e:
-            print(f"❌ Erreur lors du déplacement du fichier: {str(e)}")
+            # print(f"❌ Erreur lors du déplacement du fichier: {str(e)}")
             return False
 
     def replace_file_with_confirmation(self, document_type: str, preview_url: str, societe_name: str, **kwargs) -> Tuple[bool, str, str]:
@@ -741,7 +741,7 @@ class PDFManager:
             temp_pdf_path = os.path.join(self.temp_dir, output_filename)
             
             # 3. Générer le PDF avec Puppeteer
-            print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
+            # print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
             command = ['node', script_path, preview_url, temp_pdf_path]
             
             result = subprocess.run(
@@ -755,21 +755,21 @@ class PDFManager:
             if not os.path.exists(temp_pdf_path):
                 return False, "Le fichier PDF n'a pas été généré par Puppeteer", "", False
             
-            print(f"✅ PDF généré avec succès: {temp_pdf_path}")
+            # print(f"✅ PDF généré avec succès: {temp_pdf_path}")
             
             # 4. Déterminer le nom et l'emplacement S3
             filename = self.generate_pdf_filename(document_type, **kwargs)
             s3_folder_path = self.get_s3_folder_path(document_type, societe_name, **kwargs)
             
             # 5. Créer le dossier S3 s'il n'existe pas
-            print(f"📁 Création du dossier S3: {s3_folder_path}")
+            # print(f"📁 Création du dossier S3: {s3_folder_path}")
             create_s3_folder_recursive(s3_folder_path)
             
             # 6. Vérifier le conflit et gérer le remplacement
             s3_file_path = f"{s3_folder_path}/{filename}"
             
             if self.check_file_conflict(s3_file_path):
-                print(f"⚠️ Remplacement du fichier existant: {s3_file_path}")
+                # print(f"⚠️ Remplacement du fichier existant: {s3_file_path}")
                 
                 # Créer le dossier Historique à la racine du Drive
                 historique_path = "Historique"
@@ -780,11 +780,11 @@ class PDFManager:
                 old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
                 old_s3_path = f"{historique_path}/{old_filename}"
                 
-                print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
+                # print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
                 self.move_file_in_s3(s3_file_path, old_s3_path)
             
             # 7. Uploader le nouveau PDF dans S3
-            print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
+            # print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
             success = upload_file_to_s3(temp_pdf_path, s3_file_path)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", ""
@@ -792,11 +792,11 @@ class PDFManager:
             # 8. Nettoyer le fichier temporaire
             try:
                 os.remove(temp_pdf_path)
-                print(f"🧹 Fichier temporaire supprimé: {temp_pdf_path}")
+                # print(f"🧹 Fichier temporaire supprimé: {temp_pdf_path}")
             except:
                 pass
             
-            print(f"🎉 PDF remplacé avec succès dans S3: {s3_file_path}")
+            # print(f"🎉 PDF remplacé avec succès dans S3: {s3_file_path}")
             return True, "PDF généré et remplacé avec succès", s3_file_path
             
         except subprocess.TimeoutExpired:

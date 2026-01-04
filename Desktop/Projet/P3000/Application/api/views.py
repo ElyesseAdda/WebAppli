@@ -5761,9 +5761,9 @@ class SituationViewSet(viewsets.ModelViewSet):
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
             # Créer la situation
-            print("✅ Validation réussie, création de la situation...")
+            # print("✅ Validation réussie, création de la situation...")
             situation = serializer.save()
-            print(f"✅ Situation créée avec ID: {situation.id}")
+            # print(f"✅ Situation créée avec ID: {situation.id}")
 
             # Créer les lignes de situation
             for ligne_data in data.get('lignes', []):
@@ -7635,7 +7635,7 @@ def generate_situation_pdf(request):
         for path in node_paths:
             try:
                 result = subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
-                print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
+                # print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
                 node_found = True
                 node_path = path
                 break

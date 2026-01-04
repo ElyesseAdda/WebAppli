@@ -1331,15 +1331,15 @@ def upload_file_to_s3_robust(local_file_path: str, s3_file_path: str) -> bool:
         
         # Vérifier la taille du fichier
         file_size = os.path.getsize(local_file_path)
-        print(f"📊 Taille du fichier: {file_size} octets ({file_size / (1024*1024):.2f} MB)")
+        # print(f"📊 Taille du fichier: {file_size} octets ({file_size / (1024*1024):.2f} MB)")
         
         # Upload avec gestion de flux personnalisée
-        print(f"🚀 Upload robuste de {local_file_path} vers S3: {s3_file_path}")
+        # print(f"🚀 Upload robuste de {local_file_path} vers S3: {s3_file_path}")
         
         # Lire le fichier en entier pour s'assurer qu'il n'y a pas de troncature
         with open(local_file_path, 'rb') as file:
             file_content = file.read()
-            print(f"📖 Fichier lu en mémoire: {len(file_content)} octets")
+            # print(f"📖 Fichier lu en mémoire: {len(file_content)} octets")
             
             # Vérifier que tout le contenu a été lu
             if len(file_content) != file_size:
@@ -1356,18 +1356,18 @@ def upload_file_to_s3_robust(local_file_path: str, s3_file_path: str) -> bool:
                 ServerSideEncryption='AES256'
             )
         
-        print(f"✅ Fichier uploadé avec succès: {s3_file_path}")
+        # print(f"✅ Fichier uploadé avec succès: {s3_file_path}")
         
         # Vérifier que le fichier a bien été uploadé
         try:
             response = s3_client.head_object(Bucket=bucket_name, Key=s3_file_path)
             uploaded_size = response['ContentLength']
-            print(f"✅ Vérification S3: fichier uploadé avec {uploaded_size} octets")
+            # print(f"✅ Vérification S3: fichier uploadé avec {uploaded_size} octets")
             if uploaded_size != file_size:
-                print(f"⚠️ ATTENTION: Taille différente! Local: {file_size}, S3: {uploaded_size}")
+                # print(f"⚠️ ATTENTION: Taille différente! Local: {file_size}, S3: {uploaded_size}")
                 return False
         except Exception as e:
-            print(f"❌ Erreur lors de la vérification S3: {str(e)}")
+            # print(f"❌ Erreur lors de la vérification S3: {str(e)}")
             return False
         
         return True

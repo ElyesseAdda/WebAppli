@@ -33,6 +33,48 @@ import {
 } from '@mui/icons-material';
 import DrivePathSelector from './Devis/DrivePathSelector';
 
+// Fonction pour nettoyer le chemin de drive (retirer les préfixes)
+const cleanDrivePath = (drivePath) => {
+  if (!drivePath) {
+    return null;
+  }
+  
+  let path = String(drivePath).trim();
+  
+  // Retirer les préfixes Appels_Offres/ et Chantiers/
+  if (path.startsWith('Appels_Offres/')) {
+    path = path.substring('Appels_Offres/'.length);
+  } else if (path.startsWith('Chantiers/')) {
+    path = path.substring('Chantiers/'.length);
+  }
+  
+  // Nettoyer les slashes en début et fin
+  path = path.replace(/^\/+|\/+$/g, '');
+  
+  // Retourner null si vide après nettoyage
+  if (!path) {
+    return null;
+  }
+  
+  return path;
+};
+
+// Fonction pour obtenir le chemin complet avec préfixe pour l'affichage dans DrivePathSelector
+const getFullPathForSelector = (path, itemType) => {
+  if (!path) {
+    return '';
+  }
+  
+  // Si le chemin commence déjà par un préfixe, le retourner tel quel
+  if (path.startsWith('Chantiers/') || path.startsWith('Appels_Offres/')) {
+    return path;
+  }
+  
+  // Ajouter le préfixe selon le type
+  const prefix = itemType === 'chantier' ? 'Chantiers/' : 'Appels_Offres/';
+  return `${prefix}${path}`;
+};
+
 const ChantiersDrivePaths = () => {
   const [chantiers, setChantiers] = useState([]);
   const [filteredChantiers, setFilteredChantiers] = useState([]);
@@ -70,8 +112,10 @@ const ChantiersDrivePaths = () => {
       setLoading(true);
       setError(null);
       const response = await axios.get('/api/chantiers/drive-paths/');
-      setChantiers(response.data);
-      setFilteredChantiers(response.data);
+      // Filtrer pour ne garder que les chantiers (exclure les appels d'offres)
+      const chantiersOnly = response.data.filter(item => item.type === 'chantier');
+      setChantiers(chantiersOnly);
+      setFilteredChantiers(chantiersOnly);
     } catch (err) {
       console.error('Erreur lors de la récupération des chemins de drive:', err);
       setError('Erreur lors de la récupération des données');
@@ -117,15 +161,31 @@ const ChantiersDrivePaths = () => {
   const handleSavePath = async () => {
     if (!selectedItem) return;
 
+    // Nettoyer le chemin sélectionné (retirer les préfixes)
+    const cleanedNewPath = selectedPath !== null ? cleanDrivePath(selectedPath) : null;
+    const cleanedCurrentPath = selectedItem.drive_path_stored ? cleanDrivePath(selectedItem.drive_path_stored) : null;
+    
+    // Vérifier si le chemin change réellement
+    // Si selectedPath est null, cela signifie qu'on veut garder le chemin actuel
+    // Si selectedPath est défini et identique au chemin actuel, ne rien faire
+    if (selectedPath !== null && cleanedNewPath === cleanedCurrentPath) {
+      setSnackbar({
+        open: true,
+        message: 'Le chemin n\'a pas changé',
+        severity: 'info'
+      });
+      handleCloseEditModal();
+      return;
+    }
+
     setSaving(true);
     try {
       const endpoint = selectedItem.type === 'chantier' 
         ? `/api/chantier/${selectedItem.id}/update_drive_path/`
         : `/api/appels-offres/${selectedItem.id}/update_drive_path/`;
       
-      // Si selectedPath est défini et différent du chemin actuel, l'utiliser
-      // Sinon, garder le chemin actuel (ne pas le modifier)
-      const pathToSave = selectedPath !== null ? selectedPath : selectedItem.drive_path_stored;
+      // Envoyer le chemin nettoyé (sans préfixe)
+      const pathToSave = selectedPath !== null ? cleanedNewPath : selectedItem.drive_path_stored;
       
       const response = await axios.patch(endpoint, {
         drive_path: pathToSave || null
@@ -138,7 +198,7 @@ const ChantiersDrivePaths = () => {
       if (response.data.success) {
         setSnackbar({
           open: true,
-          message: response.data.message || 'Chemin mis à jour avec succès',
+          message: response.data.message || 'Chemin mis à jour avec succès. Les fichiers ont été transférés automatiquement.',
           severity: 'success'
         });
         handleCloseEditModal();
@@ -400,9 +460,14 @@ const ChantiersDrivePaths = () => {
               </Typography>
             )}
             {selectedPath && selectedPath !== (selectedItem?.drive_path_stored || selectedItem?.drive_path_base || '') && (
-              <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
-                Nouveau chemin sélectionné: <strong>{selectedPath}</strong>
-              </Typography>
+              <>
+                <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                  Nouveau chemin sélectionné: <strong>{selectedPath}</strong>
+                </Typography>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Tous les fichiers et dossiers seront automatiquement transférés de l'ancien chemin vers le nouveau lors de l'enregistrement.
+                </Alert>
+              </>
             )}
           </Box>
           <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
@@ -451,7 +516,9 @@ const ChantiersDrivePaths = () => {
         open={showPathSelector}
         onClose={() => setShowPathSelector(false)}
         onSelect={handlePathSelected}
-        defaultPath={selectedPath || selectedItem?.drive_path_stored || selectedItem?.drive_path_base || ''}
+        defaultPath={selectedPath 
+          ? getFullPathForSelector(selectedPath, selectedItem?.type || 'chantier')
+          : selectedItem?.drive_path || ''}
       />
 
       {/* Snackbar pour les notifications */}

@@ -489,22 +489,49 @@ class DriveAutomation:
         """
         Transfère récursivement un dossier et son contenu
         """
+        # S'assurer que les chemins se terminent par /
+        if not source_folder.endswith('/'):
+            source_folder += '/'
+        if not dest_folder.endswith('/'):
+            dest_folder += '/'
+        
         # Créer le dossier de destination
         create_s3_folder_recursive(dest_folder)
         
         # Lister le contenu
-        content = list_s3_folder_content(source_folder)
+        try:
+            content = list_s3_folder_content(source_folder)
+        except Exception as e:
+            return
         
         # Transférer les fichiers
         for file in content['files']:
-            source_file_path = f"{source_folder}/{file['name']}"
-            dest_file_path = f"{dest_folder}/{file['name']}"
+            # Utiliser file['path'] qui contient le chemin complet, ou construire le chemin
+            source_file_path = file.get('path') or f"{source_folder.rstrip('/')}/{file['name']}"
+            # Construire le chemin de destination en remplaçant le préfixe source par le préfixe destination
+            source_folder_clean = source_folder.rstrip('/')
+            if source_file_path.startswith(source_folder_clean):
+                relative_path = source_file_path[len(source_folder_clean):].lstrip('/')
+                dest_file_path = f"{dest_folder.rstrip('/')}/{relative_path}"
+            else:
+                # Fallback : utiliser le nom du fichier uniquement
+                dest_file_path = f"{dest_folder.rstrip('/')}/{file['name']}"
+            
             move_s3_file(source_file_path, dest_file_path)
         
         # Transférer les sous-dossiers récursivement
         for subfolder in content['folders']:
-            source_subfolder = f"{source_folder}/{subfolder['name']}"
-            dest_subfolder = f"{dest_folder}/{subfolder['name']}"
+            # Utiliser subfolder['path'] qui contient le chemin complet, ou construire le chemin
+            source_subfolder = subfolder.get('path') or f"{source_folder.rstrip('/')}/{subfolder['name']}"
+            # Construire le chemin de destination en remplaçant le préfixe source par le préfixe destination
+            # Utiliser startswith pour éviter les remplacements incorrects
+            source_folder_clean = source_folder.rstrip('/')
+            if source_subfolder.startswith(source_folder_clean):
+                relative_path = source_subfolder[len(source_folder_clean):].lstrip('/')
+                dest_subfolder = f"{dest_folder.rstrip('/')}/{relative_path}"
+            else:
+                # Fallback : utiliser le nom du dossier uniquement
+                dest_subfolder = f"{dest_folder.rstrip('/')}/{subfolder['name']}"
             self._transfer_folder_recursive(source_subfolder, dest_subfolder)
     
     def _delete_folder_recursive(self, folder_path: str):
@@ -618,9 +645,70 @@ class DriveAutomation:
         except Exception:
             return False
     
+    def list_all_s3_objects_recursive(self, prefix: str) -> List[Dict]:
+        """
+        Liste récursivement tous les objets (fichiers) dans un préfixe donné.
+        Utilise le paginator AWS pour gérer la pagination automatiquement.
+        
+        Args:
+            prefix: Préfixe du chemin (doit se terminer par /)
+            
+        Returns:
+            List[Dict]: Liste de dictionnaires contenant 'Key' (chemin complet) et autres métadonnées
+        """
+        from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+        
+        if not is_s3_available():
+            # Pour le stockage local, utiliser list_local_folder_content
+            from .utils import list_local_folder_content
+            content = list_local_folder_content(prefix)
+            all_files = []
+            for file in content['files']:
+                all_files.append({'Key': file['path']})
+            for folder in content['folders']:
+                # Récursif pour les dossiers locaux
+                sub_files = self.list_all_s3_objects_recursive(folder['path'])
+                all_files.extend(sub_files)
+            return all_files
+        
+        s3_client = get_s3_client()
+        bucket_name = get_s3_bucket_name()
+        
+        all_objects = []
+        
+        try:
+            # Utiliser le paginator pour gérer automatiquement la pagination
+            # SANS Delimiter pour obtenir TOUS les objets récursivement
+            paginator = s3_client.get_paginator('list_objects_v2')
+            page_iterator = paginator.paginate(
+                Bucket=bucket_name,
+                Prefix=prefix
+                # Pas de Delimiter = liste récursive complète
+            )
+            
+            for page in page_iterator:
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        # Ignorer les objets .keep (marqueurs de dossiers)
+                        if obj['Key'].endswith('/.keep'):
+                            continue
+                        # Ignorer les objets qui se terminent par / (ce sont des dossiers vides)
+                        if obj['Key'].endswith('/'):
+                            continue
+                        all_objects.append(obj)
+            
+            return all_objects
+            
+        except Exception as e:
+            import traceback
+            print(f"❌ Erreur lors de la liste récursive: {str(e)}")
+            print(traceback.format_exc())
+            return []
+    
     def transfer_chantier_drive_path(self, ancien_chemin: str, nouveau_chemin: str) -> bool:
         """
         Transfère tous les fichiers d'un chantier d'un chemin vers un autre.
+        Utilise une liste récursive complète pour s'assurer de transférer TOUS les fichiers.
         
         Args:
             ancien_chemin: Ancien chemin (relatif, sans préfixe Chantiers/)
@@ -640,28 +728,35 @@ class DriveAutomation:
             if not dest_path.endswith('/'):
                 dest_path += '/'
             
-            # Vérifier que le dossier source existe
-            try:
-                content = list_s3_folder_content(source_path)
-            except Exception:
-                # Le dossier source n'existe pas ou est vide, rien à transférer
-                print(f"⚠️ Le dossier source n'existe pas ou est vide: {source_path}")
-                return True
+            # Lister récursivement TOUS les objets (fichiers) dans le dossier source
+            all_objects = self.list_all_s3_objects_recursive(source_path)
+            
+            if not all_objects:
+                return True  # Pas d'erreur si le dossier est vide
             
             # Créer la structure de destination si nécessaire
             create_s3_folder_recursive(dest_path)
             
             # Transférer tous les fichiers
-            for file in content['files']:
-                source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
-                dest_file_path = f"{dest_path.rstrip('/')}/{file['name']}"
-                move_s3_file(source_file_path, dest_file_path)
-            
-            # Transférer tous les dossiers récursivement
-            for folder in content['folders']:
-                source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
-                dest_folder_path = f"{dest_path.rstrip('/')}/{folder['name']}"
-                self._transfer_folder_recursive(source_folder_path, dest_folder_path)
+            for obj in all_objects:
+                source_key = obj['Key']
+                
+                # Vérifier que le fichier commence bien par le préfixe source
+                if not source_key.startswith(source_path):
+                    continue
+                
+                # Calculer le chemin de destination en remplaçant le préfixe source par le préfixe destination
+                relative_path = source_key[len(source_path):]
+                dest_key = dest_path + relative_path
+                
+                # Créer les dossiers parents si nécessaire
+                dest_dir = '/'.join(dest_key.split('/')[:-1])
+                if dest_dir:
+                    create_s3_folder_recursive(dest_dir + '/')
+                
+                success = move_s3_file(source_key, dest_key)
+                if not success:
+                    return False
             
             return True
             
@@ -674,6 +769,7 @@ class DriveAutomation:
     def transfer_appel_offres_drive_path(self, ancien_chemin: str, nouveau_chemin: str) -> bool:
         """
         Transfère tous les fichiers d'un appel d'offres d'un chemin vers un autre.
+        Utilise une liste récursive complète pour s'assurer de transférer TOUS les fichiers.
         
         Args:
             ancien_chemin: Ancien chemin (relatif, sans préfixe Appels_Offres/)
@@ -693,28 +789,35 @@ class DriveAutomation:
             if not dest_path.endswith('/'):
                 dest_path += '/'
             
-            # Vérifier que le dossier source existe
-            try:
-                content = list_s3_folder_content(source_path)
-            except Exception:
-                # Le dossier source n'existe pas ou est vide, rien à transférer
-                print(f"⚠️ Le dossier source n'existe pas ou est vide: {source_path}")
-                return True
+            # Lister récursivement TOUS les objets (fichiers) dans le dossier source
+            all_objects = self.list_all_s3_objects_recursive(source_path)
+            
+            if not all_objects:
+                return True  # Pas d'erreur si le dossier est vide
             
             # Créer la structure de destination si nécessaire
             create_s3_folder_recursive(dest_path)
             
             # Transférer tous les fichiers
-            for file in content['files']:
-                source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
-                dest_file_path = f"{dest_path.rstrip('/')}/{file['name']}"
-                move_s3_file(source_file_path, dest_file_path)
-            
-            # Transférer tous les dossiers récursivement
-            for folder in content['folders']:
-                source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
-                dest_folder_path = f"{dest_path.rstrip('/')}/{folder['name']}"
-                self._transfer_folder_recursive(source_folder_path, dest_folder_path)
+            for obj in all_objects:
+                source_key = obj['Key']
+                
+                # Vérifier que le fichier commence bien par le préfixe source
+                if not source_key.startswith(source_path):
+                    continue
+                
+                # Calculer le chemin de destination en remplaçant le préfixe source par le préfixe destination
+                relative_path = source_key[len(source_path):]
+                dest_key = dest_path + relative_path
+                
+                # Créer les dossiers parents si nécessaire
+                dest_dir = '/'.join(dest_key.split('/')[:-1])
+                if dest_dir:
+                    create_s3_folder_recursive(dest_dir + '/')
+                
+                success = move_s3_file(source_key, dest_key)
+                if not success:
+                    return False
             
             return True
             
