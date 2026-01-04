@@ -2404,7 +2404,8 @@ const SituationCreationModal = ({
           situationData
         );
         
-        // Régénérer le PDF avec gestion de l'historique si le numéro a changé
+        // Générer le PDF dans le drive après modification
+        // Si le numéro a changé, utiliser l'endpoint regenerate-pdf pour gérer l'historique
         if (oldNumeroSituation && response.data.numero_situation && oldNumeroSituation !== response.data.numero_situation) {
           try {
             console.log('🔄 Régénération du PDF de la situation modifiée...');
@@ -2422,6 +2423,45 @@ const SituationCreationModal = ({
             }
           } catch (pdfError) {
             console.warn('⚠️ Erreur lors de la régénération du PDF:', pdfError);
+          }
+        } else {
+          // Si le numéro n'a pas changé, utiliser le système universel avec gestion des conflits
+          try {
+            console.log('🔄 Génération du PDF de la situation modifiée dans le Drive...');
+            const driveData = {
+              situationId: response.data.id,
+              chantierId: chantier.id,
+              chantierName: chantier.chantier_name || chantier.nom || "Chantier",
+              societeName:
+                chantier.societe?.nom_societe ||
+                chantier.societe?.nom ||
+                "Société",
+              numeroSituation: response.data.numero_situation || numeroSituation,
+            };
+
+            const pdfResult = await generatePDFDrive("situation", driveData, {
+              onSuccess: (result) => {
+                console.log("✅ PDF de la situation généré et stocké dans le Drive:", result);
+              },
+              onError: (error) => {
+                console.error("❌ Erreur lors de la génération du PDF:", error);
+              },
+            });
+
+            // Si un conflit est détecté, ne pas fermer le modal (l'utilisateur doit résoudre le conflit)
+            if (pdfResult && pdfResult.conflict_detected) {
+              console.log("⚠️ Conflit détecté - le modal de conflit est affiché. Attente de la résolution par l'utilisateur.");
+              // Ne pas fermer le modal - l'utilisateur doit résoudre le conflit via le modal
+              return;
+            }
+          } catch (pdfError) {
+            console.error("❌ Erreur lors de la génération du PDF:", pdfError);
+            // Si l'erreur est un conflit, ne pas fermer le modal
+            if (pdfError.response && pdfError.response.status === 409) {
+              console.log("⚠️ Conflit détecté via erreur - le modal de conflit est affiché.");
+              return;
+            }
+            // Pour les autres erreurs, continuer quand même
           }
         }
       } else {

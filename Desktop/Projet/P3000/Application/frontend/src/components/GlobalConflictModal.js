@@ -232,7 +232,7 @@ const GlobalConflictModal = () => {
 
       // Pour les nouveaux types, utiliser le système universel
       if (
-        ["devis_chantier", "devis_travaux", "devis_marche", "planning_hebdo", "rapport_agents", "bon_commande"].includes(
+        ["devis_chantier", "devis_travaux", "devis_marche", "devis_normal", "planning_hebdo", "rapport_agents", "bon_commande", "situation"].includes(
           conflictData.documentType
         )
       ) {
@@ -244,6 +244,14 @@ const GlobalConflictModal = () => {
             devisId: conflictData.devisId,
             appelOffresId: conflictData.appelOffresId,
             appelOffresName: conflictData.appelOffresName,
+            societeName: conflictData.societeName,
+            numero: conflictData.numero,
+          };
+        } else if (conflictData.documentType === "devis_normal") {
+          documentData = {
+            devisId: conflictData.devisId,
+            chantierId: conflictData.chantierId,
+            chantierName: conflictData.chantierName,
             societeName: conflictData.societeName,
             numero: conflictData.numero,
           };
@@ -266,6 +274,14 @@ const GlobalConflictModal = () => {
             societeName: conflictData.societeName,
             numeroBonCommande: conflictData.numeroBonCommande,
             fournisseurName: conflictData.fournisseurName,
+          };
+        } else if (conflictData.documentType === "situation") {
+          documentData = {
+            situationId: conflictData.situationId,
+            chantierId: conflictData.chantierId,
+            chantierName: conflictData.chantierName,
+            societeName: conflictData.societeName,
+            numeroSituation: conflictData.numeroSituation,
           };
         }
 
@@ -400,7 +416,7 @@ const GlobalConflictModal = () => {
 
       // Pour les nouveaux types, utiliser le système universel avec custom_filename
       if (
-        ["devis_chantier", "devis_travaux", "devis_marche", "planning_hebdo", "rapport_agents", "bon_commande"].includes(
+        ["devis_chantier", "devis_travaux", "devis_marche", "devis_normal", "planning_hebdo", "rapport_agents", "bon_commande", "situation"].includes(
           conflictData.documentType
         )
       ) {
@@ -437,6 +453,15 @@ const GlobalConflictModal = () => {
             societeName: conflictData.societeName,
             numeroBonCommande: conflictData.numeroBonCommande,
             fournisseurName: conflictData.fournisseurName,
+            custom_filename: newFileName.trim(),
+          };
+        } else if (conflictData.documentType === "situation") {
+          documentData = {
+            situationId: conflictData.situationId,
+            chantierId: conflictData.chantierId,
+            chantierName: conflictData.chantierName,
+            societeName: conflictData.societeName,
+            numeroSituation: conflictData.numeroSituation,
             custom_filename: newFileName.trim(),
           };
         }

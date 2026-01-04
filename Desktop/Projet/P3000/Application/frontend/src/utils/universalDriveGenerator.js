@@ -361,7 +361,7 @@ const handleConflict = (documentType, data, responseData, callbacks) => {
   
   const conflictData = {
     conflictId: `${documentType}_${
-      data.devisId || data.appelOffresId || data.bonCommandeId || Date.now()
+      data.devisId || data.appelOffresId || data.bonCommandeId || data.situationId || Date.now()
     }_${Date.now()}`,
     fileName: responseData.file_name,
     displayFileName: responseData.file_name,
@@ -383,6 +383,12 @@ const handleConflict = (documentType, data, responseData, callbacks) => {
     ...(responseData.fournisseur_name && { fournisseurName: responseData.fournisseur_name }),
     ...(responseData.chantier_id && { chantierId: responseData.chantier_id }),
     ...(responseData.chantier_name && { chantierName: responseData.chantier_name }),
+    ...(responseData.situation_id && { situationId: responseData.situation_id }),
+    ...(responseData.numero_situation && { numeroSituation: responseData.numero_situation }),
+    ...(responseData.devis_id && { devisId: responseData.devis_id }),
+    ...(responseData.numero && { numero: responseData.numero }),
+    ...(responseData.appel_offres_id && { appelOffresId: responseData.appel_offres_id }),
+    ...(responseData.appel_offres_name && { appelOffresName: responseData.appel_offres_name }),
   };
 
   // Émettre l'événement pour ouvrir le modal de conflit
@@ -411,7 +417,7 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
 
   const conflictData = {
     conflictId: `${documentType}_${
-      data.devisId || data.appelOffresId || data.bonCommandeId || Date.now()
+      data.devisId || data.appelOffresId || data.bonCommandeId || data.situationId || Date.now()
     }_${Date.now()}`,
     fileName: fileName,
     displayFileName: fileName,
@@ -430,6 +436,8 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
     ...(errorResponse.fournisseur_name && { fournisseurName: errorResponse.fournisseur_name }),
     ...(errorResponse.chantier_id && { chantierId: errorResponse.chantier_id }),
     ...(errorResponse.chantier_name && { chantierName: errorResponse.chantier_name }),
+    ...(errorResponse.situation_id && { situationId: errorResponse.situation_id }),
+    ...(errorResponse.numero_situation && { numeroSituation: errorResponse.numero_situation }),
   };
 
   // Émettre l'événement pour ouvrir le modal de conflit

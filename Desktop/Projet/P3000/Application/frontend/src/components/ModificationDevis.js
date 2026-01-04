@@ -38,6 +38,7 @@ import SelectSocieteModal from "./SelectSocieteModal";
 import SocieteInfoModal from "./SocieteInfoModal";
 import SpecialLineModal from "./SpecialLineModal";
 import SpecialLinesOverview from "./SpecialLinesOverview";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const ModificationDevis = () => {
   const { devisId } = useParams();
@@ -952,59 +953,159 @@ const ModificationDevis = () => {
           }
         }
 
-        // Remplacement automatique du PDF dans le Drive
+        // Générer le PDF dans le drive après modification avec gestion des conflits
         try {
+          console.log('🔄 Génération du PDF du devis modifié dans le Drive...');
           
-          const regenerateResponse = await axios.post(`/api/devis/${devisId}/regenerate-pdf/`);
+          // Récupérer les données complètes du devis pour déterminer le type
+          const devisResponse = await axios.get(`/api/devisa/${devisId}/`);
+          const devisFullData = devisResponse.data;
           
-          if (regenerateResponse.data.success) {
-            
-            // Afficher une notification de succès avec lien vers le Drive
-            const driveUrl = regenerateResponse.data.drive_url || regenerateResponse.data.redirect_to;
-            setNotification({
-              open: true,
-              message: `✅ Devis modifié avec succès ! PDF mis à jour dans le Drive.`,
-              severity: 'success',
-              action: {
-                label: 'Voir le fichier',
-                onClick: () => {
-                  if (driveUrl) {
-                    window.open(driveUrl, '_blank');
-                  }
+          // Déterminer le type de devis
+          const isChantierDevis = devisType === 'chantier' || devisFullData.devis_chantier;
+          const documentType = isChantierDevis ? 'devis_chantier' : 'devis_normal';
+          
+          // Préparer les données selon le type de devis
+          let driveData = {};
+          
+          if (isChantierDevis) {
+            // Pour les devis de chantier (appels d'offres)
+            if (devisFullData.appel_offres) {
+              try {
+                const appelOffresResponse = await axios.get(`/api/appel-offres/${devisFullData.appel_offres}/`);
+                const appelOffres = appelOffresResponse.data;
+                
+                // Récupérer la société depuis le chantier ou l'appel d'offres
+                let societeName = 'Société';
+                if (appelOffres.societe) {
+                  const societeResponse = await axios.get(`/api/societe/${appelOffres.societe}/`);
+                  societeName = societeResponse.data.nom_societe || societeName;
                 }
+                
+                driveData = {
+                  devisId: devisId,
+                  appelOffresId: appelOffres.id,
+                  appelOffresName: appelOffres.chantier_name || appelOffres.nom || 'Appel d\'offres',
+                  societeName: societeName,
+                  numero: devisModalData.numero || devisFullData.numero
+                };
+              } catch (error) {
+                console.error('❌ Erreur lors de la récupération de l\'appel d\'offres:', error);
+                // Fallback
+                driveData = {
+                  devisId: devisId,
+                  appelOffresId: null,
+                  appelOffresName: 'Chantier',
+                  societeName: 'Société',
+                  numero: devisModalData.numero || devisFullData.numero
+                };
               }
-            });
-
-            // Optionnel : afficher un message d'historique si conflit détecté
-            if (regenerateResponse.data.conflict_detected) {
-              console.log("📝 Historique:", regenerateResponse.data.conflict_message);
+            } else {
+              // Fallback si pas d'appel d'offres
+              driveData = {
+                devisId: devisId,
+                appelOffresId: null,
+                appelOffresName: 'Chantier',
+                societeName: 'Société',
+                numero: devisModalData.numero || devisFullData.numero
+              };
             }
           } else {
-            console.error("❌ Erreur lors de la régénération:", regenerateResponse.data.error);
-            setNotification({
-              open: true,
-              message: `❌ Erreur lors de la régénération du PDF: ${regenerateResponse.data.error}`,
-              severity: 'error',
-              action: null
-            });
+            // Pour les devis normaux
+            // Récupérer les données du chantier et de la société
+            let chantierName = 'Chantier';
+            let societeName = 'Société';
+            
+            if (selectedChantierId && selectedChantierId !== -1) {
+              try {
+                const chantierResponse = await axios.get(`/api/chantier/${selectedChantierId}/`);
+                const chantier = chantierResponse.data;
+                chantierName = chantier.chantier_name || chantierName;
+                
+                if (chantier.societe) {
+                  const societeResponse = await axios.get(`/api/societe/${chantier.societe}/`);
+                  societeName = societeResponse.data.nom_societe || societeName;
+                }
+              } catch (error) {
+                console.error('❌ Erreur lors de la récupération du chantier:', error);
+              }
+            }
+            
+            driveData = {
+              devisId: devisId,
+              chantierId: selectedChantierId,
+              chantierName: chantierName,
+              societeName: societeName,
+              numero: devisModalData.numero || devisFullData.numero
+            };
           }
-        } catch (replaceError) {
-          console.error("❌ Erreur lors de la régénération du PDF:", replaceError);
+
+          const pdfResult = await generatePDFDrive(documentType, driveData, {
+            onSuccess: (result) => {
+              console.log("✅ PDF du devis généré et stocké dans le Drive:", result);
+              // Afficher une notification de succès avec lien vers le Drive
+              const driveUrl = result.drive_url || result.redirect_to;
+              setNotification({
+                open: true,
+                message: `✅ Devis modifié avec succès ! PDF mis à jour dans le Drive.`,
+                severity: 'success',
+                action: {
+                  label: 'Voir le fichier',
+                  onClick: () => {
+                    if (driveUrl) {
+                      window.open(driveUrl, '_blank');
+                    }
+                  }
+                }
+              });
+            },
+            onError: (error) => {
+              console.error("❌ Erreur lors de la génération du PDF:", error);
+              setNotification({
+                open: true,
+                message: `❌ Erreur lors de la génération du PDF: ${error.message}`,
+                severity: 'error',
+                action: null
+              });
+            },
+          });
+
+          // Si un conflit est détecté, ne pas rediriger (l'utilisateur doit résoudre le conflit)
+          if (pdfResult && pdfResult.conflict_detected) {
+            console.log("⚠️ Conflit détecté - le modal de conflit est affiché. Attente de la résolution par l'utilisateur.");
+            // Ne pas rediriger - l'utilisateur doit résoudre le conflit via le modal
+            clearSavedState();
+            return;
+          }
+          
+          clearSavedState();
+          
+          // Redirection après 5 secondes pour laisser le temps à la notification de s'afficher
+          // (seulement si aucun conflit n'a été détecté)
+          setTimeout(() => {
+            window.location.href = "/ListeDevis";
+          }, 5000);
+        } catch (pdfError) {
+          console.error("❌ Erreur lors de la génération du PDF:", pdfError);
+          // Si l'erreur est un conflit, ne pas rediriger
+          if (pdfError.response && pdfError.response.status === 409) {
+            console.log("⚠️ Conflit détecté via erreur - le modal de conflit est affiché.");
+            clearSavedState();
+            return;
+          }
+          // Pour les autres erreurs, afficher une notification mais continuer avec la redirection
           setNotification({
             open: true,
-            message: `❌ Erreur lors de la régénération du PDF: ${replaceError.message}`,
+            message: `❌ Erreur lors de la génération du PDF: ${pdfError.message}`,
             severity: 'error',
             action: null
           });
-          // Ne pas bloquer la sauvegarde du devis si la régénération échoue
+          clearSavedState();
+          // Redirection même en cas d'erreur (sauf conflit)
+          setTimeout(() => {
+            window.location.href = "/ListeDevis";
+          }, 5000);
         }
-        
-        clearSavedState();
-        
-        // Redirection après 5 secondes pour laisser le temps à la notification de s'afficher
-        setTimeout(() => {
-          window.location.href = "/ListeDevis";
-        }, 5000);
       }
     } catch (error) {
       console.error("Erreur détaillée lors de la modification du devis:", {

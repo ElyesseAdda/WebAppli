@@ -188,6 +188,8 @@ def generate_devis_travaux_pdf_drive(request):
         societe_name = request.GET.get('societe_name', 'Société par défaut')
         devis_id = request.GET.get('devis_id')
         custom_path = request.GET.get('custom_path', '')  # Chemin personnalisé du drive
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        custom_filename = request.GET.get('custom_filename', '')  # Nom de fichier personnalisé
         
         if not devis_id:
             return JsonResponse({
@@ -220,17 +222,41 @@ def generate_devis_travaux_pdf_drive(request):
         if custom_path:
             pdf_kwargs['custom_path'] = custom_path
         
+        # Ajouter custom_filename si fourni
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
+        
         # Générer le PDF et le stocker dans AWS S3
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='devis_travaux',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=force_replace,
             **pdf_kwargs
         )
         
+        # ✅ Gérer les conflits : retourner les informations même si success=False
+        if conflict_detected and not success:
+            # Conflit détecté : retourner les informations du conflit
+            return JsonResponse({
+                'success': False,
+                'error': message,
+                'conflict_detected': True,
+                'conflict_message': f'Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?',
+                'conflict_type': 'file_exists',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1] if s3_file_path else None,
+                'document_type': 'devis_travaux',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'devis_id': devis_id,
+                'numero': devis_numero
+            }, status=409)  # Code 409 Conflict
+        
         if success:
             # Succès : retourner les informations du fichier stocké
-            return JsonResponse({
+            response_data = {
                 'success': True,
                 'message': f'PDF devis travaux {chantier_name} généré et stocké avec succès dans le Drive',
                 'file_path': s3_file_path,
@@ -241,8 +267,17 @@ def generate_devis_travaux_pdf_drive(request):
                 'societe_name': societe_name,
                 'chantier_id': chantier_id,
                 'chantier_name': chantier_name,
-                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
-            })
+                'devis_id': devis_id,
+                'numero': devis_numero,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected
+            }
+            
+            if conflict_detected:
+                response_data['conflict_message'] = f'Un fichier avec le même nom existait déjà dans le Drive. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
+                response_data['conflict_type'] = 'file_replaced'
+            
+            return JsonResponse(response_data)
         else:
             # Échec : retourner l'erreur
             return JsonResponse({
@@ -320,6 +355,25 @@ def generate_devis_marche_pdf_drive(request):
             **pdf_kwargs
         )
         
+        # ✅ Gérer les conflits : retourner les informations même si success=False
+        if conflict_detected and not success:
+            # Conflit détecté : retourner les informations du conflit
+            return JsonResponse({
+                'success': False,
+                'error': message,
+                'conflict_detected': True,
+                'conflict_message': f'Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?',
+                'conflict_type': 'file_exists',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1] if s3_file_path else None,
+                'document_type': 'devis_marche',
+                'societe_name': societe_name,
+                'appel_offres_id': appel_offres_id,
+                'appel_offres_name': appel_offres_name,
+                'devis_id': devis_id,
+                'numero': devis_name
+            }, status=409)  # Code 409 Conflict
+        
         if success:
             # Succès : retourner les informations du fichier stocké
             import time
@@ -331,7 +385,7 @@ def generate_devis_marche_pdf_drive(request):
             else:
                 message = f'PDF devis marché {appel_offres_name} généré et stocké avec succès dans le Drive'
             
-            return JsonResponse({
+            response_data = {
                 'success': True,
                 'message': message,
                 'file_path': s3_file_path,
@@ -342,10 +396,18 @@ def generate_devis_marche_pdf_drive(request):
                 'societe_name': societe_name,
                 'appel_offres_id': appel_offres_id,
                 'appel_offres_name': appel_offres_name,
+                'devis_id': devis_id,
+                'numero': devis_name,
                 'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
                 'conflict_detected': conflict_detected,
                 'file_replaced': force_replace and conflict_detected
-            })
+            }
+            
+            if conflict_detected:
+                response_data['conflict_message'] = f'Un fichier avec le même nom existait déjà dans le Drive. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
+                response_data['conflict_type'] = 'file_replaced'
+            
+            return JsonResponse(response_data)
         else:
             # Échec : retourner l'erreur
             return JsonResponse({
@@ -843,6 +905,7 @@ def generate_situation_pdf_drive(request):
         societe_name = request.GET.get('societe_name', 'Société par défaut')
         numero_situation = request.GET.get('numero_situation', 'SIT-001')
         force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        custom_filename = request.GET.get('custom_filename', '')  # Nom de fichier personnalisé
         
         if not situation_id:
             return JsonResponse({'error': 'situation_id est requis'}, status=400)
@@ -850,21 +913,49 @@ def generate_situation_pdf_drive(request):
         # URL de prévisualisation
         preview_url = request.build_absolute_uri(f"/api/preview-situation/{situation_id}/")
         
+        # Préparer les kwargs pour generate_andStore_pdf
+        pdf_kwargs = {
+            'situation_id': situation_id,
+            'chantier_id': chantier_id,
+            'chantier_name': chantier_name,
+            'numero_situation': numero_situation
+        }
+        
+        # Ajouter custom_filename si fourni
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
+        
         # Générer le PDF et le stocker dans AWS S3
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='situation',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
-            situation_id=situation_id,
-            chantier_id=chantier_id,
-            chantier_name=chantier_name,
-            numero_situation=numero_situation
+            **pdf_kwargs
         )
+        
+        # ✅ Gérer les conflits : retourner les informations même si success=False
+        if conflict_detected and not success:
+            # Conflit détecté : retourner les informations du conflit
+            return JsonResponse({
+                'success': False,
+                'error': message,
+                'conflict_detected': True,
+                'conflict_message': f'Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?',
+                'conflict_type': 'file_exists',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1] if s3_file_path else None,
+                'document_type': 'situation',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'situation_id': situation_id,
+                'numero_situation': numero_situation
+            }, status=409)  # Code 409 Conflict
         
         if success:
             # Succès : retourner les informations du fichier stocké
-            return JsonResponse({
+            response_data = {
                 'success': True,
                 'message': f'PDF situation {numero_situation} généré et stocké avec succès dans le Drive',
                 'file_path': s3_file_path,
@@ -877,8 +968,15 @@ def generate_situation_pdf_drive(request):
                 'chantier_name': chantier_name,
                 'situation_id': situation_id,
                 'numero_situation': numero_situation,
-                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
-            })
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected
+            }
+            
+            if conflict_detected:
+                response_data['conflict_message'] = f'Un fichier avec le même nom existait déjà dans le Drive. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
+                response_data['conflict_type'] = 'file_replaced'
+            
+            return JsonResponse(response_data)
         else:
             # Échec : retourner l'erreur
             return JsonResponse({
