@@ -8,6 +8,12 @@ import {
   DialogTitle,
   Link,
   Typography,
+  TextField,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  FormLabel,
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
@@ -15,6 +21,22 @@ import { generatePDFDrive } from "../utils/universalDriveGenerator";
 const GlobalConflictModal = () => {
   const [open, setOpen] = useState(false);
   const [conflictData, setConflictData] = useState(null);
+  const [actionMode, setActionMode] = useState("replace"); // "replace" ou "rename"
+  const [newFileName, setNewFileName] = useState("");
+
+  // Fonction pour générer un nom de fichier avec suffixe (1), (2), etc.
+  const generateNewFileName = (originalFileName, suffix = 1) => {
+    if (!originalFileName) return `document_(${suffix}).pdf`;
+    
+    const lastDotIndex = originalFileName.lastIndexOf(".");
+    if (lastDotIndex === -1) {
+      return `${originalFileName} (${suffix})`;
+    }
+    
+    const nameWithoutExt = originalFileName.substring(0, lastDotIndex);
+    const extension = originalFileName.substring(lastDotIndex);
+    return `${nameWithoutExt} (${suffix})${extension}`;
+  };
 
   // Fonction utilitaire pour construire les chemins (unifiée)
   const buildFilePath = (data) => {
@@ -122,27 +144,39 @@ const GlobalConflictModal = () => {
     };
 
     const processConflictEvent = async (event) => {
-      // Vérifier si les données ont réellement changé
-      if (conflictData && conflictData.conflictId === event.detail.conflictId) {
-        return;
-      }
+      // Ne pas vérifier le conflictId pour éviter que le modal se ferme immédiatement
+      // Le modal doit s'ouvrir à chaque fois qu'un conflit est détecté
 
-      // Pour les appels d'offres, utiliser le nom du fichier existant
+      // Utiliser le nom du fichier et le chemin qui viennent du backend (détecté dans le drive)
       let fileName, folderPath, fullPath;
 
-      if (
-        event.detail.documentType === "devis_marche" ||
-        event.detail.documentType === "devis_chantier"
-      ) {
-        // Utiliser le nom du fichier existant (celui qui cause le conflit)
-        fileName = event.detail.fileName || event.detail.displayFileName;
-
-        // Construire le chemin du dossier (sans le nom du fichier)
-        const paths = buildFilePath(event.detail);
-        folderPath = paths.folderPath;
-        fullPath = `${folderPath}${fileName}`;
+      // Si le backend fournit directement le nom du fichier et le chemin, les utiliser
+      if (event.detail.fileName || event.detail.file_path) {
+        // Extraire le nom du fichier depuis file_path ou utiliser fileName
+        if (event.detail.file_path) {
+          // Extraire le nom du fichier depuis le chemin complet
+          const pathParts = event.detail.file_path.split('/');
+          fileName = pathParts[pathParts.length - 1] || event.detail.fileName || event.detail.displayFileName;
+          // Extraire le chemin du dossier (sans le nom du fichier)
+          folderPath = event.detail.file_path.substring(0, event.detail.file_path.lastIndexOf('/') + 1);
+          fullPath = event.detail.file_path;
+        } else {
+          // Utiliser fileName si disponible
+          fileName = event.detail.fileName || event.detail.displayFileName;
+          
+          // Construire le chemin du dossier si nécessaire
+          if (event.detail.existingFilePath) {
+            folderPath = event.detail.existingFilePath;
+            fullPath = `${folderPath}${fileName}`;
+          } else {
+            // Fallback: construire le chemin avec buildFilePath
+            const paths = buildFilePath(event.detail);
+            folderPath = paths.folderPath;
+            fullPath = `${folderPath}${fileName}`;
+          }
+        }
       } else {
-        // Pour les autres types, utiliser la logique normale
+        // Fallback: construire le chemin avec buildFilePath si aucune info du backend
         const paths = buildFilePath(event.detail);
         fileName = paths.fileName;
         folderPath = paths.folderPath;
@@ -150,15 +184,20 @@ const GlobalConflictModal = () => {
       }
 
       // Mettre à jour les données avec les chemins corrects
+      // Utiliser le drive_url du backend s'il est disponible, sinon le construire
+      const driveUrl = event.detail.drive_url || `/drive?path=${fullPath}&sidebar=closed&focus=file&_t=${Date.now()}`;
+      
       const updatedData = {
         ...event.detail,
         folderPath: folderPath,
-        fileName: fileName, // Utiliser le nom du fichier existant
+        fileName: fileName, // Utiliser le nom du fichier existant (venant du backend)
         fullPath: fullPath,
-        drive_url: `/drive?path=${fullPath}&sidebar=closed&focus=file&_t=${Date.now()}`,
+        drive_url: driveUrl,
       };
 
-
+      // Initialiser le mode d'action et le nouveau nom de fichier
+      setActionMode("replace");
+      setNewFileName(generateNewFileName(fileName, 1));
       setConflictData(updatedData);
       setOpen(true);
     };
@@ -179,6 +218,8 @@ const GlobalConflictModal = () => {
   const handleClose = () => {
     setOpen(false);
     setConflictData(null);
+    setActionMode("replace");
+    setNewFileName("");
   };
 
   const handleReplace = async () => {
@@ -191,14 +232,14 @@ const GlobalConflictModal = () => {
 
       // Pour les nouveaux types, utiliser le système universel
       if (
-        ["devis_chantier", "planning_hebdo", "rapport_agents"].includes(
+        ["devis_chantier", "devis_travaux", "devis_marche", "planning_hebdo", "rapport_agents", "bon_commande"].includes(
           conflictData.documentType
         )
       ) {
         // Construire les données pour le système universel selon le type
         let documentData = {};
 
-        if (conflictData.documentType === "devis_chantier") {
+        if (conflictData.documentType === "devis_chantier" || conflictData.documentType === "devis_travaux" || conflictData.documentType === "devis_marche") {
           documentData = {
             devisId: conflictData.devisId,
             appelOffresId: conflictData.appelOffresId,
@@ -216,6 +257,15 @@ const GlobalConflictModal = () => {
           documentData = {
             month: conflictData.month,
             year: conflictData.year,
+          };
+        } else if (conflictData.documentType === "bon_commande") {
+          documentData = {
+            bonCommandeId: conflictData.bonCommandeId,
+            chantierId: conflictData.chantierId,
+            chantierName: conflictData.chantierName,
+            societeName: conflictData.societeName,
+            numeroBonCommande: conflictData.numeroBonCommande,
+            fournisseurName: conflictData.fournisseurName,
           };
         }
 
@@ -333,6 +383,175 @@ const GlobalConflictModal = () => {
     }
   };
 
+  const handleRename = async () => {
+    if (!conflictData || !newFileName || !newFileName.trim()) {
+      const errorEvent = new CustomEvent("showNotification", {
+        detail: {
+          message: "❌ Veuillez saisir un nom de fichier valide",
+          type: "error",
+        },
+      });
+      document.dispatchEvent(errorEvent);
+      return;
+    }
+
+    try {
+      console.log("🚀 Création du fichier avec un nouveau nom:", newFileName);
+
+      // Pour les nouveaux types, utiliser le système universel avec custom_filename
+      if (
+        ["devis_chantier", "devis_travaux", "devis_marche", "planning_hebdo", "rapport_agents", "bon_commande"].includes(
+          conflictData.documentType
+        )
+      ) {
+        // Construire les données pour le système universel selon le type
+        let documentData = {};
+
+        if (conflictData.documentType === "devis_chantier" || conflictData.documentType === "devis_travaux" || conflictData.documentType === "devis_marche") {
+          documentData = {
+            devisId: conflictData.devisId,
+            appelOffresId: conflictData.appelOffresId,
+            appelOffresName: conflictData.appelOffresName,
+            societeName: conflictData.societeName,
+            numero: conflictData.numero,
+            custom_filename: newFileName.trim(), // Nom personnalisé pour éviter le conflit
+          };
+        } else if (conflictData.documentType === "planning_hebdo") {
+          documentData = {
+            week: conflictData.week,
+            year: conflictData.year,
+            agent_ids: conflictData.agent_ids,
+            custom_filename: newFileName.trim(),
+          };
+        } else if (conflictData.documentType === "rapport_agents") {
+          documentData = {
+            month: conflictData.month,
+            year: conflictData.year,
+            custom_filename: newFileName.trim(),
+          };
+        } else if (conflictData.documentType === "bon_commande") {
+          documentData = {
+            bonCommandeId: conflictData.bonCommandeId,
+            chantierId: conflictData.chantierId,
+            chantierName: conflictData.chantierName,
+            societeName: conflictData.societeName,
+            numeroBonCommande: conflictData.numeroBonCommande,
+            fournisseurName: conflictData.fournisseurName,
+            custom_filename: newFileName.trim(),
+          };
+        }
+
+        // Utiliser le système universel avec custom_filename (pas de force_replace)
+        await generatePDFDrive(
+          conflictData.documentType,
+          documentData,
+          {
+            onSuccess: (response) => {
+              // Afficher une notification de succès
+              const successEvent = new CustomEvent("showNotification", {
+                detail: {
+                  message: `✅ Fichier créé avec succès sous le nom "${newFileName.trim()}" !`,
+                  type: "success",
+                },
+              });
+              document.dispatchEvent(successEvent);
+
+              // Fermer le modal
+              handleClose();
+            },
+            onError: (error) => {
+              console.error("❌ Erreur lors de la création avec nouveau nom:", error);
+
+              const errorEvent = new CustomEvent("showNotification", {
+                detail: {
+                  message: `❌ Erreur lors de la création: ${error.message || "Erreur inconnue"}`,
+                  type: "error",
+                },
+              });
+              document.dispatchEvent(errorEvent);
+            },
+          },
+          false // forceReplace = false (on veut créer avec un nouveau nom)
+        );
+      } else {
+        // Pour les anciens types, utiliser l'ancien système avec custom_filename
+        const requestBody = {
+          document_type: conflictData.documentType,
+          file_path: conflictData.folderPath,
+          file_name: newFileName.trim(),
+          preview_url: conflictData.previewUrl,
+          societe_name: conflictData.societeName,
+          custom_filename: newFileName.trim(),
+          // Paramètres spécifiques selon le type
+          ...(conflictData.week !== undefined && { week: conflictData.week }),
+          ...(conflictData.month !== undefined && {
+            month: conflictData.month,
+          }),
+          ...(conflictData.year !== undefined && { year: conflictData.year }),
+          ...(conflictData.appelOffresId !== undefined && {
+            appel_offres_id: conflictData.appelOffresId,
+          }),
+          ...(conflictData.appelOffresName !== undefined && {
+            appel_offres_name: conflictData.appelOffresName,
+          }),
+          ...(conflictData.devisId !== undefined && {
+            devis_id: conflictData.devisId,
+          }),
+        };
+
+        console.log("🚀 Création du fichier avec l'ancien système:", requestBody);
+
+        // Appeler l'API pour créer le fichier avec un nouveau nom
+        const response = await fetch("/api/generate-pdf-drive/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+
+          // Afficher une notification de succès
+          const successEvent = new CustomEvent("showNotification", {
+            detail: {
+              message: `✅ Fichier créé avec succès sous le nom "${newFileName.trim()}" !`,
+              type: "success",
+            },
+          });
+          document.dispatchEvent(successEvent);
+
+          // Fermer le modal
+          handleClose();
+
+          // Rediriger vers le Drive si demandé
+          if (result.drive_url) {
+            window.open(result.drive_url, "_blank");
+          }
+        } else {
+          const error = await response.json();
+          const errorEvent = new CustomEvent("showNotification", {
+            detail: {
+              message: `❌ Erreur lors de la création: ${error.error || "Erreur inconnue"}`,
+              type: "error",
+            },
+          });
+          document.dispatchEvent(errorEvent);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la création avec nouveau nom:", error);
+      const errorEvent = new CustomEvent("showNotification", {
+        detail: {
+          message: "❌ Erreur lors de la création du fichier",
+          type: "error",
+        },
+      });
+      document.dispatchEvent(errorEvent);
+    }
+  };
+
   const handleCancel = () => {
     // Afficher une notification d'annulation
     const cancelEvent = new CustomEvent("showNotification", {
@@ -441,6 +660,69 @@ const GlobalConflictModal = () => {
         <Box
           sx={{
             p: 3,
+            bgcolor: "grey.50",
+            borderRadius: 2,
+            border: "1px solid",
+            borderColor: "grey.200",
+            mb: 3,
+          }}
+        >
+          <FormControl component="fieldset" sx={{ width: "100%" }}>
+            <FormLabel component="legend" sx={{ mb: 2, fontWeight: 600 }}>
+              Que souhaitez-vous faire ?
+            </FormLabel>
+            <RadioGroup
+              value={actionMode}
+              onChange={(e) => setActionMode(e.target.value)}
+              sx={{ gap: 2 }}
+            >
+              <FormControlLabel
+                value="replace"
+                control={<Radio />}
+                label={
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      🔄 Remplacer le fichier existant
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+                      L'ancien fichier sera déplacé dans le dossier "Historique" et le nouveau fichier le remplacera à l'emplacement original
+                    </Typography>
+                  </Box>
+                }
+              />
+              <FormControlLabel
+                value="rename"
+                control={<Radio />}
+                label={
+                  <Box sx={{ width: "100%" }}>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      📝 Créer avec un nouveau nom
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 1 }}>
+                      Le fichier sera créé avec un nom différent pour éviter le conflit
+                    </Typography>
+                    {actionMode === "rename" && (
+                      <TextField
+                        fullWidth
+                        label="Nouveau nom de fichier"
+                        value={newFileName}
+                        onChange={(e) => setNewFileName(e.target.value)}
+                        variant="outlined"
+                        size="small"
+                        sx={{ mt: 1, ml: 4 }}
+                        helperText="Le fichier sera créé avec ce nom dans le même dossier"
+                      />
+                    )}
+                  </Box>
+                }
+              />
+            </RadioGroup>
+          </FormControl>
+        </Box>
+
+        <Box
+          sx={{
+            p: 3,
             bgcolor: "info.50",
             borderRadius: 2,
             border: "1px solid",
@@ -452,16 +734,28 @@ const GlobalConflictModal = () => {
             color="info.main"
             sx={{ fontWeight: 500 }}
           >
-            💡 <strong>Que se passe-t-il ?</strong>
+            💡 <strong>Information :</strong>
             <br />
-            • L'ancien fichier sera déplacé dans le dossier "Historique" avec un
-            timestamp
-            <br />
-            • Il sera automatiquement supprimé après 30 jours par le système de
-            nettoyage
-            <br />
-            • Le nouveau fichier remplacera l'ancien à l'emplacement original
-            <br />• Vous pourrez toujours accéder à l'historique via le Drive
+            {actionMode === "replace" ? (
+              <>
+                • L'ancien fichier sera déplacé dans le dossier "Historique" avec un
+                timestamp
+                <br />
+                • Il sera automatiquement supprimé après 30 jours par le système de
+                nettoyage
+                <br />
+                • Le nouveau fichier remplacera l'ancien à l'emplacement original
+                <br />• Vous pourrez toujours accéder à l'historique via le Drive
+              </>
+            ) : (
+              <>
+                • Le nouveau fichier sera créé avec le nom que vous avez choisi
+                <br />
+                • Le fichier existant restera inchangé dans le Drive
+                <br />
+                • Les deux fichiers coexisteront dans le même dossier
+              </>
+            )}
           </Typography>
         </Box>
       </DialogContent>
@@ -482,23 +776,44 @@ const GlobalConflictModal = () => {
         >
           Annuler
         </Button>
-        <Button
-          onClick={handleReplace}
-          variant="contained"
-          color="primary"
-          size="large"
-          startIcon={<span style={{ fontSize: "1.2rem" }}>🔄</span>}
-          sx={{
-            px: 3,
-            py: 1.5,
-            borderRadius: 2,
-            textTransform: "none",
-            fontSize: "1rem",
-            boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
-          }}
-        >
-          Remplacer le fichier
-        </Button>
+        {actionMode === "replace" ? (
+          <Button
+            onClick={handleReplace}
+            variant="contained"
+            color="primary"
+            size="large"
+            startIcon={<span style={{ fontSize: "1.2rem" }}>🔄</span>}
+            sx={{
+              px: 3,
+              py: 1.5,
+              borderRadius: 2,
+              textTransform: "none",
+              fontSize: "1rem",
+              boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
+            }}
+          >
+            Remplacer le fichier
+          </Button>
+        ) : (
+          <Button
+            onClick={handleRename}
+            variant="contained"
+            color="primary"
+            size="large"
+            startIcon={<span style={{ fontSize: "1.2rem" }}>📝</span>}
+            disabled={!newFileName || !newFileName.trim()}
+            sx={{
+              px: 3,
+              py: 1.5,
+              borderRadius: 2,
+              textTransform: "none",
+              fontSize: "1rem",
+              boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
+            }}
+          >
+            Créer avec ce nom
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

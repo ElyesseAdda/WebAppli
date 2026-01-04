@@ -214,7 +214,7 @@ const BonCommandeModif = () => {
       } else {
         // Si le numéro n'a pas changé, utiliser l'ancienne méthode
         try {
-          await generatePDFDrive(
+          const pdfResult = await generatePDFDrive(
             "bon_commande",
             {
               bonCommandeId: id,
@@ -228,19 +228,34 @@ const BonCommandeModif = () => {
               onSuccess: (response) => {
                 console.log("✅ PDF généré et stocké dans le Drive:", response);
                 alert("Bon de commande mis à jour et PDF généré avec succès !");
+                // Ne pas rediriger ici - la redirection se fait après, seulement si pas de conflit
               },
               onError: (error) => {
                 console.error("❌ Erreur lors de la génération du PDF:", error);
                 alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
+                // Ne pas rediriger ici - la redirection se fait après, seulement si pas de conflit
               },
             }
           );
+          
+          // Si un conflit est détecté, ne pas rediriger (le modal reste ouvert)
+          if (pdfResult && pdfResult.conflict_detected) {
+            console.log("⚠️ Conflit détecté - le modal de conflit est affiché. Attente de la résolution par l'utilisateur.");
+            // Ne pas rediriger - l'utilisateur doit résoudre le conflit via le modal
+            return;
+          }
         } catch (pdfError) {
           console.error("Erreur lors de la génération du PDF:", pdfError);
+          // Si l'erreur est un conflit, ne pas rediriger
+          if (pdfError.response && pdfError.response.status === 409) {
+            console.log("⚠️ Conflit détecté via erreur - le modal de conflit est affiché.");
+            return;
+          }
           alert("Bon de commande mis à jour, mais erreur lors de la génération du PDF.");
         }
       }
       
+      // Rediriger uniquement si aucun conflit n'a été détecté
       window.location.href = "/BonCommande";
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);

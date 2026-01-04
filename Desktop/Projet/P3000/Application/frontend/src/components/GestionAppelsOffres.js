@@ -135,10 +135,10 @@ const GestionAppelsOffres = () => {
     try {
       setTransformingId(appelOffresId);
       
-      // Nettoyer le chemin : retirer les préfixes Chantiers/ et Appels_Offres/
-      const drivePathValue = cleanDrivePath(selectedPath);
+      // ✅ Utiliser le chemin validé par l'utilisateur tel quel, sans modification
+      const drivePathValue = selectedPath ? String(selectedPath).trim() : null;
       
-      // Appeler l'API avec le drive_path sélectionné
+      // Appeler l'API avec le drive_path tel quel (sans modification)
       const response = await axios.post(
         `/api/appels-offres/${appelOffresId}/transformer_en_chantier/`,
         { drive_path: drivePathValue }

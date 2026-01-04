@@ -177,15 +177,19 @@ class Chantier(models.Model):
     
     def get_drive_path(self):
         """
-        Retourne le chemin du drive (personnalisé ou calculé).
+        Retourne le chemin du drive (personnalisé ou calculé) sans préfixe Chantiers/.
         
         Priorité :
-        1. Si drive_path est défini → retourne drive_path
+        1. Si drive_path est défini → retourne drive_path (sans préfixe Chantiers/ si présent)
         2. Sinon → calcule automatiquement {societe_slug}/{chantier_slug}
         3. Si pas de société → retourne None
         """
         if self.drive_path and self.drive_path.strip():
-            return self.drive_path.strip()
+            path = self.drive_path.strip()
+            # Retirer le préfixe Chantiers/ s'il existe pour être cohérent avec le reste du code
+            if path.startswith('Chantiers/'):
+                return path[len('Chantiers/'):]
+            return path
         # Calculer le chemin par défaut
         if self.societe:
             from api.utils import custom_slugify
@@ -513,14 +517,20 @@ class AppelOffres(models.Model):
     
     def _clean_drive_path_for_copy(self, drive_path):
         """
-        Nettoie le drive_path lors de la copie (retire les préfixes).
-        Méthode interne utilisée lors de la transformation en chantier.
+        Utilise le drive_path tel quel, sans modification.
+        L'utilisateur définit le chemin comme bon lui semble.
         """
         if not drive_path:
             return None
         
-        from api.utils import clean_drive_path
-        return clean_drive_path(drive_path)
+        # Utiliser le chemin tel quel, juste nettoyer les espaces
+        path = str(drive_path).strip()
+        
+        # Retourner None si vide
+        if not path:
+            return None
+        
+        return path
 
 class Agent(models.Model):
     PAYMENT_TYPE_CHOICES = [

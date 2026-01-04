@@ -105,10 +105,10 @@ class ChantierViewSet(viewsets.ModelViewSet):
             'marge_estimee': marge_estimee
         }
         
-        # ✅ Toujours stocker le drive_path en base de données (avec préfixe Chantiers/ si non fourni)
+        # ✅ Gérer le drive_path : garder le préfixe Chantiers/ en DB
         if 'drive_path' not in serializer_data or not serializer_data.get('drive_path'):
             # Calculer le chemin par défaut avec le préfixe Chantiers/
-            societe_id = request.data.get('societe')
+            societe_id = request.data.get('societe') or serializer_data.get('societe_id') or serializer_data.get('societe')
             chantier_name = request.data.get('chantier_name', '')
             
             if societe_id and chantier_name:
@@ -118,6 +118,7 @@ class ChantierViewSet(viewsets.ModelViewSet):
                     chantier_slug = custom_slugify(chantier_name)
                     
                     if societe_slug and chantier_slug:
+                        # Stocker avec le préfixe Chantiers/ en DB
                         default_drive_path = f"Chantiers/{societe_slug}/{chantier_slug}"
                         serializer_data['drive_path'] = default_drive_path
                     elif societe_slug:
@@ -125,6 +126,15 @@ class ChantierViewSet(viewsets.ModelViewSet):
                         serializer_data['drive_path'] = default_drive_path
                 except Societe.DoesNotExist:
                     pass  # Laisser NULL si société non trouvée
+        else:
+            # Si drive_path est fourni, le garder tel quel (avec préfixe Chantiers/ si présent)
+            # Juste nettoyer les slashes en début/fin, mais conserver le préfixe
+            drive_path_value = serializer_data['drive_path'].strip()
+            # S'assurer que le préfixe Chantiers/ est présent si le chemin ne commence pas par un préfixe connu
+            if drive_path_value and not drive_path_value.startswith('Chantiers/') and not drive_path_value.startswith('Appels_Offres/'):
+                # Ajouter le préfixe Chantiers/ si absent
+                drive_path_value = f"Chantiers/{drive_path_value}"
+            serializer_data['drive_path'] = drive_path_value.strip('/')
         
         # Créer le chantier avec les estimations
         serializer = self.get_serializer(data=serializer_data)

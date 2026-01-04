@@ -3211,8 +3211,8 @@ const DevisAvance = () => {
             </div>
           </div>
 
-          {/* Section 4: Chemin du drive - Afficher pour les devis de chantier et les appels d'offres */}
-          {(devisType === "normal" || devisType === "chantier") && (
+          {/* Section 4: Chemin du drive - Afficher uniquement pour les nouveaux chantiers et les appels d'offres (pas pour les devis TS) */}
+          {((devisType === "normal" && (selectedChantierId === null || selectedChantierId === -1)) || devisType === "chantier") && (
             <div style={{
               backgroundColor: '#f8f9fa',
               border: '1px solid #e9ecef',

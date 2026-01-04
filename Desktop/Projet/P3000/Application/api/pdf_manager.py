@@ -84,10 +84,25 @@ class PDFManager:
         Args:
             document_type: Type de document (planning_hebdo, rapport_agents, etc.)
             **kwargs: Paramètres spécifiques (week, year, month, chantier_name, etc.)
+                - custom_filename: Nom de fichier personnalisé (optionnel). Si fourni, ce nom sera utilisé directement.
         
         Returns:
             str: Nom de fichier généré
         """
+        # Si un nom de fichier personnalisé est fourni, l'utiliser directement
+        if 'custom_filename' in kwargs and kwargs['custom_filename']:
+            custom_name = kwargs['custom_filename'].strip()
+            # Remplacer les + (espaces encodés dans l'URL) par des espaces
+            # au cas où ils ne seraient pas décodés automatiquement
+            custom_name = custom_name.replace('+', ' ')
+            # S'assurer que le nom se termine par .pdf
+            if not custom_name.lower().endswith('.pdf'):
+                custom_name += '.pdf'
+            # Nettoyer le nom pour qu'il soit compatible avec S3
+            clean_name = clean_filename_for_s3(custom_name)
+            print(f"📝 Nom de fichier personnalisé nettoyé: '{custom_name}' -> '{clean_name}'")
+            return clean_name
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         if document_type == 'planning_hebdo':
@@ -450,8 +465,18 @@ class PDFManager:
             create_s3_folder_recursive(s3_folder_path)
             
             # 6. Vérifier s'il y a un conflit de nom
+            # Si custom_filename est fourni, c'est que l'utilisateur a choisi un nouveau nom
+            # pour éviter le conflit, donc on ne vérifie pas de conflit dans ce cas
             s3_file_path = f"{s3_folder_path}/{filename}"
-            conflict_detected = self.check_file_conflict(s3_file_path)
+            has_custom_filename = 'custom_filename' in kwargs and kwargs.get('custom_filename')
+            
+            if has_custom_filename:
+                # Nom personnalisé fourni : pas de vérification de conflit
+                conflict_detected = False
+                print(f"📝 Nom de fichier personnalisé fourni: {filename} - Pas de vérification de conflit")
+            else:
+                # Vérifier s'il y a un conflit avec le nom généré automatiquement
+                conflict_detected = self.check_file_conflict(s3_file_path)
             
             if conflict_detected:
                 print(f"⚠️ Conflit détecté: {s3_file_path}")

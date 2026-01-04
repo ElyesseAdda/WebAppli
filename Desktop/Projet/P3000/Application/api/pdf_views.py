@@ -45,14 +45,23 @@ def planning_hebdo_pdf_drive(request):
         # Pour l'instant, utiliser une société par défaut
         societe_name = "Société par défaut"  # À adapter selon votre logique
         
+        # Récupérer le nom de fichier personnalisé si fourni (pour éviter les conflits)
+        custom_filename = request.GET.get('custom_filename', '')
+        
         # Générer le PDF et le stocker dans AWS S3
+        pdf_kwargs = {
+            'week': week,
+            'year': year
+        }
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
+        
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='planning_hebdo',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
-            week=week,
-            year=year
+            **pdf_kwargs
         )
         
         if success:
@@ -109,14 +118,23 @@ def generate_monthly_agents_pdf_drive(request):
         # Pour l'instant, utiliser une société par défaut
         societe_name = "Société par défaut"  # À adapter selon votre logique
         
+        # Récupérer le nom de fichier personnalisé si fourni (pour éviter les conflits)
+        custom_filename = request.GET.get('custom_filename', '')
+        
         # Générer le PDF et le stocker dans AWS S3
+        pdf_kwargs = {
+            'month': month,
+            'year': year
+        }
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
+        
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='rapport_agents',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
-            month=month,
-            year=year
+            **pdf_kwargs
         )
         
         if success:
@@ -287,6 +305,11 @@ def generate_devis_marche_pdf_drive(request):
         custom_path = request.GET.get('custom_path', '')
         if custom_path:
             pdf_kwargs['custom_path'] = custom_path
+        
+        # Ajouter le nom de fichier personnalisé si fourni (pour éviter les conflits)
+        custom_filename = request.GET.get('custom_filename', '')
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
         
         # Générer le PDF et le stocker dans AWS S3
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
@@ -884,6 +907,7 @@ def generate_bon_commande_pdf_drive(request):
         numero_bon_commande = request.GET.get('numero_bon_commande', 'BC-001')
         fournisseur_name = request.GET.get('fournisseur_name', 'Fournisseur')
         force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        custom_filename = request.GET.get('custom_filename', '')  # Nom de fichier personnalisé
         
         if not bon_commande_id:
             return JsonResponse({'error': 'bon_commande_id est requis'}, status=400)
@@ -891,22 +915,51 @@ def generate_bon_commande_pdf_drive(request):
         # URL de prévisualisation
         preview_url = request.build_absolute_uri(f"/api/preview-saved-bon-commande/{bon_commande_id}/")
         
+        # Préparer les kwargs pour generate_andStore_pdf
+        pdf_kwargs = {
+            'bon_commande_id': bon_commande_id,
+            'chantier_id': chantier_id,
+            'chantier_name': chantier_name,
+            'numero_bon_commande': numero_bon_commande,
+            'fournisseur_name': fournisseur_name
+        }
+        
+        # Ajouter custom_filename si fourni
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
+        
         # Générer le PDF et le stocker dans AWS S3
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='bon_commande',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
-            bon_commande_id=bon_commande_id,
-            chantier_id=chantier_id,
-            chantier_name=chantier_name,
-            numero_bon_commande=numero_bon_commande,
-            fournisseur_name=fournisseur_name
+            **pdf_kwargs
         )
+        
+        # ✅ Gérer les conflits : retourner les informations même si success=False
+        if conflict_detected and not success:
+            # Conflit détecté : retourner les informations du conflit
+            return JsonResponse({
+                'success': False,
+                'error': message,
+                'conflict_detected': True,
+                'conflict_message': f'Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?',
+                'conflict_type': 'file_exists',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1] if s3_file_path else None,
+                'document_type': 'bon_commande',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'bon_commande_id': bon_commande_id,
+                'numero_bon_commande': numero_bon_commande,
+                'fournisseur_name': fournisseur_name
+            }, status=409)  # Code 409 Conflict
         
         if success:
             # Succès : retourner les informations du fichier stocké
-            return JsonResponse({
+            response_data = {
                 'success': True,
                 'message': f'PDF bon de commande {numero_bon_commande} généré et stocké avec succès dans le Drive',
                 'file_path': s3_file_path,
@@ -920,8 +973,15 @@ def generate_bon_commande_pdf_drive(request):
                 'bon_commande_id': bon_commande_id,
                 'numero_bon_commande': numero_bon_commande,
                 'fournisseur_name': fournisseur_name,
-                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}"
-            })
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected
+            }
+            
+            if conflict_detected:
+                response_data['conflict_message'] = f'Un fichier avec le même nom existait déjà dans le Drive. L\'ancien fichier a été déplacé dans le dossier Historique et sera automatiquement supprimé après 30 jours.'
+                response_data['conflict_type'] = 'file_replaced'
+            
+            return JsonResponse(response_data)
         else:
             # Échec : retourner l'erreur
             return JsonResponse({

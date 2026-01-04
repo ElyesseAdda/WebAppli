@@ -184,17 +184,22 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
   // Charger le contenu initial
   useEffect(() => {
     if (open) {
-      const initialPath = defaultPath || '';
-      setSelectedPath(initialPath);
+      // ✅ Remplacer Appels_Offres/ par Chantiers/ dans le defaultPath pour l'affichage uniquement
+      let displayPath = defaultPath || '';
+      if (displayPath && displayPath.startsWith('Appels_Offres/')) {
+        displayPath = displayPath.replace('Appels_Offres/', 'Chantiers/');
+      }
+      
+      setSelectedPath(displayPath);
       setSearchTerm('');
       setSearchResults([]);
       setShowSearchResults(false);
-      setCurrentPath(initialPath);
+      setCurrentPath(displayPath);
       setError(null);
       setNewFolderName('');
       setShowCreateFolderDialog(false);
-      // Charger le chemin par défaut ou la racine
-      fetchFolderContent(initialPath);
+      // Charger le chemin par défaut ou la racine (avec le préfixe remplacé pour l'affichage)
+      fetchFolderContent(displayPath);
     } else {
       // Nettoyer le cache quand le modal se ferme
       setFolderCache(new Map());

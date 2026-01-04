@@ -253,19 +253,29 @@ export const generatePDFDrive = async (
  * Construit les paramètres API selon le type de document
  */
 const buildApiParams = (documentType, data) => {
+  // Fonction helper pour ajouter custom_filename et custom_path si fournis
+  const addCustomParams = (params) => {
+    if (data.custom_filename) {
+      params.custom_filename = data.custom_filename;
+    }
+    if (data.customPath) {
+      params.custom_path = data.customPath;
+    }
+    return params;
+  };
+
   switch (documentType) {
     case "devis_chantier":
+    case "devis_travaux":
+    case "devis_marche":
       const paramsChantier = {
         devis_id: data.devisId,
         appel_offres_id: data.appelOffresId,
         appel_offres_name: data.appelOffresName,
         societe_name: data.societeName,
       };
-      // Ajouter le chemin personnalisé si fourni
-      if (data.customPath) {
-        paramsChantier.custom_path = data.customPath;
-      }
-      return paramsChantier;
+      // Ajouter le chemin personnalisé et le nom de fichier personnalisé si fournis
+      return addCustomParams(paramsChantier);
 
     case "devis_normal":
       const paramsNormal = {
@@ -274,23 +284,20 @@ const buildApiParams = (documentType, data) => {
         chantier_name: data.chantierName,
         societe_name: data.societeName,
       };
-      // Ajouter le chemin personnalisé si fourni
-      if (data.customPath) {
-        paramsNormal.custom_path = data.customPath;
-      }
-      return paramsNormal;
+      // Ajouter le chemin personnalisé et le nom de fichier personnalisé si fournis
+      return addCustomParams(paramsNormal);
 
     case "contrat_sous_traitance":
-      return {
+      return addCustomParams({
         contrat_id: data.contratId,
         chantier_id: data.chantierId,
         chantier_name: data.chantierName,
         societe_name: data.societeName,
         sous_traitant_name: data.sousTraitantName,
-      };
+      });
 
     case "avenant_sous_traitance":
-      return {
+      return addCustomParams({
         avenant_id: data.avenantId,
         contrat_id: data.contratId,
         chantier_id: data.chantierId,
@@ -298,26 +305,26 @@ const buildApiParams = (documentType, data) => {
         societe_name: data.societeName,
         sous_traitant_name: data.sousTraitantName,
         numero_avenant: data.numeroAvenant,
-      };
+      });
 
     case "situation":
-      return {
+      return addCustomParams({
         situation_id: data.situationId,
         chantier_id: data.chantierId,
         chantier_name: data.chantierName,
         societe_name: data.societeName,
         numero_situation: data.numeroSituation,
-      };
+      });
 
     case "bon_commande":
-      return {
+      return addCustomParams({
         bon_commande_id: data.bonCommandeId,
         chantier_id: data.chantierId,
         chantier_name: data.chantierName,
         societe_name: data.societeName,
         numero_bon_commande: data.numeroBonCommande,
         fournisseur_name: data.fournisseurName,
-      };
+      });
 
     case "planning_hebdo":
       const params = {
@@ -328,17 +335,17 @@ const buildApiParams = (documentType, data) => {
       if (data.agent_ids && data.agent_ids.length > 0) {
         params.agent_ids = data.agent_ids.join(',');
       }
-      return params;
+      return addCustomParams(params);
 
     case "rapport_agents":
-      return {
+      return addCustomParams({
         month: data.month,
         year: data.year,
-      };
+      });
 
     // Autres types à ajouter ici
     default:
-      return data;
+      return addCustomParams(data || {});
   }
 };
 
@@ -349,9 +356,12 @@ const handleConflict = (documentType, data, responseData, callbacks) => {
   const documentConfig = DOCUMENT_TYPES[documentType];
 
   // Construire les données du conflit
+  const conflictMessage = responseData.conflict_message || 
+    `Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?`;
+  
   const conflictData = {
     conflictId: `${documentType}_${
-      data.devisId || data.appelOffresId
+      data.devisId || data.appelOffresId || data.bonCommandeId || Date.now()
     }_${Date.now()}`,
     fileName: responseData.file_name,
     displayFileName: responseData.file_name,
@@ -359,14 +369,20 @@ const handleConflict = (documentType, data, responseData, callbacks) => {
       0,
       responseData.file_path.lastIndexOf("/") + 1
     ),
-    conflictMessage: `Un fichier avec le même nom existe déjà dans le Drive.`,
+    conflictMessage: conflictMessage,
     documentType: documentType,
-    societeName: data.societeName,
-    previewUrl: documentConfig.previewUrl(data),
+    societeName: data.societeName || responseData.societe_name,
+    previewUrl: documentConfig?.previewUrl ? documentConfig.previewUrl(data) : null,
     drive_url: responseData.drive_url,
     file_path: responseData.file_path,
     // Données spécifiques au type de document
     ...getDocumentSpecificData(documentType, data),
+    // Inclure les données supplémentaires du backend si disponibles
+    ...(responseData.bon_commande_id && { bonCommandeId: responseData.bon_commande_id }),
+    ...(responseData.numero_bon_commande && { numeroBonCommande: responseData.numero_bon_commande }),
+    ...(responseData.fournisseur_name && { fournisseurName: responseData.fournisseur_name }),
+    ...(responseData.chantier_id && { chantierId: responseData.chantier_id }),
+    ...(responseData.chantier_name && { chantierName: responseData.chantier_name }),
   };
 
   // Émettre l'événement pour ouvrir le modal de conflit
@@ -385,26 +401,35 @@ const handleConflict = (documentType, data, responseData, callbacks) => {
  */
 const handleConflictFromError = (documentType, data, error, callbacks) => {
   const documentConfig = DOCUMENT_TYPES[documentType];
+  const errorResponse = error.response?.data || {};
 
-  // Construire le nom et le chemin du fichier (comme le backend le ferait)
-  const fileName = buildFileName(documentType, data);
-  const filePath = buildFilePath(documentType, data, fileName);
+  // Utiliser les données du backend si disponibles, sinon construire
+  const fileName = errorResponse.file_name || buildFileName(documentType, data);
+  const filePath = errorResponse.file_path || buildFilePath(documentType, data, fileName);
+  const conflictMessage = errorResponse.conflict_message || 
+    `Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?`;
 
   const conflictData = {
     conflictId: `${documentType}_${
-      data.devisId || data.appelOffresId
+      data.devisId || data.appelOffresId || data.bonCommandeId || Date.now()
     }_${Date.now()}`,
     fileName: fileName,
     displayFileName: fileName,
     existingFilePath: filePath.substring(0, filePath.lastIndexOf("/") + 1),
-    conflictMessage: `Un fichier avec le même nom existe déjà dans le Drive.`,
+    conflictMessage: conflictMessage,
     documentType: documentType,
-    societeName: data.societeName,
-    previewUrl: documentConfig.previewUrl(data),
+    societeName: data.societeName || errorResponse.societe_name,
+    previewUrl: documentConfig?.previewUrl ? documentConfig.previewUrl(data) : null,
     file_path: filePath,
-    drive_url: `/drive?path=${filePath}&sidebar=closed&focus=file&_t=${Date.now()}`,
+    drive_url: errorResponse.drive_url || `/drive?path=${filePath}&sidebar=closed&focus=file&_t=${Date.now()}`,
     // Données spécifiques au type de document
     ...getDocumentSpecificData(documentType, data),
+    // Inclure les données supplémentaires du backend si disponibles
+    ...(errorResponse.bon_commande_id && { bonCommandeId: errorResponse.bon_commande_id }),
+    ...(errorResponse.numero_bon_commande && { numeroBonCommande: errorResponse.numero_bon_commande }),
+    ...(errorResponse.fournisseur_name && { fournisseurName: errorResponse.fournisseur_name }),
+    ...(errorResponse.chantier_id && { chantierId: errorResponse.chantier_id }),
+    ...(errorResponse.chantier_name && { chantierName: errorResponse.chantier_name }),
   };
 
   // Émettre l'événement pour ouvrir le modal de conflit
@@ -625,10 +650,15 @@ const getDocumentSpecificData = (documentType, data) => {
 const isConflictError = (error) => {
   return (
     error.response &&
-    error.response.status === 500 &&
+    (
+      error.response.status === 409 || // Code Conflict
+      (error.response.status === 500 &&
+       error.response.data &&
+       error.response.data.error &&
+       error.response.data.error.includes("Conflit de fichier détecté"))
+    ) &&
     error.response.data &&
-    error.response.data.error &&
-    error.response.data.error.includes("Conflit de fichier détecté")
+    error.response.data.conflict_detected === true
   );
 };
 
