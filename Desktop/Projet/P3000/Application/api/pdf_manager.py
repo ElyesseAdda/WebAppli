@@ -236,6 +236,8 @@ class PDFManager:
                 appel_offres = AppelOffres.objects.get(id=kwargs['appel_offres_id'])
                 base_path = appel_offres.get_drive_path()
                 if base_path:
+                    # Normaliser base_path en supprimant les slashes au début et à la fin
+                    base_path = base_path.strip('/')
                     subfolder = self.document_type_folders.get(document_type, 'Devis')
                     # Pour les devis de marché, utiliser la structure Devis/Devis_Marche
                     if document_type == 'devis_marche':
@@ -252,6 +254,8 @@ class PDFManager:
                 chantier = Chantier.objects.get(id=kwargs['chantier_id'])
                 base_path = chantier.get_drive_path()
                 if base_path:
+                    # Normaliser base_path en supprimant les slashes au début et à la fin
+                    base_path = base_path.strip('/')
                     subfolder = self.document_type_folders.get(document_type, 'Devis')
                     # ✅ Structure pour chantiers : Chantiers/{base_path}/{subfolder}
                     # Pour certains types, ajouter un sous-dossier supplémentaire (ex: fournisseur, entreprise)
