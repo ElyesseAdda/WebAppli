@@ -2,6 +2,7 @@ import {
   Delete as DeleteIcon,
   Transform as TransformIcon,
   Visibility as VisibilityIcon,
+  Folder as FolderIcon,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -31,6 +32,49 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import DrivePathSelector from "./Devis/DrivePathSelector";
+
+// Fonction pour slugifier un texte (similaire à custom_slugify du backend)
+const customSlugify = (text) => {
+  if (!text) return '';
+  // Remplacer les espaces multiples par un seul espace
+  text = text.trim().replace(/\s+/g, ' ');
+  // Remplacer les espaces par des tirets
+  text = text.replace(/\s/g, '-');
+  // Supprimer les caractères spéciaux sauf les tirets
+  text = text.replace(/[^a-zA-Z0-9-]/g, '');
+  // Supprimer les tirets multiples
+  text = text.replace(/-+/g, '-');
+  // Supprimer les tirets en début et fin
+  text = text.replace(/^-+|-+$/g, '');
+  return text;
+};
+
+// Fonction utilitaire pour nettoyer le drive_path (retirer les préfixes Appels_Offres/ et Chantiers/)
+const cleanDrivePath = (drivePath) => {
+  if (!drivePath) {
+    return null;
+  }
+  
+  let path = String(drivePath).trim();
+  
+  // Retirer les préfixes Appels_Offres/ et Chantiers/
+  if (path.startsWith('Appels_Offres/')) {
+    path = path.substring('Appels_Offres/'.length);
+  } else if (path.startsWith('Chantiers/')) {
+    path = path.substring('Chantiers/'.length);
+  }
+  
+  // Nettoyer les slashes en début et fin
+  path = path.replace(/^\/+|\/+$/g, '');
+  
+  // Retourner null si vide après nettoyage
+  if (!path) {
+    return null;
+  }
+  
+  return path;
+};
 
 const GestionAppelsOffres = () => {
   const [appelsOffres, setAppelsOffres] = useState([]);
@@ -43,6 +87,10 @@ const GestionAppelsOffres = () => {
   const [alertMessage, setAlertMessage] = useState("");
   const [alertSeverity, setAlertSeverity] = useState("success");
   const [transformingId, setTransformingId] = useState(null); // ✅ Pour empêcher les clics multiples
+  const [showDrivePathModal, setShowDrivePathModal] = useState(false);
+  const [selectedAppelOffresForDrivePath, setSelectedAppelOffresForDrivePath] = useState(null);
+  const [showTransformModal, setShowTransformModal] = useState(false);
+  const [selectedAppelOffresForTransform, setSelectedAppelOffresForTransform] = useState(null);
 
   useEffect(() => {
     fetchAppelsOffres();
@@ -66,7 +114,19 @@ const GestionAppelsOffres = () => {
     setTimeout(() => setAlertMessage(""), 5000);
   };
 
-  const handleTransformerEnChantier = async (appelOffresId) => {
+  const handleTransformerEnChantier = (appelOffres) => {
+    // Ouvrir le modal pour sélectionner le drive_path
+    setSelectedAppelOffresForTransform(appelOffres);
+    setShowTransformModal(true);
+  };
+
+  const handleConfirmTransform = async (selectedPath) => {
+    if (!selectedAppelOffresForTransform) {
+      return;
+    }
+
+    const appelOffresId = selectedAppelOffresForTransform.id;
+    
     // ✅ Empêcher les clics multiples
     if (transformingId === appelOffresId) {
       return;
@@ -74,11 +134,19 @@ const GestionAppelsOffres = () => {
     
     try {
       setTransformingId(appelOffresId);
+      
+      // Nettoyer le chemin : retirer les préfixes Chantiers/ et Appels_Offres/
+      const drivePathValue = cleanDrivePath(selectedPath);
+      
+      // Appeler l'API avec le drive_path sélectionné
       const response = await axios.post(
-        `/api/appels-offres/${appelOffresId}/transformer_en_chantier/`
+        `/api/appels-offres/${appelOffresId}/transformer_en_chantier/`,
+        { drive_path: drivePathValue }
       );
       showAlert("Appel d'offres transformé en chantier avec succès !");
       fetchAppelsOffres();
+      setShowTransformModal(false);
+      setSelectedAppelOffresForTransform(null);
     } catch (error) {
       const errorMessage =
         error.response?.data?.error || "Erreur lors de la transformation";
@@ -291,7 +359,7 @@ const GestionAppelsOffres = () => {
                                   color={appelOffres.deja_transforme ? "default" : "success"}
                                   onClick={() =>
                                     !appelOffres.deja_transforme && 
-                                    handleTransformerEnChantier(appelOffres.id)
+                                    handleTransformerEnChantier(appelOffres)
                                   }
                                   disabled={appelOffres.deja_transforme || transformingId === appelOffres.id}
                                   size="small"
@@ -301,6 +369,19 @@ const GestionAppelsOffres = () => {
                               </span>
                             </Tooltip>
                           )}
+
+                          <Tooltip title="Modifier le chemin du drive">
+                            <IconButton
+                              color="info"
+                              onClick={() => {
+                                setSelectedAppelOffresForDrivePath(appelOffres);
+                                setShowDrivePathModal(true);
+                              }}
+                              size="small"
+                            >
+                              <FolderIcon />
+                            </IconButton>
+                          </Tooltip>
 
                           <Tooltip title="Modifier le statut">
                             <IconButton
@@ -456,6 +537,63 @@ const GestionAppelsOffres = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Modal pour modifier le chemin du drive */}
+      {selectedAppelOffresForDrivePath && (
+        <DrivePathSelector
+          open={showDrivePathModal}
+          onClose={() => {
+            setShowDrivePathModal(false);
+            setSelectedAppelOffresForDrivePath(null);
+          }}
+          onSelect={async (selectedPath) => {
+            try {
+              // ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
+              const drivePathValue = cleanDrivePath(selectedPath);
+              
+              // Appeler l'API pour mettre à jour le drive_path
+              await axios.put(
+                `/api/appels-offres/${selectedAppelOffresForDrivePath.id}/update_drive_path/`,
+                { drive_path: drivePathValue }
+              );
+              
+              showAlert("Chemin du drive mis à jour avec succès !", "success");
+              fetchAppelsOffres(); // Recharger la liste pour afficher le nouveau chemin
+              setShowDrivePathModal(false);
+              setSelectedAppelOffresForDrivePath(null);
+            } catch (error) {
+              const errorMessage =
+                error.response?.data?.error || "Erreur lors de la mise à jour du chemin";
+              showAlert(errorMessage, "error");
+            }
+          }}
+          defaultPath={selectedAppelOffresForDrivePath.drive_path || ''}
+        />
+      )}
+
+      {/* Modal pour transformer en chantier avec sélection du drive_path */}
+      {selectedAppelOffresForTransform && (
+        <DrivePathSelector
+          open={showTransformModal}
+          onClose={() => {
+            setShowTransformModal(false);
+            setSelectedAppelOffresForTransform(null);
+          }}
+          onSelect={handleConfirmTransform}
+          defaultPath={(() => {
+            // Calculer le chemin par défaut à partir de la société et du nom du chantier
+            const appelOffres = selectedAppelOffresForTransform;
+            if (appelOffres.societe && appelOffres.chantier_name) {
+              const societeSlug = customSlugify(appelOffres.societe.nom_societe);
+              const chantierSlug = customSlugify(appelOffres.chantier_name);
+              if (societeSlug && chantierSlug) {
+                return `${societeSlug}/${chantierSlug}`;
+              }
+            }
+            return '';
+          })()}
+        />
+      )}
     </Container>
   );
 };

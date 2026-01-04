@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.utils.text import slugify
+from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
 import os
 
@@ -18,7 +19,7 @@ from .serializers import (
     DocumentListSerializer, 
     FolderItemSerializer
 )
-from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify
+from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -148,6 +149,86 @@ class ChantierViewSet(viewsets.ModelViewSet):
         if societe_id:
             queryset = queryset.filter(societe_id=societe_id)
         return queryset
+    
+    @action(detail=True, methods=['put', 'patch'])
+    def update_drive_path(self, request, pk=None):
+        """
+        Met à jour le drive_path d'un chantier et transfère les fichiers si nécessaire.
+        
+        Body:
+        {
+            "drive_path": "nouveau/chemin" ou null pour réinitialiser
+        }
+        """
+        try:
+            chantier = self.get_object()
+            nouveau_drive_path = request.data.get('drive_path')
+            
+            # Déterminer l'ancien chemin (drive_path stocké ou calculé)
+            ancien_chemin_base = chantier.get_drive_path()
+            
+            # Si drive_path est fourni comme chaîne vide, le traiter comme null
+            if nouveau_drive_path == '':
+                nouveau_drive_path = None
+            elif nouveau_drive_path:
+                # ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
+                nouveau_drive_path = clean_drive_path(nouveau_drive_path)
+                if nouveau_drive_path:
+                    # Nettoyer les slashes en début/fin
+                    nouveau_drive_path = nouveau_drive_path.strip().strip('/')
+                    # Valider le chemin (utiliser la méthode du modèle)
+                    try:
+                        chantier.validate_drive_path(nouveau_drive_path)
+                    except ValidationError as e:
+                        return Response({
+                            'error': str(e)
+                        }, status=400)
+                else:
+                    nouveau_drive_path = None
+            
+            # Vérifier si le chemin change réellement
+            nouveau_chemin_base = nouveau_drive_path if nouveau_drive_path else (
+                f"{custom_slugify(chantier.societe.nom_societe)}/{custom_slugify(chantier.chantier_name)}" 
+                if chantier.societe else None
+            )
+            
+            # Si le chemin change, transférer les fichiers
+            if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base:
+                # Transférer tous les fichiers de l'ancien vers le nouveau chemin
+                transfer_success = drive_automation.transfer_chantier_drive_path(
+                    ancien_chemin=ancien_chemin_base,
+                    nouveau_chemin=nouveau_chemin_base
+                )
+                
+                if not transfer_success:
+                    return Response({
+                        'error': 'Erreur lors du transfert des fichiers. Le chemin n\'a pas été modifié.'
+                    }, status=500)
+            
+            # Mettre à jour le drive_path
+            chantier.drive_path = nouveau_drive_path
+            chantier.save()
+            
+            return Response({
+                'success': True,
+                'drive_path': chantier.drive_path,
+                'drive_path_computed': chantier.get_drive_path(),
+                'message': 'Chemin du drive mis à jour avec succès' + (
+                    ' et fichiers transférés' if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base else ''
+                )
+            }, status=200)
+            
+        except Chantier.DoesNotExist:
+            return Response({
+                'error': 'Chantier non trouvé'
+            }, status=404)
+        except Exception as e:
+            import traceback
+            print(f"❌ Erreur lors de la mise à jour du drive_path du chantier: {str(e)}")
+            print(traceback.format_exc())
+            return Response({
+                'error': f'Erreur lors de la mise à jour : {str(e)}'
+            }, status=500)
 
 
 
@@ -2922,6 +3003,18 @@ def create_devis(request):
                     'statut': 'en_attente'
                 }
                 
+                # ✅ Ajouter drive_path si fourni (pour les appels d'offres)
+                # Si drive_path est fourni et non vide, l'enregistrer
+                # Sinon, laisser NULL (calcul automatique via get_drive_path())
+                if 'drive_path' in request.data and request.data.get('drive_path'):
+                    drive_path_value = request.data.get('drive_path', '').strip()
+                    if drive_path_value:
+                        # ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
+                        drive_path_value = clean_drive_path(drive_path_value)
+                        if drive_path_value:
+                            drive_path_value = drive_path_value.strip().strip('/')
+                            appel_offres_data['drive_path'] = drive_path_value
+                
                 appel_offres = AppelOffres.objects.create(**appel_offres_data)
                 
                 # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
@@ -4400,7 +4493,10 @@ def get_chantier_details(request, chantier_id):
                     'nom': f"{chantier.societe.client_name.name} {chantier.societe.client_name.surname}" if chantier.societe and chantier.societe.client_name else None,
                     'email': chantier.societe.client_name.client_mail if chantier.societe and chantier.societe.client_name else None
                 } if chantier.societe else None
-            }
+            },
+            # ✅ Ajouter le drive_path (personnalisé ou calculé)
+            'drive_path': chantier.get_drive_path(),
+            'drive_path_stored': chantier.drive_path  # Chemin stocké en base (peut être None)
         }
         
         return Response(details)
@@ -11580,6 +11676,86 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
         
         return queryset.order_by('-date_debut')
     
+    @action(detail=True, methods=['put', 'patch'])
+    def update_drive_path(self, request, pk=None):
+        """
+        Met à jour le drive_path d'un appel d'offres et transfère les fichiers si nécessaire.
+        
+        Body:
+        {
+            "drive_path": "nouveau/chemin" ou null pour réinitialiser
+        }
+        """
+        try:
+            appel_offres = self.get_object()
+            nouveau_drive_path = request.data.get('drive_path')
+            
+            # Déterminer l'ancien chemin (drive_path stocké ou calculé)
+            ancien_chemin_base = appel_offres.get_drive_path()
+            
+            # Si drive_path est fourni comme chaîne vide, le traiter comme null
+            if nouveau_drive_path == '':
+                nouveau_drive_path = None
+            elif nouveau_drive_path:
+                # ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
+                nouveau_drive_path = clean_drive_path(nouveau_drive_path)
+                if nouveau_drive_path:
+                    # Nettoyer les slashes en début/fin
+                    nouveau_drive_path = nouveau_drive_path.strip().strip('/')
+                    # Valider le chemin (utiliser la méthode du modèle)
+                    try:
+                        appel_offres.validate_drive_path(nouveau_drive_path)
+                    except ValidationError as e:
+                        return Response({
+                            'error': str(e)
+                        }, status=400)
+                else:
+                    nouveau_drive_path = None
+            
+            # Vérifier si le chemin change réellement
+            nouveau_chemin_base = nouveau_drive_path if nouveau_drive_path else (
+                f"{custom_slugify(appel_offres.societe.nom_societe)}/{custom_slugify(appel_offres.chantier_name)}" 
+                if appel_offres.societe else None
+            )
+            
+            # Si le chemin change, transférer les fichiers
+            if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base:
+                # Transférer tous les fichiers de l'ancien vers le nouveau chemin
+                transfer_success = drive_automation.transfer_appel_offres_drive_path(
+                    ancien_chemin=ancien_chemin_base,
+                    nouveau_chemin=nouveau_chemin_base
+                )
+                
+                if not transfer_success:
+                    return Response({
+                        'error': 'Erreur lors du transfert des fichiers. Le chemin n\'a pas été modifié.'
+                    }, status=500)
+            
+            # Mettre à jour le drive_path
+            appel_offres.drive_path = nouveau_drive_path
+            appel_offres.save()
+            
+            return Response({
+                'success': True,
+                'drive_path': appel_offres.drive_path,
+                'drive_path_computed': appel_offres.get_drive_path(),
+                'message': 'Chemin du drive mis à jour avec succès' + (
+                    ' et fichiers transférés' if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base else ''
+                )
+            }, status=200)
+            
+        except AppelOffres.DoesNotExist:
+            return Response({
+                'error': 'Appel d\'offres non trouvé'
+            }, status=404)
+        except Exception as e:
+            import traceback
+            print(f"❌ Erreur lors de la mise à jour du drive_path de l'appel d'offres: {str(e)}")
+            print(traceback.format_exc())
+            return Response({
+                'error': f'Erreur lors de la mise à jour : {str(e)}'
+            }, status=500)
+    
     @action(detail=True, methods=['post'])
     def transformer_en_chantier(self, request, pk=None):
         """Transforme un appel d'offres validé en chantier"""
@@ -11601,7 +11777,16 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                     'deja_transforme': True
                 }, status=400)
             
-            chantier = appel_offres.transformer_en_chantier()
+            # ✅ Vérifier que l'appel d'offres a une société avant de transformer
+            if not appel_offres.societe:
+                return Response({
+                    'error': 'L\'appel d\'offres doit avoir une société associée pour être transformé en chantier'
+                }, status=400)
+            
+            # ✅ Récupérer le drive_path depuis la requête (optionnel)
+            drive_path = request.data.get('drive_path', None)
+            
+            chantier = appel_offres.transformer_en_chantier(drive_path=drive_path)
             
             # Mettre à jour le devis pour qu'il pointe vers le nouveau chantier
             devis = appel_offres.devis.first()
@@ -11610,38 +11795,35 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 devis.appel_offres = None
                 devis.save()
             
-            # Récupérer les informations pour la copie (sans génération de PDF)
+            # ✅ Copier automatiquement les dossiers du drive vers le nouveau chemin
+            # Utiliser les drive_path des modèles au lieu de calculer les chemins
             try:
-                # Récupérer le nom de la société depuis l'appel d'offres
-                societe_name = "Société par défaut"
-                if appel_offres.societe:
-                    societe_name = appel_offres.societe.nom_societe
-                elif hasattr(appel_offres, 'devis') and appel_offres.devis.first():
-                    devis = appel_offres.devis.first()
-                    if devis.societe:
-                        societe_name = devis.societe.nom
+                # Récupérer les chemins de base depuis les modèles
+                appel_offres_base_path = appel_offres.get_drive_path()
+                chantier_base_path = chantier.get_drive_path()
                 
-                # Utiliser le nom de l'appel d'offres et du chantier
-                appel_offres_name = appel_offres.chantier_name
-                chantier_name = chantier.chantier_name
-                
-            except Exception as e:
-                pass
-            
-            # Copier automatiquement les dossiers du drive vers le nouveau chemin
-            try:
-                drive_automation.copy_appel_offres_to_chantier(
-                    societe_name=societe_name,
-                    appel_offres_name=appel_offres_name,
-                    chantier_name=chantier_name
-                )
+                if appel_offres_base_path and chantier_base_path:
+                    # Construire les chemins complets avec les préfixes
+                    source_path = f"Appels_Offres/{appel_offres_base_path}"
+                    dest_path = f"Chantiers/{chantier_base_path}"
+                    
+                    # Copier les fichiers en utilisant les chemins complets
+                    drive_automation.copy_appel_offres_to_chantier_by_path(
+                        source_path=source_path,
+                        dest_path=dest_path
+                    )
             except Exception:
+                # Erreur silencieuse : ne pas bloquer la transformation
                 pass
             
+            # Retourner la réponse avec les informations du chantier
+            # Ne pas sérialiser complètement pour éviter les erreurs si societe est None
             return Response({
                 'message': 'Appel d\'offres transformé en chantier avec succès',
                 'chantier_id': chantier.id,
-                'chantier_name': chantier.chantier_name
+                'chantier_name': chantier.chantier_name,
+                'societe_id': chantier.societe.id if chantier.societe else None,
+                'societe_nom': chantier.societe.nom_societe if chantier.societe else None
             })
             
         except Exception as e:
@@ -13130,21 +13312,26 @@ def delete_ligne_speciale(request, devis_id, ligne_id):
 @permission_classes([AllowAny])
 def get_chantiers_drive_paths(request):
     """
-    Récupère les chemins de drive pour tous les chantiers
+    Récupère les chemins de drive pour tous les chantiers et appels d'offres
     
     Returns:
-        Liste des chantiers avec leurs chemins de drive correspondants
+        Liste des chantiers et appels d'offres avec leurs chemins de drive correspondants
     """
     try:
+        # ✅ Récupérer les chantiers
         chantiers = Chantier.objects.select_related('societe').all()
         
+        # ✅ Récupérer les appels d'offres
+        appels_offres = AppelOffres.objects.select_related('societe').all()
+        
         result = []
+        
+        # ✅ Traiter les chantiers
         for chantier in chantiers:
-            # Construire le chemin de drive
-            if chantier.societe:
-                societe_slug = custom_slugify(chantier.societe.nom_societe)
-                chantier_slug = custom_slugify(chantier.chantier_name)
-                drive_path = f"Chantiers/{societe_slug}/{chantier_slug}"
+            # Utiliser get_drive_path() qui gère le calcul automatique si drive_path est NULL
+            base_path = chantier.get_drive_path()
+            if base_path:
+                drive_path = f"Chantiers/{base_path}"
             else:
                 drive_path = None
             
@@ -13154,8 +13341,34 @@ def get_chantiers_drive_paths(request):
                 'societe_id': chantier.societe.id if chantier.societe else None,
                 'societe_nom': chantier.societe.nom_societe if chantier.societe else None,
                 'drive_path': drive_path,
+                'drive_path_base': base_path,  # Chemin de base sans préfixe Chantiers/
+                'drive_path_stored': chantier.drive_path,  # Chemin stocké en base (peut être None)
                 'state_chantier': chantier.state_chantier,
                 'date_debut': chantier.date_debut.isoformat() if chantier.date_debut else None,
+                'type': 'chantier',  # ✅ Indicateur de type
+            })
+        
+        # ✅ Traiter les appels d'offres
+        for appel_offres in appels_offres:
+            # Utiliser get_drive_path() qui gère le calcul automatique si drive_path est NULL
+            base_path = appel_offres.get_drive_path()
+            if base_path:
+                drive_path = f"Appels_Offres/{base_path}"
+            else:
+                drive_path = None
+            
+            result.append({
+                'id': appel_offres.id,
+                'chantier_name': appel_offres.chantier_name,
+                'societe_id': appel_offres.societe.id if appel_offres.societe else None,
+                'societe_nom': appel_offres.societe.nom_societe if appel_offres.societe else None,
+                'drive_path': drive_path,
+                'drive_path_base': base_path,  # Chemin de base sans préfixe Appels_Offres/
+                'drive_path_stored': appel_offres.drive_path,  # Chemin stocké en base (peut être None)
+                'state_chantier': appel_offres.state_chantier,
+                'statut': appel_offres.statut,  # Statut spécifique aux appels d'offres
+                'date_debut': appel_offres.date_debut.isoformat() if appel_offres.date_debut else None,
+                'type': 'appel_offres',  # ✅ Indicateur de type
             })
         
         return Response(result, status=status.HTTP_200_OK)

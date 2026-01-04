@@ -882,22 +882,29 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
     // Utiliser les données complètes du chantier si disponibles, sinon les données de base
     const chantierInfo = fullChantierData || chantierData;
 
-    if (!chantierInfo?.societe?.nom || !chantierInfo?.nom) {
+    // ✅ Utiliser le drive_path du chantier (personnalisé ou calculé) au lieu de le calculer localement
+    let drivePath = null;
+    
+    if (chantierInfo?.drive_path) {
+      // Utiliser le drive_path du chantier (déjà calculé par get_drive_path())
+      drivePath = `Chantiers/${chantierInfo.drive_path}`;
+    } else if (chantierInfo?.societe?.nom && chantierInfo?.nom) {
+      // Fallback : calculer le chemin si drive_path n'est pas disponible (rétrocompatibilité)
+      const societeSlug = universalDriveGenerator.customSlugify(
+        chantierInfo.societe.nom
+      );
+      const chantierSlug = universalDriveGenerator.customSlugify(
+        chantierInfo.nom
+      );
+      drivePath = `Chantiers/${societeSlug}/${chantierSlug}`;
+    }
+
+    if (!drivePath) {
       alert(
         "Impossible d'ouvrir le Drive : informations du chantier manquantes"
       );
       return;
     }
-
-    // Construire le chemin du Drive en utilisant customSlugify
-    const societeSlug = universalDriveGenerator.customSlugify(
-      chantierInfo.societe.nom
-    );
-    const chantierSlug = universalDriveGenerator.customSlugify(
-      chantierInfo.nom
-    );
-
-    const drivePath = `Chantiers/${societeSlug}/${chantierSlug}`;
 
     // Ouvrir le Drive dans une nouvelle fenêtre
     const driveUrl = `/drive?path=${encodeURIComponent(

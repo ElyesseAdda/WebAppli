@@ -156,6 +156,15 @@ class Chantier(models.Model):
     maitre_oeuvre_telephone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Téléphone maître d'oeuvre")
     maitre_oeuvre_email = models.EmailField(max_length=254, blank=True, null=True, verbose_name="Email maître d'oeuvre")
     maitre_oeuvre_contact = models.CharField(max_length=500, blank=True, null=True, verbose_name="Contact maître d'oeuvre")
+    
+    # Champ pour le chemin personnalisé dans le drive
+    drive_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Chemin du drive",
+        help_text="Chemin personnalisé dans le drive. Si vide, sera calculé automatiquement à partir du nom de la société et du chantier."
+    )
 
     #Partie validation des informations
     @property
@@ -165,6 +174,55 @@ class Chantier(models.Model):
     @property
     def nombre_facture(self):
         return self.facture.count()
+    
+    def get_drive_path(self):
+        """
+        Retourne le chemin du drive (personnalisé ou calculé).
+        
+        Priorité :
+        1. Si drive_path est défini → retourne drive_path
+        2. Sinon → calcule automatiquement {societe_slug}/{chantier_slug}
+        3. Si pas de société → retourne None
+        """
+        if self.drive_path and self.drive_path.strip():
+            return self.drive_path.strip()
+        # Calculer le chemin par défaut
+        if self.societe:
+            from api.utils import custom_slugify
+            societe_slug = custom_slugify(self.societe.nom_societe)
+            chantier_slug = custom_slugify(self.chantier_name)
+            return f"{societe_slug}/{chantier_slug}"
+        return None
+    
+    def clean(self):
+        """
+        Valide le format du chemin drive lors de la validation du modèle.
+        """
+        super().clean()
+        if self.drive_path:
+            self.validate_drive_path(self.drive_path)
+    
+    def validate_drive_path(self, value):
+        """
+        Valide le format du chemin drive.
+        Interdit les caractères spéciaux non gérés par AWS S3.
+        """
+        if not value:
+            return value
+        
+        # Caractères interdits par AWS S3
+        forbidden_chars = ['\\', ':', '*', '?', '"', '<', '>', '|', '\x00', '\x01']
+        for char in forbidden_chars:
+            if char in value:
+                raise ValidationError(
+                    f"Le chemin contient un caractère interdit : '{char}'. "
+                    f"Caractères interdits : {', '.join(forbidden_chars)}"
+                )
+        
+        # Vérifier que le chemin ne commence/termine pas par /
+        value = value.strip('/')
+        
+        return value
     
     def __str__(self):
         return f"Chantier {self.id} - {self.chantier_name}"
@@ -331,11 +389,74 @@ class AppelOffres(models.Model):
         verbose_name="Chantier transformé depuis cet appel d'offres"
     )
     
+    # Champ pour le chemin personnalisé dans le drive
+    drive_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Chemin du drive",
+        help_text="Chemin personnalisé dans le drive. Si vide, sera calculé automatiquement à partir du nom de la société et du chantier."
+    )
+    
+    def get_drive_path(self):
+        """
+        Retourne le chemin du drive (personnalisé ou calculé).
+        
+        Priorité :
+        1. Si drive_path est défini → retourne drive_path
+        2. Sinon → calcule automatiquement {societe_slug}/{chantier_slug}
+        3. Si pas de société → retourne None
+        """
+        if self.drive_path and self.drive_path.strip():
+            return self.drive_path.strip()
+        # Calculer le chemin par défaut
+        if self.societe:
+            from api.utils import custom_slugify
+            societe_slug = custom_slugify(self.societe.nom_societe)
+            chantier_slug = custom_slugify(self.chantier_name)
+            return f"{societe_slug}/{chantier_slug}"
+        return None
+    
+    def clean(self):
+        """
+        Valide le format du chemin drive lors de la validation du modèle.
+        """
+        super().clean()
+        if self.drive_path:
+            self.validate_drive_path(self.drive_path)
+    
+    def validate_drive_path(self, value):
+        """
+        Valide le format du chemin drive.
+        Interdit les caractères spéciaux non gérés par AWS S3.
+        """
+        if not value:
+            return value
+        
+        # Caractères interdits par AWS S3
+        forbidden_chars = ['\\', ':', '*', '?', '"', '<', '>', '|', '\x00', '\x01']
+        for char in forbidden_chars:
+            if char in value:
+                raise ValidationError(
+                    f"Le chemin contient un caractère interdit : '{char}'. "
+                    f"Caractères interdits : {', '.join(forbidden_chars)}"
+                )
+        
+        # Vérifier que le chemin ne commence/termine pas par /
+        value = value.strip('/')
+        
+        return value
+    
     def __str__(self):
         return f"Appel d'offres {self.id} - {self.chantier_name}"
     
-    def transformer_en_chantier(self):
-        """Transforme l'appel d'offres en chantier"""
+    def transformer_en_chantier(self, drive_path=None):
+        """Transforme l'appel d'offres en chantier
+        
+        Args:
+            drive_path (str, optional): Chemin personnalisé pour le drive du nouveau chantier.
+                                      Si None, utilise le drive_path de l'appel d'offres.
+        """
         if self.statut != 'valide':
             raise ValueError("Seuls les appels d'offres validés peuvent être transformés en chantier")
         
@@ -351,6 +472,14 @@ class AppelOffres(models.Model):
         # (grâce à on_delete=models.SET_NULL) et la transformation sera à nouveau possible
         if self.chantier_transformé:
             raise ValueError(f"Cet appel d'offres a déjà été transformé en chantier : {self.chantier_transformé.chantier_name}")
+        
+        # ✅ Utiliser le drive_path fourni en paramètre, sinon utiliser celui de l'appel d'offres
+        if drive_path is not None:
+            # Nettoyer le drive_path fourni
+            cleaned_drive_path = self._clean_drive_path_for_copy(drive_path) if drive_path else None
+        else:
+            # Nettoyer le drive_path de l'appel d'offres
+            cleaned_drive_path = self._clean_drive_path_for_copy(self.drive_path) if self.drive_path else None
         
         # Créer le chantier avec tous les champs de l'appel d'offres
         chantier = Chantier.objects.create(
@@ -372,6 +501,8 @@ class AppelOffres(models.Model):
             marge_estimee=self.marge_estimee,
             description=self.description,
             taux_fixe=self.taux_fixe,
+            # ✅ Utiliser le drive_path nettoyé (personnalisé ou celui de l'appel d'offres)
+            drive_path=cleaned_drive_path,
         )
         
         # ✅ Marquer cet appel d'offres comme transformé en liant le chantier
@@ -379,6 +510,17 @@ class AppelOffres(models.Model):
         self.save()
         
         return chantier
+    
+    def _clean_drive_path_for_copy(self, drive_path):
+        """
+        Nettoie le drive_path lors de la copie (retire les préfixes).
+        Méthode interne utilisée lors de la transformation en chantier.
+        """
+        if not drive_path:
+            return None
+        
+        from api.utils import clean_drive_path
+        return clean_drive_path(drive_path)
 
 class Agent(models.Model):
     PAYMENT_TYPE_CHOICES = [

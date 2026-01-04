@@ -161,8 +161,10 @@ class PDFManager:
         Args:
             document_type: Type de document
             societe_name: Nom de la société
-            **kwargs: Paramètres supplémentaires (chantier_name, appel_offres_name, custom_path, etc.)
+            **kwargs: Paramètres supplémentaires (chantier_name, appel_offres_name, custom_path, chantier_id, appel_offres_id, etc.)
                 - custom_path: Chemin personnalisé dans le drive (optionnel). Si fourni, ce chemin sera utilisé directement.
+                - chantier_id: ID du chantier (optionnel). Si fourni, utilise le drive_path du chantier.
+                - appel_offres_id: ID de l'appel d'offres (optionnel). Si fourni, utilise le drive_path de l'appel d'offres.
         
         Returns:
             str: Chemin S3 complet (sans le nom du fichier)
@@ -175,6 +177,45 @@ class PDFManager:
             # Ajouter le sous-dossier du type de document si nécessaire
             subfolder = self.document_type_folders.get(document_type, 'Devis')
             return f"{custom_path}/{subfolder}" if custom_path else subfolder
+        
+        # ✅ Si un appel_offres_id est fourni, utiliser le chemin de l'appel d'offres
+        if 'appel_offres_id' in kwargs and kwargs['appel_offres_id']:
+            from .models import AppelOffres
+            try:
+                appel_offres = AppelOffres.objects.get(id=kwargs['appel_offres_id'])
+                base_path = appel_offres.get_drive_path()
+                if base_path:
+                    subfolder = self.document_type_folders.get(document_type, 'Devis')
+                    # Pour les devis de marché, utiliser la structure Devis/Devis_Marche
+                    if document_type == 'devis_marche':
+                        subfolder = 'Devis/Devis_Marche'
+                    # ✅ Structure pour appels d'offres : Appels_Offres/{base_path}/{subfolder}
+                    return f"Appels_Offres/{base_path}/{subfolder}"
+            except AppelOffres.DoesNotExist:
+                pass
+        
+        # ✅ Si un chantier_id est fourni, utiliser le chemin du chantier
+        if 'chantier_id' in kwargs and kwargs['chantier_id']:
+            from .models import Chantier
+            try:
+                chantier = Chantier.objects.get(id=kwargs['chantier_id'])
+                base_path = chantier.get_drive_path()
+                if base_path:
+                    subfolder = self.document_type_folders.get(document_type, 'Devis')
+                    # ✅ Structure pour chantiers : Chantiers/{base_path}/{subfolder}
+                    # Pour certains types, ajouter un sous-dossier supplémentaire (ex: fournisseur, entreprise)
+                    if document_type == 'bon_commande' and 'fournisseur_name' in kwargs:
+                        fournisseur_slug = custom_slugify(kwargs['fournisseur_name'])
+                        return f"Chantiers/{base_path}/{subfolder}/{fournisseur_slug}"
+                    elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance'] and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
+                        sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
+                        sous_traitant_slug = custom_slugify(sous_traitant_name)
+                        return f"Chantiers/{base_path}/Sous_Traitant/{sous_traitant_slug}"
+                    elif document_type == 'devis_marche':
+                        return f"Chantiers/{base_path}/Devis/{subfolder}"
+                    return f"Chantiers/{base_path}/{subfolder}"
+            except Chantier.DoesNotExist:
+                pass
         
         societe_slug = custom_slugify(societe_name)
         

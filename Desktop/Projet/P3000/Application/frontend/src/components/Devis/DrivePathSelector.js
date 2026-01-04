@@ -29,9 +29,10 @@ import {
   Folder as FolderIcon,
   Home as HomeIcon,
   NavigateNext as NavigateNextIcon,
-  ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
   Search as SearchIcon,
   Check as CheckIcon,
+  CreateNewFolder as CreateNewFolderIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
@@ -44,21 +45,6 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
     backgroundColor: theme.palette.action.hover,
   },
 }));
-
-const getCookie = (name) => {
-  let cookieValue = null;
-  if (document.cookie && document.cookie !== '') {
-    const cookies = document.cookie.split(';');
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i].trim();
-      if (cookie.substring(0, name.length + 1) === name + '=') {
-        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        break;
-      }
-    }
-  }
-  return cookieValue;
-};
 
 const displayFilename = (filename) => {
   if (!filename) return 'Racine';
@@ -77,13 +63,18 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   
+  // États pour la création de dossier
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  
   // Cache pour les dossiers visités
   const [folderCache, setFolderCache] = useState(new Map());
 
   // Charger le contenu du dossier actuel avec cache
-  const fetchFolderContent = useCallback(async (folderPath = '') => {
-    // Vérifier le cache d'abord
-    if (folderCache.has(folderPath)) {
+  const fetchFolderContent = useCallback(async (folderPath = '', forceRefresh = false) => {
+    // Vérifier le cache d'abord (sauf si on force le rafraîchissement)
+    if (!forceRefresh && folderCache.has(folderPath)) {
       const cachedData = folderCache.get(folderPath);
       setFolders(cachedData);
       setCurrentPath(folderPath);
@@ -116,17 +107,22 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
   // Charger le contenu initial
   useEffect(() => {
     if (open) {
-      setSelectedPath(defaultPath || '');
+      const initialPath = defaultPath || '';
+      setSelectedPath(initialPath);
       setSearchTerm('');
       setSearchResults([]);
       setShowSearchResults(false);
-      setCurrentPath(defaultPath || '');
+      setCurrentPath(initialPath);
       setError(null);
+      setNewFolderName('');
+      setShowCreateFolderDialog(false);
       // Charger le chemin par défaut ou la racine
-      fetchFolderContent(defaultPath || '');
+      fetchFolderContent(initialPath);
     } else {
       // Nettoyer le cache quand le modal se ferme
       setFolderCache(new Map());
+      setNewFolderName('');
+      setShowCreateFolderDialog(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultPath]);
@@ -235,6 +231,77 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
     fetchFolderContent(defaultPath || '');
   };
 
+  // Créer un nouveau dossier
+  const handleCreateFolder = async () => {
+    if (!newFolderName || !newFolderName.trim()) {
+      setError('Le nom du dossier ne peut pas être vide');
+      return;
+    }
+
+    setIsCreatingFolder(true);
+    setError(null);
+
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/create-folder/`,
+        {
+          parent_path: currentPath,
+          folder_name: newFolderName.trim(),
+        },
+        { withCredentials: true }
+      );
+
+      if (response.data.success) {
+        const newFolderPath = response.data.folder_path;
+        const folderNameFromAPI = response.data.folder_name_display || response.data.folder_name || newFolderName.trim();
+        
+        // Invalider le cache du dossier parent pour forcer le rechargement
+        setFolderCache(prev => {
+          const newCache = new Map(prev);
+          newCache.delete(currentPath);
+          return newCache;
+        });
+
+        // Ajouter immédiatement le nouveau dossier à la liste (optimiste)
+        const newFolder = {
+          name: folderNameFromAPI,
+          path: newFolderPath,
+        };
+        
+        setFolders(prev => {
+          // Vérifier si le dossier n'existe pas déjà dans la liste
+          const exists = prev.some(f => f.path === newFolderPath);
+          if (!exists) {
+            return [...prev, newFolder].sort((a, b) => a.name.localeCompare(b.name));
+          }
+          return prev;
+        });
+
+        // Attendre un court délai puis recharger pour s'assurer que tout est synchronisé
+        setTimeout(async () => {
+          await fetchFolderContent(currentPath, true);
+        }, 200);
+
+        // Optionnel : naviguer automatiquement vers le nouveau dossier créé
+        // Nettoyer le chemin (retirer le slash final si présent)
+        const cleanedPath = newFolderPath.endsWith('/') 
+          ? newFolderPath.slice(0, -1) 
+          : newFolderPath;
+        setSelectedPath(cleanedPath);
+        
+        // Fermer le dialog de création
+        setShowCreateFolderDialog(false);
+        setNewFolderName('');
+      } else {
+        setError('Erreur lors de la création du dossier');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Erreur lors de la création du dossier');
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
@@ -242,8 +309,8 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
           <Typography variant="h6">
             Sélectionner le chemin du drive
           </Typography>
-          <IconButton onClick={onClose} size="small">
-            <ArrowBackIcon />
+          <IconButton onClick={onClose} size="small" aria-label="Fermer">
+            <CloseIcon />
           </IconButton>
         </Box>
       </DialogTitle>
@@ -351,6 +418,17 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
               </Box>
             ) : (
               <>
+                {/* Bouton pour créer un nouveau dossier */}
+                <Button
+                  variant="outlined"
+                  startIcon={<CreateNewFolderIcon />}
+                  onClick={() => setShowCreateFolderDialog(true)}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                >
+                  Créer un nouveau dossier ici
+                </Button>
+
                 {/* Option pour sélectionner le dossier actuel */}
                 <Paper
                   variant="outlined"
@@ -437,6 +515,65 @@ const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
           Confirmer
         </Button>
       </DialogActions>
+
+      {/* Dialog pour créer un nouveau dossier */}
+      <Dialog
+        open={showCreateFolderDialog}
+        onClose={() => {
+          if (!isCreatingFolder) {
+            setShowCreateFolderDialog(false);
+            setNewFolderName('');
+            setError(null);
+          }
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          Créer un nouveau dossier
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Créer un dossier dans : <strong>{currentPath || 'Racine'}</strong>
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Nom du dossier"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && newFolderName.trim() && !isCreatingFolder) {
+                handleCreateFolder();
+              }
+            }}
+            disabled={isCreatingFolder}
+            error={!!error}
+            helperText={error || 'Le nom sera automatiquement formaté (espaces remplacés par des tirets)'}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setShowCreateFolderDialog(false);
+              setNewFolderName('');
+              setError(null);
+            }}
+            disabled={isCreatingFolder}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleCreateFolder}
+            variant="contained"
+            disabled={!newFolderName.trim() || isCreatingFolder}
+            startIcon={isCreatingFolder ? <CircularProgress size={16} /> : <CreateNewFolderIcon />}
+          >
+            {isCreatingFolder ? 'Création...' : 'Créer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

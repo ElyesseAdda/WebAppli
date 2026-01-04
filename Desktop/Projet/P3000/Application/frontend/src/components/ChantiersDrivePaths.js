@@ -17,12 +17,21 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Snackbar,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   ContentCopy as ContentCopyIcon,
   OpenInNew as OpenInNewIcon,
+  Edit as EditIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
+import DrivePathSelector from './Devis/DrivePathSelector';
 
 const ChantiersDrivePaths = () => {
   const [chantiers, setChantiers] = useState([]);
@@ -30,6 +39,12 @@ const ChantiersDrivePaths = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedPath, setSelectedPath] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [showPathSelector, setShowPathSelector] = useState(false);
 
   useEffect(() => {
     fetchChantiersDrivePaths();
@@ -74,6 +89,115 @@ const ChantiersDrivePaths = () => {
       const driveUrl = `/drive?path=${encodeURIComponent(path)}&sidebar=closed`;
       window.open(driveUrl, '_blank', 'width=1200,height=800');
     }
+  };
+
+  const handleEditPath = (item) => {
+    // Utiliser drive_path_stored (chemin personnalisé stocké) ou drive_path_base (chemin calculé)
+    // Si drive_path_stored existe, c'est le chemin personnalisé actuel
+    // Sinon, on utilise drive_path_base qui est le chemin calculé
+    const currentPath = item.drive_path_stored || item.drive_path_base || '';
+    setSelectedItem(item);
+    // Initialiser selectedPath avec le chemin actuel (pour permettre de le garder ou le modifier)
+    setSelectedPath(item.drive_path_stored || null);
+    setEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModalOpen(false);
+    setSelectedItem(null);
+    setSelectedPath(null);
+  };
+
+  const handlePathSelected = (path) => {
+    setSelectedPath(path);
+    setShowPathSelector(false);
+    // Le DrivePathSelector ferme automatiquement son modal
+  };
+
+  const handleSavePath = async () => {
+    if (!selectedItem) return;
+
+    setSaving(true);
+    try {
+      const endpoint = selectedItem.type === 'chantier' 
+        ? `/api/chantier/${selectedItem.id}/update_drive_path/`
+        : `/api/appels-offres/${selectedItem.id}/update_drive_path/`;
+      
+      // Si selectedPath est défini et différent du chemin actuel, l'utiliser
+      // Sinon, garder le chemin actuel (ne pas le modifier)
+      const pathToSave = selectedPath !== null ? selectedPath : selectedItem.drive_path_stored;
+      
+      const response = await axios.patch(endpoint, {
+        drive_path: pathToSave || null
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.data.success) {
+        setSnackbar({
+          open: true,
+          message: response.data.message || 'Chemin mis à jour avec succès',
+          severity: 'success'
+        });
+        handleCloseEditModal();
+        // Rafraîchir la liste
+        fetchChantiersDrivePaths();
+      }
+    } catch (err) {
+      console.error('Erreur lors de la mise à jour du chemin:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || 'Erreur lors de la mise à jour du chemin',
+        severity: 'error'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResetPath = async () => {
+    if (!selectedItem) return;
+
+    setSaving(true);
+    try {
+      const endpoint = selectedItem.type === 'chantier' 
+        ? `/api/chantier/${selectedItem.id}/update_drive_path/`
+        : `/api/appels-offres/${selectedItem.id}/update_drive_path/`;
+      
+      const response = await axios.patch(endpoint, {
+        drive_path: null
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.data.success) {
+        setSnackbar({
+          open: true,
+          message: 'Chemin réinitialisé au chemin par défaut',
+          severity: 'success'
+        });
+        handleCloseEditModal();
+        // Rafraîchir la liste
+        fetchChantiersDrivePaths();
+      }
+    } catch (err) {
+      console.error('Erreur lors de la réinitialisation du chemin:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || 'Erreur lors de la réinitialisation du chemin',
+        severity: 'error'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const getStateColor = (state) => {
@@ -204,6 +328,15 @@ const ChantiersDrivePaths = () => {
                   </TableCell>
                   <TableCell>
                     <Box display="flex" gap={1}>
+                      <Tooltip title="Modifier le chemin">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditPath(chantier)}
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       {chantier.drive_path && (
                         <>
                           <Tooltip title="Copier le chemin">
@@ -240,6 +373,98 @@ const ChantiersDrivePaths = () => {
           Total: {filteredChantiers.length} chantier(s) affiché(s) sur {chantiers.length}
         </Typography>
       </Box>
+
+      {/* Modal de modification du chemin */}
+      <Dialog
+        open={editModalOpen}
+        onClose={handleCloseEditModal}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Modifier le chemin du drive
+          {selectedItem && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {selectedItem.type === 'chantier' ? 'Chantier' : 'Appel d\'offres'}: {selectedItem.chantier_name}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Chemin actuel: <strong>{selectedItem?.drive_path || 'Calculé automatiquement'}</strong>
+            </Typography>
+            {selectedItem?.drive_path_stored && (
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                (Chemin personnalisé stocké: {selectedItem.drive_path_stored})
+              </Typography>
+            )}
+            {selectedPath && selectedPath !== (selectedItem?.drive_path_stored || selectedItem?.drive_path_base || '') && (
+              <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                Nouveau chemin sélectionné: <strong>{selectedPath}</strong>
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              onClick={() => setShowPathSelector(true)}
+              disabled={saving}
+            >
+              {selectedPath ? 'Modifier le chemin sélectionné' : 'Sélectionner un nouveau chemin'}
+            </Button>
+            {selectedItem?.drive_path_stored && (
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={handleResetPath}
+                disabled={saving}
+                color="secondary"
+              >
+                Réinitialiser au chemin par défaut
+              </Button>
+            )}
+          </Box>
+          {!selectedPath && (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              Cliquez sur "Sélectionner un nouveau chemin" pour choisir un chemin personnalisé, ou utilisez "Réinitialiser" pour revenir au chemin par défaut.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditModal} disabled={saving}>
+            Annuler
+          </Button>
+          <Button
+            onClick={handleSavePath}
+            variant="contained"
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={16} /> : null}
+          >
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* DrivePathSelector modal */}
+      <DrivePathSelector
+        open={showPathSelector}
+        onClose={() => setShowPathSelector(false)}
+        onSelect={handlePathSelected}
+        defaultPath={selectedPath || selectedItem?.drive_path_stored || selectedItem?.drive_path_base || ''}
+      />
+
+      {/* Snackbar pour les notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

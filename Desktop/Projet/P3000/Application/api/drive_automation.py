@@ -288,6 +288,8 @@ class DriveAutomation:
         Copie un appel d'offres vers un chantier (COPIE les fichiers sans supprimer l'original)
         Chemin source: Appels_Offres/Societe/nom_appel_offres
         Chemin destination: Chantier/Societe/nom_chantier
+        
+        ⚠️ DEPRECATED : Utiliser copy_appel_offres_to_chantier_by_path() à la place
         """
         try:
             # Chemins source et destination
@@ -334,6 +336,62 @@ class DriveAutomation:
             return True
             
         except Exception:
+            return False
+    
+    def copy_appel_offres_to_chantier_by_path(self, source_path: str, dest_path: str) -> bool:
+        """
+        Copie un appel d'offres vers un chantier en utilisant les chemins complets.
+        
+        Args:
+            source_path: Chemin source complet (ex: "Appels_Offres/Zonia/Testcontact")
+            dest_path: Chemin destination complet (ex: "Chantiers/Zonia/Testcontact")
+            
+        Returns:
+            bool: True si le transfert a réussi
+        """
+        try:
+            # S'assurer que les chemins se terminent par /
+            if not source_path.endswith('/'):
+                source_path += '/'
+            if not dest_path.endswith('/'):
+                dest_path += '/'
+            
+            # Lister tout le contenu du projet source AVANT de créer la structure
+            content = list_s3_folder_content(source_path)
+            
+            # Créer le dossier racine du chantier
+            create_s3_folder_recursive(dest_path)
+            
+            # Créer seulement les dossiers spécifiques au chantier (Situation, Sous_Traitant, Facture)
+            # Ne pas créer Devis et DCE car ils seront copiés depuis l'appel d'offres
+            existing_folders = [f['name'] for f in content['folders']]
+            chantier_specific_folders = ["Situation", "Sous_Traitant", "Facture"]
+            
+            for folder_name in chantier_specific_folders:
+                if folder_name not in existing_folders:
+                    folder_path = f"{dest_path.rstrip('/')}/{folder_name}"
+                    create_s3_folder_recursive(folder_path)
+            
+            # Copier tous les fichiers
+            for file in content['files']:
+                source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
+                dest_file_path = f"{dest_path.rstrip('/')}/{file['name']}"
+                self._copy_s3_file(source_file_path, dest_file_path)
+            
+            # Copier tous les dossiers (Devis et DCE) directement dans le chantier
+            for folder in content['folders']:
+                source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
+                dest_folder_path = f"{dest_path.rstrip('/')}/{folder['name']}"
+                
+                # Copier le contenu du dossier récursivement
+                self._copy_folder_recursive(source_folder_path, dest_folder_path)
+            
+            return True
+            
+        except Exception as e:
+            import traceback
+            print(f"Erreur lors de la copie des fichiers : {str(e)}")
+            print(traceback.format_exc())
             return False
     
     def _transfer_folder_recursive(self, source_folder: str, dest_folder: str):
@@ -467,6 +525,112 @@ class DriveAutomation:
             return True
             
         except Exception:
+            return False
+    
+    def transfer_chantier_drive_path(self, ancien_chemin: str, nouveau_chemin: str) -> bool:
+        """
+        Transfère tous les fichiers d'un chantier d'un chemin vers un autre.
+        
+        Args:
+            ancien_chemin: Ancien chemin (relatif, sans préfixe Chantiers/)
+            nouveau_chemin: Nouveau chemin (relatif, sans préfixe Chantiers/)
+            
+        Returns:
+            bool: True si le transfert a réussi
+        """
+        try:
+            # Construire les chemins complets
+            source_path = f"{self.chantiers_root}/{ancien_chemin}"
+            dest_path = f"{self.chantiers_root}/{nouveau_chemin}"
+            
+            # S'assurer que les chemins se terminent par /
+            if not source_path.endswith('/'):
+                source_path += '/'
+            if not dest_path.endswith('/'):
+                dest_path += '/'
+            
+            # Vérifier que le dossier source existe
+            try:
+                content = list_s3_folder_content(source_path)
+            except Exception:
+                # Le dossier source n'existe pas ou est vide, rien à transférer
+                print(f"⚠️ Le dossier source n'existe pas ou est vide: {source_path}")
+                return True
+            
+            # Créer la structure de destination si nécessaire
+            create_s3_folder_recursive(dest_path)
+            
+            # Transférer tous les fichiers
+            for file in content['files']:
+                source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
+                dest_file_path = f"{dest_path.rstrip('/')}/{file['name']}"
+                move_s3_file(source_file_path, dest_file_path)
+            
+            # Transférer tous les dossiers récursivement
+            for folder in content['folders']:
+                source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
+                dest_folder_path = f"{dest_path.rstrip('/')}/{folder['name']}"
+                self._transfer_folder_recursive(source_folder_path, dest_folder_path)
+            
+            return True
+            
+        except Exception as e:
+            import traceback
+            print(f"❌ Erreur lors du transfert du chantier : {str(e)}")
+            print(traceback.format_exc())
+            return False
+    
+    def transfer_appel_offres_drive_path(self, ancien_chemin: str, nouveau_chemin: str) -> bool:
+        """
+        Transfère tous les fichiers d'un appel d'offres d'un chemin vers un autre.
+        
+        Args:
+            ancien_chemin: Ancien chemin (relatif, sans préfixe Appels_Offres/)
+            nouveau_chemin: Nouveau chemin (relatif, sans préfixe Appels_Offres/)
+            
+        Returns:
+            bool: True si le transfert a réussi
+        """
+        try:
+            # Construire les chemins complets
+            source_path = f"{self.appels_offres_root}/{ancien_chemin}"
+            dest_path = f"{self.appels_offres_root}/{nouveau_chemin}"
+            
+            # S'assurer que les chemins se terminent par /
+            if not source_path.endswith('/'):
+                source_path += '/'
+            if not dest_path.endswith('/'):
+                dest_path += '/'
+            
+            # Vérifier que le dossier source existe
+            try:
+                content = list_s3_folder_content(source_path)
+            except Exception:
+                # Le dossier source n'existe pas ou est vide, rien à transférer
+                print(f"⚠️ Le dossier source n'existe pas ou est vide: {source_path}")
+                return True
+            
+            # Créer la structure de destination si nécessaire
+            create_s3_folder_recursive(dest_path)
+            
+            # Transférer tous les fichiers
+            for file in content['files']:
+                source_file_path = f"{source_path.rstrip('/')}/{file['name']}"
+                dest_file_path = f"{dest_path.rstrip('/')}/{file['name']}"
+                move_s3_file(source_file_path, dest_file_path)
+            
+            # Transférer tous les dossiers récursivement
+            for folder in content['folders']:
+                source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
+                dest_folder_path = f"{dest_path.rstrip('/')}/{folder['name']}"
+                self._transfer_folder_recursive(source_folder_path, dest_folder_path)
+            
+            return True
+            
+        except Exception as e:
+            import traceback
+            print(f"❌ Erreur lors du transfert de l'appel d'offres : {str(e)}")
+            print(traceback.format_exc())
             return False
 
 

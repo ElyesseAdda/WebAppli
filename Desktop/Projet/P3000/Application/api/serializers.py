@@ -395,7 +395,8 @@ class ChantierSerializer(serializers.ModelSerializer):
             'marge_fourniture', 'taux_fixe',
             'maitre_ouvrage_nom_societe', 'maitre_ouvrage_telephone', 'maitre_ouvrage_email', 'maitre_ouvrage_contact',
             'assistance_maitrise_ouvrage_nom_societe', 'assistance_maitrise_ouvrage_telephone', 'assistance_maitrise_ouvrage_email', 'assistance_maitrise_ouvrage_contact',
-            'maitre_oeuvre_nom_societe', 'maitre_oeuvre_telephone', 'maitre_oeuvre_email', 'maitre_oeuvre_contact'
+            'maitre_oeuvre_nom_societe', 'maitre_oeuvre_telephone', 'maitre_oeuvre_email', 'maitre_oeuvre_contact',
+            'drive_path'  # ✅ Chemin personnalisé dans le drive
         ]
 
     def get_marge_fourniture(self, obj):
@@ -694,7 +695,8 @@ class ChantierDetailSerializer(serializers.ModelSerializer):
             'statistiques',
             'adresse',
             'couts',
-            'dates'
+            'dates',
+            'drive_path'  # ✅ Chemin personnalisé dans le drive
         ]
 
     def get_societe_details(self, obj):

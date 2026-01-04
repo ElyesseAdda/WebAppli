@@ -510,6 +510,7 @@ const convertDateToISO = (dateString) => {
  * @param {number|null} params.societeId - ID de la société (pour appel d'offres)
  * @param {Object|null} params.totals - Totaux estimés (cout_estime_main_oeuvre, cout_estime_materiel, cout_avec_taux_fixe, marge_estimee)
  * @param {number} params.tauxFixe - Taux fixe global (par défaut 20)
+ * @param {string|null} params.drive_path - Chemin personnalisé du drive (pour appels d'offres et chantiers)
  * @returns {Object} Devis au format legacy prêt pour l'API
  */
 export const transformToLegacyFormat = ({
@@ -523,6 +524,7 @@ export const transformToLegacyFormat = ({
   societeId = null,
   totals = null, // { cout_estime_main_oeuvre, cout_estime_materiel, cout_avec_taux_fixe, marge_estimee }
   tauxFixe = 20,
+  drive_path = null, // ✅ Chemin personnalisé du drive
 }) => {
   // Extraire les lignes de détail
   const lignes = extractLignes(devisItems);
@@ -591,6 +593,8 @@ export const transformToLegacyFormat = ({
         cout_avec_taux_fixe: parseFloat(totals.cout_avec_taux_fixe || 0).toFixed(2),
         marge_estimee: parseFloat(totals.marge_estimee || 0).toFixed(2),
       }),
+      // ✅ Ajouter drive_path si défini (pour les appels d'offres)
+      ...(drive_path && { drive_path: drive_path }),
     }),
     
     // ❌ SUPPRIMÉ : Ces champs sont générés automatiquement par le serializer lors de la lecture

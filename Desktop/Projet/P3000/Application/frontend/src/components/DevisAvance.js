@@ -159,6 +159,32 @@ const customSlugify = (text) => {
   return text;
 };
 
+// Fonction utilitaire pour nettoyer le drive_path (retirer les préfixes Appels_Offres/ et Chantiers/)
+const cleanDrivePath = (drivePath) => {
+  if (!drivePath) {
+    return null;
+  }
+  
+  let path = String(drivePath).trim();
+  
+  // Retirer les préfixes Appels_Offres/ et Chantiers/
+  if (path.startsWith('Appels_Offres/')) {
+    path = path.substring('Appels_Offres/'.length);
+  } else if (path.startsWith('Chantiers/')) {
+    path = path.substring('Chantiers/'.length);
+  }
+  
+  // Nettoyer les slashes en début et fin
+  path = path.replace(/^\/+|\/+$/g, '');
+  
+  // Retourner null si vide après nettoyage
+  if (!path) {
+    return null;
+  }
+  
+  return path;
+};
+
 const DevisAvance = () => {
   // États pour les données du devis
   const [devisData, setDevisData] = useState(() => createInitialDevisData());
@@ -236,6 +262,7 @@ const DevisAvance = () => {
   // États pour le chemin personnalisé du drive
   const [customDrivePath, setCustomDrivePath] = useState(null);
   const [showDrivePathSelector, setShowDrivePathSelector] = useState(false);
+  const [chantierDrivePath, setChantierDrivePath] = useState(null); // drive_path du chantier depuis la DB
   
   // États liés à la persistance locale
   const [sessionUser, setSessionUser] = useState(null);
@@ -291,8 +318,14 @@ const DevisAvance = () => {
     return 'devisAvanceDraft_global';
   }, [sessionUser]);
   
-  // Calculer le chemin par défaut du drive : /societe/nom du chantier
+  // Calculer le chemin par défaut du drive : priorité au drive_path du chantier en DB, sinon calcul automatique
   const defaultDrivePath = React.useMemo(() => {
+    // ✅ Si un chantier existant est sélectionné et a un drive_path en DB, l'utiliser
+    if (selectedChantierId && selectedChantierId !== -1 && chantierDrivePath) {
+      return chantierDrivePath;
+    }
+    
+    // Sinon, calculer automatiquement à partir de la société et du chantier
     const societeName = societe.nom_societe || pendingChantierData?.societe?.nom_societe || '';
     const chantierName = chantier.chantier_name || pendingChantierData?.chantier?.chantier_name || '';
     
@@ -312,7 +345,7 @@ const DevisAvance = () => {
     }
     
     return '';
-  }, [societe.nom_societe, chantier.chantier_name, pendingChantierData]);
+  }, [selectedChantierId, chantierDrivePath, societe.nom_societe, chantier.chantier_name, pendingChantierData]);
   
   // Chemin effectif à utiliser (personnalisé ou par défaut)
   const effectiveDrivePath = customDrivePath !== null ? customDrivePath : defaultDrivePath;
@@ -437,6 +470,9 @@ const DevisAvance = () => {
     
     // Si c'est un nouveau chantier (id = -1), utiliser les données temporaires
     if (chantierId === -1) {
+      // Réinitialiser le drive_path du chantier (nouveau chantier)
+      setChantierDrivePath(null);
+      
       // Mettre à jour le chantier si les données existent
       if (pendingChantierData.chantier) {
         setChantier({
@@ -476,6 +512,14 @@ const DevisAvance = () => {
         // Récupérer les détails du chantier avec la société
         const chantierResponse = await axios.get(`/api/chantier/${chantierId}/`);
         const chantierData = chantierResponse.data;
+        
+        // ✅ Récupérer et stocker le drive_path du chantier depuis la DB
+        if (chantierData.drive_path) {
+          setChantierDrivePath(chantierData.drive_path);
+        } else {
+          // Si pas de drive_path en DB, réinitialiser pour utiliser le calcul automatique
+          setChantierDrivePath(null);
+        }
         
         // Mettre à jour les informations du chantier
         setChantier({
@@ -570,8 +614,13 @@ const DevisAvance = () => {
             code_postal: selectedChantier.code_postal,
             ville: selectedChantier.ville
           });
+          // Réinitialiser le drive_path en cas d'erreur
+          setChantierDrivePath(null);
         }
       }
+    } else {
+      // Si aucun chantier n'est sélectionné, réinitialiser le drive_path
+      setChantierDrivePath(null);
     }
   };
 
@@ -1739,6 +1788,8 @@ const DevisAvance = () => {
     setTotalHt(0);
     setTva(0);
     setMontantTtc(0);
+    setChantierDrivePath(null); // ✅ Réinitialiser le drive_path du chantier
+    setCustomDrivePath(null); // ✅ Réinitialiser aussi le chemin personnalisé
   }, []);
 
   // ✅ Plus besoin de synchronisation : devisItems est la source de vérité unique
@@ -2635,7 +2686,7 @@ const DevisAvance = () => {
           }
 
           // Créer le chantier avec la société (totals déjà calculé plus haut)
-          const chantierResponse = await axios.post("/api/chantier/", {
+          const chantierData = {
             chantier_name: pendingChantierData.chantier.chantier_name.trim(),
             ville: pendingChantierData.chantier.ville,
             rue: pendingChantierData.chantier.rue,
@@ -2650,7 +2701,18 @@ const DevisAvance = () => {
             cout_avec_taux_fixe: totals.cout_avec_taux_fixe,
             marge_estimee: totals.marge_estimee,
             taux_fixe: tauxFixe !== null ? tauxFixe : 20,
-          });
+          };
+          
+          // ✅ Ajouter drive_path si customDrivePath est défini (utilisateur a modifié le chemin)
+          if (customDrivePath !== null && customDrivePath.trim() !== '') {
+            // ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
+            const cleanedPath = cleanDrivePath(customDrivePath);
+            if (cleanedPath) {
+              chantierData.drive_path = cleanedPath;
+            }
+          }
+          
+          const chantierResponse = await axios.post("/api/chantier/", chantierData);
           finalChantierId = chantierResponse.data.id;
         } else {
           // ✅ Pour les appels d'offres, ne pas créer de chantier
@@ -2694,6 +2756,9 @@ const DevisAvance = () => {
         societeId: finalSocieteId,
         totals: totals, // Totals estimés (marge_estimee, cout_avec_taux_fixe)
         tauxFixe: tauxFixe,
+        // ✅ Ajouter drive_path si customDrivePath est défini (pour les appels d'offres)
+        // ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
+        drive_path: customDrivePath !== null && customDrivePath.trim() !== '' ? cleanDrivePath(customDrivePath) : null,
       });
       
       // Envoyer à l'API

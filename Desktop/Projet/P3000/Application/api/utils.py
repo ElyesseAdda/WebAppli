@@ -75,6 +75,41 @@ def custom_slugify(text):
     
     return text or "Dossier"
 
+def clean_drive_path(drive_path):
+    """
+    Nettoie le drive_path en retirant les préfixes Appels_Offres/ et Chantiers/.
+    
+    Le drive_path stocké en base de données ne doit contenir que le chemin de base
+    (ex: "Zonia/Testcontact/"), sans les préfixes "Appels_Offres/" ou "Chantiers/".
+    Ces préfixes sont ajoutés uniquement lors de l'utilisation du chemin.
+    
+    Args:
+        drive_path: Chemin à nettoyer (peut contenir les préfixes)
+        
+    Returns:
+        str: Chemin nettoyé sans les préfixes, ou None si vide
+    """
+    if not drive_path:
+        return None
+    
+    # Convertir en string et nettoyer
+    path = str(drive_path).strip()
+    
+    # Retirer les préfixes Appels_Offres/ et Chantiers/
+    if path.startswith('Appels_Offres/'):
+        path = path[len('Appels_Offres/'):]
+    elif path.startswith('Chantiers/'):
+        path = path[len('Chantiers/'):]
+    
+    # Nettoyer les slashes en début et fin
+    path = path.strip('/')
+    
+    # Retourner None si vide après nettoyage
+    if not path:
+        return None
+    
+    return path
+
 def encode_filename_for_content_disposition(filename, disposition_type='attachment', for_presigned_url=False):
     """
     Encode un nom de fichier pour l'en-tête Content-Disposition selon RFC 5987.
