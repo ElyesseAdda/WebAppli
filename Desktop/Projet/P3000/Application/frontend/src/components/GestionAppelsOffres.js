@@ -581,16 +581,28 @@ const GestionAppelsOffres = () => {
           }}
           onSelect={handleConfirmTransform}
           defaultPath={(() => {
-            // Calculer le chemin par défaut à partir de la société et du nom du chantier
+            // Utiliser le drive_path de l'appel d'offres et remplacer Appels_Offres/ par Chantiers/
             const appelOffres = selectedAppelOffresForTransform;
+            if (appelOffres.drive_path) {
+              let drivePath = appelOffres.drive_path;
+              // Remplacer le préfixe Appels_Offres/ par Chantiers/
+              if (drivePath.startsWith('Appels_Offres/')) {
+                drivePath = drivePath.replace('Appels_Offres/', 'Chantiers/');
+              } else if (!drivePath.startsWith('Chantiers/')) {
+                // Si le chemin n'a pas de préfixe, ajouter Chantiers/
+                drivePath = `Chantiers/${drivePath}`;
+              }
+              return drivePath;
+            }
+            // Fallback : calculer le chemin par défaut à partir de la société et du nom du chantier
             if (appelOffres.societe && appelOffres.chantier_name) {
               const societeSlug = customSlugify(appelOffres.societe.nom_societe);
               const chantierSlug = customSlugify(appelOffres.chantier_name);
               if (societeSlug && chantierSlug) {
-                return `${societeSlug}/${chantierSlug}`;
+                return `Chantiers/${societeSlug}/${chantierSlug}`;
               }
             }
-            return '';
+            return 'Chantiers/';
           })()}
         />
       )}

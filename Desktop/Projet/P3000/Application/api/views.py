@@ -11843,7 +11843,7 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 devis.appel_offres = None
                 devis.save()
             
-            # ✅ Copier automatiquement les dossiers du drive vers le nouveau chemin
+            # ✅ Transférer automatiquement tous les fichiers et dossiers du drive vers le nouveau chemin
             # Utiliser les drive_path des modèles au lieu de calculer les chemins
             try:
                 # Récupérer les chemins de base depuis les modèles
@@ -11852,15 +11852,21 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 
                 if appel_offres_base_path and chantier_base_path:
                     # Construire les chemins complets avec les préfixes
-                    source_path = f"Appels_Offres/{appel_offres_base_path}"
-                    dest_path = f"Chantiers/{chantier_base_path}"
+                    # Vérifier si le préfixe existe déjà dans le chemin
+                    if appel_offres_base_path.startswith('Appels_Offres/'):
+                        source_path = appel_offres_base_path
+                    else:
+                        source_path = f"Appels_Offres/{appel_offres_base_path}"
                     
-                    # Copier les fichiers en utilisant les chemins complets
-                    drive_automation.copy_appel_offres_to_chantier_by_path(
-                        source_path=source_path,
-                        dest_path=dest_path
-                    )
-            except Exception:
+                    if chantier_base_path.startswith('Chantiers/'):
+                        dest_path = chantier_base_path
+                    else:
+                        dest_path = f"Chantiers/{chantier_base_path}"
+                    
+                    # Transférer récursivement tous les fichiers et dossiers
+                    from api.utils import transfer_all_files_recursive
+                    transfer_all_files_recursive(source_path, dest_path)
+            except Exception as e:
                 # Erreur silencieuse : ne pas bloquer la transformation
                 pass
             

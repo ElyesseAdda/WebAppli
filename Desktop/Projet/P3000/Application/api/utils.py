@@ -903,6 +903,139 @@ def move_local_file(source_path, destination_path):
         return False
 
 
+def copy_s3_file(source_path, destination_path):
+    """
+    Copie un fichier dans S3 (sans supprimer l'original)
+    
+    Args:
+        source_path: chemin source
+        destination_path: chemin de destination
+        
+    Returns:
+        bool: True si copié avec succès
+    """
+    if not is_s3_available():
+        return copy_local_file(source_path, destination_path)
+    
+    s3_client = get_s3_client()
+    bucket_name = get_s3_bucket_name()
+    
+    try:
+        # Copier le fichier
+        s3_client.copy_object(
+            Bucket=bucket_name,
+            CopySource={'Bucket': bucket_name, 'Key': source_path},
+            Key=destination_path
+        )
+        return True
+    except Exception as e:
+        print(f"Erreur lors de la copie S3: {e}")
+        return False
+
+
+def copy_local_file(source_path, destination_path):
+    """Copie un fichier dans le stockage local"""
+    try:
+        source_full = os.path.join(LOCAL_STORAGE_PATH, source_path)
+        dest_full = os.path.join(LOCAL_STORAGE_PATH, destination_path)
+        
+        # Créer le dossier de destination si nécessaire
+        os.makedirs(os.path.dirname(dest_full), exist_ok=True)
+        
+        # Copier le fichier
+        import shutil
+        shutil.copy2(source_full, dest_full)
+        
+        return True
+    except Exception as e:
+        print(f"Erreur lors de la copie locale: {e}")
+        return False
+
+
+def transfer_all_files_recursive(source_folder, destination_folder):
+    """
+    Transfère récursivement tous les fichiers et dossiers d'un dossier source vers un dossier de destination.
+    Copie tous les fichiers et crée la structure de dossiers correspondante.
+    
+    Args:
+        source_folder: chemin source (ex: "Appels_Offres/Mada/Japania")
+        destination_folder: chemin de destination (ex: "Chantiers/Mada/Japania")
+        
+    Returns:
+        tuple: (success: bool, message: str, files_count: int)
+    """
+    if not source_folder or not destination_folder:
+        return False, "Les chemins source et destination sont requis", 0
+    
+    # S'assurer que les chemins se terminent par /
+    if not source_folder.endswith('/'):
+        source_folder += '/'
+    if not destination_folder.endswith('/'):
+        destination_folder += '/'
+    
+    files_copied = 0
+    errors = []
+    
+    try:
+        # Créer le dossier de destination
+        create_s3_folder_recursive(destination_folder.rstrip('/'))
+        
+        # Lister récursivement tous les objets avec le préfixe source
+        s3_client = get_s3_client()
+        bucket_name = get_s3_bucket_name()
+        
+        # Utiliser list_objects_v2 pour lister récursivement tous les objets
+        # SANS Delimiter pour obtenir tous les objets récursivement
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(
+            Bucket=bucket_name, 
+            Prefix=source_folder,
+        )
+        
+        for page in pages:
+            if 'Contents' not in page:
+                continue
+            
+            for obj in page['Contents']:
+                source_key = obj['Key']
+                
+                # Ignorer les objets qui se terminent par '/' (dossiers) et les fichiers .keep
+                if source_key.endswith('/') or source_key.endswith('/.keep'):
+                    continue
+                
+                # Vérifier que le fichier commence bien par le prefix source
+                if not source_key.startswith(source_folder):
+                    continue
+                
+                # Calculer le chemin de destination en remplaçant le préfixe source par destination
+                relative_path = source_key[len(source_folder):]
+                destination_key = destination_folder + relative_path
+                
+                # Créer les dossiers parents si nécessaire
+                destination_dir = '/'.join(destination_key.split('/')[:-1])
+                if destination_dir:
+                    create_s3_folder_recursive(destination_dir)
+                
+                # Copier le fichier
+                try:
+                    if copy_s3_file(source_key, destination_key):
+                        files_copied += 1
+                    else:
+                        errors.append(f"Erreur lors de la copie de {source_key}")
+                except Exception as e:
+                    error_msg = f"Erreur lors de la copie de {source_key}: {str(e)}"
+                    errors.append(error_msg)
+        
+        if errors:
+            return True, f"{files_copied} fichiers copiés avec {len(errors)} erreurs", files_copied
+        
+        return True, f"{files_copied} fichiers transférés avec succès", files_copied
+        
+    except Exception as e:
+        error_msg = f"Erreur lors du transfert récursif: {str(e)}"
+        return False, error_msg, files_copied
+
+
 def rename_s3_item(old_path, new_name):
     """
     Renomme un fichier ou dossier dans S3
