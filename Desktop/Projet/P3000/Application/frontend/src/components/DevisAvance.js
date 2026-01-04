@@ -318,9 +318,9 @@ const DevisAvance = () => {
     return 'devisAvanceDraft_global';
   }, [sessionUser]);
   
-  // Calculer le chemin par défaut du drive : priorité au drive_path du chantier en DB, sinon calcul automatique
+  // Calculer le chemin par défaut du drive : priorité au drive_path du chantier en DB, sinon calcul automatique avec préfixe
   const defaultDrivePath = React.useMemo(() => {
-    // ✅ Si un chantier existant est sélectionné et a un drive_path en DB, l'utiliser
+    // ✅ Si un chantier existant est sélectionné et a un drive_path en DB, l'utiliser (sans préfixe, car déjà stocké sans préfixe)
     if (selectedChantierId && selectedChantierId !== -1 && chantierDrivePath) {
       return chantierDrivePath;
     }
@@ -336,16 +336,30 @@ const DevisAvance = () => {
     const societeSlug = customSlugify(societeName);
     const chantierSlug = customSlugify(chantierName);
     
+    let basePath = '';
     if (societeSlug && chantierSlug) {
-      return `${societeSlug}/${chantierSlug}`;
+      basePath = `${societeSlug}/${chantierSlug}`;
     } else if (societeSlug) {
-      return societeSlug;
+      basePath = societeSlug;
     } else if (chantierSlug) {
-      return chantierSlug;
+      basePath = chantierSlug;
     }
     
-    return '';
-  }, [selectedChantierId, chantierDrivePath, societe.nom_societe, chantier.chantier_name, pendingChantierData]);
+    if (!basePath) {
+      return '';
+    }
+    
+    // ✅ Pour les appels d'offres, ajouter le préfixe Appels_Offres/ pour que DrivePathSelector s'ouvre au bon endroit
+    // ✅ Pour les chantiers normaux, ajouter le préfixe Chantiers/
+    // Le préfixe sera retiré lors de la sauvegarde (via cleanDrivePath)
+    if (devisType === "chantier") {
+      // C'est un appel d'offres
+      return `Appels_Offres/${basePath}`;
+    } else {
+      // C'est un chantier normal
+      return `Chantiers/${basePath}`;
+    }
+  }, [selectedChantierId, chantierDrivePath, societe.nom_societe, chantier.chantier_name, pendingChantierData, devisType]);
   
   // Chemin effectif à utiliser (personnalisé ou par défaut)
   const effectiveDrivePath = customDrivePath !== null ? customDrivePath : defaultDrivePath;
@@ -2703,13 +2717,12 @@ const DevisAvance = () => {
             taux_fixe: tauxFixe !== null ? tauxFixe : 20,
           };
           
-          // ✅ Ajouter drive_path si customDrivePath est défini (utilisateur a modifié le chemin)
-          if (customDrivePath !== null && customDrivePath.trim() !== '') {
-            // ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
-            const cleanedPath = cleanDrivePath(customDrivePath);
-            if (cleanedPath) {
-              chantierData.drive_path = cleanedPath;
-            }
+          // ✅ Ajouter drive_path : utiliser customDrivePath si défini, sinon utiliser defaultDrivePath
+          // Toujours garder le préfixe Chantiers/ (même si l'utilisateur modifie le chemin)
+          const pathToUse = customDrivePath !== null ? customDrivePath : defaultDrivePath;
+          if (pathToUse && pathToUse.trim() !== '') {
+            // Garder le chemin tel quel avec le préfixe
+            chantierData.drive_path = pathToUse.trim();
           }
           
           const chantierResponse = await axios.post("/api/chantier/", chantierData);
@@ -2756,9 +2769,16 @@ const DevisAvance = () => {
         societeId: finalSocieteId,
         totals: totals, // Totals estimés (marge_estimee, cout_avec_taux_fixe)
         tauxFixe: tauxFixe,
-        // ✅ Ajouter drive_path si customDrivePath est défini (pour les appels d'offres)
-        // ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
-        drive_path: customDrivePath !== null && customDrivePath.trim() !== '' ? cleanDrivePath(customDrivePath) : null,
+        // ✅ Ajouter drive_path
+        // Toujours garder le préfixe Appels_Offres/ (même si l'utilisateur modifie le chemin)
+        drive_path: (() => {
+          const pathToUse = customDrivePath !== null ? customDrivePath : defaultDrivePath;
+          if (pathToUse && pathToUse.trim() !== '') {
+            // Garder le chemin tel quel avec le préfixe
+            return pathToUse.trim();
+          }
+          return null;
+        })(),
       });
       
       // Envoyer à l'API
@@ -3191,77 +3211,79 @@ const DevisAvance = () => {
             </div>
           </div>
 
-          {/* Section 4: Chemin du drive */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: '#1976d2',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
+          {/* Section 4: Chemin du drive - Afficher pour les devis de chantier et les appels d'offres */}
+          {(devisType === "normal" || devisType === "chantier") && (
+            <div style={{
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #e9ecef',
+              borderRadius: '8px',
+              padding: '25px',
+              marginBottom: '30px'
             }}>
-              📁 Chemin du drive pour les documents
-            </h2>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <div style={{
-                backgroundColor: 'white',
-                border: '1px solid #dee2e6',
-                borderRadius: '6px',
-                padding: '15px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
+              <h2 style={{
+                color: '#1976d2',
+                fontSize: '20px',
+                fontWeight: 'bold',
+                margin: '0 0 20px 0',
+                paddingBottom: '10px',
+                borderBottom: '2px solid #1976d2'
               }}>
-                <div style={{ flex: 1 }}>
-                  <Typography variant="body2" color="text.secondary" style={{ marginBottom: '5px' }}>
-                    Chemin actuel :
-                  </Typography>
-                  <Typography variant="body1" style={{ 
-                    fontFamily: 'monospace',
-                    color: effectiveDrivePath ? '#1976d2' : '#6c757d'
-                  }}>
-                    {effectiveDrivePath || '(Chemin par défaut non disponible)'}
-                  </Typography>
-                  {customDrivePath === null && defaultDrivePath && (
-                    <Typography variant="caption" color="text.secondary" style={{ marginTop: '5px', display: 'block' }}>
-                      Chemin par défaut : {defaultDrivePath}
-                    </Typography>
-                  )}
-                </div>
-                <Button
-                  variant="outlined"
-                  onClick={() => setShowDrivePathSelector(true)}
-                  style={{
-                    marginLeft: '15px',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  Modifier le chemin
-                </Button>
-              </div>
+                📁 Chemin du drive pour les documents
+              </h2>
               
-              {customDrivePath !== null && (
-                <Button
-                  variant="text"
-                  size="small"
-                  onClick={() => {
-                    setCustomDrivePath(null);
-                  }}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  Réinitialiser au chemin par défaut
-                </Button>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div style={{
+                  backgroundColor: 'white',
+                  border: '1px solid #dee2e6',
+                  borderRadius: '6px',
+                  padding: '15px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <Typography variant="body2" color="text.secondary" style={{ marginBottom: '5px' }}>
+                      Chemin actuel :
+                    </Typography>
+                    <Typography variant="body1" style={{ 
+                      fontFamily: 'monospace',
+                      color: effectiveDrivePath ? '#1976d2' : '#6c757d'
+                    }}>
+                      {effectiveDrivePath || '(Chemin par défaut non disponible)'}
+                    </Typography>
+                    {customDrivePath === null && defaultDrivePath && (
+                      <Typography variant="caption" color="text.secondary" style={{ marginTop: '5px', display: 'block' }}>
+                        Chemin par défaut : {defaultDrivePath}
+                      </Typography>
+                    )}
+                  </div>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setShowDrivePathSelector(true)}
+                    style={{
+                      marginLeft: '15px',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Modifier le chemin
+                  </Button>
+                </div>
+                
+                {customDrivePath !== null && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => {
+                      setCustomDrivePath(null);
+                    }}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    Réinitialiser au chemin par défaut
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Section 5: Détail du devis */}
           <div style={{

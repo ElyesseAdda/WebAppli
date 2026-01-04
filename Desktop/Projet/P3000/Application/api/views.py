@@ -97,27 +97,47 @@ class ChantierViewSet(viewsets.ModelViewSet):
         cout_estime_materiel = request.data.get('cout_estime_materiel', 0)
         marge_estimee = request.data.get('marge_estimee', 0)
         
-        # Créer le chantier avec les estimations
-        serializer = self.get_serializer(data={
+        # ✅ Préparer les données pour le serializer
+        serializer_data = {
             **request.data,
             'cout_estime_main_oeuvre': cout_estime_main_oeuvre,
             'cout_estime_materiel': cout_estime_materiel,
             'marge_estimee': marge_estimee
-        })
+        }
+        
+        # ✅ Toujours stocker le drive_path en base de données (avec préfixe Chantiers/ si non fourni)
+        if 'drive_path' not in serializer_data or not serializer_data.get('drive_path'):
+            # Calculer le chemin par défaut avec le préfixe Chantiers/
+            societe_id = request.data.get('societe')
+            chantier_name = request.data.get('chantier_name', '')
+            
+            if societe_id and chantier_name:
+                try:
+                    societe = Societe.objects.get(id=societe_id)
+                    societe_slug = custom_slugify(societe.nom_societe)
+                    chantier_slug = custom_slugify(chantier_name)
+                    
+                    if societe_slug and chantier_slug:
+                        default_drive_path = f"Chantiers/{societe_slug}/{chantier_slug}"
+                        serializer_data['drive_path'] = default_drive_path
+                    elif societe_slug:
+                        default_drive_path = f"Chantiers/{societe_slug}"
+                        serializer_data['drive_path'] = default_drive_path
+                except Societe.DoesNotExist:
+                    pass  # Laisser NULL si société non trouvée
+        
+        # Créer le chantier avec les estimations
+        serializer = self.get_serializer(data=serializer_data)
         
         serializer.is_valid(raise_exception=True)
         chantier = self.perform_create(serializer)
         
-        # Créer automatiquement la structure de dossiers dans le drive
+        # ✅ Créer les sous-dossiers en utilisant drive_path
         try:
-            societe = chantier.societe
-            if societe and chantier.nom:
-                drive_automation.create_chantier_structure(
-                    societe_name=societe.nom,
-                    chantier_name=chantier.nom
-                )
+            drive_automation.create_subfolders_for_chantier(chantier)
         except Exception as e:
-            print(f"Erreur lors de la création automatique des dossiers: {str(e)}")
+            # Ne pas faire échouer la création si les sous-dossiers ne peuvent pas être créés
+            print(f"⚠️ Erreur lors de la création des sous-dossiers pour le chantier {chantier.id}: {str(e)}")
         
         headers = self.get_success_headers(serializer.data)
         return Response(
@@ -2967,6 +2987,12 @@ def create_chantier_from_devis(request):
             taux_fixe=TauxFixe.objects.first().valeur
         )
         
+        # ✅ Créer les sous-dossiers en utilisant drive_path
+        try:
+            drive_automation.create_subfolders_for_chantier(chantier)
+        except Exception as e:
+            print(f"⚠️ Erreur lors de la création des sous-dossiers pour le chantier {chantier.id}: {str(e)}")
+        
         return Response({'message': 'Chantier créé avec succès', 'id': chantier.id})
     except Exception as e:
         return Response({'error': str(e)}, status=400)
@@ -3003,19 +3029,35 @@ def create_devis(request):
                     'statut': 'en_attente'
                 }
                 
-                # ✅ Ajouter drive_path si fourni (pour les appels d'offres)
-                # Si drive_path est fourni et non vide, l'enregistrer
-                # Sinon, laisser NULL (calcul automatique via get_drive_path())
+                # ✅ Ajouter drive_path (pour les appels d'offres)
+                # Toujours stocker le drive_path en base de données (avec préfixe Appels_Offres/)
                 if 'drive_path' in request.data and request.data.get('drive_path'):
                     drive_path_value = request.data.get('drive_path', '').strip()
                     if drive_path_value:
-                        # ✅ Nettoyer le chemin : retirer les préfixes Appels_Offres/ et Chantiers/
-                        drive_path_value = clean_drive_path(drive_path_value)
-                        if drive_path_value:
-                            drive_path_value = drive_path_value.strip().strip('/')
-                            appel_offres_data['drive_path'] = drive_path_value
+                        # ✅ Stocker le chemin tel quel (avec le préfixe Appels_Offres/)
+                        appel_offres_data['drive_path'] = drive_path_value.strip()
+                else:
+                    # ✅ Si non fourni, calculer le chemin par défaut avec le préfixe Appels_Offres/
+                    from api.utils import custom_slugify
+                    societe_slug = custom_slugify(societe.nom_societe) if societe else None
+                    chantier_name = request.data.get('chantier_name', '')
+                    chantier_slug = custom_slugify(chantier_name) if chantier_name else None
+                    
+                    if societe_slug and chantier_slug:
+                        default_drive_path = f"Appels_Offres/{societe_slug}/{chantier_slug}"
+                        appel_offres_data['drive_path'] = default_drive_path
+                    elif societe_slug:
+                        default_drive_path = f"Appels_Offres/{societe_slug}"
+                        appel_offres_data['drive_path'] = default_drive_path
                 
                 appel_offres = AppelOffres.objects.create(**appel_offres_data)
+                
+                # ✅ Créer les sous-dossiers en utilisant drive_path
+                try:
+                    drive_automation.create_subfolders_for_appel_offres(appel_offres)
+                except Exception as e:
+                    # Ne pas faire échouer la création si les sous-dossiers ne peuvent pas être créés
+                    print(f"⚠️ Erreur lors de la création des sous-dossiers pour l'appel d'offres {appel_offres.id}: {str(e)}")
                 
                 # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
                 # Si oui, utiliser directement, sinon filtrer depuis lignes_speciales
@@ -11787,6 +11829,12 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
             drive_path = request.data.get('drive_path', None)
             
             chantier = appel_offres.transformer_en_chantier(drive_path=drive_path)
+            
+            # ✅ Créer les sous-dossiers pour le chantier en utilisant drive_path
+            try:
+                drive_automation.create_subfolders_for_chantier(chantier)
+            except Exception as e:
+                print(f"⚠️ Erreur lors de la création des sous-dossiers pour le chantier {chantier.id}: {str(e)}")
             
             # Mettre à jour le devis pour qu'il pointe vers le nouveau chantier
             devis = appel_offres.devis.first()

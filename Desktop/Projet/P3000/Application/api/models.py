@@ -403,13 +403,13 @@ class AppelOffres(models.Model):
         Retourne le chemin du drive (personnalisé ou calculé).
         
         Priorité :
-        1. Si drive_path est défini → retourne drive_path
-        2. Sinon → calcule automatiquement {societe_slug}/{chantier_slug}
+        1. Si drive_path est défini → retourne drive_path tel quel (peut contenir le préfixe Appels_Offres/)
+        2. Sinon → calcule automatiquement {societe_slug}/{chantier_slug} (sans préfixe)
         3. Si pas de société → retourne None
         """
         if self.drive_path and self.drive_path.strip():
             return self.drive_path.strip()
-        # Calculer le chemin par défaut
+        # Calculer le chemin par défaut (sans préfixe)
         if self.societe:
             from api.utils import custom_slugify
             societe_slug = custom_slugify(self.societe.nom_societe)

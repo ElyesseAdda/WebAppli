@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const puppeteer = require("puppeteer");
 
 async function generatePDF() {
@@ -8,23 +9,42 @@ async function generatePDF() {
 
   console.log("URL de prévisualisation:", previewUrl); // Ajouter un log pour l'URL
 
+  // Détecter l'environnement : production (Linux) ou local (Windows/autre)
+  const isProduction = process.platform === "linux" && fs.existsSync("/usr/bin/chromium-browser");
+  const chromiumPath = isProduction ? "/usr/bin/chromium-browser" : undefined;
+
+  // Configuration des arguments selon l'environnement
+  const launchArgs = [
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--window-size=1920,1080",
+    "--font-render-hinting=none",
+    "--disable-font-subpixel-positioning",
+    "--disable-features=FontAccess",
+    "--enable-font-antialiasing",
+    "--force-device-scale-factor=1",
+  ];
+
+  // Ajouter --no-sandbox uniquement en production (nécessaire pour Gunicorn)
+  if (isProduction) {
+    launchArgs.push("--no-sandbox", "--disable-setuid-sandbox");
+  }
+
+  const browserConfig = {
+    headless: true,
+    args: launchArgs,
+  };
+
+  // Ajouter executablePath uniquement en production
+  if (chromiumPath) {
+    browserConfig.executablePath = chromiumPath;
+    console.log("🌐 Mode production - Utilisation de Chromium système:", chromiumPath);
+  } else {
+    console.log("💻 Mode local - Utilisation du Chromium de Puppeteer");
+  }
+
   try {
-    const browser = await puppeteer.launch({
-      executablePath: "/usr/bin/chromium-browser", // chemin exact de Chromium
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1920,1080",
-        "--font-render-hinting=none",
-        "--disable-font-subpixel-positioning",
-        "--disable-features=FontAccess",
-        "--enable-font-antialiasing",
-        "--force-device-scale-factor=1",
-      ], // Ajout de paramètres pour Puppeteer
-    });
+    const browser = await puppeteer.launch(browserConfig);
     console.log("Navigateur lancé");
 
     const page = await browser.newPage();

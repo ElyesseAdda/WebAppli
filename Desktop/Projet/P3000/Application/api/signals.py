@@ -30,26 +30,15 @@ def capture_old_appel_offres_name(sender, instance, **kwargs):
             instance._old_societe = None
 
 
-@receiver(post_save, sender=AppelOffres)
-def create_appel_offres_folders(sender, instance, created, **kwargs):
-    """
-    Crée automatiquement la structure de dossiers S3 lors de la création d'un appel d'offres
-    Ou déplace les fichiers si le nom a changé
-    """
-    if created:
-        try:
-            # Récupérer le nom de la société
-            societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
-            
-            # Créer la structure de dossiers S3
-            drive_automation.create_appel_offres_structure(
-                societe_name=societe_name,
-                appel_offres_name=instance.chantier_name
-            )
-            
-        except Exception:
-            # Ne pas faire échouer la création de l'appel d'offres à cause du Drive
-            pass
+# ✅ Signal désactivé - La création des sous-dossiers est maintenant gérée via drive_path
+# Les sous-dossiers sont créés explicitement dans create_devis et autres endroits de création
+# @receiver(post_save, sender=AppelOffres)
+# def create_appel_offres_folders(sender, instance, created, **kwargs):
+#     """
+#     DÉSACTIVÉ : La création des dossiers est maintenant gérée via drive_path
+#     Les sous-dossiers sont créés explicitement lors de la création via create_subfolders_for_appel_offres()
+#     """
+#     pass
     else:
         # C'est une mise à jour - vérifier si le nom a changé
         old_chantier_name = getattr(instance, '_old_chantier_name', None)
@@ -121,26 +110,15 @@ def capture_old_chantier_name(sender, instance, **kwargs):
             instance._old_societe = None
 
 
-@receiver(post_save, sender=Chantier)
-def create_chantier_folders(sender, instance, created, **kwargs):
-    """
-    Crée automatiquement la structure de dossiers S3 lors de la création d'un chantier
-    Ou déplace les fichiers si le nom a changé
-    """
-    if created:
-        try:
-            # Récupérer le nom de la société
-            societe_name = instance.societe.nom_societe if instance.societe else "Société par défaut"
-            
-            # Créer la structure de dossiers S3
-            drive_automation.create_chantier_structure(
-                societe_name=societe_name,
-                chantier_name=instance.chantier_name
-            )
-            
-        except Exception:
-            # Ne pas faire échouer la création du chantier à cause du Drive
-            pass
+# ✅ Signal désactivé - La création des sous-dossiers est maintenant gérée via drive_path
+# Les sous-dossiers sont créés explicitement dans ChantierViewSet.create et autres endroits de création
+# @receiver(post_save, sender=Chantier)
+# def create_chantier_folders(sender, instance, created, **kwargs):
+#     """
+#     DÉSACTIVÉ : La création des dossiers est maintenant gérée via drive_path
+#     Les sous-dossiers sont créés explicitement lors de la création via create_subfolders_for_chantier()
+#     """
+#     pass
     else:
         # C'est une mise à jour - vérifier si le nom a changé
         old_chantier_name = getattr(instance, '_old_chantier_name', None)

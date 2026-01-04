@@ -6,6 +6,7 @@ Gère la génération, le stockage et l'organisation des PDFs
 import os
 import subprocess
 import tempfile
+import re
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 from django.conf import settings
@@ -19,6 +20,34 @@ from .utils import (
     custom_slugify
 )
 from .drive_automation import drive_automation
+
+
+def clean_filename_for_s3(filename):
+    """
+    Nettoie un nom de fichier pour S3 en préservant le nom original.
+    Remplace uniquement les caractères interdits dans les noms de fichiers.
+    Remplace les espaces par des underscores pour la compatibilité AWS S3.
+    """
+    if not filename:
+        return ""
+    
+    # Caractères interdits dans les noms de fichiers Windows/Unix/S3
+    # Remplace : / \ : * ? " < > |
+    forbidden_chars = r'[/\\:*?"<>|]'
+    
+    # Remplacer les caractères interdits par des underscores
+    cleaned = re.sub(forbidden_chars, '_', filename)
+    
+    # Remplacer les espaces par des underscores (AWS S3 préfère les underscores)
+    cleaned = re.sub(r'\s+', '_', cleaned)
+    
+    # Supprimer les underscores multiples
+    cleaned = re.sub(r'_+', '_', cleaned)
+    
+    # Supprimer les underscores en début et fin
+    cleaned = cleaned.strip('_')
+    
+    return cleaned
 
 
 class PDFManager:
@@ -106,9 +135,9 @@ class PDFManager:
             devis_numero = kwargs.get('numero', kwargs.get('devis_name', 'devis_marche'))
             print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
             print(f"🔍 DEBUG generate_pdf_filename - kwargs: {kwargs}")
-            # Nettoyer le nom pour qu'il soit propre
-            clean_name = custom_slugify(devis_numero)
-            print(f"🔍 DEBUG generate_pdf_filename - clean_name après custom_slugify: '{clean_name}'")
+            # Nettoyer le nom pour qu'il soit compatible avec S3, mais préserver le nom original
+            clean_name = clean_filename_for_s3(devis_numero)
+            print(f"🔍 DEBUG generate_pdf_filename - clean_name après nettoyage: '{clean_name}'")
             return f"{clean_name}.pdf"
         
         elif document_type == 'contrat_sous_traitance':
@@ -174,8 +203,15 @@ class PDFManager:
             custom_path = kwargs['custom_path'].strip()
             # Nettoyer le chemin (supprimer les slashes en début/fin)
             custom_path = custom_path.strip('/')
-            # Ajouter le sous-dossier du type de document si nécessaire
-            subfolder = self.document_type_folders.get(document_type, 'Devis')
+            # Déterminer le sous-dossier selon le type de document et le contexte
+            # Pour les appels d'offres avec devis_marche, utiliser Devis/Devis_Marche
+            if document_type == 'devis_marche' and ('appel_offres_id' in kwargs or 'appel_offres_name' in kwargs):
+                subfolder = 'Devis/Devis_Marche'
+            elif document_type == 'devis_travaux' and ('appel_offres_id' in kwargs or 'appel_offres_name' in kwargs):
+                subfolder = 'Devis'
+            else:
+                # Utiliser le sous-dossier par défaut du type de document
+                subfolder = self.document_type_folders.get(document_type, 'Devis')
             return f"{custom_path}/{subfolder}" if custom_path else subfolder
         
         # ✅ Si un appel_offres_id est fourni, utiliser le chemin de l'appel d'offres
@@ -240,11 +276,13 @@ class PDFManager:
                 # Utiliser seulement le nom de l'appel d'offres (sans ID devant)
                 appel_offres_slug = custom_slugify(appel_offres_name)
                 
-                # Pour les devis de marché, utiliser la structure Devis/Devis_Marche
+                # Pour les appels d'offres :
+                # - devis_marche (devis initial) → Devis/Devis_Marche
+                # - devis_travaux (autres devis) → Devis (un niveau plus haut)
                 if document_type == 'devis_marche':
                     subfolder = 'Devis/Devis_Marche'
-                else:
-                    subfolder = self.document_type_folders.get(document_type, 'Devis')
+                else:  # devis_travaux
+                    subfolder = 'Devis'
                 
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
