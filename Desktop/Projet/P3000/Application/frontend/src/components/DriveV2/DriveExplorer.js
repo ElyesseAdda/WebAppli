@@ -46,6 +46,8 @@ import {
   TextField,
   Button,
   Alert,
+  Snackbar,
+  CircularProgress,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -122,8 +124,10 @@ const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver, isDrag
   display: 'grid',
   gridTemplateColumns: '1fr minmax(80px, 100px) minmax(120px, 150px) minmax(80px, 100px)',
   gap: theme.spacing(2),
-  padding: theme.spacing(2),
+  padding: '4px',
   marginLeft: theme.spacing(2), // Margin à gauche pour la zone de sélection
+  marginTop: '2px',
+  marginBottom: '2px',
   borderBottom: `1px solid ${theme.palette.divider}`,
   cursor: 'pointer',
   backgroundColor: isDragOver 
@@ -137,8 +141,8 @@ const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver, isDrag
       ? `3px solid ${theme.palette.primary.dark}` 
       : 'none',
   minWidth: 0,
-  width: '100%',
-  maxWidth: '100%',
+  width: '99%',
+  maxWidth: '99%',
   boxSizing: 'border-box',
   opacity: isDragging ? 0.5 : 1,
   transform: isDragging ? 'scale(0.98)' : 'scale(1)',
@@ -195,6 +199,7 @@ const DriveExplorer = ({
   const [dragOverFolder, setDragOverFolder] = useState(null);
   const [mouseDownPos, setMouseDownPos] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [downloadingFolder, setDownloadingFolder] = useState(null);
   const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
 
@@ -845,6 +850,110 @@ const DriveExplorer = ({
     handleCloseContextMenu();
   };
 
+  const handleDownloadFolder = async (item = null) => {
+    // Fermer le menu contextuel immédiatement
+    handleCloseContextMenu();
+    
+    // Si item est un événement (a une propriété type === 'click'), ignorer
+    if (item && typeof item === 'object' && item.type === 'click') {
+      console.error('Un événement a été passé au lieu d\'un item', item);
+      return;
+    }
+    
+    const folderToDownload = item || selectedItem;
+    
+    // Vérifier que l'item est valide et n'est pas un événement
+    if (!folderToDownload || (typeof folderToDownload === 'object' && folderToDownload.type === 'click')) {
+      console.error('Aucun dossier sélectionné pour le téléchargement', { item, selectedItem });
+      alert('Aucun dossier sélectionné pour le téléchargement');
+      return;
+    }
+    
+    // Vérifier que c'est bien un dossier
+    // Un dossier peut avoir type === 'folder' OU path qui se termine par '/'
+    const isFolder = folderToDownload.type === 'folder' || 
+                     (folderToDownload.path && (folderToDownload.path.endsWith('/') || !folderToDownload.path.includes('.')));
+    
+    if (!isFolder) {
+      console.error('L\'élément sélectionné n\'est pas un dossier', folderToDownload);
+      // Ne pas afficher d'alerte si c'est un événement
+      if (!(folderToDownload && typeof folderToDownload === 'object' && folderToDownload.type === 'click')) {
+        alert('L\'élément sélectionné n\'est pas un dossier');
+      }
+      return;
+    }
+
+    // Extraire le nom du dossier une seule fois
+    const folderName = displayFilename(folderToDownload.name || folderToDownload.path?.split('/').filter(Boolean).pop() || 'dossier');
+
+    // Afficher l'indicateur de chargement immédiatement
+    setDownloadingFolder(folderName);
+
+    try {
+      // Afficher un message de chargement
+      const loadingMessage = `Téléchargement du dossier "${folderName}" en cours...`;
+      console.log(loadingMessage);
+
+      // S'assurer que le path se termine par '/' pour un dossier
+      let folderPath = folderToDownload.path;
+      if (folderPath && !folderPath.endsWith('/')) {
+        folderPath = folderPath + '/';
+      }
+      
+      console.log('Téléchargement du dossier:', { folderPath, folderToDownload });
+      
+      const response = await fetch(
+        `/api/drive-v2/download-folder/?folder_path=${encodeURIComponent(folderPath)}`,
+        {
+          credentials: 'include',
+          method: 'GET',
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        throw new Error(errorData.error || `Erreur HTTP ${response.status}`);
+      }
+
+      // Récupérer le contenu du ZIP
+      const blob = await response.blob();
+      
+      // Extraire le nom du fichier depuis le header Content-Disposition
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let zipFilename = `${folderName}.zip`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          zipFilename = filenameMatch[1].replace(/['"]/g, '');
+          // Décoder l'URL si nécessaire
+          try {
+            zipFilename = decodeURIComponent(zipFilename);
+          } catch (e) {
+            // Si le décodage échoue, utiliser le nom tel quel
+          }
+        }
+      }
+
+      // Créer un lien temporaire pour télécharger le ZIP
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = zipFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      console.log(`✅ Dossier "${folderName}" téléchargé avec succès`);
+    } catch (error) {
+      console.error('Erreur lors du téléchargement du dossier:', error);
+      alert(`Erreur lors du téléchargement du dossier: ${error.message}`);
+    } finally {
+      // Masquer l'indicateur de chargement
+      setDownloadingFolder(null);
+    }
+  };
+
   // Vérifier si un dossier est protégé contre la suppression
   const isProtectedFolder = (item) => {
     if (!item || item.type !== 'folder') return false;
@@ -1458,7 +1567,22 @@ const DriveExplorer = ({
                 --
               </Typography>
               <Box sx={{ minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                <Tooltip title="Supprimer">
+                <Tooltip title="Télécharger le dossier">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      // S'assurer que folderItem a bien le type 'folder'
+                      const itemToDownload = { ...folderItem, type: 'folder' };
+                      console.log('Téléchargement du dossier:', itemToDownload);
+                      handleDownloadFolder(itemToDownload);
+                    }}
+                  >
+                    <DownloadIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Plus d'actions">
                   <IconButton
                     size="small"
                     onClick={(e) => {
@@ -1618,6 +1742,14 @@ const DriveExplorer = ({
             </MenuItem>
           </>
         )}
+        {selectedItem?.type === 'folder' && (
+          <MenuItem onClick={() => handleDownloadFolder(selectedItem)}>
+            <ListItemIcon>
+              <DownloadIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Télécharger le dossier</ListItemText>
+          </MenuItem>
+        )}
         {onCopyItems && (
           <MenuItem onClick={handleCopy}>
             <ListItemIcon>
@@ -1759,6 +1891,35 @@ const DriveExplorer = ({
           )}
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar pour l'indicateur de chargement du téléchargement de dossier */}
+      <Snackbar
+        open={downloadingFolder !== null}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{
+          '& .MuiSnackbar-root': {
+            pointerEvents: 'none',
+          },
+        }}
+      >
+        <Alert
+          severity="info"
+          icon={<CircularProgress size={20} color="inherit" />}
+          sx={{
+            minWidth: '300px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            '& .MuiAlert-icon': {
+              alignItems: 'center',
+            },
+          }}
+        >
+          <Typography variant="body2">
+            Téléchargement de "{downloadingFolder}" en cours...
+          </Typography>
+        </Alert>
+      </Snackbar>
     </ExplorerContainer>
   );
 };

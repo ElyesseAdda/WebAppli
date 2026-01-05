@@ -2,9 +2,11 @@
 Drive Manager - Gestionnaire principal du Drive V2
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from .storage import StorageManager
 import re
+import zipfile
+import io
 from ..utils import encode_filename_for_content_disposition
 
 
@@ -533,3 +535,103 @@ class DriveManager:
                 })
         
         return breadcrumb
+    
+    def download_folder_as_zip(
+        self,
+        folder_path: str
+    ) -> Tuple[bytes, str]:
+        """
+        Télécharge un dossier et tous ses fichiers dans un ZIP
+        
+        Args:
+            folder_path: Chemin du dossier à télécharger
+            
+        Returns:
+            Tuple (contenu_zip, nom_fichier_zip)
+        """
+        try:
+            # Normaliser le chemin du dossier
+            normalized_path = self.normalize_path(folder_path)
+            
+            # Récupérer le nom du dossier pour le nom du ZIP
+            folder_name = normalized_path.rstrip('/').split('/')[-1] if normalized_path.rstrip('/') else 'dossier'
+            zip_filename = f"{folder_name}.zip"
+            
+            # Créer un ZIP en mémoire
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Récupérer récursivement tous les fichiers du dossier
+                all_files = self._get_all_files_recursive(normalized_path)
+                
+                # Télécharger chaque fichier et l'ajouter au ZIP
+                for file_info in all_files:
+                    try:
+                        # Télécharger le fichier depuis S3
+                        file_content = self.storage.download_file_content(file_info['path'])
+                        
+                        # Calculer le chemin relatif dans le ZIP
+                        # Enlever le préfixe du dossier parent pour garder la structure relative
+                        relative_path = file_info['path'][len(normalized_path):]
+                        
+                        # Ajouter le fichier au ZIP avec son chemin relatif
+                        zip_file.writestr(relative_path, file_content)
+                    except Exception as e:
+                        # Continuer même si un fichier échoue
+                        print(f"Erreur lors du téléchargement de {file_info['path']}: {str(e)}")
+                        continue
+            
+            # Retourner le contenu du ZIP
+            zip_buffer.seek(0)
+            return zip_buffer.read(), zip_filename
+            
+        except Exception as e:
+            raise Exception(f"Erreur lors de la création du ZIP: {str(e)}")
+    
+    def _get_all_files_recursive(self, folder_path: str) -> List[Dict]:
+        """
+        Récupère récursivement tous les fichiers d'un dossier
+        
+        Args:
+            folder_path: Chemin du dossier
+            
+        Returns:
+            Liste de dicts avec path et name pour chaque fichier
+        """
+        all_files = []
+        
+        try:
+            # Utiliser le storage pour lister récursivement
+            # On utilise list_objects_v2 sans delimiter pour parcourir récursivement
+            paginator = self.storage.s3_client.get_paginator('list_objects_v2')
+            page_iterator = paginator.paginate(
+                Bucket=self.storage.bucket_name,
+                Prefix=folder_path
+            )
+            
+            for page in page_iterator:
+                if 'Contents' not in page:
+                    continue
+                
+                for obj in page['Contents']:
+                    key = obj['Key']
+                    
+                    # Ignorer les marqueurs de dossier (.keep, trailing /)
+                    if key.endswith('/') or key.endswith('/.keep'):
+                        continue
+                    
+                    # Ignorer le dossier lui-même si c'est un marqueur
+                    if key == folder_path:
+                        continue
+                    
+                    # Ajouter le fichier à la liste
+                    file_name = key.split('/')[-1]
+                    all_files.append({
+                        'path': key,
+                        'name': file_name
+                    })
+            
+            return all_files
+            
+        except Exception as e:
+            raise Exception(f"Erreur lors de la récupération récursive des fichiers: {str(e)}")

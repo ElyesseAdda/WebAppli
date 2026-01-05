@@ -3,7 +3,7 @@
  * Système de gestion de fichiers amélioré
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Paper,

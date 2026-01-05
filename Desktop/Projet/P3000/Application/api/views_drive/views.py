@@ -10,11 +10,12 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
-from django.http import StreamingHttpResponse, JsonResponse
+from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
 import requests
 from .manager import DriveManager
 from .onlyoffice import OnlyOfficeManager
 from ..utils import encode_filename_for_content_disposition
+import io
 
 
 class DriveV2ViewSet(viewsets.ViewSet):
@@ -133,6 +134,39 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 'download_url': url,
                 'file_path': file_path
             }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'], url_path='download-folder')
+    def download_folder(self, request):
+        """
+        Télécharge un dossier et tous ses fichiers dans un ZIP
+        
+        Query params:
+            - folder_path: Chemin du dossier à télécharger
+        """
+        try:
+            folder_path = request.query_params.get('folder_path')
+            
+            if not folder_path:
+                return Response(
+                    {'error': 'folder_path est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Créer le ZIP avec tous les fichiers du dossier
+            zip_content, zip_filename = self.drive_manager.download_folder_as_zip(folder_path)
+            
+            # Créer la réponse HTTP avec le ZIP
+            response = HttpResponse(zip_content, content_type='application/zip')
+            response['Content-Disposition'] = encode_filename_for_content_disposition(zip_filename, 'attachment')
+            response['Content-Length'] = len(zip_content)
+            
+            return response
             
         except Exception as e:
             return Response(

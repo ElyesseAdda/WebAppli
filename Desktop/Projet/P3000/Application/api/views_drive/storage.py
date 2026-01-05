@@ -595,3 +595,24 @@ class StorageManager:
             
         except Exception as e:
             return False
+    
+    def download_file_content(self, key: str) -> bytes:
+        """
+        Télécharge le contenu d'un fichier depuis S3
+        
+        Args:
+            key: Clé S3 du fichier
+            
+        Returns:
+            Contenu binaire du fichier
+        """
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=key
+            )
+            
+            return response['Body'].read()
+            
+        except Exception as e:
+            raise Exception(f"Erreur lors du téléchargement du fichier {key}: {str(e)}")
