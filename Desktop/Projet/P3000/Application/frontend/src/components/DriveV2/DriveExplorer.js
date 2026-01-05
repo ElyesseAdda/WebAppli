@@ -876,8 +876,11 @@ const DriveExplorer = ({
   };
 
   // Menu contextuel
-  const handleContextMenu = (event, item) => {
+  const handleContextMenu = (event, item = null) => {
     event.preventDefault();
+    event.stopPropagation();
+    
+    // Si un item est fourni, l'utiliser, sinon utiliser null pour le menu général
     setSelectedItem(item);
     setContextMenu({
       mouseX: event.clientX + 2,
@@ -1515,6 +1518,13 @@ const DriveExplorer = ({
           handleContainerClick(e);
         }
       }}
+      onContextMenu={(e) => {
+        // Gérer le clic droit sur le conteneur (zone vide)
+        // Si on clique sur un élément de liste, il gérera son propre menu contextuel
+        if (!e.target.closest('[data-item-path]') && !e.target.closest('button')) {
+          handleContextMenu(e, null);
+        }
+      }}
     >
       {/* Zone de sélection rectangulaire */}
       {selectionBox && (
@@ -1811,32 +1821,42 @@ const DriveExplorer = ({
             : undefined
         }
       >
-        {selectedItem?.type === 'file' && (
-          <>
-            <MenuItem onClick={() => handlePreview(selectedItem)}>
-              <ListItemIcon>
-                <VisibilityIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Prévisualiser</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={handleDownload}>
-              <ListItemIcon>
-                <DownloadIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Télécharger</ListItemText>
-            </MenuItem>
-          </>
-        )}
-        {selectedItem?.type === 'folder' && (
-          <MenuItem onClick={() => handleDownloadFolder(selectedItem)}>
-            <ListItemIcon>
-              <DownloadIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Télécharger le dossier</ListItemText>
-          </MenuItem>
-        )}
+        {/* Prévisualiser - seulement pour les fichiers */}
+        <MenuItem 
+          onClick={() => selectedItem?.type === 'file' && handlePreview(selectedItem)}
+          disabled={selectedItem?.type !== 'file'}
+        >
+          <ListItemIcon>
+            <VisibilityIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Prévisualiser</ListItemText>
+        </MenuItem>
+        {/* Télécharger - pour les fichiers */}
+        <MenuItem 
+          onClick={handleDownload}
+          disabled={selectedItem?.type !== 'file'}
+        >
+          <ListItemIcon>
+            <DownloadIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Télécharger</ListItemText>
+        </MenuItem>
+        {/* Télécharger le dossier - seulement pour les dossiers */}
+        <MenuItem 
+          onClick={() => selectedItem?.type === 'folder' && handleDownloadFolder(selectedItem)}
+          disabled={selectedItem?.type !== 'folder'}
+        >
+          <ListItemIcon>
+            <DownloadIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Télécharger le dossier</ListItemText>
+        </MenuItem>
+        {/* Copier - si des éléments sont sélectionnés */}
         {onCopyItems && (
-          <MenuItem onClick={handleCopy}>
+          <MenuItem 
+            onClick={handleCopy}
+            disabled={!selectedItem && selectedFiles.size === 0}
+          >
             <ListItemIcon>
               <ContentCopyIcon fontSize="small" />
             </ListItemIcon>
@@ -1845,23 +1865,35 @@ const DriveExplorer = ({
             </ListItemText>
           </MenuItem>
         )}
-        {pasteItems && hasCopiedItems && (
-          <MenuItem onClick={handlePaste} disabled={isCopying}>
+        {/* Coller - si des éléments sont copiés */}
+        {pasteItems && (
+          <MenuItem 
+            onClick={handlePaste} 
+            disabled={!hasCopiedItems || isCopying}
+          >
             <ListItemIcon>
               <ContentPasteIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>
-              Coller ({copiedItems.length})
+              Coller {hasCopiedItems ? `(${copiedItems.length})` : ''}
             </ListItemText>
           </MenuItem>
         )}
-        <MenuItem onClick={handleRename}>
+        {/* Renommer - seulement si un seul élément est sélectionné */}
+        <MenuItem 
+          onClick={handleRename}
+          disabled={!selectedItem || selectedFiles.size > 0}
+        >
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Renommer</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleMove}>
+        {/* Déplacer - si des éléments sont sélectionnés */}
+        <MenuItem 
+          onClick={handleMove}
+          disabled={!selectedItem && selectedFiles.size === 0}
+        >
           <ListItemIcon>
             <MoveIcon fontSize="small" />
           </ListItemIcon>
@@ -1869,9 +1901,10 @@ const DriveExplorer = ({
             Déplacer {selectedFiles.size > 0 ? `(${selectedFiles.size})` : ''}
           </ListItemText>
         </MenuItem>
+        {/* Supprimer - si des éléments sont sélectionnés */}
         <MenuItem 
           onClick={handleDelete}
-          disabled={selectedItem && isProtectedFolder(selectedItem)}
+          disabled={(!selectedItem && selectedFiles.size === 0) || (selectedItem && isProtectedFolder(selectedItem))}
         >
           <ListItemIcon>
             <DeleteIcon fontSize="small" color="error" />
