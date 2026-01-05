@@ -99,6 +99,8 @@ const SelectionBox = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.primary.light + '20',
   pointerEvents: 'none',
   zIndex: 10,
+  // S'assurer que le rectangle suit le scroll
+  willChange: 'transform',
 }));
 
 
@@ -193,6 +195,8 @@ const DriveExplorer = ({
   const [selectionStart, setSelectionStart] = useState(null);
   const [selectionBox, setSelectionBox] = useState(null);
   const [selectionStartPos, setSelectionStartPos] = useState(null);
+  const [selectionStartDisplayPos, setSelectionStartDisplayPos] = useState(null);
+  const [lastMousePos, setLastMousePos] = useState(null);
   const [wasSelectionBox, setWasSelectionBox] = useState(false);
   const [justFinishedSelection, setJustFinishedSelection] = useState(false);
   const [draggedItems, setDraggedItems] = useState(null);
@@ -331,10 +335,15 @@ const DriveExplorer = ({
     if (containerRef.current && (event.target === containerRef.current || event.target.closest('ul'))) {
       event.preventDefault();
       const rect = containerRef.current.getBoundingClientRect();
+      // Position relative au viewport (pour l'affichage) - sans scroll
       const startX = event.clientX - rect.left;
       const startY = event.clientY - rect.top;
+      // Position avec scroll (pour la détection des intersections)
+      const startXWithScroll = startX + containerRef.current.scrollLeft;
+      const startYWithScroll = startY + containerRef.current.scrollTop;
       
-      setSelectionStartPos({ x: startX, y: startY });
+      setSelectionStartPos({ x: startXWithScroll, y: startYWithScroll });
+      setSelectionStartDisplayPos({ x: startX, y: startY });
       setSelectionBox({ x: startX, y: startY, width: 0, height: 0 });
       setIsSelecting(true);
       setWasSelectionBox(true);
@@ -355,39 +364,61 @@ const DriveExplorer = ({
     if (!isSelecting || !containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
+    // Position relative au viewport (pour l'affichage)
     const currentX = event.clientX - rect.left;
     const currentY = event.clientY - rect.top;
+    // Position avec scroll (pour la détection des intersections)
+    const currentXWithScroll = currentX + containerRef.current.scrollLeft;
+    const currentYWithScroll = currentY + containerRef.current.scrollTop;
+
+    // Stocker la dernière position de la souris pour le scroll
+    setLastMousePos({ x: currentX, y: currentY, xWithScroll: currentXWithScroll, yWithScroll: currentYWithScroll });
 
     // Si on a une position de départ, créer la zone de sélection
-    if (selectionStartPos) {
-      const x = Math.min(selectionStartPos.x, currentX);
-      const y = Math.min(selectionStartPos.y, currentY);
-      const width = Math.abs(currentX - selectionStartPos.x);
-      const height = Math.abs(currentY - selectionStartPos.y);
+    if (selectionStartPos && selectionStartDisplayPos) {
+      // Pour l'affichage, utiliser la position initiale d'affichage stockée
+      const x = Math.min(selectionStartDisplayPos.x, currentX);
+      const y = Math.min(selectionStartDisplayPos.y, currentY);
+      const width = Math.abs(currentX - selectionStartDisplayPos.x);
+      const height = Math.abs(currentY - selectionStartDisplayPos.y);
 
       setSelectionBox({ x, y, width, height });
 
       // Trouver tous les éléments dans la zone de sélection
       const allItems = [...files.map(f => ({ ...f, type: 'file' })), ...folders.map(f => ({ ...f, type: 'folder' }))];
       const selectedPaths = new Set();
+      let firstSelectedPath = null;
+      let lastSelectedPath = null;
 
       allItems.forEach(item => {
         const listItem = document.querySelector(`[data-item-path="${item.path}"]`);
         if (listItem) {
           const itemRect = listItem.getBoundingClientRect();
-          const itemX = itemRect.left - rect.left;
-          const itemY = itemRect.top - rect.top;
+          // Utiliser les coordonnées avec scroll pour la détection des intersections
+          const itemX = itemRect.left - rect.left + containerRef.current.scrollLeft;
+          const itemY = itemRect.top - rect.top + containerRef.current.scrollTop;
           const itemWidth = itemRect.width;
           const itemHeight = itemRect.height;
 
+          // Utiliser les coordonnées avec scroll pour la comparaison
+          const selectionX = Math.min(selectionStartPos.x, currentXWithScroll);
+          const selectionY = Math.min(selectionStartPos.y, currentYWithScroll);
+          const selectionWidth = Math.abs(currentXWithScroll - selectionStartPos.x);
+          const selectionHeight = Math.abs(currentYWithScroll - selectionStartPos.y);
+
           // Vérifier si l'élément intersecte avec la zone de sélection
           if (
-            itemX < x + width &&
-            itemX + itemWidth > x &&
-            itemY < y + height &&
-            itemY + itemHeight > y
+            itemX < selectionX + selectionWidth &&
+            itemX + itemWidth > selectionX &&
+            itemY < selectionY + selectionHeight &&
+            itemY + itemHeight > selectionY
           ) {
             selectedPaths.add(item.path);
+            // Identifier le premier et dernier élément sélectionné
+            if (firstSelectedPath === null) {
+              firstSelectedPath = item.path;
+            }
+            lastSelectedPath = item.path;
           }
         }
       });
@@ -414,6 +445,8 @@ const DriveExplorer = ({
     setSelectionStart(null);
     setSelectionBox(null);
     setSelectionStartPos(null);
+    setSelectionStartDisplayPos(null);
+    setLastMousePos(null);
     setWasSelectionBox(false);
     // Ne pas réinitialiser mouseDownPos ici, il sera réinitialisé dans onClick
     // Cela permet à onClick d'avoir accès à mouseDownPos pour détecter les clics vs drags
@@ -427,14 +460,66 @@ const DriveExplorer = ({
         handleMouseUp(event);
       };
       
+      // Gérer le scroll pour mettre à jour le rectangle de sélection
+      const handleScroll = () => {
+        if (isSelecting && containerRef.current && selectionStartDisplayPos && lastMousePos) {
+          // Recalculer le rectangle avec la dernière position connue de la souris
+          const x = Math.min(selectionStartDisplayPos.x, lastMousePos.x);
+          const y = Math.min(selectionStartDisplayPos.y, lastMousePos.y);
+          const width = Math.abs(lastMousePos.x - selectionStartDisplayPos.x);
+          const height = Math.abs(lastMousePos.y - selectionStartDisplayPos.y);
+          
+          setSelectionBox({ x, y, width, height });
+          
+          // Recalculer aussi la sélection des fichiers avec la dernière position
+          const allItems = [...files.map(f => ({ ...f, type: 'file' })), ...folders.map(f => ({ ...f, type: 'folder' }))];
+          const selectedPaths = new Set();
+          const rect = containerRef.current.getBoundingClientRect();
+          
+          // Utiliser les coordonnées avec scroll pour la comparaison
+          const selectionX = Math.min(selectionStartPos.x, lastMousePos.xWithScroll);
+          const selectionY = Math.min(selectionStartPos.y, lastMousePos.yWithScroll);
+          const selectionWidth = Math.abs(lastMousePos.xWithScroll - selectionStartPos.x);
+          const selectionHeight = Math.abs(lastMousePos.yWithScroll - selectionStartPos.y);
+          
+          allItems.forEach(item => {
+            const listItem = document.querySelector(`[data-item-path="${item.path}"]`);
+            if (listItem) {
+              const itemRect = listItem.getBoundingClientRect();
+              const itemX = itemRect.left - rect.left + containerRef.current.scrollLeft;
+              const itemY = itemRect.top - rect.top + containerRef.current.scrollTop;
+              const itemWidth = itemRect.width;
+              const itemHeight = itemRect.height;
+
+              if (
+                itemX < selectionX + selectionWidth &&
+                itemX + itemWidth > selectionX &&
+                itemY < selectionY + selectionHeight &&
+                itemY + itemHeight > selectionY
+              ) {
+                selectedPaths.add(item.path);
+              }
+            }
+          });
+          
+          setSelectedFiles(selectedPaths);
+        }
+      };
+      
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUpGlobal);
+      if (containerRef.current) {
+        containerRef.current.addEventListener('scroll', handleScroll);
+      }
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUpGlobal);
+        if (containerRef.current) {
+          containerRef.current.removeEventListener('scroll', handleScroll);
+        }
       };
     }
-  }, [isSelecting, mouseDownPos, handleMouseMove, handleMouseUp]);
+  }, [isSelecting, mouseDownPos, handleMouseMove, handleMouseUp, selectionStartDisplayPos, selectionStartPos, selectionBox, lastMousePos, files, folders]);
 
   // Gestion du drag des fichiers sélectionnés
   const handleDragStart = useCallback((event, item) => {
