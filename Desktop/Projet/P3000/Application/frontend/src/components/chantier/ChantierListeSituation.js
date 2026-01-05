@@ -13,6 +13,7 @@ import {
 import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { AiFillFilePdf } from "react-icons/ai";
 import { TfiMore } from "react-icons/tfi";
 import {
   AlignedCell,
@@ -237,6 +238,55 @@ const ChantierListeSituation = ({
     window.open(`/api/preview-situation/${situationId}/`, "_blank");
   };
 
+  const handleGeneratePDF = async (situation) => {
+    try {
+      // Appel à l'API pour générer le PDF
+      const response = await axios.post(
+        "/api/generate-situation-pdf/",
+        {
+          situation_id: situation.id,
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Vérifier si la réponse est bien un PDF
+      if (response.headers["content-type"] === "application/pdf") {
+        // Créer un URL pour le blob
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+
+        // Créer un lien temporaire pour télécharger le PDF
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = `${situation.numero_situation}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+      } else {
+        // Si ce n'est pas un PDF, c'est probablement une erreur
+        const reader = new FileReader();
+        reader.onload = function () {
+          const errorMessage = JSON.parse(reader.result);
+          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+      alert(
+        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
+      );
+    }
+  };
+
   // Handlers pour le menu "more"
   const handleMenuClick = (event, situation) => {
     setAnchorEl(event.currentTarget);
@@ -419,8 +469,22 @@ const ChantierListeSituation = ({
                       {formatStatusLabel(situation.statut || "brouillon")}
                     </Typography>
                   </CenteredTableCell>
-                  <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
+                  <CenteredTableCell sx={{ width: "180px", padding: "0 8px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                      {/* Bouton de téléchargement PDF */}
+                      <IconButton
+                        onClick={() => handleGeneratePDF(situation)}
+                        size="small"
+                        sx={{
+                          color: "success.main",
+                          "&:hover": {
+                            backgroundColor: "rgba(46, 125, 50, 0.04)",
+                          },
+                        }}
+                        title="Télécharger le PDF"
+                      >
+                        <AiFillFilePdf style={{ fontSize: "20px" }} />
+                      </IconButton>
                       {/* Bouton de régénération dans le Drive */}
                       <RegeneratePDFIconButton
                         documentType={DOCUMENT_TYPES.SITUATION}

@@ -19,6 +19,7 @@ import {
 import { green } from "@mui/material/colors";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { AiFillFilePdf } from "react-icons/ai";
 import { TfiMore } from "react-icons/tfi";
 import {
   AlignedCell,
@@ -267,7 +268,7 @@ const ChantierListeFactures = ({
         // Créer un lien temporaire pour télécharger le PDF
         const link = document.createElement("a");
         link.href = pdfUrl;
-        link.download = `facture-${facture.numero}.pdf`;
+        link.download = `${facture.numero}.pdf`;
         document.body.appendChild(link);
         link.click();
 
@@ -429,10 +430,33 @@ const ChantierListeFactures = ({
                       {facture.state_facture || "En cours"}
                     </Typography>
                   </CenteredTableCell>
-                  <CenteredTableCell sx={{ width: "60px", padding: "0 8px" }}>
-                    <IconButton onClick={(e) => handleMenuClick(e, facture)}>
-                      <TfiMore size={16} color="#666" />
-                    </IconButton>
+                  <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                      <IconButton
+                        onClick={() => handleGeneratePDF(facture)}
+                        size="small"
+                        sx={{
+                          color: "success.main",
+                          "&:hover": {
+                            backgroundColor: "rgba(46, 125, 50, 0.04)",
+                          },
+                        }}
+                        title="Télécharger le PDF"
+                      >
+                        <AiFillFilePdf style={{ fontSize: "20px" }} />
+                      </IconButton>
+                      <IconButton
+                        onClick={(e) => handleMenuClick(e, facture)}
+                        size="small"
+                        sx={{
+                          "&:hover": {
+                            backgroundColor: "rgba(0, 0, 0, 0.04)",
+                          },
+                        }}
+                      >
+                        <TfiMore size={16} color="#666" />
+                      </IconButton>
+                    </div>
                   </CenteredTableCell>
                 </TableRow>
               ))}

@@ -11,6 +11,7 @@ from django.utils.text import slugify
 from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
 import os
+import threading
 
 from .models import Document, Societe, Chantier
 from .serializers import (
@@ -222,29 +223,39 @@ class ChantierViewSet(viewsets.ModelViewSet):
                 if chantier.societe else None
             )
             
-            # Si le chemin change, transférer les fichiers
-            if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base:
-                # Transférer tous les fichiers de l'ancien vers le nouveau chemin
-                transfer_success = drive_automation.transfer_chantier_drive_path(
-                    ancien_chemin=ancien_chemin_base,
-                    nouveau_chemin=nouveau_chemin_base
-                )
-                
-                if not transfer_success:
-                    return Response({
-                        'error': 'Erreur lors du transfert des fichiers. Le chemin n\'a pas été modifié.'
-                    }, status=500)
-            
-            # Mettre à jour le drive_path
+            # Mettre à jour le drive_path immédiatement
             chantier.drive_path = nouveau_drive_path
             chantier.save()
+            
+            # Si le chemin change, transférer les fichiers en arrière-plan
+            transfer_needed = ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base
+            if transfer_needed:
+                # Lancer le transfert en arrière-plan avec threading pour éviter les timeouts
+                def transfer_files_background():
+                    try:
+                        transfer_success = drive_automation.transfer_chantier_drive_path(
+                            ancien_chemin=ancien_chemin_base,
+                            nouveau_chemin=nouveau_chemin_base
+                        )
+                        if not transfer_success:
+                            print(f"⚠️ Erreur lors du transfert des fichiers du chantier {chantier.id} de {ancien_chemin_base} vers {nouveau_chemin_base}")
+                        else:
+                            print(f"✅ Transfert des fichiers du chantier {chantier.id} terminé avec succès")
+                    except Exception as e:
+                        import traceback
+                        print(f"❌ Erreur lors du transfert en arrière-plan pour le chantier {chantier.id}: {str(e)}")
+                        print(traceback.format_exc())
+                
+                # Démarrer le thread en arrière-plan
+                transfer_thread = threading.Thread(target=transfer_files_background, daemon=True)
+                transfer_thread.start()
             
             return Response({
                 'success': True,
                 'drive_path': chantier.drive_path,
                 'drive_path_computed': chantier.get_drive_path(),
                 'message': 'Chemin du drive mis à jour avec succès' + (
-                    ' et fichiers transférés' if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base else ''
+                    '. Le transfert des fichiers est en cours en arrière-plan.' if transfer_needed else ''
                 )
             }, status=200)
             
@@ -732,27 +743,20 @@ def preview_devis(request):
 
 def generate_pdf_from_preview(request):
     try:
-        # Ajout de logs
-        logger.info("Début de generate_pdf_from_preview")
-        
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
-        logger.info(f"Génération PDF - Devis ID: {devis_id}")
 
         if not devis_id:
             return JsonResponse({'error': 'ID du devis manquant'}, status=400)
 
         # URL de la page de prévisualisation pour un devis sauvegardé
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
-        logger.debug(f"Preview URL: {preview_url}")
 
-            # Chemin vers le script Puppeteer
+        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
-        logger.debug(f"Node script path: {node_script_path}")
 
-            # Commande pour exécuter Puppeteer avec Node.js
+        # Commande pour exécuter Puppeteer avec Node.js
         command = ['node', node_script_path, preview_url]
-        logger.debug(f"Commande: {command}")
 
         # Exécuter Puppeteer avec capture de la sortie
         result = subprocess.run(
@@ -761,38 +765,27 @@ def generate_pdf_from_preview(request):
             capture_output=True,
             text=True
         )
-        logger.debug(f"Sortie standard: {result.stdout}")
-        logger.debug(f"Sortie d'erreur: {result.stderr}")
 
-            # Lire le fichier PDF généré
+        # Lire le fichier PDF généré
         pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
-        logger.debug(f"Chemin du PDF: {pdf_path}")
-        logger.debug(f"Le fichier existe: {os.path.exists(pdf_path)}")
 
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
                 response = HttpResponse(pdf_file.read(), content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
-            logger.info("PDF généré avec succès")
             return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
-            logger.error(error_msg)
             return JsonResponse({'error': error_msg}, status=500)
 
     except json.JSONDecodeError as e:
         error_msg = f'Données JSON invalides: {str(e)}'
-        logger.error(error_msg)
         return JsonResponse({'error': error_msg}, status=400)
     except subprocess.CalledProcessError as e:
-        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.output}'
-        logger.error(error_msg)
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
         return JsonResponse({'error': error_msg}, status=500)
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
-        logger.error(error_msg)
-        logger.error(f"Type d'erreur: {type(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return JsonResponse({'error': error_msg}, status=500)
 
 
@@ -1516,28 +1509,20 @@ def preview_devis(request):
 
 def generate_pdf_from_preview(request):
     try:
-        # Ajout de logs
-        print("Début de generate_pdf_from_preview")
-        print("Request body:", request.body)
-        
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
-        print("Devis ID:", devis_id)
 
         if not devis_id:
             return JsonResponse({'error': 'ID du devis manquant'}, status=400)
 
         # URL de la page de prévisualisation pour un devis sauvegardé
         preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
-        print("Preview URL:", preview_url)
 
-            # Chemin vers le script Puppeteer
+        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
-        print("Node script path:", node_script_path)
 
-            # Commande pour exécuter Puppeteer avec Node.js
+        # Commande pour exécuter Puppeteer avec Node.js
         command = ['node', node_script_path, preview_url]
-        print("Commande à exécuter:", command)
 
         # Exécuter Puppeteer avec capture de la sortie
         result = subprocess.run(
@@ -1546,38 +1531,27 @@ def generate_pdf_from_preview(request):
             capture_output=True,
             text=True
         )
-        print("Sortie standard:", result.stdout)
-        print("Sortie d'erreur:", result.stderr)
 
-            # Lire le fichier PDF généré
+        # Lire le fichier PDF généré
         pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
-        print("Chemin du PDF:", pdf_path)
-        print("Le fichier existe ?", os.path.exists(pdf_path))
 
         if os.path.exists(pdf_path):
-                with open(pdf_path, 'rb') as pdf_file:
-                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
-                print("PDF généré avec succès")
-                return response
+            with open(pdf_path, 'rb') as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+            return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
-            print(error_msg)
             return JsonResponse({'error': error_msg}, status=500)
 
     except json.JSONDecodeError as e:
         error_msg = f'Données JSON invalides: {str(e)}'
-        print(error_msg)
         return JsonResponse({'error': error_msg}, status=400)
     except subprocess.CalledProcessError as e:
-        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.output}'
-        print(error_msg)
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
         return JsonResponse({'error': error_msg}, status=500)
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
-        print(error_msg)
-        print("Type d'erreur:", type(e))
-        print("Traceback:", traceback.format_exc())
         return JsonResponse({'error': error_msg}, status=500)
 
 
@@ -7624,7 +7598,6 @@ def generate_situation_pdf(request):
         # Vérifications préliminaires
         if not os.path.exists(node_script_path):
             error_msg = f'Script Node.js introuvable: {node_script_path}'
-            print(f"ERREUR: {error_msg}")
             return JsonResponse({'error': error_msg}, status=500)
         
         # Vérifier si Node.js est disponible avec plusieurs chemins
@@ -7634,8 +7607,7 @@ def generate_situation_pdf(request):
         
         for path in node_paths:
             try:
-                result = subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
-                # print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
+                subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
                 node_found = True
                 node_path = path
                 break
@@ -7644,21 +7616,15 @@ def generate_situation_pdf(request):
         
         if not node_found:
             error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
-            print(f"ERREUR: {error_msg}")
             return JsonResponse({'error': error_msg}, status=500)
         
         command = [node_path, node_script_path, preview_url, pdf_path]
-        print(f"Commande exécutée: {' '.join(command)}")
         
         try:
-            # Exécuter avec capture de sortie pour debug
             result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
-            print(f"Sortie standard: {result.stdout}")
-            print(f"Sortie d'erreur: {result.stderr}")
             
             if not os.path.exists(pdf_path):
                 error_msg = f'Le fichier PDF n\'a pas été généré: {pdf_path}'
-                print(f"ERREUR: {error_msg}")
                 return JsonResponse({'error': error_msg}, status=500)
             
             with open(pdf_path, 'rb') as pdf_file:
@@ -7668,17 +7634,12 @@ def generate_situation_pdf(request):
                 
         except subprocess.TimeoutExpired:
             error_msg = 'Timeout lors de la génération du PDF (60 secondes)'
-            print(f"ERREUR: {error_msg}")
             return JsonResponse({'error': error_msg}, status=500)
         except subprocess.CalledProcessError as e:
-            error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.stdout}\nErreur: {e.stderr}'
-            print(f"ERREUR: {error_msg}")
+            error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
             return JsonResponse({'error': error_msg}, status=500)
         except Exception as e:
             error_msg = f'Erreur inattendue: {str(e)}'
-            print(f"ERREUR: {error_msg}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
             return JsonResponse({'error': error_msg}, status=500)
 
     except Exception as e:
@@ -11770,29 +11731,39 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
                 if appel_offres.societe else None
             )
             
-            # Si le chemin change, transférer les fichiers
-            if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base:
-                # Transférer tous les fichiers de l'ancien vers le nouveau chemin
-                transfer_success = drive_automation.transfer_appel_offres_drive_path(
-                    ancien_chemin=ancien_chemin_base,
-                    nouveau_chemin=nouveau_chemin_base
-                )
-                
-                if not transfer_success:
-                    return Response({
-                        'error': 'Erreur lors du transfert des fichiers. Le chemin n\'a pas été modifié.'
-                    }, status=500)
-            
-            # Mettre à jour le drive_path
+            # Mettre à jour le drive_path immédiatement
             appel_offres.drive_path = nouveau_drive_path
             appel_offres.save()
+            
+            # Si le chemin change, transférer les fichiers en arrière-plan
+            transfer_needed = ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base
+            if transfer_needed:
+                # Lancer le transfert en arrière-plan avec threading pour éviter les timeouts
+                def transfer_files_background():
+                    try:
+                        transfer_success = drive_automation.transfer_appel_offres_drive_path(
+                            ancien_chemin=ancien_chemin_base,
+                            nouveau_chemin=nouveau_chemin_base
+                        )
+                        if not transfer_success:
+                            print(f"⚠️ Erreur lors du transfert des fichiers de l'appel d'offres {appel_offres.id} de {ancien_chemin_base} vers {nouveau_chemin_base}")
+                        else:
+                            print(f"✅ Transfert des fichiers de l'appel d'offres {appel_offres.id} terminé avec succès")
+                    except Exception as e:
+                        import traceback
+                        print(f"❌ Erreur lors du transfert en arrière-plan pour l'appel d'offres {appel_offres.id}: {str(e)}")
+                        print(traceback.format_exc())
+                
+                # Démarrer le thread en arrière-plan
+                transfer_thread = threading.Thread(target=transfer_files_background, daemon=True)
+                transfer_thread.start()
             
             return Response({
                 'success': True,
                 'drive_path': appel_offres.drive_path,
                 'drive_path_computed': appel_offres.get_drive_path(),
                 'message': 'Chemin du drive mis à jour avec succès' + (
-                    ' et fichiers transférés' if ancien_chemin_base and nouveau_chemin_base and ancien_chemin_base != nouveau_chemin_base else ''
+                    '. Le transfert des fichiers est en cours en arrière-plan.' if transfer_needed else ''
                 )
             }, status=200)
             

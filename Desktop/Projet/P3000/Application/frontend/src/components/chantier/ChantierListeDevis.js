@@ -230,6 +230,56 @@ const ChantierListeDevis = ({
     window.open(previewUrl, "_blank");
   };
 
+  const handleGeneratePDF = async (devis) => {
+    try {
+      // Appel à l'API existante
+      const response = await axios.post(
+        "/api/generate-pdf-from-preview/",
+        {
+          devis_id: devis.id,
+          preview_url: `/api/preview-saved-devis/${devis.id}/`,
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Vérifier si la réponse est bien un PDF
+      if (response.headers["content-type"] === "application/pdf") {
+        // Créer un URL pour le blob
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+
+        // Créer un lien temporaire pour télécharger le PDF
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = `${devis.numero}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+      } else {
+        // Si ce n'est pas un PDF, c'est probablement une erreur
+        const reader = new FileReader();
+        reader.onload = function () {
+          const errorMessage = JSON.parse(reader.result);
+          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+      alert(
+        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
+      );
+    }
+  };
+
   const handleMoreClick = (event, devis) => {
     setAnchorEl(event.currentTarget);
     setSelectedDevis(devis);
@@ -578,7 +628,7 @@ const ChantierListeDevis = ({
                   </CenteredTableCell>
                   <CenteredTableCell
                     sx={{
-                      width: "60px",
+                      width: "120px",
                       padding: "0 8px",
                       display: "flex",
                       alignItems: "center",
@@ -598,14 +648,15 @@ const ChantierListeDevis = ({
                         <TfiMore size={16} color="#666" />
                       </IconButton>
                       <IconButton
-                        onClick={() => handlePreviewDevis(devis.id)}
+                        onClick={() => handleGeneratePDF(devis)}
                         size="small"
                         sx={{
-                          color: "primary.main",
+                          color: "success.main",
                           "&:hover": {
-                            backgroundColor: "rgba(25, 118, 210, 0.04)",
+                            backgroundColor: "rgba(46, 125, 50, 0.04)",
                           },
                         }}
+                        title="Télécharger le PDF"
                       >
                         <AiFillFilePdf style={{ fontSize: "20px" }} />
                       </IconButton>

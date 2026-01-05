@@ -23,6 +23,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import fr from "date-fns/locale/fr";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AiFillFilePdf } from "react-icons/ai";
 import { TfiMore } from "react-icons/tfi";
 import {
   CenteredTableCell,
@@ -302,6 +303,56 @@ const ChantierListeBonCommande = ({
   const handlePreviewBonCommande = (bonCommandeId) => {
     window.open(`/api/preview-saved-bon-commande/${bonCommandeId}/`, "_blank");
   };
+
+  const handleGeneratePDF = async (bc) => {
+    try {
+      // Appel à l'API existante (utilise le même endpoint que les devis)
+      const response = await axios.post(
+        "/api/generate-pdf-from-preview/",
+        {
+          devis_id: bc.id, // L'endpoint accepte devis_id mais on peut utiliser l'ID du BC
+          preview_url: `/api/preview-saved-bon-commande/${bc.id}/`,
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Vérifier si la réponse est bien un PDF
+      if (response.headers["content-type"] === "application/pdf") {
+        // Créer un URL pour le blob
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+
+        // Créer un lien temporaire pour télécharger le PDF
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = `${bc.numero}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+      } else {
+        // Si ce n'est pas un PDF, c'est probablement une erreur
+        const reader = new FileReader();
+        reader.onload = function () {
+          const errorMessage = JSON.parse(reader.result);
+          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+      alert(
+        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
+      );
+    }
+  };
   const handleModifyBC = () => {
     if (selectedBC) {
       window.location.href = `/ModificationBC/${selectedBC.id}`;
@@ -526,10 +577,33 @@ const ChantierListeBonCommande = ({
                 >
                   {bc.reste_a_payer} €
                 </CenteredTableCell>
-                <CenteredTableCell>
-                  <IconButton onClick={(e) => handleMenuOpen(e, bc)}>
-                    <TfiMore />
-                  </IconButton>
+                <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                    <IconButton
+                      onClick={() => handleGeneratePDF(bc)}
+                      size="small"
+                      sx={{
+                        color: "success.main",
+                        "&:hover": {
+                          backgroundColor: "rgba(46, 125, 50, 0.04)",
+                        },
+                      }}
+                      title="Télécharger le PDF"
+                    >
+                      <AiFillFilePdf style={{ fontSize: "20px" }} />
+                    </IconButton>
+                    <IconButton
+                      onClick={(e) => handleMenuOpen(e, bc)}
+                      size="small"
+                      sx={{
+                        "&:hover": {
+                          backgroundColor: "rgba(0, 0, 0, 0.04)",
+                        },
+                      }}
+                    >
+                      <TfiMore size={16} color="#666" />
+                    </IconButton>
+                  </div>
                 </CenteredTableCell>
               </TableRow>
             ))}

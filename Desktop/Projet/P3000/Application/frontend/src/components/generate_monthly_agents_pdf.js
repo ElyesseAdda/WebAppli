@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const puppeteer = require("puppeteer");
 
 async function generateMonthlyAgentsPDF() {
@@ -9,18 +10,37 @@ async function generateMonthlyAgentsPDF() {
 
   console.log("URL de prévisualisation:", previewUrl);
 
-  try {
-    const browser = await puppeteer.launch({
-      executablePath: "/usr/bin/chromium-browser", // chemin exact de Chromium
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+  // Détecter l'environnement : production (Linux) ou local (Windows/autre)
+  const isProduction = process.platform === "linux" && fs.existsSync("/usr/bin/chromium-browser");
+  const chromiumPath = isProduction ? "/usr/bin/chromium-browser" : undefined;
+
+  // Configuration des arguments selon l'environnement
+  const launchArgs = [
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--window-size=1920,1080",
-      ],
-    });
+  ];
+
+  // Ajouter --no-sandbox uniquement en production (nécessaire pour Gunicorn)
+  if (isProduction) {
+    launchArgs.push("--no-sandbox", "--disable-setuid-sandbox");
+  }
+
+  const browserConfig = {
+    headless: true,
+    args: launchArgs,
+  };
+
+  // Ajouter executablePath uniquement en production
+  if (chromiumPath) {
+    browserConfig.executablePath = chromiumPath;
+    console.log("🌐 Mode production - Utilisation de Chromium système:", chromiumPath);
+  } else {
+    console.log("💻 Mode local - Utilisation du Chromium de Puppeteer");
+  }
+
+  try {
+    const browser = await puppeteer.launch(browserConfig);
     console.log("Navigateur lancé");
 
     const page = await browser.newPage();
