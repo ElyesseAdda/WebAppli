@@ -35,9 +35,12 @@ import {
   StyledTextField,
 } from "../../styles/tableStyles";
 import BonCommandeForm from "../BonCommandeForm";
+import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
+import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const ChantierListeBonCommande = ({
   chantierId,
+  chantierData = null,
   bonsCommande = [],
   setBonsCommande = () => {},
   initialFilters = {},
@@ -522,7 +525,18 @@ const ChantierListeBonCommande = ({
                   onChange={handleChange("reste_a_payer")}
                 />
               </FilterCell>
-              <FilterCell />
+              <FilterCell>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    color: "white",
+                    fontWeight: "bold",
+                    textAlign: "center",
+                  }}
+                >
+                  Actions
+                </Typography>
+              </FilterCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -579,6 +593,7 @@ const ChantierListeBonCommande = ({
                 </CenteredTableCell>
                 <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                    {/* Bouton de téléchargement PDF */}
                     <IconButton
                       onClick={() => handleGeneratePDF(bc)}
                       size="small"
@@ -592,6 +607,21 @@ const ChantierListeBonCommande = ({
                     >
                       <AiFillFilePdf style={{ fontSize: "20px" }} />
                     </IconButton>
+                    {/* Bouton de régénération dans le Drive */}
+                    <RegeneratePDFIconButton
+                      documentType={DOCUMENT_TYPES.BON_COMMANDE}
+                      documentData={{
+                        ...bc,
+                        chantier: chantierData || { id: chantierId, chantier_name: bc.chantier_name },
+                      }}
+                      size="small"
+                      color="primary"
+                      tooltipPlacement="top"
+                      onSuccess={() => {
+                        console.log('✅ Bon de commande régénéré avec succès');
+                      }}
+                    />
+                    {/* Bouton "more" */}
                     <IconButton
                       onClick={(e) => handleMenuOpen(e, bc)}
                       size="small"

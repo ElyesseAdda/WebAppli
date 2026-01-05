@@ -121,7 +121,7 @@ export const DOCUMENT_CONFIG = {
       chantier_id: documentData.chantier?.id || documentData.chantier_id,
       chantier_name: documentData.chantier?.chantier_name || documentData.chantier?.nom || documentData.chantier_name || 'Chantier',
       societe_name: documentData.chantier?.societe?.nom_societe || documentData.chantier?.societe?.nom || documentData.societe_name || 'Société',
-      numero_bon_commande: documentData.numero_bon_commande,
+      numero_bon_commande: documentData.numero_bon_commande || documentData.numero,
       fournisseur_name: documentData.fournisseur?.nom || documentData.fournisseur_name || 'Fournisseur',
       force_replace: true,
     }),

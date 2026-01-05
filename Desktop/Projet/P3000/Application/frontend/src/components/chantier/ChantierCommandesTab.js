@@ -47,6 +47,7 @@ const ChantierCommandesTab = ({ chantierData }) => {
   return (
     <ChantierListeBonCommande
       chantierId={chantierData.id}
+      chantierData={chantierData}
       bonsCommande={bonsCommande}
       setBonsCommande={setBonsCommande}
       initialFilters={savedFilters}

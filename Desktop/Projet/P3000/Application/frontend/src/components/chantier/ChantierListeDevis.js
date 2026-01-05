@@ -33,6 +33,8 @@ import FactureModal from "../FactureModal";
 import StatusChangeModal from "../StatusChangeModal";
 import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
+import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
+import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -594,7 +596,18 @@ const ChantierListeDevis = ({
                     ))}
                   </StyledSelect>
                 </FilterCell>
-                <FilterCell />
+                <FilterCell>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "white",
+                      fontWeight: "bold",
+                      textAlign: "center",
+                    }}
+                  >
+                    Actions
+                  </Typography>
+                </FilterCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -626,27 +639,9 @@ const ChantierListeDevis = ({
                       {devis.status || "En attente"}
                     </Typography>
                   </CenteredTableCell>
-                  <CenteredTableCell
-                    sx={{
-                      width: "120px",
-                      padding: "0 8px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
+                  <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
-                      <IconButton
-                        onClick={(e) => handleMoreClick(e, devis)}
-                        size="small"
-                        sx={{
-                          "&:hover": {
-                            backgroundColor: "rgba(0, 0, 0, 0.04)",
-                          },
-                        }}
-                      >
-                        <TfiMore size={16} color="#666" />
-                      </IconButton>
+                      {/* Bouton de téléchargement PDF */}
                       <IconButton
                         onClick={() => handleGeneratePDF(devis)}
                         size="small"
@@ -659,6 +654,32 @@ const ChantierListeDevis = ({
                         title="Télécharger le PDF"
                       >
                         <AiFillFilePdf style={{ fontSize: "20px" }} />
+                      </IconButton>
+                      {/* Bouton de régénération dans le Drive */}
+                      <RegeneratePDFIconButton
+                        documentType={DOCUMENT_TYPES.DEVIS_TRAVAUX}
+                        documentData={{
+                          ...devis,
+                          chantier: chantierData,
+                        }}
+                        size="small"
+                        color="primary"
+                        tooltipPlacement="top"
+                        onSuccess={() => {
+                          console.log('✅ Devis régénéré avec succès');
+                        }}
+                      />
+                      {/* Bouton "more" */}
+                      <IconButton
+                        onClick={(e) => handleMoreClick(e, devis)}
+                        size="small"
+                        sx={{
+                          "&:hover": {
+                            backgroundColor: "rgba(0, 0, 0, 0.04)",
+                          },
+                        }}
+                      >
+                        <TfiMore size={16} color="#666" />
                       </IconButton>
                     </div>
                   </CenteredTableCell>
