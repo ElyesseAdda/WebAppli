@@ -215,11 +215,12 @@ const DropZone = styled(Box)(({ theme, isDragOver }) => ({
   },
 }));
 
-const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = [] }) => {
+const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = [], onProgress = null, onUploadStart = null, onReopenUploadDialog = null, onCancel = null }) => {
   const [selectedFiles, setSelectedFiles] = useState(initialFiles);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadMode, setUploadMode] = useState('files'); // 'files' ou 'folder'
-  const { uploadFiles, detectConflicts, findAvailableFileName, uploading, progress, errors } = useUpload();
+  const { uploadFiles, detectConflicts, findAvailableFileName, cancelUpload, uploading, progress, errors } = useUpload();
+  const cancelAnalysisRef = useRef(false);
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [conflicts, setConflicts] = useState([]);
   const [filesToReplace, setFilesToReplace] = useState(new Set());
@@ -238,6 +239,76 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
   const completedCount = useMemo(() => {
     return Object.values(progress).filter(p => p.complete).length;
   }, [progress]);
+
+  // Calculer les statistiques totales (nombre de fichiers et taille totale)
+  const totalStats = useMemo(() => {
+    if (selectedFiles.length === 0) {
+      return { totalFiles: 0, totalSize: 0 };
+    }
+    
+    // Pour l'upload, on a déjà les fichiers avec leur taille
+    const totalSize = selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+    return {
+      totalFiles: selectedFiles.length,
+      totalSize: totalSize,
+    };
+  }, [selectedFiles]);
+
+  // Notifier le début avec les stats totales
+  useEffect(() => {
+    if (!onProgress || !uploading || selectedFiles.length === 0) return;
+    
+    // Au début, notifier avec les stats totales
+    if (Object.keys(progress).length === 0) {
+      onProgress({
+        phase: 'upload',
+        progress: 0,
+        loaded: 0,
+        total: totalStats.totalSize,
+        currentItem: '',
+        currentItemIndex: 0,
+        totalItems: totalStats.totalFiles,
+      });
+      return;
+    }
+    
+    const progressValues = Object.values(progress);
+    if (progressValues.length === 0) return;
+    
+    // Calculer la progression globale basée sur la taille (plus précis)
+    const completedFiles = progressValues.filter(p => p.complete).length;
+    
+    // Calculer la taille uploadée basée sur la progression de chaque fichier
+    let uploadedSize = 0;
+    selectedFiles.forEach(file => {
+      const fileKey = file.webkitRelativePath || file.name;
+      const fileProgress = progress[fileKey];
+      if (fileProgress) {
+        uploadedSize += (file.size || 0) * (fileProgress.progress || 0) / 100;
+      }
+    });
+    
+    // Calculer le pourcentage global basé sur la taille
+    const globalProgress = totalStats.totalSize > 0 
+      ? Math.round((uploadedSize / totalStats.totalSize) * 100)
+      : 0;
+    
+    // Trouver le fichier en cours (non complété)
+    const currentFileProgress = progressValues.find(p => !p.complete);
+    const currentFileName = currentFileProgress ? 
+      Object.keys(progress).find(key => progress[key] === currentFileProgress) : 
+      (completedFiles < selectedFiles.length ? selectedFiles[completedFiles]?.name : '');
+    
+    onProgress({
+      phase: 'upload',
+      progress: globalProgress,
+      loaded: uploadedSize,
+      total: totalStats.totalSize,
+      currentItem: currentFileName || '',
+      currentItemIndex: completedFiles,
+      totalItems: totalStats.totalFiles,
+    });
+  }, [progress, uploading, selectedFiles, onProgress, totalStats]);
 
   const fileTree = useMemo(() => buildFileTree(selectedFiles), [selectedFiles]);
 
@@ -416,11 +487,53 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
     if (selectedFiles.length === 0) return;
 
     try {
-      // Détecter les conflits avant l'upload
+      // Ouvrir immédiatement le modal de progression AVANT la détection des conflits
+      // pour éviter l'effet de "bug" pendant l'analyse des fichiers volumineux
+      if (onUploadStart) {
+        onUploadStart();
+        // Ajouter un petit délai pour garantir que le modal a le temps de se rendre
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      // Notifier le début de l'analyse
+      if (onProgress) {
+        onProgress({
+          phase: 'upload',
+          progress: 0,
+          loaded: 0,
+          total: totalStats.totalSize,
+          currentItem: 'Analyse des fichiers...',
+          currentItemIndex: 0,
+          totalItems: totalStats.totalFiles,
+        });
+      }
+      
+      // Réinitialiser le flag d'annulation
+      cancelAnalysisRef.current = false;
+      
+      // Détecter les conflits (cela peut prendre du temps pour des fichiers volumineux)
       const detectedConflicts = await detectConflicts(selectedFiles, currentPath);
       
+      // Vérifier si l'opération a été annulée
+      if (cancelAnalysisRef.current) {
+        if (onProgress) {
+          onProgress(null);
+        }
+        if (onCancel) {
+          onCancel();
+        }
+        return;
+      }
+      
       if (detectedConflicts.length > 0) {
-        // Afficher le dialog de confirmation
+        // Fermer le modal de progression et rouvrir le modal d'upload pour gérer les conflits
+        if (onProgress) {
+          onProgress(null);
+        }
+        // Rouvrir le modal d'upload pour afficher les conflits
+        if (onReopenUploadDialog) {
+          onReopenUploadDialog();
+        }
         setConflicts(detectedConflicts);
         setConflictDialogOpen(true);
         return;
@@ -438,6 +551,20 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
   // Procéder à l'upload avec les fichiers à remplacer ou renommés
   const proceedWithUpload = async (replaceFiles = [], renamedFilesMap = new Map()) => {
     try {
+      // Le modal de progression est déjà ouvert par handleStartUpload
+      // On met juste à jour les données pour indiquer le début de l'upload
+      if (onProgress) {
+        onProgress({
+          phase: 'upload',
+          progress: 0,
+          loaded: 0,
+          total: totalStats.totalSize,
+          currentItem: '',
+          currentItemIndex: 0,
+          totalItems: totalStats.totalFiles,
+        });
+      }
+      
       // Créer une nouvelle liste de fichiers avec les noms renommés si nécessaire
       const filesToUpload = selectedFiles.map(file => {
         const fileKey = file.name || file.webkitRelativePath;
@@ -463,13 +590,35 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
         return file;
       });
       
-      await uploadFiles(filesToUpload, currentPath, replaceFiles, renamedFilesMap);
+      await uploadFiles(filesToUpload, currentPath, replaceFiles, renamedFilesMap, onProgress);
+      
+      // Notifier la fin de l'upload avec 100% de progression
+      if (onProgress) {
+        onProgress({
+          phase: 'upload',
+          progress: 100,
+          loaded: totalStats.totalSize,
+          total: totalStats.totalSize,
+          currentItem: '',
+          currentItemIndex: totalStats.totalFiles,
+          totalItems: totalStats.totalFiles,
+        });
+      }
+      
       // Attendre un peu pour que l'utilisateur voie le succès
       setTimeout(() => {
         onUploadComplete();
       }, 1000);
     } catch (error) {
       console.error('Erreur lors de l\'upload:', error);
+      // Fermer le modal de progression en cas d'erreur
+      if (onProgress) {
+        onProgress(null);
+      }
+      // Appeler onUploadComplete pour fermer le modal même en cas d'erreur
+      setTimeout(() => {
+        onUploadComplete();
+      }, 500);
     }
   };
 

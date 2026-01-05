@@ -2,7 +2,7 @@
  * useUpload Hook - Gestion de l'upload de fichiers
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
   normalizeFilename,
@@ -18,6 +18,8 @@ export const useUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({});
   const [errors, setErrors] = useState({});
+  const cancelRef = useRef(false);
+  const abortControllerRef = useRef(null);
 
   // Utilitaire pour récupérer le token CSRF
   const getCookie = (name) => {
@@ -317,8 +319,17 @@ export const useUpload = () => {
     return conflicts;
   }, []);
 
+  // Fonction pour annuler l'upload
+  const cancelUpload = useCallback(() => {
+    cancelRef.current = true;
+    setUploading(false);
+    setProgress({});
+  }, []);
+
   // Upload de plusieurs fichiers
-  const uploadFiles = useCallback(async (files, currentPath, replaceFiles = [], renamedFilesMap = new Map()) => {
+  const uploadFiles = useCallback(async (files, currentPath, replaceFiles = [], renamedFilesMap = new Map(), onProgress = null) => {
+    // Réinitialiser le flag d'annulation
+    cancelRef.current = false;
     // Filtrer pour ne garder que les fichiers (pas les dossiers)
     // IMPORTANT : Quand on sélectionne un dossier avec webkitdirectory, le navigateur peut parfois
     // retourner le dossier lui-même comme un "fichier" avec size=0 et webkitRelativePath=''
@@ -382,6 +393,10 @@ export const useUpload = () => {
     // Créer tous les dossiers nécessaires avant l'upload
     if (folderPaths.size > 0) {
       for (const folderPath of folderPaths) {
+        if (cancelRef.current) {
+          setUploading(false);
+          throw new Error('Upload annulé');
+        }
         await ensureFoldersExist(folderPath, currentPath || '');
       }
     }
@@ -396,6 +411,9 @@ export const useUpload = () => {
     // Uploader tous les fichiers
     const results = await Promise.all(
       validFiles.map(async (file) => {
+        if (cancelRef.current) {
+          return false;
+        }
         const fileKey = file.name || file.webkitRelativePath;
         const shouldReplace = replaceSet.has(file.name) || replaceSet.has(file.webkitRelativePath) || replaceSet.has(file);
         
@@ -408,6 +426,11 @@ export const useUpload = () => {
         return uploadFile(file, currentPath, rootFolderName, shouldReplace, newFileName);
       })
     );
+
+    if (cancelRef.current) {
+      setUploading(false);
+      throw new Error('Upload annulé');
+    }
 
     setUploading(false);
 

@@ -33,6 +33,7 @@ import { styled } from '@mui/material/styles';
 import DriveExplorer, { displayFilename } from './DriveExplorer';
 import DriveUploader from './DriveUploader';
 import DriveSearch from './DriveSearch';
+import PasteProgressModal from './PasteProgressModal';
 import { useDrive } from './hooks/useDrive';
 import { usePaste } from './hooks/usePaste';
 import { useDriveCopy } from './hooks/useDriveCopy';
@@ -113,6 +114,9 @@ const DriveV2 = () => {
   const [draggedItemsFromExplorer, setDraggedItemsFromExplorer] = useState(null);
   const [dragOverBreadcrumbItem, setDragOverBreadcrumbItem] = useState(null);
   const [pasteIndicatorVisible, setPasteIndicatorVisible] = useState(false);
+  const [pasteProgressModalOpen, setPasteProgressModalOpen] = useState(false);
+  const [pasteProgressData, setPasteProgressData] = useState(null);
+  const cancelPasteRef = useRef(false);
 
   // Hook pour gérer la copie interne du Drive
   const { 
@@ -133,6 +137,73 @@ const DriveV2 = () => {
       severity: 'info',
     });
   }, [originalCopyItems]);
+
+  // Fonction pour annuler le collage
+  const handleCancelPaste = useCallback(() => {
+    cancelPasteRef.current = true;
+    setPasteProgressModalOpen(false);
+    setPasteProgressData(null);
+    clearCopiedItems();
+  }, [clearCopiedItems]);
+
+  // Fonction pour annuler l'upload
+  const handleCancelUpload = useCallback(() => {
+    setPasteProgressModalOpen(false);
+    setPasteProgressData(null);
+    setUploadDialogOpen(false);
+  }, []);
+
+  // Wrapper pour pasteItems avec gestion des messages et modal de progression
+  const handlePasteWithMessages = useCallback(async (destinationPath) => {
+    if (!hasCopiedItems || isCopying) return;
+    
+    // Ouvrir le modal de progression immédiatement
+    setPasteProgressModalOpen(true);
+    setPasteProgressData({ progress: 0 });
+    
+    // Petit délai pour s'assurer que le modal est rendu avant de commencer le processus
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    try {
+      const result = await pasteItems(destinationPath, (progressData) => {
+        // Mettre à jour les données de progression pour le modal
+        setPasteProgressData(progressData);
+      });
+      
+      // Fermer le modal
+      setPasteProgressModalOpen(false);
+      setPasteProgressData(null);
+      
+      setSnackbar({
+        open: true,
+        message: `${result.success} élément(s) copié(s) avec succès`,
+        severity: 'success',
+      });
+      
+      if (result.error > 0) {
+        setTimeout(() => {
+          setSnackbar({
+            open: true,
+            message: `${result.error} élément(s) n'ont pas pu être copiés`,
+            severity: 'error',
+          });
+        }, 2000);
+      }
+      
+      clearCopiedItems();
+      refreshContent();
+    } catch (error) {
+      // Fermer le modal en cas d'erreur
+      setPasteProgressModalOpen(false);
+      setPasteProgressData(null);
+      
+      setSnackbar({
+        open: true,
+        message: `Erreur lors du collage : ${error.message}`,
+        severity: 'error',
+      });
+    }
+  }, [hasCopiedItems, isCopying, pasteItems, clearCopiedItems, refreshContent]);
 
   // Hook pour gérer le copier-coller depuis le presse-papier système
   const { isPasteSupported } = usePaste(
@@ -192,34 +263,11 @@ const DriveV2 = () => {
         if (hasCopiedItems && !uploadDialogOpen && !isCopying) {
           event.preventDefault();
           
-          try {
-            const result = await pasteItems(currentPath);
-            
-            setSnackbar({
-              open: true,
-              message: `${result.success} élément(s) copié(s) avec succès`,
-              severity: 'success',
-            });
-            
-            if (result.error > 0) {
-              setTimeout(() => {
-                setSnackbar({
-                  open: true,
-                  message: `${result.error} élément(s) n'ont pas pu être copiés`,
-                  severity: 'error',
-                });
-              }, 2000);
-            }
-            
-            clearCopiedItems();
-            refreshContent();
-          } catch (error) {
-            setSnackbar({
-              open: true,
-              message: `Erreur lors du collage : ${error.message}`,
-              severity: 'error',
-            });
-          }
+          // Utiliser le même handler que le menu contextuel pour avoir le modal de progression
+          // Ne pas utiliser await ici pour éviter de bloquer l'événement
+          handlePasteWithMessages(currentPath).catch((error) => {
+            console.error('Erreur lors du collage via Ctrl+V:', error);
+          });
         }
       }
     };
@@ -229,7 +277,7 @@ const DriveV2 = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [hasCopiedItems, uploadDialogOpen, isCopying, pasteItems, currentPath, clearCopiedItems, refreshContent]);
+  }, [hasCopiedItems, uploadDialogOpen, isCopying, handlePasteWithMessages, currentPath]);
 
   // Charger le contenu initial
   useEffect(() => {
@@ -671,6 +719,9 @@ const DriveV2 = () => {
             onDraggedItemsChange={setDraggedItemsFromExplorer}
             onCopyItems={copyItems}
             copiedItems={copiedItems}
+            pasteItems={handlePasteWithMessages}
+            hasCopiedItems={hasCopiedItems}
+            isCopying={isCopying}
           />
         )}
       </DriveContent>
@@ -735,9 +786,29 @@ const DriveV2 = () => {
           onClose={handleCloseUploadDialog}
           onUploadComplete={() => {
             handleCloseUploadDialog();
+            setPasteProgressModalOpen(false);
+            setPasteProgressData(null);
             refreshContent();
           }}
           initialFiles={droppedFiles}
+          onProgress={(progressData) => {
+            setPasteProgressData(progressData);
+          }}
+          onUploadStart={async () => {
+            // Fermer le modal d'upload et ouvrir le modal de progression
+            setUploadDialogOpen(false);
+            setPasteProgressModalOpen(true);
+            setPasteProgressData({ progress: 0 });
+            // Ajouter un petit délai pour garantir que le modal a le temps de se rendre
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }}
+          onReopenUploadDialog={() => {
+            // Rouvrir le modal d'upload en cas de conflits détectés
+            setPasteProgressModalOpen(false);
+            setPasteProgressData(null);
+            setUploadDialogOpen(true);
+          }}
+          onCancel={handleCancelUpload}
         />
       )}
 
@@ -789,6 +860,13 @@ const DriveV2 = () => {
           </Typography>
         </Box>
       )}
+
+      {/* Modal de progression pour le collage et l'upload */}
+      <PasteProgressModal
+        open={pasteProgressModalOpen}
+        progressData={pasteProgressData}
+        onCancel={pasteProgressData?.phase === 'upload' ? handleCancelUpload : handleCancelPaste}
+      />
     </DriveContainer>
   );
 };

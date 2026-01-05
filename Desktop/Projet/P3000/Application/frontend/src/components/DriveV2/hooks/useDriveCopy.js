@@ -51,7 +51,7 @@ export const useDriveCopy = () => {
   }, []);
 
   // Copier (dupliquer) un fichier
-  const copyFile = async (sourcePath, destPath, newFileName) => {
+  const copyFile = async (sourcePath, destPath, newFileName, onProgress = null) => {
     try {
       // Télécharger le fichier source
       const downloadResponse = await axios.get(`${API_BASE_URL}/download-url/`, {
@@ -61,9 +61,22 @@ export const useDriveCopy = () => {
 
       const downloadUrl = downloadResponse.data.download_url;
 
-      // Télécharger le contenu
+      // Télécharger le contenu avec suivi de progression
       const fileResponse = await axios.get(downloadUrl, {
         responseType: 'blob',
+        onDownloadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            onProgress({
+              phase: 'download',
+              progress: percentCompleted,
+              loaded: progressEvent.loaded,
+              total: progressEvent.total,
+            });
+          }
+        },
       });
 
       const blob = fileResponse.data;
@@ -90,7 +103,7 @@ export const useDriveCopy = () => {
 
       const { upload_url, fields } = uploadUrlResponse.data;
 
-      // Upload vers S3
+      // Upload vers S3 avec suivi de progression
       const formData = new FormData();
       Object.keys(fields).forEach((key) => {
         formData.append(key, fields[key]);
@@ -99,6 +112,19 @@ export const useDriveCopy = () => {
 
       await axios.post(upload_url, formData, {
         withCredentials: false,
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            onProgress({
+              phase: 'upload',
+              progress: percentCompleted,
+              loaded: progressEvent.loaded,
+              total: progressEvent.total,
+            });
+          }
+        },
       });
 
       return true;
@@ -108,8 +134,40 @@ export const useDriveCopy = () => {
     }
   };
 
+  // Calculer récursivement le nombre total de fichiers et la taille totale d'un dossier
+  const calculateFolderStats = async (folderPath) => {
+    try {
+      let totalFiles = 0;
+      let totalSize = 0;
+
+      // Lister le contenu du dossier
+      const contentResponse = await axios.get(`${API_BASE_URL}/list-content/`, {
+        params: { folder_path: folderPath },
+        withCredentials: true,
+      });
+
+      const { files = [], folders = [] } = contentResponse.data;
+
+      // Ajouter les fichiers du dossier actuel
+      totalFiles += files.length;
+      totalSize += files.reduce((sum, file) => sum + (file.size || 0), 0);
+
+      // Parcourir récursivement les sous-dossiers
+      for (const folder of folders) {
+        const subStats = await calculateFolderStats(folder.path);
+        totalFiles += subStats.totalFiles;
+        totalSize += subStats.totalSize;
+      }
+
+      return { totalFiles, totalSize };
+    } catch (error) {
+      console.error('Erreur lors du calcul des statistiques du dossier:', error);
+      return { totalFiles: 0, totalSize: 0 };
+    }
+  };
+
   // Copier (dupliquer) un dossier récursivement
-  const copyFolder = async (sourceFolderPath, destPath, newFolderName) => {
+  const copyFolder = async (sourceFolderPath, destPath, newFolderName, onProgress = null, folderStats = null, folderOffset = { size: 0 }) => {
     try {
       // Créer le dossier de destination
       const newFolderPath = destPath + newFolderName + '/';
@@ -139,12 +197,66 @@ export const useDriveCopy = () => {
 
       // Copier tous les fichiers
       for (const file of files) {
-        await copyFile(file.path, newFolderPath, file.name);
+        const fileSize = file.size || 0;
+        const fileOffset = { ...folderOffset };
+        
+        const fileProgressCallback = onProgress && folderStats ? (progressData) => {
+          // progressData contient la progression du fichier individuel (0-100%)
+          const fileProgress = progressData.progress || 0;
+          
+          // Calculer la taille chargée de ce fichier
+          const fileLoaded = fileSize * fileProgress / 100;
+          
+          // Progression du dossier = offset (fichiers précédents) + progression de ce fichier
+          const folderSizeProcessed = fileOffset.size + fileLoaded;
+          const folderProgress = folderStats.size > 0 
+            ? Math.round((folderSizeProcessed / folderStats.size) * 100)
+            : 0;
+          
+          // Appeler le callback parent avec la progression du dossier
+          onProgress({
+            phase: progressData.phase || 'upload',
+            progress: folderProgress,
+            loaded: folderSizeProcessed,
+            total: folderStats.size,
+          });
+        } : onProgress;
+
+        await copyFile(file.path, newFolderPath, file.name, fileProgressCallback);
+        
+        // Mettre à jour l'offset pour le prochain fichier
+        folderOffset.size += fileSize;
       }
 
       // Copier tous les sous-dossiers récursivement
       for (const folder of folders) {
-        await copyFolder(folder.path, newFolderPath, folder.name);
+        // Calculer les stats du sous-dossier
+        const subStats = await calculateFolderStats(folder.path);
+        
+        // Créer un callback pour le sous-dossier qui adapte sa progression à celle du dossier parent
+        const subFolderCallback = onProgress && folderStats ? (progressData) => {
+          // progressData contient la progression du sous-dossier (0-100%)
+          const subFolderProgress = progressData.progress || 0;
+          const subFolderLoaded = subStats.size * subFolderProgress / 100;
+          
+          // Progression du dossier parent = offset (fichiers et sous-dossiers précédents) + progression du sous-dossier
+          const folderSizeProcessed = folderOffset.size + subFolderLoaded;
+          const folderProgress = folderStats.size > 0 
+            ? Math.round((folderSizeProcessed / folderStats.size) * 100)
+            : 0;
+          
+          onProgress({
+            phase: progressData.phase || 'upload',
+            progress: folderProgress,
+            loaded: folderSizeProcessed,
+            total: folderStats.size,
+          });
+        } : onProgress;
+        
+        await copyFolder(folder.path, newFolderPath, folder.name, subFolderCallback, subStats, folderOffset);
+        
+        // Mettre à jour l'offset pour le prochain sous-dossier
+        folderOffset.size += subStats.size;
       }
 
       return true;
@@ -155,7 +267,7 @@ export const useDriveCopy = () => {
   };
 
   // Coller les éléments copiés
-  const pasteItems = useCallback(async (destinationPath) => {
+  const pasteItems = useCallback(async (destinationPath, onProgress = null) => {
     if (copiedItems.length === 0) {
       throw new Error('Aucun élément à coller');
     }
@@ -163,21 +275,116 @@ export const useDriveCopy = () => {
     setIsCopying(true);
 
     try {
-      const results = [];
+      // ÉTAPE 1 : Calculer le nombre total de fichiers et la taille totale AVANT de commencer
+      let totalFiles = 0;
+      let totalSize = 0;
+      const fileStats = [];
 
       for (const item of copiedItems) {
+        if (item.type === 'folder') {
+          // Calculer récursivement les stats du dossier
+          const stats = await calculateFolderStats(item.path);
+          totalFiles += stats.totalFiles;
+          totalSize += stats.totalSize;
+          fileStats.push({ item, files: stats.totalFiles, size: stats.totalSize });
+        } else {
+          // Pour un fichier, récupérer sa taille depuis l'API si non disponible
+          let fileSize = item.size || 0;
+          
+          // Si la taille n'est pas disponible, la récupérer depuis l'API
+          if (!fileSize) {
+            try {
+              const contentResponse = await axios.get(`${API_BASE_URL}/list-content/`, {
+                params: { 
+                  folder_path: item.path.substring(0, item.path.lastIndexOf('/') + 1) 
+                },
+                withCredentials: true,
+              });
+              
+              const file = contentResponse.data.files?.find(f => f.path === item.path);
+              if (file && file.size) {
+                fileSize = file.size;
+              }
+            } catch (error) {
+              console.warn(`Impossible de récupérer la taille du fichier ${item.name}:`, error);
+            }
+          }
+          
+          totalFiles += 1;
+          totalSize += fileSize;
+          fileStats.push({ item, files: 1, size: fileSize });
+        }
+      }
+
+      // Notifier le début avec les stats totales
+      if (onProgress) {
+        onProgress({
+          phase: 'upload',
+          progress: 0,
+          loaded: 0,
+          total: totalSize,
+          currentItem: '',
+          currentItemIndex: 0,
+          totalItems: totalFiles,
+        });
+      }
+
+      // ÉTAPE 2 : Copier les éléments avec suivi de progression
+      const results = [];
+      let currentFileIndex = 0;
+      let previousItemsSize = 0; // Taille totale des éléments précédents (déjà complétés à 100%)
+
+      for (let itemIndex = 0; itemIndex < copiedItems.length; itemIndex++) {
+        const item = copiedItems[itemIndex];
+        const stats = fileStats[itemIndex];
+
         try {
+          // Créer un wrapper pour le callback de progression qui calcule la progression globale
+          const itemProgressCallback = onProgress ? (progressData) => {
+            // progressData contient la progression de l'élément actuel (fichier ou dossier)
+            const currentItemProgress = progressData.progress || 0;
+            
+            // Calculer la taille chargée pour cet élément
+            const currentItemLoaded = stats.size * currentItemProgress / 100;
+            
+            // Taille totale chargée = éléments précédents (100%) + élément actuel (en cours)
+            const totalLoaded = previousItemsSize + currentItemLoaded;
+            
+            // Calculer le pourcentage global basé sur la taille
+            const globalProgress = totalSize > 0 
+              ? Math.round((totalLoaded / totalSize) * 100)
+              : 0;
+
+            onProgress({
+              phase: progressData.phase || 'upload',
+              progress: globalProgress,
+              loaded: totalLoaded,
+              total: totalSize,
+              currentItem: item.name,
+              currentItemIndex: currentFileIndex,
+              totalItems: totalFiles,
+            });
+          } : null;
+
           if (item.type === 'folder') {
-            // Copier le dossier
-            await copyFolder(item.path, destinationPath, item.name);
+            // Copier le dossier (le callback sera appelé pour chaque fichier dans le dossier)
+            // Le callback adaptera la progression de chaque fichier à la progression globale
+            await copyFolder(item.path, destinationPath, item.name, itemProgressCallback, stats, { size: 0 });
+            currentFileIndex += stats.files;
+            previousItemsSize += stats.size; // Ajouter la taille de ce dossier (complété à 100%)
             results.push({ success: true, item });
           } else {
             // Copier le fichier
-            await copyFile(item.path, destinationPath, item.name);
+            await copyFile(item.path, destinationPath, item.name, itemProgressCallback);
+            currentFileIndex += 1;
+            previousItemsSize += stats.size; // Ajouter la taille de ce fichier (complété à 100%)
             results.push({ success: true, item });
           }
         } catch (error) {
           console.error(`Erreur lors de la copie de ${item.name}:`, error);
+          // Même en cas d'erreur, on compte les fichiers comme "traités"
+          currentFileIndex += stats.files;
+          previousItemsSize += stats.size;
           results.push({ success: false, item, error });
         }
       }

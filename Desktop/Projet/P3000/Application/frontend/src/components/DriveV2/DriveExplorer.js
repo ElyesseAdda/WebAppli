@@ -63,6 +63,8 @@ import {
   Visibility as VisibilityIcon,
   DriveFileMove as MoveIcon,
   Edit as EditIcon,
+  ContentCopy as ContentCopyIcon,
+  ContentPaste as ContentPasteIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
@@ -170,6 +172,9 @@ const DriveExplorer = ({
   onDraggedItemsChange,
   onCopyItems = null,
   copiedItems = [],
+  pasteItems = null,
+  hasCopiedItems = false,
+  isCopying = false,
 }) => {
   const [contextMenu, setContextMenu] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -241,13 +246,60 @@ const DriveExplorer = ({
         // Feedback visuel temporaire (optionnel)
         console.log(`${itemsToCopy.length} élément(s) copié(s) dans le Drive`);
       }
+
+      // Touche Suppr ou Backspace : supprimer les éléments sélectionnés
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedFiles.size > 0) {
+        event.preventDefault();
+        
+        // Récupérer tous les éléments sélectionnés
+        const itemsToDelete = Array.from(selectedFiles).map(path => {
+          const file = files.find(f => f.path === path);
+          const folder = folders.find(f => f.path === path);
+          return file ? { ...file, type: 'file' } : folder ? { ...folder, type: 'folder' } : null;
+        }).filter(Boolean);
+
+        if (itemsToDelete.length === 0) return;
+
+        // Vérifier si un des dossiers est protégé
+        const protectedItems = itemsToDelete.filter(item => {
+          if (!item || item.type !== 'folder') return false;
+          const protectedFolders = ['Agents', 'Appels_Offres', 'Chantiers', 'Historique'];
+          if (!protectedFolders.includes(item.name)) return false;
+          const path = item.path || '';
+          const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
+          const isRootFolder = normalizedPath === item.name || normalizedPath === '';
+          return isRootFolder;
+        });
+
+        if (protectedItems.length > 0) {
+          alert(`Certains dossiers sont protégés et ne peuvent pas être supprimés : ${protectedItems.map(i => displayFilename(i.name)).join(', ')}`);
+          return;
+        }
+
+        // Confirmation pour la suppression multiple
+        const itemNames = itemsToDelete.map(item => displayFilename(item.name)).join(', ');
+        if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${itemsToDelete.length} élément(s) ?\n\n${itemNames}`)) {
+          // Supprimer tous les éléments sélectionnés
+          Promise.all(
+            itemsToDelete.map(item => 
+              onDeleteItem(item.path, item.type === 'folder')
+            )
+          ).then(() => {
+            setSelectedFiles(new Set()); // Réinitialiser la sélection
+            onRefresh();
+          }).catch((error) => {
+            console.error('Erreur lors de la suppression:', error);
+            alert('Erreur lors de la suppression de certains éléments');
+          });
+        }
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedFiles, files, folders, onCopyItems]);
+  }, [selectedFiles, files, folders, onCopyItems, onDeleteItem, onRefresh]);
 
   // Gestion de la sélection multiple avec clic maintenu
   const handleMouseDown = useCallback((event, item) => {
@@ -815,6 +867,46 @@ const DriveExplorer = ({
   };
 
   const handleDelete = async () => {
+    // Gérer la sélection multiple si des fichiers sont sélectionnés
+    if (selectedFiles.size > 0) {
+      // Récupérer tous les éléments sélectionnés
+      const itemsToDelete = Array.from(selectedFiles).map(path => {
+        const file = files.find(f => f.path === path);
+        const folder = folders.find(f => f.path === path);
+        return file ? { ...file, type: 'file' } : folder ? { ...folder, type: 'folder' } : null;
+      }).filter(Boolean);
+
+      if (itemsToDelete.length === 0) return;
+
+      // Vérifier si un des dossiers est protégé
+      const protectedItems = itemsToDelete.filter(item => isProtectedFolder(item));
+      if (protectedItems.length > 0) {
+        alert(`Certains dossiers sont protégés et ne peuvent pas être supprimés : ${protectedItems.map(i => displayFilename(i.name)).join(', ')}`);
+        handleCloseContextMenu();
+        return;
+      }
+
+      // Confirmation pour la suppression multiple
+      const itemNames = itemsToDelete.map(item => displayFilename(item.name)).join(', ');
+      if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${itemsToDelete.length} élément(s) ?\n\n${itemNames}`)) {
+        try {
+          // Supprimer tous les éléments sélectionnés
+          const deletePromises = itemsToDelete.map(item => 
+            onDeleteItem(item.path, item.type === 'folder')
+          );
+          await Promise.all(deletePromises);
+          setSelectedFiles(new Set()); // Réinitialiser la sélection
+          onRefresh();
+        } catch (error) {
+          console.error('Erreur lors de la suppression:', error);
+          alert('Erreur lors de la suppression de certains éléments');
+        }
+      }
+      handleCloseContextMenu();
+      return;
+    }
+
+    // Gérer la suppression d'un seul élément (menu contextuel)
     if (!selectedItem) return;
 
     // Vérifier si le dossier est protégé
@@ -880,6 +972,36 @@ const DriveExplorer = ({
     }
     
     setMoveDialogOpen(true);
+  };
+
+  // Copier les éléments sélectionnés ou l'élément du menu contextuel
+  const handleCopy = () => {
+    if (!onCopyItems) return;
+    
+    handleCloseContextMenu();
+    
+    // Si des éléments sont sélectionnés, les copier
+    if (selectedFiles.size > 0) {
+      const allItems = [
+        ...folders.map(f => ({ ...f, type: 'folder' })),
+        ...files.map(f => ({ ...f, type: 'file' }))
+      ];
+      const itemsToCopy = allItems.filter(item => selectedFiles.has(item.path));
+      onCopyItems(itemsToCopy);
+    } else if (selectedItem) {
+      // Sinon, copier l'élément du menu contextuel
+      onCopyItems([selectedItem]);
+    }
+  };
+
+  // Coller les éléments copiés
+  const handlePaste = async () => {
+    if (!pasteItems || !hasCopiedItems || isCopying) return;
+    
+    handleCloseContextMenu();
+    
+    // pasteItems est un wrapper qui gère déjà les messages et le rafraîchissement
+    await pasteItems(currentPath);
   };
 
   // Ouvrir le dialog de renommage
@@ -1496,6 +1618,26 @@ const DriveExplorer = ({
             </MenuItem>
           </>
         )}
+        {onCopyItems && (
+          <MenuItem onClick={handleCopy}>
+            <ListItemIcon>
+              <ContentCopyIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>
+              Copier {selectedFiles.size > 0 ? `(${selectedFiles.size})` : ''}
+            </ListItemText>
+          </MenuItem>
+        )}
+        {pasteItems && hasCopiedItems && (
+          <MenuItem onClick={handlePaste} disabled={isCopying}>
+            <ListItemIcon>
+              <ContentPasteIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>
+              Coller ({copiedItems.length})
+            </ListItemText>
+          </MenuItem>
+        )}
         <MenuItem onClick={handleRename}>
           <ListItemIcon>
             <EditIcon fontSize="small" />
@@ -1512,14 +1654,15 @@ const DriveExplorer = ({
         </MenuItem>
         <MenuItem 
           onClick={handleDelete}
-          disabled={isProtectedFolder(selectedItem)}
+          disabled={selectedItem && isProtectedFolder(selectedItem)}
         >
           <ListItemIcon>
             <DeleteIcon fontSize="small" color="error" />
           </ListItemIcon>
           <ListItemText>
             Supprimer
-            {isProtectedFolder(selectedItem) && ' (protégé)'}
+            {selectedFiles.size > 0 && ` (${selectedFiles.size})`}
+            {selectedItem && isProtectedFolder(selectedItem) && ' (protégé)'}
           </ListItemText>
         </MenuItem>
       </Menu>
