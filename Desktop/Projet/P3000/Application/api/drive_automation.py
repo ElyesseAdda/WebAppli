@@ -21,16 +21,16 @@ class DriveAutomation:
     
     # Structure des dossiers pour les appels d'offres
     APPEL_OFFRES_SUBFOLDERS = [
-        "Devis",
+        "DEVIS",
         "DCE"           # Dossier des Cahiers des Charges
     ]
     
     # Structure des dossiers pour les chantiers
     CHANTIER_SUBFOLDERS = [
-        "Devis",
-        "Situation",
-        "Sous_Traitant",
-        "Facture"
+        "DEVIS",
+        "SITUATION",
+        "SOUS_TRAITANT",
+        "FACTURE"
     ]
     
     def __init__(self):
@@ -173,8 +173,8 @@ class DriveAutomation:
                 subfolder_path = f"{full_path}/{subfolder}"
                 create_s3_folder_recursive(subfolder_path)
             
-            # Créer le sous-dossier Devis_Marche dans le dossier Devis
-            devis_marche_path = f"{full_path}/Devis/Devis_Marche"
+            # Créer le sous-dossier DEVIS_MARCHE dans le dossier DEVIS
+            devis_marche_path = f"{full_path}/DEVIS/DEVIS_MARCHE"
             create_s3_folder_recursive(devis_marche_path)
             
             return True
@@ -400,10 +400,10 @@ class DriveAutomation:
             # Créer seulement le dossier racine du chantier
             create_s3_folder_recursive(dest_chantier_path)
             
-            # Créer seulement les dossiers spécifiques au chantier (Situation, Sous_Traitant, Facture)
-            # Ne pas créer Devis et DCE car ils seront copiés depuis l'appel d'offres
+            # Créer seulement les dossiers spécifiques au chantier (SITUATION, SOUS_TRAITANT, FACTURE)
+            # Ne pas créer DEVIS et DCE car ils seront copiés depuis l'appel d'offres
             existing_folders = [f['name'] for f in content['folders']]
-            chantier_specific_folders = ["Situation", "Sous_Traitant", "Facture"]
+            chantier_specific_folders = ["SITUATION", "SOUS_TRAITANT", "FACTURE"]
             
             for folder_name in chantier_specific_folders:
                 if folder_name not in existing_folders:
@@ -416,7 +416,7 @@ class DriveAutomation:
                 dest_file_path = f"{dest_chantier_path.rstrip('/')}/{file['name']}"
                 self._copy_s3_file(source_file_path, dest_file_path)
             
-            # Copier tous les dossiers (Devis et DCE) directement dans le chantier
+            # Copier tous les dossiers (DEVIS et DCE) directement dans le chantier
             for folder in content['folders']:
                 source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
                 dest_folder_path = f"{dest_chantier_path.rstrip('/')}/{folder['name']}"
@@ -453,10 +453,10 @@ class DriveAutomation:
             # Créer le dossier racine du chantier
             create_s3_folder_recursive(dest_path)
             
-            # Créer seulement les dossiers spécifiques au chantier (Situation, Sous_Traitant, Facture)
-            # Ne pas créer Devis et DCE car ils seront copiés depuis l'appel d'offres
+            # Créer seulement les dossiers spécifiques au chantier (SITUATION, SOUS_TRAITANT, FACTURE)
+            # Ne pas créer DEVIS et DCE car ils seront copiés depuis l'appel d'offres
             existing_folders = [f['name'] for f in content['folders']]
-            chantier_specific_folders = ["Situation", "Sous_Traitant", "Facture"]
+            chantier_specific_folders = ["SITUATION", "SOUS_TRAITANT", "FACTURE"]
             
             for folder_name in chantier_specific_folders:
                 if folder_name not in existing_folders:
@@ -469,7 +469,7 @@ class DriveAutomation:
                 dest_file_path = f"{dest_path.rstrip('/')}/{file['name']}"
                 self._copy_s3_file(source_file_path, dest_file_path)
             
-            # Copier tous les dossiers (Devis et DCE) directement dans le chantier
+            # Copier tous les dossiers (DEVIS et DCE) directement dans le chantier
             for folder in content['folders']:
                 source_folder_path = f"{source_path.rstrip('/')}/{folder['name']}"
                 dest_folder_path = f"{dest_path.rstrip('/')}/{folder['name']}"

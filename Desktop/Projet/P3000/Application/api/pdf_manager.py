@@ -66,15 +66,15 @@ class PDFManager:
             'planning_hebdo': 'PlanningHebdo',
             'planning_mensuel': 'PlanningHebdo',
             'rapport_agents': 'Rapport_mensuel',
-            'devis_travaux': 'Devis',
-            'devis_marche': 'Devis_Marche',
-            'situation': 'Situation',
-            'bon_commande': 'Bon_Commande',
-            'facture': 'Facture',
+            'devis_travaux': 'DEVIS',
+            'devis_marche': 'DEVIS_MARCHE',
+            'situation': 'SITUATION',
+            'bon_commande': 'BON_COMMANDE',
+            'facture': 'FACTURE',
             'avenant': 'Avenant',
             'rapport_chantier': 'Documents_Execution',
-            'contrat_sous_traitance': 'Sous_Traitant',
-            'avenant_sous_traitance': 'Sous_Traitant'
+            'contrat_sous_traitance': 'SOUS_TRAITANT',
+            'avenant_sous_traitance': 'SOUS_TRAITANT'
         }
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:
@@ -219,14 +219,14 @@ class PDFManager:
             # Nettoyer le chemin (supprimer les slashes en début/fin)
             custom_path = custom_path.strip('/')
             # Déterminer le sous-dossier selon le type de document et le contexte
-            # Pour les appels d'offres avec devis_marche, utiliser Devis/Devis_Marche
+            # Pour les appels d'offres avec devis_marche, utiliser DEVIS/DEVIS_MARCHE
             if document_type == 'devis_marche' and ('appel_offres_id' in kwargs or 'appel_offres_name' in kwargs):
-                subfolder = 'Devis/Devis_Marche'
+                subfolder = 'DEVIS/DEVIS_MARCHE'
             elif document_type == 'devis_travaux' and ('appel_offres_id' in kwargs or 'appel_offres_name' in kwargs):
-                subfolder = 'Devis'
+                subfolder = 'DEVIS'
             else:
                 # Utiliser le sous-dossier par défaut du type de document
-                subfolder = self.document_type_folders.get(document_type, 'Devis')
+                subfolder = self.document_type_folders.get(document_type, 'DEVIS')
             return f"{custom_path}/{subfolder}" if custom_path else subfolder
         
         # ✅ Si un appel_offres_id est fourni, utiliser le chemin de l'appel d'offres
@@ -238,10 +238,10 @@ class PDFManager:
                 if base_path:
                     # Normaliser base_path en supprimant les slashes au début et à la fin
                     base_path = base_path.strip('/')
-                    subfolder = self.document_type_folders.get(document_type, 'Devis')
-                    # Pour les devis de marché, utiliser la structure Devis/Devis_Marche
+                    subfolder = self.document_type_folders.get(document_type, 'DEVIS')
+                    # Pour les devis de marché, utiliser la structure DEVIS/DEVIS_MARCHE
                     if document_type == 'devis_marche':
-                        subfolder = 'Devis/Devis_Marche'
+                        subfolder = 'DEVIS/DEVIS_MARCHE'
                     # ✅ Structure pour appels d'offres : Appels_Offres/{base_path}/{subfolder}
                     return f"Appels_Offres/{base_path}/{subfolder}"
             except AppelOffres.DoesNotExist:
@@ -256,7 +256,7 @@ class PDFManager:
                 if base_path:
                     # Normaliser base_path en supprimant les slashes au début et à la fin
                     base_path = base_path.strip('/')
-                    subfolder = self.document_type_folders.get(document_type, 'Devis')
+                    subfolder = self.document_type_folders.get(document_type, 'DEVIS')
                     # ✅ Structure pour chantiers : Chantiers/{base_path}/{subfolder}
                     # Pour certains types, ajouter un sous-dossier supplémentaire (ex: fournisseur, entreprise)
                     if document_type == 'bon_commande' and 'fournisseur_name' in kwargs:
@@ -265,9 +265,9 @@ class PDFManager:
                     elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance'] and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
                         sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
                         sous_traitant_slug = custom_slugify(sous_traitant_name)
-                        return f"Chantiers/{base_path}/Sous_Traitant/{sous_traitant_slug}"
+                        return f"Chantiers/{base_path}/SOUS_TRAITANT/{sous_traitant_slug}"
                     elif document_type == 'devis_marche':
-                        return f"Chantiers/{base_path}/Devis/{subfolder}"
+                        return f"Chantiers/{base_path}/DEVIS/{subfolder}"
                     return f"Chantiers/{base_path}/{subfolder}"
             except Chantier.DoesNotExist:
                 pass
@@ -281,11 +281,11 @@ class PDFManager:
                 # C'est un chantier (devis normal)
                 chantier_name = kwargs['chantier_name']
                 chantier_slug = custom_slugify(chantier_name)
-                subfolder = self.document_type_folders.get(document_type, 'Devis')
+                subfolder = self.document_type_folders.get(document_type, 'DEVIS')
                 
-                # Pour les devis de chantier, ajouter le dossier Devis/
+                # Pour les devis de chantier, ajouter le dossier DEVIS/
                 if document_type == 'devis_marche':
-                    return f"Chantiers/{societe_slug}/{chantier_slug}/Devis/{subfolder}"
+                    return f"Chantiers/{societe_slug}/{chantier_slug}/DEVIS/{subfolder}"
                 else:
                     return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
             else:
@@ -296,18 +296,18 @@ class PDFManager:
                 appel_offres_slug = custom_slugify(appel_offres_name)
                 
                 # Pour les appels d'offres :
-                # - devis_marche (devis initial) → Devis/Devis_Marche
-                # - devis_travaux (autres devis) → Devis (un niveau plus haut)
+                # - devis_marche (devis initial) → DEVIS/DEVIS_MARCHE
+                # - devis_travaux (autres devis) → DEVIS (un niveau plus haut)
                 if document_type == 'devis_marche':
-                    subfolder = 'Devis/Devis_Marche'
+                    subfolder = 'DEVIS/DEVIS_MARCHE'
                 else:  # devis_travaux
-                    subfolder = 'Devis'
+                    subfolder = 'DEVIS'
                 
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
         elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance', 'contrat', 'contrats']:
             # Pour les contrats et avenants de sous-traitance
-            # Chemin: Chantiers/{Societe}/{Chantier}/Sous_Traitant/{Entreprise}/
+            # Chemin: Chantiers/{Societe}/{Chantier}/SOUS_TRAITANT/{Entreprise}/
             # Protection: gérer aussi les cas où document_type est 'contrat' ou 'contrats' (ancien code)
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             chantier_slug = custom_slugify(chantier_name)
@@ -317,7 +317,7 @@ class PDFManager:
                 print(f"⚠️ ATTENTION: sous_traitant_name manquant pour {document_type}, utilisation du fallback")
                 sous_traitant_name = 'SousTraitant'
             sous_traitant_slug = custom_slugify(sous_traitant_name)
-            return f"Chantiers/{societe_slug}/{chantier_slug}/Sous_Traitant/{sous_traitant_slug}"
+            return f"Chantiers/{societe_slug}/{chantier_slug}/SOUS_TRAITANT/{sous_traitant_slug}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
             # Ces documents sont maintenant stockés dans Agents/Document_Generaux/
@@ -337,7 +337,7 @@ class PDFManager:
             # Pour les situations, utiliser la structure Chantiers/
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             chantier_slug = custom_slugify(chantier_name)
-            subfolder = self.document_type_folders.get(document_type, 'Situation')
+            subfolder = self.document_type_folders.get(document_type, 'SITUATION')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
         
         elif document_type == 'bon_commande':
@@ -346,14 +346,14 @@ class PDFManager:
             chantier_slug = custom_slugify(chantier_name)
             fournisseur_name = kwargs.get('fournisseur_name', 'Fournisseur')
             fournisseur_slug = custom_slugify(fournisseur_name)
-            subfolder = self.document_type_folders.get(document_type, 'Bon_Commande')
+            subfolder = self.document_type_folders.get(document_type, 'BON_COMMANDE')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}/{fournisseur_slug}"
         
         elif document_type == 'facture':
             # Pour les factures, utiliser la structure Chantiers/
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             chantier_slug = custom_slugify(chantier_name)
-            subfolder = self.document_type_folders.get(document_type, 'Facture')
+            subfolder = self.document_type_folders.get(document_type, 'FACTURE')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
         
         elif document_type == 'avenant':
