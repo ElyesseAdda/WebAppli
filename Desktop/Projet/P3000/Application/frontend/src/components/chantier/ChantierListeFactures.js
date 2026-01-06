@@ -231,12 +231,17 @@ const ChantierListeFactures = ({
     handleClose();
   };
 
-  const handleStatusUpdate = async (newStatus) => {
+  const handleStatusUpdate = async (newStatus, datePaiement = null) => {
     try {
       if (!factureToUpdate) return;
-      await axios.put(`/api/facture/${factureToUpdate.id}/update_status/`, {
+      const updateData = {
         state_facture: newStatus,
-      });
+      };
+      // Si le statut est "Payée" et qu'une date de paiement est fournie, l'ajouter
+      if (newStatus === "Payée" && datePaiement) {
+        updateData.date_paiement = datePaiement;
+      }
+      await axios.put(`/api/facture/${factureToUpdate.id}/update_status/`, updateData);
       fetchFactures();
       setShowStatusModal(false);
       setFactureToUpdate(null);
@@ -582,6 +587,11 @@ const ChantierListeFactures = ({
         onStatusChange={handleStatusUpdate}
         type="facture"
         title="Modifier l'état de la facture"
+        currentDatePaiement={
+          factureToUpdate?.date_paiement
+            ? new Date(factureToUpdate.date_paiement).toISOString().split("T")[0]
+            : ""
+        }
       />
     </div>
   );

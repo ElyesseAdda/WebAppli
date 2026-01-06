@@ -4700,6 +4700,15 @@ def update_facture_status(request, facture_id):
     try:
         facture = Facture.objects.get(id=facture_id)
         facture.state_facture = request.data.get('state_facture')
+        
+        # Si le statut est "Payée" et qu'une date de paiement est fournie, la sauvegarder
+        if request.data.get('state_facture') == 'Payée' and request.data.get('date_paiement'):
+            facture.date_paiement = request.data.get('date_paiement')
+        # Si le statut n'est plus "Payée", on peut optionnellement réinitialiser la date de paiement
+        elif request.data.get('state_facture') != 'Payée':
+            # Ne pas réinitialiser la date de paiement si elle existe déjà, au cas où l'utilisateur change le statut par erreur
+            pass
+        
         facture.save()
         return Response({'status': 'success'})
     except Facture.DoesNotExist:
@@ -6855,6 +6864,7 @@ def get_situations(request, chantier_id):
         annee = int(annee)
 
         # Requête avec prefetch_related pour optimiser les performances
+        # Tri par date_creation décroissante, puis par ID décroissant pour garantir l'ordre
         situations = Situation.objects.filter(
             chantier_id=chantier_id,
             mois=mois,
@@ -6863,7 +6873,7 @@ def get_situations(request, chantier_id):
             'lignes',
             'lignes_supplementaires',
             'lignes_avenant'
-        ).order_by('-date_creation')
+        ).order_by('-date_creation', '-id')
 
         print(f"Nombre de situations trouvées: {situations.count()}")
         
@@ -6881,10 +6891,11 @@ def get_situations(request, chantier_id):
 @api_view(['GET'])
 def get_last_situation(request, chantier_id):
     try:
-        # Récupère la dernière situation basée sur la date de création
+        # Récupère la dernière situation basée sur la date de création puis l'ID
+        # L'ID est utilisé comme critère secondaire car il augmente toujours avec le temps
         last_situation = Situation.objects.filter(
             chantier_id=chantier_id
-        ).order_by('-date_creation').first()
+        ).order_by('-date_creation', '-id').first()
         
         if last_situation:
             return Response(SituationSerializer(last_situation).data)

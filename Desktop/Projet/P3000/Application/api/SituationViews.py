@@ -505,30 +505,16 @@ def preview_situation_v2(request, situation_id):
                 'isHighlighted': False
             })
         
-        # Calculer les montants en utilisant les valeurs stockées en DB
-        montant_ht_mois = situation.montant_ht_mois
-        retenue_garantie = situation.retenue_garantie
+        # Utiliser directement les valeurs stockées en DB (elles sont déjà calculées et correctes)
+        montant_ht_mois = situation.montant_ht_mois or Decimal('0')
+        retenue_garantie = situation.retenue_garantie or Decimal('0')
         taux_retenue_garantie = situation.taux_retenue_garantie or Decimal('5.00')
-        montant_prorata = situation.montant_prorata
-        retenue_cie = situation.retenue_cie
+        montant_prorata = situation.montant_prorata or Decimal('0')
+        retenue_cie = situation.retenue_cie or Decimal('0')
         type_retenue_cie = situation.type_retenue_cie or 'deduction'
-        
-        # Calculer la retenue CIE selon le type (déduction ou ajout)
-        retenue_cie_calculee = retenue_cie if type_retenue_cie == 'deduction' else -retenue_cie
-        
-        # Calculer le montant après retenues en tenant compte des lignes supplémentaires
-        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie_calculee
-        
-        # Ajouter l'impact des lignes supplémentaires
-        for ligne_suppl in lignes_supplementaires_data:
-            if ligne_suppl['type'] == 'deduction':
-                montant_apres_retenues -= ligne_suppl['montant']
-            else:
-                montant_apres_retenues += ligne_suppl['montant']
-        
-        # Calculer la TVA avec le taux de TVA de la situation
+        montant_apres_retenues = situation.montant_apres_retenues or Decimal('0')
         tva_rate = situation.tva_rate if hasattr(situation, 'tva_rate') and situation.tva_rate is not None else Decimal('20.00')
-        tva = (montant_apres_retenues * tva_rate / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        tva = situation.tva or Decimal('0')
         
         # Calculer les totaux pour tous les avenants
         total_avenants = Decimal('0')
@@ -652,7 +638,7 @@ def preview_situation_v2(request, situation_id):
         # ✅ Créer un objet situation avec contact_societe pour le template
         # Le template utilise situation.contact_societe et d'autres propriétés, donc on crée un objet qui a toutes ces propriétés
         class SituationForTemplate:
-            def __init__(self, situation_obj, contact, montant_ht_mois_value):
+            def __init__(self, situation_obj, contact, montant_ht_mois_value, retenue_garantie_value, taux_retenue_garantie_value, montant_prorata_value, taux_prorata_value, retenue_cie_value, type_retenue_cie_value, montant_apres_retenues_value, tva_value, tva_rate_value):
                 self.id = situation_obj.id
                 self.numero = situation_obj.numero
                 self.mois = situation_obj.mois
@@ -667,8 +653,31 @@ def preview_situation_v2(request, situation_id):
                 self.montant_total_cumul_ht = situation_obj.montant_total_cumul_ht
                 self.cumul_precedent = situation_obj.cumul_precedent
                 self.montant_ht_mois = montant_ht_mois_value
+                # Propriétés pour les retenues et prorata
+                self.retenue_garantie = retenue_garantie_value
+                self.taux_retenue_garantie = taux_retenue_garantie_value
+                self.montant_prorata = montant_prorata_value
+                self.taux_prorata = taux_prorata_value
+                self.retenue_cie = retenue_cie_value
+                self.type_retenue_cie = type_retenue_cie_value
+                self.montant_apres_retenues = montant_apres_retenues_value
+                self.tva = tva_value
+                self.tva_rate = tva_rate_value
         
-        situation_for_template = SituationForTemplate(situation, contact_societe, montant_ht_mois)
+        situation_for_template = SituationForTemplate(
+            situation, 
+            contact_societe, 
+            montant_ht_mois,
+            retenue_garantie,
+            taux_retenue_garantie,
+            montant_prorata,
+            situation.taux_prorata or Decimal('2.50'),
+            retenue_cie,
+            type_retenue_cie,
+            montant_apres_retenues,
+            tva,
+            tva_rate
+        )
         
         context = {
             'chantier': {

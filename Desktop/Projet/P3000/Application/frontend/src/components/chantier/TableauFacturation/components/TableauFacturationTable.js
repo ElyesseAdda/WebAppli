@@ -126,6 +126,100 @@ const TableauFacturationTable = ({
                   </TableCell>
                 </TableRow>
               );
+            } else if (item.price_ht !== undefined) {
+              // Ligne de facture
+              const facture = item;
+              // Pour les factures, utiliser date_creation comme date d'envoi
+              const dateEnvoiFacture = facture.date_creation;
+              const datePaiementPrevue = calculateDatePaiement(
+                dateEnvoiFacture,
+                facture.delai_paiement,
+                formatDate
+              );
+              
+              // Déterminer le mois de la facture (utiliser date_creation)
+              let moisFacture = "-";
+              if (facture.date_creation) {
+                const date = new Date(facture.date_creation);
+                moisFacture = (date.getMonth() + 1).toString().padStart(2, "0");
+              }
+
+              return (
+                <TableRow
+                  key={`facture-${facture.id}`}
+                  sx={{
+                    "&:nth-of-type(odd)": { backgroundColor: "#f5f5f5" },
+                    "&:nth-of-type(even)": { backgroundColor: "#ffffff" },
+                    "&:hover": { backgroundColor: "#f5f5f5" },
+                  }}
+                >
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: "0.8rem",
+                        color: "rgba(27, 120, 188, 1)",
+                      }}
+                    >
+                      {facture.chantier_name || facture.chantier?.chantier_name || "-"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    -
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {moisFacture}
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {facture.numero || "-"}
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {formatMontant(parseFloat(facture.price_ht) || 0)}
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Button
+                      size="small"
+                      onClick={() => onOpenDateModal(facture)}
+                    >
+                      {facture.date_creation
+                        ? formatDate(facture.date_creation)
+                        : "Définir date"}
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {datePaiementPrevue}
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Button
+                      size="small"
+                      onClick={() => onOpenPaiementModal(facture)}
+                    >
+                      {facture.state_facture === 'Payée' && facture.price_ht
+                        ? formatNumberWithColor(
+                            parseFloat(facture.price_ht),
+                            parseFloat(facture.price_ht)
+                          )
+                        : "Définir paiement"}
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {facture.date_paiement
+                      ? formatDate(facture.date_paiement)
+                      : "-"}
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {calculateRetard(
+                      datePaiementPrevue,
+                      facture.date_paiement,
+                      formatDate
+                    )}
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                </TableRow>
+              );
             } else {
               // Ligne de situation normale
               const situation = item;

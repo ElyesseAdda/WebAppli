@@ -139,8 +139,8 @@ export const sortSituations = (situations, extractSituationNumberFn) => {
 /**
  * Calcule les totaux globaux
  */
-export const calculateTotaux = (allSituations) => {
-  return allSituations.reduce(
+export const calculateTotaux = (allSituations, allFactures = []) => {
+  const totauxSituations = allSituations.reduce(
     (acc, situation) => {
       return {
         montantHTSituation:
@@ -160,46 +160,97 @@ export const calculateTotaux = (allSituations) => {
       ecartMois: 0,
     }
   );
+
+  // Ajouter les factures aux totaux
+  const totauxFactures = allFactures.reduce(
+    (acc, facture) => {
+      const priceHt = parseFloat(facture.price_ht) || 0;
+      const montantRecu = facture.state_facture === 'Payée' ? priceHt : 0;
+      return {
+        montantHTSituation: acc.montantHTSituation + priceHt,
+        montantRecuHT: acc.montantRecuHT + montantRecu,
+        ecartMois: acc.ecartMois + (montantRecu - priceHt),
+      };
+    },
+    {
+      montantHTSituation: 0,
+      montantRecuHT: 0,
+      ecartMois: 0,
+    }
+  );
+
+  return {
+    montantHTSituation: totauxSituations.montantHTSituation + totauxFactures.montantHTSituation,
+    montantRecuHT: totauxSituations.montantRecuHT + totauxFactures.montantRecuHT,
+    ecartMois: totauxSituations.ecartMois + totauxFactures.ecartMois,
+  };
 };
 
 /**
- * Groupe les situations par mois et ajoute les sous-totaux
+ * Groupe les situations et factures par mois et ajoute les sous-totaux
  */
-export const groupSituationsByMonth = (situationsTriees) => {
-  const moisAvecSituations = {};
+export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) => {
+  const moisAvecItems = {};
 
   // Grouper les situations par mois
   situationsTriees.forEach((situation) => {
     const mois = situation.mois;
-    if (!moisAvecSituations[mois]) {
-      moisAvecSituations[mois] = [];
+    if (!moisAvecItems[mois]) {
+      moisAvecItems[mois] = { situations: [], factures: [] };
     }
-    moisAvecSituations[mois].push(situation);
+    moisAvecItems[mois].situations.push(situation);
+  });
+
+  // Grouper les factures par mois (utiliser date_creation pour les factures)
+  facturesTriees.forEach((facture) => {
+    let mois;
+    if (facture.date_creation) {
+      const date = new Date(facture.date_creation);
+      mois = date.getMonth() + 1;
+    } else {
+      return; // Ignorer les factures sans date
+    }
+    
+    if (!moisAvecItems[mois]) {
+      moisAvecItems[mois] = { situations: [], factures: [] };
+    }
+    moisAvecItems[mois].factures.push(facture);
   });
 
   // Trier les mois
-  const moisTries = Object.keys(moisAvecSituations).sort(
+  const moisTries = Object.keys(moisAvecItems).sort(
     (a, b) => parseInt(a) - parseInt(b)
   );
 
-  // Créer une liste avec les situations et les sous-totaux
-  const situationsAvecSousTotaux = [];
+  // Créer une liste avec les situations, factures et les sous-totaux
+  const itemsAvecSousTotaux = [];
   moisTries.forEach((mois) => {
-    const situationsDuMois = moisAvecSituations[mois];
-    situationsAvecSousTotaux.push(...situationsDuMois);
+    const { situations, factures } = moisAvecItems[mois];
+    
+    // Ajouter les situations du mois
+    itemsAvecSousTotaux.push(...situations);
+    
+    // Ajouter les factures du mois
+    itemsAvecSousTotaux.push(...factures);
 
     // Ajouter une ligne de sous-total après chaque mois
-    const sousTotalMois = situationsDuMois.reduce((total, situation) => {
+    const sousTotalSituations = situations.reduce((total, situation) => {
       return total + (parseFloat(situation.montant_apres_retenues) || 0);
     }, 0);
+    
+    const sousTotalFactures = factures.reduce((total, facture) => {
+      return total + (parseFloat(facture.price_ht) || 0);
+    }, 0);
 
-    situationsAvecSousTotaux.push({
+    const sousTotalMois = sousTotalSituations + sousTotalFactures;
+
+    itemsAvecSousTotaux.push({
       isSousTotal: true,
       mois: parseInt(mois),
       sousTotal: sousTotalMois,
     });
   });
 
-  return situationsAvecSousTotaux;
+  return itemsAvecSousTotaux;
 };
 

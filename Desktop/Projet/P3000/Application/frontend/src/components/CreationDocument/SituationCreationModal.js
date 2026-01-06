@@ -1656,7 +1656,31 @@ const SituationCreationModal = ({
           const situations = response.data;
 
           if (situations.length > 0) {
-            const currentSituation = situations[0];
+            // ✅ Trier les situations pour s'assurer de prendre la dernière créée
+            // Tri par année, mois puis ID décroissants (plus sémantique que date_creation)
+            const sortedSituations = [...situations].sort((a, b) => {
+              // Priorité 1 : Comparer par année décroissante
+              const anneeA = parseInt(a.annee) || 0;
+              const anneeB = parseInt(b.annee) || 0;
+              if (anneeB !== anneeA) {
+                return anneeB - anneeA; // Décroissant
+              }
+              
+              // Priorité 2 : Si même année, comparer par mois décroissant
+              const moisA = parseInt(a.mois) || 0;
+              const moisB = parseInt(b.mois) || 0;
+              if (moisB !== moisA) {
+                return moisB - moisA; // Décroissant
+              }
+              
+              // Priorité 3 : Si même année et mois, comparer par ID décroissant
+              const idA = parseInt(a.id) || 0;
+              const idB = parseInt(b.id) || 0;
+              return idB - idA; // Décroissant
+            });
+            
+            // Prendre la première situation après tri (la plus récente)
+            const currentSituation = sortedSituations[0];
             
             // IMPORTANT: Charger le numéro de la situation existante EN PREMIER
             // pour éviter le problème de synchronisation

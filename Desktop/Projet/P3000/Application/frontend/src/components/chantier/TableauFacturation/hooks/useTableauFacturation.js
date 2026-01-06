@@ -12,6 +12,7 @@ export const useTableauFacturation = () => {
   const [chantiers, setChantiers] = useState([]);
   const [selectedAnnee, setSelectedAnnee] = useState("");
   const [allSituations, setAllSituations] = useState([]);
+  const [allFactures, setAllFactures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [banques, setBanques] = useState([]);
 
@@ -38,30 +39,39 @@ export const useTableauFacturation = () => {
     setSelectedAnnee(now.getFullYear());
   }, []);
 
-  // Charger toutes les situations pour l'année sélectionnée
+  // Charger toutes les situations et factures pour l'année sélectionnée
   useEffect(() => {
     if (selectedAnnee) {
       setLoading(true);
-      const fetchAllSituations = async () => {
+      const fetchAllData = async () => {
         try {
-          // Une seule requête pour récupérer toutes les situations de l'année
-          // L'API retourne déjà les situations avec chantier_name, chantier_id et allSituationsChantier
-          const response = await axios.get(
-            `/api/situations/by-year/?annee=${selectedAnnee}`
-          );
+          // Récupérer les situations et les factures en parallèle
+          const [situationsResponse, facturesResponse] = await Promise.all([
+            axios.get(`/api/situations/by-year/?annee=${selectedAnnee}`),
+            axios.get(`/api/facture/?date_creation__year=${selectedAnnee}`)
+          ]);
 
-          const situations = response.data || [];
+          const situations = situationsResponse.data || [];
+          const factures = facturesResponse.data || [];
+          
+          // Mapper les factures pour avoir la même structure que les situations
+          const facturesFormatees = factures.map(facture => ({
+            ...facture,
+            chantier_id: facture.chantier || facture.chantier_id,
+            isFacture: true, // Marqueur pour identifier les factures
+          }));
           
           // Les données sont déjà formatées par l'API avec toutes les informations nécessaires
           setAllSituations(situations);
+          setAllFactures(facturesFormatees);
         } catch (error) {
-          console.error("Erreur lors du chargement des situations:", error);
+          console.error("Erreur lors du chargement des données:", error);
         } finally {
           setLoading(false);
         }
       };
 
-      fetchAllSituations();
+      fetchAllData();
     }
   }, [selectedAnnee]);
 
@@ -86,15 +96,33 @@ export const useTableauFacturation = () => {
     return sortSituations(allSituations, extractSituationNumber);
   }, [allSituations]);
 
-  // Grouper les situations par mois avec sous-totaux (mémorisé)
+  // Trier les factures (mémorisé)
+  const facturesTriees = useMemo(() => {
+    return [...allFactures].sort((a, b) => {
+      // Trier par chantier, puis par date_creation (date d'envoi pour les factures)
+      const chantierA = a.chantier_name || '';
+      const chantierB = b.chantier_name || '';
+      if (chantierA !== chantierB) {
+        return chantierA.localeCompare(chantierB);
+      }
+      const dateA = a.date_creation;
+      const dateB = b.date_creation;
+      if (dateA && dateB) {
+        return new Date(dateA) - new Date(dateB);
+      }
+      return 0;
+    });
+  }, [allFactures]);
+
+  // Grouper les situations et factures par mois avec sous-totaux (mémorisé)
   const situationsAvecSousTotaux = useMemo(() => {
-    return groupSituationsByMonth(situationsTriees);
-  }, [situationsTriees]);
+    return groupSituationsByMonth(situationsTriees, facturesTriees);
+  }, [situationsTriees, facturesTriees]);
 
   // Calculer les totaux (mémorisé)
   const totaux = useMemo(() => {
-    return calculateTotaux(allSituations);
-  }, [allSituations]);
+    return calculateTotaux(allSituations, allFactures);
+  }, [allSituations, allFactures]);
 
   // Handlers pour les mises à jour
   const handleDateModalSubmit = useCallback(
@@ -200,6 +228,7 @@ export const useTableauFacturation = () => {
     selectedAnnee,
     setSelectedAnnee,
     allSituations,
+    allFactures,
     loading,
     banques,
     situationsAvecSousTotaux,

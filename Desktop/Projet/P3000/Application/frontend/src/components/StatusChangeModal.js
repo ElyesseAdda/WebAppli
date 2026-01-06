@@ -7,6 +7,8 @@ import {
   FormControlLabel,
   Radio,
   RadioGroup,
+  TextField,
+  Box,
 } from "@mui/material";
 import React from "react";
 
@@ -18,8 +20,12 @@ const StatusChangeModal = ({
   statusOptions,
   title,
   type = "devis",
+  currentDatePaiement,
 }) => {
   const [selectedStatus, setSelectedStatus] = React.useState(currentStatus);
+  const [datePaiement, setDatePaiement] = React.useState(
+    currentDatePaiement || ""
+  );
 
   const getStatusOptions = () => {
     if (type === "facture") {
@@ -29,13 +35,36 @@ const StatusChangeModal = ({
   };
 
   const handleSubmit = () => {
-    onStatusChange(selectedStatus);
+    // Si le statut est "Payée" et qu'il s'agit d'une facture, envoyer aussi la date de paiement
+    if (type === "facture" && selectedStatus === "Payée") {
+      onStatusChange(selectedStatus, datePaiement);
+    } else {
+      onStatusChange(selectedStatus);
+    }
     onClose();
+  };
+
+  // Fonction pour obtenir la date du jour au format YYYY-MM-DD
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   React.useEffect(() => {
     setSelectedStatus(currentStatus);
-  }, [currentStatus, open]);
+    // Si une date de paiement existe, l'utiliser, sinon pré-remplir avec la date du jour
+    setDatePaiement(currentDatePaiement || getTodayDate());
+  }, [currentStatus, currentDatePaiement, open]);
+
+  // Lorsque "Payée" est sélectionné et qu'il n'y a pas de date, pré-remplir avec la date du jour
+  React.useEffect(() => {
+    if (type === "facture" && selectedStatus === "Payée" && !datePaiement) {
+      setDatePaiement(getTodayDate());
+    }
+  }, [selectedStatus, type]);
 
   return (
     <Dialog open={open} onClose={onClose}>
@@ -66,10 +95,31 @@ const StatusChangeModal = ({
             );
           })}
         </RadioGroup>
+        {type === "facture" && selectedStatus === "Payée" && (
+          <Box sx={{ mt: 3 }}>
+            <TextField
+              label="Date de paiement"
+              type="date"
+              value={datePaiement}
+              onChange={(e) => setDatePaiement(e.target.value)}
+              fullWidth
+              required
+              InputLabelProps={{
+                shrink: true,
+              }}
+              sx={{ mt: 1 }}
+            />
+          </Box>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSubmit} variant="contained" color="primary">
+        <Button 
+          onClick={handleSubmit} 
+          variant="contained" 
+          color="primary"
+          disabled={type === "facture" && selectedStatus === "Payée" && !datePaiement}
+        >
           Confirmer
         </Button>
       </DialogActions>
