@@ -27,9 +27,11 @@ export const normalizeFilename = (filename) => {
     return filename;
   }
 
-  // Remplacer UNIQUEMENT les espaces par des underscores
-  // Tous les autres caractères spéciaux (&, @, #, etc.) sont autorisés par AWS S3
-  const normalized = filename.replace(/ /g, '_');
+  // Remplacer les espaces par des underscores
+  // Encoder le slash '/' en '∕' (U+2215) pour éviter la création de sous-dossiers
+  const normalized = filename
+    .replace(/ /g, '_')
+    .replace(/\//g, '∕');
 
   return normalized;
 };

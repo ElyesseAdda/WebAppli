@@ -75,6 +75,21 @@ def custom_slugify(text):
     
     return text or "Dossier"
 
+def normalize_drive_segment(name: str) -> str:
+    """
+    Normalise un segment de chemin pour le Drive (dossier/fichier) en conservant l'intention visuelle.
+    - Remplace les espaces par des underscores
+    - Encode le slash '/' en '∕' (U+2215) pour éviter la création de sous-dossiers tout en l'affichant '/'
+    - Conserve les autres caractères (S3 accepte les caractères spéciaux hors espaces)
+    """
+    if not name:
+        return ""
+    # Important: faire l'encodage du slash avant toute autre filtration
+    normalized = str(name).replace('/', '∕')
+    # Puis remplacer seulement les espaces
+    normalized = normalized.replace(' ', '_')
+    return normalized
+
 def clean_drive_path(drive_path):
     """
     Nettoie le drive_path en retirant les préfixes Appels_Offres/ et Chantiers/.

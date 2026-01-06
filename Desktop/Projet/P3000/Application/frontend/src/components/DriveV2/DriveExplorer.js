@@ -12,7 +12,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 export const displayFilename = (normalizedName) => {
   if (!normalizedName) return normalizedName;
   // Remplacer les underscores par des espaces pour l'affichage
-  return normalizedName.replace(/_/g, ' ');
+  // Décoder le slash encodé '∕' (U+2215) vers '/'
+  return normalizedName
+    .replace(/_/g, ' ')
+    .replace(/∕/g, '/');
 };
 
 /**

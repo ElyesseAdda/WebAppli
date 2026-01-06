@@ -29,6 +29,9 @@ def normalize_filename(filename: str) -> str:
     # Remplacer UNIQUEMENT les espaces par des underscores
     # Tous les autres caractères spéciaux (&, @, #, etc.) sont autorisés par AWS S3
     normalized = filename.replace(' ', '_')
+    # Spécifique: encoder le slash '/' pour éviter la création de sous-dossiers
+    # Utiliser le caractère '∕' (U+2215) visuellement proche et sûr pour les clés S3
+    normalized = normalized.replace('/', '∕')
     
     return normalized
 

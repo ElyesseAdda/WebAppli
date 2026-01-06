@@ -192,9 +192,9 @@ class Chantier(models.Model):
             return path
         # Calculer le chemin par défaut
         if self.societe:
-            from api.utils import custom_slugify
-            societe_slug = custom_slugify(self.societe.nom_societe)
-            chantier_slug = custom_slugify(self.chantier_name)
+            from api.utils import normalize_drive_segment
+            societe_slug = normalize_drive_segment(self.societe.nom_societe)
+            chantier_slug = normalize_drive_segment(self.chantier_name)
             return f"{societe_slug}/{chantier_slug}"
         return None
     
@@ -415,9 +415,9 @@ class AppelOffres(models.Model):
             return self.drive_path.strip()
         # Calculer le chemin par défaut (sans préfixe)
         if self.societe:
-            from api.utils import custom_slugify
-            societe_slug = custom_slugify(self.societe.nom_societe)
-            chantier_slug = custom_slugify(self.chantier_name)
+            from api.utils import normalize_drive_segment
+            societe_slug = normalize_drive_segment(self.societe.nom_societe)
+            chantier_slug = normalize_drive_segment(self.chantier_name)
             return f"{societe_slug}/{chantier_slug}"
         return None
     

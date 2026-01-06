@@ -143,20 +143,19 @@ const getNextSousPartieNumero = (items = [], partieId) => {
   return `${parentNumero}.${nextIndex}`;
 };
 
-// Fonction pour slugifier un texte (similaire à custom_slugify du backend)
+// Normalisation Drive (cohérente avec le Drive V2 / backend) :
+// - espaces -> underscores
+// - encoder '/' en '∕' (U+2215) pour éviter la création de sous-dossiers tout en l'affichant '/'
 const customSlugify = (text) => {
   if (!text) return '';
-  // Remplacer les espaces multiples par un seul espace
-  text = text.trim().replace(/\s+/g, ' ');
-  // Remplacer les espaces par des tirets
-  text = text.replace(/\s/g, '-');
-  // Supprimer les caractères spéciaux sauf les tirets
-  text = text.replace(/[^a-zA-Z0-9-]/g, '');
-  // Supprimer les tirets multiples
-  text = text.replace(/-+/g, '-');
-  // Supprimer les tirets en début et fin
-  text = text.replace(/^-+|-+$/g, '');
-  return text;
+  const cleaned = String(text).trim().replace(/\s+/g, ' ');
+  return cleaned.replace(/\//g, '∕').replace(/ /g, '_');
+};
+
+// Affichage: décoder '∕' -> '/' (ne pas modifier la valeur stockée)
+const displayDrivePath = (path) => {
+  if (!path) return path;
+  return String(path).replace(/\u2215/g, '/');
 };
 
 // Fonction utilitaire pour nettoyer le drive_path (retirer les préfixes Appels_Offres/ et Chantiers/)
@@ -3254,11 +3253,11 @@ const DevisAvance = () => {
                       fontFamily: 'monospace',
                       color: effectiveDrivePath ? '#1976d2' : '#6c757d'
                     }}>
-                      {effectiveDrivePath || '(Chemin par défaut non disponible)'}
+                      {displayDrivePath(effectiveDrivePath) || '(Chemin par défaut non disponible)'}
                     </Typography>
                     {customDrivePath === null && defaultDrivePath && (
                       <Typography variant="caption" color="text.secondary" style={{ marginTop: '5px', display: 'block' }}>
-                        Chemin par défaut : {defaultDrivePath}
+                        Chemin par défaut : {displayDrivePath(defaultDrivePath)}
                       </Typography>
                     )}
                   </div>

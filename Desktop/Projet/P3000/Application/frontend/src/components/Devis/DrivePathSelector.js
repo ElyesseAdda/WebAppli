@@ -122,8 +122,9 @@ const StyledSearchField = styled(TextField)(({ theme }) => ({
 
 const displayFilename = (filename) => {
   if (!filename) return 'Racine';
-  // Remplacer les underscores et tirets par des espaces pour l'affichage
-  return filename.replace(/[_-]/g, ' ');
+  // Décoder le caractère "∕" (U+2215) en "/" pour l'affichage
+  // Puis remplacer les underscores par des espaces
+  return filename.replace(/\u2215/g, '/').replace(/_/g, ' ');
 };
 
 const DrivePathSelector = ({ open, onClose, onSelect, defaultPath = '' }) => {
