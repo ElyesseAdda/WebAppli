@@ -5,6 +5,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   MenuItem,
   Paper,
   Select,
@@ -16,8 +17,10 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { useSituationsManager } from "../hooks/useSituationsManager";
@@ -85,9 +88,9 @@ const PaiementModal = ({ open, onClose, situation, onSubmit }) => {
     if (situation) {
       // Si la situation n'a pas de date de paiement réelle, préremplir avec la date du jour
       const dateAujourdhui = new Date().toISOString().split("T")[0];
-      // Préremplir le montant reçu avec montant_reel_ht s'il existe, sinon avec montant_apres_retenues (montant HT situation)
+      // Préremplir le montant reçu avec montant_reel_ht s'il existe, sinon avec montant_ht_mois (montant HT situation)
       setMontantRecu(
-        situation.montant_reel_ht || situation.montant_apres_retenues || ""
+        situation.montant_reel_ht || situation.montant_ht_mois || ""
       );
       setDatePaiementReel(situation.date_paiement_reel || dateAujourdhui);
     }
@@ -145,7 +148,7 @@ const TableauSuivi = () => {
   const [openPaiementModal, setOpenPaiementModal] = useState(false);
 
   // Utiliser le hook pour gérer les situations
-  const { situations, updateDateEnvoi, updatePaiement } =
+  const { situations, updateDateEnvoi, updatePaiement, resetPaiement } =
     useSituationsManager(selectedChantierId);
 
   const commonBodyCellStyle = {
@@ -155,6 +158,14 @@ const TableauSuivi = () => {
     wordWrap: "break-word",
     textAlign: "center",
     verticalAlign: "middle",
+  };
+
+  // Fonction pour formater un nombre avec des espaces comme séparateurs de milliers
+  const formatNumberWithSpaces = (number) => {
+    const numStr = Math.abs(number).toFixed(2);
+    const [integerPart, decimalPart] = numStr.split(".");
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    return `${formattedInteger},${decimalPart}`;
   };
 
   const formatNumberWithColor = (value, compareValue) => {
@@ -183,7 +194,7 @@ const TableauSuivi = () => {
           whiteSpace: "nowrap",
         }}
       >
-        {number.toFixed(2)} €
+        {formatNumberWithSpaces(number)} €
       </Typography>
     );
   };
@@ -396,11 +407,11 @@ const TableauSuivi = () => {
                   {rowIndex === 0
                     ? formatNumberWithColor(
                         chantier?.montant_ht,
-                        situations[0]?.montant_reel_ht
+                        situations[0]?.montant_ht_mois
                       )
                     : formatNumberWithColor(
                         avenants[rowIndex - 1]?.montant_total || 0,
-                        situations[rowIndex - 1]?.montant_reel_ht
+                        situations[rowIndex - 1]?.montant_ht_mois
                       )}
                 </TableCell>
                 <TableCell
@@ -413,7 +424,7 @@ const TableauSuivi = () => {
                 >
                   {formatNumberWithColor(
                     avenants[rowIndex + 4]?.montant_total || 0,
-                    situations[rowIndex + 4]?.montant_reel_ht
+                    situations[rowIndex + 4]?.montant_ht_mois
                   )}
                 </TableCell>
                 <TableCell
@@ -424,7 +435,7 @@ const TableauSuivi = () => {
                 <TableCell>
                   {formatNumberWithColor(
                     avenants[rowIndex + 9]?.montant_total || 0,
-                    situations[rowIndex + 9]?.montant_reel_ht
+                    situations[rowIndex + 9]?.montant_ht_mois
                   )}
                 </TableCell>
               </TableRow>
@@ -451,7 +462,7 @@ const TableauSuivi = () => {
     });
 
     // Fonction helper pour formater les montants avec la couleur
-    const formatMontant = (montant, forceNegative = false, type = null) => {
+    const formatMontant = (montant, forceNegative = false, type = null, largeSize = false) => {
       const valeur = parseFloat(montant) || 0;
       const isNegatif = forceNegative || valeur < 0 || type === "deduction";
       const couleur = isNegatif ? "error.main" : "rgb(0, 168, 42)";
@@ -462,12 +473,12 @@ const TableauSuivi = () => {
             color: couleur,
             fontFamily: "Roboto, Arial, sans-serif",
             fontWeight: 500,
-            fontSize: "0.75rem",
+            fontSize: largeSize ? "1.25rem" : "0.75rem",
             whiteSpace: "nowrap",
           }}
         >
           {isNegatif ? "-" : ""}
-          {Math.abs(valeur).toFixed(2)} €
+          {formatNumberWithSpaces(Math.abs(valeur))} €
         </Typography>
       );
     };
@@ -488,7 +499,7 @@ const TableauSuivi = () => {
 
     const calculerEcartMois = (situation) => {
       const montantHTSituation =
-        parseFloat(situation.montant_apres_retenues) || 0;
+        parseFloat(situation.montant_ht_mois) || 0;
       const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
       const ecart = montantRecuHT - montantHTSituation;
 
@@ -499,8 +510,8 @@ const TableauSuivi = () => {
 
     const calculerCumulSituationHT = (situations, indexCourant) => {
       return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
-        // Utiliser le montant après retenues (montant_apres_retenues)
-        const montantHT = parseFloat(situation.montant_apres_retenues) || 0;
+        // Utiliser le montant HT du mois (montant_ht_mois)
+        const montantHT = parseFloat(situation.montant_ht_mois) || 0;
         return sum + montantHT;
       }, 0);
     };
@@ -518,19 +529,18 @@ const TableauSuivi = () => {
           return {
             montantHTSituation:
               totaux.montantHTSituation +
-              (parseFloat(situation.montant_apres_retenues) || 0),
+              (parseFloat(situation.montant_ht_mois) || 0),
             rg: totaux.rg + (parseFloat(situation.retenue_garantie) || 0),
             netAPayer:
               totaux.netAPayer +
-              ((parseFloat(situation.montant_apres_retenues) || 0) +
-                (parseFloat(situation.tva) || 0)),
+              (parseFloat(situation.montant_apres_retenues) || 0),
             montantRecuHT:
               totaux.montantRecuHT +
               (parseFloat(situation.montant_reel_ht) || 0),
             ecartMois:
               totaux.ecartMois +
               (parseFloat(situation.montant_reel_ht || 0) -
-                parseFloat(situation.montant_apres_retenues || 0)),
+                parseFloat(situation.montant_ht_mois || 0)),
           };
         },
         {
@@ -544,13 +554,14 @@ const TableauSuivi = () => {
     };
 
     const calculerResteAPayer = () => {
-      // Calculer le montant total cumulé avec montant_apres_retenues
+      // Montant total du marché (marché + avenants)
+      const montantTotalMarche = calculerMontantTotalMarche();
+      // Cumul des montants HT des situations (payées ou non)
       const montantTotalCumulHT = calculerCumulSituationHT(
         situationsTriees,
         situationsTriees.length - 1
       );
-      const totalMontantRecuHT = calculerTotaux().montantRecuHT;
-      return montantTotalCumulHT - totalMontantRecuHT;
+      return montantTotalMarche - montantTotalCumulHT;
     };
 
     const calculerPourcentageAvancement = () => {
@@ -578,6 +589,17 @@ const TableauSuivi = () => {
 
     const lignesSupplementairesUniques = getAllLignesSupplementaires();
 
+    // Vérifier si au moins une situation a une retenue CIE (non nulle et différente de 0)
+    const hasRetenueCIE = situations.some(
+      (situation) => {
+        const retenueCIE = parseFloat(situation.retenue_cie);
+        return situation.retenue_cie !== undefined && 
+               situation.retenue_cie !== null && 
+               !isNaN(retenueCIE) && 
+               retenueCIE !== 0;
+      }
+    );
+
     return (
       <>
         <TableContainer
@@ -599,6 +621,9 @@ const TableauSuivi = () => {
                 </TableCell>
                 <TableCell sx={{ ...commonCellStyle }}>RG</TableCell>
                 <TableCell sx={{ ...commonCellStyle }}>Prorata</TableCell>
+                {hasRetenueCIE && (
+                  <TableCell sx={{ ...commonCellStyle }}>Montant CIE</TableCell>
+                )}
                 {lignesSupplementairesUniques.map((ligne) => (
                   <TableCell
                     sx={{ ...commonCellStyle }}
@@ -677,7 +702,7 @@ const TableauSuivi = () => {
                     </TableCell>
                     <TableCell>
                       {formatMontant(
-                        parseFloat(situation.montant_apres_retenues) || 0
+                        parseFloat(situation.montant_ht_mois) || 0
                       )}
                     </TableCell>
                     <TableCell>
@@ -686,6 +711,15 @@ const TableauSuivi = () => {
                     <TableCell>
                       {formatMontant(situation.montant_prorata, true)}
                     </TableCell>
+                    {hasRetenueCIE && (
+                      <TableCell>
+                        {formatMontant(
+                          parseFloat(situation.retenue_cie) || 0,
+                          situation.type_retenue_cie === "deduction",
+                          situation.type_retenue_cie === "deduction" ? "deduction" : null
+                        )}
+                      </TableCell>
+                    )}
                     {lignesSupplementairesUniques.map((ligneUnique) => {
                       const ligneSituation =
                         situation.lignes_supplementaires?.find(
@@ -705,8 +739,7 @@ const TableauSuivi = () => {
                     })}
                     <TableCell>
                       {formatMontant(
-                        (parseFloat(situation.montant_apres_retenues) || 0) +
-                          (parseFloat(situation.tva) || 0)
+                        parseFloat(situation.montant_apres_retenues) || 0
                       )}
                     </TableCell>
 
@@ -736,20 +769,51 @@ const TableauSuivi = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setSelectedSituation(situation);
-                          setOpenPaiementModal(true);
-                        }}
-                      >
-                        {situation.montant_reel_ht
-                          ? formatNumberWithColor(
-                              situation.montant_reel_ht,
-                              situation.montant_apres_retenues
-                            )
-                          : "Définir paiement"}
-                      </Button>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setSelectedSituation(situation);
+                            setOpenPaiementModal(true);
+                          }}
+                        >
+                          {situation.montant_reel_ht
+                            ? formatNumberWithColor(
+                                situation.montant_reel_ht,
+                                situation.montant_ht_mois
+                              )
+                            : "Définir paiement"}
+                        </Button>
+                        {situation.montant_reel_ht && (
+                          <Tooltip title="Réinitialiser le paiement">
+                            <IconButton
+                              size="small"
+                              color="warning"
+                              onClick={async () => {
+                                if (
+                                  window.confirm(
+                                    "Êtes-vous sûr de vouloir réinitialiser ce paiement ?"
+                                  )
+                                ) {
+                                  try {
+                                    await resetPaiement(situation.id);
+                                  } catch (error) {
+                                    console.error(
+                                      "Erreur lors de la réinitialisation du paiement:",
+                                      error
+                                    );
+                                    alert(
+                                      "Erreur lors de la réinitialisation du paiement"
+                                    );
+                                  }
+                                }
+                              }}
+                            >
+                              <RemoveCircleOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       {situation.date_paiement_reel
@@ -812,6 +876,27 @@ const TableauSuivi = () => {
                     true
                   )}
                 </TableCell>
+                {hasRetenueCIE && (
+                  <TableCell>
+                    {(() => {
+                      const totalCIE = situations.reduce((sum, s) => {
+                        const montant = parseFloat(s.retenue_cie || 0);
+                        return (
+                          sum +
+                          (s.type_retenue_cie === "deduction" ? -montant : montant)
+                        );
+                      }, 0);
+                      const hasDeduction = situations.some(
+                        (s) => s.type_retenue_cie === "deduction"
+                      );
+                      return formatMontant(
+                        Math.abs(totalCIE),
+                        totalCIE < 0 || hasDeduction,
+                        hasDeduction ? "deduction" : null
+                      );
+                    })()}
+                  </TableCell>
+                )}
                 {lignesSupplementairesUniques.map((ligneUnique) => (
                   <TableCell key={ligneUnique.description}>
                     {formatMontant(
@@ -871,7 +956,7 @@ const TableauSuivi = () => {
               }}
             >
               Montant total du marché :{" "}
-              {formatMontant(calculerMontantTotalMarche())}
+              {formatMontant(calculerMontantTotalMarche(), false, null, true)}
             </Typography>
             <Typography
               sx={{
@@ -897,7 +982,7 @@ const TableauSuivi = () => {
             >
               Reste à payer HT :
             </Typography>
-            {formatMontant(calculerResteAPayer())}
+            {formatMontant(calculerResteAPayer(), false, null, true)}
           </Box>
         </Box>
       </>
@@ -1008,10 +1093,10 @@ const TableauSuivi = () => {
   const isMontantDifferent = (situationId, montantRecu) => {
     const situation = situations.find((s) => s.id === situationId);
     if (!situation || !montantRecu) return false;
-    // Comparer avec le montant après retenues (ce qui est facturé)
+    // Comparer avec le montant HT du mois (montant_ht_mois)
     return (
       Math.abs(
-        parseFloat(situation.montant_apres_retenues) - parseFloat(montantRecu)
+        parseFloat(situation.montant_ht_mois) - parseFloat(montantRecu)
       ) > 0.01
     );
   };

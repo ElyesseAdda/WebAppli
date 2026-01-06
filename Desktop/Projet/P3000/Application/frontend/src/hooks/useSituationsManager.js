@@ -77,6 +77,18 @@ export const useSituationsManager = (chantierId) => {
     [updateSituation]
   );
 
+  // Réinitialiser/supprimer le paiement
+  const resetPaiement = useCallback(
+    async (situationId) => {
+      const updateData = {
+        montant_reel_ht: null,
+        date_paiement_reel: null,
+      };
+      return await updateSituation(situationId, updateData);
+    },
+    [updateSituation]
+  );
+
   // Charger les situations au montage et quand chantierId change
   useEffect(() => {
     loadSituations();
@@ -90,5 +102,6 @@ export const useSituationsManager = (chantierId) => {
     updateSituation,
     updateDateEnvoi,
     updatePaiement,
+    resetPaiement,
   };
 };
