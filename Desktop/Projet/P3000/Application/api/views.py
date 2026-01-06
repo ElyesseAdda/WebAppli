@@ -288,6 +288,18 @@ class FactureTSViewSet(viewsets.ModelViewSet):
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         return queryset.select_related('devis', 'avenant')
+    
+    def destroy(self, request, *args, **kwargs):
+        # Récupérer le chantier avant suppression
+        facture_ts = self.get_object()
+        chantier_id = facture_ts.chantier.id if facture_ts.chantier else None
+        
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code == 204:
+            # Mettre à jour le chantier après suppression (soustraire les coûts)
+            if chantier_id:
+                recalculer_couts_estimes_chantier(chantier_id)
+        return response
 
 
 class DevisPagination(PageNumberPagination):
@@ -1163,6 +1175,18 @@ class FactureTSViewSet(viewsets.ModelViewSet):
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         return queryset.select_related('devis', 'avenant')
+    
+    def destroy(self, request, *args, **kwargs):
+        # Récupérer le chantier avant suppression
+        facture_ts = self.get_object()
+        chantier_id = facture_ts.chantier.id if facture_ts.chantier else None
+        
+        response = super().destroy(request, *args, **kwargs)
+        if response.status_code == 204:
+            # Mettre à jour le chantier après suppression (soustraire les coûts)
+            if chantier_id:
+                recalculer_couts_estimes_chantier(chantier_id)
+        return response
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = Devis.objects.all().prefetch_related('lignes')
     serializer_class = DevisSerializer
@@ -5528,11 +5552,17 @@ def get_chantier_avenants(request, chantier_id):
     """Récupère tous les avenants d'un chantier avec leurs TS associés"""
     try:
         # Récupérer uniquement les avenants qui ont des TS associés
+        # Optimiser avec select_related pour les devis et prefetch_related pour les factures_ts
         avenants = (Avenant.objects
                    .filter(chantier_id=chantier_id)
-                   .annotate(ts_count=models.Count('factures_ts'))
+                   .annotate(ts_count=Count('factures_ts'))
                    .filter(ts_count__gt=0)
-                   .prefetch_related('factures_ts')
+                   .prefetch_related(
+                       Prefetch(
+                           'factures_ts',
+                           queryset=FactureTS.objects.select_related('devis', 'chantier', 'avenant')
+                       )
+                   )
                    .order_by('numero'))
         
         serializer = AvenantSerializer(avenants, many=True)
@@ -5563,7 +5593,9 @@ def create_facture_ts(request):
     try:
         devis = Devis.objects.get(id=request.data['devis_id'])
         chantier_id = request.data['chantier_id']
-        designation = request.data.get('numero_ts', '')
+        # Utiliser en priorité le champ 'designation' envoyé par le frontend,
+        # sinon retomber sur 'numero_ts' pour compat rétro si présent
+        designation = request.data.get('designation') or request.data.get('numero_ts', '')
         
         # Si on doit créer un nouvel avenant
         avenant_id = request.data.get('avenant_id')
@@ -5581,7 +5613,7 @@ def create_facture_ts(request):
         last_ts = FactureTS.objects.filter(chantier_id=chantier_id).order_by('-numero_ts').first()
         next_ts_number = (last_ts.numero_ts + 1) if last_ts else 1
 
-        # Créer la facture TS
+        # Créer la facture TS (sans créer de Facture standard)
         facture_ts = FactureTS.objects.create(
             devis=devis,
             chantier_id=chantier_id,
@@ -5593,26 +5625,14 @@ def create_facture_ts(request):
             tva_rate=devis.tva_rate
         )
 
-        # Créer aussi une Facture standard pour garder la cohérence
-        facture_standard = Facture.objects.create(
-            numero=f"{devis.numero} / TS{next_ts_number:03d}",
-            devis=devis,
-            chantier_id=chantier_id,
-            type_facture='ts',
-            price_ht=devis.price_ht,
-            price_ttc=devis.price_ttc,
-            designation=designation,
-            avenant_id=avenant_id,
-            # Transférer les coûts estimés du devis
-            cout_estime_main_oeuvre=devis.cout_estime_main_oeuvre,
-            cout_estime_materiel=devis.cout_estime_materiel
-        )
+        # ✅ Transférer les coûts estimés du devis au chantier (section prévisionnel)
+        recalculer_couts_estimes_chantier(chantier_id)
 
         return Response({
             "success": True,
-            "message": f"Facture TS créée avec succès",
+            "message": f"Avenant créé avec succès",
             "facture_ts_id": facture_ts.id,
-            "facture_id": facture_standard.id,
+            "avenant_id": avenant_id,
             "numero_ts": next_ts_number
         })
 
@@ -12607,7 +12627,7 @@ def calculer_couts_facture(facture_id):
 def recalculer_couts_estimes_chantier(chantier_id):
     """
     Recalcule les coûts totaux du chantier en sommant
-    les coûts du devis de chantier + toutes les factures
+    les coûts du devis de chantier + toutes les factures + tous les avenants (FactureTS)
     """
     from decimal import Decimal
     
@@ -12631,7 +12651,14 @@ def recalculer_couts_estimes_chantier(chantier_id):
             cout_main_oeuvre_total += Decimal(str(facture.cout_estime_main_oeuvre or 0))
             cout_materiel_total += Decimal(str(facture.cout_estime_materiel or 0))
         
-        # 3. Sauvegarder dans le chantier
+        # 3. Coûts de tous les avenants (FactureTS)
+        factures_ts = FactureTS.objects.filter(chantier=chantier).select_related('devis')
+        for facture_ts in factures_ts:
+            # Les coûts sont dans le devis associé à la FactureTS
+            cout_main_oeuvre_total += Decimal(str(facture_ts.devis.cout_estime_main_oeuvre or 0))
+            cout_materiel_total += Decimal(str(facture_ts.devis.cout_estime_materiel or 0))
+        
+        # 4. Sauvegarder dans le chantier
         chantier.cout_estime_main_oeuvre = cout_main_oeuvre_total
         chantier.cout_estime_materiel = cout_materiel_total
         chantier.save(update_fields=['cout_estime_main_oeuvre', 'cout_estime_materiel'])

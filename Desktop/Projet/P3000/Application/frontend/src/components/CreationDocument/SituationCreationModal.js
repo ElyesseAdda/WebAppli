@@ -865,6 +865,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
 
   if (avenants && avenants.length > 0) {
     let totalPourcentage = 0;
+    let nombreAvenantsAvecTS = 0;
     avenants.forEach((avenant) => {
       if (avenant.factures_ts && avenant.factures_ts.length > 0) {
         const pourcentageAvenant =
@@ -873,6 +874,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
             0
           ) / avenant.factures_ts.length;
         totalPourcentage += pourcentageAvenant;
+        nombreAvenantsAvecTS++;
 
         montantPartie += avenant.factures_ts.reduce(
           (acc, ts) =>
@@ -881,7 +883,8 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
         );
       }
     });
-    moyennePartie = totalPourcentage / avenants.length;
+    // Éviter la division par zéro
+    moyennePartie = nombreAvenantsAvecTS > 0 ? totalPourcentage / nombreAvenantsAvecTS : 0;
   }
 
   return (
@@ -928,13 +931,15 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
         <TableCell style={{ padding: 0 }} colSpan={7}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box>
-              {avenants?.map((avenant) => (
-                <AvenantSousPartieTable
-                  key={avenant.id}
-                  avenant={avenant}
-                  handlePourcentageChange={handlePourcentageChange}
-                />
-              ))}
+              {avenants
+                ?.filter((avenant) => avenant.factures_ts && avenant.factures_ts.length > 0)
+                .map((avenant) => (
+                  <AvenantSousPartieTable
+                    key={avenant.id}
+                    avenant={avenant}
+                    handlePourcentageChange={handlePourcentageChange}
+                  />
+                ))}
             </Box>
           </Collapse>
         </TableCell>
@@ -1577,21 +1582,25 @@ const SituationCreationModal = ({
     }
   }, [devis]);
 
-  // Charger les avenants
+  // Charger les avenants - Recharger à chaque ouverture du modal et quand le chantier change
   useEffect(() => {
-    if (chantier?.id) {
+    if (open && chantier?.id) {
       axios
         .get(`/api/avenant_chantier/${chantier.id}/avenants/`)
         .then((response) => {
           if (response.data.success) {
-            setAvenants(response.data.avenants);
+            // Filtrer les avenants qui ont encore des factures_ts (éviter les avenants vides)
+            const avenantsAvecTS = response.data.avenants.filter(
+              (avenant) => avenant.factures_ts && avenant.factures_ts.length > 0
+            );
+            setAvenants(avenantsAvecTS);
           }
         })
         .catch((error) => {
           console.error("Erreur lors du chargement des avenants:", error);
         });
     }
-  }, [chantier]);
+  }, [open, chantier]);
 
   // Calculer l'avancement chaque fois que la structure change
   useEffect(() => {
@@ -2991,10 +3000,13 @@ const SituationCreationModal = ({
                     </TableRow>
                   );
                 })}
-              <AvenantsPartieRow
-                avenants={avenants}
-                handlePourcentageChange={handlePourcentageChange}
-              />
+              {/* Afficher la partie Avenants uniquement s'il y a des avenants avec des factures_ts */}
+              {avenants && avenants.length > 0 && avenants.some(av => av.factures_ts && av.factures_ts.length > 0) && (
+                <AvenantsPartieRow
+                  avenants={avenants.filter(av => av.factures_ts && av.factures_ts.length > 0)}
+                  handlePourcentageChange={handlePourcentageChange}
+                />
+              )}
             </TableBody>
           </Table>
         </TableContainer>

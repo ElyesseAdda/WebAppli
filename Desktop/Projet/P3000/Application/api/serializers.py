@@ -765,6 +765,11 @@ class BonCommandeSerializer(serializers.ModelSerializer):
 
 class FactureTSSerializer(serializers.ModelSerializer):
     devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    devis_date_creation = serializers.DateTimeField(source='devis.date_creation', read_only=True)
+    devis_nature_travaux = serializers.CharField(source='devis.nature_travaux', read_only=True)
+    devis_status = serializers.CharField(source='devis.status', read_only=True)
+    devis_price_ht = serializers.FloatField(source='devis.price_ht', read_only=True)
+    devis_price_ttc = serializers.FloatField(source='devis.price_ttc', read_only=True)
     
     class Meta:
         model = FactureTS
@@ -779,8 +784,12 @@ class FactureTSSerializer(serializers.ModelSerializer):
             'devis',
             'chantier',
             'avenant',
-            
-            'devis_numero'
+            'devis_numero',
+            'devis_date_creation',
+            'devis_nature_travaux',
+            'devis_status',
+            'devis_price_ht',
+            'devis_price_ttc'
         ]
 
 class AvenantSerializer(serializers.ModelSerializer):

@@ -1889,6 +1889,16 @@ class FactureTS(models.Model):
         )['total'] or 0
         self.avenant.save()
 
+    def delete(self, *args, **kwargs):
+        # Récupérer l'avenant avant suppression pour mettre à jour son montant_total
+        avenant = self.avenant
+        super().delete(*args, **kwargs)
+        # Mettre à jour le montant total de l'avenant après suppression
+        avenant.montant_total = avenant.factures_ts.aggregate(
+            total=models.Sum('montant_ht')
+        )['total'] or 0
+        avenant.save()
+
     @property
     def numero_complet(self):
         """Retourne le numéro complet formaté : DEV-001-25 - TS n°001 - Désignation"""

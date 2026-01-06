@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useSituationsManager } from "../../hooks/useSituationsManager";
 import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
+import ChantierListeAvenants from "./ChantierListeAvenants";
 import ChantierListeSituation from "./ChantierListeSituation";
 
 const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
@@ -52,6 +53,19 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   );
   const [isLoadedFactures, setIsLoadedFactures] = useState(false);
 
+  // Avenants
+  const [avenants, setAvenants] = useState([]);
+  const [filtersAvenants, setFiltersAvenants] = useState(
+    state.filtersAvenants || {
+      numero_devis: "",
+      date_creation: "",
+      montant: "",
+      status: "Tous",
+      avenant_numero: "Tous",
+    }
+  );
+  const [isLoadedAvenants, setIsLoadedAvenants] = useState(false);
+
   // Gestion du changement d'onglet
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -61,6 +75,7 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
       filtersSituations,
       filtersDevis,
       filtersFactures,
+      filtersAvenants,
     });
   };
 
@@ -76,6 +91,10 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   const saveFiltersFactures = (filters) => {
     setFiltersFactures(filters);
     setState((prev) => ({ ...prev, filtersFactures: filters }));
+  };
+  const saveFiltersAvenants = (filters) => {
+    setFiltersAvenants(filters);
+    setState((prev) => ({ ...prev, filtersAvenants: filters }));
   };
 
   const hasLoaded = useRef(false);
@@ -98,6 +117,8 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
         setIsLoadedDevis(false);
       } else if (selectedTab === 2) {
         setIsLoadedFactures(false);
+      } else if (selectedTab === 3) {
+        setIsLoadedAvenants(false);
       }
     }
   }, [isActive, chantierData?.id, selectedTab, loadSituations]);
@@ -120,6 +141,13 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   useEffect(() => {
     if (selectedTab === 2 && chantierData?.id && isActive) {
       setIsLoadedFactures(false);
+    }
+  }, [selectedTab, chantierData?.id, isActive]);
+
+  // Recharger les avenants quand l'onglet Avenants devient actif
+  useEffect(() => {
+    if (selectedTab === 3 && chantierData?.id && isActive) {
+      setIsLoadedAvenants(false);
     }
   }, [selectedTab, chantierData?.id, isActive]);
 
@@ -167,6 +195,7 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
             <Tab label="Situations" />
             <Tab label="Devis" />
             <Tab label="Factures" />
+            <Tab label="Avenants" />
           </Tabs>
         </AppBar>
       </Box>
@@ -213,6 +242,18 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
               isLoaded={isLoadedFactures}
               setIsLoaded={setIsLoadedFactures}
               onSaveFilters={saveFiltersFactures}
+            />
+          )}
+          {selectedTab === 3 && (
+            <ChantierListeAvenants
+              chantierData={chantierData}
+              avenants={avenants}
+              setAvenants={setAvenants}
+              filters={filtersAvenants}
+              setFilters={setFiltersAvenants}
+              isLoaded={isLoadedAvenants}
+              setIsLoaded={setIsLoadedAvenants}
+              onSaveFilters={saveFiltersAvenants}
             />
           )}
         </Paper>
