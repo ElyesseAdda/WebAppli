@@ -268,6 +268,33 @@ const DevisAvance = () => {
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const draftSaveTimeoutRef = React.useRef(null);
   const lastDraftKeyRef = React.useRef(null);
+  // ✅ Ref pour stocker les valeurs les plus récentes pour beforeunload
+  const latestDraftRef = React.useRef({
+    draftStorageKey: null,
+    isDraftHydrated: false,
+    devisData: null,
+    client: null,
+    societe: null,
+    chantier: null,
+    special_lines_global: [],
+    pendingSpecialLines: [],
+    devisItems: [],
+    selectedChantierId: null,
+    pendingChantierData: null,
+    devisType: "normal",
+    tauxFixe: 20,
+    lineAwaitingPlacement: null,
+    pendingLineForBase: null,
+    isSelectingBase: false,
+    recurringLineDraft: null,
+    contactsSociete: [],
+    selectedContactId: null,
+    currentSocieteId: null,
+    selectedSocieteId: null,
+    customDrivePath: null,
+    chantierDrivePath: null,
+    clientId: null
+  });
   
   // ✅ NOUVEAU : Enrichir devisItems pour que les parties aient selectedSousParties (pour compatibilité)
   const enrichedDevisItems = React.useMemo(() => {
@@ -1678,6 +1705,37 @@ const DevisAvance = () => {
       if (typeof draft.tauxFixe === 'number') {
         setTauxFixe(draft.tauxFixe);
       }
+      
+      // ✅ Restaurer les contacts de société
+      if (Array.isArray(draft.contactsSociete)) {
+        setContactsSociete(draft.contactsSociete);
+      }
+      
+      if (typeof draft.selectedContactId !== 'undefined') {
+        setSelectedContactId(draft.selectedContactId ?? null);
+      }
+      
+      if (typeof draft.currentSocieteId !== 'undefined') {
+        setCurrentSocieteId(draft.currentSocieteId ?? null);
+      }
+      
+      if (typeof draft.selectedSocieteId !== 'undefined') {
+        setSelectedSocieteId(draft.selectedSocieteId ?? null);
+      }
+      
+      // ✅ Restaurer les chemins du drive
+      if (typeof draft.customDrivePath !== 'undefined') {
+        setCustomDrivePath(draft.customDrivePath ?? null);
+      }
+      
+      if (typeof draft.chantierDrivePath !== 'undefined') {
+        setChantierDrivePath(draft.chantierDrivePath ?? null);
+      }
+      
+      // ✅ Restaurer l'ID du client
+      if (typeof draft.clientId !== 'undefined') {
+        setClientId(draft.clientId ?? null);
+      }
     } catch (error) {
     }
   }, []);
@@ -1723,8 +1781,18 @@ const DevisAvance = () => {
         tauxFixe,
         lineAwaitingPlacement,
         pendingLineForBase,
-      isSelectingBase,
-      recurringLineDraft
+        isSelectingBase,
+        recurringLineDraft,
+        // ✅ Ajouter les contacts de société
+        contactsSociete,
+        selectedContactId,
+        currentSocieteId,
+        selectedSocieteId,
+        // ✅ Ajouter les chemins du drive
+        customDrivePath,
+        chantierDrivePath,
+        // ✅ Ajouter l'ID du client
+        clientId
       };
       
       try {
@@ -1754,7 +1822,18 @@ const DevisAvance = () => {
     tauxFixe,
     lineAwaitingPlacement,
     pendingLineForBase,
-    isSelectingBase
+    isSelectingBase,
+    recurringLineDraft,
+    // ✅ Ajouter les dépendances pour les contacts
+    contactsSociete,
+    selectedContactId,
+    currentSocieteId,
+    selectedSocieteId,
+    // ✅ Ajouter les dépendances pour les chemins du drive
+    customDrivePath,
+    chantierDrivePath,
+    // ✅ Ajouter la dépendance pour l'ID du client
+    clientId
   ]);
   
   useEffect(() => {
@@ -1764,6 +1843,140 @@ const DevisAvance = () => {
       }
     };
   }, []);
+  
+  // ✅ Recharger les contacts après restauration si une société est disponible
+  useEffect(() => {
+    if (!isDraftHydrated) {
+      return;
+    }
+    
+    // Si on a une société restaurée (via selectedSocieteId ou currentSocieteId ou pendingChantierData)
+    const societeIdToUse = currentSocieteId || selectedSocieteId || pendingChantierData?.societe?.id;
+    
+    if (societeIdToUse && (!contactsSociete || contactsSociete.length === 0)) {
+      // Recharger les contacts si on a une société mais pas de contacts chargés
+      fetchContactsSociete(societeIdToUse);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDraftHydrated, currentSocieteId, selectedSocieteId, pendingChantierData?.societe?.id]);
+  
+  // ✅ Mettre à jour la ref avec les valeurs les plus récentes
+  useEffect(() => {
+    latestDraftRef.current = {
+      draftStorageKey,
+      isDraftHydrated,
+      devisData,
+      client,
+      societe,
+      chantier,
+      special_lines_global,
+      pendingSpecialLines,
+      devisItems,
+      selectedChantierId,
+      pendingChantierData,
+      devisType,
+      tauxFixe,
+      lineAwaitingPlacement,
+      pendingLineForBase,
+      isSelectingBase,
+      recurringLineDraft,
+      contactsSociete,
+      selectedContactId,
+      currentSocieteId,
+      selectedSocieteId,
+      customDrivePath,
+      chantierDrivePath,
+      clientId
+    };
+  }, [
+    draftStorageKey,
+    isDraftHydrated,
+    devisData,
+    client,
+    societe,
+    chantier,
+    special_lines_global,
+    pendingSpecialLines,
+    devisItems,
+    selectedChantierId,
+    pendingChantierData,
+    devisType,
+    tauxFixe,
+    lineAwaitingPlacement,
+    pendingLineForBase,
+    isSelectingBase,
+    recurringLineDraft,
+    contactsSociete,
+    selectedContactId,
+    currentSocieteId,
+    selectedSocieteId,
+    customDrivePath,
+    chantierDrivePath,
+    clientId
+  ]);
+  
+  // ✅ Sauvegarde synchrone avant fermeture de la page (beforeunload)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Sauvegarder immédiatement sans timeout en utilisant les valeurs de la ref
+      const latest = latestDraftRef.current;
+      if (latest.draftStorageKey && latest.isDraftHydrated) {
+        try {
+          // Annuler le timeout en cours s'il existe
+          if (draftSaveTimeoutRef.current) {
+            clearTimeout(draftSaveTimeoutRef.current);
+          }
+          
+          // Sauvegarder immédiatement avec les valeurs les plus récentes
+          const draftPayload = {
+            devisData: latest.devisData,
+            client: latest.client,
+            societe: latest.societe,
+            chantier: latest.chantier,
+            special_lines_global: latest.special_lines_global,
+            pendingSpecialLines: latest.pendingSpecialLines,
+            devisItems: latest.devisItems,
+            selectedChantierId: latest.selectedChantierId,
+            pendingChantierData: latest.pendingChantierData,
+            devisType: latest.devisType,
+            tauxFixe: latest.tauxFixe,
+            lineAwaitingPlacement: latest.lineAwaitingPlacement,
+            pendingLineForBase: latest.pendingLineForBase,
+            isSelectingBase: latest.isSelectingBase,
+            recurringLineDraft: latest.recurringLineDraft,
+            contactsSociete: latest.contactsSociete,
+            selectedContactId: latest.selectedContactId,
+            currentSocieteId: latest.currentSocieteId,
+            selectedSocieteId: latest.selectedSocieteId,
+            customDrivePath: latest.customDrivePath,
+            chantierDrivePath: latest.chantierDrivePath,
+            clientId: latest.clientId
+          };
+          
+          localStorage.setItem(latest.draftStorageKey, JSON.stringify(draftPayload));
+        } catch (error) {
+          // Ignorer les erreurs de sauvegarde lors de la fermeture
+        }
+      }
+    };
+    
+    // Écouter l'événement beforeunload
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Écouter aussi visibilitychange pour les cas où l'onglet devient invisible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleBeforeUnload();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // Pas de dépendances, on utilise la ref qui est toujours à jour
   
   const clearDraftStorage = React.useCallback(() => {
     if (!draftStorageKey) {
@@ -1808,6 +2021,10 @@ const DevisAvance = () => {
     setMontantTtc(0);
     setChantierDrivePath(null); // ✅ Réinitialiser le drive_path du chantier
     setCustomDrivePath(null); // ✅ Réinitialiser aussi le chemin personnalisé
+    // ✅ Réinitialiser les contacts
+    setContactsSociete([]);
+    setSelectedContactId(null);
+    setCurrentSocieteId(null);
   }, []);
 
   // ✅ Plus besoin de synchronisation : devisItems est la source de vérité unique
