@@ -147,10 +147,8 @@ const ChantierListeAvenants = ({
               .split("T")[0];
             return itemDate === filters[key];
           case "montant":
-            const itemMontant = item.montant_ttc?.toString() || "";
+            const itemMontant = item.montant_ht?.toString() || "";
             return itemMontant.includes(filters[key]);
-          case "status":
-            return item.status === filters[key];
           case "avenant_numero":
             return item.avenant_numero?.toString() === filters[key];
           default:
@@ -182,7 +180,7 @@ const ChantierListeAvenants = ({
           (new Date(a[property]).getTime() - new Date(b[property]).getTime())
         );
       }
-      if (property === "montant_ttc") {
+      if (property === "montant_ht") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
         );
@@ -338,13 +336,13 @@ const ChantierListeAvenants = ({
                 </AlignedCell>
                 <AlignedCell>
                   <TableSortLabel
-                    active={orderBy === "montant_ttc"}
-                    direction={orderBy === "montant_ttc" ? order : "asc"}
-                    onClick={() => handleSort("montant_ttc")}
+                    active={orderBy === "montant_ht"}
+                    direction={orderBy === "montant_ht" ? order : "asc"}
+                    onClick={() => handleSort("montant_ht")}
                     sx={{ textAlign: "center" }}
                   >
                     <PriceTextField
-                      label="Prix TTC"
+                      label="Prix HT"
                       variant="standard"
                       value={filters.montant || ""}
                       onChange={handleFilterChange("montant")}
@@ -367,19 +365,6 @@ const ChantierListeAvenants = ({
                   </StyledSelect>
                 </FilterCell>
                 <FilterCell>
-                  <StyledSelect
-                    value={filters.status || "Tous"}
-                    onChange={handleFilterChange("status")}
-                    variant="standard"
-                    sx={{ pt: "10px" }}
-                  >
-                    <MenuItem value="Tous">Tous</MenuItem>
-                    <MenuItem value="En Cours">En Cours</MenuItem>
-                    <MenuItem value="Accepté">Accepté</MenuItem>
-                    <MenuItem value="Refusé">Refusé</MenuItem>
-                  </StyledSelect>
-                </FilterCell>
-                <FilterCell>
                   <Typography
                     variant="subtitle2"
                     sx={{
@@ -396,7 +381,7 @@ const ChantierListeAvenants = ({
             <TableBody>
               {filteredAvenants.length === 0 ? (
                 <TableRow>
-                  <CenteredTableCell colSpan={7}>
+                  <CenteredTableCell colSpan={5}>
                     <Typography variant="body2" color="text.secondary">
                       Aucun avenant trouvé
                     </Typography>
@@ -422,37 +407,10 @@ const ChantierListeAvenants = ({
                     <CenteredTableCell
                       sx={{ fontWeight: 600, color: green[500] }}
                     >
-                      {formatNumber(item.montant_ttc)} €
+                      {formatNumber(item.montant_ht)} €
                     </CenteredTableCell>
                     <CenteredTableCell>
                       Avenant n°{item.avenant_numero}
-                    </CenteredTableCell>
-                    <CenteredTableCell>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          display: "inline-block",
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: 1,
-                          backgroundColor:
-                            item.status === "Accepté"
-                              ? "success.light"
-                              : item.status === "Refusé"
-                              ? "error.light"
-                              : "warning.light",
-                          color:
-                            item.status === "Accepté"
-                              ? "success.dark"
-                              : item.status === "Refusé"
-                              ? "error.dark"
-                              : "warning.dark",
-                          fontWeight: 500,
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {item.status || "En Cours"}
-                      </Typography>
                     </CenteredTableCell>
                     <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                       <div

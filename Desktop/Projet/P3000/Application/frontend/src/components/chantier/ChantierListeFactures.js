@@ -141,7 +141,7 @@ const ChantierListeFactures = ({
               .split("T")[0];
             return factureDate === filters[key];
           case "montant":
-            const factureMontant = facture.price_ttc?.toString() || "";
+            const factureMontant = facture.price_ht?.toString() || "";
             return factureMontant.includes(filters[key]);
           case "state_facture":
             return facture.state_facture === filters[key];
@@ -183,7 +183,7 @@ const ChantierListeFactures = ({
           (new Date(a[property]).getTime() - new Date(b[property]).getTime())
         );
       }
-      if (property === "price_ttc") {
+      if (property === "price_ht") {
         return (
           (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]))
         );
@@ -357,13 +357,13 @@ const ChantierListeFactures = ({
                 </AlignedCell>
                 <AlignedCell>
                   <TableSortLabel
-                    active={orderBy === "price_ttc"}
-                    direction={orderBy === "price_ttc" ? order : "asc"}
-                    onClick={() => handleSort("price_ttc")}
+                    active={orderBy === "price_ht"}
+                    direction={orderBy === "price_ht" ? order : "asc"}
+                    onClick={() => handleSort("price_ht")}
                     sx={{ textAlign: "center" }}
                   >
                     <PriceTextField
-                      label="Prix TTC"
+                      label="Prix HT"
                       variant="standard"
                       value={filters.montant}
                       onChange={handleFilterChange("montant")}
@@ -431,7 +431,7 @@ const ChantierListeFactures = ({
                   <CenteredTableCell
                     sx={{ fontWeight: 600, color: green[500] }}
                   >
-                    {formatNumber(facture.price_ttc)} €
+                    {formatNumber(facture.price_ht)} €
                   </CenteredTableCell>
                   <CenteredTableCell>
                     {facture.type_facture === "cie"
