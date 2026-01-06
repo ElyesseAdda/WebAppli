@@ -2,7 +2,7 @@
  * Drive Uploader - Composant d'upload de fichiers
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Box,
   Paper,

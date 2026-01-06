@@ -134,11 +134,11 @@ const LigneDetailSearch = ({
       // Ouvrir le modal de création
       setModalDescription(inputValue.trim());
       setIsModalOpen(true);
-      setInputValue('');
+      // Ne pas réinitialiser l'input après ouverture du modal pour permettre de continuer à taper
     } else {
       if (onLigneDetailSelect) {
         onLigneDetailSelect(selectedOption.data);
-        setInputValue('');
+        // Ne pas réinitialiser l'input après sélection pour permettre de continuer à taper
       }
     }
   };
@@ -213,11 +213,22 @@ const LigneDetailSearch = ({
           value={null}
           onChange={handleChange}
           inputValue={inputValue}
-          onInputChange={(newValue) => setInputValue(newValue)}
+          onInputChange={(newValue, actionMeta) => {
+            // Préserver la valeur sauf si l'utilisateur efface explicitement
+            if (actionMeta.action === 'input-change') {
+              setInputValue(newValue);
+            } else if (actionMeta.action === 'clear') {
+              setInputValue('');
+            }
+          }}
           styles={customStyles}
           menuPortalTarget={document.body}
           menuPosition="fixed"
           isLoading={isLoading}
+          onBlur={() => {
+            // Préserver la valeur au blur
+            // Ne rien faire, la valeur est déjà préservée dans inputValue
+          }}
           noOptionsMessage={() => 
             inputValue.trim() 
               ? `Aucune ligne trouvée. Tapez pour créer "${inputValue}"`

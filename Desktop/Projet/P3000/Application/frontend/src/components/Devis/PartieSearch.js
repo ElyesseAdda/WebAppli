@@ -168,12 +168,18 @@ const PartieSearch = ({
             placeholder={selectedParties.length > 0 ? "Ajouter une autre partie..." : "Tapez le nom de la partie ou choisissez-en une existante..."}
             value={null}
             inputValue={inputValue}
-            onInputChange={setInputValue}
+            onInputChange={(newValue, actionMeta) => {
+              // Préserver la valeur sauf si l'utilisateur efface explicitement
+              if (actionMeta.action === 'input-change') {
+                setInputValue(newValue);
+              } else if (actionMeta.action === 'clear') {
+                setInputValue('');
+              }
+            }}
             options={optionsWithCreate}
             onCreateOption={(inputValue) => {
               const result = onPartieCreate(inputValue);
-              // Effacer l'input après création
-              setInputValue('');
+              // Ne pas effacer l'input après création pour permettre de continuer à taper
               return result;
             }}
             onChange={(selectedOption) => {
@@ -185,8 +191,7 @@ const PartieSearch = ({
                   // Sélectionner une partie existante
                   onPartieSelect(selectedOption);
                 }
-                // Effacer l'input après sélection/création
-                setInputValue('');
+                // Ne pas effacer l'input après sélection/création pour permettre de continuer à taper
               }
             }}
             isLoading={isLoading || isLoadingParties}
@@ -202,8 +207,8 @@ const PartieSearch = ({
             }}
             formatCreateLabel={(inputValue) => `✨ Créer "${inputValue}"`}
             onBlur={() => {
-              // Ne pas effacer l'input au blur
-              setTimeout(() => setInputValue(inputValue), 0);
+              // Préserver la valeur au blur
+              // Ne rien faire, la valeur est déjà préservée dans inputValue
             }}
             onFocus={() => {
               // S'assurer que les options sont chargées

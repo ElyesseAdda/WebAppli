@@ -62,10 +62,16 @@ class FrontendAppView(TemplateView):
                 })
         
         # Ajouter l'URL du serveur OnlyOffice pour le template
+        # Convertir automatiquement HTTP en HTTPS si la requête est en HTTPS (pour éviter Mixed Content)
+        onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', None)
+        if onlyoffice_url and self.request.is_secure() and onlyoffice_url.startswith('http://'):
+            # Remplacer http:// par https:// pour éviter les erreurs Mixed Content
+            onlyoffice_url = onlyoffice_url.replace('http://', 'https://', 1)
+        
         context.update({
             'debug': settings.DEBUG,
             'version': getattr(settings, 'VERSION', '1.0.0'),
-            'onlyoffice_server_url': getattr(settings, 'ONLYOFFICE_SERVER_URL', None),
+            'onlyoffice_server_url': onlyoffice_url,
         })
         return context
 

@@ -1928,6 +1928,7 @@ const DevisTable = ({
           ligneDetail={editContext.ligne}
           onSuccess={(updated) => {
             if (editContext?.ligne) {
+              // Mettre à jour l'objet ligne directement (pour compatibilité)
               Object.assign(editContext.ligne, {
                 description: updated.description,
                 unite: updated.unite,
@@ -1937,6 +1938,25 @@ const DevisTable = ({
                 marge: updated.marge,
                 prix: updated.prix
               });
+              
+              // ✅ Appeler onLigneDetailEdit pour mettre à jour devisItems via setDevisItems
+              // Cela permet de déclencher un re-render dans ModificationDevisV2.js
+              if (onLigneDetailEdit) {
+                // Créer un objet ligne mis à jour avec toutes les propriétés
+                const updatedLigne = {
+                  ...editContext.ligne,
+                  description: updated.description,
+                  unite: updated.unite,
+                  cout_main_oeuvre: parseFloat(updated.cout_main_oeuvre) || 0,
+                  cout_materiel: parseFloat(updated.cout_materiel) || 0,
+                  taux_fixe: parseFloat(updated.taux_fixe) || 0,
+                  marge: parseFloat(updated.marge) || 0,
+                  marge_devis: parseFloat(updated.marge) || 0,
+                  prix: parseFloat(updated.prix) || 0,
+                  prix_devis: parseFloat(updated.prix) || 0
+                };
+                onLigneDetailEdit(updatedLigne);
+              }
             }
             setIsEditOpen(false);
           }}

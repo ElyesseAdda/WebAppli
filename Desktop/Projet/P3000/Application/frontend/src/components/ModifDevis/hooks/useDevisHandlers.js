@@ -423,11 +423,40 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
   }, [setDevisItems]);
 
   /**
-   * Éditer une ligne de détail (ouvre le modal)
+   * Éditer une ligne de détail (met à jour devisItems après modification)
    */
-  const handleLigneDetailEdit = useCallback((ligneDetail) => {
-    // Le modal d'édition est géré par le composant parent
-  }, []);
+  const handleLigneDetailEdit = useCallback((updatedLigne) => {
+    if (!updatedLigne || !updatedLigne.id) return;
+    
+    // ✅ Mettre à jour devisItems avec les nouvelles données de la ligne
+    setDevisItems(prev => prev.map(item => {
+      if (item.type === 'ligne_detail' && item.id === updatedLigne.id) {
+        // Calculer le nouveau prix si nécessaire
+        const cout_total = parseFloat(updatedLigne.cout_main_oeuvre || 0) + parseFloat(updatedLigne.cout_materiel || 0);
+        const taux_fixe = parseFloat(updatedLigne.taux_fixe || 0);
+        const prix_base = cout_total * (1 + taux_fixe / 100);
+        const marge = parseFloat(updatedLigne.marge || updatedLigne.marge_devis || 0);
+        const prix_calcule = prix_base * (1 + marge / 100);
+        
+        // Utiliser le prix fourni ou le prix calculé
+        const prix_final = updatedLigne.prix || updatedLigne.prix_devis || prix_calcule;
+        
+        return {
+          ...item,
+          description: updatedLigne.description || item.description,
+          unite: updatedLigne.unite || item.unite,
+          cout_main_oeuvre: parseFloat(updatedLigne.cout_main_oeuvre || 0),
+          cout_materiel: parseFloat(updatedLigne.cout_materiel || 0),
+          taux_fixe: parseFloat(updatedLigne.taux_fixe || item.taux_fixe || 0),
+          marge: parseFloat(updatedLigne.marge || updatedLigne.marge_devis || item.marge || 0),
+          marge_devis: parseFloat(updatedLigne.marge || updatedLigne.marge_devis || item.marge_devis || 0),
+          prix: parseFloat(prix_final),
+          prix_devis: parseFloat(prix_final)
+        };
+      }
+      return item;
+    }));
+  }, [setDevisItems]);
 
   /**
    * Créer une ligne de détail

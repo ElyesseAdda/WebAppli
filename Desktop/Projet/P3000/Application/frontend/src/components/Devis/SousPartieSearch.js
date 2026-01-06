@@ -84,13 +84,13 @@ const SousPartieSearch = ({
     if (selectedOption.value === 'create' || selectedOption.data?.isCreate) {
       if (onSousPartieCreate && inputValue.trim()) {
         onSousPartieCreate(partieId, inputValue.trim());
-        setInputValue(''); // Réinitialiser après création
+        // Ne pas réinitialiser l'input après création pour permettre de continuer à taper
       }
     } else {
       // Si c'est une sélection
       if (onSousPartieSelect) {
         onSousPartieSelect(selectedOption.data);
-        setInputValue(''); // Réinitialiser après sélection
+        // Ne pas réinitialiser l'input après sélection pour permettre de continuer à taper
       }
     }
   };
@@ -197,11 +197,22 @@ const SousPartieSearch = ({
         value={null}
         onChange={handleChange}
         inputValue={inputValue}
-        onInputChange={(newValue) => setInputValue(newValue)}
+        onInputChange={(newValue, actionMeta) => {
+          // Préserver la valeur sauf si l'utilisateur efface explicitement
+          if (actionMeta.action === 'input-change') {
+            setInputValue(newValue);
+          } else if (actionMeta.action === 'clear') {
+            setInputValue('');
+          }
+        }}
         styles={customStyles}
         menuPortalTarget={document.body}
         menuPosition="fixed"
         isLoading={isLoading}
+        onBlur={() => {
+          // Préserver la valeur au blur
+          // Ne rien faire, la valeur est déjà préservée dans inputValue
+        }}
         noOptionsMessage={() => 
           inputValue.trim() 
             ? `Aucune sous-partie trouvée. Tapez pour créer "${inputValue}"`

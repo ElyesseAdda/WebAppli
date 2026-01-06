@@ -320,8 +320,13 @@ const DevisAvance = () => {
   
   // Calculer le chemin par défaut du drive : priorité au drive_path du chantier en DB, sinon calcul automatique avec préfixe
   const defaultDrivePath = React.useMemo(() => {
-    // ✅ Si un chantier existant est sélectionné et a un drive_path en DB, l'utiliser (sans préfixe, car déjà stocké sans préfixe)
+    // ✅ Si un chantier existant est sélectionné et a un drive_path en DB, l'utiliser avec le préfixe Chantiers/
     if (selectedChantierId && selectedChantierId !== -1 && chantierDrivePath) {
+      // ✅ Réajouter le préfixe Chantiers/ si absent (car get_drive_path() le retire)
+      if (chantierDrivePath && !chantierDrivePath.startsWith('Chantiers/') && !chantierDrivePath.startsWith('Appels_Offres/')) {
+        return `Chantiers/${chantierDrivePath}`;
+      }
+      // Si le préfixe est déjà présent, le retourner tel quel
       return chantierDrivePath;
     }
     
