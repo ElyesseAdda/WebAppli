@@ -449,6 +449,7 @@ def preview_situation_v2(request, situation_id):
         current_avenant_lines = []
         total_avenant = Decimal('0')
         pourcentage_avenant = Decimal('0')
+        montant_avancement_avenant = Decimal('0')
         nb_lignes_avenant = 0
         
         for ligne_avenant in situation.lignes_avenant.all().order_by('facture_ts__avenant__numero'):
@@ -463,13 +464,14 @@ def preview_situation_v2(request, situation_id):
                         'lignes': current_avenant_lines,
                         'pourcentage_avenant': avg_pourcentage,
                         'total_avenant': total_avenant,
-                        'montant_avancement': (total_avenant * avg_pourcentage) / Decimal('100')
+                        'montant_avancement': montant_avancement_avenant
                     })
                 
                 current_avenant = avenant.numero
                 current_avenant_lines = []
                 total_avenant = Decimal('0')
                 pourcentage_avenant = Decimal('0')
+                montant_avancement_avenant = Decimal('0')
                 nb_lignes_avenant = 0
             
             current_avenant_lines.append({
@@ -482,6 +484,7 @@ def preview_situation_v2(request, situation_id):
             
             total_avenant += ligne_avenant.montant_ht
             pourcentage_avenant += ligne_avenant.pourcentage_actuel
+            montant_avancement_avenant += ligne_avenant.montant
             nb_lignes_avenant += 1
         
         # Ajouter le dernier avenant
@@ -492,7 +495,7 @@ def preview_situation_v2(request, situation_id):
                 'lignes': current_avenant_lines,
                 'pourcentage_avenant': avg_pourcentage,
                 'total_avenant': total_avenant,
-                'montant_avancement': (total_avenant * avg_pourcentage) / Decimal('100')
+                'montant_avancement': montant_avancement_avenant
             })
         
         # Gestion des lignes supplémentaires
