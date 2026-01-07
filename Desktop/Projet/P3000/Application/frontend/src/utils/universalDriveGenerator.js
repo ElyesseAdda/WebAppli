@@ -4,6 +4,7 @@
  */
 
 import axios from "axios";
+import { normalizeFilename } from '../components/DriveV2/services/pathNormalizationService';
 
 // Configuration de base
 const API_BASE_URL =
@@ -453,37 +454,47 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
 
 /**
  * Construit le nom de fichier selon le type de document
+ * Normalise les noms pour encoder "/" en "∕" afin d'éviter la création de sous-dossiers
  */
 const buildFileName = (documentType, data) => {
+  let fileName = '';
+  
   switch (documentType) {
     case "devis_chantier":
       // Utiliser le numéro du devis depuis la DB (ex: "DEV-008-25 - Test Appel Offres")
-      return `${data.numero || data.devisId}.pdf`;
+      fileName = `${data.numero || data.devisId}.pdf`;
+      break;
 
     case "devis_normal":
       // Utiliser le numéro du devis depuis la DB (ex: "DEV-008-25 - Test Chantier")
-      return `${data.numero || data.devisId}.pdf`;
+      fileName = `${data.numero || data.devisId}.pdf`;
+      break;
 
     case "contrat_sous_traitance":
       // Nom du fichier : "Contrat [SousTraitant] - [Chantier].pdf"
       const contratName = `Contrat ${data.sousTraitantName} - ${data.chantierName}`;
-      return `${contratName}.pdf`;
+      fileName = `${contratName}.pdf`;
+      break;
 
     case "avenant_sous_traitance":
       // Nom du fichier : "Avenant [Numero] [SousTraitant] - [Chantier].pdf"
       const avenantName = `Avenant ${data.numeroAvenant} ${data.sousTraitantName} - ${data.chantierName}`;
-      return `${avenantName}.pdf`;
+      fileName = `${avenantName}.pdf`;
+      break;
 
     case "situation":
       // Nom du fichier : "{numero_situation}.pdf"
-      return `${data.numeroSituation}.pdf`;
+      fileName = `${data.numeroSituation}.pdf`;
+      break;
 
     case "bon_commande":
       // Nom du fichier : "{numero_bon_commande}.pdf"
-      return `${data.numeroBonCommande}.pdf`;
+      fileName = `${data.numeroBonCommande}.pdf`;
+      break;
 
     case "planning_hebdo":
-      return `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
+      fileName = `PH S${data.week} ${String(data.year).slice(-2)}.pdf`;
+      break;
 
     case "rapport_agents":
       const monthNames = [
@@ -501,12 +512,21 @@ const buildFileName = (documentType, data) => {
         "Décembre",
       ];
       const monthName = monthNames[data.month - 1] || `Mois_${data.month}`;
-      return `RapportComptable_${monthName}_${String(data.year).slice(-2)}.pdf`;
+      fileName = `RapportComptable_${monthName}_${String(data.year).slice(-2)}.pdf`;
+      break;
 
     // Autres types à ajouter ici
     default:
-      return `${documentType}_${data.id || Date.now()}.pdf`;
+      fileName = `${documentType}_${data.id || Date.now()}.pdf`;
   }
+  
+  // Normaliser le nom de fichier pour encoder "/" en "∕" (séparer le nom et l'extension)
+  const parts = fileName.split('.');
+  const extension = parts.length > 1 ? parts.pop() : '';
+  const nameWithoutExt = parts.join('.');
+  const normalizedName = normalizeFilename(nameWithoutExt);
+  
+  return extension ? `${normalizedName}.${extension}` : normalizedName;
 };
 
 /**
@@ -515,41 +535,41 @@ const buildFileName = (documentType, data) => {
 const buildFilePath = (documentType, data, fileName) => {
   switch (documentType) {
     case "devis_chantier":
-      const societeSlug = customSlugify(data.societeName);
-      const appelOffresSlug = customSlugify(data.appelOffresName);
+      const societeSlug = normalizeFilename(data.societeName);
+      const appelOffresSlug = normalizeFilename(data.appelOffresName);
       return `Appels_Offres/${societeSlug}/${appelOffresSlug}/Devis/Devis_Marche/${fileName}`;
 
     case "devis_normal":
-      const societeNormalSlug = customSlugify(data.societeName);
-      const chantierSlug = customSlugify(data.chantierName);
+      const societeNormalSlug = normalizeFilename(data.societeName);
+      const chantierSlug = normalizeFilename(data.chantierName);
       return `Chantiers/${societeNormalSlug}/${chantierSlug}/Devis/${fileName}`;
 
     case "contrat_sous_traitance":
-      const societeContratSlug = customSlugify(data.societeName);
-      const chantierContratSlug = customSlugify(data.chantierName);
-      const entrepriseContratSlug = customSlugify(data.sousTraitantName);
+      const societeContratSlug = normalizeFilename(data.societeName);
+      const chantierContratSlug = normalizeFilename(data.chantierName);
+      const entrepriseContratSlug = normalizeFilename(data.sousTraitantName);
       return `Chantiers/${societeContratSlug}/${chantierContratSlug}/Sous_Traitant/${entrepriseContratSlug}/${fileName}`;
 
     case "avenant_sous_traitance":
-      const societeAvenantSlug = customSlugify(data.societeName);
-      const chantierAvenantSlug = customSlugify(data.chantierName);
-      const entrepriseAvenantSlug = customSlugify(data.sousTraitantName);
+      const societeAvenantSlug = normalizeFilename(data.societeName);
+      const chantierAvenantSlug = normalizeFilename(data.chantierName);
+      const entrepriseAvenantSlug = normalizeFilename(data.sousTraitantName);
       return `Chantiers/${societeAvenantSlug}/${chantierAvenantSlug}/Sous_Traitant/${entrepriseAvenantSlug}/${fileName}`;
 
     case "situation":
-      const societeSituationSlug = customSlugify(data.societeName);
-      const chantierSituationSlug = customSlugify(data.chantierName);
+      const societeSituationSlug = normalizeFilename(data.societeName);
+      const chantierSituationSlug = normalizeFilename(data.chantierName);
       return `Chantiers/${societeSituationSlug}/${chantierSituationSlug}/Situation/${fileName}`;
 
     case "bon_commande":
-      const societeBonCommandeSlug = customSlugify(data.societeName);
-      const chantierBonCommandeSlug = customSlugify(data.chantierName);
-      const fournisseurSlug = customSlugify(data.fournisseurName);
+      const societeBonCommandeSlug = normalizeFilename(data.societeName);
+      const chantierBonCommandeSlug = normalizeFilename(data.chantierName);
+      const fournisseurSlug = normalizeFilename(data.fournisseurName);
       return `Chantiers/${societeBonCommandeSlug}/${chantierBonCommandeSlug}/Bon_Commande/${fournisseurSlug}/${fileName}`;
 
     case "facture":
-      const societeFactureSlug = customSlugify(data.societeName);
-      const chantierFactureSlug = customSlugify(data.chantierName);
+      const societeFactureSlug = normalizeFilename(data.societeName);
+      const chantierFactureSlug = normalizeFilename(data.chantierName);
       return `Chantiers/${societeFactureSlug}/${chantierFactureSlug}/Facture/${fileName}`;
 
     case "planning_hebdo":

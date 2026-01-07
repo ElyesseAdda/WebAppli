@@ -17,8 +17,10 @@ from .utils import (
     upload_file_to_s3,
     upload_file_to_s3_robust,
     create_s3_folder_recursive,
-    custom_slugify
+    custom_slugify,
+    normalize_drive_segment
 )
+from .views_drive.manager import normalize_filename
 from .drive_automation import drive_automation
 
 
@@ -98,8 +100,15 @@ class PDFManager:
             # S'assurer que le nom se termine par .pdf
             if not custom_name.lower().endswith('.pdf'):
                 custom_name += '.pdf'
-            # Nettoyer le nom pour qu'il soit compatible avec S3
-            clean_name = clean_filename_for_s3(custom_name)
+            # Normaliser le nom pour encoder "/" en "∕" (séparer le nom et l'extension)
+            parts = custom_name.rsplit('.', 1)
+            if len(parts) == 2:
+                name_without_ext = parts[0]
+                extension = parts[1]
+                normalized_name = normalize_filename(name_without_ext)
+                clean_name = f"{normalized_name}.{extension}"
+            else:
+                clean_name = normalize_filename(custom_name)
             # print(f"📝 Nom de fichier personnalisé nettoyé: '{custom_name}' -> '{clean_name}'")
             return clean_name
         
@@ -142,25 +151,24 @@ class PDFManager:
         elif document_type == 'devis_travaux':
             # Utiliser le numéro du devis depuis la DB (sans timestamp ni ID)
             devis_numero = kwargs.get('devis_numero', 'devis_travaux')
-            # print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
-            return f"{devis_numero}.pdf"
+            # Normaliser le nom pour encoder "/" en "∕"
+            normalized_name = normalize_filename(devis_numero)
+            return f"{normalized_name}.pdf"
         
         elif document_type == 'devis_marche':
             # Utiliser le numéro du devis depuis la DB (sans timestamp ni ID)
             devis_numero = kwargs.get('numero', kwargs.get('devis_name', 'devis_marche'))
-            # print(f"🔍 DEBUG generate_pdf_filename - devis_numero reçu: '{devis_numero}'")
-            # print(f"🔍 DEBUG generate_pdf_filename - kwargs: {kwargs}")
-            # Nettoyer le nom pour qu'il soit compatible avec S3, mais préserver le nom original
-            clean_name = clean_filename_for_s3(devis_numero)
-            # print(f"🔍 DEBUG generate_pdf_filename - clean_name après nettoyage: '{clean_name}'")
-            return f"{clean_name}.pdf"
+            # Normaliser le nom pour encoder "/" en "∕"
+            normalized_name = normalize_filename(devis_numero)
+            return f"{normalized_name}.pdf"
         
         elif document_type == 'contrat_sous_traitance':
             # Format: Contrat_NomSousTraitant_NomChantier.pdf
             sous_traitant_name = kwargs.get('sous_traitant_name', 'SousTraitant')
             chantier_name = kwargs.get('chantier_name', 'Chantier')
-            sous_traitant_slug = custom_slugify(sous_traitant_name)
-            chantier_slug = custom_slugify(chantier_name)
+            # Normaliser les noms pour encoder "/" en "∕"
+            sous_traitant_slug = normalize_filename(sous_traitant_name)
+            chantier_slug = normalize_filename(chantier_name)
             filename = f"Contrat_{sous_traitant_slug}_{chantier_slug}.pdf"
             # print(f"🔍 DEBUG generate_pdf_filename - Contrat ST: '{filename}'")
             return filename
@@ -170,29 +178,35 @@ class PDFManager:
             avenant_numero = kwargs.get('avenant_numero', '1')
             sous_traitant_name = kwargs.get('sous_traitant_name', 'SousTraitant')
             chantier_name = kwargs.get('chantier_name', 'Chantier')
-            sous_traitant_slug = custom_slugify(sous_traitant_name)
-            chantier_slug = custom_slugify(chantier_name)
-            filename = f"Avenant_{avenant_numero}_{sous_traitant_slug}_{chantier_slug}.pdf"
+            # Normaliser les noms pour encoder "/" en "∕"
+            sous_traitant_slug = normalize_filename(sous_traitant_name)
+            chantier_slug = normalize_filename(chantier_name)
+            # Normaliser le numéro d'avenant pour encoder "/" en "∕"
+            normalized_avenant_numero = normalize_filename(avenant_numero)
+            filename = f"Avenant_{normalized_avenant_numero}_{sous_traitant_slug}_{chantier_slug}.pdf"
             # print(f"🔍 DEBUG generate_pdf_filename - Avenant ST: '{filename}'")
             return filename
         
         elif document_type == 'situation':
             # Utiliser le numero_situation depuis la DB (sans timestamp ni ID)
             numero_situation = kwargs.get('numero_situation', 'situation')
-            # print(f"🔍 DEBUG generate_pdf_filename - numero_situation reçu: '{numero_situation}'")
-            return f"{numero_situation}.pdf"
+            # Normaliser le nom pour encoder "/" en "∕"
+            normalized_name = normalize_filename(numero_situation)
+            return f"{normalized_name}.pdf"
         
         elif document_type == 'bon_commande':
             # Utiliser le numero_bon_commande depuis la DB (sans timestamp ni ID)
             numero_bon_commande = kwargs.get('numero_bon_commande', 'bon_commande')
-            # print(f"🔍 DEBUG generate_pdf_filename - numero_bon_commande reçu: '{numero_bon_commande}'")
-            return f"{numero_bon_commande}.pdf"
+            # Normaliser le nom pour encoder "/" en "∕"
+            normalized_name = normalize_filename(numero_bon_commande)
+            return f"{normalized_name}.pdf"
         
         elif document_type == 'facture':
             # Utiliser le numéro de la facture depuis la DB (sans timestamp ni ID)
             numero = kwargs.get('numero', 'Facture n°01.2025')
-            # print(f"🔍 DEBUG generate_pdf_filename - numero facture reçu: '{numero}'")
-            return f"{numero}.pdf"
+            # Normaliser le nom pour encoder "/" en "∕"
+            normalized_name = normalize_filename(numero)
+            return f"{normalized_name}.pdf"
         
         else:
             # Nom générique
@@ -260,11 +274,11 @@ class PDFManager:
                     # ✅ Structure pour chantiers : Chantiers/{base_path}/{subfolder}
                     # Pour certains types, ajouter un sous-dossier supplémentaire (ex: fournisseur, entreprise)
                     if document_type == 'bon_commande' and 'fournisseur_name' in kwargs:
-                        fournisseur_slug = custom_slugify(kwargs['fournisseur_name'])
+                        fournisseur_slug = normalize_drive_segment(kwargs['fournisseur_name'])
                         return f"Chantiers/{base_path}/{subfolder}/{fournisseur_slug}"
                     elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance'] and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
                         sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
-                        sous_traitant_slug = custom_slugify(sous_traitant_name)
+                        sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
                         return f"Chantiers/{base_path}/SOUS_TRAITANT/{sous_traitant_slug}"
                     elif document_type == 'devis_marche':
                         return f"Chantiers/{base_path}/DEVIS/{subfolder}"
@@ -272,7 +286,7 @@ class PDFManager:
             except Chantier.DoesNotExist:
                 pass
         
-        societe_slug = custom_slugify(societe_name)
+        societe_slug = normalize_drive_segment(societe_name)
         
         # Déterminer le dossier racine et le sous-dossier
         if document_type in ['devis_travaux', 'devis_marche']:
@@ -280,7 +294,7 @@ class PDFManager:
             if 'chantier_name' in kwargs:
                 # C'est un chantier (devis normal)
                 chantier_name = kwargs['chantier_name']
-                chantier_slug = custom_slugify(chantier_name)
+                chantier_slug = normalize_drive_segment(chantier_name)
                 subfolder = self.document_type_folders.get(document_type, 'DEVIS')
                 
                 # Pour les devis de chantier, ajouter le dossier DEVIS/
@@ -293,7 +307,7 @@ class PDFManager:
                 appel_offres_name = kwargs['appel_offres_name']
                 appel_offres_id = kwargs['appel_offres_id']
                 # Utiliser seulement le nom de l'appel d'offres (sans ID devant)
-                appel_offres_slug = custom_slugify(appel_offres_name)
+                appel_offres_slug = normalize_drive_segment(appel_offres_name)
                 
                 # Pour les appels d'offres :
                 # - devis_marche (devis initial) → DEVIS/DEVIS_MARCHE
@@ -310,13 +324,13 @@ class PDFManager:
             # Chemin: Chantiers/{Societe}/{Chantier}/SOUS_TRAITANT/{Entreprise}/
             # Protection: gérer aussi les cas où document_type est 'contrat' ou 'contrats' (ancien code)
             chantier_name = kwargs.get('chantier_name', 'Chantier')
-            chantier_slug = custom_slugify(chantier_name)
+            chantier_slug = normalize_drive_segment(chantier_name)
             sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName')
             if not sous_traitant_name:
                 # Si sous_traitant_name n'est pas fourni, utiliser un fallback sécurisé
                 print(f"⚠️ ATTENTION: sous_traitant_name manquant pour {document_type}, utilisation du fallback")
                 sous_traitant_name = 'SousTraitant'
-            sous_traitant_slug = custom_slugify(sous_traitant_name)
+            sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
             return f"Chantiers/{societe_slug}/{chantier_slug}/SOUS_TRAITANT/{sous_traitant_slug}"
         
         elif document_type in ['planning_hebdo', 'planning_mensuel', 'rapport_agents']:
@@ -336,30 +350,30 @@ class PDFManager:
         elif document_type == 'situation':
             # Pour les situations, utiliser la structure Chantiers/
             chantier_name = kwargs.get('chantier_name', 'Chantier')
-            chantier_slug = custom_slugify(chantier_name)
+            chantier_slug = normalize_drive_segment(chantier_name)
             subfolder = self.document_type_folders.get(document_type, 'SITUATION')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
         
         elif document_type == 'bon_commande':
             # Pour les bons de commande, utiliser la structure Chantiers/ avec sous-dossier par fournisseur
             chantier_name = kwargs.get('chantier_name', 'Chantier')
-            chantier_slug = custom_slugify(chantier_name)
+            chantier_slug = normalize_drive_segment(chantier_name)
             fournisseur_name = kwargs.get('fournisseur_name', 'Fournisseur')
-            fournisseur_slug = custom_slugify(fournisseur_name)
+            fournisseur_slug = normalize_drive_segment(fournisseur_name)
             subfolder = self.document_type_folders.get(document_type, 'BON_COMMANDE')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}/{fournisseur_slug}"
         
         elif document_type == 'facture':
             # Pour les factures, utiliser la structure Chantiers/
             chantier_name = kwargs.get('chantier_name', 'Chantier')
-            chantier_slug = custom_slugify(chantier_name)
+            chantier_slug = normalize_drive_segment(chantier_name)
             subfolder = self.document_type_folders.get(document_type, 'FACTURE')
             return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
         
         elif document_type == 'avenant':
             # Ces documents sont toujours liés à un chantier
             chantier_name = kwargs['chantier_name']
-            chantier_slug = custom_slugify(chantier_name)
+            chantier_slug = normalize_drive_segment(chantier_name)
             subfolder = self.document_type_folders.get(document_type, 'Documents_Execution')
             return f"Sociétés/{societe_slug}/{chantier_slug}/{subfolder}"
         
