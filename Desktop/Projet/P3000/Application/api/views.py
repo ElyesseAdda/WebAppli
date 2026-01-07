@@ -757,12 +757,21 @@ def generate_pdf_from_preview(request):
     try:
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
+        preview_url_param = data.get('preview_url')
 
         if not devis_id:
             return JsonResponse({'error': 'ID du devis manquant'}, status=400)
 
-        # URL de la page de prévisualisation pour un devis sauvegardé
-        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        # Utiliser le preview_url fourni, sinon construire l'URL par défaut pour les devis
+        if preview_url_param:
+            # Si c'est une URL relative, la convertir en URL absolue
+            if preview_url_param.startswith('/'):
+                preview_url = request.build_absolute_uri(preview_url_param)
+            else:
+                preview_url = preview_url_param
+        else:
+            # URL de la page de prévisualisation pour un devis sauvegardé (par défaut)
+            preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
         # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
@@ -1535,12 +1544,21 @@ def generate_pdf_from_preview(request):
     try:
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
+        preview_url_param = data.get('preview_url')
 
         if not devis_id:
             return JsonResponse({'error': 'ID du devis manquant'}, status=400)
 
-        # URL de la page de prévisualisation pour un devis sauvegardé
-        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        # Utiliser le preview_url fourni, sinon construire l'URL par défaut pour les devis
+        if preview_url_param:
+            # Si c'est une URL relative, la convertir en URL absolue
+            if preview_url_param.startswith('/'):
+                preview_url = request.build_absolute_uri(preview_url_param)
+            else:
+                preview_url = preview_url_param
+        else:
+            # URL de la page de prévisualisation pour un devis sauvegardé (par défaut)
+            preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
         # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
