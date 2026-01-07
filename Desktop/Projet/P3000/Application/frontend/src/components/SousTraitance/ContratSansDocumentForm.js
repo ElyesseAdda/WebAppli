@@ -23,8 +23,6 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
     adresse_prestation: "",
     nom_operation: "",
     montant_operation: "",
-    nom_maitre_ouvrage: "",
-    nom_maitre_oeuvre: "",
   });
 
   useEffect(() => {
@@ -106,16 +104,6 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
       return;
     }
 
-    if (!formData.nom_maitre_ouvrage || !formData.nom_maitre_ouvrage.trim()) {
-      alert("Erreur: Le nom du maître d'ouvrage est requis");
-      return;
-    }
-
-    if (!formData.nom_maitre_oeuvre || !formData.nom_maitre_oeuvre.trim()) {
-      alert("Erreur: Le nom du maître d'œuvre est requis");
-      return;
-    }
-
     try {
       const contratData = {
         ...formData,
@@ -128,8 +116,8 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
         adresse_prestation: formData.adresse_prestation.trim(),
         nom_operation: formData.nom_operation.trim(),
         duree: formData.duree.trim(),
-        nom_maitre_ouvrage: formData.nom_maitre_ouvrage.trim(),
-        nom_maitre_oeuvre: formData.nom_maitre_oeuvre.trim(),
+        nom_maitre_ouvrage: null, // Non requis pour les associations sans contrat
+        nom_maitre_oeuvre: null, // Non requis pour les associations sans contrat
         type_contrat: "SANS_CONTRAT", // Catégorie spéciale pour les associations sans contrat documenté
       };
 
@@ -174,24 +162,6 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
               multiline
               rows={4}
               value={formData.description_prestation}
-              onChange={handleChange}
-              fullWidth
-              required
-            />
-
-            <TextField
-              name="nom_maitre_ouvrage"
-              label="Nom du maître d'ouvrage"
-              value={formData.nom_maitre_ouvrage}
-              onChange={handleChange}
-              fullWidth
-              required
-            />
-
-            <TextField
-              name="nom_maitre_oeuvre"
-              label="Nom du maître d'œuvre"
-              value={formData.nom_maitre_oeuvre}
               onChange={handleChange}
               fullWidth
               required
