@@ -27,6 +27,8 @@ const EditorContainer = styled(Box)(({ theme }) => ({
 const EditorContent = styled(Box)(({ theme }) => ({
   width: '100%',
   height: '100%',
+  minWidth: '800px',  // Taille minimale garantie
+  minHeight: '600px',  // Taille minimale garantie
   position: 'relative',
   backgroundColor: '#fff',
 }));
@@ -123,51 +125,81 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         }
 
         // Attendre que le conteneur DOM soit prêt avant d'initialiser OnlyOffice
-        const editorElement = document.getElementById('onlyoffice-editor');
-        if (!editorElement) {
-          throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'a pas été trouvé dans le DOM');
-        }
-
-        // Vérifier que le conteneur est visible et a une taille
-        if (editorElement.offsetWidth === 0 || editorElement.offsetHeight === 0) {
-          console.warn('[OnlyOffice Debug] Le conteneur n\'a pas de taille, attente de 100ms...');
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        // Créer le nouvel éditeur avec un délai pour s'assurer que le DOM est stable
-        // Utiliser requestAnimationFrame pour attendre le prochain cycle de rendu
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            try {
-              // Vérifier à nouveau que le conteneur existe
-              const editorElement = document.getElementById('onlyoffice-editor');
-              if (!editorElement) {
-                throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'existe plus');
-              }
-              
-              // Vérifier que le conteneur est dans le DOM et visible
-              if (!editorElement.isConnected || editorElement.offsetParent === null) {
-                console.warn('[OnlyOffice Debug] Le conteneur n\'est pas visible, nouvelle tentative...');
-                setTimeout(() => {
-                  try {
-                    docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
-                  } catch (err) {
-                    console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation (retry):', err);
-                    setError(`Erreur lors de l'initialisation de l'éditeur: ${err.message}`);
-                    setLoading(false);
-                  }
-                }, 200);
+        // Utiliser une fonction d'attente récursive pour s'assurer que le conteneur est prêt
+        const waitForContainer = (attempts = 0, maxAttempts = 20) => {
+          return new Promise((resolve, reject) => {
+            const editorElement = document.getElementById('onlyoffice-editor');
+            
+            if (!editorElement) {
+              if (attempts >= maxAttempts) {
+                reject(new Error('Le conteneur de l\'éditeur OnlyOffice n\'a pas été trouvé dans le DOM après plusieurs tentatives'));
                 return;
               }
-              
-              docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
-            } catch (err) {
-              console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation:', err);
-              setError(`Erreur lors de l'initialisation de l'éditeur: ${err.message}`);
-              setLoading(false);
+              setTimeout(() => waitForContainer(attempts + 1, maxAttempts).then(resolve).catch(reject), 100);
+              return;
             }
+
+            // Vérifier que le conteneur est dans le DOM
+            if (!editorElement.isConnected) {
+              if (attempts >= maxAttempts) {
+                reject(new Error('Le conteneur de l\'éditeur OnlyOffice n\'est pas connecté au DOM'));
+                return;
+              }
+              setTimeout(() => waitForContainer(attempts + 1, maxAttempts).then(resolve).catch(reject), 100);
+              return;
+            }
+
+            // Vérifier que le conteneur a une taille
+            // Note: offsetWidth/offsetHeight peuvent être 0 même si le conteneur existe
+            // Vérifier aussi avec getBoundingClientRect
+            const rect = editorElement.getBoundingClientRect();
+            const computedStyle = window.getComputedStyle(editorElement);
+            const hasSize = (editorElement.offsetWidth > 0 && editorElement.offsetHeight > 0) ||
+                          (rect.width > 0 && rect.height > 0) ||
+                          (computedStyle.width !== '0px' && computedStyle.height !== '0px');
+            
+            // Accepter le conteneur même s'il n'a pas encore de taille après plusieurs tentatives
+            // OnlyOffice peut s'initialiser même avec une taille de 0 et s'adapter ensuite
+            if (!hasSize) {
+              if (attempts >= maxAttempts) {
+                console.warn('[OnlyOffice Debug] Le conteneur n\'a pas de taille après plusieurs tentatives, initialisation quand même...');
+                resolve(editorElement);
+                return;
+              }
+              console.log(`[OnlyOffice Debug] Attente du conteneur (tentative ${attempts + 1}/${maxAttempts})...`);
+              setTimeout(() => waitForContainer(attempts + 1, maxAttempts).then(resolve).catch(reject), 200);
+              return;
+            }
+
+            resolve(editorElement);
+          });
+        };
+
+        // Attendre que le conteneur soit prêt
+        await waitForContainer();
+
+        // Attendre encore un cycle de rendu pour être sûr que React a fini
+        await new Promise(resolve => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setTimeout(resolve, 50);
+            });
           });
         });
+
+        // Vérifier une dernière fois avant d'initialiser
+        const editorElement = document.getElementById('onlyoffice-editor');
+        if (!editorElement || !editorElement.isConnected) {
+          throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'est plus disponible');
+        }
+
+        // Créer l'éditeur OnlyOffice
+        try {
+          docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
+        } catch (err) {
+          console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation:', err);
+          throw err;
+        }
 
       } catch (err) {
         setError(err.message);
@@ -256,15 +288,18 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           </Box>
         )}
 
-        {/* Container de l'éditeur OnlyOffice */}
+        {/* Container de l'éditeur OnlyOffice - Toujours dans le DOM avec une taille */}
         <div
           id="onlyoffice-editor"
           ref={editorRef}
           style={{
             width: '100%',
             height: '100%',
-            minHeight: '400px',  // Taille minimale pour éviter les problèmes de rendu
-            display: loading || error ? 'none' : 'block',  // Utiliser display au lieu de visibility
+            minWidth: '800px',  // Taille minimale pour éviter les problèmes de rendu
+            minHeight: '600px',
+            position: 'relative',  // Position relative pour qu'il prenne la taille du parent
+            visibility: loading || error ? 'hidden' : 'visible',  // Utiliser visibility au lieu de display pour garder la taille
+            opacity: loading || error ? 0 : 1,  // Faire disparaître visuellement mais garder la taille
           }}
         />
       </EditorContent>
