@@ -1238,6 +1238,7 @@ class ContratSousTraitanceSerializer(serializers.ModelSerializer):
             'chantier',
             'sous_traitant',
             'sous_traitant_details',
+            'sans_contrat',
             'type_contrat',
             'description_prestation',
             'date_debut',
@@ -1251,6 +1252,17 @@ class ContratSousTraitanceSerializer(serializers.ModelSerializer):
             'date_modification',
             'avenants'
         ]
+        extra_kwargs = {
+            'description_prestation': {'required': False, 'allow_blank': True},
+            'date_debut': {'required': False},
+            'duree': {'required': False, 'allow_blank': True},
+            'adresse_prestation': {'required': False, 'allow_blank': True},
+            'nom_operation': {'required': False, 'allow_blank': True},
+            'montant_operation': {'required': False},
+            'nom_maitre_ouvrage': {'required': False, 'allow_blank': True},
+            'nom_maitre_oeuvre': {'required': False, 'allow_blank': True},
+            'date_creation': {'required': False},
+        }
 
 class PaiementSousTraitantSerializer(serializers.ModelSerializer):
     class Meta:

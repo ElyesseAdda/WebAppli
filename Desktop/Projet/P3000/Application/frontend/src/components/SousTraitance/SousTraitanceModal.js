@@ -38,6 +38,7 @@ import { useNavigate } from "react-router-dom";
 
 import AvenantForm from "./AvenantForm";
 import ContratForm from "./ContratForm";
+import ContratSansDocumentForm from "./ContratSansDocumentForm";
 import SousTraitantForm from "./SousTraitantForm";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
@@ -49,6 +50,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [selectedSousTraitant, setSelectedSousTraitant] = useState(null);
   const [showSousTraitantForm, setShowSousTraitantForm] = useState(false);
   const [showContratForm, setShowContratForm] = useState(false);
+  const [showContratSansDocumentForm, setShowContratSansDocumentForm] = useState(false);
   const [showAvenantForm, setShowAvenantForm] = useState(false);
   const [showSelectSousTraitant, setShowSelectSousTraitant] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -105,7 +107,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
         );
         
         if (contrat) {
-          // Sous-traitant avec contrat pour ce chantier
+          // Sous-traitant avec contrat pour ce chantier (avec ou sans document)
           sousTraitantsAvecContrat.push({
             ...sousTraitant,
             contrat: contrat,
@@ -156,6 +158,40 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     setShowContratForm(true);
   };
 
+  // Ajouter un sous-traitant au chantier sans contrat - ouvre le formulaire
+  const handleAssocierSousTraitant = (sousTraitant) => {
+    setSelectedSousTraitant(sousTraitant);
+    setShowSelectSousTraitant(false);
+    setShowContratSansDocumentForm(true);
+  };
+
+  // Retirer un sous-traitant associé (sans contrat)
+  const handleRetirerSousTraitant = async (contratId) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir retirer ce sous-traitant du chantier ?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/contrats-sous-traitance/${contratId}/`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setHasChanges(true);
+        // Rafraîchir la liste
+        setTimeout(() => {
+          fetchSousTraitants();
+        }, 300);
+      } else {
+        console.error("Erreur lors de la suppression de l'association");
+        alert("Erreur lors de la suppression. Veuillez réessayer.");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la suppression de l'association:", error);
+      alert("Erreur lors de la suppression. Veuillez réessayer.");
+    }
+  };
+
   // Fonction de filtrage des sous-traitants par recherche
   const getFilteredSousTraitantsSansContrat = () => {
     return sousTraitantsSansContrat.filter((sousTraitant) => {
@@ -201,12 +237,28 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     try {
       setShowContratForm(false);
       setHasChanges(true);
+      
       // Rafraîchir après un court délai pour s'assurer que la base de données est mise à jour
       setTimeout(() => {
         fetchSousTraitants();
       }, 500);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde du contrat:", error);
+    }
+  };
+
+  const handleContratSansDocumentSave = async (contratData) => {
+    try {
+      setShowContratSansDocumentForm(false);
+      setHasChanges(true);
+      setSearchTerm("");
+      
+      // Rafraîchir après un court délai pour s'assurer que la base de données est mise à jour
+      setTimeout(() => {
+        fetchSousTraitants();
+      }, 500);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde de l'association:", error);
     }
   };
 
@@ -332,10 +384,10 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
           {/* Message informatif */}
           <Box sx={{ mb: 2, p: 2, backgroundColor: "rgba(25, 118, 210, 0.04)", borderRadius: 1 }}>
             <Typography variant="body2" color="primary" sx={{ fontWeight: 500 }}>
-              📋 Affichage des sous-traitants avec contrat pour ce chantier uniquement
+              📋 Affichage des sous-traitants associés à ce chantier
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Pour ajouter un sous-traitant existant, utilisez le bouton "Sélectionner un sous-traitant existant"
+              Vous pouvez ajouter un sous-traitant avec ou sans contrat. Sans contrat, la génération de documents sera désactivée.
             </Typography>
           </Box>
 
@@ -359,36 +411,45 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
             </FormControl>
           </Box>
 
-          {sousTraitantsAvecContrat.length === 0 ? (
-            <Box sx={{ textAlign: "center", py: 4 }}>
-              <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-                Aucun sous-traitant avec contrat
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Ce chantier n'a pas encore de sous-traitants associés.
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSelectExistingSousTraitant}
-                sx={{ mr: 1 }}
-              >
-                Sélectionner un sous-traitant existant
-              </Button>
-              <Button
-                variant="outlined"
-                color="primary"
-                onClick={handleCreateSousTraitant}
-              >
-                Créer un nouveau sous-traitant
-              </Button>
-            </Box>
-          ) : (
-            sousTraitantsAvecContrat
-              .filter(
-                (sousTraitant) => !typeFilter || sousTraitant.type === typeFilter
-              )
-              .map((sousTraitant) => (
+          {(() => {
+            // Utiliser directement la liste des sous-traitants avec contrat (qui inclut maintenant ceux sans contrat documenté)
+            const tousSousTraitants = sousTraitantsAvecContrat;
+            
+            if (tousSousTraitants.length === 0) {
+              return (
+                <Box sx={{ textAlign: "center", py: 4 }}>
+                  <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                    Aucun sous-traitant avec contrat
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Ce chantier n'a pas encore de sous-traitants associés.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleSelectExistingSousTraitant}
+                    sx={{ mr: 1 }}
+                  >
+                    Sélectionner un sous-traitant existant
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    onClick={handleCreateSousTraitant}
+                  >
+                    Créer un nouveau sous-traitant
+                  </Button>
+                </Box>
+              );
+            }
+            
+            return (
+              <>
+                {tousSousTraitants
+                  .filter(
+                    (sousTraitant) => !typeFilter || sousTraitant.type === typeFilter
+                  )
+                  .map((sousTraitant) => (
               <Accordion key={sousTraitant.id}>
                 <AccordionSummary
                   expandIcon={<FaChevronDown />}
@@ -402,9 +463,26 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                     width="100%"
                   >
                     <Box>
-                      <Typography>
-                        {sousTraitant.entreprise} - {sousTraitant.numero_rcs}
-                      </Typography>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Typography>
+                          {sousTraitant.entreprise} - {sousTraitant.numero_rcs}
+                        </Typography>
+                        {sousTraitant.contrat && sousTraitant.contrat.sans_contrat && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              backgroundColor: "rgba(255, 152, 0, 0.1)",
+                              color: "#f57c00",
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Sans contrat
+                          </Typography>
+                        )}
+                      </Box>
                       {sousTraitant.type && (
                         <Typography
                           variant="caption"
@@ -455,24 +533,66 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                         </IconButton>
                       </Tooltip>
                       {sousTraitant.contrat ? (
-                        <Tooltip title="Créer un avenant" arrow>
-                          <IconButton
-                            edge="end"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCreateAvenant(sousTraitant);
-                            }}
-                            sx={{
-                              mr: 2.5,
-                              color: "#1976d2",
-                              "&:hover": {
-                                backgroundColor: "rgba(25, 118, 210, 0.1)",
-                              },
-                            }}
-                          >
-                            <FaPlusCircle />
-                          </IconButton>
-                        </Tooltip>
+                        <>
+                          <Tooltip title="Créer un avenant" arrow>
+                            <IconButton
+                              edge="end"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCreateAvenant(sousTraitant);
+                              }}
+                              sx={{
+                                mr: sousTraitant.contrat.sans_contrat ? 1 : 2.5,
+                                color: "#1976d2",
+                                "&:hover": {
+                                  backgroundColor: "rgba(25, 118, 210, 0.1)",
+                                },
+                              }}
+                            >
+                              <FaPlusCircle />
+                            </IconButton>
+                          </Tooltip>
+                          {sousTraitant.contrat.sans_contrat && (
+                            <>
+                              <Tooltip title="Créer un contrat" arrow>
+                                <IconButton
+                                  edge="end"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCreateContrat(sousTraitant);
+                                  }}
+                                  sx={{
+                                    mr: 1,
+                                    color: "#1976d2",
+                                    "&:hover": {
+                                      backgroundColor: "rgba(25, 118, 210, 0.1)",
+                                    },
+                                  }}
+                                >
+                                  <FaPlus />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Retirer ce sous-traitant du chantier" arrow>
+                                <IconButton
+                                  edge="end"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRetirerSousTraitant(sousTraitant.contrat.id);
+                                  }}
+                                  sx={{
+                                    mr: 2.5,
+                                    color: "#d32f2f",
+                                    "&:hover": {
+                                      backgroundColor: "rgba(211, 47, 47, 0.1)",
+                                    },
+                                  }}
+                                >
+                                  <FaTrash />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <Tooltip title="Créer un contrat" arrow>
                           <IconButton
@@ -525,15 +645,15 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           <TableBody>
                             <TableRow>
                               <TableCell
-                                onClick={() =>
+                                onClick={sousTraitant.contrat.sans_contrat ? undefined : () =>
                                   handlePreviewContrat(sousTraitant.contrat.id)
                                 }
                                 sx={{
-                                  cursor: "pointer",
-                                  color: "primary.main",
+                                  cursor: sousTraitant.contrat.sans_contrat ? "default" : "pointer",
+                                  color: sousTraitant.contrat.sans_contrat ? "text.primary" : "primary.main",
                                   fontWeight: "bold",
                                   "&:hover": {
-                                    textDecoration: "underline",
+                                    textDecoration: sousTraitant.contrat.sans_contrat ? "none" : "underline",
                                   },
                                 }}
                               >
@@ -543,7 +663,13 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                 {sousTraitant.contrat.description_prestation}
                               </TableCell>
                               <TableCell>
-                                {sousTraitant.contrat.type_contrat}
+                                {sousTraitant.contrat.sans_contrat ? (
+                                  <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                                    -
+                                  </Typography>
+                                ) : (
+                                  sousTraitant.contrat.type_contrat
+                                )}
                               </TableCell>
                               <TableCell>
                                 {new Date(
@@ -561,47 +687,56 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                               </TableCell>
                               <TableCell align="center">
                                 {/* Bouton de régénération du contrat dans le Drive */}
-                                <RegeneratePDFIconButton
-                                  documentType={DOCUMENT_TYPES.CONTRAT_SOUS_TRAITANCE}
-                                  documentData={{
-                                    ...sousTraitant.contrat,
-                                    chantier: chantier,
-                                    sous_traitant: {
-                                      id: sousTraitant.id,
-                                      entreprise: sousTraitant.entreprise,
-                                    },
-                                  }}
-                                  size="small"
-                                  color="primary"
-                                  tooltipPlacement="top"
-                                  onSuccess={() => {
-                                    console.log('✅ Contrat régénéré avec succès');
-                                  }}
-                                />
-                                
-                                {/* Bouton de suppression */}
-                                <Tooltip
-                                  title="Supprimer le contrat et tous ses avenants"
-                                  arrow
-                                >
-                                  <IconButton
-                                    size="small"
-                                    onClick={() =>
-                                      handleDeleteContrat(
-                                        sousTraitant.contrat.id
-                                      )
-                                    }
-                                    sx={{
-                                      color: "#d32f2f",
-                                      "&:hover": {
-                                        backgroundColor:
-                                          "rgba(211, 47, 47, 0.1)",
-                                      },
-                                    }}
-                                  >
-                                    <FaTrash />
-                                  </IconButton>
-                                </Tooltip>
+                                {sousTraitant.contrat && !sousTraitant.contrat.sans_contrat && (
+                                  <>
+                                    <RegeneratePDFIconButton
+                                      documentType={DOCUMENT_TYPES.CONTRAT_SOUS_TRAITANCE}
+                                      documentData={{
+                                        ...sousTraitant.contrat,
+                                        chantier: chantier,
+                                        sous_traitant: {
+                                          id: sousTraitant.id,
+                                          entreprise: sousTraitant.entreprise,
+                                        },
+                                      }}
+                                      size="small"
+                                      color="primary"
+                                      tooltipPlacement="top"
+                                      onSuccess={() => {
+                                        console.log('✅ Contrat régénéré avec succès');
+                                      }}
+                                    />
+                                    
+                                    {/* Bouton de suppression */}
+                                    <Tooltip
+                                      title="Supprimer le contrat et tous ses avenants"
+                                      arrow
+                                    >
+                                      <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                          handleDeleteContrat(
+                                            sousTraitant.contrat.id
+                                          )
+                                        }
+                                        sx={{
+                                          color: "#d32f2f",
+                                          "&:hover": {
+                                            backgroundColor:
+                                              "rgba(211, 47, 47, 0.1)",
+                                          },
+                                        }}
+                                      >
+                                        <FaTrash />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </>
+                                )}
+                                {sousTraitant.contrat && sousTraitant.contrat.sans_contrat && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Aucun document
+                                  </Typography>
+                                )}
                               </TableCell>
                             </TableRow>
                             {sousTraitant.contrat.avenants &&
@@ -610,14 +745,14 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                 .map((avenant) => (
                                   <TableRow key={avenant.id}>
                                     <TableCell
-                                      onClick={() =>
+                                      onClick={sousTraitant.contrat.sans_contrat ? undefined : () =>
                                         handlePreviewAvenant(avenant.id)
                                       }
                                       sx={{
-                                        cursor: "pointer",
-                                        color: "primary.main",
+                                        cursor: sousTraitant.contrat.sans_contrat ? "default" : "pointer",
+                                        color: sousTraitant.contrat.sans_contrat ? "text.primary" : "primary.main",
                                         "&:hover": {
-                                          textDecoration: "underline",
+                                          textDecoration: sousTraitant.contrat.sans_contrat ? "none" : "underline",
                                         },
                                       }}
                                     >
@@ -625,7 +760,13 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                     </TableCell>
                                     <TableCell>{avenant.description}</TableCell>
                                     <TableCell>
-                                      {sousTraitant.contrat.type_contrat}
+                                      {sousTraitant.contrat.sans_contrat ? (
+                                        <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                                          -
+                                        </Typography>
+                                      ) : (
+                                        sousTraitant.contrat.type_contrat
+                                      )}
                                     </TableCell>
                                     <TableCell>
                                       {new Date(
@@ -641,49 +782,53 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                     </TableCell>
                                     <TableCell align="center">
                                       {/* Bouton de régénération de l'avenant dans le Drive */}
-                                      <RegeneratePDFIconButton
-                                        documentType={DOCUMENT_TYPES.AVENANT_SOUS_TRAITANCE}
-                                        documentData={{
-                                          ...avenant,
-                                          contrat: {
-                                            ...sousTraitant.contrat,
-                                            sous_traitant: {
-                                              id: sousTraitant.id,
-                                              entreprise: sousTraitant.entreprise,
-                                            },
-                                            chantier: chantier,
-                                          },
-                                          chantier: chantier,
-                                        }}
-                                        size="small"
-                                        color="primary"
-                                        tooltipPlacement="top"
-                                        onSuccess={() => {
-                                          console.log('✅ Avenant régénéré avec succès');
-                                        }}
-                                      />
-                                      
-                                      {/* Bouton de suppression */}
-                                      <Tooltip
-                                        title="Supprimer l'avenant"
-                                        arrow
-                                      >
-                                        <IconButton
-                                          size="small"
-                                          onClick={() =>
-                                            handleDeleteAvenant(avenant.id)
-                                          }
-                                          sx={{
-                                            color: "#d32f2f",
-                                            "&:hover": {
-                                              backgroundColor:
-                                                "rgba(211, 47, 47, 0.1)",
-                                            },
-                                          }}
-                                        >
-                                          <FaTrash />
-                                        </IconButton>
-                                      </Tooltip>
+                                      {sousTraitant.contrat && !sousTraitant.contrat.sans_contrat && (
+                                        <>
+                                          <RegeneratePDFIconButton
+                                            documentType={DOCUMENT_TYPES.AVENANT_SOUS_TRAITANCE}
+                                            documentData={{
+                                              ...avenant,
+                                              contrat: {
+                                                ...sousTraitant.contrat,
+                                                sous_traitant: {
+                                                  id: sousTraitant.id,
+                                                  entreprise: sousTraitant.entreprise,
+                                                },
+                                                chantier: chantier,
+                                              },
+                                              chantier: chantier,
+                                            }}
+                                            size="small"
+                                            color="primary"
+                                            tooltipPlacement="top"
+                                            onSuccess={() => {
+                                              console.log('✅ Avenant régénéré avec succès');
+                                            }}
+                                          />
+                                          
+                                          {/* Bouton de suppression */}
+                                          <Tooltip
+                                            title="Supprimer l'avenant"
+                                            arrow
+                                          >
+                                            <IconButton
+                                              size="small"
+                                              onClick={() =>
+                                                handleDeleteAvenant(avenant.id)
+                                              }
+                                              sx={{
+                                                color: "#d32f2f",
+                                                "&:hover": {
+                                                  backgroundColor:
+                                                    "rgba(211, 47, 47, 0.1)",
+                                                },
+                                              }}
+                                            >
+                                              <FaTrash />
+                                            </IconButton>
+                                          </Tooltip>
+                                        </>
+                                      )}
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -698,8 +843,10 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                   )}
                 </AccordionDetails>
               </Accordion>
-            ))
-          )}
+                  ))}
+              </>
+            );
+          })()}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleModalClose}>Fermer</Button>
@@ -721,6 +868,14 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
         onSave={handleContratSave}
       />
 
+      <ContratSansDocumentForm
+        open={showContratSansDocumentForm}
+        onClose={() => setShowContratSansDocumentForm(false)}
+        sousTraitant={selectedSousTraitant}
+        chantier={chantier}
+        onSave={handleContratSansDocumentSave}
+      />
+
       <AvenantForm
         open={showAvenantForm}
         onClose={() => setShowAvenantForm(false)}
@@ -739,7 +894,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
         <DialogTitle>Sélectionner un sous-traitant existant</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Choisissez un sous-traitant existant pour créer un contrat avec ce chantier.
+            Choisissez un sous-traitant existant. Vous pouvez l'ajouter avec ou sans contrat.
           </Typography>
           
           {/* Barre de recherche */}
@@ -812,24 +967,45 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
           )}
 
           {/* Liste des sous-traitants sans contrat */}
-          {getFilteredSousTraitantsSansContrat().map((sousTraitant) => (
+          {getFilteredSousTraitantsSansContrat().map((sousTraitant) => {
+            // Vérifier si le sous-traitant est déjà associé au chantier
+            const aUnContrat = sousTraitantsAvecContrat.some(st => st.id === sousTraitant.id);
+            
+            return (
               <Paper 
                 key={sousTraitant.id} 
                 sx={{ 
                   p: 2, 
                   mb: 1, 
-                  cursor: "pointer",
+                  cursor: aUnContrat ? "default" : "pointer",
                   "&:hover": {
-                    backgroundColor: "rgba(25, 118, 210, 0.04)",
+                    backgroundColor: aUnContrat ? "transparent" : "rgba(25, 118, 210, 0.04)",
                   },
+                  opacity: aUnContrat ? 0.6 : 1,
                 }}
-                onClick={() => handleSelectSousTraitantForContrat(sousTraitant)}
               >
                 <Box display="flex" justifyContent="space-between" alignItems="center">
                   <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {highlightSearchTerm(sousTraitant.entreprise, searchTerm)}
-                    </Typography>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        {highlightSearchTerm(sousTraitant.entreprise, searchTerm)}
+                      </Typography>
+                      {aUnContrat && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            backgroundColor: "rgba(76, 175, 80, 0.1)",
+                            color: "#2e7d32",
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Déjà associé
+                        </Typography>
+                      )}
+                    </Box>
                     <Typography variant="body2" color="text.secondary">
                       {highlightSearchTerm(sousTraitant.numero_rcs, searchTerm)} • {highlightSearchTerm(sousTraitant.ville, searchTerm)}
                     </Typography>
@@ -844,20 +1020,38 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                       </Typography>
                     )}
                   </Box>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelectSousTraitantForContrat(sousTraitant);
-                    }}
-                  >
-                    Sélectionner
-                  </Button>
+                  <Box display="flex" gap={1}>
+                    {!aUnContrat && (
+                      <>
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAssocierSousTraitant(sousTraitant);
+                          }}
+                        >
+                          Ajouter sans contrat
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectSousTraitantForContrat(sousTraitant);
+                          }}
+                        >
+                          Créer un contrat
+                        </Button>
+                      </>
+                    )}
+                  </Box>
                 </Box>
               </Paper>
-            ))}
+            );
+          })}
           
           {getFilteredSousTraitantsSansContrat().length === 0 && (
             <Box sx={{ textAlign: "center", py: 4 }}>

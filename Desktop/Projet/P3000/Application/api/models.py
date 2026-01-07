@@ -2339,20 +2339,22 @@ class ContratSousTraitance(models.Model):
     TYPE_CHOICES = [
         ('BTP', 'BTP'),
         ('NETTOYAGE', 'Nettoyage'),
+        ('SANS_CONTRAT', 'Sans contrat documenté'),
     ]
 
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='contrats_sous_traitance')
     sous_traitant = models.ForeignKey(SousTraitant, on_delete=models.CASCADE, related_name='contrats')
+    sans_contrat = models.BooleanField(default=False, verbose_name="Association sans contrat", help_text="Si True, ce contrat est juste une association sans document formel")
     type_contrat = models.CharField(max_length=20, choices=TYPE_CHOICES, default='NETTOYAGE')
-    description_prestation = models.TextField()
-    date_debut = models.DateField()
-    duree = models.CharField(max_length=100, default="Jusqu'à livraison du chantier")
-    adresse_prestation = models.CharField(max_length=255)
-    nom_operation = models.CharField(max_length=255)
-    montant_operation = models.DecimalField(max_digits=10, decimal_places=2)
-    nom_maitre_ouvrage = models.CharField(max_length=255, verbose_name="Nom du maître d'ouvrage")
-    nom_maitre_oeuvre = models.CharField(max_length=255, verbose_name="Nom du maître d'œuvre")
-    date_creation = models.DateField(verbose_name="Date de création du contrat")
+    description_prestation = models.TextField(blank=True, null=True)
+    date_debut = models.DateField(blank=True, null=True)
+    duree = models.CharField(max_length=100, default="Jusqu'à livraison du chantier", blank=True, null=True)
+    adresse_prestation = models.CharField(max_length=255, blank=True, null=True)
+    nom_operation = models.CharField(max_length=255, blank=True, null=True)
+    montant_operation = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    nom_maitre_ouvrage = models.CharField(max_length=255, verbose_name="Nom du maître d'ouvrage", blank=True, null=True)
+    nom_maitre_oeuvre = models.CharField(max_length=255, verbose_name="Nom du maître d'œuvre", blank=True, null=True)
+    date_creation = models.DateField(verbose_name="Date de création du contrat", blank=True, null=True)
     date_modification = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -2364,6 +2366,15 @@ class ContratSousTraitance(models.Model):
 
     def save(self, *args, **kwargs):
         from decimal import Decimal
+        
+        # Définir des valeurs par défaut minimales si nécessaire (même pour sans_contrat)
+        if not self.date_creation:
+            from django.utils import timezone
+            self.date_creation = timezone.now().date()
+        if not self.montant_operation:
+            self.montant_operation = Decimal('0')
+        
+        # Calcul des coûts pour TOUS les contrats (avec ou sans contrat documenté)
         # Si c'est une modification, on soustrait l'ancien montant
         if self.pk:
             old_instance = ContratSousTraitance.objects.get(pk=self.pk)
@@ -2375,7 +2386,7 @@ class ContratSousTraitance(models.Model):
             # Restaurer l'ancien montant dans le coût estimé main d'œuvre
             self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal + old_montant
 
-        # Ajouter le nouveau montant
+        # Ajouter le nouveau montant (même si c'est 0 pour un sans_contrat)
         montant_decimal = Decimal(str(self.montant_operation))
         cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
         cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
@@ -2393,7 +2404,7 @@ class ContratSousTraitance(models.Model):
         for avenant in self.avenants.all():
             avenant.delete()
         
-        # Soustraire le montant lors de la suppression
+        # Soustraire le montant lors de la suppression (pour tous les contrats, même sans_contrat)
         montant_decimal = Decimal(str(self.montant_operation))
         cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
         cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
