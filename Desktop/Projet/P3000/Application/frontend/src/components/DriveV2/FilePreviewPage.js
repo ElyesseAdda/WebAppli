@@ -15,8 +15,7 @@ import {
   Download as DownloadIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
-// OnlyOffice désactivé temporairement
-// import OnlyOfficeCache from './utils/onlyofficeCache';
+import OnlyOfficeCache from './utils/onlyofficeCache';
 
 const PageContainer = styled(Box)(({ theme }) => ({
   width: '100vw',
@@ -55,9 +54,8 @@ const FilePreviewPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [displayUrl, setDisplayUrl] = useState(null);
-  // OnlyOffice désactivé temporairement
-  const [onlyOfficeAvailable] = useState(false);
-  const [onlyOfficeError] = useState(false);
+  const [onlyOfficeAvailable, setOnlyOfficeAvailable] = useState(false);
+  const [onlyOfficeError, setOnlyOfficeError] = useState(false);
 
   // Neutraliser le padding du body pour cette page uniquement
   useEffect(() => {
@@ -76,14 +74,15 @@ const FilePreviewPage = () => {
     };
   }, []);
 
-  // OnlyOffice désactivé temporairement - Pas de vérification
-  // useEffect(() => {
-  //   const checkOnlyOffice = async () => {
-  //     const available = await OnlyOfficeCache.checkAvailability();
-  //     setOnlyOfficeAvailable(available);
-  //   };
-  //   checkOnlyOffice();
-  // }, []);
+  // Vérifier la disponibilité de OnlyOffice (CACHE OPTIMISÉ)
+  useEffect(() => {
+    const checkOnlyOffice = async () => {
+      const available = await OnlyOfficeCache.checkAvailability();
+      setOnlyOfficeAvailable(available);
+    };
+
+    checkOnlyOffice();
+  }, []);
 
   // Récupérer l'URL d'affichage (OPTIMISÉ)
   useEffect(() => {
@@ -145,18 +144,18 @@ const FilePreviewPage = () => {
 
   const fileType = getFileType();
 
-  // OnlyOffice désactivé temporairement
-  // const isOfficeEditable = () => {
-  //   const extension = fileName.split('.').pop()?.toLowerCase();
-  //   const editableExtensions = [
-  //     'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
-  //     'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
-  //     'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
-  //     'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
-  //     'pdf'  // Support PDF depuis OnlyOffice 8.1+
-  //   ];
-  //   return editableExtensions.includes(extension);
-  // };
+  // Vérifier si le fichier peut être édité avec OnlyOffice
+  const isOfficeEditable = () => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    const editableExtensions = [
+      'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
+      'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
+      'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
+      'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
+      'pdf'  // Support PDF depuis OnlyOffice 8.1+
+    ];
+    return editableExtensions.includes(extension);
+  };
 
   // Télécharger le fichier
   const handleDownload = async () => {
@@ -201,7 +200,21 @@ const FilePreviewPage = () => {
 
     switch (fileType) {
       case 'pdf':
-        // OnlyOffice désactivé - Utilisation de la preview native du navigateur
+        // Si OnlyOffice est disponible, l'utiliser directement
+        if (onlyOfficeAvailable) {
+          return (
+            <iframe
+              src={`/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`}
+              title={fileName}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+            />
+          );
+        }
+        // Sinon, preview native
         return (
           <iframe
             src={displayUrl}
@@ -275,7 +288,25 @@ const FilePreviewPage = () => {
         );
 
       case 'office':
-        // OnlyOffice désactivé - Utilisation de Office Online pour la prévisualisation
+        // Si OnlyOffice est disponible et pas d'erreur, l'utiliser en priorité
+        if (onlyOfficeAvailable && isOfficeEditable() && !onlyOfficeError) {
+          return (
+            <iframe
+              src={`/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`}
+              title={fileName}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+              onError={() => {
+                setOnlyOfficeError(true);
+              }}
+            />
+          );
+        }
+        
+        // Fallback sur Office Online (en silence)
         return (
           <iframe
             src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(displayUrl)}`}
