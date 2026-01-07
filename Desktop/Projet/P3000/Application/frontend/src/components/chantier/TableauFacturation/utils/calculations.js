@@ -201,11 +201,13 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
     moisAvecItems[mois].situations.push(situation);
   });
 
-  // Grouper les factures par mois (utiliser date_creation pour les factures)
+  // Grouper les factures par mois (utiliser date_envoi pour les factures, avec vérification de l'année)
   facturesTriees.forEach((facture) => {
     let mois;
-    if (facture.date_creation) {
-      const date = new Date(facture.date_creation);
+    // Utiliser date_envoi en priorité, sinon date_creation en fallback
+    const dateEnvoi = facture.date_envoi || facture.date_creation;
+    if (dateEnvoi) {
+      const date = new Date(dateEnvoi);
       mois = date.getMonth() + 1;
     } else {
       return; // Ignorer les factures sans date

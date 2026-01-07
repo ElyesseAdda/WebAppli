@@ -130,7 +130,7 @@ const ChantiersDrivePaths = () => {
 
   const handleOpenDrive = (path) => {
     if (path) {
-      const driveUrl = `/drive?path=${encodeURIComponent(path)}&sidebar=closed`;
+      const driveUrl = `/drive-v2?path=${encodeURIComponent(path)}`;
       window.open(driveUrl, '_blank', 'width=1200,height=800');
     }
   };

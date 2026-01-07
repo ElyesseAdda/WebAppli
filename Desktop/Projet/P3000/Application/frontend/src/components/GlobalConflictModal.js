@@ -185,7 +185,7 @@ const GlobalConflictModal = () => {
 
       // Mettre à jour les données avec les chemins corrects
       // Utiliser le drive_url du backend s'il est disponible, sinon le construire
-      const driveUrl = event.detail.drive_url || `/drive?path=${fullPath}&sidebar=closed&focus=file&_t=${Date.now()}`;
+      const driveUrl = event.detail.drive_url || `/drive-v2?path=${fullPath}&focus=file&_t=${Date.now()}`;
       
       const updatedData = {
         ...event.detail,

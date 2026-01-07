@@ -14,6 +14,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  TextField,
   Typography,
 } from "@mui/material";
 import { green } from "@mui/material/colors";
@@ -63,6 +64,8 @@ const ChantierListeFactures = ({
   const [factureToUpdate, setFactureToUpdate] = useState(null);
   const statusOptions = ["En cours", "Attente paiement", "Payée"];
   const [pendingSave, setPendingSave] = useState(false);
+  const [showDateEnvoiModal, setShowDateEnvoiModal] = useState(false);
+  const [factureForDateEnvoi, setFactureForDateEnvoi] = useState(null);
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (stateFacture) => {
@@ -250,6 +253,21 @@ const ChantierListeFactures = ({
     }
   };
 
+  const handleDateEnvoiUpdate = async (dateEnvoi) => {
+    try {
+      if (!factureForDateEnvoi) return;
+      await axios.patch(`/api/facture/${factureForDateEnvoi.id}/`, {
+        date_envoi: dateEnvoi,
+      });
+      fetchFactures();
+      setShowDateEnvoiModal(false);
+      setFactureForDateEnvoi(null);
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour de la date d'envoi:", error);
+      alert("Erreur lors de la mise à jour de la date d'envoi");
+    }
+  };
+
   const handleGeneratePDF = async (facture) => {
     try {
       // Appel à l'API pour générer le PDF
@@ -339,6 +357,18 @@ const ChantierListeFactures = ({
                   />
                 </FilterCell>
                 <AlignedCell>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "white",
+                      fontWeight: "bold",
+                      textAlign: "center",
+                    }}
+                  >
+                    Date d'envoi
+                  </Typography>
+                </AlignedCell>
+                <AlignedCell>
                   <TableSortLabel
                     active={orderBy === "date_creation"}
                     direction={orderBy === "date_creation" ? order : "asc"}
@@ -425,8 +455,26 @@ const ChantierListeFactures = ({
                   >
                     {facture.numero}
                   </DevisNumber>
+                  <CenteredTableCell
+                    onClick={() => {
+                      setFactureForDateEnvoi(facture);
+                      setShowDateEnvoiModal(true);
+                    }}
+                    sx={{
+                      cursor: "pointer",
+                      "&:hover": {
+                        backgroundColor: "rgba(27, 120, 188, 0.1)",
+                      },
+                    }}
+                  >
+                    {facture.date_envoi
+                      ? new Date(facture.date_envoi).toLocaleDateString()
+                      : "-"}
+                  </CenteredTableCell>
                   <CenteredTableCell>
-                    {new Date(facture.date_creation).toLocaleDateString()}
+                    {(facture.date_paiement || facture.date_echeance || facture.date_creation)
+                      ? new Date(facture.date_paiement || facture.date_echeance || facture.date_creation).toLocaleDateString()
+                      : "-"}
                   </CenteredTableCell>
                   <CenteredTableCell
                     sx={{ fontWeight: 600, color: green[500] }}
@@ -593,7 +641,82 @@ const ChantierListeFactures = ({
             : ""
         }
       />
+
+      {/* Modal pour modifier la date d'envoi */}
+      <Dialog
+        open={showDateEnvoiModal}
+        onClose={() => {
+          setShowDateEnvoiModal(false);
+          setFactureForDateEnvoi(null);
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            padding: 1,
+          },
+        }}
+      >
+        <DialogTitle>Date d'envoi de la facture</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Facture : {factureForDateEnvoi?.numero}
+          </DialogContentText>
+          <DateEnvoiFactureModalContent
+            facture={factureForDateEnvoi}
+            onSave={handleDateEnvoiUpdate}
+            onCancel={() => {
+              setShowDateEnvoiModal(false);
+              setFactureForDateEnvoi(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+};
+
+// Composant pour le contenu du modal de date d'envoi
+const DateEnvoiFactureModalContent = ({ facture, onSave, onCancel }) => {
+  const [dateEnvoi, setDateEnvoi] = useState("");
+
+  useEffect(() => {
+    if (facture) {
+      // Précharger la date d'envoi si elle existe, sinon la date du jour
+      if (facture.date_envoi) {
+        setDateEnvoi(new Date(facture.date_envoi).toISOString().split("T")[0]);
+      } else {
+        // Date du jour par défaut
+        setDateEnvoi(new Date().toISOString().split("T")[0]);
+      }
+    }
+  }, [facture]);
+
+  const handleSubmit = () => {
+    if (dateEnvoi) {
+      onSave(dateEnvoi);
+    }
+  };
+
+  return (
+    <>
+      <TextField
+        type="date"
+        label="Date d'envoi"
+        value={dateEnvoi}
+        onChange={(e) => setDateEnvoi(e.target.value)}
+        fullWidth
+        margin="normal"
+        InputLabelProps={{ shrink: true }}
+      />
+      <DialogActions sx={{ mt: 2 }}>
+        <Button onClick={onCancel} variant="outlined">
+          Annuler
+        </Button>
+        <Button onClick={handleSubmit} variant="contained" color="primary">
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </>
   );
 };
 

@@ -129,18 +129,18 @@ const TableauFacturationTable = ({
             } else if (item.price_ht !== undefined) {
               // Ligne de facture
               const facture = item;
-              // Pour les factures, utiliser date_creation comme date d'envoi
-              const dateEnvoiFacture = facture.date_creation;
+              // Pour les factures, utiliser date_envoi (ou date_creation en fallback)
+              const dateEnvoiFacture = facture.date_envoi || facture.date_creation;
               const datePaiementPrevue = calculateDatePaiement(
                 dateEnvoiFacture,
                 facture.delai_paiement,
                 formatDate
               );
               
-              // Déterminer le mois de la facture (utiliser date_creation)
+              // Déterminer le mois de la facture (utiliser date_envoi avec vérification de l'année)
               let moisFacture = "-";
-              if (facture.date_creation) {
-                const date = new Date(facture.date_creation);
+              if (dateEnvoiFacture) {
+                const date = new Date(dateEnvoiFacture);
                 moisFacture = (date.getMonth() + 1).toString().padStart(2, "0");
               }
 
@@ -173,7 +173,30 @@ const TableauFacturationTable = ({
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>
-                    {facture.numero || "-"}
+                    {facture.numero ? (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          const previewUrl = `/api/preview-facture/${facture.id}/`;
+                          window.open(previewUrl, "_blank");
+                        }}
+                        sx={{
+                          color: "rgba(27, 120, 188, 1)",
+                          fontWeight: "bold",
+                          fontSize: "0.75rem",
+                          textTransform: "none",
+                          minWidth: "auto",
+                          padding: "2px 8px",
+                          "&:hover": {
+                            backgroundColor: "rgba(27, 120, 188, 0.1)",
+                          },
+                        }}
+                      >
+                        {facture.numero}
+                      </Button>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     {formatMontant(parseFloat(facture.price_ht) || 0)}
@@ -184,8 +207,8 @@ const TableauFacturationTable = ({
                       size="small"
                       onClick={() => onOpenDateModal(facture)}
                     >
-                      {facture.date_creation
-                        ? formatDate(facture.date_creation)
+                      {dateEnvoiFacture
+                        ? formatDate(dateEnvoiFacture)
                         : "Définir date"}
                     </Button>
                   </TableCell>
@@ -283,7 +306,7 @@ const TableauFacturationTable = ({
                     <Button
                       size="small"
                       onClick={() => {
-                        const previewUrl = `/preview-situation/${situation.id}/`;
+                        const previewUrl = `/api/preview-situation/${situation.id}/`;
                         window.open(previewUrl, "_blank");
                       }}
                       sx={{
@@ -322,7 +345,30 @@ const TableauFacturationTable = ({
                     />
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
-                    {situation.numero_situation || "-"}
+                    {situation.numero_situation ? (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          const previewUrl = `/api/preview-situation/${situation.id}/`;
+                          window.open(previewUrl, "_blank");
+                        }}
+                        sx={{
+                          color: "rgba(27, 120, 188, 1)",
+                          fontWeight: "bold",
+                          fontSize: "0.75rem",
+                          textTransform: "none",
+                          minWidth: "auto",
+                          padding: "2px 8px",
+                          "&:hover": {
+                            backgroundColor: "rgba(27, 120, 188, 0.1)",
+                          },
+                        }}
+                      >
+                        {situation.numero_situation}
+                      </Button>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     {formatMontant(

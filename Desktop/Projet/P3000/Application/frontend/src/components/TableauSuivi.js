@@ -473,7 +473,7 @@ const TableauSuivi = () => {
             color: couleur,
             fontFamily: "Roboto, Arial, sans-serif",
             fontWeight: 500,
-            fontSize: largeSize ? "1.25rem" : "0.75rem",
+            fontSize: largeSize ? "1rem" : "0.75rem",
             whiteSpace: "nowrap",
           }}
         >
@@ -510,9 +510,9 @@ const TableauSuivi = () => {
 
     const calculerCumulSituationHT = (situations, indexCourant) => {
       return situations.slice(0, indexCourant + 1).reduce((sum, situation) => {
-        // Utiliser le montant HT du mois (montant_ht_mois)
-        const montantHT = parseFloat(situation.montant_ht_mois) || 0;
-        return sum + montantHT;
+        // Utiliser le net à payer (montant_apres_retenues)
+        const netAPayer = parseFloat(situation.montant_apres_retenues) || 0;
+        return sum + netAPayer;
       }, 0);
     };
 

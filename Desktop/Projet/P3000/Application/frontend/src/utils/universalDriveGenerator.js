@@ -428,7 +428,7 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
     societeName: data.societeName || errorResponse.societe_name,
     previewUrl: documentConfig?.previewUrl ? documentConfig.previewUrl(data) : null,
     file_path: filePath,
-    drive_url: errorResponse.drive_url || `/drive?path=${filePath}&sidebar=closed&focus=file&_t=${Date.now()}`,
+    drive_url: errorResponse.drive_url || `/drive-v2?path=${filePath}&focus=file&_t=${Date.now()}`,
     // Données spécifiques au type de document
     ...getDocumentSpecificData(documentType, data),
     // Inclure les données supplémentaires du backend si disponibles

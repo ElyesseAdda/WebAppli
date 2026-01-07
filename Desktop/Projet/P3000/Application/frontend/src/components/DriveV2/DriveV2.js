@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -89,6 +90,7 @@ const DriveContent = styled(Box)(({ theme }) => ({
 }));
 
 const DriveV2 = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     currentPath,
     folderContent,
@@ -279,10 +281,37 @@ const DriveV2 = () => {
     };
   }, [hasCopiedItems, uploadDialogOpen, isCopying, handlePasteWithMessages, currentPath]);
 
-  // Charger le contenu initial
+  // Charger le contenu initial depuis les paramètres d'URL ou la racine
   useEffect(() => {
-    fetchFolderContent('');
-  }, []);
+    const pathFromUrl = searchParams.get('path');
+    const focusFile = searchParams.get('focus') === 'file';
+    
+    if (pathFromUrl) {
+      // Si c'est un fichier, naviguer vers le dossier parent
+      const isFile = pathFromUrl.includes('.') && pathFromUrl.split('/').pop().includes('.');
+      if (isFile && focusFile) {
+        const parentPath = pathFromUrl.substring(0, pathFromUrl.lastIndexOf('/'));
+        fetchFolderContent(parentPath || '');
+        // Optionnel : scroll vers le fichier après chargement
+        setTimeout(() => {
+          const fileElement = document.querySelector(`[data-item-path="${pathFromUrl}"]`);
+          if (fileElement) {
+            fileElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Mettre en surbrillance le fichier
+            fileElement.style.backgroundColor = 'rgba(25, 118, 210, 0.1)';
+            setTimeout(() => {
+              fileElement.style.backgroundColor = '';
+            }, 3000);
+          }
+        }, 500);
+      } else {
+        // C'est un dossier, naviguer directement
+        fetchFolderContent(pathFromUrl);
+      }
+    } else {
+      fetchFolderContent('');
+    }
+  }, [searchParams, fetchFolderContent]);
 
   // Empêcher le scroll horizontal sur le body
   useEffect(() => {

@@ -330,7 +330,7 @@ export const generateDevisMarchePDFDrive = async (
           devisId: devisId,
           previewUrl: `${window.location.origin}/api/preview-saved-devis/${devisId}/`,
           file_path: filePath, // Chemin complet du fichier
-          drive_url: `/drive?path=${filePath}&sidebar=closed&focus=file&_t=${Date.now()}`,
+          drive_url: `/drive-v2?path=${filePath}&focus=file&_t=${Date.now()}`,
         },
       });
 
@@ -618,220 +618,38 @@ const showSuccessNotification = (message, driveUrl) => {
   viewButton.addEventListener("click", async () => {
     if (driveUrl) {
       // Extraire le chemin du fichier depuis l'URL
-      const urlParams = new URLSearchParams(driveUrl.split("?")[1]);
+      const urlParts = driveUrl.split("?");
+      const urlParams = new URLSearchParams(urlParts[1] || "");
       const filePath = urlParams.get("path");
 
       if (filePath) {
-        // Le bouton est déjà désactivé pendant 3 secondes, pas besoin de le redésactiver
-
+        // Vérifier que le fichier existe dans S3 (avec un nombre limité de tentatives)
         try {
-          // PREMIÈRE REQUÊTE : Vérifier que le fichier existe dans S3
-          const fileExists = await waitForFileToExist(filePath, 10, 1000); // 10 tentatives, 1 seconde entre chaque
-
-          if (fileExists) {
-          } else {
-            // Attendre 2 secondes supplémentaires pour la synchronisation
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          }
-
-          // DEUXIÈME REQUÊTE : Vérification finale avant redirection
-          const finalCheck = await waitForFileToExist(filePath, 5, 500); // 5 tentatives, 0.5 seconde entre chaque
-
-          if (finalCheck) {
-          } else {
-
-            // Vérifier si le dossier parent existe
+          const fileExists = await waitForFileToExist(filePath, 5, 1000);
+          
+          if (!fileExists) {
+            // Si le fichier n'existe pas, naviguer vers le dossier parent
             const parentPath = filePath.substring(0, filePath.lastIndexOf("/"));
-
-            try {
-              // Faire une requête HEAD sur le dossier parent
-              const parentResponse = await axios.head(
-                `${API_BASE_URL}/download-pdf-from-s3/`,
-                {
-                  params: { path: parentPath },
-                  withCredentials: true,
-                  timeout: 5000,
-                }
-              );
-
-              if (parentResponse.status === 200) {
-                console.log(
-                  "✅ Dossier parent confirmé, redirection vers le dossier parent"
-                );
-                driveUrl = driveUrl.replace(
-                  `path=${filePath}`,
-                  `path=${parentPath}`
-                );
-              } else {
-                console.log(
-                  "⚠️ Dossier parent non trouvé, redirection vers le dossier racine"
-                );
-                // Rediriger vers le dossier racine des appels d'offres
-                const rootPath = "Appels_Offres";
-                driveUrl = driveUrl.replace(
-                  `path=${filePath}`,
-                  `path=${rootPath}`
-                );
-              }
-            } catch (error) {
-              console.log(
-                "❌ Erreur lors de la vérification du dossier parent, redirection vers le dossier racine"
-              );
-              const rootPath = "Appels_Offres";
-              driveUrl = driveUrl.replace(
-                `path=${filePath}`,
-                `path=${rootPath}`
-              );
+            if (parentPath) {
+              // Construire l'URL du Drive V2 avec le dossier parent
+              const driveV2Url = `/drive-v2?path=${encodeURIComponent(parentPath)}`;
+              window.location.href = driveV2Url;
+              return;
             }
           }
         } catch (error) {
-          console.log(
-            "⚠️ Erreur lors de la vérification, redirection intelligente..."
-          );
-          // En cas d'erreur, essayer de rediriger vers le dossier parent
-          try {
-            const parentPath = filePath.substring(0, filePath.lastIndexOf("/"));
-            console.log(
-              `🔄 Tentative de redirection vers le dossier parent: ${parentPath}`
-            );
-            driveUrl = driveUrl.replace(
-              `path=${filePath}`,
-              `path=${parentPath}`
-            );
-          } catch (fallbackError) {
-            console.log(
-              "❌ Erreur lors de la redirection vers le dossier parent, redirection vers le dossier racine"
-            );
-            const rootPath = "Appels_Offres";
-            driveUrl = driveUrl.replace(`path=${filePath}`, `path=${rootPath}`);
-          }
+          console.log("⚠️ Erreur lors de la vérification du fichier:", error);
         }
 
-        // Le bouton reste activé (il a été réactivé après 3 secondes)
-      }
+        // Construire l'URL du Drive V2 avec le chemin du fichier
+        // Le Drive V2 gère automatiquement la navigation vers le dossier parent et le focus sur le fichier
+        const driveV2Url = `/drive-v2?path=${encodeURIComponent(filePath)}&focus=file`;
 
-      // Améliorer l'URL pour pointer exactement vers le fichier
-      let enhancedDriveUrl = driveUrl;
-
-      // Log de l'URL originale
-      console.log("🔗 URL originale reçue:", driveUrl);
-
-      // Si l'URL contient un paramètre path, s'assurer qu'elle pointe vers le bon dossier
-      if (driveUrl.includes("path=")) {
-        // Vérifier si les paramètres sont déjà présents pour éviter les doublons
-        if (!driveUrl.includes("sidebar=closed")) {
-          enhancedDriveUrl = driveUrl + "&sidebar=closed&focus=file";
-        } else {
-          // Les paramètres sont déjà présents, utiliser l'URL telle quelle
-          enhancedDriveUrl = driveUrl;
-        }
-      }
-
-      // Log de l'URL finale
-      console.log("🔗 URL finale pour redirection:", enhancedDriveUrl);
-
-      // SOLUTION : Toujours créer une nouvelle fenêtre pour éviter les problèmes de cache
-      console.log(
-        "🆕 Création d'une nouvelle fenêtre Drive (solution anti-cache)"
-      );
-
-      // Fermer la fenêtre existante si elle existe
-      try {
-        const existingWindow = window.open("", "drive_window");
-        if (existingWindow && !existingWindow.closed) {
-          existingWindow.close();
-        }
-      } catch (error) {
-      }
-
-      // Attendre un court délai avant de créer la nouvelle fenêtre
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Créer une nouvelle fenêtre avec un nom unique
-      const uniqueWindowName = `drive_window_${Date.now()}`;
-      console.log(`🆕 Création de la fenêtre Drive: ${uniqueWindowName}`);
-
-      // SOLUTION 1: Ajouter plusieurs paramètres cache-busting à l'URL
-      const timestamp = Date.now();
-      const randomId = Math.random().toString(36).substring(7);
-      const cacheBuster = `&_cb=${timestamp}&_r=${randomId}&_v=${Math.floor(
-        Math.random() * 10000
-      )}`;
-      const urlWithCacheBuster = enhancedDriveUrl.includes("?")
-        ? `${enhancedDriveUrl}${cacheBuster}`
-        : `${enhancedDriveUrl}?${cacheBuster.substring(1)}`;
-
-      console.log("🔗 URL avec cache-busting multiple:", urlWithCacheBuster);
-
-      // SOLUTION 3: Nettoyer le cache local avant l'ouverture
-      try {
-        // Nettoyer le sessionStorage et localStorage liés au Drive
-        const keysToRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key && (key.includes("drive") || key.includes("cache"))) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach((key) => sessionStorage.removeItem(key));
-      } catch (error) {
-      }
-
-      // SOLUTION ROBUSTE: Créer d'abord une fenêtre vide, puis naviguer
-      const driveWindow = window.open(
-        "about:blank",
-        uniqueWindowName,
-        "width=1400,height=900,scrollbars=yes,resizable=yes,menubar=no,toolbar=no,location=no,status=no"
-      );
-
-      if (driveWindow) {
-
-        // Attendre que la fenêtre soit prête, puis naviguer
-        setTimeout(() => {
-          try {
-
-            // Utiliser location.replace pour forcer la navigation
-            driveWindow.location.replace(enhancedDriveUrl);
-
-            driveWindow.focus();
-
-            // Vérification supplémentaire après 1 seconde
-            setTimeout(() => {
-              try {
-                console.log(
-                  "🔍 Vérification de l'URL finale dans la fenêtre:",
-                  driveWindow.location.href
-                );
-                if (driveWindow.location.href.includes("about:blank")) {
-                  console.log(
-                    "⚠️ La fenêtre est toujours sur about:blank, tentative de navigation alternative..."
-                  );
-                  driveWindow.location.href = enhancedDriveUrl;
-                }
-              } catch (error) {
-                console.log(
-                  "⚠️ Impossible de vérifier l'URL de la fenêtre:",
-                  error
-                );
-              }
-            }, 1000);
-          } catch (error) {
-
-            // Fallback: Essayer avec location.href
-            try {
-              driveWindow.location.href = enhancedDriveUrl;
-              driveWindow.focus();
-            } catch (fallbackError) {
-            }
-          }
-        }, 300); // Délai pour s'assurer que la fenêtre est prête
+        // Rediriger vers le Drive V2 dans la fenêtre actuelle
+        window.location.href = driveV2Url;
       } else {
-
-        // SOLUTION DE FALLBACK: Redirection dans la fenêtre actuelle
-        try {
-          window.location.href = enhancedDriveUrl;
-        } catch (error) {
-        }
+        // Si pas de chemin, rediriger vers la racine du Drive V2
+        window.location.href = "/drive-v2";
       }
     }
   });

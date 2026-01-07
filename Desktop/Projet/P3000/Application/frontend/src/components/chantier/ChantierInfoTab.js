@@ -906,10 +906,8 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
       return;
     }
 
-    // Ouvrir le Drive dans une nouvelle fenêtre
-    const driveUrl = `/drive?path=${encodeURIComponent(
-      drivePath
-    )}&sidebar=closed`;
+    // Ouvrir le Drive V2 dans une nouvelle fenêtre
+    const driveUrl = `/drive-v2?path=${encodeURIComponent(drivePath)}`;
     window.open(driveUrl, "_blank", "width=1200,height=800");
   };
 

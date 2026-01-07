@@ -86,11 +86,20 @@ ${devis.societe.codepostal_societe} ${devis.societe.ville_societe}`;
       ? dateEcheanceCalculee.toISOString().split("T")[0]
       : null;
 
+    // Formater la date d'envoi
+    const dateEnvoiFormatted = formData.date_envoi
+      ? (formData.date_envoi instanceof Date
+          ? formData.date_envoi.toISOString().split("T")[0]
+          : formData.date_envoi)
+      : null;
+
     // Si l'adresse de facturation est vide, utiliser l'adresse de la société
     const finalFormData = {
       numero: formData.numero_facture,
       devis: devis.id,
       date_echeance: dateEcheanceFormatted,
+      date_envoi: dateEnvoiFormatted,
+      delai_paiement: formData.delai_paiement,
       mode_paiement: formData.mode_paiement,
     };
 
