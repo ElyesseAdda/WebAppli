@@ -122,8 +122,52 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           }
         }
 
-        // Créer le nouvel éditeur
-        docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
+        // Attendre que le conteneur DOM soit prêt avant d'initialiser OnlyOffice
+        const editorElement = document.getElementById('onlyoffice-editor');
+        if (!editorElement) {
+          throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'a pas été trouvé dans le DOM');
+        }
+
+        // Vérifier que le conteneur est visible et a une taille
+        if (editorElement.offsetWidth === 0 || editorElement.offsetHeight === 0) {
+          console.warn('[OnlyOffice Debug] Le conteneur n\'a pas de taille, attente de 100ms...');
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Créer le nouvel éditeur avec un délai pour s'assurer que le DOM est stable
+        // Utiliser requestAnimationFrame pour attendre le prochain cycle de rendu
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            try {
+              // Vérifier à nouveau que le conteneur existe
+              const editorElement = document.getElementById('onlyoffice-editor');
+              if (!editorElement) {
+                throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'existe plus');
+              }
+              
+              // Vérifier que le conteneur est dans le DOM et visible
+              if (!editorElement.isConnected || editorElement.offsetParent === null) {
+                console.warn('[OnlyOffice Debug] Le conteneur n\'est pas visible, nouvelle tentative...');
+                setTimeout(() => {
+                  try {
+                    docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
+                  } catch (err) {
+                    console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation (retry):', err);
+                    setError(`Erreur lors de l'initialisation de l'éditeur: ${err.message}`);
+                    setLoading(false);
+                  }
+                }, 200);
+                return;
+              }
+              
+              docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
+            } catch (err) {
+              console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation:', err);
+              setError(`Erreur lors de l'initialisation de l'éditeur: ${err.message}`);
+              setLoading(false);
+            }
+          });
+        });
 
       } catch (err) {
         setError(err.message);
@@ -219,7 +263,8 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           style={{
             width: '100%',
             height: '100%',
-            visibility: loading || error ? 'hidden' : 'visible',
+            minHeight: '400px',  // Taille minimale pour éviter les problèmes de rendu
+            display: loading || error ? 'none' : 'block',  // Utiliser display au lieu de visibility
           }}
         />
       </EditorContent>
