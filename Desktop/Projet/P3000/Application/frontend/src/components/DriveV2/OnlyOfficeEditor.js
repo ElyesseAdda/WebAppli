@@ -2,7 +2,7 @@
  * OnlyOffice Editor Component - Éditeur de documents Office en ligne
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   Box,
   CircularProgress,
@@ -36,9 +36,14 @@ const EditorContent = styled(Box)(({ theme }) => ({
 const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
   const editorRef = useRef(null);
   const docEditorRef = useRef(null);
+  const isInitializedRef = useRef(false);  // Prévenir les re-initialisations
+  const containerMountedRef = useRef(false);  // Indiquer si le conteneur est monté
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [config, setConfig] = useState(null);
+  
+  // ID unique et stable pour le conteneur (ne change jamais une fois créé)
+  const editorContainerId = useMemo(() => `onlyoffice-editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
 
   // Neutraliser le padding du body
   useEffect(() => {
@@ -56,6 +61,12 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
 
   // Charger la configuration et initialiser l'éditeur
   useEffect(() => {
+    // Empêcher les re-initialisations si OnlyOffice est déjà initialisé
+    if (isInitializedRef.current) {
+      console.log('[OnlyOffice Debug] Éditeur déjà initialisé, skip...');
+      return;
+    }
+    
     const initEditor = async () => {
       setLoading(true);
       setError(null);
@@ -128,7 +139,7 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         // Utiliser une fonction d'attente récursive pour s'assurer que le conteneur est prêt
         const waitForContainer = (attempts = 0, maxAttempts = 20) => {
           return new Promise((resolve, reject) => {
-            const editorElement = document.getElementById('onlyoffice-editor');
+            const editorElement = document.getElementById(editorContainerId);
             
             if (!editorElement) {
               if (attempts >= maxAttempts) {
@@ -188,14 +199,17 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         });
 
         // Vérifier une dernière fois avant d'initialiser
-        const editorElement = document.getElementById('onlyoffice-editor');
+        const editorElement = document.getElementById(editorContainerId);
         if (!editorElement || !editorElement.isConnected) {
           throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'est plus disponible');
         }
 
-        // Créer l'éditeur OnlyOffice
+        // Marquer comme initialisé pour éviter les re-initialisations
+        isInitializedRef.current = true;
+
+        // Créer l'éditeur OnlyOffice avec l'ID unique
         try {
-          docEditorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig);
+          docEditorRef.current = new window.DocsAPI.DocEditor(editorContainerId, editorConfig);
         } catch (err) {
           console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation:', err);
           throw err;
@@ -216,12 +230,13 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
       if (docEditorRef.current) {
         try {
           docEditorRef.current.destroyEditor();
+          isInitializedRef.current = false;  // Réinitialiser le flag
         } catch (e) {
           // Ignorer l'erreur
         }
       }
     };
-  }, [filePath, fileName, mode]);
+  }, [filePath, fileName, mode, editorContainerId]);  // Ajouter editorContainerId aux dépendances
 
   const handleRefresh = () => {
     window.location.reload();
@@ -289,9 +304,11 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         )}
 
         {/* Container de l'éditeur OnlyOffice - Toujours dans le DOM avec une taille */}
+        {/* ID unique pour éviter les conflits avec React qui re-render */}
         <div
-          id="onlyoffice-editor"
+          id={editorContainerId}
           ref={editorRef}
+          data-onlyoffice-container="true"  // Attribut pour identifier le conteneur
           style={{
             width: '100%',
             height: '100%',
@@ -307,5 +324,14 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
   );
 };
 
-export default OnlyOfficeEditor;
+// Utiliser React.memo pour éviter les re-renders inutiles
+// Cela prévient React de re-rendre le composant pendant qu'OnlyOffice manipule le DOM
+export default React.memo(OnlyOfficeEditor, (prevProps, nextProps) => {
+  // Ne re-rendre que si filePath, fileName ou mode changent
+  return (
+    prevProps.filePath === nextProps.filePath &&
+    prevProps.fileName === nextProps.fileName &&
+    prevProps.mode === nextProps.mode
+  );
+});
 
