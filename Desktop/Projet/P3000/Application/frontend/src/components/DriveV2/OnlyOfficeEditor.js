@@ -60,6 +60,43 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
     };
   }, []);
 
+  // Solution SSL : Intercepter et ignorer silencieusement les erreurs Service Worker SSL
+  useEffect(() => {
+    // Intercepter les erreurs de Service Worker pour éviter les erreurs SSL
+    const originalConsoleError = console.error;
+    const handleServiceWorkerError = (message) => {
+      // Ignorer silencieusement les erreurs SSL du Service Worker OnlyOffice
+      if (typeof message === 'string' && 
+          (message.includes('ServiceWorker') || message.includes('service_worker')) &&
+          (message.includes('SSL') || message.includes('certificate') || message.includes('ERR_CERT'))) {
+        console.warn('[OnlyOffice Debug] Erreur SSL Service Worker ignorée (certificat auto-signé)');
+        return;
+      }
+      // Pour les autres erreurs, utiliser la console.error normale
+      originalConsoleError.apply(console, arguments);
+    };
+
+    // Intercepter window.onerror pour capturer les erreurs non catchées
+    const originalOnError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+      if (message && typeof message === 'string' && 
+          (message.includes('ServiceWorker') || message.includes('service_worker')) &&
+          (message.includes('SSL') || message.includes('certificate') || message.includes('ERR_CERT'))) {
+        console.warn('[OnlyOffice Debug] Erreur SSL Service Worker ignorée (certificat auto-signé)');
+        return true; // Empêcher l'affichage de l'erreur dans la console
+      }
+      if (originalOnError) {
+        return originalOnError.apply(window, arguments);
+      }
+      return false;
+    };
+
+    return () => {
+      console.error = originalConsoleError;
+      window.onerror = originalOnError;
+    };
+  }, []);
+
   // Solution "Bunker" : Initialisation avec div créée manuellement en JS pur
   // React ne voit jamais cette div dans son Virtual DOM, donc il ne peut pas planter dessus
   useEffect(() => {
