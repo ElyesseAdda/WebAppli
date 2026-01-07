@@ -34,16 +34,17 @@ const EditorContent = styled(Box)(({ theme }) => ({
 }));
 
 const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
-  const containerRef = useRef(null); // Référence directe au DOM
+  // Solution "Bunker" : wrapper React simple (React le gère)
+  const wrapperRef = useRef(null); // Référence au wrapper React
+  const innerDivRef = useRef(null); // Référence à la div OnlyOffice créée manuellement (React ne la voit pas)
   const docEditorRef = useRef(null); // Référence à l'instance OnlyOffice
   const isInitializingRef = useRef(false); // Flag pour éviter les initialisations concurrentes
-  const containerReadyRef = useRef(false); // Flag pour indiquer que le conteneur est prêt
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [config, setConfig] = useState(null);
   
-  // ID unique et stable pour le conteneur (ne change jamais une fois créé)
-  const editorContainerId = useMemo(() => `onlyoffice-editor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
+  // ID unique et stable pour le conteneur OnlyOffice (créé manuellement)
+  const editorContainerId = useMemo(() => `onlyoffice-inner-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
 
   // Neutraliser le padding du body
   useEffect(() => {
@@ -59,25 +60,15 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
     };
   }, []);
 
-  // Effet pour marquer le conteneur comme prêt une fois monté
+  // Solution "Bunker" : Initialisation avec div créée manuellement en JS pur
+  // React ne voit jamais cette div dans son Virtual DOM, donc il ne peut pas planter dessus
   useEffect(() => {
-    if (containerRef.current && containerRef.current.isConnected) {
-      containerReadyRef.current = true;
-    }
-    
-    return () => {
-      containerReadyRef.current = false;
-    };
-  }, []);
-
-  // Charger la configuration et initialiser l'éditeur
-  useEffect(() => {
-    // Si l'éditeur existe déjà et fonctionne, ne rien faire
-    if (docEditorRef.current && !error) {
+    // Sécurité : si pas de wrapper ou si DocsAPI absent, on sort
+    if (!wrapperRef.current || !window.DocsAPI) {
       return;
     }
 
-    // Si une initialisation est en cours, ne rien faire (évite les doubles initialisations en Strict Mode)
+    // Si une initialisation est en cours, ne rien faire
     if (isInitializingRef.current) {
       console.log('[OnlyOffice Debug] Initialisation déjà en cours, skip...');
       return;
@@ -88,61 +79,32 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
       return;
     }
 
+    // Si l'éditeur existe déjà, ne rien faire
+    if (docEditorRef.current) {
+      return;
+    }
+
     const initEditor = async () => {
-      // Marquer que l'initialisation est en cours
       isInitializingRef.current = true;
       setLoading(true);
       setError(null);
 
       try {
-        // Attendre que le conteneur soit monté dans le DOM
-        // Utiliser plusieurs cycles de rendu pour s'assurer que React a fini
-        let attempts = 0;
-        const maxAttempts = 50;
+        // LA MAGIE "Bunker" : Créer la div OnlyOffice MANUELLEMENT en JS pur
+        // React ne "voit" pas cette div dans son Virtual DOM, donc il ne peut pas planter dessus
+        const innerDiv = document.createElement('div');
+        innerDiv.id = editorContainerId;
+        innerDiv.style.width = "100%";
+        innerDiv.style.height = "100%";
+        innerDiv.style.minWidth = "800px";
+        innerDiv.style.minHeight = "600px";
+        innerDiv.style.position = "relative";
         
-        while (!containerRef.current || !containerRef.current.isConnected) {
-          if (attempts >= maxAttempts) {
-            throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'est pas disponible après plusieurs tentatives');
-          }
-          await new Promise(resolve => setTimeout(resolve, 50));
-          attempts++;
-        }
+        // Stocker la référence pour le nettoyage
+        innerDivRef.current = innerDiv;
 
-        // Attendre que React ait fini de monter complètement le composant
-        // Utiliser requestAnimationFrame pour s'assurer que le DOM est stable
-        await new Promise(resolve => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              setTimeout(resolve, 100); // Délai supplémentaire pour la stabilité
-            });
-          });
-        });
-
-        // Vérifier une dernière fois que le conteneur est toujours disponible
-        if (!containerRef.current || !containerRef.current.isConnected) {
-          throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'est plus disponible');
-        }
-
-        // Vérifier que l'API OnlyOffice est chargée
-        if (!window.DocsAPI) {
-          throw new Error(
-            'OnlyOffice API not loaded. Make sure the OnlyOffice server is running and accessible.'
-          );
-        }
-
-        // Point 1 du diagnostic : Ne pas modifier le conteneur si OnlyOffice l'a déjà initialisé
-        // Vérifier si le conteneur a été marqué comme initialisé ou contient déjà des éléments OnlyOffice
-        const isAlreadyInitialized = containerRef.current.getAttribute('data-onlyoffice-initialized') === 'true';
-        const hasOnlyOfficeElements = containerRef.current.querySelector('[id^="asc"]') !== null || 
-                                       containerRef.current.querySelector('iframe') !== null;
-        
-        // Ne vider le conteneur QUE s'il n'a pas été initialisé par OnlyOffice
-        // Cela empêche React de supprimer des éléments pendant qu'OnlyOffice les manipule
-        if (!isAlreadyInitialized && !hasOnlyOfficeElements) {
-          containerRef.current.innerHTML = "";
-        } else if (isAlreadyInitialized || hasOnlyOfficeElements) {
-          console.log('[OnlyOffice Debug] Conteneur déjà initialisé, skip nettoyage');
-        }
+        // Ajouter cette div manuelle dans le wrapper React
+        wrapperRef.current.appendChild(innerDiv);
 
         // Récupérer la configuration depuis Django
         const response = await fetch('/api/drive-v2/onlyoffice-config/', {
@@ -150,12 +112,12 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include',  // Inclure les cookies de session pour l'authentification
+          credentials: 'include',
           body: JSON.stringify({
             file_path: filePath,
             file_name: fileName,
             mode: mode,
-            use_proxy: true,  // Utiliser le proxy Django au lieu de l'URL S3 directe
+            use_proxy: true,
           }),
         });
 
@@ -167,32 +129,44 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         const data = await response.json();
         setConfig(data);
 
-        // Vérifier une dernière fois que le conteneur est toujours disponible après la requête
-        if (!containerRef.current || !containerRef.current.isConnected) {
-          throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'est plus disponible après le chargement de la configuration');
-        }
-
-        // Préparer la configuration pour OnlyOffice
+        // Préparer la configuration pour OnlyOffice avec callbacks sécurisés
+        // Solution "Bunker" : Envelopper tous les callbacks dans setTimeout(..., 0)
+        // Cela sort l'exécution du cycle de rendu React actuel
         const editorConfig = {
           ...data.config,
           height: '100%',
           width: '100%',
           type: 'desktop',
           events: {
-            onDocumentReady: () => {
-              setLoading(false);
-              isInitializingRef.current = false;
-              // Marquer le conteneur comme "verrouillé" par OnlyOffice
-              // Empêcher React de le modifier
-              if (containerRef.current) {
-                containerRef.current.setAttribute('data-onlyoffice-initialized', 'true');
-              }
+            // Solution "Bunker" : setTimeout(0) sort l'exécution du cycle de rendu React
+            // Cela brise la boucle "Event -> setState -> Re-render -> Crash"
+            onDocumentReady: (e) => {
+              console.log('[OnlyOffice Debug] Document ready');
+              // setTimeout(0) pour sortir du cycle de rendu React actuel
+              setTimeout(() => {
+                setLoading(false);
+                isInitializingRef.current = false;
+              }, 0);
             },
             onError: (event) => {
-              setError(`Erreur lors du chargement du document: ${event.data}`);
-              setLoading(false);
-              isInitializingRef.current = false;
+              console.error('[OnlyOffice Debug] Error:', event.data);
+              // setTimeout(0) pour sortir du cycle de rendu React actuel
+              setTimeout(() => {
+                setError(`Erreur lors du chargement du document: ${event.data}`);
+                setLoading(false);
+                isInitializingRef.current = false;
+              }, 0);
             },
+            // Si la config Django contient d'autres événements, les envelopper aussi
+            ...(data.config.events && Object.keys(data.config.events).reduce((acc, key) => {
+              const originalCallback = data.config.events[key];
+              if (typeof originalCallback === 'function') {
+                acc[key] = (...args) => {
+                  setTimeout(() => originalCallback(...args), 0);
+                };
+              }
+              return acc;
+            }, {})),
           },
         };
 
@@ -201,17 +175,11 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           editorConfig.token = data.token;
         }
 
-        // Vérifier une dernière fois avant l'initialisation
-        if (!containerRef.current || !containerRef.current.isConnected) {
-          throw new Error('Le conteneur de l\'éditeur OnlyOffice n\'est plus disponible avant l\'initialisation');
-        }
-
-        // Initialiser l'éditeur OnlyOffice avec l'ID du conteneur
+        // Initialiser l'éditeur OnlyOffice sur la div manuelle
         try {
           docEditorRef.current = new window.DocsAPI.DocEditor(editorContainerId, editorConfig);
         } catch (err) {
           console.error('[OnlyOffice Debug] Erreur lors de l\'initialisation:', err);
-          isInitializingRef.current = false;
           throw err;
         }
 
@@ -224,70 +192,35 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
 
     initEditor();
 
-    // FONCTION DE NETTOYAGE (Cruciale) - Détruit l'éditeur lors du démontage
+    // FONCTION DE NETTOYAGE (Cruciale) - Détruit l'éditeur et retire la div manuelle
     return () => {
-      // Ne pas détruire si une nouvelle initialisation est en cours (Strict Mode)
-      // Cela permet d'éviter de détruire l'éditeur pendant qu'une nouvelle instance s'initialise
-      const currentEditor = docEditorRef.current;
-      const wasInitializing = isInitializingRef.current;
-      
-      // Si une initialisation est en cours, attendre un peu avant de détruire
-      // pour laisser le temps à la nouvelle instance de prendre le relais
       const destroyEditor = async () => {
-        // Si une initialisation est en cours, attendre qu'elle se termine
-        let attempts = 0;
-        while (isInitializingRef.current && attempts < 10) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          attempts++;
-        }
-
-        // Si l'éditeur a changé (nouvelle instance), ne pas détruire l'ancien
-        if (docEditorRef.current !== currentEditor) {
-          console.log('[OnlyOffice Debug] Nouvelle instance détectée, skip destruction de l\'ancienne');
-          return;
-        }
-
-        // Marquer que l'initialisation est terminée seulement si c'était la même instance
-        if (docEditorRef.current === currentEditor) {
-          isInitializingRef.current = false;
-        }
-
-        if (currentEditor) {
+        // Détruire l'éditeur OnlyOffice
+        if (docEditorRef.current) {
           try {
-            // Attendre un cycle de rendu supplémentaire pour s'assurer que OnlyOffice a fini
-            await new Promise(resolve => {
-              requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  setTimeout(resolve, 100);
-                });
-              });
-            });
-
-            // Vérifier que le conteneur existe encore et qu'on a toujours la même instance
-            if (containerRef.current && 
-                containerRef.current.isConnected && 
-                docEditorRef.current === currentEditor) {
-              currentEditor.destroyEditor();
-              if (docEditorRef.current === currentEditor) {
-                docEditorRef.current = null;
-              }
-            } else if (docEditorRef.current === currentEditor) {
-              // Si le conteneur n'existe plus, juste mettre la ref à null
-              docEditorRef.current = null;
-            }
+            docEditorRef.current.destroyEditor();
+            docEditorRef.current = null;
           } catch (e) {
-            // Ignorer l'erreur de destruction si l'éditeur est déjà détruit
             console.warn('[OnlyOffice Debug] Erreur lors de la destruction de l\'éditeur:', e);
-            if (docEditorRef.current === currentEditor) {
-              docEditorRef.current = null;
-            }
+            docEditorRef.current = null;
           }
         }
+
+        // Retirer manuellement la div qu'on a créée (Solution "Bunker")
+        if (wrapperRef.current && innerDivRef.current) {
+          // Vérification de sécurité avant de retirer
+          if (wrapperRef.current.contains(innerDivRef.current)) {
+            wrapperRef.current.removeChild(innerDivRef.current);
+          }
+          innerDivRef.current = null;
+        }
+
+        isInitializingRef.current = false;
       };
 
       destroyEditor();
     };
-  }, [filePath, fileName, mode, editorContainerId]);  // Dépendances
+  }, [filePath, fileName, mode, editorContainerId]);  // Dépendances minimales
 
   const handleRefresh = () => {
     window.location.reload();
@@ -354,27 +287,17 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           </Box>
         )}
 
-        {/* Container de l'éditeur OnlyOffice - Toujours dans le DOM avec une taille */}
-        {/* Point 1 du diagnostic : Le conteneur reste toujours dans le DOM, on cache juste avec CSS */}
-        {/* Point 2 du diagnostic : React.memo empêche les re-renders, donc le style reste stable */}
+        {/* Solution "Bunker" : Wrapper React simple */}
+        {/* React ne gère que cette div vide. La div OnlyOffice est créée manuellement en JS pur */}
+        {/* React ne "voit" jamais la div OnlyOffice dans son Virtual DOM, donc il ne peut pas planter dessus */}
         <div
-          id={editorContainerId}
-          ref={containerRef}
-          key={`onlyoffice-container-${editorContainerId}`}
-          data-onlyoffice-container="true"  // Attribut pour identifier le conteneur
-          data-file-path={filePath}  // Stocker le filePath pour le debugging
+          ref={wrapperRef}
           style={{
             width: '100%',
             height: '100%',
-            minWidth: '800px',  // Taille minimale pour éviter les problèmes de rendu
+            minWidth: '800px',
             minHeight: '600px',
-            position: 'relative',  // Position relative pour qu'il prenne la taille du parent
-            // Point 1 : Utiliser visibility/opacity au lieu de display pour garder le DOM stable
-            // React ne retire jamais ce conteneur du DOM, il le cache juste
-            visibility: loading || error ? 'hidden' : 'visible',
-            opacity: loading || error ? 0 : 1,
-            // Empêcher React de modifier le style après que OnlyOffice ait pris le contrôle
-            pointerEvents: loading || error ? 'none' : 'auto',
+            position: 'relative',
           }}
         />
       </EditorContent>
@@ -382,10 +305,9 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
   );
 };
 
-// Utiliser React.memo avec une condition stricte pour éviter les re-renders inutiles
-// Point 2 du diagnostic : Empêcher les re-renders une fois l'éditeur initialisé
-// Retourner true = "Ne pas re-render" (props identiques)
-// Retourner false = "Re-render" (props différentes)
+// Solution "Bunker" : React.memo pour éviter les re-renders inutiles
+// Même avec la solution "Bunker" qui isole la div OnlyOffice du Virtual DOM,
+// on empêche encore les re-renders pour optimiser les performances
 export default React.memo(OnlyOfficeEditor, (prevProps, nextProps) => {
   // Re-render UNIQUEMENT si filePath, fileName ou mode changent réellement
   // Cela empêche React de re-render pour d'autres raisons (state parent, etc.)
