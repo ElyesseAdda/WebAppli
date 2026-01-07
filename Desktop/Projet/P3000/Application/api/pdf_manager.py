@@ -20,7 +20,7 @@ from .utils import (
     custom_slugify,
     normalize_drive_segment
 )
-from .views_drive.manager import normalize_filename
+from .views_drive.manager import normalize_filename, denormalize_filename
 from .drive_automation import drive_automation
 
 
@@ -606,8 +606,10 @@ class PDFManager:
             file_extension = file_path.split('.')[-1].lower() if '.' in file_path else ''
             content_type = self.get_mime_type(file_extension)
             
-            # Extraire le nom du fichier
-            file_name = file_path.split('/')[-1]
+            # Extraire le nom du fichier normalisé depuis le chemin S3
+            normalized_file_name = file_path.split('/')[-1]
+            # Convertir le nom normalisé en nom d'affichage (avec espaces)
+            file_name = denormalize_filename(normalized_file_name)
             
             print(f"✅ Fichier téléchargé avec succès: {file_name} ({len(file_content)} octets, {content_type})")
             return True, file_content, content_type, file_name

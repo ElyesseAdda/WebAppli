@@ -36,6 +36,28 @@ def normalize_filename(filename: str) -> str:
     return normalized
 
 
+def denormalize_filename(normalized_filename: str) -> str:
+    """
+    Convertit un nom de fichier normalisé (avec underscores) en nom d'affichage (avec espaces)
+    C'est l'inverse de normalize_filename
+    
+    Args:
+        normalized_filename: Nom normalisé avec underscores
+        
+    Returns:
+        Nom d'affichage avec espaces
+    """
+    if not normalized_filename:
+        return normalized_filename
+    
+    # Remplacer les underscores par des espaces pour l'affichage
+    # Décoder le slash encodé '∕' (U+2215) vers '/'
+    display_name = normalized_filename.replace('_', ' ')
+    display_name = display_name.replace('∕', '/')
+    
+    return display_name
+
+
 def normalize_path_segments(path: str) -> str:
     """
     Normalise tous les segments d'un chemin (dossiers et fichiers)
@@ -254,10 +276,12 @@ class DriveManager:
             URL présignée
         """
         try:
-            # Extraire le nom du fichier pour le Content-Disposition
-            file_name = file_path.split('/')[-1]
+            # Extraire le nom du fichier normalisé depuis le chemin S3
+            normalized_file_name = file_path.split('/')[-1]
+            # Convertir le nom normalisé en nom d'affichage (avec espaces)
+            display_file_name = denormalize_filename(normalized_file_name)
             # Pour les URLs présignées S3, utiliser for_presigned_url=True
-            disposition = encode_filename_for_content_disposition(file_name, for_presigned_url=True)
+            disposition = encode_filename_for_content_disposition(display_file_name, for_presigned_url=True)
             
             url = self.storage.get_presigned_url(
                 key=file_path,

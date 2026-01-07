@@ -925,7 +925,8 @@ const DriveExplorer = ({
         // Créer un lien temporaire pour forcer le téléchargement
         const link = document.createElement('a');
         link.href = data.download_url;
-        link.download = fileToDownload.name;
+        // Utiliser le nom d'affichage (avec espaces) au lieu du nom normalisé (avec underscores)
+        link.download = displayFilename(fileToDownload.name);
         link.target = '_blank';
         document.body.appendChild(link);
         link.click();
