@@ -565,9 +565,14 @@ def check_onlyoffice_view(request):
         
         # Tester la connexion directement
         import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)  # Désactiver les warnings SSL
+        
         healthcheck_url = f"{onlyoffice_url}/healthcheck"
         try:
-            response = requests.get(healthcheck_url, timeout=5)
+            # Si l'URL est HTTPS avec une IP, désactiver la vérification SSL (certificat auto-signé)
+            verify_ssl = not (onlyoffice_url.startswith('https://127.0.0.1') or onlyoffice_url.startswith('https://72.60.90.127'))
+            response = requests.get(healthcheck_url, timeout=5, verify=verify_ssl)
             is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
             
             return JsonResponse({
@@ -576,6 +581,19 @@ def check_onlyoffice_view(request):
                 'jwt_enabled': jwt_enabled
             }, status=200)
         except requests.RequestException as e:
+            # Si erreur SSL, réessayer sans vérification
+            if 'SSL' in str(e) or 'certificate' in str(e).lower():
+                try:
+                    response = requests.get(healthcheck_url, timeout=5, verify=False)
+                    is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
+                    return JsonResponse({
+                        'available': is_available,
+                        'server_url': onlyoffice_url,
+                        'jwt_enabled': jwt_enabled
+                    }, status=200)
+                except:
+                    pass
+            
             return JsonResponse({
                 'available': False,
                 'error': f'OnlyOffice server is unreachable: {str(e)}',

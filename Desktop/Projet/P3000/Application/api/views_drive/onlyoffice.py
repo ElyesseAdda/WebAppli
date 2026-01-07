@@ -168,7 +168,9 @@ class OnlyOfficeManager:
         """
         try:
             healthcheck_url = f"{settings.ONLYOFFICE_SERVER_URL}/healthcheck"
-            response = requests.get(healthcheck_url, timeout=5)
+        # Désactiver la vérification SSL pour les certificats auto-signés
+            verify_ssl = not settings.ONLYOFFICE_SERVER_URL.startswith('https://127.0.0.1') and not settings.ONLYOFFICE_SERVER_URL.startswith('https://72.60.90.127')
+            response = requests.get(healthcheck_url, timeout=5, verify=verify_ssl)
             
             is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
             
@@ -178,10 +180,25 @@ class OnlyOfficeManager:
                 'jwt_enabled': settings.ONLYOFFICE_JWT_ENABLED
             }
         except requests.RequestException as e:
+            # Si erreur SSL avec certificat auto-signé, réessayer sans vérification
+            if 'SSL' in str(e) or 'certificate' in str(e).lower():
+                try:
+                    healthcheck_url = f"{settings.ONLYOFFICE_SERVER_URL}/healthcheck"
+                    response = requests.get(healthcheck_url, timeout=5, verify=False)
+                    is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
+                    return {
+                        'available': is_available,
+                        'server_url': settings.ONLYOFFICE_SERVER_URL,
+                        'jwt_enabled': settings.ONLYOFFICE_JWT_ENABLED
+                    }
+                except:
+                    pass
+            
             return {
                 'available': False,
-                'error': 'OnlyOffice server is unreachable',
-                'server_url': settings.ONLYOFFICE_SERVER_URL
+                'error': f'OnlyOffice server is unreachable: {str(e)}',
+                'server_url': settings.ONLYOFFICE_SERVER_URL,
+                'jwt_enabled': settings.ONLYOFFICE_JWT_ENABLED
             }
     
     @staticmethod

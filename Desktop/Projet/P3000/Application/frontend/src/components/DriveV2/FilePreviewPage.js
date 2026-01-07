@@ -78,6 +78,7 @@ const FilePreviewPage = () => {
   useEffect(() => {
     const checkOnlyOffice = async () => {
       const available = await OnlyOfficeCache.checkAvailability();
+      console.log('[OnlyOffice Debug] Available:', available);
       setOnlyOfficeAvailable(available);
     };
 
@@ -201,16 +202,21 @@ const FilePreviewPage = () => {
     switch (fileType) {
       case 'pdf':
         // Si OnlyOffice est disponible, l'utiliser directement
+        console.log('[OnlyOffice Debug] PDF file - onlyOfficeAvailable:', onlyOfficeAvailable, 'filePath:', filePath);
         if (onlyOfficeAvailable) {
+          const editorUrl = `/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`;
+          console.log('[OnlyOffice Debug] Opening editor at:', editorUrl);
           return (
             <iframe
-              src={`/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`}
+              src={editorUrl}
               title={fileName}
               style={{
                 width: '100%',
                 height: '100%',
                 border: 'none',
               }}
+              onLoad={() => console.log('[OnlyOffice Debug] Editor iframe loaded')}
+              onError={(e) => console.error('[OnlyOffice Debug] Editor iframe error:', e)}
             />
           );
         }
@@ -289,17 +295,22 @@ const FilePreviewPage = () => {
 
       case 'office':
         // Si OnlyOffice est disponible et pas d'erreur, l'utiliser en priorité
+        console.log('[OnlyOffice Debug] Office file - onlyOfficeAvailable:', onlyOfficeAvailable, 'isOfficeEditable:', isOfficeEditable(), 'onlyOfficeError:', onlyOfficeError, 'filePath:', filePath);
         if (onlyOfficeAvailable && isOfficeEditable() && !onlyOfficeError) {
+          const editorUrl = `/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`;
+          console.log('[OnlyOffice Debug] Opening editor at:', editorUrl);
           return (
             <iframe
-              src={`/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`}
+              src={editorUrl}
               title={fileName}
               style={{
                 width: '100%',
                 height: '100%',
                 border: 'none',
               }}
-              onError={() => {
+              onLoad={() => console.log('[OnlyOffice Debug] Editor iframe loaded')}
+              onError={(e) => {
+                console.error('[OnlyOffice Debug] Editor iframe error:', e);
                 setOnlyOfficeError(true);
               }}
             />
