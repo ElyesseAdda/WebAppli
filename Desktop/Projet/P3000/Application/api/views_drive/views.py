@@ -506,8 +506,10 @@ class DriveV2ViewSet(viewsets.ViewSet):
             )
             
             # 7. Gestion propre du nom de fichier pour le téléchargement (gère les accents)
+            # IMPORTANT : Utiliser 'attachment' au lieu de 'inline' pour OnlyOffice
+            # OnlyOffice a besoin de 'attachment' pour traiter le fichier comme un téléchargement physique
             filename = final_key.split('/')[-1]
-            response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
+            response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'attachment')
             response['Content-Length'] = s3_meta['ContentLength']
             response['Accept-Ranges'] = 'bytes'
             
@@ -815,7 +817,9 @@ def proxy_file_view(request):
         # Ajouter les headers
         response['Content-Length'] = s3_response['ContentLength']
         filename = file_path.split("/")[-1]
-        response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
+        # IMPORTANT : Utiliser 'attachment' au lieu de 'inline' pour OnlyOffice
+        # OnlyOffice a besoin de 'attachment' pour traiter le fichier comme un téléchargement physique
+        response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'attachment')
         response['Accept-Ranges'] = 'bytes'
         response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response['Pragma'] = 'no-cache'
