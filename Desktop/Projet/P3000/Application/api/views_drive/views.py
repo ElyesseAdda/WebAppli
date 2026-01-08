@@ -443,6 +443,11 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 )
             
             # Générer l'URL du fichier pour OnlyOffice
+            # DEBUG : Logger le paramètre use_proxy reçu
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[OnlyOffice] use_proxy={use_proxy} pour {file_name}")
+            
             if use_proxy:
                 # Utiliser le proxy Django au lieu de l'URL S3 directe
                 from urllib.parse import urlencode
@@ -450,9 +455,21 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 file_url = request.build_absolute_uri(f'/api/drive-v2/proxy-file/?{params}')
                 # Normaliser l'URL pour qu'elle soit accessible depuis Docker
                 file_url = OnlyOfficeManager.normalize_callback_url(file_url)
+                logger.info(f"[OnlyOffice] Utilisation du proxy Django: {file_url[:100]}...")
             else:
                 # URL S3 directe (valide 24h)
+                # IMPORTANT : Générer une URL S3 signée complète (https://bucket.s3.region.amazonaws.com/...)
                 file_url = self.drive_manager.get_onlyoffice_url(file_path, expires_in=86400)
+                # DEBUG : Logger l'URL S3 générée pour vérification
+                logger.info(f"[OnlyOffice] URL S3 générée pour {file_name}: {file_url[:150]}...")
+                
+                # Vérifier que l'URL est bien une URL S3 complète
+                from urllib.parse import urlparse
+                parsed = urlparse(file_url)
+                if 's3' not in parsed.netloc.lower() and 'amazonaws.com' not in parsed.netloc.lower():
+                    logger.error(f"[OnlyOffice] ERREUR: L'URL générée n'est pas une URL S3: {parsed.netloc}")
+                else:
+                    logger.info(f"[OnlyOffice] URL S3 valide détectée: {parsed.netloc}")
             
             # URL de callback pour sauvegarder les modifications
             callback_url = request.build_absolute_uri('/api/drive-v2/onlyoffice-callback/')

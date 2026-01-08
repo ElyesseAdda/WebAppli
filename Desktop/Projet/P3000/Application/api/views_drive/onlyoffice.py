@@ -251,12 +251,27 @@ class OnlyOfficeManager:
         cache.set(f"onlyoffice_key_{document_key}", file_path, timeout=604800)
         
         # Configuration OnlyOffice
+        # IMPORTANT : Vérifier que file_url est une URL S3 complète (https://bucket.s3.region.amazonaws.com/...)
+        # Si ce n'est pas le cas, OnlyOffice pourrait essayer de passer par son propre serveur
+        from urllib.parse import urlparse
+        parsed_file_url = urlparse(file_url)
+        
+        # Logger l'URL pour debug
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[OnlyOffice] URL fichier pour {file_name}: {file_url[:150]}...")  # Logger les 150 premiers caractères
+        
+        # Vérifier que l'URL est bien une URL S3 externe (pas un domaine local)
+        is_s3_url = 's3' in parsed_file_url.netloc.lower() or 'amazonaws.com' in parsed_file_url.netloc.lower()
+        if not is_s3_url and not settings.DEBUG:
+            logger.warning(f"[OnlyOffice] ATTENTION: L'URL du fichier ne semble pas être une URL S3: {parsed_file_url.netloc}")
+        
         config = {
             "document": {
                 "fileType": file_name.split('.')[-1].lower(),
                 "key": document_key,
                 "title": file_name,
-                "url": file_url,
+                "url": file_url,  # URL S3 signée complète
                 "permissions": {
                     "comment": mode == 'edit',
                     "copy": True,
@@ -293,6 +308,12 @@ class OnlyOfficeManager:
                 "callbackUrl": OnlyOfficeManager.normalize_callback_url(callback_url),
                 "lang": "fr",
                 "mode": mode,
+                # IMPORTANT : Désactiver le téléchargement via le serveur OnlyOffice
+                # Forcer OnlyOffice à télécharger directement depuis l'URL S3 fournie
+                "coEditing": {
+                    "mode": "fast",
+                    "change": True
+                },
             },
             "height": "100%",
             "width": "100%",

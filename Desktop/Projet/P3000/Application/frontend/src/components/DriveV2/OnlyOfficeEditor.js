@@ -168,6 +168,10 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         const data = await response.json();
         setConfig(data);
 
+        // DEBUG : Afficher l'URL du fichier pour vérifier que c'est bien une URL S3
+        console.log('[OnlyOffice Debug] File URL:', data.config?.document?.url);
+        console.log('[OnlyOffice Debug] Full config:', JSON.stringify(data.config, null, 2));
+
         // Préparer la configuration pour OnlyOffice avec callbacks sécurisés
         // Solution "Bunker" : Envelopper tous les callbacks dans setTimeout(..., 0)
         // Cela sort l'exécution du cycle de rendu React actuel
