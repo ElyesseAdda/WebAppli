@@ -38,63 +38,41 @@ class OnlyOfficeManager:
         # Si l'URL contient 127.0.0.1 ou localhost
         if parsed.hostname in ('127.0.0.1', 'localhost'):
             if is_production:
-                # En production : utiliser localhost (Docker sur Linux peut accéder au host)
-                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
-                return f"{parsed.scheme}://localhost:{port}{parsed.path}"
+                # En production : utiliser localhost:8000 (port Django interne) pour Docker
+                # IMPORTANT : Docker accède directement à Django sur le port 8000, pas via nginx (443)
+                query_string = f"?{parsed.query}" if parsed.query else ""
+                return f"http://localhost:8000{parsed.path}{query_string}"
             else:
-                # En développement : utiliser host.docker.internal (Docker Desktop)
-                return url.replace('127.0.0.1', 'host.docker.internal').replace('localhost', 'host.docker.internal')
+                # En développement : utiliser host.docker.internal:8000 (Docker Desktop)
+                query_string = f"?{parsed.query}" if parsed.query else ""
+                return f"http://host.docker.internal:8000{parsed.path}{query_string}"
         
-        # Si l'URL utilise une IP externe (comme 72.60.90.127)
+        # Si l'URL utilise une IP externe ou un domaine (comme 72.60.90.127 ou myp3000app.com)
         # En production, si OnlyOffice et Django sont sur le même serveur,
-        # remplacer l'IP par localhost pour que Docker puisse accéder au host
+        # remplacer par localhost:8000 pour que Docker puisse accéder directement à Django
         if is_production and parsed.hostname:
             onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
             onlyoffice_parsed = urlparse(onlyoffice_url)
             
-            # Si l'IP de l'URL correspond à l'IP du serveur OnlyOffice
-            # OU si OnlyOffice utilise aussi cette IP, alors on est sur le même serveur
-            if (parsed.hostname == onlyoffice_parsed.hostname or 
-                (onlyoffice_parsed.hostname in settings.ALLOWED_HOSTS and 
-                 parsed.hostname in settings.ALLOWED_HOSTS)):
-                # Utiliser localhost car on est sur le même serveur
-                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
-                return f"{parsed.scheme}://localhost:{port}{parsed.path}"
+            # Liste des domaines/IPs qui indiquent qu'on est sur le même serveur
+            same_server_hostnames = [
+                onlyoffice_parsed.hostname,
+                'myp3000app.com',
+                'www.myp3000app.com',
+                '72.60.90.127',
+                '127.0.0.1',
+                'localhost'
+            ]
+            
+            # Vérifier si l'URL est pour le même serveur
+            if (parsed.hostname in same_server_hostnames or 
+                parsed.hostname in (settings.ALLOWED_HOSTS if hasattr(settings, 'ALLOWED_HOSTS') else [])):
+                # IMPORTANT : Utiliser localhost:8000 (port Django interne) et non 443 (nginx)
+                # OnlyOffice dans Docker doit accéder directement à Django sur le port 8000
+                query_string = f"?{parsed.query}" if parsed.query else ""
+                return f"http://localhost:8000{parsed.path}{query_string}"
         
         # Si l'URL utilise déjà un domaine/IP externe différent, la retourner telle quelle
-        return url
-    
-    @staticmethod
-    def normalize_file_url(url: str) -> str:
-        """
-        Normalise l'URL de fichier pour OnlyOffice.
-        S'assure que OnlyOffice peut accéder aux fichiers Django depuis son conteneur Docker.
-        
-        Args:
-            url: URL de fichier originale (ex: https://myp3000app.com/api/drive-v2/proxy-file/...)
-            
-        Returns:
-            URL normalisée accessible depuis Docker
-        """
-        parsed = urlparse(url)
-        is_production = not settings.DEBUG
-        
-        # En production, si OnlyOffice est sur le même serveur que Django,
-        # utiliser localhost pour que Docker puisse accéder au host
-        if is_production:
-            onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
-            onlyoffice_parsed = urlparse(onlyoffice_url)
-            
-            # Si l'URL utilise le même domaine/IP que OnlyOffice, utiliser localhost
-            if parsed.hostname == onlyoffice_parsed.hostname:
-                # Remplacer par localhost:8000 (port Django interne)
-                return f"http://localhost:8000{parsed.path}?{parsed.query}" if parsed.query else f"http://localhost:8000{parsed.path}"
-            elif parsed.hostname in ('myp3000app.com', 'www.myp3000app.com', '72.60.90.127'):
-                # Si l'URL utilise le domaine public mais OnlyOffice est sur le même serveur
-                # Utiliser localhost:8000 pour accès direct depuis Docker
-                return f"http://localhost:8000{parsed.path}?{parsed.query}" if parsed.query else f"http://localhost:8000{parsed.path}"
-        
-        # En développement ou si les serveurs sont séparés, retourner l'URL telle quelle
         return url
     
     @staticmethod
