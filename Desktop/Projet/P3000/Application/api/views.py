@@ -9763,7 +9763,9 @@ class RecapFinancierChantierAPIView(APIView):
         # --- Agrégation des totaux et des listes ---
         # Remplacement de la logique matériel par PaiementFournisseurMateriel
         paiements_materiel = PaiementFournisseurMateriel.objects.filter(chantier=chantier)
-        if date_debut and date_fin and mois and annee:
+        # En mode global (mois et annee non définis), on inclut tous les paiements de matériel
+        # En mode période, on filtre par mois et année
+        if mois and annee:
             paiements_materiel = paiements_materiel.filter(mois=int(mois), annee=int(annee))
         
         def paiement_materiel_to_doc(pm):
@@ -9778,9 +9780,9 @@ class RecapFinancierChantierAPIView(APIView):
             }
         
         # Utiliser montant_a_payer pour le total car c'est ce que l'utilisateur saisit comme dépense
-        # Si montant_a_payer n'existe pas, utiliser montant comme fallback
+        # Si montant_a_payer n'existe pas ou est 0, utiliser montant comme fallback
         total_materiel = float(sum(
-            (pm.montant_a_payer if pm.montant_a_payer else pm.montant) 
+            (float(pm.montant_a_payer) if pm.montant_a_payer and float(pm.montant_a_payer) > 0 else float(pm.montant or 0)) 
             for pm in paiements_materiel
         ))
         documents_materiel = [paiement_materiel_to_doc(pm) for pm in paiements_materiel]
