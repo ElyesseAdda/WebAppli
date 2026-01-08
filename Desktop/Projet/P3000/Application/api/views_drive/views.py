@@ -361,7 +361,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
             )
     
     
-    @action(detail=False, methods=['get'], url_path='proxy-file', permission_classes=[AllowAny])
+    @action(detail=False, methods=['get', 'options'], url_path='proxy-file', permission_classes=[AllowAny])
     @method_decorator(csrf_exempt)
     def proxy_file(self, request):
         """
@@ -374,6 +374,15 @@ class DriveV2ViewSet(viewsets.ViewSet):
             - file_path: Chemin du fichier dans S3 (peut être URL-encodé avec accents)
             - token: Token JWT temporaire pour OnlyOffice (optionnel si authentification Django disponible)
         """
+        # Gérer les requêtes OPTIONS (preflight CORS)
+        if request.method == 'OPTIONS':
+            response = Response(status=status.HTTP_200_OK)
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+            response['Access-Control-Max-Age'] = '3600'
+            return response
+        
         try:
             # 1. Récupérer le chemin brut envoyé par OnlyOffice/React (peut être URL-encodé)
             raw_path = request.query_params.get('file_path')
@@ -506,6 +515,15 @@ class DriveV2ViewSet(viewsets.ViewSet):
             response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             response['Pragma'] = 'no-cache'
             response['Expires'] = '0'
+            
+            # Headers CORS pour permettre à OnlyOffice (Docker) d'accéder au fichier
+            # OnlyOffice fait des requêtes cross-origin depuis son conteneur Docker
+            # IMPORTANT : Utiliser '*' pour Access-Control-Allow-Origin (OnlyOffice ne peut pas envoyer d'origin spécifique)
+            # Si on utilise '*', on ne peut PAS utiliser Access-Control-Allow-Credentials: true
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Range'
+            response['Access-Control-Expose-Headers'] = 'Content-Length, Content-Range, Content-Type, Accept-Ranges'
             
             return response
             
@@ -758,6 +776,15 @@ def proxy_file_view(request):
     (Utilisé par OnlyOffice si il ne peut pas accéder directement à S3)
     Pas d'authentification requise car OnlyOffice n'envoie pas de credentials Django
     """
+    # Gérer les requêtes OPTIONS (preflight CORS)
+    if request.method == 'OPTIONS':
+        response = JsonResponse({}, status=200)
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Range'
+        response['Access-Control-Max-Age'] = '3600'
+        return response
+    
     if request.method not in ['GET', 'HEAD']:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
@@ -790,7 +817,17 @@ def proxy_file_view(request):
         filename = file_path.split("/")[-1]
         response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
         response['Accept-Ranges'] = 'bytes'
-        response['Cache-Control'] = 'no-cache'
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        
+        # Headers CORS pour permettre à OnlyOffice (Docker) d'accéder au fichier
+        # IMPORTANT : Utiliser '*' pour Access-Control-Allow-Origin (OnlyOffice ne peut pas envoyer d'origin spécifique)
+        # Si on utilise '*', on ne peut PAS utiliser Access-Control-Allow-Credentials: true
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Range'
+        response['Access-Control-Expose-Headers'] = 'Content-Length, Content-Range, Content-Type, Accept-Ranges'
         
         return response
         

@@ -45,9 +45,8 @@ services:
     networks:
       - onlyoffice_network
     # SOLUTION : Ajouter extra_hosts pour résoudre le domaine public
-    extra_hosts:
-      - "myp3000app.com:host-gateway"
-      - "www.myp3000app.com:host-gateway"
+    
+    
 ```
 
 **Version ancienne Docker Linux (si `host-gateway` ne fonctionne pas) :**
