@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.clickjacking import xframe_options_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
@@ -362,6 +363,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
     
     
     @action(detail=False, methods=['get', 'options'], url_path='proxy-file', permission_classes=[AllowAny])
+    @method_decorator(xframe_options_exempt)  # Désactive X-Frame-Options pour OnlyOffice
     @method_decorator(csrf_exempt)
     def proxy_file(self, request):
         """
@@ -771,6 +773,9 @@ def check_onlyoffice_view(request):
 
 
 # Vue fonction pour le proxy (en dehors du ViewSet pour éviter les problèmes de permissions)
+# IMPORTANT : @xframe_options_exempt désactive X-Frame-Options pour cette vue
+# OnlyOffice a besoin que cet en-tête soit absent pour télécharger les fichiers
+@xframe_options_exempt
 @csrf_exempt
 def proxy_file_view(request):
     """

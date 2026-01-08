@@ -34,7 +34,10 @@ services:
       - JWT_ENABLED=true
       - JWT_SECRET=votre-secret-jwt-super-long-et-complexe-changez-moi
       - JWT_HEADER=Authorization
-      # ... autres variables d'environnement
+      # IMPORTANT : Désactiver les vérifications SSL pour les certificats Let's Encrypt
+      - USE_UNAUTHORIZED_STORAGE=true
+      # NUCLEAR OPTION : Désactive toutes les vérifications SSL de Node.js
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     volumes:
       - onlyoffice_data:/var/www/onlyoffice/Data
       - onlyoffice_logs:/var/log/onlyoffice
@@ -45,8 +48,9 @@ services:
     networks:
       - onlyoffice_network
     # SOLUTION : Ajouter extra_hosts pour résoudre le domaine public
-    
-    
+    extra_hosts:
+      - "myp3000app.com:host-gateway"
+      - "www.myp3000app.com:host-gateway"
 ```
 
 **Version ancienne Docker Linux (si `host-gateway` ne fonctionne pas) :**
