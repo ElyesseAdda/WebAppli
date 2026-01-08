@@ -366,14 +366,17 @@ class DriveV2ViewSet(viewsets.ViewSet):
     def proxy_file(self, request):
         """
         Proxy pour servir les fichiers S3 via le backend
-        (Utilisé par OnlyOffice si il ne peut pas accéder directement à S3)
-        Note: Pas d'authentification car OnlyOffice n'envoie pas de credentials
+        (Utilisé par OnlyOffice qui ne peut pas accéder directement à S3 depuis Docker)
+        
+        Solution 2 : Authentification par token au lieu de session/cookies
         
         Query params:
             - file_path: Chemin du fichier dans S3
+            - token: Token JWT temporaire pour OnlyOffice (optionnel si authentification Django disponible)
         """
         try:
             file_path = request.query_params.get('file_path')
+            token = request.query_params.get('token')
             
             if not file_path:
                 return Response(
@@ -381,28 +384,111 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            # Solution 2 : Vérifier le token si fourni (pour OnlyOffice)
+            # Sinon, vérifier l'authentification Django normale
+            if token:
+                try:
+                    import jwt
+                    import time
+                    from django.conf import settings
+                    token_secret = f"{settings.SECRET_KEY}_onlyoffice_file_token"
+                    
+                    # Décoder et vérifier le token
+                    payload = jwt.decode(token, token_secret, algorithms=['HS256'])
+                    
+                    # Vérifier que le file_path correspond au token
+                    if payload.get('file_path') != file_path:
+                        return Response(
+                            {'error': 'Token invalide pour ce fichier'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+                    
+                    # Token valide, continuer
+                except jwt.InvalidTokenError:
+                    return Response(
+                        {'error': 'Token invalide'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            else:
+                # Pas de token : vérifier l'authentification Django normale
+                if not request.user.is_authenticated:
+                    return Response(
+                        {'error': 'Authentification requise'},
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+            
+            # Normaliser le file_path en Unicode NFC pour éviter les erreurs S3 avec les accents
+            # Problème : macOS/Linux peut encoder les accents en NFD (U+004F + U+0302) au lieu de NFC (U+00D4)
+            # AWS S3 est strict : le nom dans l'URL signée doit correspondre exactement au nom réel du fichier
+            import unicodedata
+            file_path_normalized = unicodedata.normalize('NFC', file_path)
+            
             # Télécharger le fichier depuis S3
             s3_client = self.drive_manager.storage.s3_client
             bucket_name = self.drive_manager.storage.bucket_name
             
-            s3_response = s3_client.get_object(
-                Bucket=bucket_name,
-                Key=file_path
-            )
+            # Essayer d'abord avec le chemin normalisé, puis avec le chemin original si échec
+            from botocore.exceptions import ClientError
+            try:
+                s3_response = s3_client.get_object(
+                    Bucket=bucket_name,
+                    Key=file_path_normalized
+                )
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', '')
+                if error_code == 'NoSuchKey' and file_path_normalized != file_path:
+                    # Si échec avec NFC, essayer avec le chemin original
+                    s3_response = s3_client.get_object(
+                        Bucket=bucket_name,
+                        Key=file_path
+                    )
+                else:
+                    raise
+            
+            # Détecter le Content-Type correct selon l'extension
+            from mimetypes import guess_type
+            filename = file_path.split("/")[-1]
+            guessed_type, _ = guess_type(filename)
+            
+            # Utiliser le Content-Type de S3 s'il est valide, sinon utiliser le type deviné
+            content_type = s3_response.get('ContentType', 'application/octet-stream')
+            if not content_type or content_type == 'application/octet-stream':
+                if guessed_type:
+                    content_type = guessed_type
+                else:
+                    # Fallback selon l'extension
+                    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+                    type_map = {
+                        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'xls': 'application/vnd.ms-excel',
+                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'doc': 'application/msword',
+                        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        'ppt': 'application/vnd.ms-powerpoint',
+                        'pdf': 'application/pdf',
+                    }
+                    content_type = type_map.get(ext, 'application/octet-stream')
+            
+            # Lire le contenu du fichier depuis S3
+            file_content = s3_response['Body'].read()
             
             # Créer la réponse HTTP avec le contenu du fichier
-            from django.http import StreamingHttpResponse
+            from django.http import HttpResponse
             
-            response = StreamingHttpResponse(
-                s3_response['Body'].iter_chunks(),
-                content_type=s3_response.get('ContentType', 'application/octet-stream')
+            response = HttpResponse(
+                file_content,
+                content_type=content_type
             )
             
             # Ajouter les headers
-            response['Content-Length'] = s3_response['ContentLength']
-            filename = file_path.split("/")[-1]
+            response['Content-Length'] = len(file_content)
             response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
             response['Accept-Ranges'] = 'bytes'
+            
+            # Headers pour OnlyOffice
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
             
             return response
             
@@ -442,34 +528,51 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Générer l'URL du fichier pour OnlyOffice
-            # DEBUG : Logger le paramètre use_proxy reçu
+            # Solution 2 : Utiliser le proxy Django avec authentification par token
+            # OnlyOffice ne peut pas télécharger directement depuis S3 (problème réseau Docker)
+            # On utilise le proxy Django qui a accès à S3, avec un token temporaire au lieu de cookies
             import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"[OnlyOffice] use_proxy={use_proxy} pour {file_name}")
+            import jwt
+            import time
+            from urllib.parse import urlencode
             
-            if use_proxy:
-                # Utiliser le proxy Django au lieu de l'URL S3 directe
-                from urllib.parse import urlencode
-                params = urlencode({'file_path': file_path})
-                file_url = request.build_absolute_uri(f'/api/drive-v2/proxy-file/?{params}')
-                # Normaliser l'URL pour qu'elle soit accessible depuis Docker
-                file_url = OnlyOfficeManager.normalize_callback_url(file_url)
-                logger.info(f"[OnlyOffice] Utilisation du proxy Django: {file_url[:100]}...")
-            else:
-                # URL S3 directe (valide 24h)
-                # IMPORTANT : Générer une URL S3 signée complète (https://bucket.s3.region.amazonaws.com/...)
-                file_url = self.drive_manager.get_onlyoffice_url(file_path, expires_in=86400)
-                # DEBUG : Logger l'URL S3 générée pour vérification
-                logger.info(f"[OnlyOffice] URL S3 générée pour {file_name}: {file_url[:150]}...")
-                
-                # Vérifier que l'URL est bien une URL S3 complète
-                from urllib.parse import urlparse
-                parsed = urlparse(file_url)
-                if 's3' not in parsed.netloc.lower() and 'amazonaws.com' not in parsed.netloc.lower():
-                    logger.error(f"[OnlyOffice] ERREUR: L'URL générée n'est pas une URL S3: {parsed.netloc}")
-                else:
-                    logger.info(f"[OnlyOffice] URL S3 valide détectée: {parsed.netloc}")
+            logger = logging.getLogger(__name__)
+            logger.info(f"[OnlyOffice] Génération de l'URL pour {file_name}")
+            
+            # Normaliser le file_path en Unicode NFC pour éviter les erreurs S3 avec les accents
+            # Problème : macOS/Linux peut encoder les accents en NFD (U+004F + U+0302) au lieu de NFC (U+00D4)
+            # AWS S3 est strict : le nom dans l'URL signée doit correspondre exactement au nom réel du fichier
+            import unicodedata
+            file_path_normalized = unicodedata.normalize('NFC', file_path)
+            logger.info(f"[OnlyOffice] File path normalisé: {file_path} -> {file_path_normalized}")
+            
+            # Générer un token temporaire pour OnlyOffice (valide 24h)
+            # IMPORTANT : Utiliser le file_path normalisé dans le token
+            token_payload = {
+                'file_path': file_path_normalized,  # Utiliser le chemin normalisé
+                'user_id': str(request.user.id),
+                'exp': int(time.time()) + 86400,  # Expiration dans 24h
+                'iat': int(time.time())
+            }
+            
+            # Créer un secret pour les tokens OnlyOffice (utiliser le secret Django + un suffixe)
+            from django.conf import settings
+            token_secret = f"{settings.SECRET_KEY}_onlyoffice_file_token"
+            file_token = jwt.encode(token_payload, token_secret, algorithm='HS256')
+            
+            # Construire l'URL du proxy avec le token
+            # IMPORTANT : Utiliser le file_path normalisé dans l'URL
+            params = urlencode({
+                'file_path': file_path_normalized,  # Utiliser le chemin normalisé
+                'token': file_token
+            })
+            file_url = request.build_absolute_uri(f'/api/drive-v2/proxy-file/?{params}')
+            
+            # Normaliser l'URL pour qu'elle soit accessible depuis OnlyOffice (Docker)
+            # IMPORTANT : Utiliser le domaine public HTTPS pour que OnlyOffice puisse accéder via Internet
+            file_url = OnlyOfficeManager.normalize_file_url(file_url)
+            
+            logger.info(f"[OnlyOffice] URL proxy Django générée pour {file_name}: {file_url[:150]}...")
             
             # URL de callback pour sauvegarder les modifications
             callback_url = request.build_absolute_uri('/api/drive-v2/onlyoffice-callback/')

@@ -154,9 +154,10 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
             file_path: filePath,
             file_name: fileName,
             mode: mode,
-            // Solution 1 : Utiliser l'URL S3 signée directement (pas de proxy Django)
-            // OnlyOffice télécharge directement depuis S3 avec l'URL signée
-            use_proxy: false,  // false = URL S3 signée, true = proxy Django
+            // Solution 2 : Utiliser le proxy Django avec authentification par token
+            // OnlyOffice ne peut pas accéder directement à S3 depuis Docker (problème réseau)
+            // Le proxy Django utilise un token temporaire au lieu de cookies/session
+            use_proxy: true,  // true = proxy Django avec token, false = URL S3 directe (ne fonctionne pas avec Docker)
           }),
         });
 
