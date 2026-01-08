@@ -365,24 +365,29 @@ class DriveV2ViewSet(viewsets.ViewSet):
     @method_decorator(csrf_exempt)
     def proxy_file(self, request):
         """
-        Proxy pour servir les fichiers S3 via le backend
+        Proxy intelligent pour servir les fichiers S3 via le backend
         (Utilisé par OnlyOffice qui ne peut pas accéder directement à S3 depuis Docker)
         
-        Solution 2 : Authentification par token au lieu de session/cookies
+        Solution robuste : Normalisation Unicode intelligente (NFC/NFD) + Authentification par token
         
         Query params:
-            - file_path: Chemin du fichier dans S3
+            - file_path: Chemin du fichier dans S3 (peut être URL-encodé avec accents)
             - token: Token JWT temporaire pour OnlyOffice (optionnel si authentification Django disponible)
         """
         try:
-            file_path = request.query_params.get('file_path')
+            # 1. Récupérer le chemin brut envoyé par OnlyOffice/React (peut être URL-encodé)
+            raw_path = request.query_params.get('file_path')
             token = request.query_params.get('token')
             
-            if not file_path:
+            if not raw_path:
                 return Response(
                     {'error': 'file_path est requis'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            
+            # 2. Décoder les caractères URL (ex: %20 -> espace, %C3%A9 -> é, %CC%82 -> accent circonflexe)
+            from urllib.parse import unquote
+            decoded_path = unquote(raw_path)
             
             # Solution 2 : Vérifier le token si fourni (pour OnlyOffice)
             # Sinon, vérifier l'authentification Django normale
@@ -396,12 +401,18 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     # Décoder et vérifier le token
                     payload = jwt.decode(token, token_secret, algorithms=['HS256'])
                     
-                    # Vérifier que le file_path correspond au token
-                    if payload.get('file_path') != file_path:
-                        return Response(
-                            {'error': 'Token invalide pour ce fichier'},
-                            status=status.HTTP_403_FORBIDDEN
-                        )
+                    # Vérifier que le file_path correspond au token (comparer après décodage)
+                    token_file_path = payload.get('file_path', '')
+                    if token_file_path != decoded_path:
+                        # Si le token contient un chemin normalisé, essayer avec celui-ci
+                        import unicodedata
+                        token_normalized = unicodedata.normalize('NFC', token_file_path)
+                        decoded_normalized = unicodedata.normalize('NFC', decoded_path)
+                        if token_normalized != decoded_normalized:
+                            return Response(
+                                {'error': 'Token invalide pour ce fichier'},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
                     
                     # Token valide, continuer
                 except jwt.InvalidTokenError:
@@ -417,72 +428,78 @@ class DriveV2ViewSet(viewsets.ViewSet):
                         status=status.HTTP_401_UNAUTHORIZED
                     )
             
-            # Normaliser le file_path en Unicode NFC pour éviter les erreurs S3 avec les accents
-            # Problème : macOS/Linux peut encoder les accents en NFD (U+004F + U+0302) au lieu de NFC (U+00D4)
-            # AWS S3 est strict : le nom dans l'URL signée doit correspondre exactement au nom réel du fichier
+            # 3. NORMALISATION MAGIQUE : AWS S3 utilise le format NFC (caractères composés)
+            # Les navigateurs/macOS/Linux peuvent envoyer du NFD (caractères décomposés)
+            # Exemple : "COÛT" peut être encodé en NFC (U+00D4) ou NFD (U+004F + U+0302)
             import unicodedata
-            file_path_normalized = unicodedata.normalize('NFC', file_path)
+            from botocore.exceptions import ClientError
             
-            # Télécharger le fichier depuis S3
             s3_client = self.drive_manager.storage.s3_client
             bucket_name = self.drive_manager.storage.bucket_name
             
-            # Essayer d'abord avec le chemin normalisé, puis avec le chemin original si échec
-            from botocore.exceptions import ClientError
+            # Normaliser en NFC (format standard AWS S3)
+            s3_key_nfc = unicodedata.normalize('NFC', decoded_path)
+            final_key = s3_key_nfc
+            
+            # Astuce de pro : Vérifier d'abord si le fichier existe via head_object
+            # Cela évite de lancer un stream sur un fichier fantôme
             try:
-                s3_response = s3_client.get_object(
-                    Bucket=bucket_name,
-                    Key=file_path_normalized
-                )
+                s3_meta = s3_client.head_object(Bucket=bucket_name, Key=final_key)
             except ClientError as e:
                 error_code = e.response.get('Error', {}).get('Code', '')
-                if error_code == 'NoSuchKey' and file_path_normalized != file_path:
-                    # Si échec avec NFC, essayer avec le chemin original
-                    s3_response = s3_client.get_object(
-                        Bucket=bucket_name,
-                        Key=file_path
-                    )
+                if error_code == 'NoSuchKey':
+                    # FALLBACK : Si NFC échoue, tenter le format NFD (au cas où le fichier a été uploadé depuis un Mac)
+                    try:
+                        s3_key_nfd = unicodedata.normalize('NFD', decoded_path)
+                        final_key = s3_key_nfd
+                        s3_meta = s3_client.head_object(Bucket=bucket_name, Key=final_key)
+                    except ClientError:
+                        # Les deux formats ont échoué
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"ERREUR S3: Impossible de trouver '{decoded_path}' (Testé NFC et NFD)")
+                        return Response(
+                            {'error': f"Fichier introuvable sur S3: {decoded_path}"},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
                 else:
                     raise
             
-            # Détecter le Content-Type correct selon l'extension
-            from mimetypes import guess_type
-            filename = file_path.split("/")[-1]
-            guessed_type, _ = guess_type(filename)
+            # 4. Si on arrive ici, le fichier existe. On lance le téléchargement (Stream)
+            s3_response = s3_client.get_object(Bucket=bucket_name, Key=final_key)
             
-            # Utiliser le Content-Type de S3 s'il est valide, sinon utiliser le type deviné
-            content_type = s3_response.get('ContentType', 'application/octet-stream')
-            if not content_type or content_type == 'application/octet-stream':
-                if guessed_type:
-                    content_type = guessed_type
-                else:
-                    # Fallback selon l'extension
-                    ext = filename.lower().split('.')[-1] if '.' in filename else ''
-                    type_map = {
-                        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        'xls': 'application/vnd.ms-excel',
-                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        'doc': 'application/msword',
-                        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                        'ppt': 'application/vnd.ms-powerpoint',
-                        'pdf': 'application/pdf',
-                    }
-                    content_type = type_map.get(ext, 'application/octet-stream')
+            # 5. Définition du type MIME correct selon l'extension
+            content_type = 'application/octet-stream'
+            ext = final_key.lower().split('.')[-1] if '.' in final_key else ''
+            if ext == 'xlsx':
+                content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            elif ext == 'xls':
+                content_type = 'application/vnd.ms-excel'
+            elif ext == 'docx':
+                content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            elif ext == 'doc':
+                content_type = 'application/msword'
+            elif ext == 'pptx':
+                content_type = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            elif ext == 'ppt':
+                content_type = 'application/vnd.ms-powerpoint'
+            elif ext == 'pdf':
+                content_type = 'application/pdf'
             
-            # Lire le contenu du fichier depuis S3
-            file_content = s3_response['Body'].read()
+            # Utiliser le Content-Type de S3 s'il est valide
+            if s3_response.get('ContentType') and s3_response['ContentType'] != 'application/octet-stream':
+                content_type = s3_response['ContentType']
             
-            # Créer la réponse HTTP avec le contenu du fichier
-            from django.http import HttpResponse
-            
-            response = HttpResponse(
-                file_content,
+            # 6. Créer la réponse avec streaming pour les gros fichiers
+            response = StreamingHttpResponse(
+                s3_response['Body'].iter_chunks(),
                 content_type=content_type
             )
             
-            # Ajouter les headers
-            response['Content-Length'] = len(file_content)
+            # 7. Gestion propre du nom de fichier pour le téléchargement (gère les accents)
+            filename = final_key.split('/')[-1]
             response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
+            response['Content-Length'] = s3_meta['ContentLength']
             response['Accept-Ranges'] = 'bytes'
             
             # Headers pour OnlyOffice
@@ -493,6 +510,9 @@ class DriveV2ViewSet(viewsets.ViewSet):
             return response
             
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erreur dans proxy_file: {str(e)}", exc_info=True)
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
