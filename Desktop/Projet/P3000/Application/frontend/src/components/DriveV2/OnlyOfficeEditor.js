@@ -100,34 +100,49 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
   // Solution "Bunker" : Initialisation avec div créée manuellement en JS pur
   // React ne voit jamais cette div dans son Virtual DOM, donc il ne peut pas planter dessus
   useEffect(() => {
-    // Vérifier que DocsAPI est disponible
-    if (!window.DocsAPI) {
-      console.error('[OnlyOffice Debug] DocsAPI is not defined. Le script api.js n\'est pas chargé.');
-      setError('Le script OnlyOffice n\'est pas chargé. Vérifiez que l\'URL du serveur OnlyOffice est correcte.');
-      setLoading(false);
-      return;
-    }
-    
-    // Sécurité : si pas de wrapper, on sort
-    if (!wrapperRef.current) {
-      return;
-    }
+    // Importer OnlyOfficeCache pour forcer le chargement du script
+    import('./utils/onlyofficeCache').then(({ default: OnlyOfficeCache }) => {
+      // Forcer le chargement du script si nécessaire
+      OnlyOfficeCache.ensureScriptLoaded()
+        .then(() => {
+          // Vérifier que DocsAPI est disponible
+          if (!window.DocsAPI || !window.DocsAPI.DocEditor) {
+            console.error('[OnlyOffice Debug] DocsAPI is not defined. Le script api.js n\'est pas chargé.');
+            setError('Le script OnlyOffice n\'est pas chargé. Vérifiez que l\'URL du serveur OnlyOffice est correcte.');
+            setLoading(false);
+            return;
+          }
+          
+          // Sécurité : si pas de wrapper, on sort
+          if (!wrapperRef.current) {
+            return;
+          }
 
-    // Si une initialisation est en cours, ne rien faire
-    if (isInitializingRef.current) {
-      console.log('[OnlyOffice Debug] Initialisation déjà en cours, skip...');
-      return;
-    }
+          // Si une initialisation est en cours, ne rien faire
+          if (isInitializingRef.current) {
+            console.log('[OnlyOffice Debug] Initialisation déjà en cours, skip...');
+            return;
+          }
 
-    // Si pas de filePath ou fileName, ne pas initialiser
-    if (!filePath || !fileName) {
-      return;
-    }
+          // Si pas de filePath ou fileName, ne pas initialiser
+          if (!filePath || !fileName) {
+            return;
+          }
 
-    // Si l'éditeur existe déjà, ne rien faire
-    if (docEditorRef.current) {
-      return;
-    }
+          // Si l'éditeur existe déjà, ne rien faire
+          if (docEditorRef.current) {
+            return;
+          }
+
+          // Continuer avec l'initialisation normale
+          initEditor();
+        })
+        .catch((err) => {
+          console.error('[OnlyOffice Debug] Erreur lors du chargement du script:', err);
+          setError(`Erreur lors du chargement du script OnlyOffice: ${err.message}`);
+          setLoading(false);
+        });
+    });
 
     const initEditor = async () => {
       isInitializingRef.current = true;

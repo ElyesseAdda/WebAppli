@@ -74,15 +74,44 @@ const FilePreviewPage = () => {
     };
   }, []);
 
-  // Vérifier la disponibilité de OnlyOffice (CACHE OPTIMISÉ)
+  // Vérification simplifiée et forcée - Se base uniquement sur window.DocsAPI
   useEffect(() => {
-    const checkOnlyOffice = async () => {
-      const available = await OnlyOfficeCache.checkAvailability();
-      console.log('[OnlyOffice Debug] Available:', available);
-      setOnlyOfficeAvailable(available);
+    const forceOnlyOffice = async () => {
+      try {
+        // 1. On s'assure que le script est chargé
+        await OnlyOfficeCache.ensureScriptLoaded();
+        console.log('[OnlyOffice Debug] Script OnlyOffice chargé');
+        
+        // 2. On vérifie la présence de l'objet global
+        if (window.DocsAPI && window.DocsAPI.DocEditor) {
+          console.log('[OnlyOffice Debug] DocsAPI détecté, activation de l\'éditeur.');
+          setOnlyOfficeAvailable(true);
+        } else {
+          // Si vraiment pas là, on attend un peu (chargement asynchrone)
+          setTimeout(() => {
+            if (window.DocsAPI && window.DocsAPI.DocEditor) {
+              console.log('[OnlyOffice Debug] DocsAPI détecté après attente, activation de l\'éditeur.');
+              setOnlyOfficeAvailable(true);
+            } else {
+              console.error('[OnlyOffice Debug] DocsAPI introuvable après attente.');
+              setOnlyOfficeAvailable(false);
+            }
+          }, 1000);
+        }
+      } catch (err) {
+        console.error('[OnlyOffice Debug] Erreur lors du chargement du script:', err);
+        // En cas d'erreur de chargement, on vérifie quand même window.DocsAPI
+        // Le script peut être déjà chargé depuis le template HTML
+        if (window.DocsAPI && window.DocsAPI.DocEditor) {
+          console.log('[OnlyOffice Debug] DocsAPI disponible malgré l\'erreur de chargement, activation de l\'éditeur.');
+          setOnlyOfficeAvailable(true);
+        } else {
+          setOnlyOfficeAvailable(false);
+        }
+      }
     };
 
-    checkOnlyOffice();
+    forceOnlyOffice();
   }, []);
 
   // Récupérer l'URL d'affichage (OPTIMISÉ)
@@ -294,9 +323,13 @@ const FilePreviewPage = () => {
         );
 
       case 'office':
-        // Si OnlyOffice est disponible et pas d'erreur, l'utiliser en priorité
-        console.log('[OnlyOffice Debug] Office file - onlyOfficeAvailable:', onlyOfficeAvailable, 'isOfficeEditable:', isOfficeEditable(), 'onlyOfficeError:', onlyOfficeError, 'filePath:', filePath);
-        if (onlyOfficeAvailable && isOfficeEditable() && !onlyOfficeError) {
+        // CRITIQUE : Vérifier aussi directement window.DocsAPI pour forcer l'utilisation
+        const docsApiAvailable = window.DocsAPI && window.DocsAPI.DocEditor;
+        const shouldUseOnlyOffice = (onlyOfficeAvailable || docsApiAvailable) && isOfficeEditable() && !onlyOfficeError;
+        
+        console.log('[OnlyOffice Debug] Office file - onlyOfficeAvailable:', onlyOfficeAvailable, 'docsApiAvailable:', docsApiAvailable, 'isOfficeEditable:', isOfficeEditable(), 'onlyOfficeError:', onlyOfficeError, 'shouldUseOnlyOffice:', shouldUseOnlyOffice, 'filePath:', filePath);
+        
+        if (shouldUseOnlyOffice) {
           const editorUrl = `/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`;
           console.log('[OnlyOffice Debug] Opening editor at:', editorUrl);
           return (
@@ -308,7 +341,10 @@ const FilePreviewPage = () => {
                 height: '100%',
                 border: 'none',
               }}
-              onLoad={() => console.log('[OnlyOffice Debug] Editor iframe loaded')}
+              onLoad={() => {
+                console.log('[OnlyOffice Debug] Editor iframe loaded successfully');
+                setOnlyOfficeError(false); // Réinitialiser l'erreur si le chargement réussit
+              }}
               onError={(e) => {
                 console.error('[OnlyOffice Debug] Editor iframe error:', e);
                 setOnlyOfficeError(true);
@@ -317,7 +353,8 @@ const FilePreviewPage = () => {
           );
         }
         
-        // Fallback sur Office Online (en silence)
+        // Fallback sur Office Online uniquement si OnlyOffice n'est vraiment pas disponible
+        console.warn('[OnlyOffice Debug] Fallback vers Microsoft Office Online - onlyOfficeAvailable:', onlyOfficeAvailable, 'docsApiAvailable:', docsApiAvailable);
         return (
           <iframe
             src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(displayUrl)}`}
