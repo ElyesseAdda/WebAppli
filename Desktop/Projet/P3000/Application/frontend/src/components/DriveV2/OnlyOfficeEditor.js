@@ -100,8 +100,16 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
   // Solution "Bunker" : Initialisation avec div créée manuellement en JS pur
   // React ne voit jamais cette div dans son Virtual DOM, donc il ne peut pas planter dessus
   useEffect(() => {
-    // Sécurité : si pas de wrapper ou si DocsAPI absent, on sort
-    if (!wrapperRef.current || !window.DocsAPI) {
+    // Vérifier que DocsAPI est disponible
+    if (!window.DocsAPI) {
+      console.error('[OnlyOffice Debug] DocsAPI is not defined. Le script api.js n\'est pas chargé.');
+      setError('Le script OnlyOffice n\'est pas chargé. Vérifiez que l\'URL du serveur OnlyOffice est correcte.');
+      setLoading(false);
+      return;
+    }
+    
+    // Sécurité : si pas de wrapper, on sort
+    if (!wrapperRef.current) {
       return;
     }
 
