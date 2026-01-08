@@ -65,6 +65,39 @@ class OnlyOfficeManager:
         return url
     
     @staticmethod
+    def normalize_file_url(url: str) -> str:
+        """
+        Normalise l'URL de fichier pour OnlyOffice.
+        S'assure que OnlyOffice peut accéder aux fichiers Django depuis son conteneur Docker.
+        
+        Args:
+            url: URL de fichier originale (ex: https://myp3000app.com/api/drive-v2/proxy-file/...)
+            
+        Returns:
+            URL normalisée accessible depuis Docker
+        """
+        parsed = urlparse(url)
+        is_production = not settings.DEBUG
+        
+        # En production, si OnlyOffice est sur le même serveur que Django,
+        # utiliser localhost pour que Docker puisse accéder au host
+        if is_production:
+            onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
+            onlyoffice_parsed = urlparse(onlyoffice_url)
+            
+            # Si l'URL utilise le même domaine/IP que OnlyOffice, utiliser localhost
+            if parsed.hostname == onlyoffice_parsed.hostname:
+                # Remplacer par localhost:8000 (port Django interne)
+                return f"http://localhost:8000{parsed.path}?{parsed.query}" if parsed.query else f"http://localhost:8000{parsed.path}"
+            elif parsed.hostname in ('myp3000app.com', 'www.myp3000app.com', '72.60.90.127'):
+                # Si l'URL utilise le domaine public mais OnlyOffice est sur le même serveur
+                # Utiliser localhost:8000 pour accès direct depuis Docker
+                return f"http://localhost:8000{parsed.path}?{parsed.query}" if parsed.query else f"http://localhost:8000{parsed.path}"
+        
+        # En développement ou si les serveurs sont séparés, retourner l'URL telle quelle
+        return url
+    
+    @staticmethod
     def get_document_type(file_name: str) -> str:
         """
         Détermine le type de document pour OnlyOffice

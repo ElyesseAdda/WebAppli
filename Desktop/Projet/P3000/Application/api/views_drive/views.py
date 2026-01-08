@@ -390,19 +390,51 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 Key=file_path
             )
             
-            # Créer la réponse HTTP avec le contenu du fichier
-            from django.http import StreamingHttpResponse
+            # Télécharger le contenu du fichier depuis S3
+            # IMPORTANT : Lire tout le contenu pour éviter les problèmes avec OnlyOffice
+            file_content = s3_response['Body'].read()
             
-            response = StreamingHttpResponse(
-                s3_response['Body'].iter_chunks(),
-                content_type=s3_response.get('ContentType', 'application/octet-stream')
+            # Détecter le Content-Type correct selon l'extension
+            from mimetypes import guess_type
+            filename = file_path.split("/")[-1]
+            guessed_type, _ = guess_type(filename)
+            
+            # Utiliser le Content-Type de S3 s'il est valide, sinon utiliser le type deviné
+            content_type = s3_response.get('ContentType', 'application/octet-stream')
+            if not content_type or content_type == 'application/octet-stream':
+                if guessed_type:
+                    content_type = guessed_type
+                else:
+                    # Fallback selon l'extension
+                    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+                    type_map = {
+                        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'xls': 'application/vnd.ms-excel',
+                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'doc': 'application/msword',
+                        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        'ppt': 'application/vnd.ms-powerpoint',
+                        'pdf': 'application/pdf',
+                    }
+                    content_type = type_map.get(ext, 'application/octet-stream')
+            
+            # Créer la réponse HTTP avec le contenu du fichier
+            from django.http import HttpResponse
+            
+            response = HttpResponse(
+                file_content,
+                content_type=content_type
             )
             
             # Ajouter les headers
-            response['Content-Length'] = s3_response['ContentLength']
-            filename = file_path.split("/")[-1]
+            response['Content-Length'] = len(file_content)
             response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'inline')
             response['Accept-Ranges'] = 'bytes'
+            
+            # Headers pour OnlyOffice
+            response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
             
             return response
             
@@ -448,8 +480,9 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 from urllib.parse import urlencode
                 params = urlencode({'file_path': file_path})
                 file_url = request.build_absolute_uri(f'/api/drive-v2/proxy-file/?{params}')
-                # Normaliser l'URL pour qu'elle soit accessible depuis Docker
-                file_url = OnlyOfficeManager.normalize_callback_url(file_url)
+                # Normaliser l'URL pour qu'elle soit accessible depuis Docker (OnlyOffice)
+                # Utiliser normalize_file_url qui utilise localhost:8000 pour Docker
+                file_url = OnlyOfficeManager.normalize_file_url(file_url)
             else:
                 # URL S3 directe (valide 24h)
                 file_url = self.drive_manager.get_onlyoffice_url(file_path, expires_in=86400)
