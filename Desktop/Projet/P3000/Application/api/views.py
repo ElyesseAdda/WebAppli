@@ -9766,7 +9766,13 @@ class RecapFinancierChantierAPIView(APIView):
         # En mode global (mois et annee non définis), on inclut tous les paiements de matériel
         # En mode période, on filtre par mois et année
         if mois and annee:
-            paiements_materiel = paiements_materiel.filter(mois=int(mois), annee=int(annee))
+            try:
+                mois_int = int(mois)
+                annee_int = int(annee)
+                paiements_materiel = paiements_materiel.filter(mois=mois_int, annee=annee_int)
+            except (ValueError, TypeError):
+                # Si la conversion échoue, on garde tous les paiements
+                pass
         
         def paiement_materiel_to_doc(pm):
             return {
@@ -9862,9 +9868,15 @@ class PaiementFournisseurMaterielAPIView(APIView):
         annee = request.GET.get('annee')
         paiements = PaiementFournisseurMateriel.objects.filter(chantier_id=chantier_id)
         if mois:
-            paiements = paiements.filter(mois=mois)
+            try:
+                paiements = paiements.filter(mois=int(mois))
+            except (ValueError, TypeError):
+                pass
         if annee:
-            paiements = paiements.filter(annee=annee)
+            try:
+                paiements = paiements.filter(annee=int(annee))
+            except (ValueError, TypeError):
+                pass
         serializer = PaiementFournisseurMaterielSerializer(paiements, many=True)
         return Response(serializer.data)
 

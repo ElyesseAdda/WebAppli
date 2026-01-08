@@ -256,8 +256,11 @@ const RecapCategoryDetails = ({
         // Mettre à jour avec les montants À PAYER existants depuis l'API
         paiementsSauvegardes.forEach((paiement) => {
           if (paiement.fournisseur) {
-            // Utiliser montant_a_payer si disponible, sinon 0 - CONVERTIR EN NOMBRE
-            const montant = parseFloat(paiement.montant_a_payer) || 0;
+            // Utiliser montant_a_payer s'il existe et est > 0, sinon utiliser montant
+            // Cette logique correspond à celle du backend pour le calcul du total
+            const montantAPayer = parseFloat(paiement.montant_a_payer) || 0;
+            const montant = parseFloat(paiement.montant) || 0;
+            const montantFinal = (montantAPayer > 0) ? montantAPayer : montant;
             // En mode global, additionner tous les montants pour chaque fournisseur
             // En mode période, remplacer (car un seul paiement par fournisseur/mois)
             if (global) {
@@ -266,11 +269,11 @@ const RecapCategoryDetails = ({
                 paiementsInit[paiement.fournisseur] = 0;
               }
               // Convertir en nombre avant l'addition pour éviter la concaténation de chaînes
-              paiementsInit[paiement.fournisseur] = Number(paiementsInit[paiement.fournisseur]) + Number(montant);
+              paiementsInit[paiement.fournisseur] = Number(paiementsInit[paiement.fournisseur]) + Number(montantFinal);
             } else {
               // En mode période, s'assurer que le fournisseur existe dans paiementsInit
               if (paiementsInit.hasOwnProperty(paiement.fournisseur)) {
-                paiementsInit[paiement.fournisseur] = Number(montant);
+                paiementsInit[paiement.fournisseur] = Number(montantFinal);
               }
             }
           }
@@ -292,12 +295,14 @@ const RecapCategoryDetails = ({
         if (documents) {
           documents.forEach((doc) => {
             if (doc.fournisseur) {
-              // Convertir en nombre pour éviter la concaténation de chaînes
-              const montant = parseFloat(doc.montant_a_payer) || 0;
+              // Utiliser montant_a_payer s'il existe et est > 0, sinon utiliser montant
+              const montantAPayer = parseFloat(doc.montant_a_payer) || 0;
+              const montant = parseFloat(doc.montant) || 0;
+              const montantFinal = (montantAPayer > 0) ? montantAPayer : montant;
               if (global) {
-                paiementsInit[doc.fournisseur] = Number(paiementsInit[doc.fournisseur] || 0) + Number(montant);
+                paiementsInit[doc.fournisseur] = Number(paiementsInit[doc.fournisseur] || 0) + Number(montantFinal);
               } else {
-                paiementsInit[doc.fournisseur] = Number(montant);
+                paiementsInit[doc.fournisseur] = Number(montantFinal);
               }
             }
           });
