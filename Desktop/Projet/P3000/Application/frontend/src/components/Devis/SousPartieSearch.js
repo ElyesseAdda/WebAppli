@@ -4,6 +4,9 @@ import Fuse from 'fuse.js';
 import { FiPlus, FiX, FiSearch } from 'react-icons/fi';
 import axios from 'axios';
 
+// ✅ Constante pour "Lignes directes" (option par défaut)
+const DIRECT_LINES_DESCRIPTION = "Lignes directes";
+
 const SousPartieSearch = ({
   partieId,
   selectedSousParties = [],
@@ -36,8 +39,50 @@ const SousPartieSearch = ({
       !selectedSousParties.some(sp => sp.id === option.value)
     );
 
-    // Si pas de recherche, retourner toutes les options disponibles
+    // ✅ Vérifier si "Lignes directes" est déjà sélectionnée
+    const hasDirectLines = selectedSousParties.some(sp => 
+      sp.description === DIRECT_LINES_DESCRIPTION
+    );
+
+    // ✅ Vérifier si "Lignes directes" existe déjà dans les options chargées depuis l'API
+    // Format API : {value: id, label: description, data: {id, description, ...}}
+    const existingDirectLinesOption = availableOptions.find(option => {
+      const description = option.data?.description || option.label || '';
+      return description === DIRECT_LINES_DESCRIPTION || description.trim() === DIRECT_LINES_DESCRIPTION;
+    });
+
+    // Si pas de recherche, ajouter "Lignes directes" en premier si elle n'est pas déjà sélectionnée
     if (!inputValue || inputValue.trim() === '') {
+      // Si "Lignes directes" existe déjà dans les options, l'utiliser (avec son ID réel)
+      if (existingDirectLinesOption && !hasDirectLines) {
+        // Marquer cette option comme "Lignes directes" pour le style
+        const directLinesOption = {
+          ...existingDirectLinesOption,
+          label: `⚡ ${existingDirectLinesOption.label || DIRECT_LINES_DESCRIPTION}`,
+          data: {
+            ...existingDirectLinesOption.data,
+            isDirectLines: true
+          }
+        };
+        // Retirer l'option des availableOptions pour éviter les doublons
+        const otherOptions = availableOptions.filter(opt => opt.value !== existingDirectLinesOption.value);
+        return [directLinesOption, ...otherOptions];
+      }
+      
+      // Si "Lignes directes" n'existe pas encore, créer une option temporaire pour la création
+      if (!hasDirectLines && !existingDirectLinesOption) {
+        const directLinesOption = {
+          value: `direct_lines_${partieId}`,
+          label: `⚡ ${DIRECT_LINES_DESCRIPTION}`,
+          data: { 
+            description: DIRECT_LINES_DESCRIPTION, 
+            isDirectLines: true,
+            needsCreation: true // Flag pour indiquer qu'il faut créer
+          }
+        };
+        return [directLinesOption, ...availableOptions];
+      }
+      
       return availableOptions;
     }
 
@@ -46,6 +91,56 @@ const SousPartieSearch = ({
     
     // Convertir les résultats Fuse en format React Select
     const results = fuseResults.map(result => result.item);
+    
+    // ✅ Vérifier si la recherche correspond à "Lignes directes"
+    const searchLower = inputValue.toLowerCase().trim();
+    const directLinesMatches = !hasDirectLines && (
+      DIRECT_LINES_DESCRIPTION.toLowerCase().includes(searchLower) ||
+      searchLower.includes('ligne') ||
+      searchLower.includes('directe')
+    );
+    
+    // Si "Lignes directes" correspond à la recherche, l'ajouter en premier
+    if (directLinesMatches) {
+      // Si "Lignes directes" existe déjà dans les options, l'utiliser (avec son ID réel)
+      if (existingDirectLinesOption) {
+        const directLinesOption = {
+          ...existingDirectLinesOption,
+          label: `⚡ ${existingDirectLinesOption.label || DIRECT_LINES_DESCRIPTION}`,
+          data: {
+            ...existingDirectLinesOption.data,
+            isDirectLines: true
+          }
+        };
+        // Retirer l'option des results si elle y est déjà
+        const otherResults = results.filter(opt => opt.value !== existingDirectLinesOption.value);
+        // Si on a des résultats, les ajouter après "Lignes directes"
+        if (otherResults.length > 0) {
+          return [directLinesOption, ...otherResults];
+        }
+        // Si aucun résultat mais correspondance avec "Lignes directes", la retourner seule
+        return [directLinesOption];
+      }
+      
+      // Si "Lignes directes" n'existe pas encore, créer une option temporaire pour la création
+      const directLinesOption = {
+        value: `direct_lines_${partieId}`,
+        label: `⚡ ${DIRECT_LINES_DESCRIPTION}`,
+        data: { 
+          description: DIRECT_LINES_DESCRIPTION, 
+          isDirectLines: true,
+          needsCreation: true // Flag pour indiquer qu'il faut créer
+        }
+      };
+      
+      // Si on a des résultats, les ajouter après "Lignes directes"
+      if (results.length > 0) {
+        return [directLinesOption, ...results];
+      }
+      
+      // Si aucun résultat mais correspondance avec "Lignes directes", la retourner seule
+      return [directLinesOption];
+    }
     
     // Si on a des résultats, les retourner
     if (results.length > 0) {
@@ -79,6 +174,28 @@ const SousPartieSearch = ({
   // Gérer la sélection ou création
   const handleChange = (selectedOption) => {
     if (!selectedOption) return;
+
+    // ✅ Si c'est "Lignes directes", vérifier si elle existe déjà ou doit être créée
+    if (selectedOption.data?.isDirectLines) {
+      // Vérifier si c'est une option existante (avec ID réel) ou une nouvelle à créer
+      const valueStr = selectedOption.value?.toString() || '';
+      const isTemporaryId = valueStr.startsWith('direct_lines_');
+      const hasRealId = selectedOption.data?.id && !isTemporaryId;
+      const needsCreation = selectedOption.data?.needsCreation === true;
+      
+      if (hasRealId && !needsCreation) {
+        // C'est une sous-partie existante, la sélectionner
+        if (onSousPartieSelect) {
+          onSousPartieSelect(selectedOption.data);
+        }
+      } else {
+        // C'est une nouvelle "Lignes directes" à créer
+        if (onSousPartieCreate) {
+          onSousPartieCreate(partieId, DIRECT_LINES_DESCRIPTION);
+        }
+      }
+      return;
+    }
 
     // Si c'est une création
     if (selectedOption.value === 'create' || selectedOption.data?.isCreate) {
@@ -192,7 +309,7 @@ const SousPartieSearch = ({
       <Select
         isClearable
         isSearchable
-        placeholder="Rechercher une sous-partie..."
+        placeholder="Rechercher une sous-partie ou sélectionner 'Lignes directes'..."
         options={optionsWithCreate}
         value={null}
         onChange={handleChange}

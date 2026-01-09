@@ -14,6 +14,9 @@ import SpecialLineEditModal from './LignesSpeciales/SpecialLineEditModal';
 import LigneSpecialeRow from './LignesSpeciales/LigneSpecialeRow';
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
 
+// ✅ Constante pour "Lignes directes"
+const DIRECT_LINES_DESCRIPTION = "Lignes directes";
+
 // Composant zone de placement pour ligne spéciale (style glass)
 const PlacementZone = ({ position, onPlaceLineAt, isActive, lineAwaitingPlacement, displayAs = 'partie' }) => {
   if (!isActive || !lineAwaitingPlacement) return null;
@@ -1132,6 +1135,9 @@ const DevisTable = ({
                                                       const currentSousPartieIndex = sousPartieIndex;
                                                       sousPartieIndex++; // Incrémenter pour la prochaine sous-partie
                                                       
+                                                      // ✅ Vérifier si c'est une "Lignes directes" (affichage simplifié sans en-tête)
+                                                      const isDirectLines = sp.description === "Lignes directes";
+                                                      
                                                       return (
                                                       <React.Fragment key={`sp_wrapper_${sp.id}`}>
                                                       {/* Zone de placement AVANT cette sous-partie */}
@@ -1158,7 +1164,8 @@ const DevisTable = ({
                                                               marginBottom: '12px'
                                                             }}
                                                           >
-                                                            {/* EN-TÊTE DE LA SOUS-PARTIE */}
+                                                            {/* EN-TÊTE DE LA SOUS-PARTIE - Masqué pour "Lignes directes" */}
+                                                            {!isDirectLines && (
                                                             <div 
                                                               style={{ 
                                                                 backgroundColor: 'rgb(157, 197, 226)',
@@ -1283,15 +1290,59 @@ const DevisTable = ({
                                                                 )} €
                                                               </span>
                                                             </div>
+                                                            )}
                                                             
                                                             {/* ZONE DES LIGNES DÉTAILS */}
                                                             <div style={{ 
                                                               backgroundColor: '#fff',
-                                                              padding: '8px 12px',
+                                                              padding: isDirectLines ? '36px 12px 8px 12px' : '8px 12px',
                                                               border: '1px solid #dee2e6',
-                                                              borderTop: 'none',
-                                                              borderRadius: '0 0 4px 4px'
+                                                              borderTop: isDirectLines ? '1px solid #dee2e6' : 'none',
+                                                              borderRadius: isDirectLines ? '4px' : '0 0 4px 4px',
+                                                              position: 'relative'
                                                             }}>
+                                                              {/* ✅ Bouton de suppression discret pour "Lignes directes" */}
+                                                              {isDirectLines && onSousPartieRemove && (
+                                                                <button
+                                                                  onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (window.confirm(`Voulez-vous vraiment supprimer "${DIRECT_LINES_DESCRIPTION}" et toutes ses lignes ?`)) {
+                                                                      onSousPartieRemove(item.id, sp.id);
+                                                                    }
+                                                                  }}
+                                                                  style={{
+                                                                    position: 'absolute',
+                                                                    top: '8px',
+                                                                    left: '8px',
+                                                                    width: '24px',
+                                                                    height: '24px',
+                                                                    padding: '0',
+                                                                    border: 'none',
+                                                                    borderRadius: '4px',
+                                                                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                                                                    color: '#f44336',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    fontSize: '14px',
+                                                                    transition: 'all 0.2s ease',
+                                                                    zIndex: 10
+                                                                  }}
+                                                                  onMouseEnter={(e) => {
+                                                                    e.currentTarget.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+                                                                    e.currentTarget.style.transform = 'scale(1.1)';
+                                                                  }}
+                                                                  onMouseLeave={(e) => {
+                                                                    e.currentTarget.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+                                                                    e.currentTarget.style.transform = 'scale(1)';
+                                                                  }}
+                                                                  title="Supprimer les lignes directes"
+                                                                >
+                                                                  <FiX />
+                                                                </button>
+                                                              )}
+                                                              
                                                               <Droppable droppableId={`lignes-${sp.id}`} type="LIGNE_DETAIL">
                                                                 {(ldProvided, ldSnapshot) => (
                                                                   <div
