@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import React, { useEffect } from "react";
 
-const DatePaiementModal = ({ open, onClose, onSave, datePaiement, montantPaye }) => {
+const DatePaiementModal = ({ open, onClose, onSave, onCancel, datePaiement, montantPaye, hasExistingPayment = false }) => {
   const [localDatePaiement, setLocalDatePaiement] = React.useState("");
   const [localMontantPaye, setLocalMontantPaye] = React.useState("");
 
@@ -70,7 +70,20 @@ const DatePaiementModal = ({ open, onClose, onSave, datePaiement, montantPaye })
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Annuler</Button>
+        <Button onClick={onClose}>Fermer</Button>
+        {hasExistingPayment && (
+          <Button 
+            onClick={() => {
+              if (onCancel) {
+                onCancel();
+              }
+            }} 
+            variant="outlined" 
+            color="error"
+          >
+            Annuler le paiement
+          </Button>
+        )}
         <Button onClick={handleSave} variant="contained" disabled={!localDatePaiement}>
           Valider
         </Button>

@@ -9926,6 +9926,9 @@ class PaiementFournisseurMaterielAPIView(APIView):
                     date_paiement = datetime.strptime(date_paiement_str, '%Y-%m-%d').date()
                 except (ValueError, TypeError):
                     date_paiement = date_paiement_existante
+            elif 'date_paiement' in paiement_data and paiement_data.get('date_paiement') is None:
+                # Si date_paiement est explicitement None dans les données, mettre à None (supprimer)
+                date_paiement = None
             elif date_paiement_existante is not None:
                 # Conserver la date existante si aucune nouvelle date n'est fournie
                 date_paiement = date_paiement_existante
@@ -9977,7 +9980,8 @@ class PaiementFournisseurMaterielAPIView(APIView):
             )
             
             # Créer une entrée d'historique si la date de paiement a changé (après création)
-            if not created and date_paiement_existante is not None and date_paiement != date_paiement_existante:
+            # Ne pas créer d'historique si on supprime la date (date_paiement devient None)
+            if not created and date_paiement_existante is not None and date_paiement != date_paiement_existante and date_paiement is not None:
                 from api.models import HistoriqueModificationPaiementFournisseur
                 HistoriqueModificationPaiementFournisseur.objects.create(
                     paiement=obj,

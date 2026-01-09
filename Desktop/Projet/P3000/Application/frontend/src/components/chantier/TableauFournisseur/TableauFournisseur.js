@@ -58,6 +58,7 @@ const TableauFournisseur = () => {
   // État pour le modal de confirmation de remplissage automatique
   const [confirmFillModalOpen, setConfirmFillModalOpen] = useState(false);
   const [pendingFillAction, setPendingFillAction] = useState(null); // {mois, fournisseur}
+  const [fillDatePaiement, setFillDatePaiement] = useState(new Date().toISOString().split('T')[0]); // Date de paiement pour le remplissage
   
   // État pour le modal de date de paiement de facture
   const [datePaiementFactureModalOpen, setDatePaiementFactureModalOpen] = useState(false);
@@ -175,7 +176,7 @@ const TableauFournisseur = () => {
           annee: anneeComplete,
           montant: montantPaye || 0, // Montant saisi par l'utilisateur = montant payé
           montant_a_payer: montantAPayer, // Montant à payer non modifié
-          date_paiement: datePaiement !== undefined ? (datePaiement || null) : (currentData?.date_paiement || null), // Date de paiement
+          date_paiement: datePaiement !== undefined ? datePaiement : (currentData?.date_paiement || null), // Date de paiement (peut être null pour supprimer)
           date_envoi: dateEnvoi !== undefined ? (dateEnvoi || null) : (currentData?.date_envoi || null), // Date d'envoi
           factures: facturesList.filter(f => {
             // Filtrer les factures vides (objet ou string)
@@ -251,12 +252,12 @@ const TableauFournisseur = () => {
                   a_payer: parseFloat(updatedPaiement.montant_a_payer) || item.a_payer,
                   ecart: (parseFloat(updatedPaiement.montant_a_payer) || item.a_payer) - (parseFloat(updatedPaiement.montant) || 0),
                   factures: facturesMapped.length > 0 ? facturesMapped : (item.factures || []),
-                  date_paiement: updatedPaiement.date_paiement || item.date_paiement || null,
+                  date_paiement: updatedPaiement.date_paiement !== undefined ? updatedPaiement.date_paiement : item.date_paiement,
                   date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : item.date_envoi,
                   date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : item.date_paiement_prevue,
                   ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : item.ecart_paiement_reel,
-                  date_modification: updatedPaiement.date_modification || item.date_modification || null,
-                  historique_modifications: updatedPaiement.historique_modifications || item.historique_modifications || [],
+                  date_modification: updatedPaiement.date_modification !== undefined ? updatedPaiement.date_modification : item.date_modification,
+                  historique_modifications: updatedPaiement.historique_modifications !== undefined ? updatedPaiement.historique_modifications : item.historique_modifications,
                 };
               }
               return item;
@@ -311,6 +312,142 @@ const TableauFournisseur = () => {
     }
     setDatePaiementModalOpen(false);
     setCurrentPaiement(null);
+  };
+
+  // Gérer l'annulation du paiement depuis le modal
+  const handleCancelDatePaiement = async () => {
+    if (!currentPaiement) {
+      return;
+    }
+
+    const { mois, fournisseur, chantierId } = currentPaiement;
+    const key = `${mois}_${fournisseur}_${chantierId}`;
+    
+    // Annuler le timer de debounce s'il existe
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    setSaving(true);
+    setSaveSuccess(false);
+    setError(null);
+
+    try {
+      const [moisNum, annee2digits] = mois.split("/").map(Number);
+      const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+      
+      const currentData = data.find(d => 
+        d.mois === mois && 
+        d.fournisseur === fournisseur && 
+        d.chantier_id === chantierId
+      );
+      const montantAPayer = currentData?.a_payer || 0;
+      
+      // Récupérer les factures actuelles
+      const facturesList = editedFactures[key] !== undefined 
+        ? editedFactures[key] 
+        : (currentData?.factures || []).map(f => ({
+            id: f.id || null,
+            numero_facture: f.numero_facture || f,
+            montant_facture: f.montant_facture || 0,
+            payee: f.payee || false,
+            date_paiement_facture: f.date_paiement_facture || null
+          }));
+
+      // Préparer le payload avec montant à 0 et date_paiement explicitement null
+      const payload = [{
+        fournisseur: fournisseur,
+        mois: moisNum,
+        annee: anneeComplete,
+        montant: 0,
+        montant_a_payer: montantAPayer,
+        date_paiement: null, // Explicitement null pour supprimer
+        date_envoi: currentData?.date_envoi || null,
+        factures: facturesList.filter(f => {
+          if (typeof f === 'object' && f !== null) {
+            return f.numero_facture && String(f.numero_facture).trim();
+          }
+          return f && String(f).trim();
+        }).map(f => {
+          if (typeof f === 'object' && f !== null) {
+            return {
+              numero_facture: String(f.numero_facture || '').trim(),
+              montant_facture: parseFloat(f.montant_facture) || 0,
+              payee: f.payee || false,
+              date_paiement_facture: f.date_paiement_facture || null
+            };
+          }
+          return {
+            numero_facture: String(f).trim(),
+            montant_facture: 0,
+            payee: false,
+            date_paiement_facture: null
+          };
+        }),
+      }];
+
+      const response = await axios.post(
+        `/api/chantier/${chantierId}/paiements-materiel/`,
+        payload
+      );
+
+      // Mettre à jour l'état local
+      setEditedValuesPaye((prev) => ({
+        ...prev,
+        [key]: 0,
+      }));
+
+      if (response.data && response.data.length > 0) {
+        const updatedPaiement = response.data[0];
+        const annee2digits = anneeComplete.toString().slice(-2);
+        const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digits}`;
+        
+        setData((prevData) => {
+          return prevData.map((item) => {
+            if (
+              item.mois === moisKey &&
+              item.fournisseur === fournisseur &&
+              item.chantier_id === chantierId
+            ) {
+              const facturesMapped = (updatedPaiement.factures || []).map(f => ({
+                id: f.id || null,
+                numero_facture: f.numero_facture || f,
+                montant_facture: f.montant_facture || 0,
+                payee: f.payee || false,
+                date_paiement_facture: f.date_paiement_facture || null
+              }));
+              
+              return {
+                ...item,
+                paye: 0,
+                a_payer: parseFloat(updatedPaiement.montant_a_payer) || item.a_payer,
+                ecart: (parseFloat(updatedPaiement.montant_a_payer) || item.a_payer) - 0,
+                factures: facturesMapped.length > 0 ? facturesMapped : (item.factures || []),
+                date_paiement: updatedPaiement.date_paiement !== undefined ? updatedPaiement.date_paiement : null,
+                date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : item.date_envoi,
+                date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : item.date_paiement_prevue,
+                ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : item.ecart_paiement_reel,
+                date_modification: updatedPaiement.date_modification !== undefined ? updatedPaiement.date_modification : item.date_modification,
+                historique_modifications: updatedPaiement.historique_modifications !== undefined ? updatedPaiement.historique_modifications : item.historique_modifications,
+              };
+            }
+            return item;
+          });
+        });
+      }
+
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 2000);
+    } catch (err) {
+      setError("Erreur lors de l'annulation du paiement.");
+      console.error(err);
+    } finally {
+      setSaving(false);
+      setDatePaiementModalOpen(false);
+      setCurrentPaiement(null);
+    }
   };
   
   // Ouvrir le modal pour saisir/modifier la date d'envoi
@@ -367,6 +504,9 @@ const TableauFournisseur = () => {
       return;
     }
 
+    // Initialiser la date avec la date du jour
+    setFillDatePaiement(new Date().toISOString().split('T')[0]);
+    
     // Ouvrir le modal de confirmation
     setPendingFillAction({ mois, fournisseur });
     setConfirmFillModalOpen(true);
@@ -379,6 +519,12 @@ const TableauFournisseur = () => {
     }
 
     const { mois, fournisseur } = pendingFillAction;
+    
+    // Vérifier que la date est renseignée
+    if (!fillDatePaiement) {
+      setError("Veuillez renseigner une date de paiement.");
+      return;
+    }
     
     // Fermer le modal
     setConfirmFillModalOpen(false);
@@ -401,7 +547,7 @@ const TableauFournisseur = () => {
     try {
       const [moisNum, annee2digits] = mois.split("/").map(Number);
       const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
-      const dateDuJour = new Date().toISOString().split('T')[0];
+      const datePaiement = fillDatePaiement; // Utiliser la date saisie par l'utilisateur
 
       // Préparer toutes les mises à jour d'état
       const updatedValuesPaye = { ...editedValuesPaye };
@@ -433,7 +579,7 @@ const TableauFournisseur = () => {
           annee: anneeComplete,
           montant: montantAPayer,
           montant_a_payer: montantAPayer,
-          date_paiement: dateDuJour,
+          date_paiement: datePaiement,
           date_envoi: ligne.date_envoi || null,
           factures: facturesList.filter(f => {
             if (typeof f === 'object' && f !== null) {
@@ -511,6 +657,171 @@ const TableauFournisseur = () => {
     } finally {
       setSaving(false);
       setPendingFillAction(null);
+      setFillDatePaiement(new Date().toISOString().split('T')[0]); // Réinitialiser la date
+    }
+  };
+
+  // Fonction pour annuler/réinitialiser les paiements d'un fournisseur pour un mois
+  const handleCancelAllFournisseurMois = async (mois, fournisseur) => {
+    // Trouver toutes les lignes correspondant à ce mois et ce fournisseur
+    const lignesFournisseur = data.filter(d => 
+      d.mois === mois && 
+      d.fournisseur === fournisseur
+    );
+
+    if (lignesFournisseur.length === 0) {
+      return;
+    }
+
+    // Demander confirmation
+    if (!window.confirm(`Êtes-vous sûr de vouloir annuler tous les paiements du fournisseur "${fournisseur}" pour le mois "${mois}" ? Cette action réinitialisera les montants payés à 0 et supprimera les dates de paiement.`)) {
+      return;
+    }
+
+    setSaving(true);
+    setSaveSuccess(false);
+    setError(null);
+
+    try {
+      const [moisNum, annee2digits] = mois.split("/").map(Number);
+      const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+
+      // Préparer toutes les mises à jour d'état
+      const updatedValuesPaye = { ...editedValuesPaye };
+      const updatedData = [...data];
+
+      // Mettre à jour toutes les lignes
+      const updatePromises = lignesFournisseur.map(async (ligne) => {
+        const key = `${mois}_${fournisseur}_${ligne.chantier_id}`;
+        
+        // Réinitialiser les valeurs payées à 0
+        updatedValuesPaye[key] = 0;
+        
+        // Récupérer les factures actuelles et les marquer comme non payées
+        const facturesList = editedFactures[key] !== undefined 
+          ? editedFactures[key] 
+          : ((ligne.factures || []).map(f => ({
+              id: f.id || null,
+              numero_facture: f.numero_facture || f,
+              montant_facture: f.montant_facture || 0,
+              payee: f.payee || false,
+              date_paiement_facture: f.date_paiement_facture || null
+            })));
+        
+        // Marquer toutes les factures comme non payées
+        const facturesNonPayees = facturesList.map(f => ({
+          ...f,
+          payee: false,
+          date_paiement_facture: null
+        }));
+        
+        // Préparer le payload avec montant à 0 et date de paiement null
+        const payload = [{
+          fournisseur: fournisseur,
+          mois: moisNum,
+          annee: anneeComplete,
+          montant: 0, // Réinitialiser à 0
+          montant_a_payer: ligne.a_payer || 0, // Conserver le montant à payer
+          date_paiement: null, // Supprimer la date de paiement
+          date_envoi: ligne.date_envoi || null, // Conserver la date d'envoi
+          factures: facturesNonPayees.filter(f => {
+            if (typeof f === 'object' && f !== null) {
+              return f.numero_facture && String(f.numero_facture).trim();
+            }
+            return f && String(f).trim();
+          }).map(f => {
+            if (typeof f === 'object' && f !== null) {
+              return {
+                numero_facture: String(f.numero_facture || '').trim(),
+                montant_facture: parseFloat(f.montant_facture) || 0,
+                payee: false, // Toutes les factures non payées
+                date_paiement_facture: null // Supprimer les dates de paiement des factures
+              };
+            }
+            return {
+              numero_facture: String(f).trim(),
+              montant_facture: 0,
+              payee: false,
+              date_paiement_facture: null
+            };
+          }),
+        }];
+
+        // Appel API direct (sans debounce)
+        const response = await axios.post(
+          `/api/chantier/${ligne.chantier_id}/paiements-materiel/`,
+          payload
+        );
+
+        // Mettre à jour les données locales
+        if (response.data && response.data.length > 0) {
+          const updatedPaiement = response.data[0];
+          const annee2digits = anneeComplete.toString().slice(-2);
+          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digits}`;
+          
+          const dataIndex = updatedData.findIndex(item => 
+            item.mois === moisKey &&
+            item.fournisseur === fournisseur &&
+            item.chantier_id === ligne.chantier_id
+          );
+          
+          if (dataIndex !== -1) {
+            updatedData[dataIndex] = {
+              ...updatedData[dataIndex],
+              paye: 0, // Réinitialisé à 0
+              a_payer: parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer,
+              ecart: (parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer) - 0,
+              factures: updatedPaiement.factures || updatedData[dataIndex].factures || [],
+              date_paiement: updatedPaiement.date_paiement !== undefined ? updatedPaiement.date_paiement : null, // Utiliser la valeur du backend
+              date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : updatedData[dataIndex].date_envoi,
+              date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : updatedData[dataIndex].date_paiement_prevue,
+              ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : updatedData[dataIndex].ecart_paiement_reel,
+              date_modification: updatedPaiement.date_modification !== undefined ? updatedPaiement.date_modification : updatedData[dataIndex].date_modification,
+              historique_modifications: updatedPaiement.historique_modifications !== undefined ? updatedPaiement.historique_modifications : updatedData[dataIndex].historique_modifications,
+            };
+          }
+        }
+      });
+
+      // Attendre que toutes les mises à jour soient terminées
+      await Promise.all(updatePromises);
+
+      // Mettre à jour les factures dans editedFactures
+      lignesFournisseur.forEach((ligne) => {
+        const key = `${mois}_${fournisseur}_${ligne.chantier_id}`;
+        const facturesList = editedFactures[key] !== undefined 
+          ? editedFactures[key] 
+          : ((ligne.factures || []).map(f => ({
+              id: f.id || null,
+              numero_facture: f.numero_facture || f,
+              montant_facture: f.montant_facture || 0,
+              payee: false,
+              date_paiement_facture: null
+            })));
+        
+        setEditedFactures((prev) => ({
+          ...prev,
+          [key]: facturesList.map(f => ({
+            ...f,
+            payee: false,
+            date_paiement_facture: null
+          }))
+        }));
+      });
+
+      // Appliquer toutes les mises à jour d'état en une seule fois
+      setEditedValuesPaye(updatedValuesPaye);
+      setData(updatedData);
+
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 2000);
+    } catch (err) {
+      setError("Erreur lors de l'annulation des paiements.");
+      console.error(err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1757,6 +2068,8 @@ const TableauFournisseur = () => {
                             const isPayeComplet = totalFournisseur && 
                               Math.abs(totalFournisseur.totalAPayer - totalFournisseur.totalPaye) < 0.01; // Tolérance pour les arrondis
                             
+                            const hasPayments = totalFournisseur && totalFournisseur.totalPaye > 0;
+                            
                             // Pas d'alternance : vert si payé complet, bleu sinon
                             const totalBackgroundColor = isPayeComplet 
                               ? "rgba(46, 125, 50, 0.2)" // Vert clair si payé complet
@@ -1765,7 +2078,13 @@ const TableauFournisseur = () => {
                             return (
                               <TableCell
                                 rowSpan={rowSpanFournisseur}
-                                onClick={() => handleFillAllFournisseurMois(row.mois, row.fournisseur)}
+                                onClick={() => {
+                                  if (hasPayments) {
+                                    handleCancelAllFournisseurMois(row.mois, row.fournisseur);
+                                  } else {
+                                    handleFillAllFournisseurMois(row.mois, row.fournisseur);
+                                  }
+                                }}
                                 sx={{
                                   ...commonBodyCellStyle,
                                   verticalAlign: "middle",
@@ -1840,8 +2159,10 @@ const TableauFournisseur = () => {
               setCurrentPaiement(null);
             }}
             onSave={handleSaveDatePaiement}
+            onCancel={handleCancelDatePaiement}
             datePaiement={currentPaiement?.datePaiement || null}
             montantPaye={currentPaiement?.montantPaye || 0}
+            hasExistingPayment={currentPaiement?.datePaiement !== null && currentPaiement?.datePaiement !== undefined}
           />
           
           {/* Modal pour saisir/modifier la date d'envoi */}
@@ -1877,42 +2198,57 @@ const TableauFournisseur = () => {
             onClose={() => {
               setConfirmFillModalOpen(false);
               setPendingFillAction(null);
+              setFillDatePaiement(new Date().toISOString().split('T')[0]);
             }}
+            maxWidth="sm"
+            fullWidth
           >
             <DialogTitle>
-              Confirmer le remplissage automatique
+              Remplir automatiquement les paiements
             </DialogTitle>
             <DialogContent>
-              <DialogContentText>
-                {pendingFillAction && (() => {
-                  const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
-                  const moisName = getMoisName(moisNum);
-                  const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
-                  const lignesCount = data.filter(d => 
-                    d.mois === pendingFillAction.mois && 
-                    d.fournisseur === pendingFillAction.fournisseur
-                  ).length;
-                  
-                  return (
-                    <>
-                      Êtes-vous sûr de vouloir remplir automatiquement toutes les lignes du fournisseur <strong>{pendingFillAction.fournisseur}</strong> pour le mois de <strong>{moisName} {anneeComplete}</strong> ?
+              {pendingFillAction && (() => {
+                const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
+                const moisName = getMoisName(moisNum);
+                const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+                const lignesCount = data.filter(d => 
+                  d.mois === pendingFillAction.mois && 
+                  d.fournisseur === pendingFillAction.fournisseur
+                ).length;
+                
+                return (
+                  <>
+                    <DialogContentText sx={{ mb: 3 }}>
+                      Vous allez remplir automatiquement toutes les lignes du fournisseur <strong>{pendingFillAction.fournisseur}</strong> pour le mois de <strong>{moisName} {anneeComplete}</strong>.
                       <br /><br />
                       Cette action va :
                       <ul style={{ marginTop: "8px", marginBottom: "8px" }}>
                         <li>Remplir le montant payé avec le montant à payer pour chaque ligne ({lignesCount} ligne{lignesCount > 1 ? 's' : ''})</li>
-                        <li>Définir la date de paiement à aujourd'hui</li>
+                        <li>Définir la date de paiement avec la date que vous allez saisir ci-dessous</li>
                       </ul>
-                      Cette action est irréversible.
-                    </>
-                  );
-                })()}
-              </DialogContentText>
+                    </DialogContentText>
+                    <TextField
+                      label="Date de paiement"
+                      type="date"
+                      value={fillDatePaiement}
+                      onChange={(e) => setFillDatePaiement(e.target.value)}
+                      fullWidth
+                      required
+                      InputLabelProps={{
+                        shrink: true,
+                      }}
+                      sx={{ mt: 2 }}
+                    />
+                  </>
+                );
+              })()}
             </DialogContent>
             <DialogActions>
               <Button
                 onClick={() => {
                   setConfirmFillModalOpen(false);
                   setPendingFillAction(null);
+                  setFillDatePaiement(new Date().toISOString().split('T')[0]);
                 }}
                 color="secondary"
               >
@@ -1923,6 +2259,7 @@ const TableauFournisseur = () => {
                 color="primary"
                 variant="contained"
                 autoFocus
+                disabled={!fillDatePaiement}
               >
                 Confirmer
               </Button>
