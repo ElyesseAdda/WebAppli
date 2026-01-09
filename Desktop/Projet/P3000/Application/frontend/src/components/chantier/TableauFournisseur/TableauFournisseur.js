@@ -343,7 +343,7 @@ const TableauFournisseur = () => {
       );
       const montantAPayer = currentData?.a_payer || 0;
       
-      // Récupérer les factures actuelles
+      // Récupérer les factures actuelles et les marquer comme non payées
       const facturesList = editedFactures[key] !== undefined 
         ? editedFactures[key] 
         : (currentData?.factures || []).map(f => ({
@@ -354,6 +354,13 @@ const TableauFournisseur = () => {
             date_paiement_facture: f.date_paiement_facture || null
           }));
 
+      // Marquer toutes les factures comme non payées et supprimer leurs dates de paiement
+      const facturesNonPayees = facturesList.map(f => ({
+        ...f,
+        payee: false,
+        date_paiement_facture: null
+      }));
+
       // Préparer le payload avec montant à 0 et date_paiement explicitement null
       const payload = [{
         fournisseur: fournisseur,
@@ -363,7 +370,7 @@ const TableauFournisseur = () => {
         montant_a_payer: montantAPayer,
         date_paiement: null, // Explicitement null pour supprimer
         date_envoi: currentData?.date_envoi || null,
-        factures: facturesList.filter(f => {
+        factures: facturesNonPayees.filter(f => {
           if (typeof f === 'object' && f !== null) {
             return f.numero_facture && String(f.numero_facture).trim();
           }
@@ -373,8 +380,8 @@ const TableauFournisseur = () => {
             return {
               numero_facture: String(f.numero_facture || '').trim(),
               montant_facture: parseFloat(f.montant_facture) || 0,
-              payee: f.payee || false,
-              date_paiement_facture: f.date_paiement_facture || null
+              payee: false, // Toutes les factures non payées
+              date_paiement_facture: null // Supprimer les dates de paiement des factures
             };
           }
           return {
@@ -395,6 +402,16 @@ const TableauFournisseur = () => {
       setEditedValuesPaye((prev) => ({
         ...prev,
         [key]: 0,
+      }));
+
+      // Mettre à jour les factures dans editedFactures (marquer comme non payées)
+      setEditedFactures((prev) => ({
+        ...prev,
+        [key]: facturesNonPayees.map(f => ({
+          ...f,
+          payee: false,
+          date_paiement_facture: null
+        }))
       }));
 
       if (response.data && response.data.length > 0) {
@@ -572,6 +589,13 @@ const TableauFournisseur = () => {
               date_paiement_facture: f.date_paiement_facture || null
             })));
         
+        // Marquer toutes les factures comme payées avec la date de paiement
+        const facturesPayees = facturesList.map(f => ({
+          ...f,
+          payee: true,
+          date_paiement_facture: datePaiement // Utiliser la date de paiement saisie
+        }));
+        
         // Préparer le payload
         const payload = [{
           fournisseur: fournisseur,
@@ -581,7 +605,7 @@ const TableauFournisseur = () => {
           montant_a_payer: montantAPayer,
           date_paiement: datePaiement,
           date_envoi: ligne.date_envoi || null,
-          factures: facturesList.filter(f => {
+          factures: facturesPayees.filter(f => {
             if (typeof f === 'object' && f !== null) {
               return f.numero_facture && String(f.numero_facture).trim();
             }
@@ -591,15 +615,15 @@ const TableauFournisseur = () => {
               return {
                 numero_facture: String(f.numero_facture || '').trim(),
                 montant_facture: parseFloat(f.montant_facture) || 0,
-                payee: f.payee || false,
-                date_paiement_facture: f.date_paiement_facture || null
+                payee: true, // Toutes les factures marquées comme payées
+                date_paiement_facture: datePaiement // Date de paiement pour toutes les factures
               };
             }
             return {
               numero_facture: String(f).trim(),
               montant_facture: 0,
-              payee: false,
-              date_paiement_facture: null
+              payee: true,
+              date_paiement_facture: datePaiement
             };
           }),
         }];
@@ -643,8 +667,30 @@ const TableauFournisseur = () => {
       // Attendre que toutes les mises à jour soient terminées
       await Promise.all(updatePromises);
 
+      // Mettre à jour les factures dans editedFactures (marquer comme payées)
+      const updatedFactures = { ...editedFactures };
+      lignesFournisseur.forEach((ligne) => {
+        const key = `${mois}_${fournisseur}_${ligne.chantier_id}`;
+        const facturesList = updatedFactures[key] !== undefined 
+          ? updatedFactures[key] 
+          : ((ligne.factures || []).map(f => ({
+              id: f.id || null,
+              numero_facture: f.numero_facture || f,
+              montant_facture: f.montant_facture || 0,
+              payee: f.payee || false,
+              date_paiement_facture: f.date_paiement_facture || null
+            })));
+        
+        updatedFactures[key] = facturesList.map(f => ({
+          ...f,
+          payee: true,
+          date_paiement_facture: datePaiement
+        }));
+      });
+
       // Appliquer toutes les mises à jour d'état en une seule fois
       setEditedValuesPaye(updatedValuesPaye);
+      setEditedFactures(updatedFactures);
       setData(updatedData);
 
       setSaveSuccess(true);

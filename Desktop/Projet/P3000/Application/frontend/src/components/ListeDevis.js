@@ -1013,7 +1013,10 @@ const ListeDevis = () => {
         // Créer un lien temporaire pour télécharger le PDF
         const link = document.createElement("a");
         link.href = pdfUrl;
-        link.download = `devis-${devis.numero}.pdf`;
+        // Préserver le caractère "°" dans le nom de fichier
+        // Utiliser le nom tel quel pour préserver les caractères Unicode comme "°"
+        const fileName = `${devis.numero}.pdf`;
+        link.download = fileName;
         document.body.appendChild(link);
         link.click();
 

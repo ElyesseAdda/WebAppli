@@ -59,7 +59,7 @@ const style = {
 
 // Composant pour une ligne de partie
 const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   // Calculer le pourcentage moyen, le montant et le total HT de la partie
   let moyennePartie = 0;
@@ -395,7 +395,7 @@ const SousPartieTable = ({
   handlePourcentageChange,
   lignesSpeciales,
 }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   // Calculer le pourcentage moyen, le montant et le total HT de la sous-partie
   let moyenneSousPartie = 0;
@@ -686,7 +686,7 @@ const SousPartieTable = ({
 
 // Composant pour une sous-partie Avenant
 const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   // Calculer le pourcentage moyen et le montant de l'avenant
   let moyenneSousPartie = 0;
@@ -857,7 +857,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
 
 // Composant pour la partie Avenants
 const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   // Calculer le pourcentage moyen et le montant total des avenants
   let moyennePartie = 0;
