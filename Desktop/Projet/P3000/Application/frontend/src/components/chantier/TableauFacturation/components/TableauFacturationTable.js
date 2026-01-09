@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   Paper,
   Table,
@@ -18,6 +19,7 @@ import {
   formatNumberWithColor,
   getMoisName,
   extractSituationNumber,
+  formatFactureNumero,
 } from "../utils/formatters";
 import {
   calculateDatePaiement,
@@ -26,7 +28,6 @@ import {
 } from "../utils/calculations";
 
 const commonBodyCellStyle = {
-  maxWidth: "100px",
   padding: "6px 8px",
   whiteSpace: "normal",
   wordWrap: "break-word",
@@ -36,7 +37,6 @@ const commonBodyCellStyle = {
 
 const commonCellStyle = {
   color: "white",
-  maxWidth: "100px",
   padding: "6px 8px",
   whiteSpace: "normal",
   wordWrap: "break-word",
@@ -44,7 +44,7 @@ const commonCellStyle = {
   minHeight: "60px",
   verticalAlign: "middle",
 };
-import React from "react";
+import React, { useState } from "react";
 
 const TableauFacturationTable = ({
   situationsAvecSousTotaux,
@@ -56,9 +56,66 @@ const TableauFacturationTable = ({
   onOpenBanqueModal,
   onNumeroCPChange,
 }) => {
+  const [showCumulColumn, setShowCumulColumn] = useState(false);
+  // Calculer le nombre de lignes par mois (sans les sous-totaux) pour la fusion des cellules
+  const calculerLignesParMois = () => {
+    const lignesParMois = {};
+    let currentMois = null;
+    let count = 0;
+
+    situationsAvecSousTotaux.forEach((item) => {
+      if (item.isSousTotal) {
+        // Quand on rencontre un sous-total, on enregistre le count pour le mois précédent
+        if (currentMois !== null) {
+          lignesParMois[currentMois] = count;
+          count = 0;
+        }
+        currentMois = null;
+      } else {
+        // Déterminer le mois de l'item
+        let mois;
+        if (item.price_ht !== undefined) {
+          // Facture
+          const dateEnvoiFacture = item.date_envoi || item.date_creation;
+          if (dateEnvoiFacture) {
+            const date = new Date(dateEnvoiFacture);
+            mois = date.getMonth() + 1;
+          } else {
+            mois = null;
+          }
+        } else {
+          // Situation
+          mois = item.mois;
+        }
+
+        if (mois !== currentMois) {
+          // Nouveau mois
+          if (currentMois !== null) {
+            lignesParMois[currentMois] = count;
+          }
+          currentMois = mois;
+          count = 1;
+        } else {
+          count++;
+        }
+      }
+    });
+
+    // Enregistrer le dernier mois
+    if (currentMois !== null) {
+      lignesParMois[currentMois] = count;
+    }
+
+    return lignesParMois;
+  };
+
+  const lignesParMois = calculerLignesParMois();
+  let currentMois = null;
+  let ligneMoisIndex = 0;
+
   return (
-    <TableContainer component={Paper} sx={{ maxWidth: "100%", overflowX: "auto" }}>
-      <Table size="small" sx={{ tableLayout: "fixed" }}>
+    <TableContainer component={Paper} sx={{ maxWidth: "100%", overflowX: "auto", width: "100%" }}>
+      <Table size="small" sx={{ tableLayout: "auto", width: "100%" }}>
         <TableHead>
           <TableRow
             sx={{
@@ -66,14 +123,17 @@ const TableauFacturationTable = ({
               color: "white",
             }}
           >
+            <TableCell sx={{ ...commonCellStyle }}>Mois</TableCell>
+            <TableCell sx={{ ...commonCellStyle }}>Client</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>Chantier</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>Banque</TableCell>
-            <TableCell sx={{ ...commonCellStyle }}>Mois</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>N° Situation</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>N° CP</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>N° Facture</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>Montant HT Situation</TableCell>
-            <TableCell sx={{ ...commonCellStyle }}>Situation Cumul HT</TableCell>
+            {showCumulColumn && (
+              <TableCell sx={{ ...commonCellStyle }}>Situation Cumul HT</TableCell>
+            )}
             <TableCell sx={{ ...commonCellStyle }}>Date d'envoi</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>Date de paiement prévue</TableCell>
             <TableCell sx={{ ...commonCellStyle }}>Montant reçu HT</TableCell>
@@ -86,6 +146,8 @@ const TableauFacturationTable = ({
           {situationsAvecSousTotaux.map((item, index) => {
             if (item.isSousTotal) {
               // Ligne de sous-total
+              currentMois = null;
+              ligneMoisIndex = 0;
               return (
                 <TableRow
                   key={`sous-total-${item.mois}`}
@@ -99,30 +161,76 @@ const TableauFacturationTable = ({
                   }}
                 >
                   <TableCell
-                    colSpan={14}
+                    colSpan={showCumulColumn ? 15 : 14}
                     sx={{
                       ...commonBodyCellStyle,
-                      textAlign: "center",
+                      padding: "8px 16px",
+                      width: "100%",
                     }}
                   >
-                    <Typography
+                    <Box
                       sx={{
-                        fontWeight: "bold",
-                        color: "white",
-                        fontSize: "1.1rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        width: "100%",
+                        position: "relative",
                       }}
                     >
-                      Sous-total {getMoisName(item.mois)} :{" "}
-                      <span
-                        style={{
-                          fontSize: "1rem",
+                      <Box sx={{ flex: 1 }} />
+                      <Typography
+                        sx={{
                           fontWeight: "bold",
-                          marginLeft: "5px",
+                          color: "white",
+                          fontSize: "1.1rem",
+                          position: "absolute",
+                          left: "50%",
+                          transform: "translateX(-50%)",
                         }}
                       >
-                        {(parseFloat(item.sousTotal) || 0).toFixed(2)} €
-                      </span>
-                    </Typography>
+                        Sous-total {getMoisName(item.mois)} :{" "}
+                        <span
+                          style={{
+                            fontSize: "1rem",
+                            fontWeight: "bold",
+                            marginLeft: "5px",
+                          }}
+                        >
+                          {(parseFloat(item.sousTotal) || 0).toLocaleString("fr-FR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })} €
+                        </span>
+                      </Typography>
+                      <Typography
+                        onClick={() => setShowCumulColumn(!showCumulColumn)}
+                        sx={{
+                          fontWeight: "bold",
+                          color: "white",
+                          fontSize: "1rem",
+                          flex: 1,
+                          textAlign: "right",
+                          cursor: "pointer",
+                          "&:hover": {
+                            textDecoration: "underline",
+                          },
+                        }}
+                      >
+                        Situation cumul :{" "}
+                        <span
+                          style={{
+                            fontSize: "1rem",
+                            fontWeight: "bold",
+                            marginLeft: "5px",
+                          }}
+                        >
+                          {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })} €
+                        </span>
+                      </Typography>
+                    </Box>
                   </TableCell>
                 </TableRow>
               );
@@ -137,12 +245,28 @@ const TableauFacturationTable = ({
                 formatDate
               );
               
-              // Déterminer le mois de la facture (utiliser date_envoi avec vérification de l'année)
-              let moisFacture = "-";
+              // Déterminer le mois de la facture
+              let moisFacture = null;
+              let anneeFacture = null;
               if (dateEnvoiFacture) {
                 const date = new Date(dateEnvoiFacture);
-                moisFacture = (date.getMonth() + 1).toString().padStart(2, "0");
+                moisFacture = date.getMonth() + 1;
+                anneeFacture = date.getFullYear();
               }
+
+              // Vérifier si c'est la première ligne du mois
+              const isFirstRowOfMois = moisFacture !== currentMois;
+              if (isFirstRowOfMois) {
+                currentMois = moisFacture;
+                ligneMoisIndex = 0;
+              } else {
+                ligneMoisIndex++;
+              }
+
+              const rowSpanMois = isFirstRowOfMois ? (lignesParMois[moisFacture] || 1) : 0;
+              const moisDisplay = moisFacture && anneeFacture 
+                ? `${getMoisName(moisFacture)} ${anneeFacture}`
+                : "-";
 
               return (
                 <TableRow
@@ -153,12 +277,46 @@ const TableauFacturationTable = ({
                     "&:hover": { backgroundColor: "#f5f5f5" },
                   }}
                 >
+                  {isFirstRowOfMois ? (
+                    <TableCell
+                      rowSpan={rowSpanMois}
+                      sx={{
+                        ...commonBodyCellStyle,
+                        verticalAlign: "middle",
+                        textAlign: "center",
+                        borderRight: "1px solid #e0e0e0",
+                        backgroundColor: "#ffffff",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontWeight: 600,
+                          fontSize: "0.9rem",
+                          color: "rgba(27, 120, 188, 1)",
+                        }}
+                      >
+                        {moisDisplay}
+                      </Typography>
+                    </TableCell>
+                  ) : null}
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography
+                      sx={{
+                        fontSize: "0.8rem",
+                        color: "text.primary",
+                      }}
+                    >
+                      {facture.client_name || "-"}
+                    </Typography>
+                  </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     <Typography
                       sx={{
                         fontWeight: 600,
                         fontSize: "0.8rem",
-                        color: "rgba(27, 120, 188, 1)",
+                        color: (facture.state_facture === 'Payée' || facture.date_paiement)
+                          ? "rgba(27, 120, 188, 1)"
+                          : "error.main",
                       }}
                     >
                       {facture.chantier_name || facture.chantier?.chantier_name || "-"}
@@ -166,9 +324,6 @@ const TableauFacturationTable = ({
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     -
-                  </TableCell>
-                  <TableCell sx={commonBodyCellStyle}>
-                    {moisFacture}
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
@@ -192,7 +347,7 @@ const TableauFacturationTable = ({
                           },
                         }}
                       >
-                        {facture.numero}
+                        {formatFactureNumero(facture.numero)}
                       </Button>
                     ) : (
                       "-"
@@ -201,7 +356,9 @@ const TableauFacturationTable = ({
                   <TableCell sx={commonBodyCellStyle}>
                     {formatMontant(parseFloat(facture.price_ht) || 0)}
                   </TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  {showCumulColumn && (
+                    <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  )}
                   <TableCell sx={commonBodyCellStyle}>
                     <Button
                       size="small"
@@ -240,7 +397,9 @@ const TableauFacturationTable = ({
                       formatDate
                     )}
                   </TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    {calculerEcartMois(facture)}
+                  </TableCell>
                 </TableRow>
               );
             } else {
@@ -253,6 +412,20 @@ const TableauFacturationTable = ({
                 formatDate
               );
 
+              // Vérifier si c'est la première ligne du mois
+              const isFirstRowOfMois = situation.mois !== currentMois;
+              if (isFirstRowOfMois) {
+                currentMois = situation.mois;
+                ligneMoisIndex = 0;
+              } else {
+                ligneMoisIndex++;
+              }
+
+              const rowSpanMois = isFirstRowOfMois ? (lignesParMois[situation.mois] || 1) : 0;
+              const moisDisplay = situation.annee 
+                ? `${getMoisName(situation.mois)} ${situation.annee}`
+                : getMoisName(situation.mois);
+
               return (
                 <TableRow
                   key={`${situation.chantier_id}-${situation.id}`}
@@ -262,6 +435,38 @@ const TableauFacturationTable = ({
                     "&:hover": { backgroundColor: "#f5f5f5" },
                   }}
                 >
+                  {isFirstRowOfMois ? (
+                    <TableCell
+                      rowSpan={rowSpanMois}
+                      sx={{
+                        ...commonBodyCellStyle,
+                        verticalAlign: "middle",
+                        textAlign: "center",
+                        borderRight: "1px solid #e0e0e0",
+                        backgroundColor: "#ffffff",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontWeight: 600,
+                          fontSize: "0.9rem",
+                          color: "rgba(27, 120, 188, 1)",
+                        }}
+                      >
+                        {moisDisplay}
+                      </Typography>
+                    </TableCell>
+                  ) : null}
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography
+                      sx={{
+                        fontSize: "0.8rem",
+                        color: "text.primary",
+                      }}
+                    >
+                      {situation.client_name || "-"}
+                    </Typography>
+                  </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     <Typography
                       sx={{
@@ -298,9 +503,6 @@ const TableauFacturationTable = ({
                             ?.nom_banque || "Banque inconnue"
                         : ""}
                     </Button>
-                  </TableCell>
-                  <TableCell sx={commonBodyCellStyle}>
-                    {situation.mois.toString().padStart(2, "0")}
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     <Button
@@ -364,7 +566,7 @@ const TableauFacturationTable = ({
                           },
                         }}
                       >
-                        {situation.numero_situation}
+                        {formatFactureNumero(situation.numero_situation)}
                       </Button>
                     ) : (
                       "-"
@@ -375,14 +577,16 @@ const TableauFacturationTable = ({
                       parseFloat(situation.montant_apres_retenues) || 0
                     )}
                   </TableCell>
-                  <TableCell
-                    sx={{
-                      ...commonBodyCellStyle,
-                      color: "rgba(27, 120, 188, 1)",
-                    }}
-                  >
-                    {formatNumberWithColor(cumul, cumul)}
-                  </TableCell>
+                  {showCumulColumn && (
+                    <TableCell
+                      sx={{
+                        ...commonBodyCellStyle,
+                        color: "rgba(27, 120, 188, 1)",
+                      }}
+                    >
+                      {formatNumberWithColor(cumul, cumul)}
+                    </TableCell>
+                  )}
                   <TableCell sx={commonBodyCellStyle}>
                     <Button
                       size="small"
@@ -454,17 +658,21 @@ const TableauFacturationTable = ({
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>
               {formatMontant(totaux.montantHTSituation)}
             </TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            {showCumulColumn && (
+              <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            )}
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>
               {formatMontant(totaux.montantRecuHT)}
             </TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            
             <TableCell sx={commonBodyCellStyle}>
               {formatMontant(totaux.ecartMois)}
             </TableCell>
@@ -497,18 +705,22 @@ const TableauFacturationTable = ({
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>
               {formatMontant(
                 totaux.montantHTSituation - totaux.montantRecuHT
               )}
             </TableCell>
+            {showCumulColumn && (
+              <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            )}
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            
           </TableRow>
         </TableFooter>
       </Table>

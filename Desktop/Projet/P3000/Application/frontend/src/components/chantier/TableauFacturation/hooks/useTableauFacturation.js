@@ -27,7 +27,7 @@ export const useTableauFacturation = () => {
         setChantiers(chantiersResponse.data);
         setBanques(banquesResponse.data);
       } catch (error) {
-        console.error("Erreur lors du chargement des données:", error);
+        // Erreur silencieuse
       }
     };
     fetchData();
@@ -93,18 +93,54 @@ export const useTableauFacturation = () => {
 
           const situations = situationsResponse.data || [];
           
+          // Récupérer les IDs de chantiers uniques pour enrichir les factures
+          const chantierIds = [...new Set(factures.map(f => f.chantier || f.chantier_id).filter(Boolean))];
+          
+          // Récupérer les informations des chantiers pour enrichir les factures avec le client
+          let chantiersData = {};
+          if (chantierIds.length > 0) {
+            try {
+              // Récupérer tous les chantiers et filtrer côté client
+              const chantiersResponse = await axios.get('/api/chantier/');
+              chantiersData = {};
+              (chantiersResponse.data || []).forEach(chantier => {
+                if (chantierIds.includes(chantier.id)) {
+                  chantiersData[chantier.id] = chantier;
+                }
+              });
+            } catch (error) {
+              // Erreur silencieuse
+            }
+          }
+          
           // Mapper les factures pour avoir la même structure que les situations
-          const facturesFormatees = factures.map(facture => ({
-            ...facture,
-            chantier_id: facture.chantier || facture.chantier_id,
-            isFacture: true, // Marqueur pour identifier les factures
-          }));
+          const facturesFormatees = factures.map(facture => {
+            const chantierId = facture.chantier || facture.chantier_id;
+            const chantier = chantiersData[chantierId];
+            
+            // Déterminer le nom du client (maître d'ouvrage ou société)
+            let clientName = null;
+            if (chantier) {
+              if (chantier.maitre_ouvrage_nom_societe) {
+                clientName = chantier.maitre_ouvrage_nom_societe;
+              } else if (chantier.societe?.nom_societe) {
+                clientName = chantier.societe.nom_societe;
+              }
+            }
+            
+            return {
+              ...facture,
+              chantier_id: chantierId,
+              isFacture: true, // Marqueur pour identifier les factures
+              client_name: clientName,
+            };
+          });
           
           // Les données sont déjà formatées par l'API avec toutes les informations nécessaires
           setAllSituations(situations);
           setAllFactures(facturesFormatees);
         } catch (error) {
-          console.error("Erreur lors du chargement des données:", error);
+          // Erreur silencieuse
         } finally {
           setLoading(false);
         }
@@ -201,7 +237,6 @@ export const useTableauFacturation = () => {
           );
         }
       } catch (error) {
-        console.error("Erreur lors de la mise à jour:", error);
         alert("Erreur lors de la mise à jour des données");
       }
     },
@@ -209,30 +244,64 @@ export const useTableauFacturation = () => {
   );
 
   const handlePaiementModalSubmit = useCallback(
-    async (situationId, { montantRecu, datePaiementReel }) => {
+    async (itemId, { montantRecu, datePaiementReel }) => {
       try {
-        await axios.patch(`/api/situations/${situationId}/update/`, {
-          montant_reel_ht: montantRecu,
-          date_paiement_reel: datePaiementReel,
-        });
+        // Détecter si c'est une facture (a price_ht ou isFacture) ou une situation
+        const isFacture = allFactures.some(f => f.id === itemId);
+        
+        if (isFacture) {
+          // Mise à jour d'une facture
+          const facture = allFactures.find(f => f.id === itemId);
+          const updateData = {
+            date_paiement: datePaiementReel || null,
+          };
+          
+          // Si une date de paiement est fournie, marquer la facture comme payée
+          // Sinon, si on supprime la date, remettre le statut à "Attente paiement"
+          if (datePaiementReel) {
+            updateData.state_facture = 'Payée';
+          } else if (facture && facture.state_facture === 'Payée') {
+            // Si on supprime la date de paiement d'une facture payée, remettre en attente
+            updateData.state_facture = 'Attente paiement';
+          }
+          
+          await axios.patch(`/api/facture/${itemId}/`, updateData);
 
-        setAllSituations((prev) =>
-          prev.map((s) =>
-            s.id === situationId
-              ? {
-                  ...s,
-                  montant_reel_ht: montantRecu,
-                  date_paiement_reel: datePaiementReel,
-                }
-              : s
-          )
-        );
+          setAllFactures((prev) =>
+            prev.map((f) =>
+              f.id === itemId
+                ? {
+                    ...f,
+                    date_paiement: datePaiementReel || null,
+                    state_facture: datePaiementReel ? 'Payée' : (f.state_facture === 'Payée' ? 'Attente paiement' : f.state_facture),
+                  }
+                : f
+            )
+          );
+        } else {
+          // Mise à jour d'une situation
+          await axios.patch(`/api/situations/${itemId}/update/`, {
+            montant_reel_ht: montantRecu,
+            date_paiement_reel: datePaiementReel,
+          });
+
+          setAllSituations((prev) =>
+            prev.map((s) =>
+              s.id === itemId
+                ? {
+                    ...s,
+                    montant_reel_ht: montantRecu,
+                    date_paiement_reel: datePaiementReel,
+                  }
+                : s
+            )
+          );
+        }
       } catch (error) {
-        console.error("Erreur lors de la mise à jour:", error);
         alert("Erreur lors de la mise à jour des données");
       }
     },
-    []
+    [allFactures]
   );
 
   const handleNumeroCPChange = useCallback(async (situationId, numeroCP) => {
@@ -247,7 +316,6 @@ export const useTableauFacturation = () => {
         )
       );
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du numéro CP:", error);
       alert("Erreur lors de la mise à jour du numéro CP");
     }
   }, []);
@@ -264,7 +332,6 @@ export const useTableauFacturation = () => {
         )
       );
     } catch (error) {
-      console.error("Erreur lors de la mise à jour de la banque:", error);
       alert("Erreur lors de la mise à jour de la banque");
     }
   }, []);
@@ -278,7 +345,6 @@ export const useTableauFacturation = () => {
       setBanques((prev) => [...prev, response.data]);
       alert("Banque créée avec succès !");
     } catch (error) {
-      console.error("Erreur lors de la création de la banque:", error);
       alert("Erreur lors de la création de la banque");
     }
   }, []);

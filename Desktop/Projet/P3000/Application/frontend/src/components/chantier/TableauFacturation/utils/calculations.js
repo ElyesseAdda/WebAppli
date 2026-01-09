@@ -2,12 +2,26 @@ import { extractSituationNumber, formatMontant } from "./formatters";
 import React from "react";
 
 /**
- * Calcule l'écart entre le montant reçu et le montant de la situation
+ * Calcule l'écart entre le montant reçu et le montant de la situation ou facture
  */
-export const calculerEcartMois = (situation) => {
+export const calculerEcartMois = (item) => {
+  // Si c'est une facture (a price_ht)
+  if (item.price_ht !== undefined) {
+    const montantHTFacture = parseFloat(item.price_ht) || 0;
+    const montantRecuHT = (item.state_facture === 'Payée' && item.price_ht) 
+      ? parseFloat(item.price_ht) 
+      : 0;
+    const ecart = montantRecuHT - montantHTFacture;
+
+    if (ecart === 0 || isNaN(ecart)) return "-";
+
+    return formatMontant(ecart);
+  }
+  
+  // Si c'est une situation
   const montantHTSituation =
-    parseFloat(situation.montant_apres_retenues) || 0;
-  const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
+    parseFloat(item.montant_apres_retenues) || 0;
+  const montantRecuHT = parseFloat(item.montant_reel_ht) || 0;
   const ecart = montantRecuHT - montantHTSituation;
 
   if (ecart === 0 || isNaN(ecart)) return "-";
@@ -28,7 +42,6 @@ export const calculateDatePaiement = (dateEnvoi, delai, formatDateFn) => {
     date.setDate(date.getDate() + parseInt(delai));
     return formatDateFn(date);
   } catch (error) {
-    console.error("Erreur dans le calcul de la date de paiement:", error);
     return "-";
   }
 };
@@ -76,7 +89,6 @@ export const calculateRetard = (datePrevue, dateReelle, formatDateFn) => {
       return "À jour";
     }
   } catch (error) {
-    console.error("Erreur dans le calcul du retard:", error);
     return "-";
   }
 };
@@ -226,6 +238,8 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
 
   // Créer une liste avec les situations, factures et les sous-totaux
   const itemsAvecSousTotaux = [];
+  let cumulCumulatif = 0; // Cumul qui s'additionne au fur et à mesure des mois
+  
   moisTries.forEach((mois) => {
     const { situations, factures } = moisAvecItems[mois];
     
@@ -235,7 +249,7 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
     // Ajouter les factures du mois
     itemsAvecSousTotaux.push(...factures);
 
-    // Ajouter une ligne de sous-total après chaque mois
+    // Calculer le sous-total du mois
     const sousTotalSituations = situations.reduce((total, situation) => {
       return total + (parseFloat(situation.montant_apres_retenues) || 0);
     }, 0);
@@ -245,11 +259,15 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
     }, 0);
 
     const sousTotalMois = sousTotalSituations + sousTotalFactures;
+    
+    // Ajouter uniquement le sous-total des situations au cumul cumulatif (pas les factures)
+    cumulCumulatif += sousTotalSituations;
 
     itemsAvecSousTotaux.push({
       isSousTotal: true,
       mois: parseInt(mois),
       sousTotal: sousTotalMois,
+      cumulCumulatif: cumulCumulatif, // Cumul cumulatif jusqu'à ce mois inclus
     });
   });
 

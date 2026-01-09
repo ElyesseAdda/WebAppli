@@ -6967,7 +6967,7 @@ def get_all_situations_by_year(request):
         # Utilisation de select_related pour éviter les requêtes N+1
         situations_annee = (Situation.objects
                            .filter(annee=annee)
-                           .select_related('chantier')
+                           .select_related('chantier', 'chantier__societe')
                            .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes_avenant', 'lignes_supplementaires')
                            .order_by('chantier__chantier_name', 'mois', 'numero_situation'))
         
@@ -6979,7 +6979,7 @@ def get_all_situations_by_year(request):
         if chantier_ids:
             all_situations = (Situation.objects
                             .filter(chantier_id__in=chantier_ids)
-                            .select_related('chantier')
+                            .select_related('chantier', 'chantier__societe')
                             .prefetch_related('lignes', 'lignes__ligne_devis', 'lignes_avenant', 'lignes_supplementaires')
                             .order_by('annee', 'mois', 'numero_situation'))
             
@@ -6998,11 +6998,20 @@ def get_all_situations_by_year(request):
         for situation_data in serializer.data:
             situation_obj = next((s for s in situations_annee if s.id == situation_data['id']), None)
             if situation_obj and situation_obj.chantier:
-                situation_data['chantier_name'] = situation_obj.chantier.chantier_name
-                situation_data['chantier_id'] = situation_obj.chantier.id
+                chantier = situation_obj.chantier
+                situation_data['chantier_name'] = chantier.chantier_name
+                situation_data['chantier_id'] = chantier.id
+                
+                # Ajouter les informations du maître d'ouvrage ou de la société
+                client_name = None
+                if chantier.maitre_ouvrage_nom_societe:
+                    client_name = chantier.maitre_ouvrage_nom_societe
+                elif hasattr(chantier, 'societe') and chantier.societe and hasattr(chantier.societe, 'nom_societe'):
+                    client_name = chantier.societe.nom_societe
+                situation_data['client_name'] = client_name
                 
                 # Ajouter toutes les situations du chantier (sérialisées) pour le calcul des cumuls
-                chantier_id = situation_obj.chantier.id
+                chantier_id = chantier.id
                 if chantier_id in all_situations_by_chantier:
                     all_situations_chantier = all_situations_by_chantier[chantier_id]
                     situation_data['allSituationsChantier'] = SituationSerializer(
@@ -10045,11 +10054,14 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         annee_2_digits = str(paiement.annee)[-2:]
         key = f"{paiement.mois:02d}/{annee_2_digits}"
         
-        # Montant à payer : utiliser montant_a_payer si défini, sinon 0
-        montant_a_payer = Decimal(str(paiement.montant_a_payer)) if paiement.montant_a_payer else Decimal('0')
+        # Montant à payer : utiliser montant_a_payer s'il existe et est > 0, sinon utiliser montant
+        # Cette logique correspond à celle du récap financier pour la cohérence
+        montant_a_payer_decimal = Decimal(str(paiement.montant_a_payer)) if paiement.montant_a_payer else Decimal('0')
+        montant_decimal = Decimal(str(paiement.montant)) if paiement.montant else Decimal('0')
+        montant_a_payer = montant_a_payer_decimal if montant_a_payer_decimal > 0 else montant_decimal
         
         # Montant payé : utiliser le champ montant
-        montant_paye = Decimal(str(paiement.montant)) if paiement.montant else Decimal('0')
+        montant_paye = montant_decimal
         
         chantier_name = paiement.chantier.chantier_name if paiement.chantier else f"Chantier {paiement.chantier_id}"
         

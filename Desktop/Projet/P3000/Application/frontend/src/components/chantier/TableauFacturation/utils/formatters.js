@@ -20,6 +20,12 @@ export const formatNumberWithColor = (value, compareValue) => {
     color = "rgba(27, 120, 188, 1)";
   }
 
+  // Formater le nombre avec des espaces pour séparer les milliers
+  const formattedNumber = Math.abs(number).toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
   return (
     <Typography
       sx={{
@@ -30,7 +36,7 @@ export const formatNumberWithColor = (value, compareValue) => {
         whiteSpace: "nowrap",
       }}
     >
-      {number.toFixed(2)} €
+      {formattedNumber} €
     </Typography>
   );
 };
@@ -61,6 +67,12 @@ export const formatMontant = (montant, forceNegative = false, type = null) => {
   const isNegatif = forceNegative || valeur < 0 || type === "deduction";
   const couleur = isNegatif ? "error.main" : "rgb(0, 168, 42)";
 
+  // Formater le nombre avec des espaces pour séparer les milliers
+  const formattedNumber = Math.abs(valeur).toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
   return (
     <Typography
       sx={{
@@ -72,7 +84,7 @@ export const formatMontant = (montant, forceNegative = false, type = null) => {
       }}
     >
       {isNegatif ? "-" : ""}
-      {Math.abs(valeur).toFixed(2)} €
+      {formattedNumber} €
     </Typography>
   );
 };
@@ -100,10 +112,53 @@ export const getMoisName = (mois) => {
 
 /**
  * Extrait le numéro de situation depuis une chaîne
+ * Cherche spécifiquement "Situation n°X" dans le numéro original
+ * Exemples :
+ * - "Facture n°07.2026 - Situation n°01" → 1
+ * - "Situation n°5" → 5
+ * - "Facture n°07.2026" → "-" (pas de numéro de situation)
  */
 export const extractSituationNumber = (numeroSituation) => {
   if (!numeroSituation) return "-";
-  const match = numeroSituation.match(/n°(\d+)/);
-  return match ? parseInt(match[1]) : numeroSituation;
+  
+  // Chercher spécifiquement "Situation n°X" dans le numéro
+  const matchSituation = numeroSituation.match(/Situation\s*n°\s*(\d+)/i);
+  if (matchSituation) {
+    return parseInt(matchSituation[1]);
+  }
+  
+  // Si pas de "Situation n°X", chercher le premier "n°X" (fallback)
+  const match = numeroSituation.match(/n°\s*(\d+)/i);
+  return match ? parseInt(match[1]) : "-";
+};
+
+/**
+ * Formate un numéro de facture pour n'afficher que la partie principale
+ * Enlève toutes les suites (y compris "Situation n°X")
+ * Exemples :
+ * - "Facture n°01.2026 - Suite 1" → "Facture n°01.2026"
+ * - "Facture n°07.2026 - Situation n°01" → "Facture n°07.2026"
+ * - "Facture n°123.2026" → "Facture n°123.2026"
+ * - "Autre format" → "Autre format" (si le format est différent)
+ */
+export const formatFactureNumero = (numeroFacture) => {
+  if (!numeroFacture) {
+    return "-";
+  }
+  
+  // Pattern pour détecter "Facture n°XX.XXXX" ou "Facture n°XXX.XXXX"
+  // où XX/XXX est le numéro (2 ou 3 chiffres) et XXXX est l'année (4 chiffres)
+  // On enlève tout ce qui suit (y compris "Situation n°X" et autres suites)
+  const pattern = /^(Facture\s*n°\d{2,3}\.\d{4})/i;
+  const match = numeroFacture.match(pattern);
+  
+  if (match) {
+    // Si le format correspond, retourner seulement la partie principale (sans les suites, y compris Situation)
+    const result = match[1];
+    return result;
+  }
+  
+  // Si le format ne correspond pas, retourner le numéro original
+  return numeroFacture;
 };
 
