@@ -99,13 +99,16 @@ function ProduitSelectionTable({
           contact_type: selectedData.contact_type,
           contact_agent: selectedData.contact_agent,
           contact_sous_traitant: selectedData.contact_sous_traitant,
+          contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
+          is_representant: selectedData.is_representant,
+          magasin: selectedData.magasin || null, // Nom du magasin
+          magasin_id: selectedData.magasin_id || null, // ID du magasin
           lignes: selectedItems,
           montant_total: parseFloat(
             selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)
           ),
         };
 
-        console.log("Données envoyées avec numéro suggéré:", bonCommandeData);
 
         // Créer le bon de commande avec le numéro suggéré
         const bonCommande = await bonCommandeService.createBonCommande(
@@ -291,13 +294,14 @@ function ProduitSelectionTable({
         contact_sous_traitant: selectedData.contact_sous_traitant,
         contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
         is_representant: selectedData.is_representant,
+        magasin: selectedData.magasin || null, // Nom du magasin
+        magasin_id: selectedData.magasin_id || null, // ID du magasin
         lignes: selectedItems,
         montant_total: parseFloat(
           selectedItems.reduce((acc, curr) => acc + curr.total, 0).toFixed(2)
         ),
       };
 
-      console.log("Données envoyées:", bonCommandeData);
 
       // Créer le bon de commande
       const bonCommande = await bonCommandeService.createBonCommande(

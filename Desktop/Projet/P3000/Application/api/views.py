@@ -4769,13 +4769,15 @@ def bon_commande_view(request):
 
 
 class BonCommandeViewSet(viewsets.ModelViewSet):
-    queryset = BonCommande.objects.select_related('chantier', 'emetteur', 'contact_agent', 'contact_sous_traitant', 'contact_sous_traitant_contact').all()
+    queryset = BonCommande.objects.select_related('chantier', 'emetteur', 'contact_agent', 'contact_sous_traitant', 'contact_sous_traitant_contact', 'magasin').all()
     serializer_class = BonCommandeSerializer
 
     def create(self, request, *args, **kwargs):
         try:
             with transaction.atomic():
                 # Création du bon de commande
+                magasin_id = request.data.get('magasin_id')
+                magasin_value = request.data.get('magasin_retrait') or request.data.get('magasin')
                 bon_commande_data = {
                     'numero': request.data.get('numero'),
                     'fournisseur': request.data.get('fournisseur'),
@@ -4784,9 +4786,25 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     'montant_total': request.data.get('montant_total', 0),
                     'statut': request.data.get('statut', 'en_attente'),
                     'date_livraison': request.data.get('date_livraison'),
-                    'magasin_retrait': request.data.get('magasin_retrait'),
                     'date_commande': request.data.get('date_commande')
                 }
+                
+                # Ajouter le magasin (ForeignKey) si un ID est fourni
+                if magasin_id is not None and magasin_id != '':
+                    try:
+                        from .models import Magasin
+                        # Convertir en int si c'est une chaîne
+                        magasin_id_int = int(magasin_id) if isinstance(magasin_id, str) else magasin_id
+                        # Vérifier que le magasin existe
+                        magasin_obj = Magasin.objects.get(id=magasin_id_int)
+                        bon_commande_data['magasin_id'] = magasin_id_int
+                    except Magasin.DoesNotExist:
+                        pass
+                    except (ValueError, TypeError):
+                        pass
+                # Sinon, utiliser l'ancien champ magasin_retrait pour compatibilité
+                elif magasin_value:
+                    bon_commande_data['magasin_retrait'] = magasin_value
                 
                 # Ajouter les champs de contact s'ils sont présents
                 if request.data.get('contact_type'):
@@ -4845,7 +4863,8 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'date_creation': bc.date_creation,
                 'statut': bc.statut,
                 'date_livraison': bc.date_livraison,
-                'magasin_retrait': bc.magasin_retrait,
+                'magasin_retrait': bc.magasin.nom if bc.magasin else bc.magasin_retrait,
+                'magasin_id': bc.magasin.id if bc.magasin else None,
                 # Ajout des nouveaux champs
                 'statut_paiement': bc.statut_paiement,
                 'montant_paye': float(bc.montant_paye),
@@ -5021,6 +5040,19 @@ def preview_bon_commande(request):
             except (ValueError, TypeError):
                 formatted_date_livraison = None
 
+        # Récupérer le magasin et son email si un ID est fourni
+        magasin_nom = bon_commande_data.get('magasin') or bon_commande_data.get('magasin_retrait')
+        magasin_email = None
+        magasin_id = bon_commande_data.get('magasin_id')
+        if magasin_id:
+            try:
+                from .models import Magasin
+                magasin_obj = Magasin.objects.get(id=magasin_id)
+                magasin_nom = magasin_obj.nom
+                magasin_email = magasin_obj.email
+            except:
+                pass
+
         context = {
             'numero': bon_commande_data['numero'],
             'fournisseur': fournisseur_name,
@@ -5032,7 +5064,8 @@ def preview_bon_commande(request):
             'statut': bon_commande_data.get('statut', 'en_attente'),
             'date_commande': formatted_date_commande,
             'date_livraison': formatted_date_livraison,
-            'magasin_retrait': bon_commande_data.get('magasin_retrait'),
+            'magasin_retrait': magasin_nom,
+            'magasin_email': magasin_email,
             'contact_type': contact_type,
             'contact_agent': contact_agent,
             'contact_sous_traitant': contact_sous_traitant,
@@ -5068,8 +5101,6 @@ def create_bon_commande(request):
     try:
         data = request.data
         
-        # LOG: Données reçues du frontend
-        
         # Récupérer l'émetteur depuis la base de données
         try:
             emetteur = Emetteur.objects.get(id=data['emetteur'])
@@ -5104,6 +5135,24 @@ def create_bon_commande(request):
             if data.get('contact_sous_traitant_contact') and not data.get('is_representant', False):
                 bon_commande_data['contact_sous_traitant_contact_id'] = data['contact_sous_traitant_contact']
         
+        # Ajouter le magasin (ForeignKey) si un ID est fourni
+        magasin_id = data.get('magasin_id')
+        if magasin_id is not None and magasin_id != '':
+            try:
+                from .models import Magasin
+                # Convertir en int si c'est une chaîne
+                magasin_id_int = int(magasin_id) if isinstance(magasin_id, str) else magasin_id
+                # Vérifier que le magasin existe
+                magasin_obj = Magasin.objects.get(id=magasin_id_int)
+                bon_commande_data['magasin_id'] = magasin_id_int
+            except Magasin.DoesNotExist:
+                pass
+            except (ValueError, TypeError):
+                pass
+        # Sinon, utiliser l'ancien champ magasin_retrait pour compatibilité
+        elif data.get('magasin'):
+            bon_commande_data['magasin_retrait'] = data['magasin']
+        
         # Créer le bon de commande
         bon_commande = BonCommande.objects.create(**bon_commande_data)
 
@@ -5128,7 +5177,7 @@ def create_bon_commande(request):
 def preview_saved_bon_commande(request, id):
     try:
         bon_commande = get_object_or_404(
-            BonCommande.objects.select_related('contact_agent', 'contact_sous_traitant', 'contact_sous_traitant_contact', 'chantier', 'emetteur'), 
+            BonCommande.objects.select_related('contact_agent', 'contact_sous_traitant', 'contact_sous_traitant_contact', 'chantier', 'emetteur', 'magasin'), 
             id=id
         )
         lignes = bon_commande.lignes.all()
@@ -5175,6 +5224,15 @@ def preview_saved_bon_commande(request, id):
             except (ValueError, TypeError):
                 formatted_date_livraison = None
 
+        # Récupérer le magasin depuis la relation ou l'ancien champ
+        magasin_nom = None
+        magasin_email = None
+        if bon_commande.magasin:
+            magasin_nom = bon_commande.magasin.nom
+            magasin_email = bon_commande.magasin.email
+        elif bon_commande.magasin_retrait:
+            magasin_nom = bon_commande.magasin_retrait
+        
         context = {
             'numero': bon_commande.numero,
             'fournisseur': bon_commande.fournisseur,
@@ -5186,7 +5244,8 @@ def preview_saved_bon_commande(request, id):
             'statut': bon_commande.statut,
             'date_commande': formatted_date_commande,
             'date_livraison': formatted_date_livraison,
-            'magasin_retrait': bon_commande.magasin_retrait,
+            'magasin_retrait': magasin_nom or "",
+            'magasin_email': magasin_email,
             'contact_type': bon_commande.contact_type,
             'contact_agent': contact_agent,
             'contact_sous_traitant': contact_sous_traitant,

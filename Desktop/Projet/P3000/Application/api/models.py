@@ -729,6 +729,25 @@ class Fournisseur(models.Model):
     description_fournisseur = models.CharField(max_length=500, blank=True, null=True)
     magasin = models.CharField(max_length=250, blank=True, null=True)
 
+    def __str__(self):
+        return self.name
+
+
+class Magasin(models.Model):
+    fournisseur = models.ForeignKey(
+        Fournisseur,
+        on_delete=models.CASCADE,
+        related_name='magasins'
+    )
+    nom = models.CharField(max_length=250)
+    email = models.EmailField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('fournisseur', 'nom')
+
+    def __str__(self):
+        return f"{self.fournisseur.name} - {self.nom}"
+
 
 class Materiel_produit(models.Model):
     name_produit = models.CharField(max_length=25,)
@@ -1771,7 +1790,8 @@ class BonCommande(models.Model):
     date_creation = models.DateTimeField(auto_now_add=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     date_livraison = models.DateField(null=True, blank=True)
-    magasin_retrait = models.CharField(max_length=200, null=True, blank=True)
+    magasin_retrait = models.CharField(max_length=200, null=True, blank=True)  # Conservé pour compatibilité
+    magasin = models.ForeignKey('Magasin', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande', help_text="Magasin du fournisseur pour le retrait")
     date_commande = models.DateField(default='2025-01-01')  # Ajout du champ de date avec une valeur par défaut
     
     # Champs pour le contact qui réceptionne

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Devis, FournisseurMagasin, Emetteur
+from .models import Devis, FournisseurMagasin, Emetteur, Fournisseur, Magasin
 
 # Register your models here.
 
@@ -9,6 +9,31 @@ class FournisseurMagasinAdmin(admin.ModelAdmin):
     list_filter = ('fournisseur',)
     search_fields = ('fournisseur', 'magasin')
     ordering = ('-derniere_utilisation',)
+
+
+class MagasinInline(admin.TabularInline):
+    model = Magasin
+    extra = 1
+    fields = ('nom', 'email')
+
+
+@admin.register(Fournisseur)
+class FournisseurAdmin(admin.ModelAdmin):
+    list_display = ('name', 'Fournisseur_mail', 'phone_Number', 'get_magasins_count')
+    list_filter = ('name',)
+    search_fields = ('name', 'Fournisseur_mail', 'phone_Number')
+    inlines = [MagasinInline]
+    
+    def get_magasins_count(self, obj):
+        return obj.magasins.count()
+    get_magasins_count.short_description = 'Nombre de magasins'
+
+
+@admin.register(Magasin)
+class MagasinAdmin(admin.ModelAdmin):
+    list_display = ('nom', 'fournisseur', 'email')
+    list_filter = ('fournisseur',)
+    search_fields = ('nom', 'email', 'fournisseur__name')
 
 
 @admin.register(Emetteur)

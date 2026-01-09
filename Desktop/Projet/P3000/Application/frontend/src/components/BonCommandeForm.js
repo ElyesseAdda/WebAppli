@@ -41,6 +41,8 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       contact_sous_traitant: data.contact_sous_traitant,
       contact_sous_traitant_contact: data.contact_sous_traitant_contact,
       is_representant: data.is_representant,
+      magasin: data.magasin, // Nom du magasin
+      magasin_id: data.magasin_id, // ID du magasin
     });
     setStep(2);
     setIsModalOpen(true);
@@ -67,12 +69,15 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       chantier: selectedData.chantier,
       emetteur: selectedData.emetteur,
       statut: selectedData.statut, // Ajout du statut pour la prévisualisation
+      date_commande: selectedData.date_commande,
       date_creation_personnalisee: selectedData.date_creation_personnalisee,
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,
       contact_sous_traitant: selectedData.contact_sous_traitant,
       contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
       is_representant: selectedData.is_representant,
+      magasin: selectedData.magasin, // Nom du magasin
+      magasin_id: selectedData.magasin_id, // ID du magasin pour récupérer l'email
       lignes: products.map((product) => ({
         produit: product.produit,
         designation: product.designation,
@@ -98,12 +103,16 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       fournisseurName: selectedData.fournisseurName,
       chantier: selectedData.chantier,
       emetteur: selectedData.emetteur,
+      statut: selectedData.statut || "en_attente",
+      date_commande: selectedData.date_commande,
       date_creation_personnalisee: selectedData.date_creation_personnalisee,
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,
       contact_sous_traitant: selectedData.contact_sous_traitant,
       contact_sous_traitant_contact: selectedData.contact_sous_traitant_contact,
       is_representant: selectedData.is_representant,
+      magasin: selectedData.magasin || null, // Nom du magasin
+      magasin_id: selectedData.magasin_id || null, // ID du magasin
       lignes: selectedProducts.map((product) => ({
         produit: product.produit,
         designation: product.designation,

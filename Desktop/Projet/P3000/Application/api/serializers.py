@@ -7,7 +7,7 @@ from .models import (
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
     SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant, ContactSociete,
-    PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Banque, AppelOffres, AgencyExpenseAggregate,
+    PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant
 )
@@ -34,16 +34,65 @@ class BanqueSerializer(serializers.ModelSerializer):
         model = Banque
         fields = ['id', 'nom_banque']
 
+class MagasinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Magasin
+        fields = ['id', 'nom', 'email']
+        extra_kwargs = {
+            'email': {'required': False, 'allow_blank': True, 'allow_null': True},
+        }
+
+
 class FournisseurSerializer(serializers.ModelSerializer):
+    magasins = MagasinSerializer(many=True, required=False)
+
     class Meta:
         model = Fournisseur
-        fields = ['id', 'name', 'Fournisseur_mail', 'phone_Number', 'description_fournisseur', 'magasin']
+        fields = ['id', 'name', 'Fournisseur_mail', 'phone_Number', 'description_fournisseur', 'magasin', 'magasins']
         extra_kwargs = {
             'Fournisseur_mail': {'required': False, 'allow_blank': True, 'allow_null': True},
             'phone_Number': {'required': False, 'allow_null': True},
             'description_fournisseur': {'required': False, 'allow_blank': True, 'allow_null': True},
             'magasin': {'required': False, 'allow_blank': True, 'allow_null': True},
         }
+
+    def create(self, validated_data):
+        magasins_data = validated_data.pop('magasins', [])
+        fournisseur = Fournisseur.objects.create(**validated_data)
+        # Créer les magasins associés
+        for magasin_data in magasins_data:
+            # Filtrer les champs vides
+            if magasin_data.get('nom') and magasin_data['nom'].strip():
+                Magasin.objects.create(
+                    fournisseur=fournisseur,
+                    nom=magasin_data.get('nom', '').strip(),
+                    email=magasin_data.get('email', '').strip() or None
+                )
+        return fournisseur
+
+    def update(self, instance, validated_data):
+        magasins_data = validated_data.pop('magasins', None)
+        
+        # Mettre à jour les champs du fournisseur
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Mettre à jour les magasins si fournis
+        if magasins_data is not None:
+            # Supprimer les magasins existants
+            instance.magasins.all().delete()
+            # Créer les nouveaux magasins
+            for magasin_data in magasins_data:
+                # Filtrer les champs vides
+                if magasin_data.get('nom') and magasin_data['nom'].strip():
+                    Magasin.objects.create(
+                        fournisseur=instance,
+                        nom=magasin_data.get('nom', '').strip(),
+                        email=magasin_data.get('email', '').strip() or None
+                    )
+
+        return instance
 
 
 class DevisListSerializer(serializers.ModelSerializer):
@@ -758,10 +807,32 @@ class LigneBonCommandeSerializer(serializers.ModelSerializer):
 class BonCommandeSerializer(serializers.ModelSerializer):
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
     reste_a_payer = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    emetteur_name = serializers.SerializerMethodField()
+    magasin_nom = serializers.SerializerMethodField()
+    magasin_email = serializers.SerializerMethodField()
 
     class Meta:
         model = BonCommande
         fields = '__all__'
+        extra_kwargs = {
+            'magasin_retrait': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'magasin': {'required': False, 'allow_null': True},
+        }
+
+    def get_emetteur_name(self, obj):
+        if obj.emetteur:
+            return f"{obj.emetteur.name} {obj.emetteur.surname}"
+        return None
+
+    def get_magasin_nom(self, obj):
+        if obj.magasin:
+            return obj.magasin.nom
+        return obj.magasin_retrait  # Fallback sur l'ancien champ pour compatibilité
+
+    def get_magasin_email(self, obj):
+        if obj.magasin:
+            return obj.magasin.email
+        return None
 
 class FactureTSSerializer(serializers.ModelSerializer):
     devis_numero = serializers.CharField(source='numero_complet', read_only=True)

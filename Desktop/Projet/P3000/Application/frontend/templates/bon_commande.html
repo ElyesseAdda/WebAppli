@@ -346,7 +346,7 @@
 
     <div class="Fournisseur">
       <h4>Fournisseur:</h4>
-      <p>{{ fournisseur }}</p>
+      <p>{{ fournisseur }}{% if magasin_retrait and magasin_retrait.strip %} - {{ magasin_retrait }}{% endif %}</p>
     </div>
 
     <table style="width: 100%; margin-top: 20px; border-collapse: collapse">
@@ -404,7 +404,7 @@
         </p>
         {% elif statut == 'retrait_magasin' %}
         <p>
-          RETRAIT {{ fournisseur|upper }}{% if magasin_retrait %} {{ magasin_retrait|upper }}{% endif %} LE {{ date_commande }}
+          RETRAIT {% if magasin_retrait %}{{ magasin_retrait|upper }}{% else %}{{ fournisseur|upper }}{% endif %} LE {{ date_commande }}
         </p>
         {% endif %}
       </div>

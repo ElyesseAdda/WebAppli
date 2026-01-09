@@ -24,7 +24,9 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
     chantier: initialChantierIdNum || "",
     agent: "",
     statut: "en_attente", // Statut par défaut
+    magasin: "", // Magasin sélectionné
   });
+  const [magasins, setMagasins] = useState([]); // Magasins du fournisseur sélectionné
   const [dateCommande, setDateCommande] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -130,6 +132,11 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       }
     }
     
+    // Récupérer le nom du magasin sélectionné
+    const magasinId = selectedData.magasin;
+    const selectedMagasin = magasinId ? magasins.find((m) => m.id === magasinId) : null;
+    const magasinNom = selectedMagasin ? selectedMagasin.nom : null;
+
     onSubmit({
       fournisseur: selectedData.fournisseur,
       fournisseurName: selectedFournisseur ? selectedFournisseur.name : "",
@@ -144,6 +151,8 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       contact_sous_traitant: contactType === "sous_traitant" ? contactSousTraitant : null,
       contact_sous_traitant_contact: contactSousTraitantContactFinal,
       is_representant: isRepresentant,
+      magasin: magasinNom, // Nom du magasin sélectionné
+      magasin_id: magasinId && magasinId !== "" ? magasinId : null, // ID du magasin sélectionné
     });
     onClose();
   };
@@ -169,6 +178,11 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       setContactSousTraitant("");
       setContactSousTraitantContact("");
       setSousTraitantContacts([]);
+      setMagasins([]);
+      setSelectedData((prev) => ({
+        ...prev,
+        magasin: "",
+      }));
     }
   }, [open]);
 
@@ -186,12 +200,28 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
             <Select
               name="fournisseur"
               value={selectedData.fournisseur}
-              onChange={(e) =>
+              onChange={(e) => {
+                const fournisseurId = e.target.value;
                 setSelectedData({
                   ...selectedData,
-                  fournisseur: e.target.value,
-                })
-              }
+                  fournisseur: fournisseurId,
+                  magasin: "", // Réinitialiser le magasin lors du changement de fournisseur
+                });
+                // Charger les magasins du fournisseur sélectionné
+                if (fournisseurId) {
+                  fetch(`/api/fournisseurs/${fournisseurId}/`)
+                    .then((response) => response.json())
+                    .then((data) => {
+                      setMagasins(data.magasins || []);
+                    })
+                    .catch((error) => {
+                      console.error("Erreur lors du chargement des magasins:", error);
+                      setMagasins([]);
+                    });
+                } else {
+                  setMagasins([]);
+                }
+              }}
               label="Fournisseur"
             >
               {fournisseurs.map((fournisseur) => (
@@ -201,6 +231,34 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
               ))}
             </Select>
           </FormControl>
+
+          {/* Champ Magasin - affiché uniquement si un fournisseur est sélectionné et qu'il a des magasins */}
+          {selectedData.fournisseur && magasins.length > 0 && (
+            <FormControl fullWidth>
+              <InputLabel>Magasin</InputLabel>
+              <Select
+                name="magasin"
+                value={selectedData.magasin}
+                onChange={(e) =>
+                  setSelectedData({
+                    ...selectedData,
+                    magasin: e.target.value,
+                  })
+                }
+                label="Magasin"
+              >
+                <MenuItem value="">
+                  <em>Aucun magasin</em>
+                </MenuItem>
+                {magasins.map((magasin) => (
+                  <MenuItem key={magasin.id} value={magasin.id}>
+                    {magasin.nom}
+                    {magasin.email && ` (${magasin.email})`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           <FormControl fullWidth>
             <InputLabel>Chantier</InputLabel>

@@ -24,6 +24,7 @@ import {
   MdEdit,
   MdDelete,
   MdBusiness,
+  MdStore,
 } from "react-icons/md";
 import axios from "axios";
 
@@ -38,6 +39,7 @@ const ListeFournisseurs = () => {
     phone_Number: "",
     description_fournisseur: "",
     magasin: "",
+    magasins: [],
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -80,6 +82,7 @@ const ListeFournisseurs = () => {
         phone_Number: fournisseur.phone_Number || "",
         description_fournisseur: fournisseur.description_fournisseur || "",
         magasin: fournisseur.magasin || "",
+        magasins: fournisseur.magasins || [],
       });
     } else {
       setFormData({
@@ -88,6 +91,7 @@ const ListeFournisseurs = () => {
         phone_Number: "",
         description_fournisseur: "",
         magasin: "",
+        magasins: [],
       });
     }
     setOpenModal(true);
@@ -102,6 +106,7 @@ const ListeFournisseurs = () => {
       phone_Number: "",
       description_fournisseur: "",
       magasin: "",
+      magasins: [],
     });
   };
 
@@ -113,17 +118,53 @@ const ListeFournisseurs = () => {
     }));
   };
 
+  const handleAddMagasin = () => {
+    setFormData(prev => ({
+      ...prev,
+      magasins: [...prev.magasins, { nom: "", email: "" }],
+    }));
+  };
+
+  const handleMagasinChange = (index, field, value) => {
+    setFormData(prev => {
+      const newMagasins = [...prev.magasins];
+      newMagasins[index] = {
+        ...newMagasins[index],
+        [field]: value,
+      };
+      return {
+        ...prev,
+        magasins: newMagasins,
+      };
+    });
+  };
+
+  const handleRemoveMagasin = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      magasins: prev.magasins.filter((_, i) => i !== index),
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Filtrer les magasins vides (sans nom)
+    const magasinsValides = formData.magasins.filter(m => m.nom && m.nom.trim() !== "");
+    
+    const dataToSend = {
+      ...formData,
+      magasins: magasinsValides,
+    };
     
     try {
       if (editingFournisseur) {
         // Modifier un fournisseur existant
-        await axios.put(`/api/fournisseurs/${editingFournisseur.id}/`, formData);
+        await axios.put(`/api/fournisseurs/${editingFournisseur.id}/`, dataToSend);
         showSnackbar("Fournisseur modifié avec succès", "success");
       } else {
         // Créer un nouveau fournisseur
-        await axios.post("/api/fournisseurs/", formData);
+        await axios.post("/api/fournisseurs/", dataToSend);
         showSnackbar("Fournisseur créé avec succès", "success");
       }
       
@@ -131,7 +172,8 @@ const ListeFournisseurs = () => {
       fetchFournisseurs();
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
-      showSnackbar("Erreur lors de la sauvegarde du fournisseur", "error");
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message || "Erreur lors de la sauvegarde du fournisseur";
+      showSnackbar(errorMessage, "error");
     }
   };
 
@@ -189,7 +231,7 @@ const ListeFournisseurs = () => {
               <TableCell sx={{ fontWeight: "bold" }}>Nom</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Téléphone</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Magasin</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Magasins</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Description</TableCell>
               <TableCell sx={{ fontWeight: "bold", textAlign: "center" }}>
                 Actions
@@ -213,7 +255,27 @@ const ListeFournisseurs = () => {
                   </TableCell>
                   <TableCell>{fournisseur.Fournisseur_mail || "-"}</TableCell>
                   <TableCell>{fournisseur.phone_Number || "-"}</TableCell>
-                  <TableCell>{fournisseur.magasin || "-"}</TableCell>
+                  <TableCell>
+                    {fournisseur.magasins && fournisseur.magasins.length > 0 ? (
+                      <Box>
+                        {fournisseur.magasins.map((magasin, idx) => (
+                          <Box key={idx} sx={{ mb: 0.5, display: "flex", alignItems: "center", gap: 1 }}>
+                            <MdStore size={16} />
+                            <Typography variant="body2">
+                              {magasin.nom}
+                              {magasin.email && (
+                                <Typography component="span" variant="caption" sx={{ ml: 1, color: "text.secondary" }}>
+                                  ({magasin.email})
+                                </Typography>
+                              )}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
                   <TableCell>
                     {fournisseur.description_fournisseur
                       ? fournisseur.description_fournisseur.length > 50
@@ -279,14 +341,70 @@ const ListeFournisseurs = () => {
                 fullWidth
                 variant="outlined"
               />
-              <TextField
-                name="magasin"
-                label="Magasin"
-                value={formData.magasin}
-                onChange={handleInputChange}
-                fullWidth
-                variant="outlined"
-              />
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="h6" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <MdStore />
+                    Magasins
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<MdAdd />}
+                    onClick={handleAddMagasin}
+                  >
+                    Ajouter un Magasin
+                  </Button>
+                </Box>
+                {formData.magasins.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Aucun magasin ajouté. Cliquez sur "Ajouter un Magasin" pour en ajouter un.
+                  </Typography>
+                ) : (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {formData.magasins.map((magasin, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          p: 2,
+                          border: "1px solid #e0e0e0",
+                          borderRadius: 1,
+                          backgroundColor: "#fafafa",
+                        }}
+                      >
+                        <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+                          <TextField
+                            label="Nom du Magasin"
+                            value={magasin.nom}
+                            onChange={(e) => handleMagasinChange(index, "nom", e.target.value)}
+                            fullWidth
+                            variant="outlined"
+                            size="small"
+                            required
+                          />
+                          <TextField
+                            label="Email du Magasin (optionnel)"
+                            type="email"
+                            value={magasin.email}
+                            onChange={(e) => handleMagasinChange(index, "email", e.target.value)}
+                            fullWidth
+                            variant="outlined"
+                            size="small"
+                          />
+                          <IconButton
+                            color="error"
+                            onClick={() => handleRemoveMagasin(index)}
+                            size="small"
+                            sx={{ mt: 0.5 }}
+                          >
+                            <MdDelete />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
               <TextField
                 name="description_fournisseur"
                 label="Description"
