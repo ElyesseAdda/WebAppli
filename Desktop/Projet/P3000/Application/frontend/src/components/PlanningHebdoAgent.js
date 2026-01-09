@@ -95,6 +95,7 @@ const PlanningHebdoAgent = ({
   const [isCopying, setIsCopying] = useState(false);
 
   const [showCostsSummary, setShowCostsSummary] = useState(false);
+  const [publicHolidays, setPublicHolidays] = useState({}); // État pour stocker les jours fériés de la semaine
 
   const currentYear = dayjs().year();
   const currentWeek = dayjs().isoWeek();
@@ -106,6 +107,68 @@ const PlanningHebdoAgent = ({
   const getChantierName = (chantierId) => {
     const chantier = chantiers.find((c) => c.id === chantierId);
     return chantier ? chantier.chantier_name : `Chantier ${chantierId}`;
+  };
+
+  // Fonction pour calculer la date de Pâques (algorithme de Gauss)
+  const calculateEaster = (year) => {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return dayjs().year(year).month(month - 1).date(day);
+  };
+
+  // Fonction pour obtenir tous les jours fériés français d'une année
+  const getFrenchHolidays = (year) => {
+    const holidays = {};
+
+    // Jours fériés fixes
+    const fixedHolidays = {
+      "01-01": "Jour de l'an",
+      "05-01": "Fête du Travail",
+      "05-08": "Victoire 1945",
+      "07-14": "Fête nationale",
+      "08-15": "Assomption",
+      "11-01": "Toussaint",
+      "11-11": "Armistice",
+      "12-25": "Noël",
+    };
+
+    // Ajouter les jours fériés fixes
+    Object.keys(fixedHolidays).forEach((dateStr) => {
+      const [month, day] = dateStr.split("-").map(Number);
+      const date = dayjs().year(year).month(month - 1).date(day);
+      holidays[date.format("YYYY-MM-DD")] = fixedHolidays[dateStr];
+    });
+
+    // Calculer Pâques et les jours fériés variables
+    const easter = calculateEaster(year);
+    const easterMonday = easter.add(1, "day");
+    const ascension = easter.add(39, "day");
+    const whitMonday = easter.add(50, "day");
+
+    holidays[easter.format("YYYY-MM-DD")] = "Pâques";
+    holidays[easterMonday.format("YYYY-MM-DD")] = "Lundi de Pâques";
+    holidays[ascension.format("YYYY-MM-DD")] = "Ascension";
+    holidays[whitMonday.format("YYYY-MM-DD")] = "Lundi de Pentecôte";
+
+    return holidays;
+  };
+
+  // Fonction pour obtenir le nom du jour férié pour une date donnée
+  const getHolidayName = (date) => {
+    const dateStr = dayjs(date).format("YYYY-MM-DD");
+    return publicHolidays[dateStr] || null;
   };
 
   // Générer une liste d'années
@@ -185,6 +248,34 @@ const PlanningHebdoAgent = ({
 
     fetchChantiers();
   }, []);
+
+  // Charger les jours fériés de la semaine
+  useEffect(() => {
+    if (selectedWeek && selectedYear) {
+      const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
+      const holidays = {};
+      
+      // Récupérer les jours fériés pour l'année de la semaine et l'année suivante (au cas où la semaine chevauche)
+      const weekYear = startOfWeek.year();
+      const nextYear = startOfWeek.add(6, "day").year();
+      
+      const allHolidays = { ...getFrenchHolidays(weekYear) };
+      if (nextYear !== weekYear) {
+        Object.assign(allHolidays, getFrenchHolidays(nextYear));
+      }
+      
+      // Filtrer pour ne garder que les jours fériés de la semaine
+      daysOfWeek.forEach((_, index) => {
+        const date = startOfWeek.add(index, "day");
+        const dateStr = date.format("YYYY-MM-DD");
+        if (allHolidays[dateStr]) {
+          holidays[dateStr] = allHolidays[dateStr];
+        }
+      });
+      
+      setPublicHolidays(holidays);
+    }
+  }, [selectedWeek, selectedYear]);
 
   // Charger les plannings et les événements lorsqu'un agent, une semaine ou une année est sélectionné
   useEffect(() => {
@@ -756,6 +847,27 @@ const PlanningHebdoAgent = ({
     const currentDate = startOfWeek
       .add(dayIndex - 1, "day")
       .format("YYYY-MM-DD");
+
+    // Vérifier si c'est un jour férié
+    const isHoliday = publicHolidays[currentDate];
+
+    // Si c'est un jour férié, appliquer un style gris léger (mais pas si c'est aussi un événement)
+    if (isHoliday) {
+      // Vérifier d'abord si un événement absence ou congé existe pour cette date
+      const hasEvent = events.find((event) => {
+        const eventDate = dayjs(event.start_date).format("YYYY-MM-DD");
+        return (
+          eventDate === currentDate &&
+          (event.event_type === "absence" || event.event_type === "conge") &&
+          event.agent === selectedAgentId
+        );
+      });
+
+      // Si pas d'événement, appliquer le style jour férié (gris léger)
+      if (!hasEvent) {
+        return "#e0e0e0"; // Gris léger pour les jours fériés
+      }
+    }
 
     // Vérifier si un événement absence ou congé existe pour cette date
     const hasEvent = events.find((event) => {
