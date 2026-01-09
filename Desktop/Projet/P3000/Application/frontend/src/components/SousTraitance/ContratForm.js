@@ -12,6 +12,7 @@ import {
   MenuItem,
   Select,
   TextField,
+  Typography,
 } from "@mui/material";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -29,10 +30,18 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
     adresse_prestation: "",
     nom_operation: "",
     montant_operation: "",
-    type_contrat: "NETTOYAGE",
+    type_contrat: "",
     nom_maitre_ouvrage: "",
     nom_maitre_oeuvre: "",
   });
+  const [typeContratError, setTypeContratError] = useState(false);
+
+  // Réinitialiser l'erreur quand le modal s'ouvre
+  useEffect(() => {
+    if (open) {
+      setTypeContratError(false);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (chantier) {
@@ -49,9 +58,44 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
         ...prev,
         adresse_prestation: adresseComplete,
         nom_operation: chantier.chantier_name || "",
+        // Préremplir le nom du maître d'ouvrage si disponible
+        nom_maitre_ouvrage: chantier.maitre_ouvrage_nom_societe || prev.nom_maitre_ouvrage || "",
+        // Préremplir le nom du maître d'œuvre si disponible
+        nom_maitre_oeuvre: chantier.maitre_oeuvre_nom_societe || prev.nom_maitre_oeuvre || "",
       }));
     }
   }, [chantier]);
+
+  // Effet pour préremplir le type de contrat selon le type du sous-traitant
+  useEffect(() => {
+    if (sousTraitant?.type) {
+      // Mapper le type du sous-traitant vers le type de contrat
+      // Les types possibles sont : NETTOYAGE, BTP, TCE, AUTRE
+      // Le formulaire n'accepte que BTP et NETTOYAGE
+      // Pour TCE et AUTRE, on laisse vide pour que l'utilisateur choisisse
+      
+      if (sousTraitant.type === "BTP") {
+        setFormData((prev) => ({
+          ...prev,
+          type_contrat: "BTP",
+        }));
+        setTypeContratError(false);
+      } else if (sousTraitant.type === "NETTOYAGE") {
+        setFormData((prev) => ({
+          ...prev,
+          type_contrat: "NETTOYAGE",
+        }));
+        setTypeContratError(false);
+      } else {
+        // Pour TCE ou AUTRE, on laisse vide et on marque visuellement en rouge
+        setFormData((prev) => ({
+          ...prev,
+          type_contrat: "",
+        }));
+        setTypeContratError(true); // Marquer visuellement en rouge dès l'ouverture
+      }
+    }
+  }, [sousTraitant]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,6 +103,10 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
       ...prev,
       [name]: value,
     }));
+    // Réinitialiser l'erreur visuelle quand l'utilisateur sélectionne un type
+    if (name === "type_contrat" && value) {
+      setTypeContratError(false);
+    }
   };
 
   const handleDateChange = (date) => {
@@ -86,6 +134,12 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
 
     if (!chantier?.id) {
       alert("Erreur: Chantier non sélectionné");
+      return;
+    }
+
+    if (!formData.type_contrat) {
+      setTypeContratError(true);
+      alert("Erreur: Le type de contrat est requis");
       return;
     }
 
@@ -180,17 +234,31 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
         <DialogTitle>Nouveau contrat de sous-traitance</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
-            <FormControl fullWidth>
+            <FormControl fullWidth error={typeContratError} required>
               <InputLabel>Type de contrat</InputLabel>
               <Select
                 value={formData.type_contrat}
                 onChange={handleChange}
                 name="type_contrat"
                 label="Type de contrat"
+                error={typeContratError}
+                sx={{
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: typeContratError ? "error.main" : undefined,
+                  },
+                }}
               >
+                <MenuItem value="">
+                  <em>Sélectionner un type</em>
+                </MenuItem>
                 <MenuItem value="BTP">BTP</MenuItem>
                 <MenuItem value="NETTOYAGE">Nettoyage</MenuItem>
               </Select>
+              {typeContratError && (
+                <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                  Veuillez sélectionner un type de contrat
+                </Typography>
+              )}
             </FormControl>
 
             <TextField

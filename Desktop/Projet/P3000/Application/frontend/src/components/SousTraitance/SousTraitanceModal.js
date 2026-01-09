@@ -2,6 +2,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Button,
   Dialog,
@@ -15,6 +16,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
@@ -34,7 +36,9 @@ import {
   FaTable,
   FaTrash,
 } from "react-icons/fa";
+import { AiFillFilePdf } from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 import AvenantForm from "./AvenantForm";
 import ContratForm from "./ContratForm";
@@ -57,6 +61,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [chantier, setChantier] = useState(null);
   const [typeFilter, setTypeFilter] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -337,6 +342,94 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const handlePreviewAvenant = (avenantId) => {
     const previewUrl = `/api/preview-avenant/${avenantId}/`;
     window.open(previewUrl, "_blank");
+  };
+
+  const handleGeneratePDF = async (type, id, documentName) => {
+    try {
+      // Afficher le message de téléchargement en cours
+      setSnackbar({
+        open: true,
+        message: "Téléchargement en cours...",
+        severity: "info",
+      });
+
+      let previewUrl;
+      if (type === "contrat") {
+        previewUrl = `/api/preview-contrat/${id}/`;
+      } else if (type === "avenant") {
+        previewUrl = `/api/preview-avenant/${id}/`;
+      } else {
+        setSnackbar({
+          open: true,
+          message: "Type de document non reconnu",
+          severity: "error",
+        });
+        return;
+      }
+
+      // Appel à l'API existante pour générer le PDF
+      // Note: devis_id est requis par l'endpoint, on utilise l'ID du contrat/avenant
+      // L'endpoint utilisera le preview_url personnalisé fourni
+      const response = await axios.post(
+        "/api/generate-pdf-from-preview/",
+        {
+          devis_id: id, // L'endpoint requiert devis_id, on utilise l'ID du contrat/avenant
+          preview_url: previewUrl, // URL de prévisualisation spécifique pour contrat ou avenant
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Vérifier si la réponse est bien un PDF
+      if (response.headers["content-type"] === "application/pdf") {
+        // Créer un URL pour le blob
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+
+        // Créer un lien temporaire pour télécharger le PDF
+        // Remplacer les underscores par des espaces pour un nom de fichier plus lisible
+        const fileName = documentName.replace(/_/g, " ") + ".pdf";
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+
+        // Nettoyer
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+
+        // Afficher le message de succès
+        setSnackbar({
+          open: true,
+          message: "Téléchargement terminé avec succès",
+          severity: "success",
+        });
+      } else {
+        // Si ce n'est pas un PDF, c'est probablement une erreur
+        const reader = new FileReader();
+        reader.onload = function () {
+          const errorMessage = JSON.parse(reader.result);
+          setSnackbar({
+            open: true,
+            message: `Erreur: ${errorMessage.error || "Erreur inconnue"}`,
+            severity: "error",
+          });
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+      setSnackbar({
+        open: true,
+        message: "Erreur lors de la génération du PDF. Veuillez réessayer.",
+        severity: "error",
+      });
+    }
   };
 
   const handleModalClose = () => {
@@ -689,47 +782,71 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                 {/* Bouton de régénération du contrat dans le Drive */}
                                 {sousTraitant.contrat && !sousTraitant.contrat.sans_contrat && (
                                   <>
-                                    <RegeneratePDFIconButton
-                                      documentType={DOCUMENT_TYPES.CONTRAT_SOUS_TRAITANCE}
-                                      documentData={{
-                                        ...sousTraitant.contrat,
-                                        chantier: chantier,
-                                        sous_traitant: {
-                                          id: sousTraitant.id,
-                                          entreprise: sousTraitant.entreprise,
-                                        },
-                                      }}
-                                      size="small"
-                                      color="primary"
-                                      tooltipPlacement="top"
-                                      onSuccess={() => {
-                                        console.log('✅ Contrat régénéré avec succès');
-                                      }}
-                                    />
-                                    
-                                    {/* Bouton de suppression */}
-                                    <Tooltip
-                                      title="Supprimer le contrat et tous ses avenants"
-                                      arrow
-                                    >
-                                      <IconButton
-                                        size="small"
-                                        onClick={() =>
-                                          handleDeleteContrat(
-                                            sousTraitant.contrat.id
-                                          )
-                                        }
-                                        sx={{
-                                          color: "#d32f2f",
-                                          "&:hover": {
-                                            backgroundColor:
-                                              "rgba(211, 47, 47, 0.1)",
+                                    <Box sx={{ display: "flex", gap: 1, justifyContent: "center", alignItems: "center" }}>
+                                      {/* Bouton de téléchargement PDF */}
+                                      <Tooltip title="Télécharger le PDF" arrow>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleGeneratePDF(
+                                              "contrat",
+                                              sousTraitant.contrat.id,
+                                              `Contrat ${sousTraitant.entreprise} ${chantier?.nom || chantier?.chantier_name || "Chantier"}`
+                                            )
+                                          }
+                                          sx={{
+                                            color: "success.main",
+                                            "&:hover": {
+                                              backgroundColor: "rgba(46, 125, 50, 0.04)",
+                                            },
+                                          }}
+                                        >
+                                          <AiFillFilePdf style={{ fontSize: "20px" }} />
+                                        </IconButton>
+                                      </Tooltip>
+                                      
+                                      <RegeneratePDFIconButton
+                                        documentType={DOCUMENT_TYPES.CONTRAT_SOUS_TRAITANCE}
+                                        documentData={{
+                                          ...sousTraitant.contrat,
+                                          chantier: chantier,
+                                          sous_traitant: {
+                                            id: sousTraitant.id,
+                                            entreprise: sousTraitant.entreprise,
                                           },
                                         }}
+                                        size="small"
+                                        color="primary"
+                                        tooltipPlacement="top"
+                                        onSuccess={() => {
+                                          console.log('✅ Contrat régénéré avec succès');
+                                        }}
+                                      />
+                                      
+                                      {/* Bouton de suppression */}
+                                      <Tooltip
+                                        title="Supprimer le contrat et tous ses avenants"
+                                        arrow
                                       >
-                                        <FaTrash />
-                                      </IconButton>
-                                    </Tooltip>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleDeleteContrat(
+                                              sousTraitant.contrat.id
+                                            )
+                                          }
+                                          sx={{
+                                            color: "#d32f2f",
+                                            "&:hover": {
+                                              backgroundColor:
+                                                "rgba(211, 47, 47, 0.1)",
+                                            },
+                                          }}
+                                        >
+                                          <FaTrash />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Box>
                                   </>
                                 )}
                                 {sousTraitant.contrat && sousTraitant.contrat.sans_contrat && (
@@ -784,49 +901,73 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                       {/* Bouton de régénération de l'avenant dans le Drive */}
                                       {sousTraitant.contrat && !sousTraitant.contrat.sans_contrat && (
                                         <>
-                                          <RegeneratePDFIconButton
-                                            documentType={DOCUMENT_TYPES.AVENANT_SOUS_TRAITANCE}
-                                            documentData={{
-                                              ...avenant,
-                                              contrat: {
-                                                ...sousTraitant.contrat,
-                                                sous_traitant: {
-                                                  id: sousTraitant.id,
-                                                  entreprise: sousTraitant.entreprise,
+                                          <Box sx={{ display: "flex", gap: 1, justifyContent: "center", alignItems: "center" }}>
+                                            {/* Bouton de téléchargement PDF */}
+                                            <Tooltip title="Télécharger le PDF" arrow>
+                                              <IconButton
+                                                size="small"
+                                                onClick={() =>
+                                                  handleGeneratePDF(
+                                                    "avenant",
+                                                    avenant.id,
+                                                    `Avenant ${avenant.numero} ${sousTraitant.entreprise} ${chantier?.nom || chantier?.chantier_name || "Chantier"}`
+                                                  )
+                                                }
+                                                sx={{
+                                                  color: "success.main",
+                                                  "&:hover": {
+                                                    backgroundColor: "rgba(46, 125, 50, 0.04)",
+                                                  },
+                                                }}
+                                              >
+                                                <AiFillFilePdf style={{ fontSize: "20px" }} />
+                                              </IconButton>
+                                            </Tooltip>
+                                            
+                                            <RegeneratePDFIconButton
+                                              documentType={DOCUMENT_TYPES.AVENANT_SOUS_TRAITANCE}
+                                              documentData={{
+                                                ...avenant,
+                                                contrat: {
+                                                  ...sousTraitant.contrat,
+                                                  sous_traitant: {
+                                                    id: sousTraitant.id,
+                                                    entreprise: sousTraitant.entreprise,
+                                                  },
+                                                  chantier: chantier,
                                                 },
                                                 chantier: chantier,
-                                              },
-                                              chantier: chantier,
-                                            }}
-                                            size="small"
-                                            color="primary"
-                                            tooltipPlacement="top"
-                                            onSuccess={() => {
-                                              console.log('✅ Avenant régénéré avec succès');
-                                            }}
-                                          />
-                                          
-                                          {/* Bouton de suppression */}
-                                          <Tooltip
-                                            title="Supprimer l'avenant"
-                                            arrow
-                                          >
-                                            <IconButton
-                                              size="small"
-                                              onClick={() =>
-                                                handleDeleteAvenant(avenant.id)
-                                              }
-                                              sx={{
-                                                color: "#d32f2f",
-                                                "&:hover": {
-                                                  backgroundColor:
-                                                    "rgba(211, 47, 47, 0.1)",
-                                                },
                                               }}
+                                              size="small"
+                                              color="primary"
+                                              tooltipPlacement="top"
+                                              onSuccess={() => {
+                                                console.log('✅ Avenant régénéré avec succès');
+                                              }}
+                                            />
+                                            
+                                            {/* Bouton de suppression */}
+                                            <Tooltip
+                                              title="Supprimer l'avenant"
+                                              arrow
                                             >
-                                              <FaTrash />
-                                            </IconButton>
-                                          </Tooltip>
+                                              <IconButton
+                                                size="small"
+                                                onClick={() =>
+                                                  handleDeleteAvenant(avenant.id)
+                                                }
+                                                sx={{
+                                                  color: "#d32f2f",
+                                                  "&:hover": {
+                                                    backgroundColor:
+                                                      "rgba(211, 47, 47, 0.1)",
+                                                  },
+                                                }}
+                                              >
+                                                <FaTrash />
+                                              </IconButton>
+                                            </Tooltip>
+                                          </Box>
                                         </>
                                       )}
                                     </TableCell>
@@ -1078,6 +1219,22 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar pour les notifications de téléchargement */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={snackbar.severity === "success" ? 3000 : 6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 };

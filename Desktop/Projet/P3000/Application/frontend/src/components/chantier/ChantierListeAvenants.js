@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Dialog,
   DialogActions,
@@ -9,6 +10,7 @@ import {
   Menu,
   MenuItem,
   Paper,
+  Snackbar,
   Table,
   TableBody,
   TableHead,
@@ -59,6 +61,7 @@ const ChantierListeAvenants = ({
   const [selectedAvenant, setSelectedAvenant] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
   // Aplatir les avenants en liste de devis (un devis par ligne)
   const flattenAvenants = (avenantsList) => {
@@ -226,6 +229,13 @@ const ChantierListeAvenants = ({
 
   const handleGeneratePDF = async (item) => {
     try {
+      // Afficher le message de téléchargement en cours
+      setSnackbar({
+        open: true,
+        message: "Téléchargement en cours...",
+        severity: "info",
+      });
+
       // Appel à l'API pour générer le PDF du devis
       const response = await axios.post(
         "/api/generate-devis-pdf-from-preview/",
@@ -256,20 +266,33 @@ const ChantierListeAvenants = ({
         // Nettoyer
         document.body.removeChild(link);
         window.URL.revokeObjectURL(pdfUrl);
+
+        // Afficher le message de succès
+        setSnackbar({
+          open: true,
+          message: "Téléchargement terminé avec succès",
+          severity: "success",
+        });
       } else {
         // Si ce n'est pas un PDF, c'est probablement une erreur
         const reader = new FileReader();
         reader.onload = function () {
           const errorMessage = JSON.parse(reader.result);
-          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+          setSnackbar({
+            open: true,
+            message: `Erreur: ${errorMessage.error || "Erreur inconnue"}`,
+            severity: "error",
+          });
         };
         reader.readAsText(response.data);
       }
     } catch (error) {
       console.error("Erreur lors de la génération du PDF:", error);
-      alert(
-        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
-      );
+      setSnackbar({
+        open: true,
+        message: "Erreur lors de la génération du PDF. Veuillez réessayer.",
+        severity: "error",
+      });
     }
   };
 
@@ -551,6 +574,22 @@ const ChantierListeAvenants = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar pour les notifications de téléchargement */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={snackbar.severity === "success" ? 3000 : 6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Dialog,
   DialogActions,
@@ -9,6 +10,7 @@ import {
   Menu,
   MenuItem,
   Paper,
+  Snackbar,
   Table,
   TableBody,
   TableHead,
@@ -66,6 +68,7 @@ const ChantierListeFactures = ({
   const [pendingSave, setPendingSave] = useState(false);
   const [showDateEnvoiModal, setShowDateEnvoiModal] = useState(false);
   const [factureForDateEnvoi, setFactureForDateEnvoi] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (stateFacture) => {
@@ -270,6 +273,13 @@ const ChantierListeFactures = ({
 
   const handleGeneratePDF = async (facture) => {
     try {
+      // Afficher le message de téléchargement en cours
+      setSnackbar({
+        open: true,
+        message: "Téléchargement en cours...",
+        severity: "info",
+      });
+
       // Appel à l'API pour générer le PDF
       const response = await axios.post(
         "/api/generate-facture-pdf-from-preview/",
@@ -300,20 +310,33 @@ const ChantierListeFactures = ({
         // Nettoyer
         document.body.removeChild(link);
         window.URL.revokeObjectURL(pdfUrl);
+
+        // Afficher le message de succès
+        setSnackbar({
+          open: true,
+          message: "Téléchargement terminé avec succès",
+          severity: "success",
+        });
       } else {
         // Si ce n'est pas un PDF, c'est probablement une erreur
         const reader = new FileReader();
         reader.onload = function () {
           const errorMessage = JSON.parse(reader.result);
-          alert(`Erreur: ${errorMessage.error || "Erreur inconnue"}`);
+          setSnackbar({
+            open: true,
+            message: `Erreur: ${errorMessage.error || "Erreur inconnue"}`,
+            severity: "error",
+          });
         };
         reader.readAsText(response.data);
       }
     } catch (error) {
       console.error("Erreur lors de la génération du PDF:", error);
-      alert(
-        "Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails."
-      );
+      setSnackbar({
+        open: true,
+        message: "Erreur lors de la génération du PDF. Veuillez réessayer.",
+        severity: "error",
+      });
     }
   };
 
@@ -671,6 +694,22 @@ const ChantierListeFactures = ({
           />
         </DialogContent>
       </Dialog>
+
+      {/* Snackbar pour les notifications de téléchargement */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={snackbar.severity === "success" ? 3000 : 6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };
