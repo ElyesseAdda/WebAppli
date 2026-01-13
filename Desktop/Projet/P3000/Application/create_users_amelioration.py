@@ -7,6 +7,8 @@ Exécuter avec: python create_users_amelioration.py
 import os
 import sys
 import django
+import secrets
+import string
 
 # Configuration Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Application.settings')
@@ -15,13 +17,43 @@ django.setup()
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 
-def create_user(username, first_name, last_name, password):
+def generate_password(length=15):
+    """Génère un mot de passe sécurisé avec le même format que les autres utilisateurs"""
+    # Caractères possibles : lettres majuscules, minuscules, chiffres, caractères spéciaux
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special = '#$@'
+    
+    # Assurer au moins un caractère de chaque type
+    password = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+        secrets.choice(special)
+    ]
+    
+    # Remplir le reste avec des caractères aléatoires
+    all_chars = uppercase + lowercase + digits + special
+    for _ in range(length - 4):
+        password.append(secrets.choice(all_chars))
+    
+    # Mélanger pour éviter un pattern prévisible
+    secrets.SystemRandom().shuffle(password)
+    
+    return ''.join(password)
+
+def create_user(username, first_name, last_name, password=None):
     """Créer un utilisateur avec le mot de passe hashé"""
     try:
         # Vérifier si l'utilisateur existe déjà
         if User.objects.filter(username=username).exists():
             print(f"❌ L'utilisateur '{username}' existe déjà")
             return False
+        
+        # Générer un mot de passe si non fourni
+        if password is None:
+            password = generate_password()
         
         # Créer l'utilisateur
         user = User.objects.create_user(
@@ -69,6 +101,12 @@ def main():
             'first_name': 'Saitatmane',
             'last_name': 'User', 
             'password': 'H4#jF8$qZ6@bP3'
+        },
+        {
+            'username': 'rkefi',
+            'first_name': 'Rkefi',
+            'last_name': 'User',
+            'password': None  # Sera généré automatiquement
         }
     ]
     
