@@ -5,11 +5,6 @@ import axios from "axios";
 import fr from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 
-const formatNumeroFacture = (numeroDevis) => {
-  if (!numeroDevis) return "";
-  return numeroDevis.replace(/^DEV-/, "FACT-");
-};
-
 const CreationFacture = ({ devis, onClose, onSubmit }) => {
   console.log("1. Devis reçu:", devis);
   console.log("1.1 Nom du chantier:", devis?.chantier_name);
@@ -20,7 +15,7 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
   }
 
   const [formData, setFormData] = useState({
-    numero_facture: formatNumeroFacture(devis?.numero),
+    numero_facture: "",
     adresse_facturation: "",
     date_envoi: new Date(),
     delai_paiement: 45,
@@ -42,6 +37,31 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
     formData.date_envoi,
     formData.delai_paiement
   );
+
+  // Charger le numéro de facture depuis l'API
+  useEffect(() => {
+    const fetchNextFactureNumber = async () => {
+      try {
+        const response = await axios.get("/api/get-next-facture-number/");
+        if (response.data && response.data.numero) {
+          setFormData((prev) => ({
+            ...prev,
+            numero_facture: response.data.numero,
+          }));
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement du numéro de facture:", error);
+        // En cas d'erreur, utiliser un format par défaut
+        const currentYear = new Date().getFullYear();
+        setFormData((prev) => ({
+          ...prev,
+          numero_facture: `Facture n°01.${currentYear}`,
+        }));
+      }
+    };
+
+    fetchNextFactureNumber();
+  }, []);
 
   useEffect(() => {
     const fetchSocieteData = async () => {

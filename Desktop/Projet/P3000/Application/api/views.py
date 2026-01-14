@@ -3759,9 +3759,15 @@ def create_facture(request):
                 'error': 'Une facture existe déjà pour ce devis'
             }, status=400)
         
+        # ✅ Obtenir le numéro de facture : utiliser celui fourni ou générer un nouveau via le service
+        numero_facture = request.data.get('numero')
+        if not numero_facture or numero_facture.strip() == '':
+            # Si aucun numéro n'est fourni, utiliser le service de numérotation unifié
+            numero_facture = NumeroService.get_next_facture_number()
+        
         # ✅ Préparer les données de la facture avec contact_societe depuis le devis
         facture_data = {
-            'numero': request.data.get('numero'),
+            'numero': numero_facture,
             'devis': devis,
             'date_echeance': request.data.get('date_echeance'),
             'mode_paiement': request.data.get('mode_paiement'),
@@ -5755,14 +5761,15 @@ def create_facture_cie(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Construire le numéro de facture CIE
-        cie_number = devis.numero  # Utiliser le numéro existant
+        # ✅ Utiliser le service de numérotation unifié pour obtenir le prochain numéro de facture
+        base_numero = NumeroService.get_next_facture_number()
         
-        # Ajouter la désignation si elle existe
+        # Construire le numéro de facture CIE avec la désignation si elle existe
         if designation:
-            cie_number = f"{cie_number} / {designation}"
+            cie_number = f"{base_numero} / {designation}"
+        else:
+            cie_number = base_numero
             
-       
 
         # ✅ Préparer les données de la facture CIE avec contact_societe depuis le devis
         facture_cie_data = {
