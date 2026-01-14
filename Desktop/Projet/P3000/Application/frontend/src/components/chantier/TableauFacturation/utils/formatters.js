@@ -133,6 +133,31 @@ export const extractSituationNumber = (numeroSituation) => {
 };
 
 /**
+ * Extrait le numéro de facture depuis une chaîne
+ * Exemples :
+ * - "Facture n°01.2026" → 1
+ * - "Facture n°07.2026" → 7
+ * - "Facture n°123.2026" → 123
+ * - "Autre format" → null
+ */
+export const extractFactureNumber = (numeroFacture) => {
+  if (!numeroFacture) {
+    return null;
+  }
+  
+  // Pattern pour détecter "Facture n°XX.XXXX" ou "Facture n°XXX.XXXX"
+  // où XX/XXX est le numéro (2 ou 3 chiffres) et XXXX est l'année (4 chiffres)
+  const pattern = /Facture\s*n°\s*(\d{2,3})\.\d{4}/i;
+  const match = numeroFacture.match(pattern);
+  
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  
+  return null;
+};
+
+/**
  * Formate un numéro de facture pour n'afficher que la partie principale
  * Enlève toutes les suites (y compris "Situation n°X")
  * Exemples :

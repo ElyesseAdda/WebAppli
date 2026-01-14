@@ -6,7 +6,7 @@ import {
   calculateTotaux,
   groupSituationsByMonth,
 } from "../utils/calculations";
-import { extractSituationNumber } from "../utils/formatters";
+import { extractSituationNumber, extractFactureNumber } from "../utils/formatters";
 
 export const useTableauFacturation = () => {
   const [chantiers, setChantiers] = useState([]);
@@ -171,21 +171,20 @@ export const useTableauFacturation = () => {
     return sortSituations(allSituations, extractSituationNumber);
   }, [allSituations]);
 
-  // Trier les factures (mémorisé)
+  // Trier les factures (mémorisé) - uniquement par numéro de facture, sans tenir compte du chantier
   const facturesTriees = useMemo(() => {
     return [...allFactures].sort((a, b) => {
-      // Trier par chantier, puis par date_envoi (ou date_creation en fallback)
-      const chantierA = a.chantier_name || '';
-      const chantierB = b.chantier_name || '';
-      if (chantierA !== chantierB) {
-        return chantierA.localeCompare(chantierB);
+      // Trier uniquement par numéro de facture (001, 002, etc.), indépendamment du chantier
+      const numA = extractFactureNumber(a.numero);
+      const numB = extractFactureNumber(b.numero);
+      
+      if (numA !== null && numB !== null) {
+        return numA - numB;
       }
-      // Utiliser date_envoi en priorité, sinon date_creation
-      const dateA = a.date_envoi || a.date_creation;
-      const dateB = b.date_envoi || b.date_creation;
-      if (dateA && dateB) {
-        return new Date(dateA) - new Date(dateB);
-      }
+      // Si une facture n'a pas de numéro, la mettre à la fin
+      if (numA === null && numB !== null) return 1;
+      if (numA !== null && numB === null) return -1;
+      // Si les deux n'ont pas de numéro, garder l'ordre original
       return 0;
     });
   }, [allFactures]);

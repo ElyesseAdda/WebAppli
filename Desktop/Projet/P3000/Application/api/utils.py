@@ -141,24 +141,28 @@ def encode_filename_for_content_disposition(filename, disposition_type='attachme
     if not filename:
         return f'{disposition_type}; filename=""'
     
-    # Pour les URLs présignées S3, utiliser un encodage URL simple
+    # Pour les URLs présignées S3, utiliser RFC 5987 pour préserver les caractères spéciaux
     if for_presigned_url:
-        # AWS S3 nécessite que ResponseContentDisposition soit compatible ISO-8859-1
-        # Pour les caractères non-ASCII, on doit les translittérer en ASCII
         try:
             filename.encode('ascii')
             # Pas de caractères spéciaux, utiliser le format simple
             return f'{disposition_type}; filename="{filename}"'
         except UnicodeEncodeError:
-            # Pour les URLs présignées S3, translittérer les caractères accentués en ASCII
-            # Cela évite les problèmes d'encodage avec AWS S3
-            # Exemple: "DÉPENSE" -> "DEPENSE"
-            ascii_filename = unicodedata.normalize('NFKD', filename)
-            ascii_filename = ascii_filename.encode('ascii', 'ignore').decode('ascii')
-            # Si après translittération le nom est vide, utiliser le nom original encodé en URL
-            if not ascii_filename:
-                ascii_filename = quote(filename, safe='')
-            return f'{disposition_type}; filename="{ascii_filename}"'
+            # AWS S3 supporte RFC 5987 avec filename* pour les caractères UTF-8
+            # Encoder en UTF-8 puis en pourcentage pour préserver tous les caractères (y compris °)
+            encoded_filename = quote(filename.encode('utf-8'), safe='')
+            # Utiliser le format filename* avec UTF-8 pour préserver les caractères spéciaux
+            # Format: attachment; filename="fallback"; filename*=UTF-8''encoded
+            # Pour le fallback, utiliser une version ASCII simplifiée si possible
+            try:
+                # Essayer de créer un fallback ASCII en translittérant
+                fallback = unicodedata.normalize('NFKD', filename)
+                fallback = fallback.encode('ascii', 'ignore').decode('ascii')
+                if not fallback:
+                    fallback = filename  # Si translittération échoue, utiliser le nom original
+            except:
+                fallback = filename
+            return f'{disposition_type}; filename="{fallback}"; filename*=UTF-8\'\'{encoded_filename}'
     
     # Pour les en-têtes HTTP directs, utiliser RFC 5987
     try:

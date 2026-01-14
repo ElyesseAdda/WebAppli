@@ -1,4 +1,4 @@
-import { extractSituationNumber, formatMontant } from "./formatters";
+import { extractSituationNumber, formatMontant, extractFactureNumber } from "./formatters";
 import React from "react";
 
 /**
@@ -243,11 +243,39 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
   moisTries.forEach((mois) => {
     const { situations, factures } = moisAvecItems[mois];
     
-    // Ajouter les situations du mois
-    itemsAvecSousTotaux.push(...situations);
+    // Mélanger situations et factures, puis trier par numéro de facture
+    const itemsDuMois = [
+      ...situations.map(s => ({ ...s, isSituation: true })),
+      ...factures.map(f => ({ ...f, isSituation: false }))
+    ];
     
-    // Ajouter les factures du mois
-    itemsAvecSousTotaux.push(...factures);
+    // Trier par numéro de facture (extrait depuis numero_situation pour les situations, numero pour les factures)
+    itemsDuMois.sort((a, b) => {
+      const numA = a.isSituation 
+        ? extractFactureNumber(a.numero_situation) 
+        : extractFactureNumber(a.numero);
+      const numB = b.isSituation 
+        ? extractFactureNumber(b.numero_situation) 
+        : extractFactureNumber(b.numero);
+      
+      if (numA !== null && numB !== null) {
+        return numA - numB;
+      }
+      // Si une n'a pas de numéro, la mettre à la fin
+      if (numA === null && numB !== null) return 1;
+      if (numA !== null && numB === null) return -1;
+      // Si les deux n'ont pas de numéro, garder l'ordre original
+      return 0;
+    });
+    
+    // Retirer le marqueur isSituation avant d'ajouter
+    const itemsTries = itemsDuMois.map(item => {
+      const { isSituation, ...rest } = item;
+      return rest;
+    });
+    
+    // Ajouter les items triés du mois
+    itemsAvecSousTotaux.push(...itemsTries);
 
     // Calculer le sous-total du mois
     const sousTotalSituations = situations.reduce((total, situation) => {
