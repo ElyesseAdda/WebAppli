@@ -97,8 +97,8 @@ html {
 .slide-bar .link-container > ul > li > a {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px; /* aligné sur les catégories */
+  gap: 6px;
+  padding: 8px 10px; /* aligné sur les catégories */
   min-height: 44px;
   width: 100%;
   box-sizing: border-box;
@@ -133,8 +133,8 @@ html {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 6px;
+  padding: 8px 10px;
   min-height: 44px;
   margin: 4px 0;
   background: transparent;
@@ -166,7 +166,7 @@ html {
 .slide-bar .category-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 6px;
   flex: 1; /* Laisse le texte prendre plus de place */
   min-width: 0; /* permet l'ellipse */
 }
@@ -216,8 +216,8 @@ html {
 .slide-bar .submenu li a {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 6px;
+  padding: 8px 10px;
   min-height: 40px;
   margin: 2px 0;
   color: #374151; /* gray-700 */
