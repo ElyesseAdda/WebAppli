@@ -70,6 +70,7 @@ import {
   Edit as EditIcon,
   ContentCopy as ContentCopyIcon,
   ContentPaste as ContentPasteIcon,
+  Print as PrintIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
@@ -1046,6 +1047,172 @@ const DriveExplorer = ({
     }
   };
 
+  const handlePrint = async (item = null) => {
+    handleCloseContextMenu();
+    
+    // Récupérer les fichiers à imprimer
+    let filesToPrint = [];
+    
+    // Si une sélection multiple existe, l'utiliser
+    if (selectedFiles.size > 0) {
+      filesToPrint = Array.from(selectedFiles)
+        .map(path => files.find(f => f.path === path))
+        .filter(f => f && f.type === 'file'); // Seulement les fichiers
+    } else if (item || selectedItem) {
+      // Sinon, utiliser l'item fourni ou l'item sélectionné
+      const fileToPrint = item || selectedItem;
+      if (fileToPrint && fileToPrint.type === 'file') {
+        filesToPrint = [fileToPrint];
+      }
+    }
+    
+    if (filesToPrint.length === 0) {
+      alert('Aucun fichier sélectionné pour l\'impression');
+      return;
+    }
+    
+    // Fonction pour imprimer un fichier en téléchargeant d'abord en mémoire
+    const printFile = async (file) => {
+      try {
+        // Télécharger le fichier directement depuis l'API
+        const response = await fetch(
+          `/api/drive-v2/download-url/?file_path=${encodeURIComponent(file.path)}`,
+          {
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+          throw new Error(errorData.error || `Erreur HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.download_url) {
+          throw new Error('URL de téléchargement non disponible');
+        }
+        
+        // Télécharger le fichier en mémoire
+        const fileResponse = await fetch(data.download_url, {
+          credentials: 'include',
+        });
+        
+        if (!fileResponse.ok) {
+          throw new Error(`Erreur lors du téléchargement: ${fileResponse.status}`);
+        }
+        
+        // Créer un blob à partir de la réponse
+        const blob = await fileResponse.blob();
+        
+        // Créer une URL blob locale
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        // Créer un iframe caché pour charger le fichier
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        
+        // Ajouter l'iframe au document
+        document.body.appendChild(iframe);
+        
+        return new Promise((resolve, reject) => {
+          // Fonction de nettoyage
+          const cleanup = () => {
+            setTimeout(() => {
+              if (iframe && iframe.parentNode) {
+                iframe.parentNode.removeChild(iframe);
+              }
+              // Libérer l'URL blob
+              window.URL.revokeObjectURL(blobUrl);
+            }, 1000);
+          };
+          
+          // Gérer le chargement du fichier
+          iframe.onload = () => {
+            try {
+              // Attendre un peu pour que le contenu soit complètement chargé
+              setTimeout(() => {
+                try {
+                  // Accéder à la fenêtre de l'iframe et déclencher l'impression
+                  const iframeWindow = iframe.contentWindow || iframe.contentDocument?.defaultView;
+                  if (iframeWindow) {
+                    iframeWindow.focus();
+                    iframeWindow.print();
+                    resolve();
+                    cleanup();
+                  } else {
+                    throw new Error('Impossible d\'accéder à la fenêtre de l\'iframe');
+                  }
+                } catch (printError) {
+                  console.error('Erreur lors de l\'appel à print():', printError);
+                  reject(printError);
+                  cleanup();
+                }
+              }, 1000);
+            } catch (e) {
+              reject(e);
+              cleanup();
+            }
+          };
+          
+          // Gérer les erreurs de chargement
+          iframe.onerror = () => {
+            reject(new Error('Erreur lors du chargement du fichier'));
+            cleanup();
+          };
+          
+          // Timeout de sécurité
+          setTimeout(() => {
+            try {
+              const iframeWindow = iframe.contentWindow || iframe.contentDocument?.defaultView;
+              if (iframeWindow) {
+                iframeWindow.print();
+                resolve();
+              } else {
+                reject(new Error('Timeout lors du chargement du fichier'));
+              }
+              cleanup();
+            } catch (timeoutError) {
+              reject(timeoutError);
+              cleanup();
+            }
+          }, 10000);
+          
+          // Charger l'URL blob dans l'iframe
+          iframe.src = blobUrl;
+        });
+      } catch (error) {
+        console.error(`Erreur lors de l'impression de ${displayFilename(file.name)}:`, error);
+        alert(`Erreur lors de l'impression de ${displayFilename(file.name)}: ${error.message}`);
+        throw error;
+      }
+    };
+    
+    // Imprimer les fichiers un par un avec un petit délai entre chaque
+    for (let i = 0; i < filesToPrint.length; i++) {
+      if (i > 0) {
+        // Délai de 1.5 secondes entre chaque impression pour éviter les conflits
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      try {
+        await printFile(filesToPrint[i]);
+      } catch (error) {
+        // Continuer avec les autres fichiers même si un échoue
+        console.error(`Échec de l'impression pour ${displayFilename(filesToPrint[i].name)}:`, error);
+      }
+    }
+  };
+
   // Vérifier si un dossier est protégé contre la suppression
   const isProtectedFolder = (item) => {
     if (!item || item.type !== 'folder') return false;
@@ -1854,6 +2021,19 @@ const DriveExplorer = ({
             <DownloadIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Télécharger le dossier</ListItemText>
+        </MenuItem>
+        {/* Imprimer - pour les fichiers (sélection simple ou multiple) */}
+        <MenuItem 
+          onClick={handlePrint}
+          disabled={(!selectedItem || selectedItem.type !== 'file') && selectedFiles.size === 0}
+        >
+          <ListItemIcon>
+            <PrintIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>
+            Imprimer
+            {selectedFiles.size > 0 ? ` (${selectedFiles.size})` : ''}
+          </ListItemText>
         </MenuItem>
         {/* Copier - si des éléments sont sélectionnés */}
         {onCopyItems && (
