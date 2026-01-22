@@ -184,9 +184,39 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           }),
         });
 
+        // Vérifier le Content-Type avant de parser
+        const contentType = response.headers.get('content-type');
+        const isJson = contentType && contentType.includes('application/json');
+
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to load document configuration');
+          let errorMessage = `Erreur HTTP ${response.status}: ${response.statusText}`;
+          
+          if (isJson) {
+            try {
+              const errorData = await response.json();
+              errorMessage = errorData.error || errorData.error_type || errorMessage;
+              
+              // Si on a un traceback en DEBUG, l'afficher dans la console
+              if (errorData.traceback) {
+                console.error('[OnlyOffice Debug] Traceback serveur:', errorData.traceback);
+              }
+            } catch (jsonError) {
+              console.error('[OnlyOffice Debug] Erreur lors du parsing JSON de l\'erreur:', jsonError);
+            }
+          } else {
+            // La réponse est du HTML (page d'erreur Django)
+            const htmlText = await response.text();
+            console.error('[OnlyOffice Debug] Réponse HTML reçue au lieu de JSON:', htmlText.substring(0, 500));
+            errorMessage = `Le serveur a renvoyé une page HTML au lieu de JSON. Vérifiez les logs Django pour l'erreur ${response.status}.`;
+          }
+          
+          throw new Error(errorMessage);
+        }
+
+        if (!isJson) {
+          const text = await response.text();
+          console.error('[OnlyOffice Debug] Réponse non-JSON reçue:', text.substring(0, 500));
+          throw new Error('Le serveur a renvoyé une réponse non-JSON. Vérifiez les logs Django.');
         }
 
         const data = await response.json();
@@ -238,8 +268,12 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         };
 
         // Si JWT est activé, ajouter le token
+        // IMPORTANT : Le token doit être passé à OnlyOffice pour valider la configuration
         if (data.token) {
           editorConfig.token = data.token;
+          console.log('[OnlyOffice Debug] Token JWT ajouté à la configuration');
+        } else {
+          console.warn('[OnlyOffice Debug] Aucun token JWT reçu - JWT peut être désactivé dans Django');
         }
 
         // Initialiser l'éditeur OnlyOffice sur la div manuelle

@@ -60,53 +60,106 @@ class OnlyOfficeCache {
   static async ensureScriptLoaded() {
     // Si DocsAPI est déjà disponible, rien à faire
     if (window.DocsAPI && window.DocsAPI.DocEditor) {
+      console.log('[OnlyOffice Debug] DocsAPI déjà disponible');
       return Promise.resolve();
     }
 
-    // Vérifier si le script est déjà en cours de chargement
+    // Vérifier si le script est déjà chargé dans le DOM (depuis le template HTML)
     const existingScript = document.querySelector('script[src*="api.js"]');
     if (existingScript) {
+      console.log('[OnlyOffice Debug] Script api.js trouvé dans le DOM, attente du chargement...');
+      
+      // Si le script est déjà chargé (onload a déjà été appelé)
+      if (window.DocsAPI && window.DocsAPI.DocEditor) {
+        console.log('[OnlyOffice Debug] DocsAPI disponible depuis le script existant');
+        return Promise.resolve();
+      }
+      
       // Attendre que le script existant se charge
       return new Promise((resolve, reject) => {
-        existingScript.onload = () => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Timeout lors du chargement du script (10s) - Vérifiez que OnlyOffice est démarré et accessible'));
+        }, 10000);
+        
+        // Vérifier périodiquement si DocsAPI est disponible
+        const checkInterval = setInterval(() => {
           if (window.DocsAPI && window.DocsAPI.DocEditor) {
+            clearInterval(checkInterval);
+            clearTimeout(timeout);
+            console.log('[OnlyOffice Debug] DocsAPI disponible après attente');
+            resolve();
+          }
+        }, 100);
+        
+        existingScript.onload = () => {
+          clearInterval(checkInterval);
+          clearTimeout(timeout);
+          if (window.DocsAPI && window.DocsAPI.DocEditor) {
+            console.log('[OnlyOffice Debug] Script chargé, DocsAPI disponible');
             resolve();
           } else {
-            reject(new Error('Script chargé mais DocsAPI non disponible'));
+            reject(new Error('Script chargé mais DocsAPI non disponible - Vérifiez la console pour les erreurs'));
           }
         };
-        existingScript.onerror = () => reject(new Error('Erreur lors du chargement du script'));
         
-        // Timeout après 10 secondes
-        setTimeout(() => reject(new Error('Timeout lors du chargement du script')), 10000);
+        existingScript.onerror = () => {
+          clearInterval(checkInterval);
+          clearTimeout(timeout);
+          const scriptUrl = existingScript.src;
+          reject(new Error(`Erreur lors du chargement du script OnlyOffice depuis ${scriptUrl} - Vérifiez que OnlyOffice est démarré`));
+        };
       });
     }
 
-    // Charger le script dynamiquement
+    // Charger le script dynamiquement si pas déjà dans le DOM
+    // Récupérer l'URL depuis le script existant ou utiliser une URL par défaut
+    let onlyofficeUrl = 'http://localhost:8080'; // Par défaut en local
+    
+    // Chercher l'URL dans un script existant ou dans une variable globale
+    const existingOnlyOfficeScript = document.querySelector('script[src*="onlyoffice"], script[src*="api.js"]');
+    if (existingOnlyOfficeScript) {
+      const src = existingOnlyOfficeScript.src;
+      // Extraire l'URL de base (ex: http://localhost:8080 depuis http://localhost:8080/web-apps/apps/api/documents/api.js)
+      const match = src.match(/^(https?:\/\/[^\/]+)/);
+      if (match) {
+        onlyofficeUrl = match[1];
+      }
+    } else if (window.ONLYOFFICE_SERVER_URL) {
+      // Si une variable globale existe
+      onlyofficeUrl = window.ONLYOFFICE_SERVER_URL;
+    }
+    
+    const scriptUrl = `${onlyofficeUrl}/web-apps/apps/api/documents/api.js`;
+    console.log(`[OnlyOffice Debug] Chargement dynamique du script depuis: ${scriptUrl}`);
+    
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      // Utiliser l'URL du reverse proxy Nginx
-      script.src = `${window.location.origin}/onlyoffice/web-apps/apps/api/documents/api.js`;
+      script.src = scriptUrl;
       script.async = true;
       
+      const timeout = setTimeout(() => {
+        reject(new Error(`Timeout lors du chargement du script depuis ${scriptUrl} (10s) - Vérifiez que OnlyOffice est démarré sur ${onlyofficeUrl}`));
+      }, 10000);
+      
       script.onload = () => {
+        clearTimeout(timeout);
         console.log('[OnlyOffice Debug] Script api.js chargé dynamiquement');
-        // Vérifier que DocsAPI est disponible
-        if (window.DocsAPI && window.DocsAPI.DocEditor) {
-          resolve();
-        } else {
-          reject(new Error('Script chargé mais DocsAPI non disponible'));
-        }
+        // Attendre un peu pour que DocsAPI soit initialisé
+        setTimeout(() => {
+          if (window.DocsAPI && window.DocsAPI.DocEditor) {
+            resolve();
+          } else {
+            reject(new Error('Script chargé mais DocsAPI non disponible - Vérifiez la console pour les erreurs'));
+          }
+        }, 500);
       };
       
       script.onerror = () => {
-        reject(new Error('Erreur lors du chargement du script OnlyOffice'));
+        clearTimeout(timeout);
+        reject(new Error(`Erreur lors du chargement du script OnlyOffice depuis ${scriptUrl} - Vérifiez que OnlyOffice est démarré et accessible`));
       };
       
       document.head.appendChild(script);
-      
-      // Timeout après 10 secondes
-      setTimeout(() => reject(new Error('Timeout lors du chargement du script')), 10000);
     });
   }
 

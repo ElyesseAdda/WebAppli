@@ -398,6 +398,9 @@ class DriveV2ViewSet(viewsets.ViewSet):
             
             # 2. Décoder les caractères URL (ex: %20 -> espace, %C3%A9 -> é, %CC%82 -> accent circonflexe)
             from urllib.parse import unquote
+            import logging
+            logger = logging.getLogger(__name__)
+            
             decoded_path = unquote(raw_path)
             
             # Solution 2 : Vérifier le token si fourni (pour OnlyOffice)
@@ -412,18 +415,23 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     # Décoder et vérifier le token
                     payload = jwt.decode(token, token_secret, algorithms=['HS256'])
                     
-                    # Vérifier que le file_path correspond au token (comparer après décodage)
+                    # Vérifier que le file_path correspond au token
+                    # IMPORTANT : Le token contient maintenant le chemin ORIGINAL (non normalisé)
+                    # On doit comparer de manière tolérante aux différences Unicode (NFC/NFD)
+                    import unicodedata
                     token_file_path = payload.get('file_path', '')
-                    if token_file_path != decoded_path:
-                        # Si le token contient un chemin normalisé, essayer avec celui-ci
-                        import unicodedata
-                        token_normalized = unicodedata.normalize('NFC', token_file_path)
-                        decoded_normalized = unicodedata.normalize('NFC', decoded_path)
-                        if token_normalized != decoded_normalized:
-                            return Response(
-                                {'error': 'Token invalide pour ce fichier'},
-                                status=status.HTTP_403_FORBIDDEN
-                            )
+                    
+                    # Normaliser les deux en NFC pour comparer (tolérant aux différences NFD/NFC)
+                    token_normalized = unicodedata.normalize('NFC', token_file_path)
+                    decoded_normalized = unicodedata.normalize('NFC', decoded_path)
+                    
+                    # Comparer après normalisation (tolérant aux différences NFD/NFC)
+                    # Aussi accepter si les chemins originaux correspondent exactement
+                    if token_normalized != decoded_normalized and token_file_path != decoded_path:
+                        return Response(
+                            {'error': 'Token invalide pour ce fichier'},
+                            status=status.HTTP_403_FORBIDDEN
+                        )
                     
                     # Token valide, continuer
                 except jwt.InvalidTokenError:
@@ -439,40 +447,47 @@ class DriveV2ViewSet(viewsets.ViewSet):
                         status=status.HTTP_401_UNAUTHORIZED
                     )
             
-            # 3. NORMALISATION MAGIQUE : AWS S3 utilise le format NFC (caractères composés)
-            # Les navigateurs/macOS/Linux peuvent envoyer du NFD (caractères décomposés)
-            # Exemple : "COÛT" peut être encodé en NFC (U+00D4) ou NFD (U+004F + U+0302)
+            # 3. RECHERCHE MAGIQUE DANS S3 : Essayer plusieurs formats Unicode
+            # AWS S3 est strict : le nom doit correspondre EXACTEMENT au nom stocké
+            # Les fichiers peuvent être stockés en NFC, NFD, ou format original
             import unicodedata
             from botocore.exceptions import ClientError
             
             s3_client = self.drive_manager.storage.s3_client
             bucket_name = self.drive_manager.storage.bucket_name
             
-            # Normaliser en NFC (format standard AWS S3)
-            s3_key_nfc = unicodedata.normalize('NFC', decoded_path)
-            final_key = s3_key_nfc
+            # STRATÉGIE : Essayer dans l'ordre : original -> NFC -> NFD
+            # Car le fichier est stocké avec le nom original (peut être NFD ou NFC)
+            final_key = None
+            s3_meta = None
             
-            # Astuce de pro : Vérifier d'abord si le fichier existe via head_object
-            # Cela évite de lancer un stream sur un fichier fantôme
+            # Tentative 1 : Chemin original (celui qui vient de l'URL/token)
             try:
+                final_key = decoded_path
                 s3_meta = s3_client.head_object(Bucket=bucket_name, Key=final_key)
             except ClientError as e:
                 error_code = e.response.get('Error', {}).get('Code', '')
                 if error_code == 'NoSuchKey':
-                    # FALLBACK : Si NFC échoue, tenter le format NFD (au cas où le fichier a été uploadé depuis un Mac)
+                    # Tentative 2 : Format NFC
                     try:
-                        s3_key_nfd = unicodedata.normalize('NFD', decoded_path)
-                        final_key = s3_key_nfd
+                        final_key = unicodedata.normalize('NFC', decoded_path)
                         s3_meta = s3_client.head_object(Bucket=bucket_name, Key=final_key)
-                    except ClientError:
-                        # Les deux formats ont échoué
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.error(f"ERREUR S3: Impossible de trouver '{decoded_path}' (Testé NFC et NFD)")
-                        return Response(
-                            {'error': f"Fichier introuvable sur S3: {decoded_path}"},
-                            status=status.HTTP_404_NOT_FOUND
-                        )
+                    except ClientError as nfc_error:
+                        nfc_error_code = nfc_error.response.get('Error', {}).get('Code', '')
+                        if nfc_error_code == 'NoSuchKey':
+                            # Tentative 3 : Format NFD
+                            try:
+                                final_key = unicodedata.normalize('NFD', decoded_path)
+                                s3_meta = s3_client.head_object(Bucket=bucket_name, Key=final_key)
+                            except ClientError as nfd_error:
+                                # Toutes les tentatives ont échoué
+                                logger.error(f"Fichier introuvable sur S3: {decoded_path}")
+                                return Response(
+                                    {'error': f"Fichier introuvable sur S3: {decoded_path}. Vérifiez que le nom du fichier correspond exactement."},
+                                    status=status.HTTP_404_NOT_FOUND
+                                )
+                        else:
+                            raise
                 else:
                     raise
             
@@ -551,6 +566,21 @@ class DriveV2ViewSet(viewsets.ViewSet):
             - mode: 'edit' ou 'view' (optionnel, défaut: 'edit')
             - use_proxy: true pour utiliser le proxy Django au lieu de l'URL S3 directe
         """
+        # S'assurer que la réponse sera toujours en JSON
+        # En cas d'erreur d'authentification, DRF peut renvoyer du HTML
+        try:
+            # Vérifier l'authentification manuellement pour avoir un meilleur contrôle
+            if not request.user.is_authenticated:
+                return Response(
+                    {'error': 'Authentification requise', 'error_type': 'AuthenticationError'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+        except Exception as auth_error:
+            return Response(
+                {'error': f'Erreur d\'authentification: {str(auth_error)}', 'error_type': 'AuthenticationError'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
         try:
             file_path = request.data.get('file_path')
             file_name = request.data.get('file_name')
@@ -579,65 +609,87 @@ class DriveV2ViewSet(viewsets.ViewSet):
             from urllib.parse import urlencode
             
             logger = logging.getLogger(__name__)
-            logger.info(f"[OnlyOffice] Génération de l'URL pour {file_name}")
             
-            # Normaliser le file_path en Unicode NFC pour éviter les erreurs S3 avec les accents
+            # Normaliser le file_path ET file_name en Unicode NFC pour éviter les erreurs S3 avec les accents
             # Problème : macOS/Linux peut encoder les accents en NFD (U+004F + U+0302) au lieu de NFC (U+00D4)
             # AWS S3 est strict : le nom dans l'URL signée doit correspondre exactement au nom réel du fichier
             import unicodedata
-            file_path_normalized = unicodedata.normalize('NFC', file_path)
-            logger.info(f"[OnlyOffice] File path normalisé: {file_path} -> {file_path_normalized}")
+            # IMPORTANT : Ne PAS normaliser ici, garder le chemin original
+            # Le fichier dans S3 est stocké avec le nom original (peut être NFD ou NFC)
+            # On normalisera seulement lors de la recherche dans S3 (dans proxy_file)
+            file_path_for_token = file_path  # Garder le chemin original pour le token
+            file_name_normalized = unicodedata.normalize('NFC', file_name)  # Normaliser seulement le nom pour l'affichage
             
             # Générer un token temporaire pour OnlyOffice (valide 24h)
-            # IMPORTANT : Utiliser le file_path normalisé dans le token
+            # IMPORTANT : Utiliser le file_path ORIGINAL (non normalisé) dans le token
+            # Car le fichier dans S3 est stocké avec le nom original
             token_payload = {
-                'file_path': file_path_normalized,  # Utiliser le chemin normalisé
+                'file_path': file_path_for_token,  # Utiliser le chemin ORIGINAL
                 'user_id': str(request.user.id),
                 'exp': int(time.time()) + 86400,  # Expiration dans 24h
                 'iat': int(time.time())
             }
             
             # Créer un secret pour les tokens OnlyOffice (utiliser le secret Django + un suffixe)
-            from django.conf import settings
+            # NOTE: settings est déjà importé au début du fichier, pas besoin de le réimporter
             token_secret = f"{settings.SECRET_KEY}_onlyoffice_file_token"
             file_token = jwt.encode(token_payload, token_secret, algorithm='HS256')
             
             # Construire l'URL du proxy avec le token
-            # IMPORTANT : Utiliser le file_path normalisé dans l'URL
+            # IMPORTANT : Utiliser le file_path ORIGINAL dans l'URL
             params = urlencode({
-                'file_path': file_path_normalized,  # Utiliser le chemin normalisé
+                'file_path': file_path_for_token,  # Utiliser le chemin ORIGINAL
                 'token': file_token
             })
             file_url = request.build_absolute_uri(f'/api/drive-v2/proxy-file/?{params}')
             
             # Normaliser l'URL pour qu'elle soit accessible depuis OnlyOffice (Docker)
-            # IMPORTANT : Utiliser le domaine public HTTPS pour que OnlyOffice puisse accéder via Internet
+            # IMPORTANT : En DEV, utilise host.docker.internal pour Docker Desktop
+            # En PROD, utilise le domaine public HTTPS
             file_url = OnlyOfficeManager.normalize_file_url(file_url)
-            
-            logger.info(f"[OnlyOffice] URL proxy Django générée pour {file_name}: {file_url[:150]}...")
             
             # URL de callback pour sauvegarder les modifications
             callback_url = request.build_absolute_uri('/api/drive-v2/onlyoffice-callback/')
             # Normaliser l'URL pour qu'elle soit accessible depuis Docker
             callback_url = OnlyOfficeManager.normalize_callback_url(callback_url)
             
-            # Créer la configuration via OnlyOfficeManager
-            result = OnlyOfficeManager.create_config(
-                file_path=file_path,
-                file_name=file_name,
-                file_url=file_url,
-                callback_url=callback_url,
-                user_id=str(request.user.id),
-                user_name=request.user.get_full_name() or request.user.username,
-                mode=mode,
-                storage_manager=self.drive_manager.storage
-            )
+            # Vérifier que drive_manager et storage sont disponibles
+            if not hasattr(self, 'drive_manager') or self.drive_manager is None:
+                raise ValueError("DriveManager n'est pas initialisé")
             
-            return Response(result, status=status.HTTP_200_OK)
+            storage_manager = getattr(self.drive_manager, 'storage', None)
+            
+            try:
+                # IMPORTANT : Utiliser le file_path original pour create_config
+                # (la normalisation sera gérée dans proxy_file lors de la recherche S3)
+                result = OnlyOfficeManager.create_config(
+                    file_path=file_path_for_token,  # Utiliser le chemin ORIGINAL
+                    file_name=file_name_normalized,   # Utiliser le nom normalisé pour l'affichage
+                    file_url=file_url,
+                    callback_url=callback_url,
+                    user_id=str(request.user.id),
+                    user_name=request.user.get_full_name() or request.user.username,
+                    mode=mode,
+                    storage_manager=storage_manager
+                )
+                return Response(result, status=status.HTTP_200_OK)
+            except Exception as config_error:
+                logger.error(f"Erreur lors de la création de la configuration OnlyOffice: {str(config_error)}", exc_info=True)
+                raise  # Re-lancer pour être capturé par le except principal
             
         except Exception as e:
+            import traceback
+            import logging
+            error_logger = logging.getLogger(__name__)
+            error_traceback = traceback.format_exc()
+            error_logger.error(f"Erreur 500 dans get_onlyoffice_config: {str(e)}")
+            error_logger.error(f"Traceback complet:\n{error_traceback}")
             return Response(
-                {'error': str(e)},
+                {
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'traceback': error_traceback if settings.DEBUG else None
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     

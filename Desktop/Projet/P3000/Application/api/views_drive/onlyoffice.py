@@ -10,7 +10,7 @@ import jwt
 import time
 import requests
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 
 class OnlyOfficeManager:
@@ -21,44 +21,46 @@ class OnlyOfficeManager:
     @staticmethod
     def normalize_file_url(url: str) -> str:
         """
-        Normalise l'URL du fichier (proxy Django) pour qu'elle soit accessible depuis OnlyOffice (Docker).
+        Normalise l'URL du fichier pour qu'elle soit accessible depuis OnlyOffice (Docker).
         
-        IMPORTANT : OnlyOffice (Docker) ne peut pas accéder à localhost:8000 depuis son conteneur.
-        On utilise le domaine public (HTTPS via Nginx) pour que OnlyOffice puisse télécharger via Internet.
+        IMPORTANT : OnlyOffice (dans Docker) doit accéder au proxy Django via Internet (domaine public).
+        En production, on utilise toujours le domaine public HTTPS (myp3000app.com) pour que
+        OnlyOffice puisse télécharger les fichiers via le reverse proxy Nginx.
+        
+        En développement local : utilise host.docker.internal pour Docker Desktop
         
         Args:
-            url: URL du proxy Django originale
+            url: URL du fichier (proxy Django) originale
             
         Returns:
-            URL normalisée pour OnlyOffice (domaine public HTTPS)
+            URL normalisée pour OnlyOffice (toujours domaine public HTTPS en production)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         parsed = urlparse(url)
         is_production = not settings.DEBUG
         
-        # En production : utiliser le domaine public HTTPS (via Nginx)
-        # OnlyOffice (Docker) peut accéder au domaine public via Internet
         if is_production:
-            # Remplacer localhost/127.0.0.1 par le domaine public
+            # En production : utiliser TOUJOURS le domaine public HTTPS
+            # OnlyOffice (Docker) accède via Internet, donc il doit utiliser le domaine public
             if parsed.hostname in ('127.0.0.1', 'localhost'):
-                # Utiliser le domaine public avec HTTPS
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 return f"https://myp3000app.com{parsed.path}{query_string}"
             
-            # Si l'URL utilise déjà le domaine public, la retourner telle quelle
+            # Si l'URL utilise déjà le domaine public, s'assurer qu'elle est en HTTPS
             if parsed.hostname in ('myp3000app.com', 'www.myp3000app.com', '72.60.90.127'):
-                # S'assurer que c'est HTTPS
                 if parsed.scheme != 'https':
                     query_string = f"?{parsed.query}" if parsed.query else ""
                     return f"https://{parsed.hostname}{parsed.path}{query_string}"
                 return url
-        
-        # En développement : utiliser host.docker.internal (Docker Desktop)
         else:
+            # En développement : utiliser host.docker.internal pour Docker Desktop
+            # Cela permet à OnlyOffice (dans Docker) d'accéder à Django sur la machine hôte
             if parsed.hostname in ('127.0.0.1', 'localhost'):
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 return f"http://host.docker.internal:8000{parsed.path}{query_string}"
         
-        # Sinon, retourner l'URL telle quelle
         return url
     
     @staticmethod
@@ -66,46 +68,65 @@ class OnlyOfficeManager:
         """
         Normalise l'URL de callback pour qu'elle soit accessible depuis le conteneur Docker.
         
-        IMPORTANT : OnlyOffice (Docker) ne peut pas accéder à localhost:8000 depuis son conteneur
-        car localhost dans le conteneur pointe vers le conteneur lui-même, pas vers l'hôte.
-        On utilise le domaine public HTTPS (via Nginx) pour que OnlyOffice puisse envoyer les callbacks.
+        IMPORTANT : En production, OnlyOffice (Docker) doit accéder au callback Django via localhost
+        car ils sont sur le même serveur. Le callback est interne au serveur.
         
         En développement local (Docker Desktop Windows/Mac) : utilise host.docker.internal
-        En production (Linux) : utilise le domaine public HTTPS
         
         Args:
             url: URL de callback originale
             
         Returns:
-            URL normalisée pour OnlyOffice (domaine public HTTPS en production)
+            URL normalisée pour Docker
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         parsed = urlparse(url)
         is_production = not settings.DEBUG
+        original_url = url
         
-        # En production : utiliser le domaine public HTTPS (via Nginx)
-        # OnlyOffice (Docker) peut accéder au domaine public via Internet
-        if is_production:
-            # Remplacer localhost/127.0.0.1 par le domaine public
-            if parsed.hostname in ('127.0.0.1', 'localhost'):
-                # Utiliser le domaine public avec HTTPS
+        # Si l'URL contient 127.0.0.1 ou localhost
+        if parsed.hostname in ('127.0.0.1', 'localhost'):
+            if is_production:
+                # En production : utiliser localhost:8000 (Docker sur Linux peut accéder au host)
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                return f"https://myp3000app.com{parsed.path}{query_string}"
+                normalized = f"http://localhost:8000{parsed.path}{query_string}"
+                logger.info(f"[OnlyOffice] Normalisation callback (PROD): {original_url[:100]}... -> {normalized[:100]}...")
+                return normalized
+            else:
+                # En développement : utiliser host.docker.internal (Docker Desktop)
+                query_string = f"?{parsed.query}" if parsed.query else ""
+                normalized = f"http://host.docker.internal:8000{parsed.path}{query_string}"
+                logger.info(f"[OnlyOffice] Normalisation callback (DEV): {original_url[:100]}... -> {normalized[:100]}...")
+                return normalized
+        
+        # Si l'URL utilise un domaine/IP externe en production
+        # OnlyOffice et Django sont sur le même serveur, donc utiliser localhost
+        if is_production and parsed.hostname:
+            onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
+            onlyoffice_parsed = urlparse(onlyoffice_url)
             
-            # Si l'URL utilise déjà le domaine public, la retourner telle quelle
-            if parsed.hostname in ('myp3000app.com', 'www.myp3000app.com', '72.60.90.127'):
-                # S'assurer que c'est HTTPS
-                if parsed.scheme != 'https':
-                    query_string = f"?{parsed.query}" if parsed.query else ""
-                    return f"https://{parsed.hostname}{parsed.path}{query_string}"
-                return url
-        
-        # En développement : utiliser host.docker.internal (Docker Desktop)
-        else:
-            if parsed.hostname in ('127.0.0.1', 'localhost'):
+            # Liste des hostnames qui indiquent qu'on est sur le même serveur
+            same_server_hostnames = [
+                onlyoffice_parsed.hostname,
+                'myp3000app.com',
+                'www.myp3000app.com',
+                '72.60.90.127',
+                '127.0.0.1',
+                'localhost'
+            ]
+            
+            if (parsed.hostname in same_server_hostnames or 
+                parsed.hostname in (settings.ALLOWED_HOSTS if hasattr(settings, 'ALLOWED_HOSTS') else [])):
+                # Utiliser localhost car on est sur le même serveur
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                return f"http://host.docker.internal:8000{parsed.path}{query_string}"
+                normalized = f"http://localhost:8000{parsed.path}{query_string}"
+                logger.info(f"[OnlyOffice] Normalisation callback (PROD same server): {original_url[:100]}... -> {normalized[:100]}...")
+                return normalized
         
-        # Sinon, retourner l'URL telle quelle
+        # Si l'URL utilise déjà un domaine/IP externe différent, la retourner telle quelle
+        logger.info(f"[OnlyOffice] Callback URL non modifiée: {url[:100]}...")
         return url
     
     @staticmethod
@@ -284,27 +305,12 @@ class OnlyOfficeManager:
         cache.set(f"onlyoffice_key_{document_key}", file_path, timeout=604800)
         
         # Configuration OnlyOffice
-        # IMPORTANT : Vérifier que file_url est une URL S3 complète (https://bucket.s3.region.amazonaws.com/...)
-        # Si ce n'est pas le cas, OnlyOffice pourrait essayer de passer par son propre serveur
-        from urllib.parse import urlparse
-        parsed_file_url = urlparse(file_url)
-        
-        # Logger l'URL pour debug
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"[OnlyOffice] URL fichier pour {file_name}: {file_url[:150]}...")  # Logger les 150 premiers caractères
-        
-        # Vérifier que l'URL est bien une URL S3 externe (pas un domaine local)
-        is_s3_url = 's3' in parsed_file_url.netloc.lower() or 'amazonaws.com' in parsed_file_url.netloc.lower()
-        if not is_s3_url and not settings.DEBUG:
-            logger.warning(f"[OnlyOffice] ATTENTION: L'URL du fichier ne semble pas être une URL S3: {parsed_file_url.netloc}")
-        
         config = {
             "document": {
                 "fileType": file_name.split('.')[-1].lower(),
                 "key": document_key,
                 "title": file_name,
-                "url": file_url,  # URL S3 signée complète
+                "url": file_url,
                 "permissions": {
                     "comment": mode == 'edit',
                     "copy": True,
@@ -341,12 +347,6 @@ class OnlyOfficeManager:
                 "callbackUrl": OnlyOfficeManager.normalize_callback_url(callback_url),
                 "lang": "fr",
                 "mode": mode,
-                # IMPORTANT : Désactiver le téléchargement via le serveur OnlyOffice
-                # Forcer OnlyOffice à télécharger directement depuis l'URL S3 fournie
-                "coEditing": {
-                    "mode": "fast",
-                    "change": True
-                },
             },
             "height": "100%",
             "width": "100%",
@@ -356,17 +356,25 @@ class OnlyOfficeManager:
         # Signer avec JWT si activé
         token = None
         if settings.ONLYOFFICE_JWT_ENABLED:
-            token = jwt.encode(
-                config,
-                settings.ONLYOFFICE_JWT_SECRET,
-                algorithm='HS256'
-            )
+            try:
+                token = jwt.encode(
+                    config,
+                    settings.ONLYOFFICE_JWT_SECRET,
+                    algorithm='HS256'
+                )
+            except Exception as jwt_error:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erreur lors de la génération du token JWT OnlyOffice: {str(jwt_error)}")
+                # Ne pas lever l'erreur, continuer sans token (OnlyOffice peut fonctionner sans JWT)
+                token = None
         
         return {
             "config": config,
             "token": token,
             "server_url": settings.ONLYOFFICE_SERVER_URL,
-            "file_path": file_path
+            "file_path": file_path,
+            "jwt_enabled": settings.ONLYOFFICE_JWT_ENABLED  # Ajouter cette info pour le debug
         }
     
     @staticmethod
