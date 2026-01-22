@@ -8,7 +8,9 @@ from .settings_base import *
 DEBUG = False
 
 # Configuration de sécurité renforcée pour la production
-SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
+# IMPORTANT : Désactiver SECURE_SSL_REDIRECT car Nginx gère déjà le SSL en amont
+# et OnlyOffice (Docker) doit pouvoir accéder à Django via HTTP sur localhost
+SECURE_SSL_REDIRECT = False  # Nginx gère le SSL, Django accepte HTTP depuis localhost
 SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', 31536000))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').lower() == 'true'
 SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'True').lower() == 'true'

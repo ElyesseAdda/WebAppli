@@ -218,6 +218,9 @@ services:
       - JWT_ENABLED=true
       - JWT_SECRET=votre-secret-jwt-super-long-et-complexe-changez-moi
       - JWT_HEADER=Authorization
+      # WebSocket / reverse proxy : aide si Nginx ou Traefik gère le SSL
+      - WOPI_ENABLED=true
+      - USE_UNAUTHORIZED_STORAGE=true
       # Configuration de la base de données (optionnel, pour la persistance)
       - DB_TYPE=postgres
       - DB_HOST=db
@@ -305,6 +308,9 @@ services:
       - JWT_ENABLED=true
       - JWT_SECRET=votre-secret-jwt-super-long-et-complexe-changez-moi
       - JWT_HEADER=Authorization
+      # WebSocket / reverse proxy (Nginx ou Traefik gère le SSL)
+      - WOPI_ENABLED=true
+      - USE_UNAUTHORIZED_STORAGE=true
     volumes:
       - onlyoffice_data:/var/www/onlyoffice/Data
       - onlyoffice_logs:/var/log/onlyoffice
@@ -371,6 +377,9 @@ Si vous utilisez déjà Nginx pour votre application Django, vous pouvez ajouter
 
 ### 4.1 Création du fichier de configuration Nginx
 
+**Pour myp3000app** : la config complète (map WebSocket + `location /onlyoffice/`) est dans `nginx_myp3000app.conf`.  
+Si vous créez un fichier dédié OnlyOffice, assurez-vous d’inclure la **map WebSocket** (obligatoire pour éviter « Connexion au serveur perdue »).
+
 ```bash
 sudo nano /etc/nginx/sites-available/onlyoffice
 ```
@@ -378,6 +387,12 @@ sudo nano /etc/nginx/sites-available/onlyoffice
 Collez le contenu suivant (adaptez si vous avez un domaine) :
 
 ```nginx
+# WebSocket : map obligatoire pour OnlyOffice (évite 400 sur handshake)
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 # Configuration OnlyOffice Document Server
 server {
     listen 80;
@@ -386,26 +401,20 @@ server {
     # Redirection vers HTTPS (recommandé en production)
     # return 301 https://$server_name$request_uri;
 
-    # Configuration pour OnlyOffice
+    # Configuration pour OnlyOffice (WebSocket + proxy)
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
-        
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeouts pour les gros fichiers
         proxy_connect_timeout 300;
         proxy_send_timeout 300;
         proxy_read_timeout 300;
         send_timeout 300;
-        
-        # Taille maximale des uploads
         client_max_body_size 100M;
     }
 }
@@ -645,6 +654,121 @@ sudo docker restart onlyoffice
 3. Activez Redis pour le cache
 4. Vérifiez la connexion réseau entre Django et OnlyOffice
 
+### Problème : WebSocket / "Connexion au serveur perdue"
+
+L’erreur **"Connexion au serveur perdue"** ou des échecs **WebSocket** (`wss://...`) viennent souvent des en-têtes **Upgrade** / **Connection** qui ne sont pas correctement transmis par le reverse proxy (Nginx, ou Traefik → Nginx).
+
+**1. Nginx (architecture actuelle myp3000app)**  
+Le fichier `nginx_myp3000app.conf` doit contenir :
+
+- Une **map** pour `Connection` (uniquement `upgrade` quand `Upgrade` est présent) :
+  ```nginx
+  map $http_upgrade $connection_upgrade {
+      default upgrade;
+      ''      close;
+  }
+  ```
+- Dans `location /onlyoffice/` :
+  - `proxy_http_version 1.1;`
+  - `proxy_set_header Upgrade $http_upgrade;`
+  - `proxy_set_header Connection $connection_upgrade;`
+  - `proxy_set_header X-Forwarded-Proto $scheme;` (HTTPS essentiel pour `wss://`)
+
+Sans la map, envoyer `Connection "upgrade"` pour toutes les requêtes peut provoquer **400** sur le handshake WebSocket.
+
+**2. Si Traefik est devant Nginx**
+
+OnlyOffice reçoit du HTTP depuis Nginx et peut ignorer que l’origine est en HTTPS. Il faut forcer `X-Forwarded-Proto=https` :
+
+- Dans les **labels Traefik** du service OnlyOffice (`docker-compose`) :
+  ```yaml
+  - "traefik.http.middlewares.onlyoffice-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+  - "traefik.http.routers.onlyoffice-secure.middlewares=onlyoffice-headers"
+  ```
+- Dans Nginx, pour le proxy vers OnlyOffice :  
+  `proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;`  
+  (au lieu de `$scheme` si Traefik envoie déjà l’en-tête).
+
+**3. Variables d’environnement OnlyOffice**
+
+Dans `docker-compose.yml`, pour le service `onlyoffice` :
+
+```yaml
+environment:
+  - WOPI_ENABLED=true
+  - USE_UNAUTHORIZED_STORAGE=true
+```
+
+**4. Vérification dans le navigateur**
+
+Ouvrir F12 → Console.  
+- `WebSocket connection to 'wss://...' failed: Unexpected response code: 400` → problème d’en-têtes (Nginx / map, ou Traefik + `X-Forwarded-Proto`).  
+- Erreurs "Mixed Content" ou connexion fermée sans 400 → souvent `X-Forwarded-Proto` manquant (Traefik ou Nginx).
+
+Après modification de Nginx : `sudo nginx -t && sudo systemctl reload nginx`.
+
+---
+
+## ✅ Commandes de vérification en production
+
+À exécuter sur le serveur de production (ex. 72.60.90.127) après déploiement ou modification.
+
+### OnlyOffice (Docker)
+
+```bash
+# Santé du Document Server
+curl -s http://localhost:8080/healthcheck
+# Attendu : true
+
+# Conteneur actif
+sudo docker ps | grep onlyoffice
+
+# Logs récents (erreurs WebSocket, callback, etc.)
+sudo docker logs --tail 100 onlyoffice
+```
+
+### Nginx
+
+```bash
+# Test de la configuration (inclut la map WebSocket)
+sudo nginx -t
+
+# Recharger après modification
+sudo systemctl reload nginx
+
+# Erreurs Nginx (proxy, WebSocket, 502, etc.)
+sudo tail -n 50 /var/log/nginx/error.log
+```
+
+### Django / API
+
+```bash
+# Endpoint de vérification OnlyOffice (depuis le serveur)
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/api/drive-v2/check-onlyoffice/
+# Attendu : 200
+
+# Ou avec réponse complète
+curl -s http://127.0.0.1:8000/api/drive-v2/check-onlyoffice/
+```
+
+### Depuis l’extérieur (HTTPS)
+
+```bash
+# OnlyOffice via reverse proxy (remplacer par votre domaine)
+curl -sI https://myp3000app.com/onlyoffice/healthcheck
+
+# Check-onlyoffice (nécessite souvent une session / auth)
+curl -sI https://myp3000app.com/api/drive-v2/check-onlyoffice/
+```
+
+### Résumé rapide
+
+```bash
+curl -s http://localhost:8080/healthcheck && \
+sudo nginx -t && \
+echo "OnlyOffice + Nginx OK"
+```
+
 ---
 
 ## 📝 Checklist de Déploiement
@@ -655,10 +779,10 @@ sudo docker restart onlyoffice
 - [ ] Variables d'environnement Django configurées
 - [ ] JWT_SECRET identique dans Django et Docker
 - [ ] ALLOWED_HOSTS mis à jour
-- [ ] Nginx configuré (si applicable)
+- [ ] Nginx configuré avec map WebSocket + `Connection $connection_upgrade` pour `/onlyoffice/`
 - [ ] HTTPS configuré (recommandé)
 - [ ] Test de santé OnlyOffice réussi
-- [ ] Test d'édition de document réussi
+- [ ] Test d'édition de document réussi (pas de « Connexion au serveur perdue »)
 - [ ] Logs vérifiés et sans erreur
 
 ---
