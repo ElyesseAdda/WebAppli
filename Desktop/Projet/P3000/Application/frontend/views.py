@@ -62,17 +62,14 @@ class FrontendAppView(TemplateView):
                 })
         
         # Ajouter l'URL du serveur OnlyOffice pour le template
-        # IMPORTANT : Utiliser le reverse proxy Nginx (/onlyoffice/) au lieu de l'URL directe
-        # Cela permet d'utiliser le même certificat SSL et d'éviter les problèmes CORS
-        if self.request.is_secure():
-            # En production HTTPS : utiliser le reverse proxy Nginx
-            onlyoffice_url = f"https://{self.request.get_host()}/onlyoffice"
-        else:
-            # En développement : utiliser l'URL directe ou le reverse proxy local
-            onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
-            # Si l'URL est en HTTP et la requête est en HTTPS, convertir
-            if onlyoffice_url.startswith('http://') and self.request.is_secure():
-                onlyoffice_url = onlyoffice_url.replace('http://', 'https://', 1)
+        # IMPORTANT : Utiliser directement ONLYOFFICE_SERVER_URL depuis les settings
+        # En production, cela pointe vers https://office.myp3000app.com (sous-domaine)
+        # En développement, cela pointe vers http://localhost:8080 ou host.docker.internal
+        onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
+        
+        # Si l'URL est en HTTP et la requête est en HTTPS, convertir
+        if onlyoffice_url.startswith('http://') and self.request.is_secure():
+            onlyoffice_url = onlyoffice_url.replace('http://', 'https://', 1)
         
         context.update({
             'debug': settings.DEBUG,
