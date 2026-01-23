@@ -38,6 +38,31 @@ def build_inline_style(styles: dict | None) -> str:
     return '; '.join(parts)
 
 
+def build_devis_title_label(devis) -> str:
+    """
+    Construit un libellé clair pour le titre d'onglet du devis.
+    - Devis de travaux: "Devis travaux"
+    - Devis TS: "TS n°XX" (si possible), sinon "TS <numero>" ou "TS"
+    """
+    if getattr(devis, 'devis_chantier', False):
+        return "Devis travaux"
+
+    numero = (getattr(devis, 'numero', '') or '').strip()
+    if not numero:
+        return "TS"
+
+    match = re.search(r"TS\s*n[°o]?\s*\d+", numero, re.IGNORECASE)
+    if match:
+        label = match.group(0).strip()
+        label = re.sub(r"^ts", "TS", label, flags=re.IGNORECASE)
+        return label
+
+    if numero.isdigit():
+        return f"TS n°{numero}"
+
+    return f"TS {numero}"
+
+
 def is_new_system_devis(devis):
     """
     Détecte si un devis utilise le nouveau système (avec index_global)
@@ -288,7 +313,8 @@ def preview_saved_devis(request, devis_id):
             'total_ht': total_ht,
             'tva': tva,
             'montant_ttc': montant_ttc,
-            'special_lines_global': special_lines_global
+            'special_lines_global': special_lines_global,
+            'devis_title_label': build_devis_title_label(devis)
         }
 
         return render(request, 'preview_devis.html', context)
@@ -640,7 +666,8 @@ def preview_saved_devis_v2(request, devis_id):
             'tva': tva,
             'montant_ttc': montant_ttc,
             'special_lines_global': special_lines_global,
-            'global_items': global_items
+            'global_items': global_items,
+            'devis_title_label': build_devis_title_label(devis)
         }
 
         return render(request, 'preview_devis_v2.html', context)
@@ -995,6 +1022,7 @@ def preview_devis_v2(request):
                     from datetime import datetime
                     
                     self.numero = data.get('numero', '')
+                    self.devis_chantier = bool(data.get('devis_chantier', False))
                     
                     # ✅ Convertir date_creation en datetime si c'est une string
                     date_creation = data.get('date_creation')
@@ -1042,7 +1070,8 @@ def preview_devis_v2(request):
                 'tva': tva,
                 'montant_ttc': montant_ttc,
                 'special_lines_global': special_lines_global,
-                'global_items': global_items
+                'global_items': global_items,
+                'devis_title_label': build_devis_title_label(temp_devis)
             }
 
             return render(request, 'preview_devis_v2.html', context)

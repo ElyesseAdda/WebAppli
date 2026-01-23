@@ -423,6 +423,27 @@ class FactureViewSet(viewsets.ModelViewSet):
         return response
 
 
+def build_situation_title_label(numero_situation):
+    """
+    Construit un libelle court pour l'onglet d'une situation.
+    Ex: "Facture n°06.2026 - Situation n°04" -> "Situation n°04"
+    """
+    raw = (numero_situation or '').strip()
+    if not raw:
+        return "Situation"
+
+    match = re.search(r"(Situation\s*n[°o]?\s*\d+)", raw, re.IGNORECASE)
+    if match:
+        label = match.group(1).strip()
+        label = re.sub(r"^situation", "Situation", label, flags=re.IGNORECASE)
+        return label
+
+    if raw.isdigit():
+        return f"Situation n°{raw}"
+
+    return f"Situation {raw}"
+
+
 def dashboard_data(request):
     # Récupérer les paramètres de filtrage
     month = request.GET.get('month', datetime.now().month)
@@ -3739,6 +3760,8 @@ def preview_saved_devis(request, devis_id):
         # Calculer TVA et TTC
         tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
         montant_ttc = total_ht + tva
+
+        situation_title_label = build_situation_title_label(situation.numero_situation)
 
         context = {
             'devis': devis,
@@ -7685,6 +7708,8 @@ def preview_situation(request, situation_id):
         # Montant total des travaux HT calculé dynamiquement
         montant_total_travaux_ht = total_montant_avancement_parties + total_montant_avancement_lignes_speciales + total_montant_avancement_avenants
 
+        situation_title_label = build_situation_title_label(situation.numero_situation)
+
         context = {
             'chantier': {
                 'nom': chantier.chantier_name,
@@ -7738,6 +7763,7 @@ def preview_situation(request, situation_id):
                 'date_validation': situation.date_validation,
                 'lignes_speciales': lignes_speciales_situation,
             },
+            'situation_title_label': situation_title_label,
             'parties': parties_data,
             'lignes_avenant': avenant_data,
             'lignes_supplementaires': lignes_supplementaires_data,

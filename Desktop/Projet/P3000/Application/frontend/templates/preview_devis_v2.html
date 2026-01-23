@@ -4,7 +4,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Prévisualisation du Devis</title>
+    <title>{% if chantier and chantier.chantier_name %}{{ chantier.chantier_name }} / {{ devis_title_label|default:"Devis" }}{% else %}{{ devis_title_label|default:"Devis" }}{% endif %} | Webapplication P3000</title>
     <style>
       /* Import des polices Google Fonts pour assurer la compatibilité */
       @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');

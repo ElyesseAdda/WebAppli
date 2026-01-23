@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from decimal import Decimal, ROUND_HALF_UP
+import re
 from .models import Situation, Devis, Chantier, Partie, SousPartie, LigneDetail, DevisLigne
 
 def _to_kebab_case(s):
@@ -26,6 +27,27 @@ def build_inline_style(styles: dict | None) -> str:
         parts.append(f"{kebab_key}:{val}")
     
     return '; '.join(parts)
+
+
+def build_situation_title_label(numero_situation: str | None) -> str:
+    """
+    Construit un libelle court pour l'onglet d'une situation.
+    Ex: "Facture n°06.2026 - Situation n°04" -> "Situation n°04"
+    """
+    raw = (numero_situation or '').strip()
+    if not raw:
+        return "Situation"
+
+    match = re.search(r"(Situation\s*n[°o]?\s*\d+)", raw, re.IGNORECASE)
+    if match:
+        label = match.group(1).strip()
+        label = re.sub(r"^situation", "Situation", label, flags=re.IGNORECASE)
+        return label
+
+    if raw.isdigit():
+        return f"Situation n°{raw}"
+
+    return f"Situation {raw}"
 
 def is_new_system_devis(devis):
     """
@@ -681,6 +703,8 @@ def preview_situation_v2(request, situation_id):
             tva,
             tva_rate
         )
+
+        situation_title_label = build_situation_title_label(situation.numero_situation)
         
         context = {
             'chantier': {
@@ -707,6 +731,7 @@ def preview_situation_v2(request, situation_id):
                 'nature_travaux': devis.nature_travaux,
             },
             'situation': situation_for_template,
+            'situation_title_label': situation_title_label,
             'situation_data': {
                 'id': situation.id,
                 'numero': situation.numero,

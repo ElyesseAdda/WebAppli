@@ -51,6 +51,7 @@ import Test from "./Test";
 import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
+import PageTitleManager from "./PageTitleManager";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -119,6 +120,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
+        <PageTitleManager />
         {/* Modal global pour les conflits de fichiers - accessible partout */}
         <GlobalConflictModal />
 

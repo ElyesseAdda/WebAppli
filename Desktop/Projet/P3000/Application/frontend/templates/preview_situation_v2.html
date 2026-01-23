@@ -4,7 +4,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Prévisualisation de la Situation</title>
+    <title>{% if chantier %}{% if chantier.chantier_name %}{{ chantier.chantier_name }}{% elif chantier.nom %}{{ chantier.nom }}{% endif %}{% if chantier.chantier_name or chantier.nom %} / {% endif %}{% if situation_title_label %}{{ situation_title_label }}{% elif situation.numero_situation %}Situation n°{{ situation.numero_situation }}{% else %}Situation{% endif %}{% else %}{% if situation_title_label %}{{ situation_title_label }}{% elif situation.numero_situation %}Situation n°{{ situation.numero_situation }}{% else %}Situation{% endif %}{% endif %} | Webapplication P3000</title>
     <style>
       /* Import des polices Google Fonts pour assurer la compatibilité */
       @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
