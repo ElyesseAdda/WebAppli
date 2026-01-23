@@ -3048,7 +3048,9 @@ const DevisAvance = () => {
               alert(
                 "Devis créé avec succès ! Téléchargement automatique vers le Drive..."
               );
-              window.location.href = `/ListeDevis?${urlParams.toString()}`;
+              // ⚠️ TEMPORAIREMENT DÉSACTIVÉ pour voir les logs
+               window.location.href = `/ListeDevis?${urlParams.toString()}`;
+              
               return;
             }
           } catch (autoDownloadAppelOffresError) {

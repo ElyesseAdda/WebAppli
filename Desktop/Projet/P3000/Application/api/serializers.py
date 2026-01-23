@@ -161,7 +161,7 @@ class DevisSerializer(serializers.ModelSerializer):
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
             'contact_societe'
         ]
-        read_only_fields = ['date_creation', 'client']
+        read_only_fields = ['client']  # ✅ Retirer date_creation pour permettre sa modification
 
     # Ancienne méthode commentée (lignes_speciales est maintenant un JSONField, pas une relation)
     # def get_lignes_speciales(self, obj):
@@ -355,6 +355,43 @@ class DevisSerializer(serializers.ModelSerializer):
         
         return recalculate_all_numeros(items)
     
+    def create(self, validated_data):
+        """
+        Créer un devis avec gestion de date_creation
+        (le modèle utilise maintenant default=timezone.now au lieu de auto_now_add=True)
+        """
+        # ✅ Gérer explicitement date_creation si fournie (parser si string)
+        if 'date_creation' in validated_data:
+            from django.utils.dateparse import parse_datetime, parse_date
+            from django.utils import timezone
+            from datetime import datetime
+            date_creation_value = validated_data.get('date_creation')
+            if date_creation_value and isinstance(date_creation_value, str):
+                try:
+                    # Essayer de parser comme datetime ISO complet d'abord
+                    date_creation = parse_datetime(date_creation_value)
+                    if not date_creation:
+                        # Si échec, essayer comme date simple "YYYY-MM-DD"
+                        parsed_date_simple = parse_date(date_creation_value)
+                        if parsed_date_simple:
+                            # Convertir la date en datetime à minuit (timezone-aware)
+                            validated_data['date_creation'] = timezone.make_aware(
+                                datetime.combine(parsed_date_simple, datetime.min.time())
+                            )
+                        else:
+                            # Si le parsing échoue, retirer date_creation pour utiliser default
+                            validated_data.pop('date_creation')
+                    else:
+                        validated_data['date_creation'] = date_creation
+                except (ValueError, TypeError):
+                    # En cas d'erreur, retirer date_creation pour utiliser default
+                    validated_data.pop('date_creation', None)
+        
+        # Créer le devis (date_creation sera utilisée si fournie, sinon default=timezone.now)
+        devis = Devis.objects.create(**validated_data)
+        
+        return devis
+    
     def update(self, instance, validated_data):
         if 'lignes' in validated_data:
             DevisLigne.objects.filter(devis=instance).delete()
@@ -389,6 +426,35 @@ class DevisSerializer(serializers.ModelSerializer):
         # Mettre à jour parties_metadata si présent
         if 'parties_metadata' in validated_data:
             instance.parties_metadata = validated_data.pop('parties_metadata')
+
+        # ✅ Gérer explicitement date_creation si fournie (parser si string)
+        if 'date_creation' in validated_data:
+            from django.utils.dateparse import parse_datetime, parse_date
+            from django.utils import timezone
+            from datetime import datetime
+            date_creation = validated_data.pop('date_creation')
+            if date_creation:
+                try:
+                    # Si c'est une string, la parser
+                    if isinstance(date_creation, str):
+                        # Essayer de parser comme datetime ISO complet d'abord
+                        parsed_date = parse_datetime(date_creation)
+                        if parsed_date:
+                            instance.date_creation = parsed_date
+                        else:
+                            # Si échec, essayer comme date simple "YYYY-MM-DD"
+                            parsed_date_simple = parse_date(date_creation)
+                            if parsed_date_simple:
+                                # Convertir la date en datetime à minuit (timezone-aware)
+                                instance.date_creation = timezone.make_aware(
+                                    datetime.combine(parsed_date_simple, datetime.min.time())
+                                )
+                    # Si c'est déjà un datetime, l'utiliser directement
+                    elif hasattr(date_creation, 'isoformat'):
+                        instance.date_creation = date_creation
+                except (ValueError, TypeError) as e:
+                    # En cas d'erreur, garder la date existante
+                    pass
 
         # Mettre à jour les autres champs
         for attr, value in validated_data.items():

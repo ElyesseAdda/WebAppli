@@ -990,8 +990,41 @@ def preview_devis_v2(request):
             # Créer un objet devis temporaire pour le template
             class TempDevis:
                 def __init__(self, data):
+                    from django.utils.dateparse import parse_datetime, parse_date
+                    from django.utils import timezone
+                    from datetime import datetime
+                    
                     self.numero = data.get('numero', '')
-                    self.date_creation = data.get('date_creation')
+                    
+                    # ✅ Convertir date_creation en datetime si c'est une string
+                    date_creation = data.get('date_creation')
+                    if date_creation:
+                        if isinstance(date_creation, str):
+                            # Essayer de parser comme datetime ISO complet d'abord
+                            parsed_date = parse_datetime(date_creation)
+                            if parsed_date:
+                                self.date_creation = parsed_date
+                            else:
+                                # Si échec, essayer comme date simple "YYYY-MM-DD"
+                                parsed_date_simple = parse_date(date_creation)
+                                if parsed_date_simple:
+                                    # Convertir la date en datetime à minuit
+                                    self.date_creation = timezone.make_aware(
+                                        datetime.combine(parsed_date_simple, datetime.min.time())
+                                    )
+                                else:
+                                    # Si le parsing échoue complètement, utiliser la date actuelle
+                                    self.date_creation = timezone.now()
+                        elif hasattr(date_creation, 'isoformat'):
+                            # Si c'est déjà un datetime, l'utiliser directement
+                            self.date_creation = date_creation
+                        else:
+                            # Sinon, utiliser la date actuelle
+                            self.date_creation = timezone.now()
+                    else:
+                        # Si pas de date fournie, utiliser la date actuelle
+                        self.date_creation = timezone.now()
+                    
                     self.nature_travaux = data.get('nature_travaux', '')
                     self.tva_rate = float(tva_rate)
                     # ✅ Ajouter contact_societe au devis temporaire

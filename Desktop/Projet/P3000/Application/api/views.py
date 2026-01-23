@@ -3139,16 +3139,31 @@ def create_devis(request):
                     devis_data['contact_societe_id'] = request.data['contact_societe']
                 
                 # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
-                # Si non fournie, le modèle utilisera auto_now_add=True
+                # Si non fournie, le modèle utilisera default=timezone.now
                 if 'date_creation' in request.data and request.data['date_creation']:
-                    from django.utils.dateparse import parse_datetime
+                    from django.utils.dateparse import parse_datetime, parse_date
+                    from django.utils import timezone
+                    from datetime import datetime
                     try:
-                        date_creation = parse_datetime(request.data['date_creation'])
+                        date_creation_str = request.data['date_creation']
+                        # Essayer de parser comme datetime ISO complet d'abord
+                        date_creation = parse_datetime(date_creation_str)
                         if date_creation:
                             devis_data['date_creation'] = date_creation
+                        else:
+                            # Si échec, essayer comme date simple "YYYY-MM-DD"
+                            parsed_date_simple = parse_date(date_creation_str)
+                            if parsed_date_simple:
+                                # Convertir la date en datetime à minuit (timezone-aware)
+                                devis_data['date_creation'] = timezone.make_aware(
+                                    datetime.combine(parsed_date_simple, datetime.min.time())
+                                )
                     except (ValueError, TypeError):
-                        # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
+                        # Si la date n'est pas valide, utiliser default=timezone.now
                         pass
+                
+                # Créer le devis (date_creation sera utilisée si fournie, sinon default=timezone.now)
+                devis = Devis.objects.create(**devis_data)
             else:
                 # ✅ Vérifier si lignes_display est déjà présent (envoyé par le frontend)
                 # Si oui, utiliser directement, sinon filtrer depuis lignes_speciales
@@ -3204,17 +3219,30 @@ def create_devis(request):
                     devis_data['contact_societe_id'] = request.data['contact_societe']
                 
                 # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
-                # Si non fournie, le modèle utilisera auto_now_add=True
+                # Si non fournie, le modèle utilisera default=timezone.now
                 if 'date_creation' in request.data and request.data['date_creation']:
-                    from django.utils.dateparse import parse_datetime
+                    from django.utils.dateparse import parse_datetime, parse_date
+                    from django.utils import timezone
+                    from datetime import datetime
                     try:
-                        date_creation = parse_datetime(request.data['date_creation'])
+                        date_creation_str = request.data['date_creation']
+                        # Essayer de parser comme datetime ISO complet d'abord
+                        date_creation = parse_datetime(date_creation_str)
                         if date_creation:
                             devis_data['date_creation'] = date_creation
+                        else:
+                            # Si échec, essayer comme date simple "YYYY-MM-DD"
+                            parsed_date_simple = parse_date(date_creation_str)
+                            if parsed_date_simple:
+                                # Convertir la date en datetime à minuit (timezone-aware)
+                                devis_data['date_creation'] = timezone.make_aware(
+                                    datetime.combine(parsed_date_simple, datetime.min.time())
+                                )
                     except (ValueError, TypeError):
-                        # Si la date n'est pas valide, utiliser auto_now_add (date actuelle)
+                        # Si la date n'est pas valide, utiliser default=timezone.now
                         pass
             
+            # Créer le devis (date_creation sera utilisée si fournie, sinon default=timezone.now)
             devis = Devis.objects.create(**devis_data)
 
             # Associer le(s) client(s) de manière robuste
@@ -3272,7 +3300,11 @@ def create_devis(request):
                 DevisLigne.objects.create(**ligne_data)
             
             # Préparer la réponse avec l'ID du devis et de l'appel d'offres si applicable
-            response_data = {'id': devis.id}
+            response_data = {
+                'id': devis.id,
+                'numero': devis.numero,
+                'date_creation': devis.date_creation.isoformat() if devis.date_creation else None
+            }
             if devis_chantier and appel_offres:
                 response_data['appel_offres_id'] = appel_offres.id
                 response_data['appel_offres_name'] = appel_offres.chantier_name

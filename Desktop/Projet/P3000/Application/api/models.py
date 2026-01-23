@@ -758,7 +758,7 @@ class Materiel_produit(models.Model):
 
 class Devis(models.Model):
     numero = models.CharField(max_length=100, unique=True)
-    date_creation = models.DateTimeField(auto_now_add=True)
+    date_creation = models.DateTimeField(default=timezone.now)  # ✅ Retirer auto_now_add pour permettre la modification
     price_ht = models.FloatField()
     price_ttc = models.FloatField()
     tva_rate = models.FloatField()
