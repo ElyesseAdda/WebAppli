@@ -11389,13 +11389,33 @@ def preview_monthly_agents_report(request):
             jours_majoration = []
             
             # PARTIE 1: Récupérer les jours majorés depuis LaborCost.details_majoration avec regroupement
+            # IMPORTANT: Vérifier que les créneaux Schedule existent réellement pour ces dates
             labor_cost_majorations = {}  # Pour regrouper par date + type
+            
+            # Récupérer tous les créneaux Schedule pour cet agent/chantier/semaine (pour vérification)
+            schedules_for_lc = Schedule.objects.filter(
+                agent_id=lc.agent_id,
+                chantier_id=lc.chantier_id,
+                year=year,
+                week=lc.week
+            )
+            
+            # Créer un set des dates réelles où l'agent a travaillé (pour vérification)
+            dates_with_schedule = set()
+            for schedule in schedules_for_lc:
+                try:
+                    date_creneau = get_date_from_week(schedule.year, schedule.week, schedule.day)
+                    if date_creneau.year == year and date_creneau.month == month:
+                        dates_with_schedule.add(date_creneau)
+                except:
+                    continue
             
             if lc.details_majoration:
                 for detail in lc.details_majoration:
                     # Normaliser le format de date vers DD/MM/YYYY pour cohérence avec LaborCostsSummary.js
                     date_str = detail.get('date', '')
                     normalized_date = date_str
+                    date_obj = None
                     
                     # Convertir YYYY-MM-DD vers DD/MM/YYYY si nécessaire
                     if date_str and '-' in date_str and len(date_str) == 10:
@@ -11404,6 +11424,39 @@ def preview_monthly_agents_report(request):
                             normalized_date = date_obj.strftime('%d/%m/%Y')
                         except:
                             pass  # Garder la date originale si la conversion échoue
+                    elif date_str and '/' in date_str:
+                        # Format DD/MM/YYYY
+                        try:
+                            parts = date_str.split('/')
+                            if len(parts) == 3:
+                                date_obj = date(int(parts[2]), int(parts[1]), int(parts[0]))
+                        except:
+                            pass
+                    
+                    # VÉRIFICATION 1: La date doit être dans le mois demandé
+                    if date_obj is None:
+                        try:
+                            if '/' in date_str:
+                                parts = date_str.split('/')
+                                if len(parts) == 3:
+                                    date_obj = date(int(parts[2]), int(parts[1]), int(parts[0]))
+                        except:
+                            continue
+                    
+                    if date_obj is None:
+                        continue
+                    
+                    if date_obj.year != year or date_obj.month != month:
+                        continue  # Ignorer les dates hors du mois
+                    
+                    # VÉRIFICATION 2: Il doit y avoir un créneau Schedule réel pour cette date
+                    if date_obj not in dates_with_schedule:
+                        continue  # Ignorer si aucun créneau n'existe pour cette date
+                    
+                    # VÉRIFICATION 3: Il doit y avoir des heures > 0
+                    hours_value = detail.get('hours', 0) or 0
+                    if hours_value <= 0:
+                        continue  # Ignorer si pas d'heures
                     
                     # Ignorer les heures supplémentaires de details_majoration (seront traitées par Schedule)
                     detail_type = detail.get('type', '').lower()
@@ -11433,20 +11486,15 @@ def preview_monthly_agents_report(request):
                             }
                         
                         # Sommer les heures pour cette date/type
-                        labor_cost_majorations[key]['hours'] += detail.get('hours', 0)
+                        labor_cost_majorations[key]['hours'] += float(hours_value)
                 
-                # Ajouter les données regroupées
+                # Ajouter les données regroupées SEULEMENT si hours > 0
                 for grouped_data in labor_cost_majorations.values():
-                    jours_majoration.append(grouped_data)
+                    if grouped_data['hours'] > 0:
+                        jours_majoration.append(grouped_data)
             
             # PARTIE 2: Ajouter les heures supplémentaires depuis Schedule
-            # Récupérer tous les créneaux Schedule pour cet agent/chantier/semaine
-            schedules_for_lc = Schedule.objects.filter(
-                agent_id=lc.agent_id,
-                chantier_id=lc.chantier_id,
-                year=year,
-                week=lc.week
-            )
+            # (schedules_for_lc déjà récupéré dans PARTIE 1)
             
             for schedule in schedules_for_lc:
                 date_creneau = get_date_from_week(schedule.year, schedule.week, schedule.day)
@@ -11574,31 +11622,119 @@ def preview_monthly_agents_report(request):
         
         # Agent data loaded successfully
         
-        # Regrouper les jours majorés par date et type
-        overtime_grouped = {}
-        for jour in agent_data['jours_majoration']:
-            key = (jour['date'], jour['type'])
-            if key not in overtime_grouped:
-                overtime_grouped[key] = {
-                    'date': jour['date'],
-                    'type': jour['type'],
-                    'hours': 0,
-                    'taux': jour['taux']
-                }
-            overtime_grouped[key]['hours'] += jour['hours']
+        # Regrouper les jours majorés par date, type et taux (comme dans LaborCostsSummary.js)
+        # Cette fonction regroupe et préserve les overtime_hours pour les heures supplémentaires
+        def group_majorations(jours_majoration):
+            grouped = {}
+            
+            def normalize_date(date_val):
+                """Normalise la date au format DD/MM/YYYY pour la clé de regroupement"""
+                if isinstance(date_val, date):
+                    return date_val.strftime('%d/%m/%Y')
+                if isinstance(date_val, str):
+                    # Si format YYYY-MM-DD, convertir en DD/MM/YYYY
+                    if '-' in date_val and len(date_val) == 10:
+                        try:
+                            date_obj = date.fromisoformat(date_val)
+                            return date_obj.strftime('%d/%m/%Y')
+                        except:
+                            pass
+                    # Si déjà en format DD/MM/YYYY, retourner tel quel
+                    if '/' in date_val:
+                        return date_val
+                return str(date_val)
+            
+            def normalize_taux(taux_val):
+                """Normalise le taux pour la clé de regroupement"""
+                if isinstance(taux_val, (int, float)):
+                    if taux_val == 1.25:
+                        return '+25%'
+                    elif taux_val == 1.5:
+                        return '+50%'
+                    else:
+                        return f'+{int((taux_val - 1) * 100)}%'
+                taux_str = str(taux_val).strip()
+                # Normaliser les formats possibles
+                if taux_str.startswith('+'):
+                    return taux_str
+                elif taux_str.endswith('%'):
+                    return f'+{taux_str}'
+                else:
+                    try:
+                        taux_float = float(taux_str)
+                        if taux_float == 1.25:
+                            return '+25%'
+                        elif taux_float == 1.5:
+                            return '+50%'
+                        else:
+                            return f'+{int((taux_float - 1) * 100)}%'
+                    except:
+                        return taux_str
+            
+            def normalize_type(type_val):
+                """Normalise le type pour la clé de regroupement"""
+                type_str = str(type_val).lower().strip()
+                if type_str in ['samedi']:
+                    return 'samedi'
+                elif type_str in ['dimanche']:
+                    return 'dimanche'
+                elif type_str in ['ferie', 'férié', 'ferié']:
+                    return 'ferie'
+                elif type_str in ['heures sup', 'overtime', 'heures supplémentaires']:
+                    return 'overtime'
+                return type_str
+            
+            for j in jours_majoration:
+                # Normaliser les valeurs pour créer une clé unique
+                normalized_date = normalize_date(j.get('date', ''))
+                normalized_type = normalize_type(j.get('type', ''))
+                normalized_taux = normalize_taux(j.get('taux', ''))
+                
+                # Clé de regroupement : date normalisée + type normalisé + taux normalisé
+                key = f"{normalized_date}_{normalized_type}_{normalized_taux}"
+                
+                if key not in grouped:
+                    grouped[key] = {
+                        'date': normalized_date,  # Utiliser la date normalisée
+                        'type': j.get('type', ''),  # Garder le type original pour l'affichage
+                        'hours': 0,
+                        'overtime_hours': 0,
+                        'taux': normalized_taux,  # Utiliser le taux normalisé
+                        'jour': j.get('jour', '')
+                    }
+                
+                # Sommer les heures normales
+                grouped[key]['hours'] += float(j.get('hours', 0) or 0)
+                
+                # Pour les heures supplémentaires, sommer aussi overtime_hours
+                if normalized_type == 'overtime' and j.get('overtime_hours', 0):
+                    grouped[key]['overtime_hours'] = (grouped[key]['overtime_hours'] or 0) + float(j.get('overtime_hours', 0) or 0)
+                elif j.get('overtime_hours', 0):
+                    # Même pour les autres types, préserver les overtime_hours si présents
+                    grouped[key]['overtime_hours'] = (grouped[key]['overtime_hours'] or 0) + float(j.get('overtime_hours', 0) or 0)
+            
+            # Trier par date croissante
+            def parse_date_for_sort(date_str):
+                if isinstance(date_str, date):
+                    return date_str
+                if isinstance(date_str, str):
+                    if '/' in date_str:
+                        parts = date_str.split('/')
+                        if len(parts) == 3:
+                            try:
+                                return date(int(parts[2]), int(parts[1]), int(parts[0]))
+                            except:
+                                pass
+                    try:
+                        return date.fromisoformat(date_str)
+                    except:
+                        pass
+                return date.min
+            
+            return sorted(grouped.values(), key=lambda x: parse_date_for_sort(x['date']))
         
-        # Convertir en liste et trier par date
-        overtime_details = []
-        for key, value in overtime_grouped.items():
-            # S'assurer que la date est bien un objet date pour le template
-            try:
-                if isinstance(value['date'], str):
-                    value['date'] = date.fromisoformat(value['date'])
-                overtime_details.append(value)
-            except:
-                pass
-        
-        overtime_details.sort(key=lambda x: x['date'])
+        # Regrouper les jours majorés
+        overtime_details = group_majorations(agent_data['jours_majoration'])
         
         # Récupérer les événements pour cet agent
         agent_events = events.filter(agent=agent)
@@ -11648,10 +11784,11 @@ def preview_monthly_agents_report(request):
         
         # UTILISER LES MÊMES DONNÉES QUE LaborCostsSummary.js
         # Les details_majoration viennent de schedule_data (via schedule_monthly_summary)
+        # Utiliser les données regroupées (overtime_details) qui préservent les overtime_hours
         details_majoration = []
         
-        # Convertir les jours_majoration de l'agent pour le template PDF
-        for i, jour in enumerate(agent_data['jours_majoration']):
+        # Convertir les jours majorés regroupés pour le template PDF
+        for jour in overtime_details:
             try:
                 # Conversion de date pour le template
                 date_str = jour['date']
@@ -11671,31 +11808,51 @@ def preview_monthly_agents_report(request):
                 
                 # Vérifier que c'est le bon mois
                 if detail_date.year == year and detail_date.month == month:
-                    details_majoration.append({
-                        'date': jour['date'],
-                        'jour': jour.get('jour', ''),
-                        'type': jour.get('type', ''),
-                        'hours': jour.get('hours', 0),
-                        'overtime_hours': jour.get('overtime_hours', 0),
-                        'taux': jour.get('taux', '')
-                    })
+                    # Vérifier qu'il y a des heures réelles (hours > 0 ou overtime_hours > 0)
+                    hours_val = jour.get('hours', 0) or 0
+                    overtime_hours_val = jour.get('overtime_hours', 0) or 0
+                    
+                    # Ne garder que les jours avec des heures > 0
+                    if hours_val > 0 or overtime_hours_val > 0:
+                        details_majoration.append({
+                            'date': jour['date'],
+                            'jour': jour.get('jour', ''),
+                            'type': jour.get('type', ''),
+                            'hours': hours_val,
+                            'overtime_hours': overtime_hours_val,
+                            'taux': jour.get('taux', '')
+                        })
             except Exception as e:
                 continue
         
-        # Trier par date
+        # Trier par date (déjà trié dans group_majorations, mais on le fait à nouveau pour être sûr)
         def parse_date_for_sort(date_str):
             if isinstance(date_str, date):
                 return date_str
             if '/' in str(date_str):
                 parts = str(date_str).split('/')
                 if len(parts) == 3:
-                    return date(int(parts[2]), int(parts[1]), int(parts[0]))
+                    try:
+                        return date(int(parts[2]), int(parts[1]), int(parts[0]))
+                    except:
+                        pass
             try:
                 return date.fromisoformat(str(date_str))
             except:
                 return date.min
         
         details_majoration.sort(key=lambda x: parse_date_for_sort(x['date']))
+        
+        # Séparer les heures supplémentaires des autres jours majorés
+        overtime_details_list = []
+        other_majoration_details = []
+        
+        for detail in details_majoration:
+            detail_type = detail.get('type', '').lower()
+            if detail_type in ['heures sup', 'overtime']:
+                overtime_details_list.append(detail)
+            else:
+                other_majoration_details.append(detail)
         
         # Récupérer les primes de l'agent pour ce mois
         primes = AgentPrime.objects.filter(
@@ -11729,6 +11886,8 @@ def preview_monthly_agents_report(request):
             },
             'overtime_details': overtime_details,
             'details_majoration': details_majoration,
+            'overtime_list': overtime_details_list,
+            'majoration_list': other_majoration_details,
             'events': events_data,
             'primes': primes_data,
             'total_primes': total_primes

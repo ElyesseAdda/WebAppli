@@ -173,27 +173,52 @@
             <h2>{{ agent_data.agent.name }} {{ agent_data.agent.surname }}</h2>
         </div>
 
-        <!-- Détail des jours majorés -->
+        <!-- Heures supplémentaires -->
+        {% if agent_data.overtime_list %}
+        <h3>Heures supplémentaires</h3>
+        <table class="hours-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Heures</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for detail in agent_data.overtime_list %}
+                <tr>
+                    <td>{{ detail.date }}</td>
+                    <td>
+                        {% if detail.overtime_hours > 0 %}
+                            {{ detail.overtime_hours|floatformat:1 }}h
+                        {% else %}
+                            0h
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <!-- Détail des jours majorés (sans les heures supplémentaires) -->
+        {% if agent_data.majoration_list %}
         <h3>Détail des jours majorés</h3>
-        {% if agent_data.details_majoration %}
         <table class="hours-table">
             <thead>
                 <tr>
                     <th>Date</th>
                     <th>Type</th>
                     <th>Heures</th>
-                    <th>Majoration</th>
                 </tr>
             </thead>
             <tbody>
-                {% for detail in agent_data.details_majoration %}
+                {% for detail in agent_data.majoration_list %}
                 <tr>
                     <td>{{ detail.date }}</td>
                     <td>
                         {% if detail.type == 'samedi' or detail.type == 'Samedi' %}🏖️ <strong>Samedi</strong>
                         {% elif detail.type == 'dimanche' or detail.type == 'Dimanche' %}🌅 <strong>Dimanche</strong>
                         {% elif detail.type == 'ferie' or detail.type == 'Férié' %}🎉 <strong>Jour férié</strong>
-                        {% elif detail.type == 'Heures sup' %}⏰ <strong>Heures supplémentaires</strong>
                         {% else %}<strong>{{ detail.type|capfirst }}</strong>
                         {% endif %}
                     </td>
@@ -208,19 +233,10 @@
                             0h
                         {% endif %}
                     </td>
-                    <td>
-                        {% if detail.type == 'Heures sup' %}
-                            <strong>-</strong>
-                        {% else %}
-                            <strong>{{ detail.taux }}</strong>
-                        {% endif %}
-                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="no-data">Aucun jour majoré pour ce mois</div>
         {% endif %}
 
         <!-- Section Primes -->
