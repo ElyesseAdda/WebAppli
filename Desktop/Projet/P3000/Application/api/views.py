@@ -11302,6 +11302,14 @@ def preview_monthly_agents_report(request):
     else:
         end_date = date(year, month + 1, 1) - timedelta(days=1)
     
+    # Fonction utilitaire pour obtenir la date réelle d'un Schedule (comme schedule_monthly_summary)
+    def get_date_from_week(year, week, day_name):
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        day_index = days_of_week.index(day_name)
+        from datetime import datetime as dt
+        lundi = dt.strptime(f'{year}-W{int(week):02d}-1', "%G-W%V-%u")
+        return (lundi + td(days=day_index)).date()
+    
     # UTILISER EXACTEMENT LA MÊME API QUE LaborCostsSummary.js
     # pour garantir la cohérence des données
     month_str = f"{year}-{month:02d}"
@@ -11383,16 +11391,11 @@ def preview_monthly_agents_report(request):
                 (lc.cost_overtime or 0)
             )
             
-            # APPROCHE HYBRIDE : Combiner les deux sources de données
-            # 1. LaborCost.details_majoration pour les jours majorés normaux (weekend, fériés)
-            # 2. Schedule.overtime_hours pour les heures supplémentaires
+            # UTILISER EXACTEMENT LA MÊME LOGIQUE QUE schedule_monthly_summary
+            # Construire les jours majorés directement depuis les Schedule (comme LaborCostsSummary.js)
             jours_majoration = []
             
-            # PARTIE 1: Récupérer les jours majorés depuis LaborCost.details_majoration avec regroupement
-            # IMPORTANT: Vérifier que les créneaux Schedule existent réellement pour ces dates
-            labor_cost_majorations = {}  # Pour regrouper par date + type
-            
-            # Récupérer tous les créneaux Schedule pour cet agent/chantier/semaine (pour vérification)
+            # Récupérer tous les créneaux Schedule pour cet agent/chantier/semaine
             schedules_for_lc = Schedule.objects.filter(
                 agent_id=lc.agent_id,
                 chantier_id=lc.chantier_id,
@@ -11400,120 +11403,68 @@ def preview_monthly_agents_report(request):
                 week=lc.week
             )
             
-            # Créer un set des dates réelles où l'agent a travaillé (pour vérification)
-            dates_with_schedule = set()
-            for schedule in schedules_for_lc:
-                try:
-                    date_creneau = get_date_from_week(schedule.year, schedule.week, schedule.day)
-                    if date_creneau.year == year and date_creneau.month == month:
-                        dates_with_schedule.add(date_creneau)
-                except:
-                    continue
+            # Récupérer les jours fériés français
+            fr_holidays = holidays.country_holidays('FR', years=[year])
             
-            if lc.details_majoration:
-                for detail in lc.details_majoration:
-                    # Normaliser le format de date vers DD/MM/YYYY pour cohérence avec LaborCostsSummary.js
-                    date_str = detail.get('date', '')
-                    normalized_date = date_str
-                    date_obj = None
-                    
-                    # Convertir YYYY-MM-DD vers DD/MM/YYYY si nécessaire
-                    if date_str and '-' in date_str and len(date_str) == 10:
-                        try:
-                            date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-                            normalized_date = date_obj.strftime('%d/%m/%Y')
-                        except:
-                            pass  # Garder la date originale si la conversion échoue
-                    elif date_str and '/' in date_str:
-                        # Format DD/MM/YYYY
-                        try:
-                            parts = date_str.split('/')
-                            if len(parts) == 3:
-                                date_obj = date(int(parts[2]), int(parts[1]), int(parts[0]))
-                        except:
-                            pass
-                    
-                    # VÉRIFICATION 1: La date doit être dans le mois demandé
-                    if date_obj is None:
-                        try:
-                            if '/' in date_str:
-                                parts = date_str.split('/')
-                                if len(parts) == 3:
-                                    date_obj = date(int(parts[2]), int(parts[1]), int(parts[0]))
-                        except:
-                            continue
-                    
-                    if date_obj is None:
-                        continue
-                    
-                    if date_obj.year != year or date_obj.month != month:
-                        continue  # Ignorer les dates hors du mois
-                    
-                    # VÉRIFICATION 2: Il doit y avoir un créneau Schedule réel pour cette date
-                    if date_obj not in dates_with_schedule:
-                        continue  # Ignorer si aucun créneau n'existe pour cette date
-                    
-                    # VÉRIFICATION 3: Il doit y avoir des heures > 0
-                    hours_value = detail.get('hours', 0) or 0
-                    if hours_value <= 0:
-                        continue  # Ignorer si pas d'heures
-                    
-                    # Ignorer les heures supplémentaires de details_majoration (seront traitées par Schedule)
-                    detail_type = detail.get('type', '').lower()
-                    if detail_type not in ['heures sup', 'overtime']:
-                        # Clé pour regroupement : date + type
-                        key = f"{normalized_date}_{detail_type}"
-                        
-                        if key not in labor_cost_majorations:
-                            # Normaliser le taux au format +XX%
-                            taux_raw = detail.get('taux', '')
-                            if isinstance(taux_raw, (int, float)):
-                                if taux_raw == 1.25:
-                                    taux_display = '+25%'
-                                elif taux_raw == 1.5:
-                                    taux_display = '+50%'
-                                else:
-                                    taux_display = f'+{int((taux_raw - 1) * 100)}%'
-                            else:
-                                taux_display = str(taux_raw)
-                            
-                            labor_cost_majorations[key] = {
-                                'date': normalized_date,
-                                'type': detail.get('type', ''),
-                                'hours': 0,
-                                'overtime_hours': detail.get('overtime_hours', 0),
-                                'taux': taux_display
-                            }
-                        
-                        # Sommer les heures pour cette date/type
-                        labor_cost_majorations[key]['hours'] += float(hours_value)
-                
-                # Ajouter les données regroupées SEULEMENT si hours > 0
-                for grouped_data in labor_cost_majorations.values():
-                    if grouped_data['hours'] > 0:
-                        jours_majoration.append(grouped_data)
+            # Gestion des agents journaliers vs horaires
+            is_journalier = lc.agent.type_paiement == 'journalier'
+            if is_journalier:
+                heures_increment = 4  # 0.5 jour = 4h équivalent
+            else:
+                heures_increment = 1  # 1 créneau = 1h
             
-            # PARTIE 2: Ajouter les heures supplémentaires depuis Schedule
-            # (schedules_for_lc déjà récupéré dans PARTIE 1)
-            
+            # Construire les jours majorés depuis les Schedule (EXACTEMENT comme schedule_monthly_summary)
             for schedule in schedules_for_lc:
                 date_creneau = get_date_from_week(schedule.year, schedule.week, schedule.day)
+                
+                # FILTRE STRICT : Ne garder que les créneaux du mois demandé
                 if date_creneau.year != year or date_creneau.month != month:
                     continue
                 
                 # Vérifier si cette case a des heures supplémentaires
                 has_overtime = schedule.overtime_hours and schedule.overtime_hours > 0
-                is_journalier = schedule.agent.type_paiement == 'journalier'
                 
+                # Construire les jours majorés (même logique que schedule_monthly_summary lignes 11198-11243)
+                if not is_journalier and not has_overtime:
+                    # Pour les agents horaires : appliquer les majorations
+                    if date_creneau in fr_holidays:
+                        # Jour férié
+                        jours_majoration.append({
+                            'date': date_creneau.strftime("%Y-%m-%d"),  # Format YYYY-MM-DD (comme schedule_monthly_summary)
+                            'type': 'ferie',
+                            'hours': heures_increment,
+                            'overtime_hours': 0,
+                            'taux': 1.5
+                        })
+                    elif schedule.day == "Samedi":
+                        # Samedi
+                        jours_majoration.append({
+                            'date': date_creneau.strftime("%Y-%m-%d"),
+                            'type': 'samedi',
+                            'hours': heures_increment,
+                            'overtime_hours': 0,
+                            'taux': 1.25
+                        })
+                    elif schedule.day == "Dimanche":
+                        # Dimanche
+                        jours_majoration.append({
+                            'date': date_creneau.strftime("%Y-%m-%d"),
+                            'type': 'dimanche',
+                            'hours': heures_increment,
+                            'overtime_hours': 0,
+                            'taux': 1.5
+                        })
+                    # Les jours normaux ne sont pas ajoutés aux jours majorés
+                
+                # Ajouter les heures supplémentaires (toujours à +25%, indépendamment du jour)
                 if has_overtime and not is_journalier:
-                    # EXACTEMENT comme dans schedule_monthly_summary lignes 8371-8377
+                    overtime_hours = float(schedule.overtime_hours)
                     jours_majoration.append({
-                        'date': date_creneau.strftime("%d/%m/%Y"),  # Format DD/MM/YYYY
-                        'jour': schedule.day,
-                        'type': 'Heures sup',
+                        'date': date_creneau.strftime("%Y-%m-%d"),
+                        'type': 'overtime',
                         'hours': 0,  # Pas d'heures normales majorées
-                        'overtime_hours': float(schedule.overtime_hours),
-                        'taux': '+25%'
+                        'overtime_hours': overtime_hours,
+                        'taux': 1.25
                     })
             
             chantiers_data[chantier_id]['details'].append({
@@ -11718,6 +11669,7 @@ def preview_monthly_agents_report(request):
                 if isinstance(date_str, date):
                     return date_str
                 if isinstance(date_str, str):
+                    # Format DD/MM/YYYY
                     if '/' in date_str:
                         parts = date_str.split('/')
                         if len(parts) == 3:
@@ -11725,10 +11677,12 @@ def preview_monthly_agents_report(request):
                                 return date(int(parts[2]), int(parts[1]), int(parts[0]))
                             except:
                                 pass
-                    try:
-                        return date.fromisoformat(date_str)
-                    except:
-                        pass
+                    # Format YYYY-MM-DD
+                    if '-' in date_str and len(date_str) == 10:
+                        try:
+                            return date.fromisoformat(date_str)
+                        except:
+                            pass
                 return date.min
             
             return sorted(grouped.values(), key=lambda x: parse_date_for_sort(x['date']))
@@ -11792,19 +11746,26 @@ def preview_monthly_agents_report(request):
             try:
                 # Conversion de date pour le template
                 date_str = jour['date']
+                detail_date = None
+                
                 if isinstance(date_str, str):
                     # Essayer plusieurs formats
                     try:
-                        if '/' in date_str:
+                        if '-' in date_str and len(date_str) == 10:
+                            # Format YYYY-MM-DD (venant de schedule_monthly_summary)
+                            detail_date = date.fromisoformat(date_str)
+                        elif '/' in date_str:
+                            # Format DD/MM/YYYY
                             parts = date_str.split('/')
                             if len(parts) == 3:
                                 detail_date = date(int(parts[2]), int(parts[1]), int(parts[0]))
-                        else:
-                            detail_date = date.fromisoformat(date_str)
                     except Exception as e:
                         continue
                 else:
                     detail_date = date_str
+                
+                if detail_date is None:
+                    continue
                 
                 # Vérifier que c'est le bon mois
                 if detail_date.year == year and detail_date.month == month:
@@ -11814,13 +11775,25 @@ def preview_monthly_agents_report(request):
                     
                     # Ne garder que les jours avec des heures > 0
                     if hours_val > 0 or overtime_hours_val > 0:
+                        # Convertir le taux en format texte pour le template
+                        taux_val = jour.get('taux', '')
+                        if isinstance(taux_val, (int, float)):
+                            if taux_val == 1.25:
+                                taux_display = '+25%'
+                            elif taux_val == 1.5:
+                                taux_display = '+50%'
+                            else:
+                                taux_display = f'+{int((taux_val - 1) * 100)}%'
+                        else:
+                            taux_display = str(taux_val)
+                        
                         details_majoration.append({
-                            'date': jour['date'],
+                            'date': detail_date.strftime('%d/%m/%Y'),  # Format DD/MM/YYYY pour le template
                             'jour': jour.get('jour', ''),
                             'type': jour.get('type', ''),
                             'hours': hours_val,
                             'overtime_hours': overtime_hours_val,
-                            'taux': jour.get('taux', '')
+                            'taux': taux_display
                         })
             except Exception as e:
                 continue
