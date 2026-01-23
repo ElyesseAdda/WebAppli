@@ -26,7 +26,7 @@ import { useDevisHandlers } from './hooks/useDevisHandlers';
 
 // Utilitaires
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
-import { validateBeforeTransform } from '../../utils/DevisLegacyTransformer';
+import { validateBeforeTransform, transformToLegacyFormat } from '../../utils/DevisLegacyTransformer';
 import { generatePDFDrive } from '../../utils/universalDriveGenerator';
 
 const { sortByIndexGlobal, reindexAll, getNextIndex } = DevisIndexManager;
@@ -772,10 +772,67 @@ const ModificationDevisV2 = () => {
     }
   };
 
-  // Handler pour prévisualiser
-  const handlePreviewDevis = () => {
-    const previewUrl = `/api/preview-saved-devis/${devisId}/`;
-    window.open(previewUrl, '_blank');
+  // Handler pour prévisualiser avec les modifications actuelles
+  const handlePreviewDevis = async () => {
+    try {
+      // Valider les données avant la prévisualisation
+      const validation = validateBeforeTransform({
+        devisItems,
+        devisData,
+        selectedChantierId
+      });
+      
+      if (!validation.valid) {
+        alert(`Erreurs de validation:\n${validation.errors.join('\n')}`);
+        return;
+      }
+      
+      // Transformer les données vers le format legacy pour la preview
+      const legacyDevis = transformToLegacyFormat({
+        devisItems,
+        devisData: {
+          ...devisData,
+          price_ht: totalHt,
+          price_ttc: totalTtc,
+          contact_societe: selectedContactId || null
+        },
+        selectedChantierId,
+        clientIds: clientId ? [clientId] : []
+      });
+      
+      // Préparer les données pour la prévisualisation
+      const previewData = {
+        ...legacyDevis,
+        chantier: selectedChantierId || -1,
+        tempData: {}
+      };
+      
+      // Utiliser POST pour envoyer les données actuelles (pas celles en DB)
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/preview-devis-v2/';
+      form.target = '_blank';
+      form.style.display = 'none';
+      
+      // Ajouter les données comme input hidden (JSON stringifié)
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'devis';
+      input.value = JSON.stringify(previewData);
+      form.appendChild(input);
+      
+      // Ajouter le formulaire au DOM, le soumettre, puis le supprimer
+      document.body.appendChild(form);
+      form.submit();
+      
+      // Nettoyer après un court délai
+      setTimeout(() => {
+        document.body.removeChild(form);
+      }, 100);
+    } catch (error) {
+      console.error('Erreur lors de la prévisualisation:', error);
+      alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
+    }
   };
 
   // Éditer une ligne spéciale
