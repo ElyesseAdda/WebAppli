@@ -390,22 +390,8 @@ class OnlyOfficeManager:
         Returns:
             Tuple (success: bool, response_data: dict, status_code: int)
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         try:
-            status_code = request_data.get('status', 0)
-            document_key = request_data.get('key', '')
-            
-            # IMPORTANT : Répondre immédiatement aux status qui ne nécessitent pas de sauvegarde
-            # Status 0, 1, 3, 4, 5, 7, 8 : Répondre immédiatement avec success
-            # Cela évite les timeouts et les faux avertissements
-            if status_code not in [2, 6]:
-                # Status qui ne nécessitent pas de sauvegarde : répondre immédiatement
-                logger.info(f"[OnlyOffice Callback] Status {status_code} - Réponse immédiate (pas de sauvegarde nécessaire)")
-                return (True, {'error': 0}, status.HTTP_200_OK)
-            
-            # Vérifier JWT si activé (seulement pour les status 2 et 6 qui nécessitent une sauvegarde)
+            # Vérifier JWT si activé
             if settings.ONLYOFFICE_JWT_ENABLED:
                 # OnlyOffice envoie le JWT dans le body sous la clé 'token'
                 token = request_data.get('token', '')
@@ -416,27 +402,24 @@ class OnlyOfficeManager:
                     if auth_header.startswith('Bearer '):
                         token = auth_header.replace('Bearer ', '')
                 
-                # Vérifier le token (mais ne pas bloquer si le token est manquant - OnlyOffice peut ne pas l'envoyer)
+                # Vérifier le token
                 if token:
                     try:
                         jwt.decode(token, settings.ONLYOFFICE_JWT_SECRET, algorithms=['HS256'])
-                        logger.info(f"[OnlyOffice Callback] JWT valide pour document {document_key}")
                     except jwt.InvalidTokenError as e:
-                        logger.warning(f"[OnlyOffice Callback] JWT invalide pour document {document_key}: {str(e)}")
-                        # Ne pas bloquer - continuer quand même (certaines versions d'OnlyOffice peuvent avoir des problèmes JWT)
-                        # return (False, {'error': 1}, status.HTTP_403_FORBIDDEN)
+                        return (False, {'error': 1}, status.HTTP_403_FORBIDDEN)
                 else:
-                    logger.warning(f"[OnlyOffice Callback] Pas de token JWT pour document {document_key} - continuation sans JWT")
+                    return (False, {'error': 1}, status.HTTP_403_FORBIDDEN)
+            
+            status_code = request_data.get('status', 0)
             
             # Status 2 ou 6 : Document prêt pour la sauvegarde
             if status_code in [2, 6]:
                 download_url = request_data.get('url')
+                document_key = request_data.get('key', '')
                 
                 if not download_url:
-                    logger.error(f"[OnlyOffice Callback] Pas d'URL de téléchargement pour status {status_code}, key: {document_key}")
                     return (False, {'error': 1}, status.HTTP_400_BAD_REQUEST)
-                
-                logger.info(f"[OnlyOffice Callback] Début sauvegarde document {document_key}, status: {status_code}")
                 
                 # Récupérer le file_path original depuis le cache
                 file_path = cache.get(f"onlyoffice_key_{document_key}")
@@ -444,7 +427,6 @@ class OnlyOfficeManager:
                 if not file_path:
                     # Fallback : essayer d'extraire depuis la key
                     file_path = '_'.join(document_key.split('_')[:-1]) if '_' in document_key else document_key
-                    logger.warning(f"[OnlyOffice Callback] File_path non trouvé dans le cache, utilisation du fallback: {file_path}")
                 
                 try:
                     # Télécharger le fichier modifié depuis OnlyOffice
@@ -500,34 +482,25 @@ class OnlyOfficeManager:
                     
                     # Upload le fichier modifié sur S3
                     file_content = response.content
-                    logger.info(f"[OnlyOffice Callback] Fichier téléchargé ({len(file_content)} bytes), upload vers S3: {file_path}")
-                    
                     success = storage_manager.upload_file_content(
                         key=file_path,
                         content=file_content
                     )
                     
                     if success:
-                        logger.info(f"[OnlyOffice Callback] Sauvegarde réussie pour {file_path}")
                         return (True, {'error': 0}, status.HTTP_200_OK)
                     else:
-                        logger.error(f"[OnlyOffice Callback] Échec de l'upload vers S3 pour {file_path}")
                         return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
                     
                 except requests.RequestException as e:
                     # Logger l'erreur pour diagnostic
-                    logger.error(f"[OnlyOffice Callback] Erreur lors du téléchargement depuis OnlyOffice: {e}, URL: {download_url}")
-                    # IMPORTANT : Retourner quand même success pour éviter les faux avertissements
-                    # Le fichier peut avoir été sauvegardé localement par OnlyOffice
-                    logger.warning(f"[OnlyOffice Callback] Retour de success malgré l'erreur pour éviter les faux avertissements")
-                    return (True, {'error': 0}, status.HTTP_200_OK)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erreur lors du téléchargement depuis OnlyOffice: {e}, URL: {download_url}")
+                    return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Pour tous les autres status, on retourne success
             return (True, {'error': 0}, status.HTTP_200_OK)
             
         except Exception as e:
-            logger.error(f"[OnlyOffice Callback] Exception non gérée: {str(e)}", exc_info=True)
-            # IMPORTANT : Retourner success même en cas d'erreur pour éviter les faux avertissements
-            # OnlyOffice peut afficher des avertissements même si le fichier est sauvegardé
-            logger.warning(f"[OnlyOffice Callback] Retour de success malgré l'exception pour éviter les faux avertissements")
-            return (True, {'error': 0}, status.HTTP_200_OK)
+            return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
