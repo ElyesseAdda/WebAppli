@@ -1702,6 +1702,26 @@ const SituationCreationModal = ({
             // Marquer qu'une situation existe pour ce mois (pour afficher un avertissement)
             setExistingSituation(currentSituation);
 
+            // ⚠️ CORRECTION: Charger la situation précédente pour obtenir les bons pourcentages précédents
+            // lors de la modification. Sans cela, les pourcentages précédents sont les mêmes que les actuels,
+            // ce qui fait que le cumul précédent = cumul actuel, donc montant HT du mois = 0
+            let previousSituation = null;
+            try {
+              const responsePrevious = await axios.get(
+                `/api/situations/${currentSituation.id}/previous/`
+              );
+              if (responsePrevious.data) {
+                previousSituation = responsePrevious.data;
+                // Définir la situation précédente comme lastSituation pour le calcul du cumul
+                setLastSituation(previousSituation);
+              } else {
+                setLastSituation(null);
+              }
+            } catch (error) {
+              console.error("Erreur lors du chargement de la situation précédente:", error);
+              setLastSituation(null);
+            }
+
             // Pré-remplir les champs avec les données existantes
             setTauxProrata(currentSituation.taux_prorata || 2.5);
             setTauxRetenueGarantie(currentSituation.taux_retenue_garantie || 5.0);
@@ -1717,6 +1737,8 @@ const SituationCreationModal = ({
             }
 
             // Mettre à jour la structure avec les pourcentages existants
+            // ⚠️ CORRECTION: Utiliser les pourcentages de la situation précédente pour pourcentage_precedent
+            // et ceux de la situation actuelle pour pourcentage_actuel
             const newStructure = structure.map((partie) => ({
               ...partie,
               sous_parties: partie.sous_parties.map((sousPartie) => ({
@@ -1725,9 +1747,15 @@ const SituationCreationModal = ({
                   const situationLigne = currentSituation.lignes.find(
                     (l) => l.ligne_devis === ligne.id
                   );
+                  // Chercher la ligne correspondante dans la situation précédente
+                  const previousLigne = previousSituation?.lignes?.find(
+                    (l) => l.ligne_devis === ligne.id
+                  );
                   return {
                     ...ligne,
-                    pourcentage_precedent: situationLigne
+                    pourcentage_precedent: previousLigne
+                      ? parseFloat(previousLigne.pourcentage_actuel)
+                      : situationLigne
                       ? parseFloat(situationLigne.pourcentage_actuel)
                       : 0,
                     pourcentage_actuel: situationLigne
@@ -1740,6 +1768,7 @@ const SituationCreationModal = ({
             setStructure(newStructure);
 
             // Mettre à jour les avenants
+            // ⚠️ CORRECTION: Utiliser les pourcentages de la situation précédente pour pourcentage_precedent
             if (avenants.length > 0) {
               const newAvenants = avenants.map((avenant) => ({
                 ...avenant,
@@ -1747,9 +1776,15 @@ const SituationCreationModal = ({
                   const situationTs = currentSituation?.lignes_avenant?.find(
                     (l) => l.facture_ts === ts.id
                   );
+                  // Chercher la ligne correspondante dans la situation précédente
+                  const previousTs = previousSituation?.lignes_avenant?.find(
+                    (l) => l.facture_ts === ts.id
+                  );
                   return {
                     ...ts,
-                    pourcentage_precedent: situationTs
+                    pourcentage_precedent: previousTs
+                      ? parseFloat(previousTs.pourcentage_actuel)
+                      : situationTs
                       ? parseFloat(situationTs.pourcentage_actuel)
                       : 0,
                     pourcentage_actuel: situationTs
@@ -1769,6 +1804,7 @@ const SituationCreationModal = ({
             }
 
             // Mettre à jour les lignes spéciales avec les pourcentages de la situation existante
+            // ⚠️ CORRECTION: Utiliser les pourcentages de la situation précédente pour pourcentage_precedent
             if (
               lignesSpeciales.length > 0 &&
               currentSituation.lignes_speciales?.length > 0
@@ -1780,9 +1816,20 @@ const SituationCreationModal = ({
                     l.description === ligne.description &&
                     l.niveau === ligne.niveau
                 );
+                // Chercher la ligne spéciale correspondante dans la situation précédente
+                const lignePrecedente = previousSituation?.lignes_speciales?.find(
+                  (l) =>
+                    l.description === ligne.description &&
+                    l.niveau === ligne.niveau
+                );
 
                 return {
                   ...ligne,
+                  pourcentage_precedent: lignePrecedente
+                    ? parseFloat(lignePrecedente.pourcentage_actuel || 0)
+                    : ligneExistante
+                    ? parseFloat(ligneExistante.pourcentage_actuel || 0)
+                    : 0,
                   pourcentage_actuel: ligneExistante
                     ? parseFloat(ligneExistante.pourcentage_actuel || 0)
                     : 0,

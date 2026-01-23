@@ -7008,6 +7008,27 @@ def get_last_situation(request, chantier_id):
         return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
+def get_previous_situation(request, situation_id):
+    """Récupère la situation précédente à une situation donnée"""
+    try:
+        situation = Situation.objects.get(id=situation_id)
+        
+        # Trouver la situation précédente (même logique que dans update_situation)
+        situation_precedente = Situation.objects.filter(
+            chantier=situation.chantier
+        ).filter(
+            Q(annee__lt=situation.annee) | (Q(annee=situation.annee) & Q(mois__lt=situation.mois))
+        ).order_by('-annee', '-mois').first()
+        
+        if situation_precedente:
+            return Response(SituationSerializer(situation_precedente).data)
+        return Response(None)
+    except Situation.DoesNotExist:
+        return Response({'error': 'Situation not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['GET'])
 def get_chantier_situations(request, chantier_id):
     try:
         situations = Situation.objects.filter(
