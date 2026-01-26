@@ -360,7 +360,12 @@
       }
       .logo {
         width: 220px;
-        height: 140px;
+        height: 160px;
+      }
+      .qualibat-logo {
+        width: 220px;
+        height: auto;
+        margin-top: 10px;
       }
       .P3000-info {
         grid-area: 1 / 2 / 2 / 3;
@@ -544,6 +549,7 @@
     <div class="p3000-container">
       <div class="logo-container">
         <img class="logo" src="{% static 'logo.png' %}" alt="" />
+        <img class="qualibat-logo" src="{% static 'Qualibat RGE.png' %}" alt="Qualibat RGE" />
       </div>
       <div class="P3000-info">
         <h2>SARL PEINTURE 3000</h2>
@@ -1163,9 +1169,25 @@
           <span>Taux de pénalité de retard :</span>
           <span>0,80%</span>
         </div>
-        <div style="display: flex; justify-content: space-between;">
+        <div style="display: flex; justify-content: space-between;margin-bottom: 20px;">
           <span>Indemnité forfaitaire de recouvrement</span>
           <span>40,00 €</span>
+        </div>
+        
+        <div style="display: inline; align-items: center; margin-top: 5px;margin-left: 70px;">
+          <span style="font-weight: 700;">Banque :</span>
+          <span style="font-size: 0.8rem;margin-right: 10px;">Crédit Agricole</span>
+
+        </div>
+        <div style="display: inline; align-items: center; margin-top: 5px;">
+          <span style="font-weight: 700;">BIC/SWIFT</span>
+          <span style="font-size: 0.8rem;margin-right: 10px;">: AGRIFRPP813</span>
+
+        </div>
+        <div style="display: inline; align-items: center; margin-top: 5px">
+          <span style="font-weight: 700;">IBAN</span>
+          <span style="font-size: 0.8rem;;">: FR76 1130 6000 9348 1341 0455 795</span>
+
         </div>
       </div>
     </div>
