@@ -296,9 +296,29 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           },
         })
         .then((res) => {
-          setDevisChantier(
-            res.data && res.data.length > 0 ? res.data[0] : null
+          const devisList = Array.isArray(res.data) ? res.data : [];
+          const devisChantierList = devisList.filter(
+            (d) => d?.devis_chantier === true
           );
+          const devisChantierMatching = devisChantierList.filter(
+            (d) => String(d?.chantier) === String(chantierData.id)
+          );
+          const sortByRecent = (list) =>
+            [...list].sort((a, b) => {
+              const dateA = new Date(a?.date_creation || a?.date || 0).getTime();
+              const dateB = new Date(b?.date_creation || b?.date || 0).getTime();
+              if (dateA !== dateB) return dateB - dateA;
+              return (b?.id || 0) - (a?.id || 0);
+            });
+
+          const selectedDevis =
+            sortByRecent(
+              devisChantierMatching.length > 0
+                ? devisChantierMatching
+                : devisChantierList
+            )[0] || null;
+
+          setDevisChantier(selectedDevis);
         })
         .catch(() => setDevisChantier(null))
         .finally(() => setLoadingDevis(false));

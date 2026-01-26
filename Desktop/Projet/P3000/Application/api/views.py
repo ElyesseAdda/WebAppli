@@ -1231,7 +1231,13 @@ class DevisViewSet(viewsets.ModelViewSet):
         chantier_id = self.request.query_params.get('chantier')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
-        return queryset
+        # Filtrer par devis_chantier si le paramètre est fourni
+        devis_chantier_param = self.request.query_params.get('devis_chantier')
+        if devis_chantier_param is not None:
+            devis_chantier_bool = devis_chantier_param.lower() == 'true'
+            queryset = queryset.filter(devis_chantier=devis_chantier_bool)
+        # Toujours trier par date de création décroissante (plus récent en premier)
+        return queryset.order_by('-date_creation')
     
     @action(detail=True, methods=['get'])
     def format_lignes(self, request, pk=None):

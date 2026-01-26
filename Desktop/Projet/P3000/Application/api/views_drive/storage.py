@@ -136,7 +136,8 @@ class StorageManager:
         self,
         key: str,
         expires_in: int = 7200,  # OPTIMISATION : 2h au lieu de 1h
-        response_content_disposition: Optional[str] = None
+        response_content_disposition: Optional[str] = None,
+        cache_bust: bool = True
     ) -> str:
         """
         Génère une URL présignée pour télécharger un fichier
@@ -145,6 +146,7 @@ class StorageManager:
             key: Clé S3 du fichier
             expires_in: Durée de validité en secondes (défaut: 2h)
             response_content_disposition: Content-Disposition header
+            cache_bust: Si True, ajoute un paramètre de cache-busting (timestamp) pour forcer le rechargement
             
         Returns:
             URL présignée
@@ -164,6 +166,14 @@ class StorageManager:
                 Params=params,
                 ExpiresIn=expires_in
             )
+            
+            # Ajouter un paramètre de cache-busting pour forcer le rechargement
+            # Cela évite que le navigateur utilise une version mise en cache après modification OnlyOffice
+            if cache_bust:
+                import time
+                timestamp = int(time.time())
+                separator = '&' if '?' in url else '?'
+                url = f"{url}{separator}_t={timestamp}"
             
             return url
             
