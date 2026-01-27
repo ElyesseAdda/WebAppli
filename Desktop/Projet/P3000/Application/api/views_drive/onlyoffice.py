@@ -333,7 +333,7 @@ class OnlyOfficeManager:
                 "customization": {
                     "autosave": True,
                     "comments": False,  # OPTIMISATION : Désactiver commentaires
-                    "compactToolbar": True,  # OPTIMISATION : Toolbar compact
+                    "compactToolbar": False,  # Laisser la barre d'outils complète et ouverte
                     "forcesave": True,
                     "help": False,  # OPTIMISATION : Désactiver aide
                     "hideRightMenu": True,  # OPTIMISATION : Cacher menu droit
@@ -391,9 +391,6 @@ class OnlyOfficeManager:
             Tuple (success: bool, response_data: dict, status_code: int)
         """
         try:
-            import logging
-            logger = logging.getLogger(__name__)
-            
             # Vérifier JWT si activé
             if settings.ONLYOFFICE_JWT_ENABLED:
                 # OnlyOffice envoie le JWT dans le body sous la clé 'token'
@@ -427,12 +424,9 @@ class OnlyOfficeManager:
                 # Récupérer le file_path original depuis le cache
                 file_path = cache.get(f"onlyoffice_key_{document_key}")
                 
-                logger.info(f"[OnlyOffice Callback] Status {status_code} - Document key: {document_key}, File path from cache: {file_path}")
-                
                 if not file_path:
                     # Fallback : essayer d'extraire depuis la key
                     file_path = '_'.join(document_key.split('_')[:-1]) if '_' in document_key else document_key
-                    logger.warning(f"[OnlyOffice Callback] File path non trouvé dans le cache, utilisation du fallback: {file_path}")
                 
                 try:
                     # Télécharger le fichier modifié depuis OnlyOffice
@@ -488,63 +482,12 @@ class OnlyOfficeManager:
                     
                     # Upload le fichier modifié sur S3
                     file_content = response.content
-                    file_size = len(file_content)
-                    logger.info(f"[OnlyOffice Callback] Téléchargement depuis OnlyOffice réussi - Taille: {file_size} bytes, File path: {file_path}")
-                    
-                    # Récupérer les métadonnées AVANT l'upload pour comparaison
-                    metadata_before = None
-                    try:
-                        metadata_before = storage_manager.get_object_metadata(file_path)
-                        if metadata_before:
-                            logger.info(f"[OnlyOffice Callback] Métadonnées AVANT upload - Taille: {metadata_before.get('content_length')}, Modifié: {metadata_before.get('last_modified')}")
-                    except Exception as e:
-                        logger.warning(f"[OnlyOffice Callback] Impossible de récupérer les métadonnées avant upload: {e}")
-                    
                     success = storage_manager.upload_file_content(
                         key=file_path,
                         content=file_content
                     )
                     
-                    logger.info(f"[OnlyOffice Callback] Upload sur S3 - Succès: {success}, File path: {file_path}, Taille uploadée: {file_size} bytes")
-                    
                     if success:
-                        # Vérifier que le fichier est bien disponible sur S3 après l'upload
-                        # Cela évite les problèmes de propagation S3 (eventual consistency)
-                        import time
-                        max_retries = 3
-                        retry_delay = 0.5  # 500ms entre les tentatives
-                        
-                        for attempt in range(max_retries):
-                            try:
-                                # Vérifier que le fichier existe et est accessible
-                                metadata = storage_manager.get_object_metadata(file_path)
-                                if metadata:
-                                    # Comparer les métadonnées avant/après
-                                    size_after = metadata.get('content_length')
-                                    modified_after = metadata.get('last_modified')
-                                    logger.info(f"[OnlyOffice Callback] Métadonnées APRÈS upload (tentative {attempt + 1}) - Taille: {size_after}, Modifié: {modified_after}")
-                                    
-                                    if metadata_before:
-                                        size_before = metadata_before.get('content_length')
-                                        if size_before != size_after:
-                                            logger.info(f"[OnlyOffice Callback] ✅ Taille du fichier changée: {size_before} -> {size_after} bytes")
-                                        else:
-                                            logger.warning(f"[OnlyOffice Callback] ⚠️ Taille du fichier identique avant/après: {size_before} bytes")
-                                    
-                                    # Le fichier est disponible, on peut retourner le succès
-                                    logger.info(f"[OnlyOffice Callback] ✅ Fichier {file_path} sauvegardé avec succès depuis OnlyOffice (tentative {attempt + 1})")
-                                    return (True, {'error': 0}, status.HTTP_200_OK)
-                            except Exception as check_error:
-                                # Si c'est la dernière tentative, logger l'erreur mais continuer
-                                if attempt == max_retries - 1:
-                                    logger.warning(f"Impossible de vérifier le fichier {file_path} après upload (tentative {attempt + 1}): {check_error}")
-                                else:
-                                    # Attendre un peu avant de réessayer
-                                    time.sleep(retry_delay)
-                        
-                        # Si on arrive ici, le fichier a été uploadé mais on n'a pas pu le vérifier
-                        # On retourne quand même le succès car l'upload a réussi
-                        logger.info(f"Fichier {file_path} uploadé avec succès depuis OnlyOffice (vérification partielle)")
                         return (True, {'error': 0}, status.HTTP_200_OK)
                     else:
                         return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -555,9 +498,6 @@ class OnlyOfficeManager:
                     logger = logging.getLogger(__name__)
                     logger.error(f"Erreur lors du téléchargement depuis OnlyOffice: {e}, URL: {download_url}")
                     return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            # Pour tous les autres status, logger pour diagnostic
-            logger.info(f"[OnlyOffice Callback] Status {status_code} reçu mais non traité (pas de sauvegarde). Données: {request_data}")
             
             # Pour tous les autres status, on retourne success
             return (True, {'error': 0}, status.HTTP_200_OK)
