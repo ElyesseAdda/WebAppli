@@ -134,11 +134,13 @@ const LigneDetailSearch = ({
       // Ouvrir le modal de création
       setModalDescription(inputValue.trim());
       setIsModalOpen(true);
-      // Ne pas réinitialiser l'input après ouverture du modal pour permettre de continuer à taper
+      // ✅ Réinitialiser l'input après ouverture du modal
+      setInputValue('');
     } else {
       if (onLigneDetailSelect) {
         onLigneDetailSelect(selectedOption.data);
-        // Ne pas réinitialiser l'input après sélection pour permettre de continuer à taper
+        // ✅ Réinitialiser l'input après sélection
+        setInputValue('');
       }
     }
   };
@@ -151,6 +153,8 @@ const LigneDetailSearch = ({
     }
     setIsModalOpen(false);
     setModalDescription('');
+    // ✅ Réinitialiser l'input après création réussie
+    setInputValue('');
   };
 
   const customStyles = {

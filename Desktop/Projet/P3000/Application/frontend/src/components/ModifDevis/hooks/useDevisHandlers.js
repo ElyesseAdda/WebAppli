@@ -130,6 +130,11 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
         return reindexAll(updated);
       });
       
+      // ✅ Recharger la liste des parties disponibles pour la barre de recherche
+      if (loadParties) {
+        await loadParties();
+      }
+      
       return {
         value: response.data.id,
         label: response.data.titre,
@@ -139,7 +144,7 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
       console.error('Erreur lors de la création de la partie:', error);
       throw error;
     }
-  }, [setDevisItems]);
+  }, [setDevisItems, loadParties]);
 
   /**
    * Supprimer une partie et tous ses enfants

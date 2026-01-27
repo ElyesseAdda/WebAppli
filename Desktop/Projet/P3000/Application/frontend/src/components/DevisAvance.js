@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Select, MenuItem, FormControl, InputLabel, Button, Box, Typography } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
@@ -1143,16 +1143,62 @@ const DevisAvance = () => {
   };
 
   // Fonction pour rechercher les parties (pour React Select)
-  const searchParties = async (inputValue) => {
+  const searchParties = useCallback(async (inputValue) => {
     try {
-      // Utiliser le nouvel endpoint dédié
-      const results = await searchPartiesAPI(inputValue);
-      return results;
+      // ✅ Utiliser availableParties comme source principale (contient TOUTES les parties)
+      // car l'endpoint /api/parties/search/ limite à 50 résultats
+      const localResults = availableParties
+        .filter(partie => {
+          if (!inputValue) return true;
+          const searchLower = inputValue.toLowerCase();
+          return (
+            partie.titre?.toLowerCase().includes(searchLower) ||
+            partie.type?.toLowerCase().includes(searchLower) ||
+            partie.type_activite?.toLowerCase().includes(searchLower)
+          );
+        })
+        .map(partie => ({
+          value: partie.id,
+          label: `${partie.titre || partie.nom || ''}${partie.type ? ` (${partie.type})` : ''}`,
+          data: partie
+        }));
+      
+      // Si availableParties est vide ou si on veut compléter avec l'API (optionnel)
+      if (localResults.length === 0 || availableParties.length === 0) {
+        try {
+          const apiResults = await searchPartiesAPI(inputValue);
+          // Combiner et éliminer les doublons
+          const apiIds = new Set(localResults.map(r => r.value));
+          apiResults.forEach(apiResult => {
+            if (!apiIds.has(apiResult.value)) {
+              localResults.push(apiResult);
+            }
+          });
+        } catch (apiError) {
+          // Ignorer l'erreur API, on utilise les résultats locaux
+        }
+      }
+      
+      return localResults;
     } catch (error) {
-      // Erreur lors de la recherche des parties
-      return [];
+      // En cas d'erreur, retourner au moins les parties locales filtrées
+      return availableParties
+        .filter(partie => {
+          if (!inputValue) return true;
+          const searchLower = inputValue.toLowerCase();
+          return (
+            partie.titre?.toLowerCase().includes(searchLower) ||
+            partie.type?.toLowerCase().includes(searchLower) ||
+            partie.type_activite?.toLowerCase().includes(searchLower)
+          );
+        })
+        .map(partie => ({
+          value: partie.id,
+          label: `${partie.titre || partie.nom || ''}${partie.type ? ` (${partie.type})` : ''}`,
+          data: partie
+        }));
     }
-  };
+  }, [availableParties]);
 
   // Fonction pour gérer la sélection d'une partie
   const handlePartieSelect = (selectedOption) => {

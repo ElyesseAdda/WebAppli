@@ -540,14 +540,62 @@ const ModificationDevisV2 = () => {
   // Rechercher les parties
   const searchParties = useCallback(async (inputValue) => {
     try {
-      const params = inputValue ? { q: inputValue } : {};
-      const response = await axios.get('/api/parties/search/', { params });
-      return response.data.options;
-    } catch (err) {
-      console.error('Erreur lors de la recherche des parties:', err);
-      return [];
+      // ✅ Utiliser availableParties comme source principale (contient TOUTES les parties)
+      // car l'endpoint /api/parties/search/ limite à 50 résultats
+      const localResults = availableParties
+        .filter(partie => {
+          if (!inputValue) return true;
+          const searchLower = inputValue.toLowerCase();
+          return (
+            partie.titre?.toLowerCase().includes(searchLower) ||
+            partie.type?.toLowerCase().includes(searchLower) ||
+            partie.type_activite?.toLowerCase().includes(searchLower)
+          );
+        })
+        .map(partie => ({
+          value: partie.id,
+          label: `${partie.titre || partie.nom || ''}${partie.type ? ` (${partie.type})` : ''}`,
+          data: partie
+        }));
+      
+      // Si availableParties est vide ou si on veut compléter avec l'API (optionnel)
+      if (localResults.length === 0 || availableParties.length === 0) {
+        try {
+          const params = inputValue ? { q: inputValue } : {};
+          const response = await axios.get('/api/parties/search/', { params });
+          const apiResults = response.data.options || [];
+          // Combiner et éliminer les doublons
+          const apiIds = new Set(localResults.map(r => r.value));
+          apiResults.forEach(apiResult => {
+            if (!apiIds.has(apiResult.value)) {
+              localResults.push(apiResult);
+            }
+          });
+        } catch (apiError) {
+          // Ignorer l'erreur API, on utilise les résultats locaux
+        }
+      }
+      
+      return localResults;
+    } catch (error) {
+      // En cas d'erreur, retourner au moins les parties locales filtrées
+      return availableParties
+        .filter(partie => {
+          if (!inputValue) return true;
+          const searchLower = inputValue.toLowerCase();
+          return (
+            partie.titre?.toLowerCase().includes(searchLower) ||
+            partie.type?.toLowerCase().includes(searchLower) ||
+            partie.type_activite?.toLowerCase().includes(searchLower)
+          );
+        })
+        .map(partie => ({
+          value: partie.id,
+          label: `${partie.titre || partie.nom || ''}${partie.type ? ` (${partie.type})` : ''}`,
+          data: partie
+        }));
     }
-  }, []);
+  }, [availableParties]);
 
   // Formater le numéro de téléphone
   const formatPhoneNumber = (phone) => {

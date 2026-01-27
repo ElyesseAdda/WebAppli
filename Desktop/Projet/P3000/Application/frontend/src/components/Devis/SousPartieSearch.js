@@ -188,11 +188,15 @@ const SousPartieSearch = ({
         if (onSousPartieSelect) {
           onSousPartieSelect(selectedOption.data);
         }
+        // ✅ Réinitialiser l'input après sélection
+        setInputValue('');
       } else {
         // C'est une nouvelle "Lignes directes" à créer
         if (onSousPartieCreate) {
           onSousPartieCreate(partieId, DIRECT_LINES_DESCRIPTION);
         }
+        // ✅ Réinitialiser l'input après création
+        setInputValue('');
       }
       return;
     }
@@ -201,13 +205,15 @@ const SousPartieSearch = ({
     if (selectedOption.value === 'create' || selectedOption.data?.isCreate) {
       if (onSousPartieCreate && inputValue.trim()) {
         onSousPartieCreate(partieId, inputValue.trim());
-        // Ne pas réinitialiser l'input après création pour permettre de continuer à taper
+        // ✅ Réinitialiser l'input après création
+        setInputValue('');
       }
     } else {
       // Si c'est une sélection
       if (onSousPartieSelect) {
         onSousPartieSelect(selectedOption.data);
-        // Ne pas réinitialiser l'input après sélection pour permettre de continuer à taper
+        // ✅ Réinitialiser l'input après sélection
+        setInputValue('');
       }
     }
   };

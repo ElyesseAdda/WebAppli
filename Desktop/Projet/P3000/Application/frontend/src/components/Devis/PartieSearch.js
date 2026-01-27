@@ -179,7 +179,8 @@ const PartieSearch = ({
             options={optionsWithCreate}
             onCreateOption={(inputValue) => {
               const result = onPartieCreate(inputValue);
-              // Ne pas effacer l'input après création pour permettre de continuer à taper
+              // ✅ Réinitialiser l'input après création
+              setInputValue('');
               return result;
             }}
             onChange={(selectedOption) => {
@@ -191,7 +192,8 @@ const PartieSearch = ({
                   // Sélectionner une partie existante
                   onPartieSelect(selectedOption);
                 }
-                // Ne pas effacer l'input après sélection/création pour permettre de continuer à taper
+                // ✅ Réinitialiser l'input après sélection/création
+                setInputValue('');
               }
             }}
             isLoading={isLoading || isLoadingParties}
