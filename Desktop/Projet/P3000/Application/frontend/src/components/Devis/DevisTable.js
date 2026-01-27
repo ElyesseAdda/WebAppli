@@ -212,6 +212,9 @@ const DevisTable = ({
   // États pour les clics (boutons d'action) - au lieu de hover
   const [clickedLigneDetailId, setClickedLigneDetailId] = useState(null);
   const [clickedLignePosition, setClickedLignePosition] = useState(null);
+  
+  // État pour stocker les valeurs de prix en cours de saisie (par ID de ligne)
+  const [editingPrices, setEditingPrices] = useState({});
   const [isIconsAnimatingOut, setIsIconsAnimatingOut] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editContext, setEditContext] = useState(null);
@@ -1527,16 +1530,63 @@ const DevisTable = ({
                                                                                   {/* PRIX UNITAIRE */}
                                                                                   <div style={{ flex: '0 0 120px', textAlign: 'center' }}>
                                                                                     <input
-                                                                                      type="number"
-                                                                                      step="0.01"
-                                                                                      min="0"
-                                                                                      value={ligne.prix_devis !== null && ligne.prix_devis !== undefined ? ligne.prix_devis : prix}
+                                                                                      type="text"
+                                                                                      inputMode="decimal"
+                                                                                      value={editingPrices[ligne.id] !== undefined 
+                                                                                        ? editingPrices[ligne.id] 
+                                                                                        : (ligne.prix_devis !== null && ligne.prix_devis !== undefined ? ligne.prix_devis : prix)}
                                                                                       onChange={(e) => {
                                                                                         if (onLigneDetailPriceChange) {
                                                                                           // Trouver la partie_id depuis la sous-partie
                                                                                           const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
                                                                                           const partieId = sp?.partie_id;
-                                                                                          onLigneDetailPriceChange(partieId, ligne.sous_partie_id, ligne.id, parseFloat(e.target.value) || 0);
+                                                                                          const value = e.target.value;
+                                                                                          // Valider le format : autoriser les nombres négatifs, décimaux, et le signe moins seul
+                                                                                          if (value === '' || value === '-' || /^-?\d*\.?\d*$/.test(value)) {
+                                                                                            // Stocker la valeur en cours de saisie
+                                                                                            setEditingPrices(prev => ({ ...prev, [ligne.id]: value }));
+                                                                                            
+                                                                                            // Si c'est un nombre valide (pas juste "-" ou vide), mettre à jour
+                                                                                            if (value !== '' && value !== '-') {
+                                                                                              const parsedValue = parseFloat(value);
+                                                                                              if (!isNaN(parsedValue)) {
+                                                                                                onLigneDetailPriceChange(partieId, ligne.sous_partie_id, ligne.id, parsedValue);
+                                                                                              }
+                                                                                            }
+                                                                                          }
+                                                                                        }
+                                                                                      }}
+                                                                                      onBlur={(e) => {
+                                                                                        const value = e.target.value;
+                                                                                        // Si le champ est vide ou juste "-" au blur, remettre la valeur précédente
+                                                                                        if (value === '' || value === '-') {
+                                                                                          // Retirer de l'état d'édition
+                                                                                          setEditingPrices(prev => {
+                                                                                            const newState = { ...prev };
+                                                                                            delete newState[ligne.id];
+                                                                                            return newState;
+                                                                                          });
+                                                                                        } else {
+                                                                                          // Valider et mettre à jour si valide
+                                                                                          const parsedValue = parseFloat(value);
+                                                                                          if (!isNaN(parsedValue) && onLigneDetailPriceChange) {
+                                                                                            const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
+                                                                                            const partieId = sp?.partie_id;
+                                                                                            onLigneDetailPriceChange(partieId, ligne.sous_partie_id, ligne.id, parsedValue);
+                                                                                          }
+                                                                                          // Retirer de l'état d'édition après validation
+                                                                                          setEditingPrices(prev => {
+                                                                                            const newState = { ...prev };
+                                                                                            delete newState[ligne.id];
+                                                                                            return newState;
+                                                                                          });
+                                                                                        }
+                                                                                      }}
+                                                                                      onFocus={(e) => {
+                                                                                        // Au focus, initialiser la valeur d'édition si nécessaire
+                                                                                        const currentValue = ligne.prix_devis !== null && ligne.prix_devis !== undefined ? ligne.prix_devis : prix;
+                                                                                        if (editingPrices[ligne.id] === undefined) {
+                                                                                          setEditingPrices(prev => ({ ...prev, [ligne.id]: currentValue }));
                                                                                         }
                                                                                       }}
                                                                                       style={{

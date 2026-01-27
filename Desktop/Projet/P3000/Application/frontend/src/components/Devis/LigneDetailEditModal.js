@@ -74,7 +74,15 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Pour le champ prix, permettre les nombres négatifs
+    if (name === 'prix') {
+      // Autoriser les nombres négatifs, décimaux, et le signe moins seul
+      if (value === '' || value === '-' || /^-?\d*\.?\d*$/.test(value)) {
+        setFormData((prev) => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -88,7 +96,8 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
     // Validation du prix : soit manuel, soit calculé
     const prixFinal = useModeCalcul ? prixCalcule : parseFloat(formData.prix);
     
-    if (!prixFinal || prixFinal === 0 || isNaN(prixFinal)) {
+    // Permettre les prix négatifs, mais vérifier que c'est un nombre valide
+    if (prixFinal === null || prixFinal === undefined || isNaN(prixFinal)) {
       setError('Le prix unitaire est obligatoire');
       return;
     }
@@ -216,12 +225,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                 ) : (
                   // Mode saisie manuelle : input éditable
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     name="prix"
                     value={formData.prix}
                     onChange={handleChange}
-                    placeholder="Ex: 25.50"
+                    placeholder="Ex: 25.50 ou -10.00"
                     style={{
                       flex: 1,
                       padding: '10px',
