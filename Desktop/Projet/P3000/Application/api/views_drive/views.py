@@ -82,6 +82,57 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=False, methods=['post'], url_path='create-document')
+    def create_document(self, request):
+        """
+        Crée un nouveau document Office vide (Word, Excel, PowerPoint)
+        
+        Body:
+            - folder_path: Chemin du dossier parent
+            - file_name: Nom du fichier (sans extension)
+            - document_type: Type de document ('word', 'excel', 'powerpoint')
+        """
+        try:
+            folder_path = request.data.get('folder_path', '')
+            file_name = request.data.get('file_name')
+            document_type = request.data.get('document_type')
+            
+            if not file_name:
+                return Response(
+                    {'error': 'file_name est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not document_type:
+                return Response(
+                    {'error': 'document_type est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if document_type not in ['word', 'excel', 'powerpoint']:
+                return Response(
+                    {'error': 'document_type doit être "word", "excel" ou "powerpoint"'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            result = self.drive_manager.create_empty_document(
+                folder_path=folder_path,
+                file_name=file_name,
+                document_type=document_type
+            )
+            return Response(result, status=status.HTTP_201_CREATED)
+            
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     @action(detail=False, methods=['delete'], url_path='delete-item')
     def delete_item(self, request):
         """

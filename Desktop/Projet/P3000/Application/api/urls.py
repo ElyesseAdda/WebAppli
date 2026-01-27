@@ -457,6 +457,9 @@ urlpatterns += [
     path('drive-v2/create-folder/', DriveV2ViewSet.as_view({
         'post': 'create_folder'
     }), name='drive-v2-create-folder'),
+    path('drive-v2/create-document/', DriveV2ViewSet.as_view({
+        'post': 'create_document'
+    }), name='drive-v2-create-document'),
     
     # Gestion des fichiers
     path('drive-v2/delete-item/', DriveV2ViewSet.as_view({
