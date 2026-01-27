@@ -137,6 +137,24 @@ def generate_monthly_agents_pdf_drive(request):
             **pdf_kwargs
         )
         
+        # ✅ Gérer les conflits : retourner les informations même si success=False
+        if conflict_detected and not success:
+            # Conflit détecté : retourner les informations du conflit
+            return JsonResponse({
+                'success': False,
+                'error': message,
+                'conflict_detected': True,
+                'conflict_message': f'Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?',
+                'conflict_type': 'file_exists',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1] if s3_file_path else None,
+                'document_type': 'rapport_agents',
+                'societe_name': societe_name,
+                'month': month,
+                'year': year,
+                'drive_url': f"/drive-v2?path={s3_file_path}&focus=file" if s3_file_path else None
+            }, status=409)  # Code 409 Conflict
+        
         if success:
             # Debug: Log du chemin S3
             print(f"🔍 DEBUG: s3_file_path = {s3_file_path}")

@@ -410,27 +410,42 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
   const documentConfig = DOCUMENT_TYPES[documentType];
   const errorResponse = error.response?.data || {};
 
+  // Fusionner les données du backend avec les données initiales (backend en priorité)
+  const mergedData = {
+    ...data,
+    ...(errorResponse.month !== undefined && { month: errorResponse.month }),
+    ...(errorResponse.year !== undefined && { year: errorResponse.year }),
+    ...(errorResponse.week !== undefined && { week: errorResponse.week }),
+    ...(errorResponse.societe_name && { societeName: errorResponse.societe_name }),
+  };
+
   // Utiliser les données du backend si disponibles, sinon construire
-  const fileName = errorResponse.file_name || buildFileName(documentType, data);
-  const filePath = errorResponse.file_path || buildFilePath(documentType, data, fileName);
+  const fileName = errorResponse.file_name || buildFileName(documentType, mergedData);
+  const filePath = errorResponse.file_path || buildFilePath(documentType, mergedData, fileName);
   const conflictMessage = errorResponse.conflict_message || 
     `Un fichier avec le même nom existe déjà dans le Drive et a été modifié. Souhaitez-vous le remplacer ?`;
 
+  // Construire le conflictId en utilisant les données fusionnées
+  const conflictId = `${documentType}_${
+    mergedData.devisId || mergedData.appelOffresId || mergedData.bonCommandeId || mergedData.situationId || 
+    (mergedData.month && mergedData.year ? `${mergedData.month}_${mergedData.year}` : null) ||
+    (mergedData.week && mergedData.year ? `${mergedData.week}_${mergedData.year}` : null) || 
+    Date.now()
+  }_${Date.now()}`;
+
   const conflictData = {
-    conflictId: `${documentType}_${
-      data.devisId || data.appelOffresId || data.bonCommandeId || data.situationId || Date.now()
-    }_${Date.now()}`,
+    conflictId: conflictId,
     fileName: fileName,
     displayFileName: fileName,
     existingFilePath: filePath.substring(0, filePath.lastIndexOf("/") + 1),
     conflictMessage: conflictMessage,
     documentType: documentType,
-    societeName: data.societeName || errorResponse.societe_name,
-    previewUrl: documentConfig?.previewUrl ? documentConfig.previewUrl(data) : null,
+    societeName: mergedData.societeName || errorResponse.societe_name,
+    previewUrl: documentConfig?.previewUrl ? documentConfig.previewUrl(mergedData) : null,
     file_path: filePath,
     drive_url: errorResponse.drive_url || `/drive-v2?path=${filePath}&focus=file&_t=${Date.now()}`,
-    // Données spécifiques au type de document
-    ...getDocumentSpecificData(documentType, data),
+    // Données spécifiques au type de document (utiliser les données fusionnées)
+    ...getDocumentSpecificData(documentType, mergedData),
     // Inclure les données supplémentaires du backend si disponibles
     ...(errorResponse.bon_commande_id && { bonCommandeId: errorResponse.bon_commande_id }),
     ...(errorResponse.numero_bon_commande && { numeroBonCommande: errorResponse.numero_bon_commande }),
