@@ -10,6 +10,7 @@ import {
   Routes,
 } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useIsMobile } from "../hooks/useIsMobile";
 import "./../../static/css/app.css";
 import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
@@ -26,6 +27,8 @@ import CreationDevis from "./CreationDevis";
 import DevisAvance from "./DevisAvance";
 import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard/Dashboard";
+import DistributeursDashboard from "./Distributeurs/DistributeursDashboard";
+import MobileAppLayout from "./Distributeurs/MobileAppLayout";
 import Drive from "./Drive";
 import DriveV2 from "./DriveV2/DriveV2";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";
@@ -41,6 +44,7 @@ import ListeSituation from "./ListeSituation";
 import ListeFournisseurs from "./ListeFournisseurs";
 import ListeSousTraitants from "./ListeSousTraitants";
 import Login from "./Login";
+import LoginMobile from "./LoginMobile";
 import ModificationDevis from "./ModificationDevis";
 import ModificationDevisV2 from "./ModifDevis/ModificationDevisV2";
 import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
@@ -69,7 +73,7 @@ const theme = createTheme({
 });
 
 // Composant pour protéger les routes - redirige vers /login si non connecté
-const ProtectedRoute = ({ children, isAuthenticated }) => {
+const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -79,6 +83,8 @@ const ProtectedRoute = ({ children, isAuthenticated }) => {
 function App() {
   // Utiliser le hook d'authentification personnalisé
   const { isAuthenticated, user, loading, checkAuth, logout } = useAuth();
+  // Détecter si on est sur mobile
+  const isMobile = useIsMobile();
 
   // Fonction appelée après une connexion réussie
   const handleLoginSuccess = (userData) => {
@@ -130,8 +136,12 @@ function App() {
             path="/login"
             element={
               isAuthenticated ? (
-                <Navigate to="/" replace /> // Si déjà connecté, rediriger vers l'accueil
+                <Navigate to={isMobile ? "/distributeurs" : "/"} replace />
+              ) : isMobile ? (
+                // Version mobile : LoginMobile (PWA)
+                <LoginMobile onLoginSuccess={handleLoginSuccess} />
               ) : (
+                // Version desktop : Login classique
                 <Login onLoginSuccess={handleLoginSuccess} />
               )
             }
@@ -145,6 +155,23 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <Dashboard />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/distributeurs"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated} isMobile={isMobile}>
+                {isMobile ? (
+                  // Version mobile : avec navigation en bas (3 onglets)
+                  <MobileAppLayout />
+                ) : (
+                  // Version desktop : avec Layout (header + sidebar)
+                  <Layout user={user} onLogout={handleLogout}>
+                    <DistributeursDashboard />
+                  </Layout>
+                )}
               </ProtectedRoute>
             }
           />

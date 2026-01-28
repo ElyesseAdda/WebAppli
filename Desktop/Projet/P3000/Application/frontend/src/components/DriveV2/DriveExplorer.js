@@ -71,10 +71,6 @@ import {
   ContentCopy as ContentCopyIcon,
   ContentPaste as ContentPasteIcon,
   Print as PrintIcon,
-  Add as AddIcon,
-  Article as ArticleIcon,
-  TableChart as TableChartIcon,
-  Slideshow as SlideshowIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
@@ -212,9 +208,6 @@ const DriveExplorer = ({
   const [mouseDownPos, setMouseDownPos] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [downloadingFolder, setDownloadingFolder] = useState(null);
-  const [createDocumentDialogOpen, setCreateDocumentDialogOpen] = useState(false);
-  const [newDocumentName, setNewDocumentName] = useState('');
-  const [newDocumentType, setNewDocumentType] = useState('word');
   const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
 
@@ -901,71 +894,6 @@ const DriveExplorer = ({
 
   const handleCloseContextMenu = () => {
     setContextMenu(null);
-  };
-
-  // Créer un nouveau document
-  const handleCreateDocument = () => {
-    handleCloseContextMenu();
-    setNewDocumentName('');
-    setNewDocumentType('word');
-    setCreateDocumentDialogOpen(true);
-  };
-
-  const handleCreateDocumentConfirm = async () => {
-    if (!newDocumentName.trim()) {
-      alert('Le nom du document ne peut pas être vide');
-      return;
-    }
-
-    try {
-      // Déterminer le chemin du dossier parent
-      let folderPath = currentPath;
-      
-      // Si on a cliqué droit sur un dossier, utiliser ce dossier comme parent
-      if (selectedItem && selectedItem.type === 'folder') {
-        folderPath = selectedItem.path;
-      }
-
-      // Créer le document via l'API
-      const response = await fetch('/api/drive-v2/create-document/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken'),
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          folder_path: folderPath,
-          file_name: newDocumentName.trim(),
-          document_type: newDocumentType,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Erreur lors de la création du document');
-      }
-
-      const data = await response.json();
-      
-      // Fermer le dialog
-      setCreateDocumentDialogOpen(false);
-      setNewDocumentName('');
-      
-      // Rafraîchir le contenu
-      onRefresh();
-      
-      // Ouvrir automatiquement avec OnlyOffice
-      setTimeout(() => {
-        const filePath = data.file_path;
-        const fileName = data.file_name_display || data.file_name;
-        // Ouvrir dans un nouvel onglet avec OnlyOffice
-        window.open(`/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`, '_blank');
-      }, 500);
-    } catch (error) {
-      console.error('Erreur lors de la création du document:', error);
-      alert(`Erreur lors de la création du document: ${error.message}`);
-    }
   };
 
   const handleDownload = async (item = null) => {
@@ -2171,18 +2099,6 @@ const DriveExplorer = ({
             {selectedItem && isProtectedFolder(selectedItem) && ' (protégé)'}
           </ListItemText>
         </MenuItem>
-        {/* Séparateur */}
-        <MenuItem disabled sx={{ borderTop: '1px solid rgba(0, 0, 0, 0.12)', marginTop: '4px', paddingTop: '8px' }} />
-        {/* Créer un document - visible quand on clique droit sur l'espace vide ou sur un dossier */}
-        <MenuItem 
-          onClick={handleCreateDocument}
-          disabled={selectedItem && selectedItem.type !== 'folder' && selectedItem !== null}
-        >
-          <ListItemIcon>
-            <AddIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Créer un document</ListItemText>
-        </MenuItem>
       </Menu>
 
       {/* Dialog de déplacement */}
@@ -2196,87 +2112,6 @@ const DriveExplorer = ({
         onMoveComplete={handleMoveComplete}
         onNavigate={onNavigateToFolder}
       />
-
-      {/* Dialog de création de document */}
-      <Dialog
-        open={createDocumentDialogOpen}
-        onClose={() => {
-          setCreateDocumentDialogOpen(false);
-          setNewDocumentName('');
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Créer un nouveau document
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              autoFocus
-              fullWidth
-              label="Nom du document"
-              value={newDocumentName}
-              onChange={(e) => setNewDocumentName(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && newDocumentName.trim()) {
-                  handleCreateDocumentConfirm();
-                }
-              }}
-              placeholder="Mon document"
-              helperText="L'extension sera ajoutée automatiquement selon le type"
-            />
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Type de document :
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  variant={newDocumentType === 'word' ? 'contained' : 'outlined'}
-                  startIcon={<ArticleIcon />}
-                  onClick={() => setNewDocumentType('word')}
-                  sx={{ flex: 1, minWidth: '120px' }}
-                >
-                  Word
-                </Button>
-                <Button
-                  variant={newDocumentType === 'excel' ? 'contained' : 'outlined'}
-                  startIcon={<TableChartIcon />}
-                  onClick={() => setNewDocumentType('excel')}
-                  sx={{ flex: 1, minWidth: '120px' }}
-                >
-                  Excel
-                </Button>
-                <Button
-                  variant={newDocumentType === 'powerpoint' ? 'contained' : 'outlined'}
-                  startIcon={<SlideshowIcon />}
-                  onClick={() => setNewDocumentType('powerpoint')}
-                  sx={{ flex: 1, minWidth: '120px' }}
-                >
-                  PowerPoint
-                </Button>
-              </Box>
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setCreateDocumentDialogOpen(false);
-              setNewDocumentName('');
-            }}
-          >
-            Annuler
-          </Button>
-          <Button
-            onClick={handleCreateDocumentConfirm}
-            variant="contained"
-            disabled={!newDocumentName.trim()}
-          >
-            Créer et ouvrir
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Dialog de renommage */}
       <Dialog

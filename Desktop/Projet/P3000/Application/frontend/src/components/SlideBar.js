@@ -34,6 +34,12 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         ],
       },
       {
+        key: "distributeurs",
+        label: "Distributeurs",
+        icon: MdBusiness,
+        to: "/distributeurs",
+      },
+      {
         key: "tableau",
         label: "Tableau",
         icon: MdTableChart,

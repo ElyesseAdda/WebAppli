@@ -36,7 +36,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -47,7 +47,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,AgencyExpenseMonth,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -2331,6 +2331,147 @@ class StockViewSet(viewsets.ModelViewSet):
 class StockMovementViewSet(viewsets.ModelViewSet):
     queryset = StockMovement.objects.all()
     serializer_class = StockMovementSerializer
+
+
+class DistributeurViewSet(viewsets.ModelViewSet):
+    queryset = Distributeur.objects.all().order_by('nom')
+    serializer_class = DistributeurSerializer
+    permission_classes = [AllowAny]
+
+    @action(detail=True, methods=['get'])
+    def resume(self, request, pk=None):
+        distributeur = self.get_object()
+        mouvements = distributeur.mouvements.all()
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        if start_date:
+            mouvements = mouvements.filter(date_mouvement__gte=start_date)
+        if end_date:
+            mouvements = mouvements.filter(date_mouvement__lte=end_date)
+
+        aggregates = mouvements.aggregate(
+            total_entrees=Sum(
+                F('quantite') * F('prix_unitaire'),
+                filter=Q(mouvement_type='entree'),
+                output_field=models.DecimalField(max_digits=12, decimal_places=2),
+            ),
+            total_sorties=Sum(
+                F('quantite') * F('prix_unitaire'),
+                filter=Q(mouvement_type='sortie'),
+                output_field=models.DecimalField(max_digits=12, decimal_places=2),
+            ),
+        )
+        total_entrees = aggregates.get('total_entrees') or 0
+        total_sorties = aggregates.get('total_sorties') or 0
+        benefice = total_entrees - total_sorties
+
+        return Response({
+            'distributeur_id': distributeur.id,
+            'total_entrees': float(total_entrees),
+            'total_sorties': float(total_sorties),
+            'benefice': float(benefice),
+        })
+
+
+class DistributeurMouvementViewSet(viewsets.ModelViewSet):
+    serializer_class = DistributeurMouvementSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = DistributeurMouvement.objects.all().order_by('-date_mouvement')
+        distributeur_id = self.request.query_params.get('distributeur_id')
+        if distributeur_id:
+            queryset = queryset.filter(distributeur_id=distributeur_id)
+        return queryset
+
+
+class DistributeurCellViewSet(viewsets.ModelViewSet):
+    serializer_class = DistributeurCellSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = DistributeurCell.objects.all()
+        distributeur_id = self.request.query_params.get('distributeur_id')
+        if distributeur_id:
+            queryset = queryset.filter(distributeur_id=distributeur_id)
+        return queryset.order_by('row_index', 'col_index')
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_products_openfoodfacts(request):
+    """
+    Recherche de produits via l'API Open Food Facts (gratuite)
+    Retourne des produits avec leurs images
+    """
+    import requests
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    search_term = request.query_params.get('q', '')
+    if not search_term:
+        return Response({'error': 'Paramètre q (recherche) requis'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # API Open Food Facts - gratuite et sans clé API
+        url = "https://world.openfoodfacts.org/cgi/search.pl"
+        params = {
+            'search_terms': search_term,
+            'search_simple': 1,
+            'action': 'process',
+            'json': 1,
+            'page_size': 20,
+            'fields': 'product_name,image_url,image_small_url,image_front_url,image_front_small_url,brands,code'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error(f"Erreur parsing JSON Open Food Facts: {e}")
+            return Response({'error': 'Erreur lors du parsing de la réponse API', 'products': []}, status=status.HTTP_200_OK)
+        
+        products = []
+        if 'products' in data and isinstance(data['products'], list):
+            for product in data['products']:
+                if not isinstance(product, dict):
+                    continue
+                    
+                # Chercher une image disponible (plusieurs champs possibles)
+                image_url = (
+                    product.get('image_url') or 
+                    product.get('image_front_url') or 
+                    product.get('image_small_url') or 
+                    product.get('image_front_small_url') or 
+                    ''
+                )
+                
+                product_name = product.get('product_name', '').strip()
+                
+                # Accepter les produits avec nom OU image
+                if product_name or image_url:
+                    products.append({
+                        'name': product_name or 'Produit sans nom',
+                        'brand': product.get('brands', ''),
+                        'image_url': image_url,
+                        'code': product.get('code', ''),
+                    })
+        
+        return Response({'products': products}, status=status.HTTP_200_OK)
+        
+    except requests.exceptions.Timeout:
+        logger.error("Timeout lors de l'appel à Open Food Facts")
+        return Response({'error': 'Timeout - Le serveur Open Food Facts ne répond pas', 'products': []}, status=status.HTTP_200_OK)
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erreur requête Open Food Facts: {e}")
+        return Response({'error': f'Erreur de connexion: {str(e)}', 'products': []}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Erreur inattendue Open Food Facts: {e}", exc_info=True)
+        return Response({'error': f'Erreur inattendue: {str(e)}', 'products': []}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 def historique_stock(request):

@@ -9,7 +9,8 @@ from .models import (
     SousTraitant, ContactSousTraitant, ContratSousTraitance, AvenantSousTraitance, PaiementSousTraitant, ContactSociete,
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
-    AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant
+    AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
+    Distributeur, DistributeurMouvement, DistributeurCell
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -724,6 +725,76 @@ class StockMovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockMovement
         fields = '__all__'
+
+class DistributeurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Distributeur
+        fields = '__all__'
+
+
+class DistributeurMouvementSerializer(serializers.ModelSerializer):
+    montant_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DistributeurMouvement
+        fields = '__all__'
+
+    def get_montant_total(self, obj):
+        return float(obj.montant_total)
+
+
+class DistributeurCellSerializer(serializers.ModelSerializer):
+    initiales = serializers.CharField(read_only=True)
+    image_display_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DistributeurCell
+        fields = '__all__'
+
+    def validate_nom_produit(self, value):
+        """Convertit les chaînes vides en None"""
+        if value and isinstance(value, str):
+            value = value.strip()
+            return value if value else None
+        return value
+
+    def validate_image_url(self, value):
+        """Convertit les chaînes vides en None et valide l'URL si fournie"""
+        if value and isinstance(value, str):
+            value = value.strip()
+            if value:
+                # Valider que c'est une URL valide
+                from django.core.validators import URLValidator
+                from django.core.exceptions import ValidationError
+                validator = URLValidator()
+                try:
+                    validator(value)
+                except ValidationError:
+                    raise serializers.ValidationError("URL invalide")
+                return value
+        return None
+
+    def validate(self, data):
+        """Valide que soit nom_produit soit image_url est fourni"""
+        nom_produit = data.get('nom_produit')
+        image_url = data.get('image_url')
+        
+        # Vérifier que les valeurs ne sont pas des chaînes vides après validation
+        if not nom_produit and not image_url:
+            raise serializers.ValidationError(
+                "Au moins un nom de produit ou une URL d'image doit être fourni"
+            )
+        return data
+
+    def get_image_display_url(self, obj):
+        """Retourne l'URL d'affichage de l'image (S3 présignée ou URL directe)"""
+        if obj.image_s3_key:
+            from .utils import generate_presigned_url
+            try:
+                return generate_presigned_url('get_object', obj.image_s3_key, expires_in=3600)
+            except Exception:
+                return obj.image_url
+        return obj.image_url
 
 class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:

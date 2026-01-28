@@ -722,6 +722,92 @@ class StockMovement(models.Model):
         return f"{self.mouvement_type} de {self.quantite} pour {self.stock.designation} le {self.date_mouvement}"
 
         
+class Distributeur(models.Model):
+    nom = models.CharField(max_length=150)
+    code = models.CharField(max_length=50, unique=True)
+    emplacement = models.CharField(max_length=255, blank=True, null=True)
+    actif = models.BooleanField(default=True)
+    description = models.TextField(blank=True, null=True)
+    # Configuration de la grille pour simuler la disposition physique
+    grid_rows = models.PositiveIntegerField(default=3, help_text="Nombre de lignes dans la grille")
+    grid_columns = models.JSONField(default=list, blank=True, help_text="Nombre de colonnes par ligne [col1, col2, ...]")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.nom} ({self.code})"
+
+
+class DistributeurMouvement(models.Model):
+    distributeur = models.ForeignKey(
+        Distributeur,
+        on_delete=models.CASCADE,
+        related_name='mouvements'
+    )
+    mouvement_type = models.CharField(
+        max_length=10,
+        choices=[('entree', 'Entrée'), ('sortie', 'Sortie')]
+    )
+    quantite = models.PositiveIntegerField(default=1)
+    prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    date_mouvement = models.DateTimeField(default=timezone.now)
+    commentaire = models.TextField(null=True, blank=True)
+
+    @property
+    def montant_total(self):
+        return self.quantite * self.prix_unitaire
+
+    def __str__(self):
+        return f"{self.mouvement_type} {self.quantite} pour {self.distributeur.nom}"
+
+
+class DistributeurCell(models.Model):
+    """Contenu d'une case dans la grille du distributeur"""
+    distributeur = models.ForeignKey(
+        Distributeur,
+        on_delete=models.CASCADE,
+        related_name='cells'
+    )
+    row_index = models.PositiveIntegerField(help_text="Index de la ligne (0-based)")
+    col_index = models.PositiveIntegerField(help_text="Index de la colonne (0-based)")
+    # Contenu : soit un nom, soit une image
+    nom_produit = models.CharField(max_length=100, blank=True, null=True, help_text="Nom du produit (ex: Chips Lays)")
+    image_url = models.URLField(max_length=500, blank=True, null=True, help_text="URL de l'image (S3 ou externe)")
+    image_s3_key = models.CharField(max_length=500, blank=True, null=True, help_text="Clé S3 si image uploadée")
+    # Position de l'image dans la case
+    image_position = models.CharField(
+        max_length=20,
+        choices=[
+            ('center', 'Centré'),
+            ('top', 'Haut'),
+            ('bottom', 'Bas'),
+            ('left', 'Gauche'),
+            ('right', 'Droite'),
+        ],
+        default='center',
+        help_text="Position de l'image dans la case"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('distributeur', 'row_index', 'col_index')
+        ordering = ['row_index', 'col_index']
+
+    def __str__(self):
+        return f"{self.distributeur.nom} - L{self.row_index}C{self.col_index}: {self.nom_produit or 'Image'}"
+    
+    @property
+    def initiales(self):
+        """Retourne les initiales du nom du produit"""
+        if not self.nom_produit:
+            return ""
+        words = self.nom_produit.split()
+        if len(words) >= 2:
+            return (words[0][0] + words[1][0]).upper()
+        return self.nom_produit[:2].upper()
+
+
 class Fournisseur(models.Model):
     name = models.CharField(max_length=25)
     Fournisseur_mail = models.EmailField(blank=True, null=True)

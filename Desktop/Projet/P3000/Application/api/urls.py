@@ -104,6 +104,10 @@ from .views import (
     ColorViewSet,
     colors_list,
     increment_color_usage,
+    DistributeurViewSet,
+    DistributeurMouvementViewSet,
+    DistributeurCellViewSet,
+    search_products_openfoodfacts,
     # Endpoints système unifié
     update_devis_order,
     create_ligne_speciale,
@@ -170,6 +174,9 @@ router.register(r'sous-parties', SousPartieViewSet, basename='sous-parties')
 router.register(r'ligne-details', LigneDetailViewSet, basename='ligne-details')
 router.register(r'client', ClientViewSet, basename='client')
 router.register(r'stock', StockViewSet, basename='stock')  # Gère les routes stock via ViewSet
+router.register(r'distributeurs', DistributeurViewSet, basename='distributeurs')
+router.register(r'distributeur-mouvements', DistributeurMouvementViewSet, basename='distributeur-mouvements')
+router.register(r'distributeur-cells', DistributeurCellViewSet, basename='distributeur-cells')
 router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
 router.register(r'events', EventViewSet, basename='event')
@@ -211,6 +218,7 @@ auth_urlpatterns = [
 urlpatterns = [
     path('csrf-token/', csrf_token_view, name='csrf-token'),
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
+    path('distributeurs/search-products/', search_products_openfoodfacts, name='search-products-openfoodfacts'),
     # Route spécifique situations AVANT le routeur pour éviter les conflits
     path('situations/by-year/', get_all_situations_by_year, name='get-all-situations-by-year'),
     path('pending-payments/', get_pending_payments, name='get-pending-payments'),
@@ -457,9 +465,6 @@ urlpatterns += [
     path('drive-v2/create-folder/', DriveV2ViewSet.as_view({
         'post': 'create_folder'
     }), name='drive-v2-create-folder'),
-    path('drive-v2/create-document/', DriveV2ViewSet.as_view({
-        'post': 'create_document'
-    }), name='drive-v2-create-document'),
     
     # Gestion des fichiers
     path('drive-v2/delete-item/', DriveV2ViewSet.as_view({

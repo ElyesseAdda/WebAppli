@@ -6,6 +6,7 @@ const BASE_TITLE = "Webapplication P3000";
 const ROUTE_TITLES = [
   { path: "/", title: "Dashboard" },
   { path: "/login", title: "Connexion" },
+  { path: "/distributeurs", title: "Distributeurs automatiques" },
   { path: "/ListeChantier", title: "Liste des chantiers" },
   { path: "/ChantiersDashboard", title: "Chantiers - Dashboard" },
   { path: "/chantier/:id", title: "Chantier" },
