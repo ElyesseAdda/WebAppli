@@ -107,6 +107,9 @@ from .views import (
     DistributeurViewSet,
     DistributeurMouvementViewSet,
     DistributeurCellViewSet,
+    StockProductViewSet,
+    StockPurchaseViewSet,
+    StockLotViewSet,
     search_products_openfoodfacts,
     # Endpoints système unifié
     update_devis_order,
@@ -177,6 +180,9 @@ router.register(r'stock', StockViewSet, basename='stock')  # Gère les routes st
 router.register(r'distributeurs', DistributeurViewSet, basename='distributeurs')
 router.register(r'distributeur-mouvements', DistributeurMouvementViewSet, basename='distributeur-mouvements')
 router.register(r'distributeur-cells', DistributeurCellViewSet, basename='distributeur-cells')
+router.register(r'stock-products', StockProductViewSet, basename='stock-products')
+router.register(r'stock-purchases', StockPurchaseViewSet, basename='stock-purchases')
+router.register(r'stock-lots', StockLotViewSet, basename='stock-lots')
 router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
 router.register(r'events', EventViewSet, basename='event')
@@ -219,6 +225,9 @@ urlpatterns = [
     path('csrf-token/', csrf_token_view, name='csrf-token'),
     path('stock/latest_code/', get_latest_code_produit, name='latest_code_produit'),  # Ajout du chemin personnalisé avant l'inclusion du routeur
     path('distributeurs/search-products/', search_products_openfoodfacts, name='search-products-openfoodfacts'),
+    path('stock-purchases/history-by-product/', StockPurchaseViewSet.as_view({
+        'get': 'history_by_product'
+    }), name='stock-purchases-history-by-product'),
     # Route spécifique situations AVANT le routeur pour éviter les conflits
     path('situations/by-year/', get_all_situations_by_year, name='get-all-situations-by-year'),
     path('pending-payments/', get_pending_payments, name='get-pending-payments'),

@@ -36,7 +36,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -47,7 +47,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,AgencyExpenseMonth,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, StockProduct, StockPurchase, StockPurchaseItem, StockLot,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -2396,6 +2396,141 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
         if distributeur_id:
             queryset = queryset.filter(distributeur_id=distributeur_id)
         return queryset.order_by('row_index', 'col_index')
+
+
+class StockProductViewSet(viewsets.ModelViewSet):
+    serializer_class = StockProductSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = StockProduct.objects.all().order_by('nom')
+        return queryset
+
+    @action(detail=True, methods=['post'])
+    def add_quantity(self, request, pk=None):
+        """Ajouter de la quantité au produit"""
+        product = self.get_object()
+        quantite = request.data.get('quantite', 0)
+        
+        if quantite <= 0:
+            return Response({'error': 'Quantité invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        product.quantite += int(quantite)
+        product.save()
+        
+        return Response({'message': 'Quantité ajoutée', 'quantite': product.quantite}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def remove_quantity(self, request, pk=None):
+        """Retirer de la quantité au produit"""
+        product = self.get_object()
+        quantite = request.data.get('quantite', 0)
+        
+        if quantite <= 0 or product.quantite < int(quantite):
+            return Response({'error': 'Quantité insuffisante ou invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        product.quantite -= int(quantite)
+        product.save()
+        
+        return Response({'message': 'Quantité retirée', 'quantite': product.quantite}, status=status.HTTP_200_OK)
+
+
+class StockPurchaseViewSet(viewsets.ModelViewSet):
+    serializer_class = StockPurchaseSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = StockPurchase.objects.all().order_by('-date_achat')
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return StockPurchaseCreateSerializer
+        return StockPurchaseSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Override create pour utiliser le bon serializer pour la réponse"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        achat = serializer.save()
+        
+        # Retourner avec StockPurchaseSerializer pour avoir les items
+        response_serializer = StockPurchaseSerializer(achat)
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=False, methods=['get'], url_path='history-by-product')
+    def history_by_product(self, request):
+        """
+        Retourne l'historique des achats d'un produit avec les prix
+        Permet de calculer les marges en fonction des différents prix d'achat
+        """
+        produit_id = request.query_params.get('produit_id')
+        if not produit_id:
+            return Response(
+                {'error': 'Paramètre produit_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            produit = StockProduct.objects.get(id=produit_id)
+        except StockProduct.DoesNotExist:
+            return Response(
+                {'error': 'Produit introuvable'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Récupérer tous les achats de ce produit
+        items = StockPurchaseItem.objects.filter(produit=produit).order_by('-achat__date_achat')
+        
+        from .serializers import StockPurchaseItemSerializer
+        serializer = StockPurchaseItemSerializer(items, many=True)
+        
+        # Calculer les statistiques
+        total_quantite = sum(item.quantite for item in items)
+        total_montant = sum(float(item.montant_total) for item in items)
+        prix_moyen = total_montant / total_quantite if total_quantite > 0 else 0
+        prix_min = min((float(item.prix_unitaire) for item in items), default=0)
+        prix_max = max((float(item.prix_unitaire) for item in items), default=0)
+        
+        return Response({
+            'produit': {
+                'id': produit.id,
+                'nom': produit.nom,
+                'quantite_actuelle': produit.quantite,
+            },
+            'historique': serializer.data,
+            'statistiques': {
+                'total_quantite_achetee': total_quantite,
+                'total_montant': round(total_montant, 2),
+                'prix_moyen_achat': round(prix_moyen, 2),
+                'prix_min': round(prix_min, 2),
+                'prix_max': round(prix_max, 2),
+                'nombre_achats': items.count(),
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class StockLotViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer les lots de stock (FIFO)"""
+    serializer_class = StockLotSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = StockLot.objects.all().order_by('date_achat', 'created_at')
+        produit_id = self.request.query_params.get('produit_id')
+        if produit_id:
+            queryset = queryset.filter(produit_id=produit_id)
+        # Filtrer seulement les lots non épuisés par défaut
+        only_available = self.request.query_params.get('only_available', 'false').lower() == 'true'
+        if only_available:
+            queryset = queryset.filter(quantite_restante__gt=0)
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return StockPurchaseCreateSerializer
+        return StockPurchaseSerializer
 
 
 @api_view(['GET'])

@@ -10,7 +10,7 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell
+    Distributeur, DistributeurMouvement, DistributeurCell, StockProduct, StockPurchase, StockPurchaseItem, StockLot
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -795,6 +795,204 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
             except Exception:
                 return obj.image_url
         return obj.image_url
+
+class StockProductSerializer(serializers.ModelSerializer):
+    initiales = serializers.CharField(read_only=True)
+    image_display_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StockProduct
+        fields = '__all__'
+
+    def validate_nom_produit(self, value):
+        """Convertit les chaînes vides en None"""
+        if value and isinstance(value, str):
+            value = value.strip()
+            return value if value else None
+        return value
+
+    def validate_image_url(self, value):
+        """Convertit les chaînes vides en None et valide l'URL si fournie"""
+        if value and isinstance(value, str):
+            value = value.strip()
+            if value:
+                from django.core.validators import URLValidator
+                from django.core.exceptions import ValidationError
+                validator = URLValidator()
+                try:
+                    validator(value)
+                except ValidationError:
+                    raise serializers.ValidationError("URL invalide")
+                return value
+        return None
+
+    def validate(self, data):
+        """Valide que soit nom_produit soit image_url est fourni si nom est vide"""
+        nom = data.get('nom', '').strip()
+        nom_produit = data.get('nom_produit')
+        image_url = data.get('image_url')
+        
+        if not nom and not nom_produit and not image_url:
+            raise serializers.ValidationError(
+                "Au moins un nom ou une URL d'image doit être fourni"
+            )
+        return data
+
+    def get_image_display_url(self, obj):
+        """Retourne l'URL d'affichage de l'image (S3 présignée ou URL directe)"""
+        if obj.image_s3_key:
+            from .utils import generate_presigned_url
+            try:
+                return generate_presigned_url('get_object', obj.image_s3_key, expires_in=3600)
+            except Exception:
+                return obj.image_url
+        return obj.image_url
+
+
+class StockPurchaseItemSerializer(serializers.ModelSerializer):
+    """Serializer pour les items d'achat avec toutes les informations pour le calcul des marges"""
+    produit_nom = serializers.CharField(source='produit.nom', read_only=True)
+    date_achat = serializers.DateTimeField(source='achat.date_achat', read_only=True)
+    lieu_achat = serializers.CharField(source='achat.lieu_achat', read_only=True)
+
+    class Meta:
+        model = StockPurchaseItem
+        fields = '__all__'
+        read_only_fields = ['montant_total']  # Calculé automatiquement dans save()
+
+
+class StockLotSerializer(serializers.ModelSerializer):
+    """Serializer pour les lots de stock (FIFO)"""
+    est_epuise = serializers.BooleanField(read_only=True)
+    produit_nom = serializers.CharField(source='produit.nom', read_only=True)
+
+    class Meta:
+        model = StockLot
+        fields = '__all__'
+
+
+class StockPurchaseSerializer(serializers.ModelSerializer):
+    items = StockPurchaseItemSerializer(many=True, read_only=True)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = StockPurchase
+        fields = '__all__'
+
+
+class StockPurchaseCreateSerializer(serializers.Serializer):
+    """Serializer pour créer un achat avec ses items"""
+    lieu_achat = serializers.CharField(max_length=150)
+    date_achat = serializers.DateTimeField(required=False)
+    items = serializers.ListField(
+        child=serializers.DictField(),
+        min_length=1
+    )
+
+    def validate_items(self, value):
+        """Valide que chaque item a les champs requis"""
+        for item in value:
+            if 'produit_id' not in item and 'nom_produit' not in item:
+                raise serializers.ValidationError("Chaque item doit avoir soit produit_id soit nom_produit")
+            if 'quantite' not in item or 'prix_unitaire' not in item or 'unite' not in item:
+                raise serializers.ValidationError("Chaque item doit avoir quantite, prix_unitaire et unite")
+        return value
+
+    def create(self, validated_data):
+        """Crée l'achat et ses items, et met à jour les stocks"""
+        items_data = validated_data.pop('items')
+        achat = StockPurchase.objects.create(**validated_data)
+        
+        total = 0
+        for item_data in items_data:
+            produit_id = item_data.get('produit_id')
+            # Convertir produit_id en entier si c'est une string ou un nombre
+            if produit_id:
+                try:
+                    produit_id = int(produit_id)
+                except (ValueError, TypeError):
+                    produit_id = None
+            
+            nom_produit = item_data.get('nom_produit', '').strip()
+            quantite = int(item_data['quantite'])
+            prix_unitaire = float(item_data['prix_unitaire'])
+            unite = item_data['unite']
+            creer_produit = item_data.get('creer_produit', True)  # Par défaut True
+            
+            produit = None
+            
+            # 1. Essayer de récupérer le produit par ID si fourni
+            if produit_id:
+                try:
+                    produit = StockProduct.objects.get(id=produit_id)
+                    # S'assurer que le nom_produit correspond
+                    if not nom_produit:
+                        nom_produit = produit.nom
+                except StockProduct.DoesNotExist:
+                    produit = None
+            
+            # 2. Si pas de produit trouvé par ID, chercher par nom (insensible à la casse et aux espaces)
+            if not produit and nom_produit:
+                try:
+                    # Chercher avec correspondance exacte d'abord
+                    produit = StockProduct.objects.get(nom__iexact=nom_produit.strip())
+                except StockProduct.DoesNotExist:
+                    # Si pas trouvé, essayer avec correspondance partielle
+                    try:
+                        produit = StockProduct.objects.filter(nom__iexact=nom_produit.strip()).first()
+                    except:
+                        produit = None
+                except StockProduct.MultipleObjectsReturned:
+                    # Si plusieurs produits avec le même nom, prendre le premier
+                    produit = StockProduct.objects.filter(nom__iexact=nom_produit.strip()).first()
+            
+            # 3. Si toujours pas de produit, créer un nouveau produit
+            if not produit and nom_produit:
+                produit = StockProduct.objects.create(
+                    nom=nom_produit,
+                    quantite=0  # On ajoutera la quantité après
+                )
+            
+            # 4. Créer l'item d'achat avec tous les détails
+            # Le montant_total sera calculé automatiquement dans la méthode save() du modèle
+            item = StockPurchaseItem.objects.create(
+                achat=achat,
+                produit=produit,
+                nom_produit=nom_produit or (produit.nom if produit else ''),
+                quantite=quantite,
+                prix_unitaire=prix_unitaire,
+                unite=unite,
+                creer_produit=creer_produit
+            )
+            
+            # 5. Mettre à jour la quantité du produit (ajouter la quantité achetée)
+            if produit:
+                # Utiliser F() pour éviter les problèmes de race condition
+                from django.db.models import F
+                StockProduct.objects.filter(id=produit.id).update(quantite=F('quantite') + quantite)
+                # Recharger depuis la DB pour avoir la valeur à jour
+                produit.refresh_from_db()
+            
+            # 6. Le montant_total est maintenant un champ sauvegardé, on peut l'utiliser directement
+            total += float(item.montant_total)
+            
+            # 7. Créer le StockLot pour le suivi FIFO
+            # Un lot = une quantité d'un produit acheté à un prix donné à une date donnée
+            from .models import StockLot
+            StockLot.objects.create(
+                produit=produit,
+                purchase_item=item,
+                quantite_restante=quantite,
+                prix_achat_unitaire=prix_unitaire,
+                date_achat=achat.date_achat
+            )
+        
+        # Mettre à jour le total de l'achat
+        achat.total = total
+        achat.save()
+        
+        return achat
+
 
 class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:

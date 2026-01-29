@@ -808,6 +808,161 @@ class DistributeurCell(models.Model):
         return self.nom_produit[:2].upper()
 
 
+class StockProduct(models.Model):
+    """Produit du stock mobile (indépendant du système de stock principal)"""
+    nom = models.CharField(max_length=150, help_text="Nom du produit", blank=False)
+    # Contenu : soit un nom, soit une image
+    nom_produit = models.CharField(max_length=100, blank=True, null=True, help_text="Nom alternatif du produit")
+    image_url = models.URLField(max_length=500, blank=True, null=True, help_text="URL de l'image (externe)")
+    image_s3_key = models.CharField(max_length=500, blank=True, null=True, help_text="Clé S3 si image uploadée")
+    # Position de l'image
+    image_position = models.CharField(
+        max_length=20,
+        choices=[
+            ('center', 'Centré'),
+            ('top', 'Haut'),
+            ('bottom', 'Bas'),
+            ('left', 'Gauche'),
+            ('right', 'Droite'),
+        ],
+        default='center',
+        help_text="Position de l'image"
+    )
+    quantite = models.PositiveIntegerField(default=0, help_text="Quantité en stock")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nom']
+        verbose_name = "Produit Stock Mobile"
+        verbose_name_plural = "Produits Stock Mobile"
+
+    def __str__(self):
+        return f"{self.nom} ({self.quantite})"
+    
+    @property
+    def initiales(self):
+        """Retourne les initiales du nom du produit"""
+        if not self.nom_produit:
+            return ""
+        words = self.nom_produit.split()
+        if len(words) >= 2:
+            return (words[0][0] + words[1][0]).upper()
+        return self.nom_produit[:2].upper()
+
+
+class StockPurchase(models.Model):
+    """Achat de stock - enregistre un achat avec lieu et date"""
+    lieu_achat = models.CharField(max_length=150, help_text="Lieu d'achat (ex: Leclerc, Intermarché)")
+    date_achat = models.DateTimeField(default=timezone.now, help_text="Date de l'achat")
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Total de l'achat")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date_achat']
+        verbose_name = "Achat de Stock"
+        verbose_name_plural = "Achats de Stock"
+
+    def __str__(self):
+        return f"{self.lieu_achat} - {self.date_achat.strftime('%d/%m/%Y')}"
+
+    def calculate_total(self):
+        """Calcule le total de l'achat"""
+        return sum(item.prix_unitaire * item.quantite for item in self.items.all())
+
+
+class StockPurchaseItem(models.Model):
+    """Produit acheté dans un achat - Historique complet avec prix pour calcul des marges"""
+    achat = models.ForeignKey(
+        StockPurchase,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    produit = models.ForeignKey(
+        StockProduct,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='achats',
+        help_text="Produit existant (si null, produit nouveau)"
+    )
+    nom_produit = models.CharField(max_length=150, help_text="Nom du produit")
+    quantite = models.PositiveIntegerField(help_text="Nombre de pièces achetées")
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2, help_text="Prix d'achat à l'unité")
+    montant_total = models.DecimalField(max_digits=10, decimal_places=2, help_text="Total pour cet item (quantité × prix_unitaire)")
+    unite = models.CharField(max_length=50, default="pièce", help_text="Unité (toujours pièce)")
+    # Si le produit est nouveau, on peut créer le produit après
+    creer_produit = models.BooleanField(default=True, help_text="Créer le produit dans le stock après l'achat")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Date de création de l'enregistrement")
+    
+    class Meta:
+        ordering = ['-achat__date_achat', '-created_at']
+        verbose_name = "Produit Acheté"
+        verbose_name_plural = "Produits Achetés"
+        indexes = [
+            models.Index(fields=['produit', 'achat']),
+            models.Index(fields=['achat', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.nom_produit or (self.produit.nom if self.produit else 'N/A')} - {self.quantite} pièces @ {self.prix_unitaire}€"
+
+    def save(self, *args, **kwargs):
+        """Calcule et sauvegarde le montant_total avant la sauvegarde"""
+        # Toujours recalculer le montant_total pour être sûr qu'il est à jour
+        self.montant_total = self.prix_unitaire * self.quantite
+        super().save(*args, **kwargs)
+    
+    @property
+    def date_achat(self):
+        """Retourne la date de l'achat depuis l'objet parent"""
+        return self.achat.date_achat
+    
+    @property
+    def lieu_achat(self):
+        """Retourne le lieu d'achat depuis l'objet parent"""
+        return self.achat.lieu_achat
+
+
+class StockLot(models.Model):
+    """Lot de stock - Suit les quantités restantes par lot d'achat pour le système FIFO"""
+    produit = models.ForeignKey(
+        StockProduct,
+        on_delete=models.CASCADE,
+        related_name='lots',
+        help_text="Produit concerné"
+    )
+    purchase_item = models.ForeignKey(
+        StockPurchaseItem,
+        on_delete=models.CASCADE,
+        related_name='lots',
+        help_text="Item d'achat d'origine"
+    )
+    quantite_restante = models.PositiveIntegerField(help_text="Quantité encore disponible dans ce lot")
+    prix_achat_unitaire = models.DecimalField(max_digits=10, decimal_places=2, help_text="Prix d'achat à l'unité (copie)")
+    date_achat = models.DateTimeField(help_text="Date d'achat (copie)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['date_achat', 'created_at']  # FIFO : plus anciens en premier
+        verbose_name = "Lot de Stock"
+        verbose_name_plural = "Lots de Stock"
+        indexes = [
+            models.Index(fields=['produit', 'date_achat']),
+            models.Index(fields=['produit', 'quantite_restante']),
+        ]
+    
+    def __str__(self):
+        return f"{self.produit.nom} - {self.quantite_restante} restantes @ {self.prix_achat_unitaire}€ (achat: {self.date_achat.strftime('%d/%m/%Y')})"
+    
+    @property
+    def est_epuise(self):
+        """Vérifie si le lot est épuisé"""
+        return self.quantite_restante == 0
+
+
 class Fournisseur(models.Model):
     name = models.CharField(max_length=25)
     Fournisseur_mail = models.EmailField(blank=True, null=True)
