@@ -109,6 +109,8 @@ from .views import (
     DistributeurCellViewSet,
     DistributeurVenteViewSet,
     DistributeurReapproSessionViewSet,
+    DistributeurReapproLigneViewSet,
+    DistributeurFraisViewSet,
     StockProductViewSet,
     StockPurchaseViewSet,
     StockLotViewSet,
@@ -184,6 +186,8 @@ router.register(r'distributeur-mouvements', DistributeurMouvementViewSet, basena
 router.register(r'distributeur-cells', DistributeurCellViewSet, basename='distributeur-cells')
 router.register(r'distributeur-ventes', DistributeurVenteViewSet, basename='distributeur-ventes')
 router.register(r'distributeur-reappro-sessions', DistributeurReapproSessionViewSet, basename='distributeur-reappro-sessions')
+router.register(r'distributeur-reappro-lignes', DistributeurReapproLigneViewSet, basename='distributeur-reappro-lignes')
+router.register(r'distributeur-frais', DistributeurFraisViewSet, basename='distributeur-frais')
 router.register(r'stock-products', StockProductViewSet, basename='stock-products')
 router.register(r'stock-purchases', StockPurchaseViewSet, basename='stock-purchases')
 router.register(r'stock-lots', StockLotViewSet, basename='stock-lots')

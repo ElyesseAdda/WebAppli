@@ -10,7 +10,7 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -794,6 +794,13 @@ class DistributeurReapproSessionSerializer(serializers.ModelSerializer):
 
     def get_total_benefice(self, obj):
         return round(sum(float(l.benefice) for l in obj.lignes.all()), 2)
+
+
+class DistributeurFraisSerializer(serializers.ModelSerializer):
+    """Frais distributeur : entretien, frais banque TPE, etc."""
+    class Meta:
+        model = DistributeurFrais
+        fields = '__all__'
 
 
 class DistributeurCellSerializer(serializers.ModelSerializer):

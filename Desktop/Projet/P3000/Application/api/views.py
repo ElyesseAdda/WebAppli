@@ -30,13 +30,13 @@ from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
 from django.utils.timezone import now
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, Coalesce
 from datetime import timedelta, date, datetime
 import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -47,7 +47,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,AgencyExpenseMonth,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -1144,7 +1144,7 @@ from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
 from django.utils.timezone import now
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, Coalesce
 from datetime import timedelta, date, datetime
 import subprocess
 import os
@@ -2344,11 +2344,30 @@ class DistributeurViewSet(viewsets.ModelViewSet):
         mouvements = distributeur.mouvements.all()
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
+        year_param = request.query_params.get('year')
+        month_param = request.query_params.get('month')
+
+        if year_param:
+            try:
+                year = int(year_param)
+                import calendar
+                if month_param:
+                    month = int(month_param)
+                    if 1 <= month <= 12:
+                        start_date = date(year, month, 1)
+                        _, last_day = calendar.monthrange(year, month)
+                        end_date = date(year, month, last_day)
+                else:
+                    # Année seule : toute l'année
+                    start_date = date(year, 1, 1)
+                    end_date = date(year, 12, 31)
+            except (ValueError, TypeError):
+                pass
 
         if start_date:
-            mouvements = mouvements.filter(date_mouvement__gte=start_date)
+            mouvements = mouvements.filter(date_mouvement__date__gte=start_date)
         if end_date:
-            mouvements = mouvements.filter(date_mouvement__lte=end_date)
+            mouvements = mouvements.filter(date_mouvement__date__lte=end_date)
 
         aggregates = mouvements.aggregate(
             total_entrees=Sum(
@@ -2366,15 +2385,30 @@ class DistributeurViewSet(viewsets.ModelViewSet):
         total_sorties = aggregates.get('total_sorties') or 0
         benefice = total_entrees - total_sorties
 
-        # Bénéfice réappro = somme (prix_vente - cout_unitaire) * quantite sur toutes les lignes des sessions terminées
+        # Bénéfice réappro = sessions terminées dans la même période (date_fin)
         sessions_reappro = DistributeurReapproSession.objects.filter(
             distributeur=distributeur, statut='termine'
         ).prefetch_related('lignes')
+        if start_date:
+            sessions_reappro = sessions_reappro.filter(date_fin__date__gte=start_date)
+        if end_date:
+            sessions_reappro = sessions_reappro.filter(date_fin__date__lte=end_date)
         benefice_reappro = sum(
             float(l.benefice)
             for s in sessions_reappro
             for l in s.lignes.all()
         )
+
+        # Frais (entretien, TPE, etc.) dans la période
+        frais_qs = DistributeurFrais.objects.filter(distributeur=distributeur)
+        if start_date:
+            frais_qs = frais_qs.filter(date_frais__gte=start_date)
+        if end_date:
+            frais_qs = frais_qs.filter(date_frais__lte=end_date)
+        total_frais = frais_qs.aggregate(total=Sum('montant'))['total'] or 0
+        total_frais = float(total_frais)
+
+        benefice_total = float(benefice) + benefice_reappro - total_frais
 
         return Response({
             'distributeur_id': distributeur.id,
@@ -2382,7 +2416,121 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             'total_sorties': float(total_sorties),
             'benefice': float(benefice),
             'benefice_reappro': round(benefice_reappro, 2),
-            'benefice_total': round(float(benefice) + benefice_reappro, 2),
+            'total_frais': round(total_frais, 2),
+            'benefice_total': round(benefice_total, 2),
+        })
+
+    @action(detail=True, methods=['get'])
+    def meilleur_mois(self, request, pk=None):
+        """
+        Retourne le mois avec le plus fort bénéfice pour ce distributeur (toutes périodes).
+        Utilisé pour afficher "Meilleur mois: Janvier 2025 (XXX €)" sur la carte bénéfice.
+        """
+        from collections import defaultdict
+        distributeur = self.get_object()
+        by_month = defaultdict(float)
+        # Bénéfice réappro par mois (date_fin des sessions)
+        sessions = DistributeurReapproSession.objects.filter(
+            distributeur=distributeur, statut='termine'
+        ).prefetch_related('lignes')
+        for s in sessions:
+            if s.date_fin:
+                key = (s.date_fin.year, s.date_fin.month)
+                by_month[key] += sum(float(l.benefice) for l in s.lignes.all())
+        # Bénéfice mouvements (entree - sortie) par mois
+        mouvements = distributeur.mouvements.all()
+        for m in mouvements:
+            if m.date_mouvement:
+                key = (m.date_mouvement.year, m.date_mouvement.month)
+                montant = float(m.quantite or 0) * float(m.prix_unitaire or 0)
+                if m.mouvement_type == 'entree':
+                    by_month[key] += montant
+                else:
+                    by_month[key] -= montant
+        if not by_month:
+            return Response({'year': None, 'month': None, 'benefice': None})
+        best_key = max(by_month.keys(), key=lambda k: by_month[k])
+        year, month = best_key
+        benefice = round(by_month[best_key], 2)
+        return Response({'year': year, 'month': month, 'benefice': benefice})
+
+    @action(detail=True, methods=['get'])
+    def resume_produits(self, request, pk=None):
+        """
+        Liste des produits du distributeur (toutes les cellules) avec bénéfice et CA
+        pour la période sélectionnée (year/month ou year seul ou global).
+        Trié par bénéfice décroissant pour voir les meilleures ventes.
+        """
+        import calendar as cal_module
+        distributeur = self.get_object()
+        year_param = request.query_params.get('year')
+        month_param = request.query_params.get('month')
+        start_date = None
+        end_date = None
+        if year_param:
+            try:
+                year = int(year_param)
+                if month_param:
+                    month = int(month_param)
+                    if 1 <= month <= 12:
+                        start_date = date(year, month, 1)
+                        _, last_day = cal_module.monthrange(year, month)
+                        end_date = date(year, month, last_day)
+                else:
+                    start_date = date(year, 1, 1)
+                    end_date = date(year, 12, 31)
+            except (ValueError, TypeError):
+                pass
+
+        sessions_reappro = DistributeurReapproSession.objects.filter(
+            distributeur=distributeur, statut='termine'
+        )
+        if start_date:
+            sessions_reappro = sessions_reappro.filter(date_fin__date__gte=start_date)
+        if end_date:
+            sessions_reappro = sessions_reappro.filter(date_fin__date__lte=end_date)
+        sessions_ids = list(sessions_reappro.values_list('id', flat=True))
+
+        # Bénéfice, quantité vendue et CA par cellule — uniquement depuis les réappro
+        # Pas de table "ventes" : recharger 5 Coca = 5 Coca vendus
+        lignes_agg = DistributeurReapproLigne.objects.filter(
+            session_id__in=sessions_ids
+        ).values('cell_id').annotate(
+            benefice=Sum(
+                F('quantite') * (F('prix_vente') - Coalesce(F('cout_unitaire'), 0)),
+                output_field=models.DecimalField(max_digits=12, decimal_places=2),
+            ),
+            quantite_vendue=Sum('quantite'),
+            ca_ventes=Sum(
+                F('quantite') * F('prix_vente'),
+                output_field=models.DecimalField(max_digits=12, decimal_places=2),
+            ),
+        )
+        benefice_by_cell = {r['cell_id']: float(r['benefice'] or 0) for r in lignes_agg}
+        qte_by_cell = {r['cell_id']: int(r['quantite_vendue'] or 0) for r in lignes_agg}
+        ca_by_cell = {r['cell_id']: float(r['ca_ventes'] or 0) for r in lignes_agg}
+
+        cells = distributeur.cells.all().order_by('row_index', 'col_index')
+        produits = []
+        for cell in cells:
+            nom = (cell.nom_produit or cell.stock_product.nom if cell.stock_product else f"L{cell.row_index + 1}C{cell.col_index + 1}").strip() or f"L{cell.row_index + 1}C{cell.col_index + 1}"
+            benefice = benefice_by_cell.get(cell.id, 0)
+            quantite_vendue = qte_by_cell.get(cell.id, 0)
+            ca_ventes = ca_by_cell.get(cell.id, 0)
+            produits.append({
+                'cell_id': cell.id,
+                'nom_produit': nom,
+                'row_index': cell.row_index,
+                'col_index': cell.col_index,
+                'benefice': round(benefice, 2),
+                'ca_ventes': round(ca_ventes, 2),
+                'quantite_vendue': quantite_vendue,
+            })
+        produits.sort(key=lambda x: (-x['benefice'], -x['ca_ventes']))
+
+        return Response({
+            'distributeur_id': distributeur.id,
+            'produits': produits,
         })
 
 
@@ -2642,6 +2790,33 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class DistributeurReapproLigneViewSet(viewsets.ModelViewSet):
+    """ViewSet pour modifier les lignes de réappro (prix vente, coût unitaire) afin de corriger les erreurs."""
+    serializer_class = DistributeurReapproLigneSerializer
+    permission_classes = [AllowAny]
+    http_method_names = ['get', 'head', 'options', 'patch', 'put']
+
+    def get_queryset(self):
+        queryset = DistributeurReapproLigne.objects.select_related('session', 'cell').all().order_by('session', 'cell')
+        session_id = self.request.query_params.get('session_id')
+        if session_id:
+            queryset = queryset.filter(session_id=session_id)
+        return queryset
+
+
+class DistributeurFraisViewSet(viewsets.ModelViewSet):
+    """Frais du distributeur : entretien, frais banque TPE, etc. CRUD complet."""
+    serializer_class = DistributeurFraisSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = DistributeurFrais.objects.select_related('distributeur').all().order_by('-date_frais', '-created_at')
+        distributeur_id = self.request.query_params.get('distributeur_id')
+        if distributeur_id:
+            queryset = queryset.filter(distributeur_id=distributeur_id)
+        return queryset
+
+
 class StockProductViewSet(viewsets.ModelViewSet):
     serializer_class = StockProductSerializer
     permission_classes = [AllowAny]
@@ -2708,10 +2883,32 @@ class StockProductViewSet(viewsets.ModelViewSet):
                     'quantite': product.quantite,
                 }, status=status.HTTP_200_OK)
             else:
+                # Sans prix : on crée quand même un lot (prix 0) pour que terminer réappro puisse déduire le stock
+                achat = StockPurchase.objects.create(
+                    lieu_achat='Ajustement manuel',
+                    date_achat=timezone.now(),
+                )
+                nom_produit = (product.nom or product.nom_produit or '').strip() or f'Produit #{product.pk}'
+                item = StockPurchaseItem.objects.create(
+                    achat=achat,
+                    produit=product,
+                    nom_produit=nom_produit,
+                    quantite=quantite,
+                    prix_unitaire=0,
+                    montant_total=0,
+                    unite='pièce',
+                )
                 StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') + quantite)
+                StockLot.objects.create(
+                    produit=product,
+                    purchase_item=item,
+                    quantite_restante=quantite,
+                    prix_achat_unitaire=0,
+                    date_achat=achat.date_achat,
+                )
                 product.refresh_from_db()
                 return Response({
-                    'message': 'Quantité ajoutée',
+                    'message': 'Quantité ajoutée (lot créé pour réappro)',
                     'quantite': product.quantite,
                 }, status=status.HTTP_200_OK)
 
@@ -2842,12 +3039,12 @@ class StockPurchaseViewSet(viewsets.ModelViewSet):
 
 
 class StockLotViewSet(viewsets.ModelViewSet):
-    """ViewSet pour gérer les lots de stock (FIFO)"""
+    """ViewSet pour gérer les lots de stock (FIFO). PATCH permet de corriger prix_achat_unitaire ou quantite_restante."""
     serializer_class = StockLotSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        queryset = StockLot.objects.all().order_by('date_achat', 'created_at')
+        queryset = StockLot.objects.select_related('produit').all().order_by('date_achat', 'created_at')
         produit_id = self.request.query_params.get('produit_id')
         if produit_id:
             queryset = queryset.filter(produit_id=produit_id)
@@ -2857,10 +3054,14 @@ class StockLotViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(quantite_restante__gt=0)
         return queryset
 
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return StockPurchaseCreateSerializer
-        return StockPurchaseSerializer
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        # Resynchroniser la quantité du produit = somme des quantite_restante de tous ses lots
+        if instance.produit_id:
+            total = StockLot.objects.filter(produit_id=instance.produit_id).aggregate(
+                total=Sum('quantite_restante')
+            )['total'] or 0
+            StockProduct.objects.filter(pk=instance.produit_id).update(quantite=total)
 
 
 @api_view(['GET'])

@@ -97,6 +97,10 @@ const MouvementReapproPage = ({
       setSession(response.data);
     } catch (error) {
       console.error("Erreur chargement session:", error);
+      if (error.response?.status === 404) {
+        clearReapproFromStorage();
+        if (onClose) onClose();
+      }
     }
   };
 
@@ -157,6 +161,7 @@ const MouvementReapproPage = ({
       await axios.post(
         `/api/distributeur-reappro-sessions/${sessionId}/terminer/`
       );
+      clearReapproFromStorage();
       if (onTerminer) onTerminer();
       onClose();
     } catch (error) {

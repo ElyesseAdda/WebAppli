@@ -19,8 +19,11 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Snackbar,
   Switch,
@@ -49,6 +52,10 @@ import {
   MdHistory,
   MdExpandMore,
   MdExpandLess,
+  MdCalendarMonth,
+  MdDateRange,
+  MdPublic,
+  MdEmojiEvents,
 } from "react-icons/md";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import DistributeurGrid from "./DistributeurGrid";
@@ -92,8 +99,29 @@ const DistributeursDashboard = () => {
   const [openReapproDetail, setOpenReapproDetail] = useState(false);
   const [selectedReapproSession, setSelectedReapproSession] = useState(null);
   const [loadingReapproDetail, setLoadingReapproDetail] = useState(false);
+  const [editingLigneId, setEditingLigneId] = useState(null);
+  const [editLignePrix, setEditLignePrix] = useState("");
+  const [editLigneCout, setEditLigneCout] = useState("");
+  const [savingLigne, setSavingLigne] = useState(false);
+  const [editingMouvement, setEditingMouvement] = useState(null);
+  const [openMouvementEditModal, setOpenMouvementEditModal] = useState(false);
   const [savedReappro, setSavedReappro] = useState(null);
   const [planOuvert, setPlanOuvert] = useState(false);
+  const now = new Date();
+  const [benefitYear, setBenefitYear] = useState(now.getFullYear());
+  const [benefitMonth, setBenefitMonth] = useState(now.getMonth() + 1);
+  /** Affichage bénéfice: "mois" (par mois, défaut) | "annuel" | "global" */
+  const [benefitViewMode, setBenefitViewMode] = useState("mois");
+  const [openBenefitModal, setOpenBenefitModal] = useState(false);
+  const [openProductStatsModal, setOpenProductStatsModal] = useState(false);
+  const [resumeProduits, setResumeProduits] = useState({ produits: [] });
+  const [loadingResumeProduits, setLoadingResumeProduits] = useState(false);
+  const [meilleurMois, setMeilleurMois] = useState({ year: null, month: null, benefice: null });
+  const [fraisList, setFraisList] = useState([]);
+  const [openFraisDialog, setOpenFraisDialog] = useState(false);
+  const [editingFrais, setEditingFrais] = useState(null);
+  const [fraisForm, setFraisForm] = useState({ description: "", date_frais: new Date().toISOString().slice(0, 10), montant: "" });
+  const [savingFrais, setSavingFrais] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -162,16 +190,131 @@ const DistributeursDashboard = () => {
     }
   };
 
-  const fetchResume = async (distributeurId) => {
+  const fetchResume = async (distributeurId, year, month) => {
     if (!distributeurId) return;
     try {
+      const params = {};
+      if (year != null) params.year = year;
+      if (month != null) params.month = month;
       const response = await axios.get(
-        `/api/distributeurs/${distributeurId}/resume/`
+        `/api/distributeurs/${distributeurId}/resume/`,
+        { params }
       );
       setResume(response.data);
     } catch (error) {
       console.error("Erreur chargement résumé:", error);
       showSnackbar("Erreur lors du chargement du résumé", "error");
+    }
+  };
+
+  const fetchResumeProduits = async (distributeurId, year, month) => {
+    if (!distributeurId) return;
+    try {
+      setLoadingResumeProduits(true);
+      const params = {};
+      if (year != null) params.year = year;
+      if (month != null) params.month = month;
+      const response = await axios.get(
+        `/api/distributeurs/${distributeurId}/resume_produits/`,
+        { params }
+      );
+      setResumeProduits(response.data);
+    } catch (error) {
+      console.error("Erreur chargement bénéfice par produit:", error);
+      showSnackbar("Erreur lors du chargement des produits", "error");
+      setResumeProduits({ produits: [] });
+    } finally {
+      setLoadingResumeProduits(false);
+    }
+  };
+
+  const fetchMeilleurMois = async (distributeurId) => {
+    if (!distributeurId) return;
+    try {
+      const response = await axios.get(
+        `/api/distributeurs/${distributeurId}/meilleur_mois/`
+      );
+      setMeilleurMois(response.data);
+    } catch (error) {
+      console.error("Erreur chargement meilleur mois:", error);
+      setMeilleurMois({ year: null, month: null, benefice: null });
+    }
+  };
+
+  const fetchFrais = async (distributeurId) => {
+    if (!distributeurId) return;
+    try {
+      const response = await axios.get("/api/distributeur-frais/", {
+        params: { distributeur_id: distributeurId },
+      });
+      const data = response.data.results || response.data;
+      setFraisList(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Erreur chargement frais:", error);
+      setFraisList([]);
+    }
+  };
+
+  const handleOpenFraisDialog = () => {
+    setEditingFrais(null);
+    setFraisForm({ description: "", date_frais: new Date().toISOString().slice(0, 10), montant: "" });
+    fetchFrais(selectedId);
+    setOpenFraisDialog(true);
+  };
+
+  const handleSaveFrais = async () => {
+    if (!selectedId || (!fraisForm.description?.trim() && !fraisForm.montant)) return;
+    const montant = parseFloat(String(fraisForm.montant).replace(",", "."));
+    if (isNaN(montant) || montant < 0) return;
+    setSavingFrais(true);
+    try {
+      const payload = {
+        distributeur: selectedId,
+        description: fraisForm.description?.trim() || "Frais",
+        date_frais: fraisForm.date_frais,
+        montant: montant,
+      };
+      if (editingFrais?.id) {
+        await axios.patch(`/api/distributeur-frais/${editingFrais.id}/`, payload);
+        showSnackbar("Frais mis à jour");
+      } else {
+        await axios.post("/api/distributeur-frais/", payload);
+        showSnackbar("Frais ajouté");
+      }
+      setEditingFrais(null);
+      setFraisForm({ description: "", date_frais: new Date().toISOString().slice(0, 10), montant: "" });
+      fetchFrais(selectedId);
+      if (benefitViewMode === "mois") {
+        fetchResume(selectedId, benefitYear, benefitMonth);
+      } else if (benefitViewMode === "annuel") {
+        fetchResume(selectedId, benefitYear, null);
+      } else {
+        fetchResume(selectedId);
+      }
+    } catch (error) {
+      console.error("Erreur sauvegarde frais:", error);
+      showSnackbar(error.response?.data?.detail || "Erreur lors de la sauvegarde", "error");
+    } finally {
+      setSavingFrais(false);
+    }
+  };
+
+  const handleDeleteFrais = async (id) => {
+    if (!window.confirm("Supprimer ce frais ?")) return;
+    try {
+      await axios.delete(`/api/distributeur-frais/${id}/`);
+      showSnackbar("Frais supprimé");
+      fetchFrais(selectedId);
+      if (benefitViewMode === "mois") {
+        fetchResume(selectedId, benefitYear, benefitMonth);
+      } else if (benefitViewMode === "annuel") {
+        fetchResume(selectedId, benefitYear, null);
+      } else {
+        fetchResume(selectedId);
+      }
+    } catch (error) {
+      console.error("Erreur suppression frais:", error);
+      showSnackbar("Erreur lors de la suppression", "error");
     }
   };
 
@@ -210,6 +353,78 @@ const DistributeursDashboard = () => {
   const handleCloseReapproDetail = () => {
     setOpenReapproDetail(false);
     setSelectedReapproSession(null);
+    setEditingLigneId(null);
+  };
+
+  const handleSaveLigne = async (ligneId) => {
+    const prix = parseFloat(String(editLignePrix).replace(",", "."));
+    const cout = editLigneCout === "" || editLigneCout == null ? null : parseFloat(String(editLigneCout).replace(",", "."));
+    if (isNaN(prix) || prix < 0) return;
+    if (cout !== null && (isNaN(cout) || cout < 0)) return;
+    setSavingLigne(true);
+    try {
+      await axios.patch(`/api/distributeur-reappro-lignes/${ligneId}/`, {
+        prix_vente: prix,
+        cout_unitaire: cout,
+      });
+      showSnackbar("Ligne mise à jour");
+      setEditingLigneId(null);
+      const sessionId = selectedReapproSession?.id;
+      if (sessionId) {
+        await handleOpenReapproDetail(sessionId);
+      }
+      fetchReapproSessions(selectedId);
+      fetchMeilleurMois(selectedId);
+      if (benefitViewMode === "mois") {
+        fetchResume(selectedId, benefitYear, benefitMonth);
+        fetchResumeProduits(selectedId, benefitYear, benefitMonth);
+      } else if (benefitViewMode === "annuel") {
+        fetchResume(selectedId, benefitYear, null);
+        fetchResumeProduits(selectedId, benefitYear, null);
+      } else {
+        fetchResume(selectedId);
+        fetchResumeProduits(selectedId);
+      }
+    } catch (error) {
+      console.error("Erreur mise à jour ligne:", error);
+      showSnackbar(error.response?.data?.detail || error.response?.data?.prix_vente?.[0] || "Erreur lors de la mise à jour", "error");
+    } finally {
+      setSavingLigne(false);
+    }
+  };
+
+  const handleOpenEditMouvement = (mouvement) => {
+    setEditingMouvement(mouvement);
+    setMouvementForm({
+      ...defaultMouvementForm,
+      mouvement_type: mouvement.mouvement_type,
+      quantite: mouvement.quantite,
+      prix_unitaire: mouvement.prix_unitaire ?? 0,
+      date_mouvement: mouvement.date_mouvement ? new Date(mouvement.date_mouvement).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+      commentaire: mouvement.commentaire || "",
+    });
+    setOpenMouvementEditModal(true);
+  };
+
+  const handleSaveMouvementEdit = async () => {
+    if (!editingMouvement?.id) return;
+    try {
+      await axios.patch(`/api/distributeur-mouvements/${editingMouvement.id}/`, {
+        mouvement_type: mouvementForm.mouvement_type,
+        quantite: Number(mouvementForm.quantite),
+        prix_unitaire: Number(mouvementForm.prix_unitaire),
+        date_mouvement: mouvementForm.date_mouvement,
+        commentaire: mouvementForm.commentaire || "",
+      });
+      showSnackbar("Mouvement mis à jour");
+      setOpenMouvementEditModal(false);
+      setEditingMouvement(null);
+      setMouvementForm(defaultMouvementForm);
+      fetchMouvements(selectedId);
+    } catch (error) {
+      console.error("Erreur mise à jour mouvement:", error);
+      showSnackbar(error.response?.data?.detail || "Erreur lors de la mise à jour", "error");
+    }
   };
 
   useEffect(() => {
@@ -219,10 +434,24 @@ const DistributeursDashboard = () => {
   useEffect(() => {
     if (!selectedId) return;
     fetchMouvements(selectedId);
-    fetchResume(selectedId);
     fetchReapproSessions(selectedId);
+    fetchMeilleurMois(selectedId);
     setSavedReappro(getReapproFromStorage());
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (benefitViewMode === "mois") {
+      fetchResume(selectedId, benefitYear, benefitMonth);
+      fetchResumeProduits(selectedId, benefitYear, benefitMonth);
+    } else if (benefitViewMode === "annuel") {
+      fetchResume(selectedId, benefitYear, null);
+      fetchResumeProduits(selectedId, benefitYear, null);
+    } else {
+      fetchResume(selectedId);
+      fetchResumeProduits(selectedId);
+    }
+  }, [selectedId, benefitYear, benefitMonth, benefitViewMode]);
 
   const openCreateDistributeur = () => {
     setEditingDistributeur(null);
@@ -701,20 +930,19 @@ const DistributeursDashboard = () => {
         </Paper>
       </Box>
 
-      {/* Résumé financier - Design modern cards */}
+      {/* Résumé financier — Bénéfice (clic sur la carte pour changer l'affichage) */}
       <Box sx={{ px: 2, mb: 4 }}>
         <Typography 
           variant="subtitle2" 
-          sx={{ mb: 2, fontWeight: 800, color: "text.secondary", textTransform: "uppercase", fontSize: "0.7rem", letterSpacing: "1.2px" }}
+          sx={{ fontWeight: 800, color: "text.secondary", textTransform: "uppercase", fontSize: "0.7rem", letterSpacing: "1.2px", mb: 2 }}
         >
           Performance Financière
         </Typography>
-        
         <Grid container spacing={2}>
-          {/* Carte Bénéfice Principale */}
           <Grid item xs={12}>
             <Paper 
               elevation={0}
+              onClick={() => setOpenBenefitModal(true)}
               sx={{ 
                 p: 3, 
                 borderRadius: "28px", 
@@ -722,103 +950,447 @@ const DistributeursDashboard = () => {
                 color: "white",
                 position: "relative",
                 overflow: "hidden",
-                boxShadow: "0 12px 32px rgba(25, 118, 210, 0.3)"
+                boxShadow: "0 12px 32px rgba(25, 118, 210, 0.3)",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                "&:active": { transform: "scale(0.98)" },
+                "&:hover": { bgcolor: "primary.dark" }
               }}
             >
-              {/* Effet de fond décoratif */}
-              <Box sx={{ 
-                position: "absolute", 
-                right: -20, 
-                top: -20, 
-                opacity: 0.1, 
-                transform: "rotate(-15deg)" 
-              }}>
+              <Box sx={{ position: "absolute", right: -20, top: -20, opacity: 0.1, transform: "rotate(-15deg)" }}>
                 <MdAttachMoney size={120} />
               </Box>
-
               <Box sx={{ position: "relative", zIndex: 1 }}>
                 <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 700, textTransform: "uppercase" }}>
-                  Bénéfice Net Total
+                  Bénéfice Net — {benefitViewMode === "mois"
+                    ? `${["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"][benefitMonth - 1]} ${benefitYear}`
+                    : benefitViewMode === "annuel"
+                    ? `Année ${benefitYear}`
+                    : "Total global"}
                 </Typography>
                 <Typography variant="h3" sx={{ fontWeight: 900, my: 0.5, letterSpacing: "-1px" }}>
                   {(resume.benefice_total ?? resume.benefice)?.toFixed(2) ?? "0.00"} €
                 </Typography>
-                
-                {(resume.benefice_reappro != null && Number(resume.benefice_reappro) !== 0) && (
-                  <Chip 
-                    label={`Réappro: +${Number(resume.benefice_reappro).toFixed(2)} €`}
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1, alignItems: "center" }}>
+                  {meilleurMois?.year != null && meilleurMois?.month != null && (
+                    <Box sx={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: 0.5, 
+                      bgcolor: "rgba(255,255,255,0.15)", 
+                      px: 1, 
+                      py: 0.3, 
+                      borderRadius: "8px",
+                      backdropFilter: "blur(4px)"
+                    }}>
+                      <MdEmojiEvents size={14} color="#ffd700" />
+                      <Typography variant="caption" sx={{ color: "white", fontWeight: 700, fontSize: "0.65rem" }}>
+                        Record: {["Janv.", "Fév.", "Mars", "Avril", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."][meilleurMois.month - 1]} {meilleurMois.year} ({Number(meilleurMois.benefice ?? 0).toFixed(2)} €)
+                      </Typography>
+                    </Box>
+                  )}
+                  {(resume.total_frais != null && Number(resume.total_frais) > 0) && (
+                    <Typography component="span" variant="caption" sx={{ color: "rgba(255,255,255,0.85)", fontSize: "0.7rem" }}>
+                      Frais période: -{Number(resume.total_frais).toFixed(2)} €
+                    </Typography>
+                  )}
+                  <Button
                     size="small"
+                    variant="text"
+                    onClick={(e) => { e.stopPropagation(); handleOpenFraisDialog(); }}
                     sx={{ 
-                      bgcolor: "rgba(255,255,255,0.2)", 
-                      color: "white", 
-                      fontWeight: 700,
-                      fontSize: "0.65rem",
-                      backdropFilter: "blur(4px)",
-                      border: "none",
-                      mt: 1
+                      color: "rgba(255,255,255,0.9)", 
+                      fontSize: "0.7rem", 
+                      fontWeight: 700, 
+                      minWidth: "auto", 
+                      py: 0,
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.1)" }
                     }}
-                  />
-                )}
+                  >
+                    Liste des frais
+                  </Button>
+                </Box>
+                <Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.8 }}>
+                  Cliquer pour changer la période
+                </Typography>
               </Box>
             </Paper>
           </Grid>
-          
-          {/* Entrées / Sorties */}
-          <Grid item xs={6}>
-            <Paper 
-              elevation={0}
-              sx={{ 
-                p: 2, 
-                borderRadius: "24px", 
-                border: "1px solid",
+          <Grid item xs={12}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => setOpenProductStatsModal(true)}
+              sx={{
+                borderRadius: "18px",
+                py: 1.5,
+                textTransform: "none",
+                fontWeight: 800,
                 borderColor: "divider",
+                color: "text.primary",
                 bgcolor: "background.paper",
                 display: "flex",
-                flexDirection: "column",
-                gap: 0.5,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.02)"
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "success.main" }}>
-                <Box sx={{ p: 0.5, bgcolor: "success.light", borderRadius: "8px", display: "flex" }}>
-                  <MdTrendingUp size={16} />
-                </Box>
-                <Typography variant="caption" sx={{ fontWeight: 800, fontSize: "0.65rem" }}>ENTRÉES</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary" }}>
-                {resume.total_entrees?.toFixed(2) ?? "0.00"} €
-              </Typography>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={6}>
-            <Paper 
-              elevation={0}
-              sx={{ 
-                p: 2, 
-                borderRadius: "24px", 
+                justifyContent: "space-between",
+                px: 2.5,
                 border: "1px solid",
-                borderColor: "divider",
-                bgcolor: "background.paper",
-                display: "flex",
-                flexDirection: "column",
-                gap: 0.5,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.02)"
+                "&:active": { transform: "scale(0.98)" },
+                "& .MuiButton-startIcon": { color: "primary.main" }
               }}
+              startIcon={<MdTrendingUp size={24} />}
+              endIcon={<MdChevronRight size={20} color="#ccc" />}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "error.main" }}>
-                <Box sx={{ p: 0.5, bgcolor: "error.light", borderRadius: "8px", display: "flex" }}>
-                  <MdTrendingDown size={16} />
-                </Box>
-                <Typography variant="caption" sx={{ fontWeight: 800, fontSize: "0.65rem" }}>SORTIES</Typography>
-              </Box>
-              <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary" }}>
-                {resume.total_sorties?.toFixed(2) ?? "0.00"} €
-              </Typography>
-            </Paper>
+              Analyse détaillée par produit
+            </Button>
           </Grid>
         </Grid>
       </Box>
+
+      {/* Détail des bénéfices par produit — Meilleures ventes */}
+      {/* (Section supprimée car remplacée par le modal de performance) */}
+
+      {/* Modal choix affichage bénéfice (par mois / annuel / global) */}
+      <Dialog 
+        open={openBenefitModal} 
+        onClose={() => setOpenBenefitModal(false)} 
+        maxWidth="xs" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: isMobile ? "24px 24px 0 0" : "28px",
+            position: isMobile ? "fixed" : "relative",
+            bottom: isMobile ? 0 : "auto",
+            m: isMobile ? 0 : 2,
+            maxHeight: "90vh"
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          textAlign: "center", 
+          fontWeight: 800, 
+          pt: 3,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1
+        }}>
+          {isMobile && (
+            <Box sx={{ 
+              width: 40, 
+              height: 4, 
+              bgcolor: "grey.300", 
+              borderRadius: 2, 
+              mb: 2 
+            }} />
+          )}
+          Période d'affichage
+        </DialogTitle>
+        <DialogContent sx={{ pb: 4 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            {/* Option: Par mois */}
+            <Paper
+              elevation={0}
+              onClick={() => setBenefitViewMode("mois")}
+              sx={{
+                p: 2,
+                borderRadius: "16px",
+                border: "2px solid",
+                borderColor: benefitViewMode === "mois" ? "primary.main" : "divider",
+                bgcolor: benefitViewMode === "mois" ? "primary.50" : "background.paper",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: benefitViewMode === "mois" ? 2 : 0 }}>
+                <Box sx={{ 
+                  p: 1, 
+                  borderRadius: "12px", 
+                  bgcolor: benefitViewMode === "mois" ? "primary.main" : "grey.100",
+                  color: benefitViewMode === "mois" ? "white" : "grey.600"
+                }}>
+                  <MdCalendarMonth size={24} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>
+                  Par mois
+                </Typography>
+                {benefitViewMode === "mois" && (
+                  <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "primary.main" }} />
+                )}
+              </Box>
+              
+              {benefitViewMode === "mois" && (
+                <Box sx={{ display: "flex", gap: 1.5 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Mois</InputLabel>
+                    <Select
+                      value={benefitMonth}
+                      label="Mois"
+                      onChange={(e) => setBenefitMonth(Number(e.target.value))}
+                      sx={{ borderRadius: "10px" }}
+                    >
+                      {["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"].map((label, i) => (
+                        <MenuItem key={i} value={i + 1}>{label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Année</InputLabel>
+                    <Select
+                      value={benefitYear}
+                      label="Année"
+                      onChange={(e) => setBenefitYear(Number(e.target.value))}
+                      sx={{ borderRadius: "10px" }}
+                    >
+                      {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                        <MenuItem key={y} value={y}>{y}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
+            </Paper>
+
+            {/* Option: Annuel */}
+            <Paper
+              elevation={0}
+              onClick={() => setBenefitViewMode("annuel")}
+              sx={{
+                p: 2,
+                borderRadius: "16px",
+                border: "2px solid",
+                borderColor: benefitViewMode === "annuel" ? "primary.main" : "divider",
+                bgcolor: benefitViewMode === "annuel" ? "primary.50" : "background.paper",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: benefitViewMode === "annuel" ? 2 : 0 }}>
+                <Box sx={{ 
+                  p: 1, 
+                  borderRadius: "12px", 
+                  bgcolor: benefitViewMode === "annuel" ? "primary.main" : "grey.100",
+                  color: benefitViewMode === "annuel" ? "white" : "grey.600"
+                }}>
+                  <MdDateRange size={24} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>
+                  Année complète
+                </Typography>
+                {benefitViewMode === "annuel" && (
+                  <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "primary.main" }} />
+                )}
+              </Box>
+              
+              {benefitViewMode === "annuel" && (
+                <FormControl fullWidth size="small">
+                  <InputLabel>Année</InputLabel>
+                  <Select
+                    value={benefitYear}
+                    label="Année"
+                    onChange={(e) => setBenefitYear(Number(e.target.value))}
+                    sx={{ borderRadius: "10px" }}
+                  >
+                    {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                      <MenuItem key={y} value={y}>{y}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            </Paper>
+
+            {/* Option: Global */}
+            <Paper
+              elevation={0}
+              onClick={() => setBenefitViewMode("global")}
+              sx={{
+                p: 2,
+                borderRadius: "16px",
+                border: "2px solid",
+                borderColor: benefitViewMode === "global" ? "primary.main" : "divider",
+                bgcolor: benefitViewMode === "global" ? "primary.50" : "background.paper",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Box sx={{ 
+                  p: 1, 
+                  borderRadius: "12px", 
+                  bgcolor: benefitViewMode === "global" ? "primary.main" : "grey.100",
+                  color: benefitViewMode === "global" ? "white" : "grey.600"
+                }}>
+                  <MdPublic size={24} />
+                </Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>
+                  Vue globale
+                </Typography>
+                {benefitViewMode === "global" && (
+                  <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "primary.main" }} />
+                )}
+              </Box>
+            </Paper>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button 
+            fullWidth 
+            variant="contained" 
+            onClick={() => setOpenBenefitModal(false)}
+            sx={{ 
+              borderRadius: "14px", 
+              py: 1.5, 
+              fontWeight: 700,
+              textTransform: "none"
+            }}
+          >
+            Appliquer les filtres
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal Performance Produits */}
+      <Dialog 
+        open={openProductStatsModal} 
+        onClose={() => setOpenProductStatsModal(false)} 
+        maxWidth="xs" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: isMobile ? "24px 24px 0 0" : "28px",
+            position: isMobile ? "fixed" : "relative",
+            bottom: isMobile ? 0 : "auto",
+            m: isMobile ? 0 : 2,
+            maxHeight: "90vh"
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          textAlign: "center", 
+          fontWeight: 800, 
+          pt: 3,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1
+        }}>
+          {isMobile && (
+            <Box sx={{ 
+              width: 40, 
+              height: 4, 
+              bgcolor: "grey.300", 
+              borderRadius: 2, 
+              mb: 2 
+            }} />
+          )}
+          Performance des Produits
+          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700 }}>
+            {benefitViewMode === "mois"
+              ? `${["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"][benefitMonth - 1]} ${benefitYear}`
+              : benefitViewMode === "annuel"
+              ? `Année ${benefitYear}`
+              : "Toute la période"}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pb: 4, px: 2 }}>
+          {loadingResumeProduits ? (
+            <Box sx={{ py: 6, textAlign: "center" }}>
+              <LinearProgress sx={{ borderRadius: 2, height: 4, mb: 2 }} />
+              <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                Analyse des ventes en cours...
+              </Typography>
+            </Box>
+          ) : (resumeProduits?.produits || []).filter(p => p.ca_ventes > 0 || p.benefice > 0).length === 0 ? (
+            <Box sx={{ py: 6, textAlign: "center", opacity: 0.6 }}>
+              <MdHistory size={48} color="#ccc" />
+              <Typography variant="body2" sx={{ mt: 2, fontWeight: 700, color: "text.secondary" }}>
+                Aucune donnée de performance
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
+              {(() => {
+                // Calcul du score de performance combiné : (Bénéfice normalisé * 0.7) + (Unités normalisées * 0.3)
+                const prods = (resumeProduits?.produits || []).filter(p => p.ca_ventes > 0 || p.benefice > 0);
+                const maxBen = Math.max(...prods.map(p => p.benefice), 1);
+                const maxQty = Math.max(...prods.map(p => p.quantite_vendue), 1);
+                
+                const scoredProds = prods.map(p => {
+                  const benScore = (p.benefice / maxBen) * 100;
+                  const qtyScore = (p.quantite_vendue / maxQty) * 100;
+                  const totalScore = (benScore * 0.7) + (qtyScore * 0.3);
+                  return { ...p, performanceScore: totalScore };
+                }).sort((a, b) => b.performanceScore - a.performanceScore);
+
+                const topScore = scoredProds[0]?.performanceScore || 1;
+                const colors = [
+                  "#2196f3", // Bleu
+                  "#4caf50", // Vert
+                  "#ff9800", // Orange
+                  "#f44336", // Rouge
+                  "#9c27b0", // Violet
+                  "#00bcd4", // Cyan
+                  "#e91e63", // Rose
+                  "#3f51b5", // Indigo
+                  "#ffc107", // Ambre
+                  "#009688", // Teal
+                ];
+
+                return scoredProds.map((p, idx) => {
+                  const relativeScore = (p.performanceScore / topScore) * 100;
+                  const barColor = colors[idx % colors.length];
+                  
+                  return (
+                    <Box key={p.cell_id}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", mb: 0.5 }}>
+                        <Box sx={{ flex: 1, minWidth: 0, pr: 2 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary", fontSize: "0.9rem", lineHeight: 1.2 }}>
+                            {idx + 1}. {p.nom_produit}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.7rem" }}>
+                            {p.quantite_vendue} u. • {p.benefice.toFixed(2)} €
+                          </Typography>
+                        </Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 900, color: barColor, fontSize: "0.85rem" }}>
+                          {Math.round(relativeScore)}%
+                        </Typography>
+                      </Box>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={Math.max(relativeScore, 2)} 
+                        sx={{ 
+                          height: 6, 
+                          borderRadius: 3,
+                          bgcolor: "grey.100",
+                          "& .MuiLinearProgress-bar": {
+                            borderRadius: 3,
+                            bgcolor: barColor
+                          }
+                        }} 
+                      />
+                    </Box>
+                  );
+                });
+              })()}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button 
+            fullWidth 
+            variant="outlined" 
+            onClick={() => setOpenProductStatsModal(false)}
+            sx={{ 
+              borderRadius: "14px", 
+              py: 1.5, 
+              fontWeight: 700,
+              textTransform: "none",
+              borderColor: "divider",
+              color: "text.primary"
+            }}
+          >
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Mouvement en cours (localStorage) — reprendre */}
       {savedReappro && savedReappro.distributeurId === selectedId && (
@@ -1043,8 +1615,16 @@ const DistributeursDashboard = () => {
                   
                   <IconButton
                     size="small"
+                    onClick={() => handleOpenEditMouvement(mouvement)}
+                    sx={{ color: "primary.main", ml: 0.5 }}
+                    title="Modifier le mouvement"
+                  >
+                    <MdEdit size={18} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
                     onClick={() => handleDeleteMouvement(mouvement.id)}
-                    sx={{ color: "text.disabled", ml: 1 }}
+                    sx={{ color: "text.disabled", ml: 0.5 }}
                   >
                     <MdDelete size={18} />
                   </IconButton>
@@ -1095,6 +1675,16 @@ const DistributeursDashboard = () => {
               showSnackbar("Mouvement enregistré");
               setSavedReappro(null);
               fetchReapproSessions(selectedId);
+              if (benefitViewMode === "mois") {
+                fetchResume(selectedId, benefitYear, benefitMonth);
+                fetchResumeProduits(selectedId, benefitYear, benefitMonth);
+              } else if (benefitViewMode === "annuel") {
+                fetchResume(selectedId, benefitYear, null);
+                fetchResumeProduits(selectedId, benefitYear, null);
+              } else {
+                fetchResume(selectedId);
+                fetchResumeProduits(selectedId);
+              }
             }}
           />
         ) : selectedId ? (
@@ -1248,6 +1838,111 @@ const DistributeursDashboard = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Modal modification mouvement individuel */}
+      <Dialog
+        open={openMouvementEditModal}
+        onClose={() => {
+          setOpenMouvementEditModal(false);
+          setEditingMouvement(null);
+          setMouvementForm(defaultMouvementForm);
+        }}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={window.innerWidth < 600}
+      >
+        <DialogTitle>Modifier le mouvement</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel id="mouvement-edit-type-label">Type</InputLabel>
+            <Select
+              labelId="mouvement-edit-type-label"
+              value={mouvementForm.mouvement_type}
+              label="Type"
+              onChange={(event) =>
+                setMouvementForm((prev) => ({
+                  ...prev,
+                  mouvement_type: event.target.value,
+                }))
+              }
+            >
+              <MenuItem value="entree">Entrée</MenuItem>
+              <MenuItem value="sortie">Sortie</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            label="Quantité"
+            type="number"
+            value={mouvementForm.quantite}
+            onChange={(event) =>
+              setMouvementForm((prev) => ({
+                ...prev,
+                quantite: event.target.value,
+              }))
+            }
+            fullWidth
+            inputProps={{ min: 1 }}
+          />
+          <TextField
+            label="Prix unitaire (€)"
+            type="number"
+            value={mouvementForm.prix_unitaire}
+            onChange={(event) =>
+              setMouvementForm((prev) => ({
+                ...prev,
+                prix_unitaire: event.target.value,
+              }))
+            }
+            fullWidth
+            inputProps={{ min: 0, step: 0.01 }}
+          />
+          <TextField
+            label="Date et heure"
+            type="datetime-local"
+            value={mouvementForm.date_mouvement}
+            onChange={(event) =>
+              setMouvementForm((prev) => ({
+                ...prev,
+                date_mouvement: event.target.value,
+              }))
+            }
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          />
+          <TextField
+            label="Commentaire (optionnel)"
+            value={mouvementForm.commentaire}
+            onChange={(event) =>
+              setMouvementForm((prev) => ({
+                ...prev,
+                commentaire: event.target.value,
+              }))
+            }
+            multiline
+            minRows={2}
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setOpenMouvementEditModal(false);
+              setEditingMouvement(null);
+              setMouvementForm(defaultMouvementForm);
+            }}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveMouvementEdit}
+            disabled={!mouvementForm.quantite || !mouvementForm.prix_unitaire}
+            sx={{ minHeight: 44 }}
+          >
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Détail mouvement réappro — produits, quantités, prix, bénéfices */}
       <Dialog
         open={openReapproDetail}
@@ -1322,60 +2017,114 @@ const DistributeursDashboard = () => {
                       </Box>
                     </Box>
 
-                    {/* Grid de données */}
-                    <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Box>
-                          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", fontSize: "0.6rem" }}>
-                            Prix Vente
-                          </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                            {Number(ligne.prix_vente).toFixed(2)} €
-                          </Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Box sx={{ textAlign: "right" }}>
-                          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", fontSize: "0.6rem" }}>
-                            Coût Unitaire
-                          </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                            {ligne.cout_unitaire != null ? `${Number(ligne.cout_unitaire).toFixed(2)} €` : "—"}
-                          </Typography>
-                        </Box>
-                      </Grid>
-                      
-                      <Grid item xs={12}>
-                        <Box sx={{ 
-                          p: 1.5, 
-                          borderRadius: "12px", 
-                          bgcolor: "grey.50", 
-                          display: "flex", 
-                          justifyContent: "space-between",
-                          alignItems: "center"
-                        }}>
-                          <Box>
-                            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.6rem" }}>
-                              TOTAL LIGNE
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 900 }}>
-                              {Number(ligne.montant_total).toFixed(2)} €
-                            </Typography>
-                          </Box>
-                          <Box sx={{ textAlign: "right" }}>
-                            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.6rem" }}>
-                              BÉNÉFICE
-                            </Typography>
-                            <Typography variant="body1" sx={{ 
-                              fontWeight: 900, 
-                              color: (ligne.benefice ?? 0) >= 0 ? "success.main" : "error.main" 
+                    {/* Grid de données — ou formulaire d'édition */}
+                    {editingLigneId === ligne.id ? (
+                      <Box sx={{ mt: 2 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              label="Prix vente (€)"
+                              type="number"
+                              value={editLignePrix}
+                              onChange={(e) => setEditLignePrix(e.target.value)}
+                              inputProps={{ min: 0, step: 0.01 }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              label="Coût unitaire (€)"
+                              type="number"
+                              value={editLigneCout}
+                              onChange={(e) => setEditLigneCout(e.target.value)}
+                              inputProps={{ min: 0, step: 0.01 }}
+                              placeholder="Optionnel"
+                            />
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", mt: 1 }}>
+                              <Button size="small" variant="outlined" onClick={() => setEditingLigneId(null)} disabled={savingLigne}>
+                                Annuler
+                              </Button>
+                              <Button size="small" variant="contained" onClick={() => handleSaveLigne(ligne.id)} disabled={savingLigne}>
+                                {savingLigne ? "Enregistrement…" : "Enregistrer"}
+                              </Button>
+                            </Box>
+                          </Grid>
+                        </Grid>
+                      </Box>
+                    ) : (
+                      <>
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <Box>
+                              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", fontSize: "0.6rem" }}>
+                                Prix Vente
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                                {Number(ligne.prix_vente).toFixed(2)} €
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Box sx={{ textAlign: "right" }}>
+                              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", fontSize: "0.6rem" }}>
+                                Coût Unitaire
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                                {ligne.cout_unitaire != null ? `${Number(ligne.cout_unitaire).toFixed(2)} €` : "—"}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          
+                          <Grid item xs={12}>
+                            <Box sx={{ 
+                              p: 1.5, 
+                              borderRadius: "12px", 
+                              bgcolor: "grey.50", 
+                              display: "flex", 
+                              justifyContent: "space-between",
+                              alignItems: "center"
                             }}>
-                              {(ligne.benefice ?? 0).toFixed(2)} €
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Grid>
-                    </Grid>
+                              <Box>
+                                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.6rem" }}>
+                                  TOTAL LIGNE
+                                </Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 900 }}>
+                                  {Number(ligne.montant_total).toFixed(2)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.6rem" }}>
+                                  BÉNÉFICE
+                                </Typography>
+                                <Typography variant="body1" sx={{ 
+                                  fontWeight: 900, 
+                                  color: (ligne.benefice ?? 0) >= 0 ? "success.main" : "error.main" 
+                                }}>
+                                  {(ligne.benefice ?? 0).toFixed(2)} €
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  onClick={() => {
+                                    setEditingLigneId(ligne.id);
+                                    setEditLignePrix(String(ligne.prix_vente ?? ""));
+                                    setEditLigneCout(ligne.cout_unitaire != null ? String(ligne.cout_unitaire) : "");
+                                  }}
+                                  sx={{ minWidth: "auto", fontWeight: 700 }}
+                                >
+                                  Modifier
+                                </Button>
+                              </Box>
+                            </Box>
+                          </Grid>
+                        </Grid>
+                      </>
+                    )}
                   </Box>
                 </Card>
               ))}

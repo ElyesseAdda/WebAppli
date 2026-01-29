@@ -962,6 +962,33 @@ class DistributeurReapproLigne(models.Model):
         return f"{self.session} — {self.cell.nom_produit or ('L%dC%d' % (self.cell.row_index, self.cell.col_index))}: {self.quantite}u @ {self.prix_vente}€"
 
 
+class DistributeurFrais(models.Model):
+    """Frais liés au distributeur : entretien, frais banque TPE, etc."""
+    distributeur = models.ForeignKey(
+        Distributeur,
+        on_delete=models.CASCADE,
+        related_name='frais',
+        help_text="Distributeur concerné",
+    )
+    description = models.CharField(max_length=255, help_text="Ex: Frais banque TPE, Entretien mensuel")
+    date_frais = models.DateField(help_text="Date du frais")
+    montant = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Montant en € (toujours positif, déduit du bénéfice)",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date_frais', '-created_at']
+        verbose_name = "Frais distributeur"
+        verbose_name_plural = "Frais distributeur"
+
+    def __str__(self):
+        return f"{self.distributeur.nom} — {self.description} ({self.date_frais.strftime('%d/%m/%Y')}) : {self.montant} €"
+
+
 class StockProduct(models.Model):
     """Produit du stock mobile (indépendant du système de stock principal)"""
     nom = models.CharField(max_length=150, help_text="Nom du produit", blank=False)

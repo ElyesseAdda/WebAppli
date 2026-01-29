@@ -31,9 +31,12 @@ import {
   MdLocationOn,
   MdExpandMore,
   MdExpandLess,
+  MdSettings,
+  MdChevronRight,
 } from "react-icons/md";
 import StockProductDialog from "./StockProductDialog";
 import CreatePurchaseDialog from "./CreatePurchaseDialog";
+import StockLotEditDialog from "./StockLotEditDialog";
 
 const StockTab = () => {
   const [products, setProducts] = useState([]);
@@ -52,6 +55,8 @@ const StockTab = () => {
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [openPurchasesList, setOpenPurchasesList] = useState(false);
   const [purchaseSearchTerm, setPurchaseSearchTerm] = useState("");
+  const [openLotEditDialog, setOpenLotEditDialog] = useState(false);
+  const [productForLots, setProductForLots] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -488,7 +493,34 @@ const StockTab = () => {
                       Entrée
                     </Button>
                   </Box>
-                  
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<MdSettings size={18} />}
+                    endIcon={<MdChevronRight size={18} />}
+                    onClick={() => {
+                      setProductForLots(product);
+                      setOpenLotEditDialog(true);
+                    }}
+                    sx={{
+                      mt: 1,
+                      textTransform: "none",
+                      fontWeight: 700,
+                      color: "text.primary",
+                      fontSize: "0.75rem",
+                      borderRadius: "12px",
+                      borderColor: "divider",
+                      py: 0.8,
+                      bgcolor: "grey.50",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      px: 2,
+                      "&:active": { transform: "scale(0.98)" }
+                    }}
+                  >
+                    Modifier les lots (prix / qté)
+                  </Button>
                   {/* Meilleur prix (discret) */}
                   {getBestPriceForProduct(product) && (
                     <Box
@@ -960,6 +992,17 @@ const StockTab = () => {
         onClose={handleCloseProductDialog}
         product={editingProduct}
         onSave={handleSaveProduct}
+      />
+
+      {/* Dialog modifier les lots d'un produit (prix unitaire, quantité restante) */}
+      <StockLotEditDialog
+        open={openLotEditDialog}
+        onClose={() => {
+          setOpenLotEditDialog(false);
+          setProductForLots(null);
+        }}
+        product={productForLots}
+        onSaved={() => fetchProducts(true)}
       />
 
       {/* Dialog pour créer un achat */}
