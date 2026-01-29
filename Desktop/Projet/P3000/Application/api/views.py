@@ -36,7 +36,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -47,7 +47,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,AgencyExpenseMonth,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, StockProduct, StockPurchase, StockPurchaseItem, StockLot,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -2366,11 +2366,23 @@ class DistributeurViewSet(viewsets.ModelViewSet):
         total_sorties = aggregates.get('total_sorties') or 0
         benefice = total_entrees - total_sorties
 
+        # Bénéfice réappro = somme (prix_vente - cout_unitaire) * quantite sur toutes les lignes des sessions terminées
+        sessions_reappro = DistributeurReapproSession.objects.filter(
+            distributeur=distributeur, statut='termine'
+        ).prefetch_related('lignes')
+        benefice_reappro = sum(
+            float(l.benefice)
+            for s in sessions_reappro
+            for l in s.lignes.all()
+        )
+
         return Response({
             'distributeur_id': distributeur.id,
             'total_entrees': float(total_entrees),
             'total_sorties': float(total_sorties),
             'benefice': float(benefice),
+            'benefice_reappro': round(benefice_reappro, 2),
+            'benefice_total': round(float(benefice) + benefice_reappro, 2),
         })
 
 
@@ -2398,6 +2410,238 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
         return queryset.order_by('row_index', 'col_index')
 
 
+class DistributeurVenteViewSet(viewsets.ModelViewSet):
+    """Ventes distributeur — chaque vente stocke son prix_vente à l'instant T pour calculs exacts."""
+    serializer_class = DistributeurVenteSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = DistributeurVente.objects.all().order_by('-date_vente')
+        distributeur_id = self.request.query_params.get('distributeur_id')
+        cell_id = self.request.query_params.get('cell_id')
+        if distributeur_id:
+            queryset = queryset.filter(distributeur_id=distributeur_id)
+        if cell_id:
+            queryset = queryset.filter(cell_id=cell_id)
+        return queryset
+
+
+class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
+    """Sessions de réapprovisionnement — grille cases, unités par case, résumé, terminer pour enregistrer."""
+    serializer_class = DistributeurReapproSessionSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = DistributeurReapproSession.objects.all().order_by('-date_debut')
+        distributeur_id = self.request.query_params.get('distributeur_id')
+        statut = self.request.query_params.get('statut')
+        if distributeur_id:
+            queryset = queryset.filter(distributeur_id=distributeur_id)
+        if statut:
+            queryset = queryset.filter(statut=statut)
+        return queryset
+
+    @action(detail=True, methods=['post'], url_path='add-ligne')
+    def add_ligne(self, request, pk=None):
+        """Ajoute ou met à jour une ligne (case + quantite) pour cette session. prix_vente = cell.prix_vente."""
+        session = self.get_object()
+        if session.statut != 'en_cours':
+            return Response(
+                {'error': 'Cette session est déjà terminée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        cell_id = request.data.get('cell_id')
+        quantite = request.data.get('quantite', 0)
+        if not cell_id:
+            return Response({'error': 'cell_id requis'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            quantite = int(quantite)
+        except (TypeError, ValueError):
+            quantite = 0
+        if quantite <= 0:
+            return Response({'error': 'Quantité invalide (min 1)'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            cell = DistributeurCell.objects.get(pk=cell_id, distributeur_id=session.distributeur_id)
+        except DistributeurCell.DoesNotExist:
+            return Response({'error': 'Case introuvable ou ne correspond pas au distributeur'}, status=status.HTTP_404_NOT_FOUND)
+        prix_vente = cell.prix_vente or 0
+        # Coût unitaire = prix d'achat StockLot du produit (priorité : case liée à StockProduct, sinon match par nom)
+        cout_unitaire = Decimal('0')
+        nom_cell = (cell.nom_produit or '').strip()
+        # 1) Produit lié directement (même liste distributeur / stock)
+        produit_stock = getattr(cell, 'stock_product', None)
+        if produit_stock:
+            logger.info(
+                "[add_ligne] Produit lié (stock_product): id=%s, nom=%r",
+                produit_stock.id, produit_stock.nom,
+            )
+        else:
+            # 2) Fallback : recherche par nom de la case
+            noms_stock = list(StockProduct.objects.values_list('nom', flat=True)[:30])
+            noms_produit_stock = list(StockProduct.objects.values_list('nom_produit', flat=True)[:30])
+            logger.info(
+                "[add_ligne] ENTRÉE: cell_id=%s, nom_produit (case)=%r, nom_cell (strip)=%r, quantite=%s, prix_vente=%s",
+                cell_id, cell.nom_produit, nom_cell, quantite, prix_vente,
+            )
+            logger.info(
+                "[add_ligne] Produits en base (nom): %s",
+                noms_stock,
+            )
+            logger.info(
+                "[add_ligne] Produits en base (nom_produit): %s",
+                noms_produit_stock,
+            )
+            if not nom_cell:
+                logger.warning("[add_ligne] nom_cell vide et pas de stock_product -> cout_unitaire=0")
+            else:
+                produit_stock = StockProduct.objects.filter(
+                    Q(nom__iexact=nom_cell) | Q(nom_produit__iexact=nom_cell)
+                ).first()
+                if produit_stock:
+                    logger.info(
+                        "[add_ligne] Produit trouvé (iexact): id=%s, nom=%r, nom_produit=%r",
+                        produit_stock.id, produit_stock.nom, produit_stock.nom_produit,
+                    )
+                else:
+                    produit_stock = StockProduct.objects.filter(
+                        Q(nom__icontains=nom_cell) | Q(nom_produit__icontains=nom_cell)
+                    ).first()
+                    if produit_stock:
+                        logger.info(
+                            "[add_ligne] Produit trouvé (icontains): id=%s, nom=%r, nom_produit=%r",
+                            produit_stock.id, produit_stock.nom, produit_stock.nom_produit,
+                        )
+                    else:
+                        logger.warning(
+                            "[add_ligne] Aucun StockProduct trouvé pour nom_cell=%r -> cout_unitaire=0",
+                            nom_cell,
+                        )
+        if produit_stock:
+                lots_avec_stock = StockLot.objects.filter(
+                    produit=produit_stock, quantite_restante__gt=0
+                )
+                nb_lots_avec_stock = lots_avec_stock.count()
+                # Détail de chaque lot (pour debug)
+                for lot in lots_avec_stock[:10]:
+                    logger.info(
+                        "[add_ligne] Lot id=%s: prix_achat_unitaire=%s, quantite_restante=%s",
+                        lot.id, lot.prix_achat_unitaire, lot.quantite_restante,
+                    )
+                agg = lots_avec_stock.aggregate(
+                    total_val=Sum(F('prix_achat_unitaire') * F('quantite_restante')),
+                    total_qty=Sum('quantite_restante'),
+                )
+                total_val = agg.get('total_val')
+                total_qty = agg.get('total_qty')
+                logger.info(
+                    "[add_ligne] Lots avec stock: nb=%s, total_val=%s, total_qty=%s (total_val is None=%s, total_qty>0=%s)",
+                    nb_lots_avec_stock, total_val, total_qty, total_val is None, bool(total_qty and total_qty > 0),
+                )
+                if total_qty and total_qty > 0 and total_val is not None:
+                    cout_unitaire = total_val / total_qty
+                    logger.info(
+                        "[add_ligne] cout_unitaire = moyenne pondérée = %s",
+                        cout_unitaire,
+                    )
+                else:
+                    logger.info(
+                        "[add_ligne] Pas de moyenne pondérée (total_qty=%s, total_val=%s) -> fallback moyenne tous lots",
+                        total_qty, total_val,
+                    )
+                    tous_lots = StockLot.objects.filter(produit=produit_stock)
+                    nb_tous = tous_lots.count()
+                    cout_moyen = tous_lots.aggregate(avg=Avg('prix_achat_unitaire'))['avg']
+                    logger.info(
+                        "[add_ligne] Aucun lot avec stock -> moyenne tous lots: nb_lots=%s, avg(prix_achat_unitaire)=%s",
+                        nb_tous, cout_moyen,
+                    )
+                    if cout_moyen is not None:
+                        cout_unitaire = cout_moyen
+                    else:
+                        logger.warning("[add_ligne] cout_moyen est None -> cout_unitaire reste 0")
+        logger.info(
+            "[add_ligne] Résultat AVANT save: cout_unitaire=%s (session=%s, cell=%s, nom_cell=%r)",
+            cout_unitaire, session.id, cell_id, nom_cell,
+        )
+        ligne, created = DistributeurReapproLigne.objects.update_or_create(
+            session=session,
+            cell=cell,
+            defaults={'quantite': quantite, 'prix_vente': prix_vente, 'cout_unitaire': cout_unitaire},
+        )
+        logger.info(
+            "[add_ligne] APRÈS save: ligne.id=%s, ligne.cout_unitaire=%s (created=%s)",
+            ligne.id, ligne.cout_unitaire, created,
+        )
+        serializer = DistributeurReapproLigneSerializer(ligne)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='terminer')
+    def terminer(self, request, pk=None):
+        """Termine la session : vérifie le stock, retire les quantités du stock (FIFO), puis marque la session terminée."""
+        session = self.get_object()
+        if session.statut != 'en_cours':
+            return Response(
+                {'error': 'Cette session est déjà terminée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        lignes = list(session.lignes.select_related('cell', 'cell__stock_product').all())
+        # Quantité requise par produit (plusieurs lignes peuvent concerner le même produit)
+        from collections import defaultdict
+        by_product = defaultdict(int)
+        for lig in lignes:
+            if lig.cell.stock_product_id:
+                by_product[lig.cell.stock_product_id] += lig.quantite
+        # Vérifier que le stock est suffisant pour chaque produit
+        insuffisant = []
+        for product_id, quantite_requise in by_product.items():
+            try:
+                product = StockProduct.objects.get(pk=product_id)
+            except StockProduct.DoesNotExist:
+                insuffisant.append({'produit': f'Produit #%s' % product_id, 'requis': quantite_requise, 'disponible': 0})
+                continue
+            disponible = StockLot.objects.filter(
+                produit=product, quantite_restante__gt=0
+            ).aggregate(total=Sum('quantite_restante'))['total'] or 0
+            if disponible < quantite_requise:
+                insuffisant.append({
+                    'produit': product.nom or product.nom_produit or f'Produit #%s' % product_id,
+                    'requis': quantite_requise,
+                    'disponible': disponible,
+                })
+        if insuffisant:
+            msg = "Stock insuffisant. Faites un achat avant de valider le mouvement."
+            return Response({
+                'error': msg,
+                'insuffisant': insuffisant,
+            }, status=status.HTTP_400_BAD_REQUEST)
+        # Déduire du stock (FIFO) et terminer la session
+        with transaction.atomic():
+            for lig in lignes:
+                if not lig.cell.stock_product_id:
+                    continue
+                product = lig.cell.stock_product
+                quantite = lig.quantite
+                lots = list(
+                    StockLot.objects.filter(produit=product, quantite_restante__gt=0)
+                    .order_by('date_achat', 'created_at')
+                    .select_for_update()
+                )
+                restant_a_retirer = quantite
+                for lot in lots:
+                    if restant_a_retirer <= 0:
+                        break
+                    prise = min(restant_a_retirer, lot.quantite_restante)
+                    lot.quantite_restante -= prise
+                    lot.save(update_fields=['quantite_restante'])
+                    restant_a_retirer -= prise
+                StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
+            session.statut = 'termine'
+            session.date_fin = timezone.now()
+            session.save()
+        serializer = DistributeurReapproSessionSerializer(session)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class StockProductViewSet(viewsets.ModelViewSet):
     serializer_class = StockProductSerializer
     permission_classes = [AllowAny]
@@ -2408,31 +2652,117 @@ class StockProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_quantity(self, request, pk=None):
-        """Ajouter de la quantité au produit"""
+        """Ajouter de la quantité au produit. Si prix_unitaire est fourni, crée un achat virtuel (Ajustement manuel) et un StockLot."""
         product = self.get_object()
         quantite = request.data.get('quantite', 0)
-        
+        prix_unitaire = request.data.get('prix_unitaire')
+
+        try:
+            quantite = int(quantite)
+        except (TypeError, ValueError):
+            quantite = 0
         if quantite <= 0:
             return Response({'error': 'Quantité invalide'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        product.quantite += int(quantite)
-        product.save()
-        
-        return Response({'message': 'Quantité ajoutée', 'quantite': product.quantite}, status=status.HTTP_200_OK)
+
+        # Prix unitaire optionnel : si fourni, crée un lot (Ajustement manuel) pour le coût en mouvement
+        has_prix = 'prix_unitaire' in request.data and request.data.get('prix_unitaire') is not None
+        if has_prix:
+            raw = request.data.get('prix_unitaire')
+            if raw != '':
+                try:
+                    prix_unitaire = Decimal(str(raw))
+                except (TypeError, ValueError):
+                    return Response({'error': 'Prix unitaire invalide'}, status=status.HTTP_400_BAD_REQUEST)
+                if prix_unitaire < 0:
+                    return Response({'error': 'Prix unitaire invalide'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                has_prix = False
+
+        with transaction.atomic():
+            if has_prix and prix_unitaire is not None and prix_unitaire >= 0:
+                achat = StockPurchase.objects.create(
+                    lieu_achat='Ajustement manuel',
+                    date_achat=timezone.now(),
+                )
+                nom_produit = (product.nom or product.nom_produit or '').strip() or f'Produit #{product.pk}'
+                item = StockPurchaseItem.objects.create(
+                    achat=achat,
+                    produit=product,
+                    nom_produit=nom_produit,
+                    quantite=quantite,
+                    prix_unitaire=prix_unitaire,
+                    montant_total=quantite * prix_unitaire,
+                    unite='pièce',
+                )
+                StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') + quantite)
+                StockLot.objects.create(
+                    produit=product,
+                    purchase_item=item,
+                    quantite_restante=quantite,
+                    prix_achat_unitaire=prix_unitaire,
+                    date_achat=achat.date_achat,
+                )
+                product.refresh_from_db()
+                return Response({
+                    'message': 'Quantité ajoutée (ajustement manuel enregistré)',
+                    'quantite': product.quantite,
+                }, status=status.HTTP_200_OK)
+            else:
+                StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') + quantite)
+                product.refresh_from_db()
+                return Response({
+                    'message': 'Quantité ajoutée',
+                    'quantite': product.quantite,
+                }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def remove_quantity(self, request, pk=None):
-        """Retirer de la quantité au produit"""
+        """Retirer de la quantité. Si is_perte=True, consomme en FIFO et crée une StockLoss avec le coût calculé."""
         product = self.get_object()
         quantite = request.data.get('quantite', 0)
-        
-        if quantite <= 0 or product.quantite < int(quantite):
+        is_perte = request.data.get('is_perte', False)
+        commentaire = request.data.get('commentaire') or ''
+
+        try:
+            quantite = int(quantite)
+        except (TypeError, ValueError):
+            quantite = 0
+        if quantite <= 0 or product.quantite < quantite:
             return Response({'error': 'Quantité insuffisante ou invalide'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        product.quantite -= int(quantite)
-        product.save()
-        
-        return Response({'message': 'Quantité retirée', 'quantite': product.quantite}, status=status.HTTP_200_OK)
+
+        montant_perte = Decimal('0')
+        with transaction.atomic():
+            if is_perte:
+                lots = list(
+                    StockLot.objects.filter(produit=product, quantite_restante__gt=0)
+                    .order_by('date_achat', 'created_at')
+                    .select_for_update()
+                )
+                restant_a_retirer = quantite
+                for lot in lots:
+                    if restant_a_retirer <= 0:
+                        break
+                    prise = min(restant_a_retirer, lot.quantite_restante)
+                    montant_perte += Decimal(str(lot.prix_achat_unitaire)) * prise
+                    lot.quantite_restante -= prise
+                    lot.save(update_fields=['quantite_restante'])
+                    restant_a_retirer -= prise
+            StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
+            if is_perte:
+                StockLoss.objects.create(
+                    produit=product,
+                    quantite=quantite,
+                    montant_total=montant_perte,
+                    date_perte=timezone.now(),
+                    commentaire=(commentaire or '').strip() or None,
+                )
+            product.refresh_from_db()
+        return Response({
+            'message': 'Quantité retirée' + (' (perte enregistrée)' if is_perte else ''),
+            'quantite': product.quantite,
+            'perte_enregistree': is_perte,
+            'montant_perte': str(montant_perte) if is_perte else None,
+        }, status=status.HTTP_200_OK)
 
 
 class StockPurchaseViewSet(viewsets.ModelViewSet):

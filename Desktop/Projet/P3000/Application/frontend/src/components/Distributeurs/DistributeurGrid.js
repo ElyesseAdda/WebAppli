@@ -90,6 +90,7 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
         nom_produit: cellData.nom_produit && cellData.nom_produit.trim() ? cellData.nom_produit.trim() : null,
         image_url: cellData.image_url && cellData.image_url.trim() ? cellData.image_url.trim() : null,
         image_s3_key: cellData.image_s3_key || null,
+        prix_vente: cellData.prix_vente != null && cellData.prix_vente !== "" ? cellData.prix_vente : null,
       };
 
       if (selectedCell && selectedCell.id) {

@@ -16,6 +16,8 @@ import {
   Chip,
   Fab,
   LinearProgress,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   MdAdd,
@@ -40,6 +42,9 @@ const StockTab = () => {
   const [openQuantityDialog, setOpenQuantityDialog] = useState(false);
   const [quantity, setQuantity] = useState("");
   const [actionType, setActionType] = useState("add"); // "add" or "remove"
+  const [prixUnitaire, setPrixUnitaire] = useState(""); // optionnel pour ajout manuel (création lot)
+  const [isPerte, setIsPerte] = useState(false); // pour retrait : perte (casse, vol...)
+  const [commentairePerte, setCommentairePerte] = useState("");
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [openPurchaseDialog, setOpenPurchaseDialog] = useState(false);
@@ -130,6 +135,9 @@ const StockTab = () => {
     setSelectedProduct(product);
     setActionType(type);
     setQuantity("");
+    setPrixUnitaire("");
+    setIsPerte(false);
+    setCommentairePerte("");
     setOpenQuantityDialog(true);
   };
 
@@ -137,6 +145,9 @@ const StockTab = () => {
     setOpenQuantityDialog(false);
     setSelectedProduct(null);
     setQuantity("");
+    setPrixUnitaire("");
+    setIsPerte(false);
+    setCommentairePerte("");
   };
 
   const handleQuantityAction = async () => {
@@ -151,9 +162,18 @@ const StockTab = () => {
           ? `/api/stock-products/${selectedProduct.id}/add_quantity/`
           : `/api/stock-products/${selectedProduct.id}/remove_quantity/`;
 
-      await axios.post(endpoint, {
-        quantite: parseInt(quantity),
-      });
+      const payload = { quantite: parseInt(quantity) };
+      if (actionType === "add") {
+        const prix = prixUnitaire.trim().replace(",", ".");
+        if (prix !== "" && !isNaN(parseFloat(prix)) && parseFloat(prix) >= 0) {
+          payload.prix_unitaire = parseFloat(prix);
+        }
+      } else {
+        payload.is_perte = !!isPerte;
+        if (isPerte && commentairePerte.trim()) payload.commentaire = commentairePerte.trim();
+      }
+
+      await axios.post(endpoint, payload);
 
       handleCloseQuantityDialog();
       fetchProducts();
@@ -832,7 +852,7 @@ const StockTab = () => {
             variant="filled"
             InputProps={{
               disableUnderline: true,
-              sx: { 
+              sx: {
                 borderRadius: "20px",
                 bgcolor: "grey.100",
                 fontSize: "1.5rem",
@@ -841,6 +861,56 @@ const StockTab = () => {
               }
             }}
           />
+
+          {actionType === "add" && (
+            <TextField
+              fullWidth
+              label="Prix unitaire (€) — optionnel (ajustement manuel)"
+              type="number"
+              value={prixUnitaire}
+              onChange={(e) => setPrixUnitaire(e.target.value)}
+              inputProps={{ min: 0, step: 0.01 }}
+              variant="filled"
+              sx={{ mt: 2 }}
+              InputProps={{
+                disableUnderline: true,
+                sx: { borderRadius: "20px", bgcolor: "grey.100" }
+              }}
+              helperText="Si renseigné, un lot sera créé pour le suivi FIFO."
+            />
+          )}
+
+          {actionType === "remove" && (
+            <>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isPerte}
+                    onChange={(e) => setIsPerte(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="C'est une perte (casse, vol, péremption…)"
+                sx={{ mt: 2, display: "block" }}
+              />
+              {isPerte && (
+                <TextField
+                  fullWidth
+                  label="Commentaire (optionnel)"
+                  value={commentairePerte}
+                  onChange={(e) => setCommentairePerte(e.target.value)}
+                  placeholder="Ex: casse, vol..."
+                  variant="filled"
+                  size="small"
+                  sx={{ mt: 1 }}
+                  InputProps={{
+                    disableUnderline: true,
+                    sx: { borderRadius: "16px", bgcolor: "grey.100" }
+                  }}
+                />
+              )}
+            </>
+          )}
           
           {actionType === "remove" && selectedProduct && (
             <Box sx={{ mt: 2, textAlign: "center" }}>

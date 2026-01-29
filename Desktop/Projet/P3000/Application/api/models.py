@@ -787,6 +787,23 @@ class DistributeurCell(models.Model):
         default='center',
         help_text="Position de l'image dans la case"
     )
+    # Prix de vente dans cette case — utilisé pour calculer le bénéfice (vs coûts StockLot)
+    prix_vente = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Prix de vente (€) pour le calcul du bénéfice par produit"
+    )
+    # Lien vers le produit du stock : même liste de produits, coût unitaire calculé depuis StockLot
+    stock_product = models.ForeignKey(
+        'StockProduct',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='distributeur_cells',
+        help_text="Produit du stock lié à cette case (même liste) — pour coût et bénéfice"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -806,6 +823,143 @@ class DistributeurCell(models.Model):
         if len(words) >= 2:
             return (words[0][0] + words[1][0]).upper()
         return self.nom_produit[:2].upper()
+
+
+class DistributeurVente(models.Model):
+    """
+    Enregistrement d'une vente avec le prix de vente à l'instant T.
+    Le prix peut varier dans le temps ; on stocke toujours le prix au moment de la vente
+    pour que les calculs (CA, bénéfice vs coûts StockLot) soient exacts.
+    """
+    distributeur = models.ForeignKey(
+        Distributeur,
+        on_delete=models.CASCADE,
+        related_name='ventes',
+        help_text="Distributeur concerné"
+    )
+    cell = models.ForeignKey(
+        DistributeurCell,
+        on_delete=models.CASCADE,
+        related_name='ventes',
+        help_text="Case (produit) vendu"
+    )
+    quantite = models.PositiveIntegerField(default=1, help_text="Nombre d'unités vendues")
+    prix_vente = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Prix de vente à l'instant T (€) — stocké pour calculs exacts"
+    )
+    date_vente = models.DateTimeField(default=timezone.now, help_text="Date et heure de la vente")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_vente']
+        verbose_name = "Vente distributeur"
+        verbose_name_plural = "Ventes distributeur"
+        indexes = [
+            models.Index(fields=['distributeur', '-date_vente']),
+            models.Index(fields=['cell', '-date_vente']),
+        ]
+
+    @property
+    def montant_total(self):
+        return self.quantite * self.prix_vente
+
+    def __str__(self):
+        return f"Vente {self.quantite}u @ {self.prix_vente}€ — {self.cell.nom_produit or ('L%dC%d' % (self.cell.row_index, self.cell.col_index))} ({self.date_vente.strftime('%d/%m/%Y %H:%M')})"
+
+
+class DistributeurReapproSession(models.Model):
+    """
+    Session de réapprovisionnement (mouvement) du distributeur.
+    Une session = une tournée de remplissage des cases ; on enregistre les unités
+    par case puis on termine pour consulter plus tard (résumé par produit, bénéfices).
+    """
+    STATUT_CHOICES = [
+        ('en_cours', 'En cours'),
+        ('termine', 'Terminé'),
+    ]
+    distributeur = models.ForeignKey(
+        Distributeur,
+        on_delete=models.CASCADE,
+        related_name='reappro_sessions',
+        help_text="Distributeur concerné"
+    )
+    date_debut = models.DateTimeField(default=timezone.now, help_text="Début du mouvement")
+    date_fin = models.DateTimeField(blank=True, null=True, help_text="Fin du mouvement (quand terminé)")
+    statut = models.CharField(
+        max_length=20,
+        choices=STATUT_CHOICES,
+        default='en_cours',
+        help_text="En cours ou Terminé"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date_debut']
+        verbose_name = "Session réappro distributeur"
+        verbose_name_plural = "Sessions réappro distributeur"
+        indexes = [
+            models.Index(fields=['distributeur', '-date_debut']),
+            models.Index(fields=['statut']),
+        ]
+
+    def __str__(self):
+        return f"Réappro {self.distributeur.nom} — {self.date_debut.strftime('%d/%m/%Y %H:%M')} ({self.statut})"
+
+
+class DistributeurReapproLigne(models.Model):
+    """Ligne d'une session de réappro : case + quantité + prix vente + coût StockLot pour bénéfice (prix_vente - cout_unitaire)."""
+    session = models.ForeignKey(
+        DistributeurReapproSession,
+        on_delete=models.CASCADE,
+        related_name='lignes',
+        help_text="Session de réappro"
+    )
+    cell = models.ForeignKey(
+        DistributeurCell,
+        on_delete=models.CASCADE,
+        related_name='reappro_lignes',
+        help_text="Case réapprovisionnée"
+    )
+    quantite = models.PositiveIntegerField(default=1, help_text="Nombre d'unités ajoutées")
+    prix_vente = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Prix de vente (€) au moment du mouvement"
+    )
+    cout_unitaire = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        blank=True,
+        null=True,
+        help_text="Coût unitaire (€) issu des StockLot — pour calcul bénéfice"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['session', 'cell']
+        verbose_name = "Ligne réappro"
+        verbose_name_plural = "Lignes réappro"
+        unique_together = ('session', 'cell')
+        indexes = [
+            models.Index(fields=['session']),
+        ]
+
+    @property
+    def montant_total(self):
+        return self.quantite * self.prix_vente
+
+    @property
+    def benefice(self):
+        """Bénéfice = quantite * (prix_vente - cout_unitaire)."""
+        cout = self.cout_unitaire or 0
+        return self.quantite * (self.prix_vente - cout)
+
+    def __str__(self):
+        return f"{self.session} — {self.cell.nom_produit or ('L%dC%d' % (self.cell.row_index, self.cell.col_index))}: {self.quantite}u @ {self.prix_vente}€"
 
 
 class StockProduct(models.Model):
@@ -961,6 +1115,42 @@ class StockLot(models.Model):
     def est_epuise(self):
         """Vérifie si le lot est épuisé"""
         return self.quantite_restante == 0
+
+
+class StockLoss(models.Model):
+    """Perte de stock - unités perdues (casse, vol, etc.) avec coût calculé en FIFO"""
+    produit = models.ForeignKey(
+        StockProduct,
+        on_delete=models.CASCADE,
+        related_name='pertes',
+        help_text="Produit concerné"
+    )
+    quantite = models.PositiveIntegerField(help_text="Nombre d'unités perdues")
+    montant_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Coût total des pertes (calculé en FIFO à partir des lots)"
+    )
+    date_perte = models.DateTimeField(default=timezone.now, help_text="Date de la perte")
+    commentaire = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Ex: casse, vol, péremption..."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_perte']
+        verbose_name = "Perte de Stock"
+        verbose_name_plural = "Pertes de Stock"
+        indexes = [
+            models.Index(fields=['produit', '-date_perte']),
+        ]
+
+    def __str__(self):
+        return f"{self.produit.nom} - {self.quantite} u perdues - {self.montant_total}€ ({self.date_perte.strftime('%d/%m/%Y')})"
 
 
 class Fournisseur(models.Model):

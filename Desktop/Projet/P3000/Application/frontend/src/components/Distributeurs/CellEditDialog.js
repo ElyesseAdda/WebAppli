@@ -7,27 +7,15 @@ import {
   DialogActions,
   Button,
   TextField,
-  Tabs,
-  Tab,
   Box,
   Typography,
-  Grid,
-  Card,
-  CardMedia,
-  CardActionArea,
-  CircularProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   IconButton,
 } from "@mui/material";
-import {
-  MdClose,
-  MdSearch,
-  MdImage,
-  MdTextFields,
-} from "react-icons/md";
+import { MdClose } from "react-icons/md";
 
 const CellEditDialog = ({
   open,
@@ -38,98 +26,63 @@ const CellEditDialog = ({
   colIndex,
   onSave,
 }) => {
-  const [tabValue, setTabValue] = useState(0); // 0: Nom, 1: Image
   const [nomProduit, setNomProduit] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imagePosition, setImagePosition] = useState("center");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [prixVente, setPrixVente] = useState("");
+  const [stockProductId, setStockProductId] = useState(null);
+  const [stockProducts, setStockProducts] = useState([]);
+
+  useEffect(() => {
+    if (open) {
+      axios.get("/api/stock-products/").then((res) => setStockProducts(res.data.results || res.data || [])).catch(() => setStockProducts([]));
+    }
+  }, [open]);
 
   useEffect(() => {
     if (cell) {
       setNomProduit(cell.nom_produit || "");
       setImageUrl(cell.image_display_url || cell.image_url || "");
       setImagePosition(cell.image_position || "center");
-      if (cell.image_url || cell.image_display_url) {
-        setTabValue(1);
-      }
+      setPrixVente(cell.prix_vente != null && cell.prix_vente !== "" ? String(cell.prix_vente) : "");
+      setStockProductId(cell.stock_product ?? null);
     } else {
       setNomProduit("");
       setImageUrl("");
       setImagePosition("center");
-      setTabValue(0);
+      setPrixVente("");
+      setStockProductId(null);
     }
   }, [cell, open]);
 
-  const handleSearchProducts = async () => {
-    if (!searchTerm.trim()) return;
-    
-    setSearching(true);
-    setSearchResults([]);
-    try {
-      const response = await axios.get("/api/distributeurs/search-products/", {
-        params: { q: searchTerm },
-      });
-      const products = response.data.products || [];
-      setSearchResults(products);
-      
-      if (products.length === 0 && response.data.error) {
-        // Afficher un message si aucun résultat mais qu'il y a une erreur
-        console.warn("Aucun produit trouvé:", response.data.error);
-      }
-    } catch (error) {
-      console.error("Erreur recherche produits:", error);
-      setSearchResults([]);
-      // L'API retourne toujours un tableau products même en cas d'erreur
-      if (error.response?.data?.products) {
-        setSearchResults(error.response.data.products);
-      }
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleSelectProduct = (product) => {
-    setImageUrl(product.image_url);
-    setNomProduit(product.name);
-    setSelectedImage(product);
-    setTabValue(1);
-  };
-
   const handleSave = () => {
-    // Validation : au moins un nom ou une image doit être fourni
-    if (tabValue === 0 && !nomProduit.trim()) {
-      alert("Veuillez entrer un nom de produit");
+    if (!stockProductId) {
+      alert("Veuillez sélectionner un produit du stock.");
       return;
     }
-    if (tabValue === 1 && !imageUrl.trim()) {
-      alert("Veuillez entrer une URL d'image ou sélectionner un produit");
-      return;
-    }
-
-    // Préparer les données en s'assurant que les valeurs vides sont null
+    const p = stockProducts.find((x) => x.id === stockProductId);
+    const hasNom = !!nomProduit.trim();
+    const hasImage = !!imageUrl.trim();
     const cellData = {
-      distributeur: parseInt(distributeurId), // S'assurer que c'est un entier
-      row_index: parseInt(rowIndex), // S'assurer que c'est un entier
-      col_index: parseInt(colIndex), // S'assurer que c'est un entier
-      nom_produit: tabValue === 0 && nomProduit.trim() ? nomProduit.trim() : null,
-      image_url: tabValue === 1 && imageUrl.trim() ? imageUrl.trim() : null,
-      image_s3_key: null, // Sera géré plus tard si upload
-      image_position: imagePosition || 'center',
+      distributeur: parseInt(distributeurId),
+      row_index: parseInt(rowIndex),
+      col_index: parseInt(colIndex),
+      nom_produit: hasNom ? nomProduit.trim() : (p ? (p.nom || p.nom_produit) : null),
+      image_url: hasImage ? imageUrl.trim() : (p ? (p.image_display_url || p.image_url) : null),
+      image_s3_key: null,
+      image_position: imagePosition || "center",
+      prix_vente: prixVente.trim() !== "" && !isNaN(parseFloat(prixVente)) && parseFloat(prixVente) >= 0
+        ? parseFloat(prixVente)
+        : null,
+      stock_product: stockProductId,
     };
-
-    // Supprimer les clés avec valeur null pour éviter les problèmes
     Object.keys(cellData).forEach(key => {
-      if (cellData[key] === null || cellData[key] === '') {
-        // Garder null pour nom_produit et image_url car ils peuvent être null
-        if (key !== 'nom_produit' && key !== 'image_url' && key !== 'image_s3_key') {
+      if (cellData[key] === null || cellData[key] === "") {
+        if (!["nom_produit", "image_url", "image_s3_key", "prix_vente", "stock_product"].includes(key)) {
           delete cellData[key];
         }
       }
     });
-
     onSave(cellData);
     onClose();
   };
@@ -162,252 +115,116 @@ const CellEditDialog = ({
       </DialogTitle>
 
       <DialogContent>
-        <Tabs
-          value={tabValue}
-          onChange={(e, newValue) => setTabValue(newValue)}
-          sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
-        >
-          <Tab
-            icon={<MdTextFields size={20} />}
-            label="Nom du produit"
-            iconPosition="start"
-          />
-          <Tab
-            icon={<MdImage size={20} />}
-            label="Image"
-            iconPosition="start"
-          />
-        </Tabs>
-
-        {tabValue === 0 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <TextField
-              label="Nom du produit"
-              placeholder="Ex: Chips Lays"
-              value={nomProduit}
-              onChange={(e) => setNomProduit(e.target.value)}
-              fullWidth
-              autoFocus
-            />
-            {nomProduit && (
-              <Box
-                sx={{
-                  p: 2,
-                  bgcolor: "action.hover",
-                  borderRadius: "12px",
-                  textAlign: "center",
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <FormControl fullWidth sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}>
+              <InputLabel>Produit lié au stock</InputLabel>
+              <Select
+                value={stockProductId ?? ""}
+                label="Produit lié au stock"
+                onChange={(e) => {
+                  const id = e.target.value ? Number(e.target.value) : null;
+                  setStockProductId(id);
+                  if (id) {
+                    const p = stockProducts.find((x) => x.id === id);
+                    if (p) {
+                      setNomProduit(p.nom || p.nom_produit || nomProduit);
+                      setImageUrl(p.image_display_url || p.image_url || imageUrl);
+                    }
+                  }
                 }}
               >
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                  Aperçu (initiales)
-                </Typography>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    color: "primary.main",
-                  }}
-                >
-                  {nomProduit
-                    .split(" ")
-                    .map((w) => w[0])
-                    .join("")
-                    .toUpperCase()
-                    .slice(0, 2)}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {tabValue === 1 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {/* Recherche Open Food Facts */}
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                Rechercher un produit (Open Food Facts)
+                <MenuItem value="">Aucun</MenuItem>
+                {stockProducts.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>
+                    {p.nom || p.nom_produit || `Produit #${p.id}`}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Typography variant="caption" sx={{ mt: 0.5, display: "block", color: "text.secondary" }}>
+                Même liste que l'onglet Stock. Créez les produits dans l'onglet Stock.
               </Typography>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField
-                  placeholder="Ex: Coca Cola, Snickers, Mars..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      handleSearchProducts();
-                    }
-                  }}
-                  fullWidth
-                  size="small"
-                />
-                <Button
-                  variant="contained"
-                  onClick={handleSearchProducts}
-                  disabled={searching || !searchTerm.trim()}
-                  sx={{ minWidth: 44, minHeight: 44 }}
-                >
-                  {searching ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    <MdSearch size={20} />
-                  )}
-                </Button>
-              </Box>
-
-              {/* Résultats de recherche */}
-              {searchResults.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                    Résultats ({searchResults.length})
-                  </Typography>
-                  <Grid container spacing={1}>
-                    {searchResults.map((product, index) => (
-                      <Grid item xs={6} sm={4} key={product.code || index}>
-                        <Card
-                          sx={{
-                            cursor: "pointer",
-                            transition: "transform 0.2s",
-                            "&:hover": {
-                              transform: "scale(1.05)",
-                            },
-                          }}
-                        >
-                          <CardActionArea onClick={() => handleSelectProduct(product)}>
-                            {product.image_url ? (
-                              <CardMedia
-                                component="img"
-                                image={product.image_url}
-                                alt={product.name}
-                                sx={{
-                                  height: 100,
-                                  objectFit: "contain",
-                                  bgcolor: "background.default",
-                                }}
-                                onError={(e) => {
-                                  e.target.style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <Box
-                                sx={{
-                                  height: 100,
-                                  bgcolor: "action.hover",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <Typography variant="caption" color="text.secondary">
-                                  Pas d'image
-                                </Typography>
-                              </Box>
-                            )}
-                            <Box sx={{ p: 1 }}>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  display: "block",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {product.name}
-                              </Typography>
-                              {product.brand && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {product.brand}
-                                </Typography>
-                              )}
-                            </Box>
-                          </CardActionArea>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Box>
-              )}
-              
-              {/* Message si aucun résultat après recherche */}
-              {!searching && searchTerm.trim() && searchResults.length === 0 && (
-                <Box sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: "12px", textAlign: "center" }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Aucun produit trouvé pour "{searchTerm}"
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                    Essayez avec un autre terme de recherche
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-
-            {/* URL image manuelle */}
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                Ou entrer une URL d'image
-              </Typography>
-              <TextField
-                label="URL de l'image"
-                placeholder="https://..."
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                fullWidth
-              />
-            </Box>
-
-            {/* Position de l'image */}
-            {imageUrl && (
-              <Box>
-                <FormControl fullWidth>
-                  <InputLabel>Position de l'image</InputLabel>
-                  <Select
-                    value={imagePosition}
-                    label="Position de l'image"
-                    onChange={(e) => setImagePosition(e.target.value)}
-                  >
-                    <MenuItem value="center">Centré</MenuItem>
-                    <MenuItem value="top">Haut</MenuItem>
-                    <MenuItem value="bottom">Bas</MenuItem>
-                    <MenuItem value="left">Gauche</MenuItem>
-                    <MenuItem value="right">Droite</MenuItem>
-                  </Select>
-                </FormControl>
-
-                {/* Aperçu */}
-                <Box
-                  sx={{
-                    mt: 2,
-                    p: 2,
-                    bgcolor: "action.hover",
-                    borderRadius: "12px",
-                    textAlign: "center",
-                    minHeight: 150,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
-                    overflow: "hidden",
-                  }}
-                >
+            </FormControl>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+              Vue d'ensemble de la case (nom et image du produit lié au stock).
+            </Typography>
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: "16px",
+                border: "1px solid",
+                borderColor: "divider",
+                bgcolor: "grey.50",
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: "14px",
+                  bgcolor: "background.paper",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {imageUrl ? (
                   <img
                     src={imageUrl}
-                    alt="Aperçu"
+                    alt={nomProduit || "Produit"}
                     style={{
-                      maxWidth: "100%",
-                      maxHeight: "100%",
+                      width: "100%",
+                      height: "100%",
                       objectFit: "contain",
-                      objectPosition: imagePosition,
+                      objectPosition: imagePosition || "center",
                     }}
                     onError={(e) => {
                       e.target.style.display = "none";
                     }}
                   />
-                </Box>
+                ) : (
+                  <Typography
+                    variant="h5"
+                    sx={{ fontWeight: 800, color: "primary.main" }}
+                  >
+                    {nomProduit
+                      ? nomProduit
+                          .split(" ")
+                          .map((w) => w[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)
+                      : "—"}
+                  </Typography>
+                )}
               </Box>
-            )}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                  Produit
+                </Typography>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  {nomProduit || "Aucun nom"}
+                </Typography>
+              </Box>
+            </Box>
+            <TextField
+              label="Prix de vente (€)"
+              placeholder="Ex: 1.50"
+              type="number"
+              value={prixVente}
+              onChange={(e) => setPrixVente(e.target.value)}
+              inputProps={{ min: 0, step: 0.01 }}
+              fullWidth
+              helperText="Utilisé pour calculer le bénéfice (vs coûts d'achat StockLot)"
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
+            />
           </Box>
-        )}
       </DialogContent>
 
       <DialogActions sx={{ px: 2, pb: 2, justifyContent: "space-between" }}>
@@ -426,11 +243,7 @@ const CellEditDialog = ({
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={
-              tabValue === 0
-                ? !nomProduit.trim()
-                : !imageUrl.trim()
-            }
+            disabled={!stockProductId}
             sx={{ borderRadius: "12px", minHeight: 44 }}
           >
             Enregistrer

@@ -10,7 +10,7 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, StockProduct, StockPurchase, StockPurchaseItem, StockLot
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -743,13 +743,73 @@ class DistributeurMouvementSerializer(serializers.ModelSerializer):
         return float(obj.montant_total)
 
 
+class DistributeurVenteSerializer(serializers.ModelSerializer):
+    """Serializer pour les ventes distributeur — prix de vente stocké à l'instant T"""
+    montant_total = serializers.SerializerMethodField()
+    cell_nom_produit = serializers.CharField(source='cell.nom_produit', read_only=True)
+
+    class Meta:
+        model = DistributeurVente
+        fields = '__all__'
+
+    def get_montant_total(self, obj):
+        return float(obj.montant_total)
+
+
+class DistributeurReapproLigneSerializer(serializers.ModelSerializer):
+    """Ligne de réappro : case + quantite + prix_vente + cout_unitaire (bénéfice = prix vente - coût lot)."""
+    montant_total = serializers.SerializerMethodField()
+    benefice = serializers.SerializerMethodField()
+    cell_nom_produit = serializers.CharField(source='cell.nom_produit', read_only=True)
+    cell_row = serializers.IntegerField(source='cell.row_index', read_only=True)
+    cell_col = serializers.IntegerField(source='cell.col_index', read_only=True)
+
+    class Meta:
+        model = DistributeurReapproLigne
+        fields = '__all__'
+
+    def get_montant_total(self, obj):
+        return float(obj.montant_total)
+
+    def get_benefice(self, obj):
+        return float(obj.benefice)
+
+
+class DistributeurReapproSessionSerializer(serializers.ModelSerializer):
+    """Session de réappro — avec lignes (unités par case, montant, bénéfice = prix vente - coût lot)."""
+    lignes = DistributeurReapproLigneSerializer(many=True, read_only=True)
+    total_unites = serializers.SerializerMethodField()
+    total_montant = serializers.SerializerMethodField()
+    total_benefice = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DistributeurReapproSession
+        fields = '__all__'
+
+    def get_total_unites(self, obj):
+        return sum(l.quantite for l in obj.lignes.all())
+
+    def get_total_montant(self, obj):
+        return round(sum(float(l.montant_total) for l in obj.lignes.all()), 2)
+
+    def get_total_benefice(self, obj):
+        return round(sum(float(l.benefice) for l in obj.lignes.all()), 2)
+
+
 class DistributeurCellSerializer(serializers.ModelSerializer):
     initiales = serializers.CharField(read_only=True)
     image_display_url = serializers.SerializerMethodField()
+    stock_product_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = DistributeurCell
         fields = '__all__'
+
+    def get_stock_product_nom(self, obj):
+        """Nom du produit stock lié (pour affichage)."""
+        if getattr(obj, 'stock_product', None):
+            return obj.stock_product.nom
+        return None
 
     def validate_nom_produit(self, value):
         """Convertit les chaînes vides en None"""
@@ -775,14 +835,15 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, data):
-        """Valide que soit nom_produit soit image_url est fourni"""
+        """Valide : soit stock_product, soit nom_produit ou image_url."""
+        stock_product = data.get('stock_product')
         nom_produit = data.get('nom_produit')
         image_url = data.get('image_url')
-        
-        # Vérifier que les valeurs ne sont pas des chaînes vides après validation
+        if stock_product:
+            return data
         if not nom_produit and not image_url:
             raise serializers.ValidationError(
-                "Au moins un nom de produit ou une URL d'image doit être fourni"
+                "Au moins un produit lié (stock), un nom de produit ou une URL d'image doit être fourni"
             )
         return data
 
@@ -868,6 +929,15 @@ class StockLotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StockLot
+        fields = '__all__'
+
+
+class StockLossSerializer(serializers.ModelSerializer):
+    """Serializer pour les pertes de stock"""
+    produit_nom = serializers.CharField(source='produit.nom', read_only=True)
+
+    class Meta:
+        model = StockLoss
         fields = '__all__'
 
 

@@ -107,6 +107,8 @@ from .views import (
     DistributeurViewSet,
     DistributeurMouvementViewSet,
     DistributeurCellViewSet,
+    DistributeurVenteViewSet,
+    DistributeurReapproSessionViewSet,
     StockProductViewSet,
     StockPurchaseViewSet,
     StockLotViewSet,
@@ -180,6 +182,8 @@ router.register(r'stock', StockViewSet, basename='stock')  # Gère les routes st
 router.register(r'distributeurs', DistributeurViewSet, basename='distributeurs')
 router.register(r'distributeur-mouvements', DistributeurMouvementViewSet, basename='distributeur-mouvements')
 router.register(r'distributeur-cells', DistributeurCellViewSet, basename='distributeur-cells')
+router.register(r'distributeur-ventes', DistributeurVenteViewSet, basename='distributeur-ventes')
+router.register(r'distributeur-reappro-sessions', DistributeurReapproSessionViewSet, basename='distributeur-reappro-sessions')
 router.register(r'stock-products', StockProductViewSet, basename='stock-products')
 router.register(r'stock-purchases', StockPurchaseViewSet, basename='stock-purchases')
 router.register(r'stock-lots', StockLotViewSet, basename='stock-lots')
