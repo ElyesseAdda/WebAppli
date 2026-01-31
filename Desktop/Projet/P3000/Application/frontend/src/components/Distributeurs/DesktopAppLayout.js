@@ -9,7 +9,6 @@ import {
   ListItemText,
   Typography,
   IconButton,
-  Avatar,
   Divider,
   Tooltip,
   useTheme,
@@ -28,6 +27,9 @@ import DistributeursDashboard from "./DistributeursDashboard";
 import StatsTab from "./StatsTab";
 import DocumentsTab from "./DocumentsTab";
 import StockTab from "./StockTab";
+
+// Logo client
+import mjrLogo from "../../../static/frontend/src/img/MJR SERVICES logo.jpg";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED_WIDTH = 80;
@@ -115,67 +117,79 @@ const DesktopAppLayout = () => {
           },
         }}
       >
-        {/* Header de la sidebar */}
+        {/* Header de la sidebar - Logo client */}
         <Box
           sx={{
-            height: 80,
+            height: sidebarCollapsed ? 80 : 100,
             display: "flex",
             alignItems: "center",
             justifyContent: sidebarCollapsed ? "center" : "space-between",
-            px: sidebarCollapsed ? 1 : 3,
+            px: sidebarCollapsed ? 1 : 2,
             borderBottom: "1px solid",
             borderColor: "divider",
+            bgcolor: "#ffffff",
           }}
         >
           {!sidebarCollapsed && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Avatar
-                sx={{
-                  width: 42,
-                  height: 42,
-                  bgcolor: "primary.main",
-                  fontSize: "1.1rem",
-                  fontWeight: 700,
+            <Box 
+              sx={{ 
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <img
+                src={mjrLogo}
+                alt="MJR Services"
+                style={{
+                  maxWidth: "180px",
+                  maxHeight: "70px",
+                  objectFit: "contain",
                 }}
-              >
-                <MdDashboard size={22} />
-              </Avatar>
-              <Box>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 800,
-                    fontSize: "1.1rem",
-                    background: "linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)",
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    letterSpacing: "-0.5px",
-                  }}
-                >
-                  Distributeurs
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "text.secondary", fontWeight: 500 }}
-                >
-                  Tableau de bord
-                </Typography>
-              </Box>
+              />
+            </Box>
+          )}
+          
+          {sidebarCollapsed && (
+            <Box
+              sx={{
+                width: 50,
+                height: 50,
+                borderRadius: "12px",
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: "#f5f5f5",
+              }}
+            >
+              <img
+                src={mjrLogo}
+                alt="MJR"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
             </Box>
           )}
           
           <Tooltip title={sidebarCollapsed ? "Développer" : "Réduire"} placement="right">
             <IconButton
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              size="small"
               sx={{
-                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                bgcolor: alpha(theme.palette.grey[500], 0.08),
+                position: sidebarCollapsed ? "absolute" : "relative",
+                right: sidebarCollapsed ? 8 : "auto",
                 "&:hover": {
                   bgcolor: alpha(theme.palette.primary.main, 0.15),
                 },
               }}
             >
-              {sidebarCollapsed ? <MdChevronRight size={20} /> : <MdChevronLeft size={20} />}
+              {sidebarCollapsed ? <MdChevronRight size={18} /> : <MdChevronLeft size={18} />}
             </IconButton>
           </Tooltip>
         </Box>

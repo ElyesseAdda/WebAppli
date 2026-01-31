@@ -65,8 +65,12 @@ const DocumentsTab = ({ isDesktop: propIsDesktop }) => {
     } else {
       setAvailableMonths([]);
       setFilteredMonths([]);
+      // Pas de distributeur sélectionné, arrêter le chargement si distributeurs déjà chargés
+      if (distributeurs.length === 0) {
+        setLoading(false);
+      }
     }
-  }, [selectedDistributeur]);
+  }, [selectedDistributeur, distributeurs.length]);
 
   // Appliquer les filtres
   useEffect(() => {
@@ -96,10 +100,14 @@ const DocumentsTab = ({ isDesktop: propIsDesktop }) => {
       // Sélectionner automatiquement le premier distributeur si disponible
       if (response.data && response.data.length > 0) {
         setSelectedDistributeur(response.data[0].id);
+      } else {
+        // Aucun distributeur : arrêter le chargement
+        setLoading(false);
       }
     } catch (error) {
       console.error("Erreur chargement distributeurs:", error);
       setError("Erreur lors du chargement des distributeurs");
+      setLoading(false);
     }
   };
 

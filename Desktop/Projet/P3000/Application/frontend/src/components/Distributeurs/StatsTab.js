@@ -28,6 +28,7 @@ import {
   MdPublic,
   MdEmojiEvents,
   MdChevronRight,
+  MdHistory
 } from "react-icons/md";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
