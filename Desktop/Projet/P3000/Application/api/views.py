@@ -14695,3 +14695,339 @@ def get_chantiers_drive_paths(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# ==================== DISTRIBUTEUR MONTHLY REPORT ====================
+
+def preview_distributeur_monthly_report(request, distributeur_id):
+    """
+    Vue pour prévisualiser le rapport mensuel d'un distributeur
+    Génère un HTML formaté pour l'envoi au comptable
+    """
+    from calendar import monthrange
+    from datetime import date as date_obj
+    from collections import defaultdict
+    import locale
+    
+    try:
+        locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+    except:
+        try:
+            locale.setlocale(locale.LC_TIME, 'French_France.1252')
+        except:
+            pass
+    
+    month = int(request.GET.get('month'))
+    year = int(request.GET.get('year'))
+    
+    # Récupérer le distributeur
+    try:
+        distributeur = Distributeur.objects.get(pk=distributeur_id)
+    except Distributeur.DoesNotExist:
+        return HttpResponse("Distributeur non trouvé", status=404)
+    
+    # Calculer les dates de début et fin du mois
+    start_date = date_obj(year, month, 1)
+    _, last_day = monthrange(year, month)
+    end_date = date_obj(year, month, last_day)
+    
+    # Nom du mois en français
+    month_names = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+    month_name = month_names[month - 1]
+    
+    # ========== 1. RÉCUPÉRER LES SESSIONS DE RÉAPPRO DU MOIS ==========
+    sessions_reappro = DistributeurReapproSession.objects.filter(
+        distributeur=distributeur,
+        statut='termine',
+        date_fin__date__gte=start_date,
+        date_fin__date__lte=end_date
+    ).prefetch_related('lignes', 'lignes__cell')
+    
+    # ========== 2. RÉCUPÉRER LES MOUVEMENTS DU MOIS ==========
+    mouvements = DistributeurMouvement.objects.filter(
+        distributeur=distributeur,
+        date_mouvement__date__gte=start_date,
+        date_mouvement__date__lte=end_date
+    ).order_by('date_mouvement')
+    
+    # ========== 3. RÉCUPÉRER LES FRAIS DU MOIS ==========
+    frais = DistributeurFrais.objects.filter(
+        distributeur=distributeur,
+        date_frais__gte=start_date,
+        date_frais__lte=end_date
+    )
+    total_frais = sum(float(f.montant or 0) for f in frais)
+    
+    # ========== 4. CALCULER LES DONNÉES AGRÉGÉES ==========
+    
+    # Journal des entrées de stock (réappros)
+    journal_entrees = []
+    total_unites_ajoutees = 0
+    valeur_stock_reappro = 0
+    
+    for session in sessions_reappro:
+        for ligne in session.lignes.all():
+            cell_name = ligne.cell.nom_produit if ligne.cell else "Produit inconnu"
+            journal_entrees.append({
+                'date': session.date_fin.strftime('%d/%m/%Y') if session.date_fin else '',
+                'produit': cell_name,
+                'prix_unitaire': float(ligne.cout_unitaire or 0),
+                'quantite': ligne.quantite,
+            })
+            total_unites_ajoutees += ligne.quantite
+            valeur_stock_reappro += float(ligne.cout_unitaire or 0) * ligne.quantite
+    
+    # Ajouter aussi les mouvements d'entrée manuels
+    for mouvement in mouvements.filter(mouvement_type='entree'):
+        journal_entrees.append({
+            'date': mouvement.date_mouvement.strftime('%d/%m/%Y') if mouvement.date_mouvement else '',
+            'produit': mouvement.commentaire or "Entrée manuelle",
+            'prix_unitaire': float(mouvement.prix_unitaire or 0),
+            'quantite': mouvement.quantite,
+        })
+        total_unites_ajoutees += mouvement.quantite
+        valeur_stock_reappro += float(mouvement.prix_unitaire or 0) * mouvement.quantite
+    
+    # Trier par nom de produit (pour regrouper), puis par date
+    journal_entrees.sort(key=lambda x: (x['produit'].lower(), x['date']))
+    
+    # ========== 5. CALCULER LE CA ET BÉNÉFICE ==========
+    ca_total = 0
+    benefice_reappro = 0
+    total_produits_vendus = 0
+    
+    # Détail par produit
+    produits_detail = defaultdict(lambda: {
+        'stock_debut': 0,
+        'ajouts': 0,
+        'stock_fin': 0,
+        'pertes': 0,
+        'ventes': 0,
+        'ca': 0,
+        'prix_vente': 0,
+    })
+    
+    for session in sessions_reappro:
+        for ligne in session.lignes.all():
+            cell_name = ligne.cell.nom_produit if ligne.cell else "Produit inconnu"
+            ca_ligne = float(ligne.prix_vente or 0) * ligne.quantite
+            benefice_ligne = float(ligne.benefice) if hasattr(ligne, 'benefice') else (
+                float(ligne.prix_vente or 0) - float(ligne.cout_unitaire or 0)
+            ) * ligne.quantite
+            
+            ca_total += ca_ligne
+            benefice_reappro += benefice_ligne
+            total_produits_vendus += ligne.quantite
+            
+            produits_detail[cell_name]['ajouts'] += ligne.quantite
+            produits_detail[cell_name]['ventes'] += ligne.quantite
+            produits_detail[cell_name]['ca'] += ca_ligne
+            produits_detail[cell_name]['prix_vente'] = float(ligne.prix_vente or 0)
+    
+    # Calculer bénéfice mouvements
+    benefice_mouvements = 0
+    for mouvement in mouvements:
+        montant = float(mouvement.quantite or 0) * float(mouvement.prix_unitaire or 0)
+        if mouvement.mouvement_type == 'entree':
+            benefice_mouvements += montant
+        else:
+            benefice_mouvements -= montant
+    
+    benefice_total = benefice_reappro + benefice_mouvements - total_frais
+    
+    # Convertir produits_detail en liste pour le template
+    produits_list = []
+    for nom, data in produits_detail.items():
+        produits_list.append({
+            'nom': nom,
+            'stock_debut': data['stock_debut'],
+            'ajouts': data['ajouts'],
+            'stock_fin': data['stock_fin'],
+            'pertes': data['pertes'],
+            'ventes': data['ventes'],
+            'ca': data['ca'],
+            'prix_vente': data['prix_vente'],
+        })
+    
+    # Trier par CA décroissant
+    produits_list.sort(key=lambda x: x['ca'], reverse=True)
+    
+    context = {
+        'distributeur': distributeur,
+        'month': month,
+        'year': year,
+        'month_name': month_name,
+        'start_date': start_date,
+        'end_date': end_date,
+        # Synthèse financière
+        'ca_total': round(ca_total, 2),
+        'total_produits_vendus': total_produits_vendus,
+        'valeur_stock_reappro': round(valeur_stock_reappro, 2),
+        'total_frais': round(total_frais, 2),
+        'benefice_total': round(benefice_total, 2),
+        # Journal des entrées
+        'journal_entrees': journal_entrees,
+        'total_unites_ajoutees': total_unites_ajoutees,
+        # Détail produits
+        'produits_list': produits_list,
+        # Date de génération
+        'generation_date': timezone.now(),
+    }
+    
+    return render(request, 'DocumentDistributeur/monthly_distributeur_report.html', context)
+
+
+def generate_distributeur_monthly_pdf(request, distributeur_id):
+    """
+    Vue pour générer le PDF du rapport mensuel d'un distributeur
+    """
+    month = int(request.GET.get('month'))
+    year = int(request.GET.get('year'))
+    
+    # URL de prévisualisation
+    preview_url = request.build_absolute_uri(
+        f"/api/preview-distributeur-monthly-report/{distributeur_id}/?month={month}&year={year}"
+    )
+    
+    # Utiliser des chemins relatifs qui fonctionnent en production
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
+    pdf_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'distributeur_monthly_report.pdf')
+    
+    # Vérifications préliminaires
+    if not os.path.exists(node_script_path):
+        error_msg = f'Script Node.js introuvable: {node_script_path}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    
+    # Vérifier si Node.js est disponible
+    node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
+    node_found = False
+    node_path = 'node'
+    
+    for path in node_paths:
+        try:
+            result = subprocess.run([path, '--version'], check=True, capture_output=True, text=True)
+            print(f"✅ Node.js trouvé: {path} - Version: {result.stdout.strip()}")
+            node_found = True
+            node_path = path
+            break
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+    
+    if not node_found:
+        error_msg = 'Node.js n\'est pas installé ou n\'est pas accessible'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    
+    command = [node_path, node_script_path, preview_url, pdf_path]
+    print(f"Commande exécutée: {' '.join(command)}")
+    
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
+        print(f"Sortie standard: {result.stdout}")
+        print(f"Sortie d'erreur: {result.stderr}")
+        
+        if not os.path.exists(pdf_path):
+            error_msg = f'Le fichier PDF n\'a pas été généré: {pdf_path}'
+            print(f"ERREUR: {error_msg}")
+            return JsonResponse({'error': error_msg}, status=500)
+        
+        # Récupérer le nom du distributeur pour le nom du fichier
+        try:
+            distributeur = Distributeur.objects.get(pk=distributeur_id)
+            filename = f"rapport_{distributeur.nom}_{month}_{year}.pdf".replace(' ', '_')
+        except:
+            filename = f"rapport_distributeur_{distributeur_id}_{month}_{year}.pdf"
+        
+        with open(pdf_path, 'rb') as pdf_file:
+            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+            
+    except subprocess.TimeoutExpired:
+        error_msg = 'Timeout lors de la génération du PDF (60 secondes)'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    except subprocess.CalledProcessError as e:
+        error_msg = f'Erreur lors de la génération du PDF: {str(e)}\nSortie: {e.stdout}\nErreur: {e.stderr}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def distributeur_available_months(request, distributeur_id):
+    """
+    Retourne la liste des mois disponibles pour un distributeur avec un résumé des données
+    Basé sur les sessions de réappro terminées et les mouvements
+    """
+    from collections import defaultdict
+    from calendar import monthrange
+    from datetime import date as date_obj
+    
+    try:
+        distributeur = Distributeur.objects.get(pk=distributeur_id)
+    except Distributeur.DoesNotExist:
+        return Response({'error': 'Distributeur non trouvé'}, status=404)
+    
+    # Collecter tous les mois avec des données
+    months_data = defaultdict(lambda: {'ca': 0, 'unites': 0, 'has_data': False})
+    
+    # Sessions de réappro terminées
+    sessions = DistributeurReapproSession.objects.filter(
+        distributeur=distributeur,
+        statut='termine',
+        date_fin__isnull=False
+    ).prefetch_related('lignes')
+    
+    for session in sessions:
+        if session.date_fin:
+            key = (session.date_fin.year, session.date_fin.month)
+            months_data[key]['has_data'] = True
+            for ligne in session.lignes.all():
+                months_data[key]['ca'] += float(ligne.prix_vente or 0) * ligne.quantite
+                months_data[key]['unites'] += ligne.quantite
+    
+    # Mouvements
+    mouvements = DistributeurMouvement.objects.filter(distributeur=distributeur)
+    for mouvement in mouvements:
+        if mouvement.date_mouvement:
+            key = (mouvement.date_mouvement.year, mouvement.date_mouvement.month)
+            months_data[key]['has_data'] = True
+    
+    # Frais
+    frais = DistributeurFrais.objects.filter(distributeur=distributeur)
+    for f in frais:
+        if f.date_frais:
+            key = (f.date_frais.year, f.date_frais.month)
+            months_data[key]['has_data'] = True
+    
+    # Convertir en liste triée (du plus récent au plus ancien)
+    month_names = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+    
+    result = []
+    for (year, month), data in sorted(months_data.items(), reverse=True):
+        if data['has_data']:
+            result.append({
+                'year': year,
+                'month': month,
+                'month_name': month_names[month - 1],
+                'label': f"{month_names[month - 1]} {year}",
+                'ca': round(data['ca'], 2),
+                'unites': data['unites'],
+            })
+    
+    return Response({
+        'distributeur_id': distributeur_id,
+        'distributeur_nom': distributeur.nom,
+        'months': result
+    })

@@ -121,6 +121,10 @@ from .views import (
     update_ligne_speciale,
     delete_ligne_speciale,
     AgencyExpenseMonthViewSet,
+    # Endpoints rapport mensuel distributeur
+    preview_distributeur_monthly_report,
+    generate_distributeur_monthly_pdf,
+    distributeur_available_months,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -380,6 +384,10 @@ urlpatterns += [
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
     path('app-version/', app_version_view, name='app-version'),
+    # Rapport mensuel distributeur
+    path('preview-distributeur-monthly-report/<int:distributeur_id>/', preview_distributeur_monthly_report, name='preview_distributeur_monthly_report'),
+    path('generate-distributeur-monthly-pdf/<int:distributeur_id>/', generate_distributeur_monthly_pdf, name='generate_distributeur_monthly_pdf'),
+    path('distributeur-available-months/<int:distributeur_id>/', distributeur_available_months, name='distributeur_available_months'),
 ] + auth_urlpatterns
 
 # Agency expense aggregates endpoints (via ViewSet actions)

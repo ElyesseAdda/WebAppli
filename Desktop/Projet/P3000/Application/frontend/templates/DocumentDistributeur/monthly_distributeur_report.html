@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport d'Activité Mensuel - {{ distributeur.nom }} - {{ month_name }} {{ year }}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+            color: #333;
+            background: #fff;
+            width: 210mm;
+            min-height: 297mm;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #1976d2;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #1976d2;
+            font-size: 24px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .header .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .header .machine-info {
+            font-size: 13px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+            color: white;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title .number {
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        /* Tableau de synthèse financière */
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        
+        .summary-table th,
+        .summary-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px 15px;
+            text-align: left;
+            font-size: 12px;
+        }
+        
+        .summary-table th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+            width: 70%;
+        }
+        
+        .summary-table td {
+            text-align: right;
+            font-weight: 500;
+            color: #1976d2;
+        }
+        
+        .summary-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        
+        .summary-table .highlight {
+            background-color: #e3f2fd;
+        }
+        
+        .summary-table .highlight td {
+            color: #0d47a1;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        /* Tableau journal des entrées */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        
+        .data-table th,
+        .data-table td {
+            border: 1px solid #e0e0e0;
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 11px;
+        }
+        
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+        }
+        
+        .data-table td {
+            color: #444;
+        }
+        
+        .data-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        
+        .data-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .data-table .total-row {
+            background-color: #e8f5e9 !important;
+            font-weight: 600;
+        }
+        
+        .data-table .total-row td {
+            color: #2e7d32;
+            border-top: 2px solid #4caf50;
+        }
+        
+        .text-right {
+            text-align: right !important;
+        }
+        
+        .text-center {
+            text-align: center !important;
+        }
+        
+        /* Tableau détail des ventes */
+        .sales-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+        
+        .sales-table th,
+        .sales-table td {
+            border: 1px solid #e0e0e0;
+            padding: 6px 8px;
+            text-align: center;
+        }
+        
+        .sales-table th {
+            background-color: #1976d2;
+            color: white;
+            font-weight: 500;
+            font-size: 9px;
+            text-transform: uppercase;
+        }
+        
+        .sales-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        .sales-table tr:nth-child(even) {
+            background-color: #f5f5f5;
+        }
+        
+        .sales-table .total-row {
+            background-color: #e3f2fd !important;
+            font-weight: 600;
+        }
+        
+        .sales-table .total-row td {
+            color: #1565c0;
+            border-top: 2px solid #1976d2;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+        }
+        
+        .footer .generation-date {
+            font-style: italic;
+        }
+        
+        /* Info box */
+        .info-box {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-size: 11px;
+            color: #856404;
+        }
+        
+        /* Impression */
+        @media print {
+            body {
+                padding: 0;
+                margin: 0;
+            }
+            
+            .section {
+                page-break-inside: avoid;
+            }
+            
+            @page {
+                margin: 15mm;
+                size: A4;
+            }
+        }
+        
+        /* Page break after section 2 if needed */
+        .page-break-before {
+            page-break-before: always;
+        }
+        
+        .no-data {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- EN-TÊTE -->
+    <div class="header">
+        <h1>📊 Rapport d'Activité Mensuel</h1>
+        <div class="subtitle">
+            <strong>Période :</strong> 01 {{ month_name }} {{ year }} - {{ end_date|date:"d" }} {{ month_name }} {{ year }}
+        </div>
+        <div class="machine-info">
+            <strong>Machine :</strong> {{ distributeur.nom }}
+            {% if distributeur.emplacement %}({{ distributeur.emplacement }}){% endif %}
+        </div>
+    </div>
+
+    <!-- SECTION 1: SYNTHÈSE FINANCIÈRE -->
+    <div class="section">
+        <div class="section-title">
+            <span class="number">1</span>
+            Synthèse Financière (Pour Déclaration)
+        </div>
+        
+        <table class="summary-table">
+            <tbody>
+                <tr class="highlight">
+                    <th>💰 Chiffre d'Affaires Total (Ventes)</th>
+                    <td>{{ ca_total|floatformat:2 }} €</td>
+                </tr>
+                <tr>
+                    <th>📦 Nombre total de produits vendus</th>
+                    <td>{{ total_produits_vendus }} unités</td>
+                </tr>
+                <tr>
+                    <th>🛒 Valeur estimée du stock réapprovisionné</th>
+                    <td>{{ valeur_stock_reappro|floatformat:2 }} €</td>
+                </tr>
+                <tr>
+                    <th>💸 Frais du mois (bancaires, maintenance, autres)</th>
+                    <td>{{ total_frais|floatformat:2 }} €</td>
+                </tr>
+                <tr class="highlight">
+                    <th>📈 Bénéfice Net</th>
+                    <td>{{ benefice_total|floatformat:2 }} €</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SECTION 2: JOURNAL DES ENTRÉES DE STOCK -->
+    <div class="section">
+        <div class="section-title">
+            <span class="number">2</span>
+            Journal des Entrées de Stock (Justificatif Achats)
+        </div>
+        
+        <div class="info-box">
+            📋 Ce tableau liste tous les produits remis dans la machine ce mois-ci.
+        </div>
+        
+        {% if journal_entrees %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Produit</th>
+                    <th class="text-right">Prix Unitaire</th>
+                    <th class="text-center">Quantité Ajoutée</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entree in journal_entrees %}
+                <tr>
+                    <td>{{ entree.date }}</td>
+                    <td>{{ entree.produit }}</td>
+                    <td class="text-right">{{ entree.prix_unitaire|floatformat:2 }} €</td>
+                    <td class="text-center">+ {{ entree.quantite }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3"><strong>TOTAL Produits ajoutés</strong></td>
+                    <td class="text-center"><strong>{{ total_unites_ajoutees }} Unités</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">
+            Aucune entrée de stock enregistrée pour ce mois
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- SECTION 3: DÉTAIL DES VENTES PAR PRODUIT -->
+    <div class="section page-break-before">
+        <div class="section-title">
+            <span class="number">3</span>
+            Détail des Ventes par Produit
+        </div>
+        
+        <div class="info-box">
+            📊 Calculé par différence : (Stock Début + Ajouts) - (Stock Fin + Pertes)
+        </div>
+        
+        {% if produits_list %}
+        <table class="sales-table">
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th>Stock Début Mois</th>
+                    <th>Ajouts (Achats)</th>
+                    <th>Stock Fin Mois</th>
+                    <th>Pertes</th>
+                    <th>Ventes (Unités)</th>
+                    <th>Total (€)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for produit in produits_list %}
+                <tr>
+                    <td>{{ produit.nom }}</td>
+                    <td>{{ produit.stock_debut }}</td>
+                    <td>{{ produit.ajouts }}</td>
+                    <td>{{ produit.stock_fin }}</td>
+                    <td>{{ produit.pertes }}</td>
+                    <td>{{ produit.ventes }}</td>
+                    <td>{{ produit.ca|floatformat:2 }} €</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td><strong>TOTAL</strong></td>
+                    <td>-</td>
+                    <td><strong>{{ total_unites_ajoutees }}</strong></td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td><strong>{{ total_produits_vendus }}</strong></td>
+                    <td><strong>{{ ca_total|floatformat:2 }} €</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">
+            Aucune vente enregistrée pour ce mois
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <div class="generation-date">
+            Document généré automatiquement le {{ generation_date|date:"d/m/Y à H:i" }}
+        </div>
+        <div style="margin-top: 5px;">
+            P3000 Application - Gestion Distributeurs
+        </div>
+    </div>
+</body>
+</html>
