@@ -29,7 +29,7 @@ import DocumentsTab from "./DocumentsTab";
 import StockTab from "./StockTab";
 
 // Logo client
-import mjrLogo from "../../../static/frontend/src/img/MJR SERVICES logo.jpg";
+import mjrLogo from "../../img/MJR SERVICES logo.jpg";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED_WIDTH = 80;
