@@ -711,7 +711,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           </Button>
         </Box>
       ) : (
-        <Box sx={{ px: 2, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box sx={{ px: 2, display: "flex", flexDirection: "column", gap: 2 }}>
           {distributeurs.map((distributeur) => (
             <Card
               key={distributeur.id}
@@ -724,8 +724,8 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                 overflow: "hidden",
                 transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:active": {
-                  transform: "scale(0.97)",
-                  bgcolor: "action.hover",
+                  transform: "scale(0.98)",
+                  bgcolor: "grey.50",
                 },
               }}
             >
@@ -734,62 +734,58 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                 sx={{ p: 0 }}
               >
                 <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
-                  {/* Icon Container */}
+                  {/* Icon Container with subtle status indicator */}
                   <Box
                     sx={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: "16px",
-                      bgcolor: distributeur.actif ? "primary.light" : "action.hover",
+                      width: 48,
+                      height: 48,
+                      borderRadius: "14px",
+                      bgcolor: distributeur.actif ? "primary.50" : "grey.100",
                       color: distributeur.actif ? "primary.main" : "text.disabled",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexShrink: 0,
+                      position: "relative"
                     }}
                   >
-                    <MdStorefront size={28} />
+                    <MdStorefront size={24} />
+                    {/* Minimal Status Dot */}
+                    <Box sx={{ 
+                      position: "absolute", 
+                      top: -2, 
+                      right: -2, 
+                      width: 12, 
+                      height: 12, 
+                      borderRadius: "50%", 
+                      bgcolor: distributeur.actif ? "success.main" : "error.main",
+                      border: "2px solid white"
+                    }} />
                   </Box>
 
                   {/* Content */}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                      <Typography
-                        variant="subtitle1"
-                        sx={{
-                          fontWeight: 700,
-                          fontSize: "1.05rem",
-                          color: "text.primary",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {distributeur.nom}
-                      </Typography>
-                      {!distributeur.actif && (
-                        <Chip
-                          label="Inactif"
-                          size="small"
-                          sx={{
-                            height: 20,
-                            fontSize: "0.65rem",
-                            fontWeight: 700,
-                            bgcolor: "error.light",
-                            color: "error.dark",
-                            border: "none"
-                          }}
-                        />
-                      )}
-                    </Box>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight: 800,
+                        fontSize: "1rem",
+                        color: "text.primary",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {distributeur.nom}
+                    </Typography>
                     
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                      <MdLocationOn size={14} color="#666" />
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.2 }}>
+                      <MdLocationOn size={14} color="#999" />
                       <Typography
-                        variant="body2"
+                        variant="caption"
                         sx={{
                           color: "text.secondary",
-                          fontSize: "0.85rem",
+                          fontWeight: 500,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -800,25 +796,24 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                     </Box>
                   </Box>
 
-                  {/* Right Arrow */}
-                  <MdChevronRight size={24} color="#ccc" />
+                  {/* Minimal Right Arrow */}
+                  <MdChevronRight size={20} color="#ccc" />
                 </Box>
               </CardActionArea>
 
-              {/* Quick Actions (Swipeable or simple footer) */}
+              {/* Minimal Actions - Integrated without a heavy footer */}
               <Box
                 sx={{
                   display: "flex",
                   justifyContent: "flex-end",
-                  px: 1,
-                  pb: 1,
+                  px: 1.5,
+                  pb: 1.5,
                   gap: 1
                 }}
               >
                 <Button
                   size="small"
                   variant="text"
-                  startIcon={<MdEdit size={16} />}
                   onClick={(e) => {
                     e.stopPropagation();
                     openEditDistributeur(distributeur);
@@ -826,10 +821,13 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                   sx={{ 
                     borderRadius: "8px", 
                     textTransform: "none",
-                    color: "text.secondary",
+                    color: "primary.main",
+                    fontWeight: 800,
                     fontSize: "0.75rem",
                     minWidth: 0,
-                    px: 1.5
+                    px: 1.5,
+                    bgcolor: "primary.50",
+                    "&:hover": { bgcolor: "primary.100" }
                   }}
                 >
                   Modifier
@@ -841,11 +839,14 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                     handleDeleteDistributeur(distributeur.id);
                   }}
                   sx={{ 
-                    color: "error.light",
-                    "&:hover": { color: "error.main" }
+                    color: "error.main",
+                    bgcolor: "error.50",
+                    borderRadius: "8px",
+                    p: 0.6,
+                    "&:hover": { bgcolor: "error.100" }
                   }}
                 >
-                  <MdDelete size={18} />
+                  <MdDelete size={16} />
                 </IconButton>
               </Box>
             </Card>
@@ -1375,19 +1376,16 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
               {(() => {
-                // Calcul du score de performance combiné : (Bénéfice normalisé * 0.7) + (Unités normalisées * 0.3)
+                // % = part du bénéfice total représentée par ce produit
                 const prods = (resumeProduits?.produits || []).filter(p => p.ca_ventes > 0 || p.benefice > 0);
-                const maxBen = Math.max(...prods.map(p => p.benefice), 1);
-                const maxQty = Math.max(...prods.map(p => p.quantite_vendue), 1);
-                
-                const scoredProds = prods.map(p => {
-                  const benScore = (p.benefice / maxBen) * 100;
-                  const qtyScore = (p.quantite_vendue / maxQty) * 100;
-                  const totalScore = (benScore * 0.7) + (qtyScore * 0.3);
-                  return { ...p, performanceScore: totalScore };
-                }).sort((a, b) => b.performanceScore - a.performanceScore);
+                const totalBenefice = prods.reduce((acc, p) => acc + Number(p.benefice || 0), 0);
+                const scoredProds = prods
+                  .map(p => ({
+                    ...p,
+                    pctBenefice: totalBenefice > 0 ? (Number(p.benefice || 0) / totalBenefice) * 100 : 0,
+                  }))
+                  .sort((a, b) => b.pctBenefice - a.pctBenefice);
 
-                const topScore = scoredProds[0]?.performanceScore || 1;
                 const colors = [
                   "#2196f3", // Bleu
                   "#4caf50", // Vert
@@ -1402,7 +1400,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                 ];
 
                 return scoredProds.map((p, idx) => {
-                  const relativeScore = (p.performanceScore / topScore) * 100;
+                  const pctBenefice = p.pctBenefice ?? 0;
                   const barColor = colors[idx % colors.length];
                   
                   return (
@@ -1417,12 +1415,12 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                           </Typography>
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 900, color: barColor, fontSize: "0.85rem" }}>
-                          {Math.round(relativeScore)}%
+                          {pctBenefice.toFixed(1)}%
                         </Typography>
                       </Box>
                       <LinearProgress 
                         variant="determinate" 
-                        value={Math.max(relativeScore, 2)} 
+                        value={Math.max(pctBenefice, 2)} 
                         sx={{ 
                           height: 6, 
                           borderRadius: 3,

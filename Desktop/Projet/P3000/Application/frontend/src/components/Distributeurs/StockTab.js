@@ -388,15 +388,16 @@ const StockTab = () => {
 
                     {/* Content */}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <Typography
                           variant="subtitle1"
                           sx={{
-                            fontWeight: 800,
-                            fontSize: "1.1rem",
+                            fontWeight: 900,
+                            fontSize: "1.15rem",
                             lineHeight: 1.2,
                             mb: 0.5,
-                            color: "text.primary"
+                            color: "text.primary",
+                            letterSpacing: "-0.5px"
                           }}
                         >
                           {product.nom}
@@ -404,49 +405,59 @@ const StockTab = () => {
                         <IconButton 
                           size="small"
                           onClick={() => handleOpenProductDialog(product)}
-                          sx={{ bgcolor: "action.hover", borderRadius: "10px", ml: 1 }}
+                          sx={{ bgcolor: "primary.50", color: "primary.main", borderRadius: "10px", ml: 1 }}
                         >
                           <MdEdit size={18} />
                         </IconButton>
                       </Box>
                       
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-                        <Typography variant="h4" sx={{ fontWeight: 900, color: product.quantite === 0 ? "error.main" : "text.primary" }}>
+                        <Typography variant="h4" sx={{ 
+                          fontWeight: 950, 
+                          color: product.quantite === 0 ? "error.main" : product.quantite <= lowStockThreshold ? "warning.main" : "primary.main",
+                          textShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                        }}>
                           {product.quantite}
                         </Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", mt: 1 }}>
-                          UNITÉS
+                        <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary", mt: 1, textTransform: "uppercase", fontSize: "0.6rem" }}>
+                          UNITÉS EN STOCK
                         </Typography>
                       </Box>
                     </Box>
                   </Box>
 
                   {/* Jauge de stock */}
-                  <Box sx={{ mb: 2 }}>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", fontSize: "0.65rem", textTransform: "uppercase" }}>
-                        Niveau de stock
+                  <Box sx={{ mb: 2, p: 2, bgcolor: "grey.50", borderRadius: "16px" }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary", fontSize: "0.65rem", textTransform: "uppercase" }}>
+                        Niveau de réserve
                       </Typography>
-                      <Typography variant="caption" sx={{ 
-                        fontWeight: 800, 
-                        fontSize: "0.65rem", 
-                        color: product.quantite <= lowStockThreshold ? "error.main" : "success.main" 
+                      <Box sx={{ 
+                        px: 1, 
+                        py: 0.2, 
+                        borderRadius: "6px", 
+                        bgcolor: product.quantite <= lowStockThreshold ? "error.50" : "success.50",
+                        color: product.quantite <= lowStockThreshold ? "error.main" : "success.main"
                       }}>
-                        {product.quantite <= lowStockThreshold ? "RÉAPPROVISIONNER" : "STOCK OK"}
-                      </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 900, fontSize: "0.6rem" }}>
+                          {product.quantite <= lowStockThreshold ? "ALERTE STOCK" : "STOCK OPTIMAL"}
+                        </Typography>
+                      </Box>
                     </Box>
                     <LinearProgress 
                       variant="determinate" 
                       value={stockPercentage} 
                       sx={{ 
-                        height: 8, 
-                        borderRadius: 4,
-                        bgcolor: "grey.100",
+                        height: 10, 
+                        borderRadius: 5,
+                        bgcolor: "white",
+                        border: "1px solid",
+                        borderColor: "divider",
                         "& .MuiLinearProgress-bar": {
-                          borderRadius: 4,
+                          borderRadius: 5,
                           bgcolor: product.quantite <= lowStockThreshold ? "error.main" : "success.main",
                         }
-                      }}
+                      }} 
                     />
                   </Box>
 
@@ -455,7 +466,7 @@ const StockTab = () => {
                     sx={{
                       display: "flex",
                       gap: 1.5,
-                      mt: 3
+                      mt: 2
                     }}
                   >
                     <Button
@@ -464,14 +475,14 @@ const StockTab = () => {
                       onClick={() => handleOpenQuantityDialog(product, "remove")}
                       disabled={product.quantite === 0}
                       sx={{ 
-                        borderRadius: "16px", 
+                        borderRadius: "14px", 
                         textTransform: "none", 
                         fontWeight: 800,
-                        borderColor: "divider",
-                        color: "text.primary",
+                        borderColor: "error.light",
+                        color: "error.main",
                         py: 1.2,
-                        bgcolor: "grey.50",
-                        "&:hover": { bgcolor: "grey.100", borderColor: "grey.300" }
+                        bgcolor: "error.50",
+                        "&:hover": { bgcolor: "error.100", borderColor: "error.main" }
                       }}
                     >
                       Sortie
@@ -481,13 +492,13 @@ const StockTab = () => {
                       variant="contained"
                       onClick={() => handleOpenQuantityDialog(product, "add")}
                       sx={{ 
-                        borderRadius: "16px", 
+                        borderRadius: "14px", 
                         textTransform: "none", 
                         fontWeight: 800,
-                        boxShadow: "0 6px 16px rgba(25, 118, 210, 0.25)",
+                        boxShadow: "0 6px 16px rgba(46, 125, 50, 0.25)",
                         py: 1.2,
-                        bgcolor: "primary.main",
-                        "&:hover": { bgcolor: "primary.dark" }
+                        bgcolor: "success.main",
+                        "&:hover": { bgcolor: "success.dark" }
                       }}
                     >
                       Entrée

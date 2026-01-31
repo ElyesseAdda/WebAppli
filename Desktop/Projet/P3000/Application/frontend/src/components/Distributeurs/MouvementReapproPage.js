@@ -296,20 +296,21 @@ const MouvementReapproPage = ({
                       sx={{
                         flex: 1,
                         aspectRatio: "1",
-                        bgcolor: hasContent ? "grey.50" : "background.paper",
+                        bgcolor: quantiteInLigne > 0 ? "success.50" : hasContent ? "primary.50" : "background.paper",
                         borderRadius: "14px",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         border: "2px solid",
-                        borderColor: quantiteInLigne > 0 ? "success.main" : hasContent ? "grey.300" : "divider",
+                        borderColor: quantiteInLigne > 0 ? "success.main" : hasContent ? "primary.light" : "divider",
                         minHeight: cellStyle.minHeight,
                         maxHeight: cellStyle.minHeight,
                         position: "relative",
                         overflow: "hidden",
                         cursor: "pointer",
-                        transition: "all 0.2s",
-                        "&:active": { transform: "scale(0.96)" },
+                        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                        boxShadow: quantiteInLigne > 0 ? "0 4px 12px rgba(76, 175, 80, 0.2)" : "none",
+                        "&:active": { transform: "scale(0.94)" },
                       }}
                     >
                       {quantiteInLigne > 0 && (
@@ -324,7 +325,9 @@ const MouvementReapproPage = ({
                             px: 0.75,
                             py: 0.25,
                             fontSize: "0.65rem",
-                            fontWeight: 800,
+                            fontWeight: 900,
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                            zIndex: 2
                           }}
                         >
                           +{quantiteInLigne}
@@ -466,21 +469,27 @@ const MouvementReapproPage = ({
                 
                 <Box sx={{ 
                   mt: 1, 
-                  p: 2, 
-                  borderRadius: "16px", 
+                  p: 2.5, 
+                  borderRadius: "20px", 
                   bgcolor: "primary.main", 
                   color: "white",
                   display: "flex",
                   justifyContent: "space-between",
-                  alignItems: "center"
+                  alignItems: "center",
+                  boxShadow: "0 8px 24px rgba(25, 118, 210, 0.3)",
+                  position: "relative",
+                  overflow: "hidden"
                 }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 700 }}>TOTAL RÉAPPRO</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 900 }}>{Number(totalMontant).toFixed(2)} €</Typography>
+                  <Box sx={{ position: "absolute", right: -10, top: -10, opacity: 0.1, transform: "rotate(-15deg)" }}>
+                    <MdCheck size={80} />
                   </Box>
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 700 }}>UNITÉS</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 900 }}>{totalUnites}</Typography>
+                  <Box sx={{ position: "relative", zIndex: 1 }}>
+                    <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px" }}>TOTAL RÉAPPRO</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: "-0.5px" }}>{Number(totalMontant).toFixed(2)} €</Typography>
+                  </Box>
+                  <Box sx={{ textAlign: "right", position: "relative", zIndex: 1 }}>
+                    <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px" }}>UNITÉS</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: "-0.5px" }}>{totalUnites}</Typography>
                   </Box>
                 </Box>
               </Box>

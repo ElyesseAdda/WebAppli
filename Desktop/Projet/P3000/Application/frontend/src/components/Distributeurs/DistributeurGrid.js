@@ -270,7 +270,7 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
                       sx={{
                         flex: 1,
                         aspectRatio: "1",
-                        bgcolor: hasContent ? "primary.light" : "background.paper",
+                        bgcolor: hasContent ? "primary.50" : "background.paper",
                         borderRadius: colsInRow > 5 ? "10px" : "14px",
                         display: "flex",
                         alignItems: "center",
@@ -281,13 +281,13 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
                         maxHeight: cellStyle.minHeight,
                         position: "relative",
                         overflow: "hidden",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
+                        boxShadow: hasContent ? "0 4px 12px rgba(25, 118, 210, 0.15)" : "0 2px 4px rgba(0,0,0,0.03)",
                         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                         cursor: "pointer",
                         "&:active": {
                           transform: "scale(0.95)",
                           borderColor: "primary.main",
-                          bgcolor: "primary.50",
+                          bgcolor: "primary.100",
                         },
                       }}
                     >
@@ -304,13 +304,15 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
+                          zIndex: 2,
+                          boxShadow: hasContent ? "0 2px 4px rgba(0,0,0,0.1)" : "none"
                         }}
                       >
                         <Typography
                           variant="caption"
                           sx={{
                             color: hasContent ? "white" : "text.secondary",
-                            fontWeight: 800,
+                            fontWeight: 900,
                             fontSize: "0.55rem",
                           }}
                         >

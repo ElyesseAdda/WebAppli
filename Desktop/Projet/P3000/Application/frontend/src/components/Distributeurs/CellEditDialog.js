@@ -149,29 +149,32 @@ const CellEditDialog = ({
             </Typography>
             <Box
               sx={{
-                p: 2,
-                borderRadius: "16px",
-                border: "1px solid",
-                borderColor: "divider",
-                bgcolor: "grey.50",
+                p: 2.5,
+                borderRadius: "20px",
+                border: "2px solid",
+                borderColor: stockProductId ? "primary.light" : "divider",
+                bgcolor: stockProductId ? "primary.50" : "grey.50",
                 display: "flex",
                 alignItems: "center",
-                gap: 2,
+                gap: 2.5,
+                transition: "all 0.3s ease",
+                boxShadow: stockProductId ? "0 4px 12px rgba(25, 118, 210, 0.1)" : "none"
               }}
             >
               <Box
                 sx={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: "14px",
-                  bgcolor: "background.paper",
+                  width: 90,
+                  height: 90,
+                  borderRadius: "18px",
+                  bgcolor: "white",
                   border: "1px solid",
-                  borderColor: "divider",
+                  borderColor: stockProductId ? "primary.main" : "divider",
                   overflow: "hidden",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.05)"
                 }}
               >
                 {imageUrl ? (
@@ -179,8 +182,8 @@ const CellEditDialog = ({
                     src={imageUrl}
                     alt={nomProduit || "Produit"}
                     style={{
-                      width: "100%",
-                      height: "100%",
+                      width: "85%",
+                      height: "85%",
                       objectFit: "contain",
                       objectPosition: imagePosition || "center",
                     }}
@@ -190,8 +193,8 @@ const CellEditDialog = ({
                   />
                 ) : (
                   <Typography
-                    variant="h5"
-                    sx={{ fontWeight: 800, color: "primary.main" }}
+                    variant="h4"
+                    sx={{ fontWeight: 950, color: "primary.main", opacity: 0.8 }}
                   >
                     {nomProduit
                       ? nomProduit
@@ -205,12 +208,17 @@ const CellEditDialog = ({
                 )}
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
-                  Produit
+                <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 800, textTransform: "uppercase", fontSize: "0.65rem", letterSpacing: "0.5px" }}>
+                  Aperçu du produit
                 </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  {nomProduit || "Aucun nom"}
+                <Typography variant="h6" sx={{ fontWeight: 900, color: "text.primary", lineHeight: 1.2, mt: 0.5 }}>
+                  {nomProduit || "Sélectionnez un produit"}
                 </Typography>
+                {stockProductId && (
+                  <Box sx={{ mt: 1, display: "inline-flex", px: 1, py: 0.2, bgcolor: "success.50", color: "success.main", borderRadius: "6px" }}>
+                    <Typography variant="caption" sx={{ fontWeight: 900, fontSize: "0.6rem" }}>LIÉ AU STOCK</Typography>
+                  </Box>
+                )}
               </Box>
             </Box>
             <TextField

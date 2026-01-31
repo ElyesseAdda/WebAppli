@@ -672,20 +672,22 @@ const StatsTab = ({ onOpenDistributeur }) => {
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
                       <Box
                         sx={{
-                          width: 36,
-                          height: 36,
+                          width: 40,
+                          height: 40,
                           borderRadius: "12px",
-                          bgcolor: rank === 1 ? "primary.main" : "grey.100",
-                          color: rank === 1 ? "white" : "text.secondary",
+                          bgcolor: rank === 1 ? "#ffd70022" : rank === 2 ? "#c0c0c022" : rank === 3 ? "#cd7f3222" : "grey.100",
+                          color: rank === 1 ? "#ffd700" : rank === 2 ? "#9e9e9e" : rank === 3 ? "#cd7f32" : "text.secondary",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontWeight: 800,
-                          fontSize: "0.9rem",
+                          fontWeight: 900,
+                          fontSize: "1rem",
                           flexShrink: 0,
+                          border: rank <= 3 ? "1px solid" : "none",
+                          borderColor: "inherit"
                         }}
                       >
-                        {rank === 1 ? <MdEmojiEvents size={20} /> : rank}
+                        {rank <= 3 ? <MdEmojiEvents size={22} /> : rank}
                       </Box>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography
@@ -1001,11 +1003,12 @@ const StatsTab = ({ onOpenDistributeur }) => {
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
               {(() => {
-                const maxBen = Math.max(...topProduits.map((x) => x.benefice), 1);
+                // % = part du bénéfice total représentée par ce produit
+                const totalBenefice = topProduits.reduce((acc, x) => acc + Number(x.benefice || 0), 0);
                 
                 return topProduits.map((p, index) => {
                   const rank = index + 1;
-                  const pct = (p.benefice / maxBen) * 100;
+                  const pct = totalBenefice > 0 ? (Number(p.benefice || 0) / totalBenefice) * 100 : 0;
                   const isTop3 = rank <= 3;
                   
                   return (
@@ -1051,7 +1054,7 @@ const StatsTab = ({ onOpenDistributeur }) => {
                             </Box>
                           </Box>
                           <Typography variant="h6" sx={{ fontWeight: 950, color: "primary.main", opacity: 0.8 }}>
-                            {Math.round(pct)}%
+                            {pct.toFixed(1)}%
                           </Typography>
                         </Box>
                         
@@ -1062,7 +1065,7 @@ const StatsTab = ({ onOpenDistributeur }) => {
                               left: 0, 
                               top: 0, 
                               height: "100%", 
-                              width: `${Math.max(pct, 4)}%`, 
+                              width: `${Math.max(pct, 2)}%`, 
                               bgcolor: isTop3 ? "primary.main" : "primary.light",
                               borderRadius: 4,
                               transition: "width 1s ease-out"

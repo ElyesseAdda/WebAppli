@@ -167,29 +167,33 @@ const DocumentsTab = () => {
               elevation={0}
               sx={{ 
                 p: 2,
-                borderRadius: "20px",
+                borderRadius: "24px",
                 border: "1px solid",
                 borderColor: "divider",
                 display: "flex",
                 alignItems: "center",
                 gap: 2,
-                transition: "all 0.2s ease",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                bgcolor: "background.paper",
                 "&:active": {
                   transform: "scale(0.98)",
-                  bgcolor: "action.hover"
-                }
+                  bgcolor: "grey.50"
+                },
+                boxShadow: "0 4px 12px rgba(0,0,0,0.02)"
               }}
             >
               <Box
                 sx={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: "16px",
-                  bgcolor: "action.hover",
+                  width: 56,
+                  height: 56,
+                  borderRadius: "18px",
+                  bgcolor: "grey.50",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0
+                  flexShrink: 0,
+                  border: "1px solid",
+                  borderColor: "divider"
                 }}
               >
                 {getFileIcon(doc.content_type, doc.filename)}
@@ -199,61 +203,48 @@ const DocumentsTab = () => {
                 <Typography
                   variant="subtitle2"
                   sx={{ 
-                    fontWeight: 800, 
+                    fontWeight: 900, 
                     lineHeight: 1.2,
                     mb: 0.5,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    whiteSpace: "nowrap"
+                    whiteSpace: "nowrap",
+                    color: "text.primary",
+                    fontSize: "0.95rem"
                   }}
                 >
                   {doc.filename}
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
-                  <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.7rem" }}>
                     {formatDate(doc.created_at)} • {formatFileSize(doc.size)}
                   </Typography>
                   {doc.category_display && (
-                    <Chip
-                      label={doc.category_display}
-                      size="small"
-                      sx={{
-                        height: 18,
-                        fontSize: "0.6rem",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        bgcolor: "primary.light",
-                        color: "primary.main",
-                        border: "none"
-                      }}
-                    />
+                    <Box sx={{ 
+                      px: 1, 
+                      py: 0.2, 
+                      borderRadius: "6px", 
+                      bgcolor: "primary.50", 
+                      color: "primary.main"
+                    }}>
+                      <Typography variant="caption" sx={{ fontWeight: 900, fontSize: "0.6rem", textTransform: "uppercase" }}>
+                        {doc.category_display}
+                      </Typography>
+                    </Box>
                   )}
                 </Box>
-                {doc.chantier_name && (
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      color: "text.secondary", 
-                      display: "block",
-                      mt: 0.5,
-                      fontWeight: 500,
-                      opacity: 0.8
-                    }}
-                  >
-                    📍 {doc.chantier_name}
-                  </Typography>
-                )}
               </Box>
 
               <IconButton
                 onClick={() => handleDownload(doc)}
                 sx={{ 
-                  bgcolor: "primary.main",
-                  color: "white",
-                  width: 44,
-                  height: 44,
-                  borderRadius: "14px",
-                  "&:hover": { bgcolor: "primary.dark" }
+                  bgcolor: "primary.50",
+                  color: "primary.main",
+                  width: 48,
+                  height: 48,
+                  borderRadius: "16px",
+                  "&:hover": { bgcolor: "primary.100" },
+                  transition: "all 0.2s"
                 }}
               >
                 <MdDownload size={24} />

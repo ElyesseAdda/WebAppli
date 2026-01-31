@@ -12,7 +12,7 @@ import DocumentsTab from "./DocumentsTab";
 import StockTab from "./StockTab";
 
 const MobileAppLayout = () => {
-  const [value, setValue] = useState(1); // 0: Stats, 1: Distributeurs, 2: Documents, 3: Stock
+  const [value, setValue] = useState(1); // 0: Stats, 1: Distributeur, 2: Stock, 3: Documents
   const [distributeurToOpen, setDistributeurToOpen] = useState(null);
 
   const handleOpenDistributeur = (distributeurId) => {
@@ -27,9 +27,9 @@ const MobileAppLayout = () => {
       case 1:
         return <DistributeursDashboard initialDistributeurId={distributeurToOpen} onDistributeurIdConsumed={() => setDistributeurToOpen(null)} />;
       case 2:
-        return <DocumentsTab />;
-      case 3:
         return <StockTab />;
+      case 3:
+        return <DocumentsTab />;
       default:
         return <DistributeursDashboard />;
     }
@@ -115,16 +115,16 @@ const MobileAppLayout = () => {
             icon={<MdBarChart size={26} />}
           />
           <BottomNavigationAction
-            label="Dashboard"
+            label="Distributeur"
             icon={<MdStore size={26} />}
-          />
-          <BottomNavigationAction
-            label="Documents"
-            icon={<MdDescription size={26} />}
           />
           <BottomNavigationAction
             label="Stock"
             icon={<MdInventory size={26} />}
+          />
+          <BottomNavigationAction
+            label="Documents"
+            icon={<MdDescription size={26} />}
           />
         </BottomNavigation>
       </Paper>
