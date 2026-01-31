@@ -56,6 +56,9 @@ import {
   MdDateRange,
   MdPublic,
   MdEmojiEvents,
+  MdReceipt,
+  MdCreditCard,
+  MdBuild,
 } from "react-icons/md";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import DistributeurGrid from "./DistributeurGrid";
@@ -74,7 +77,7 @@ const defaultMouvementForm = {
   commentaire: "",
 };
 
-const DistributeursDashboard = () => {
+const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurIdConsumed }) => {
   const isMobile = useIsMobile();
   const [distributeurs, setDistributeurs] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -120,7 +123,13 @@ const DistributeursDashboard = () => {
   const [fraisList, setFraisList] = useState([]);
   const [openFraisDialog, setOpenFraisDialog] = useState(false);
   const [editingFrais, setEditingFrais] = useState(null);
-  const [fraisForm, setFraisForm] = useState({ description: "", date_frais: new Date().toISOString().slice(0, 10), montant: "" });
+  const [fraisForm, setFraisForm] = useState({
+    description: "",
+    date_frais: new Date().toISOString().slice(0, 10),
+    montant: "",
+    category: "autre",
+    recurrence: "",
+  });
   const [savingFrais, setSavingFrais] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -257,7 +266,13 @@ const DistributeursDashboard = () => {
 
   const handleOpenFraisDialog = () => {
     setEditingFrais(null);
-    setFraisForm({ description: "", date_frais: new Date().toISOString().slice(0, 10), montant: "" });
+    setFraisForm({
+      description: "",
+      date_frais: new Date().toISOString().slice(0, 10),
+      montant: "",
+      category: "autre",
+      recurrence: "",
+    });
     fetchFrais(selectedId);
     setOpenFraisDialog(true);
   };
@@ -273,6 +288,8 @@ const DistributeursDashboard = () => {
         description: fraisForm.description?.trim() || "Frais",
         date_frais: fraisForm.date_frais,
         montant: montant,
+        category: fraisForm.category || "autre",
+        recurrence: fraisForm.recurrence || "",
       };
       if (editingFrais?.id) {
         await axios.patch(`/api/distributeur-frais/${editingFrais.id}/`, payload);
@@ -282,7 +299,13 @@ const DistributeursDashboard = () => {
         showSnackbar("Frais ajouté");
       }
       setEditingFrais(null);
-      setFraisForm({ description: "", date_frais: new Date().toISOString().slice(0, 10), montant: "" });
+      setFraisForm({
+        description: "",
+        date_frais: new Date().toISOString().slice(0, 10),
+        montant: "",
+        category: "autre",
+        recurrence: "",
+      });
       fetchFrais(selectedId);
       if (benefitViewMode === "mois") {
         fetchResume(selectedId, benefitYear, benefitMonth);
@@ -297,6 +320,17 @@ const DistributeursDashboard = () => {
     } finally {
       setSavingFrais(false);
     }
+  };
+
+  const handleEditFrais = (frais) => {
+    setEditingFrais(frais);
+    setFraisForm({
+      description: frais.description || "",
+      date_frais: frais.date_frais ? frais.date_frais.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      montant: frais.montant != null ? String(frais.montant) : "",
+      category: frais.category || "autre",
+      recurrence: frais.recurrence || "",
+    });
   };
 
   const handleDeleteFrais = async (id) => {
@@ -317,6 +351,21 @@ const DistributeursDashboard = () => {
       showSnackbar("Erreur lors de la suppression", "error");
     }
   };
+
+  // Frais filtrés par la période bénéfice courante (mois / annuel / global)
+  const fraisFilteredByPeriod = useMemo(() => {
+    if (!fraisList.length) return [];
+    if (benefitViewMode === "global") return fraisList;
+    return fraisList.filter((f) => {
+      const d = f.date_frais ? new Date(f.date_frais) : null;
+      if (!d) return false;
+      if (benefitViewMode === "mois") {
+        return d.getFullYear() === benefitYear && d.getMonth() + 1 === benefitMonth;
+      }
+      if (benefitViewMode === "annuel") return d.getFullYear() === benefitYear;
+      return true;
+    });
+  }, [fraisList, benefitViewMode, benefitYear, benefitMonth]);
 
   const fetchReapproSessions = async (distributeurId) => {
     if (!distributeurId) return;
@@ -430,6 +479,13 @@ const DistributeursDashboard = () => {
   useEffect(() => {
     fetchDistributeurs();
   }, []);
+
+  useEffect(() => {
+    if (initialDistributeurId != null && distributeurs.some((d) => d.id === initialDistributeurId)) {
+      setSelectedId(initialDistributeurId);
+      onDistributeurIdConsumed?.();
+    }
+  }, [initialDistributeurId, distributeurs, onDistributeurIdConsumed]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -991,24 +1047,9 @@ const DistributeursDashboard = () => {
                   )}
                   {(resume.total_frais != null && Number(resume.total_frais) > 0) && (
                     <Typography component="span" variant="caption" sx={{ color: "rgba(255,255,255,0.85)", fontSize: "0.7rem" }}>
-                      Frais période: -{Number(resume.total_frais).toFixed(2)} €
+                      Frais période : -{Number(resume.total_frais).toFixed(2)} €
                     </Typography>
                   )}
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={(e) => { e.stopPropagation(); handleOpenFraisDialog(); }}
-                    sx={{ 
-                      color: "rgba(255,255,255,0.9)", 
-                      fontSize: "0.7rem", 
-                      fontWeight: 700, 
-                      minWidth: "auto", 
-                      py: 0,
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.1)" }
-                    }}
-                  >
-                    Liste des frais
-                  </Button>
                 </Box>
                 <Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.8 }}>
                   Cliquer pour changer la période
@@ -1040,6 +1081,32 @@ const DistributeursDashboard = () => {
               endIcon={<MdChevronRight size={20} color="#ccc" />}
             >
               Analyse détaillée par produit
+            </Button>
+          </Grid>
+          <Grid item xs={12}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={handleOpenFraisDialog}
+              sx={{
+                borderRadius: "18px",
+                py: 1.5,
+                textTransform: "none",
+                fontWeight: 800,
+                borderColor: "divider",
+                color: "text.primary",
+                bgcolor: "background.paper",
+                display: "flex",
+                justifyContent: "space-between",
+                px: 2.5,
+                border: "1px solid",
+                "&:active": { transform: "scale(0.98)" },
+                "& .MuiButton-startIcon": { color: "primary.main" }
+              }}
+              startIcon={<MdReceipt size={24} />}
+              endIcon={<MdChevronRight size={20} color="#ccc" />}
+            >
+              Liste des frais
             </Button>
           </Grid>
         </Grid>
@@ -1521,119 +1588,6 @@ const DistributeursDashboard = () => {
           </Box>
         </Box>
       )}
-
-      {/* Historique des mouvements (Individuels) */}
-      <Box sx={{ px: 2 }}>
-        <Typography 
-          variant="subtitle2" 
-          sx={{ mb: 2, fontWeight: 800, color: "text.secondary", textTransform: "uppercase", fontSize: "0.7rem", letterSpacing: "1.2px" }}
-        >
-          Transactions Isolées
-        </Typography>
-        
-        {loadingMouvements ? (
-          <Box sx={{ py: 4, textAlign: "center" }}>
-            <Typography color="text.secondary" sx={{ fontWeight: 600 }}>Chargement...</Typography>
-          </Box>
-        ) : mouvements.length === 0 ? (
-          <Paper 
-            elevation={0} 
-            sx={{ 
-              p: 6, 
-              textAlign: "center", 
-              borderRadius: "24px",
-              border: "2px dashed",
-              borderColor: "divider",
-              bgcolor: "transparent",
-              opacity: 0.6
-            }}
-          >
-            <MdHistory size={40} style={{ marginBottom: 12, color: "#ccc" }} />
-            <Typography color="text.secondary" variant="body2" sx={{ fontWeight: 600 }}>
-              Aucun mouvement individuel
-            </Typography>
-          </Paper>
-        ) : (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {mouvements.map((mouvement) => (
-              <Card
-                key={mouvement.id}
-                elevation={0}
-                sx={{
-                  borderRadius: "20px",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: "background.paper",
-                  overflow: "hidden"
-                }}
-              >
-                <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
-                  <Box
-                    sx={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: "12px",
-                      bgcolor: mouvement.mouvement_type === "entree" ? "success.light" : "error.light",
-                      color: mouvement.mouvement_type === "entree" ? "success.main" : "error.main",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {mouvement.mouvement_type === "entree" ? <MdTrendingUp size={22} /> : <MdTrendingDown size={22} />}
-                  </Box>
-                  
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-                      {mouvement.mouvement_type === "entree" ? "Entrée Manuelle" : "Sortie Manuelle"}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
-                      {new Date(mouvement.date_mouvement).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Typography>
-                  </Box>
-                  
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography 
-                      variant="subtitle1" 
-                      sx={{ 
-                        fontWeight: 900,
-                        color: mouvement.mouvement_type === "entree" ? "success.main" : "error.main"
-                      }}
-                    >
-                      {mouvement.mouvement_type === "entree" ? "+" : "-"}{(mouvement.montant_total ?? 0).toFixed(2)} €
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "text.disabled", fontWeight: 700, fontSize: "0.6rem" }}>
-                      {mouvement.quantite} UNITÉS
-                    </Typography>
-                  </Box>
-                  
-                  <IconButton
-                    size="small"
-                    onClick={() => handleOpenEditMouvement(mouvement)}
-                    sx={{ color: "primary.main", ml: 0.5 }}
-                    title="Modifier le mouvement"
-                  >
-                    <MdEdit size={18} />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteMouvement(mouvement.id)}
-                    sx={{ color: "text.disabled", ml: 0.5 }}
-                  >
-                    <MdDelete size={18} />
-                  </IconButton>
-                </Box>
-              </Card>
-            ))}
-          </Box>
-        )}
-      </Box>
     </Box>
   );
 
@@ -1659,7 +1613,9 @@ const DistributeursDashboard = () => {
           flex: 1,
           overflowY: "auto",
           overflowX: "hidden",
-          WebkitOverflowScrolling: "touch", // Smooth scroll sur iOS
+          WebkitOverflowScrolling: "touch",
+          // Réserve en bas pour que la navbar horizontale (MobileAppLayout) ne masque rien en fin de scroll
+          pb: isMobile ? "120px" : 2,
         }}
       >
         {showMouvementReappro && selectedDistributeur ? (
@@ -2167,6 +2123,271 @@ const DistributeursDashboard = () => {
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
           <Button onClick={handleCloseReapproDetail} variant="contained" sx={{ borderRadius: "12px" }}>
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog Liste des frais — filtre période = période bénéfice, formulaire date / description / montant / catégorie / récurrence */}
+      <Dialog
+        open={openFraisDialog}
+        onClose={() => {
+          setOpenFraisDialog(false);
+          setEditingFrais(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            borderRadius: isMobile ? "24px 24px 0 0" : "28px",
+            position: isMobile ? "fixed" : "relative",
+            bottom: isMobile ? 0 : "auto",
+            m: isMobile ? 0 : 2,
+            maxHeight: "90vh",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontWeight: 800,
+            pt: 3,
+            pb: 1,
+          }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              Liste des frais
+            </Typography>
+            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+              {benefitViewMode === "mois"
+                ? `${["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"][benefitMonth - 1]} ${benefitYear}`
+                : benefitViewMode === "annuel"
+                ? `Année ${benefitYear}`
+                : "Toute la période"}
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setOpenFraisDialog(false)} size="small" sx={{ borderRadius: "12px" }}>
+            <MdClose size={22} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ px: 2, pb: 2, bgcolor: "grey.50" }}>
+          {/* Formulaire : ajout / édition */}
+          <Paper 
+            elevation={0} 
+            sx={{ 
+              p: 2.5, 
+              mb: 3, 
+              borderRadius: "24px", 
+              border: "1px solid", 
+              borderColor: "divider",
+              bgcolor: "background.paper",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.03)"
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+              <Box sx={{ p: 0.8, borderRadius: "10px", bgcolor: "primary.50", color: "primary.main" }}>
+                <MdAdd size={20} />
+              </Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "text.primary" }}>
+                {editingFrais ? "Modifier le frais" : "Ajouter un frais"}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Date"
+                    type="date"
+                    value={fraisForm.date_frais}
+                    onChange={(e) => setFraisForm((p) => ({ ...p, date_frais: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: "14px", bgcolor: "grey.50" } }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Montant (€)"
+                    type="number"
+                    value={fraisForm.montant}
+                    onChange={(e) => setFraisForm((p) => ({ ...p, montant: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: "14px", bgcolor: "grey.50" } }}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Description"
+                    placeholder="Ex: Frais banque TPE, Maintenance..."
+                    value={fraisForm.description}
+                    onChange={(e) => setFraisForm((p) => ({ ...p, description: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: "14px", bgcolor: "grey.50" } }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small" sx={{ "& .MuiOutlinedInput-root": { borderRadius: "14px", bgcolor: "grey.50" } }}>
+                    <InputLabel>Type</InputLabel>
+                    <Select
+                      value={fraisForm.category || "autre"}
+                      label="Type"
+                      onChange={(e) => setFraisForm((p) => ({ ...p, category: e.target.value }))}
+                    >
+                      <MenuItem value="bancaire">Frais bancaire / TPE</MenuItem>
+                      <MenuItem value="maintenance">Maintenance / Entretien</MenuItem>
+                      <MenuItem value="autre">Autre</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small" sx={{ "& .MuiOutlinedInput-root": { borderRadius: "14px", bgcolor: "grey.50" } }}>
+                    <InputLabel>Récurrence</InputLabel>
+                    <Select
+                      value={fraisForm.recurrence || ""}
+                      label="Récurrence"
+                      onChange={(e) => setFraisForm((p) => ({ ...p, recurrence: e.target.value }))}
+                    >
+                      <MenuItem value="">Ponctuel</MenuItem>
+                      <MenuItem value="mensuel">Mensuel</MenuItem>
+                      <MenuItem value="hebdomadaire">Hebdomadaire</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ display: "flex", gap: 1.5, mt: 1 }}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleSaveFrais}
+                  disabled={savingFrais || !fraisForm.montant}
+                  sx={{ 
+                    borderRadius: "14px", 
+                    py: 1.2,
+                    textTransform: "none", 
+                    fontWeight: 800,
+                    boxShadow: "0 4px 12px rgba(25, 118, 210, 0.2)"
+                  }}
+                >
+                  {savingFrais ? "Enregistrement…" : editingFrais ? "Enregistrer les modifications" : "Ajouter le frais"}
+                </Button>
+                {editingFrais && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setEditingFrais(null);
+                      setFraisForm({
+                        description: "",
+                        date_frais: new Date().toISOString().slice(0, 10),
+                        montant: "",
+                        category: "autre",
+                        recurrence: "",
+                      });
+                    }}
+                    sx={{ borderRadius: "14px", textTransform: "none", fontWeight: 700, px: 3 }}
+                  >
+                    Annuler
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Liste des frais (filtrée par période bénéfice) */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, px: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.secondary", textTransform: "uppercase", fontSize: "0.7rem", letterSpacing: "1px" }}>
+              Historique période
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: "error.main", bgcolor: "error.50", px: 1.5, py: 0.5, borderRadius: "10px" }}>
+              Total : -{fraisFilteredByPeriod.reduce((acc, f) => acc + Number(f.montant), 0).toFixed(2)} €
+            </Typography>
+          </Box>
+
+          {fraisFilteredByPeriod.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: "center", bgcolor: "background.paper", borderRadius: "24px", border: "1px dashed", borderColor: "divider" }}>
+              <MdReceipt size={40} style={{ color: "#ccc", marginBottom: 8 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Aucun frais sur cette période
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              {fraisFilteredByPeriod.map((f) => (
+                <Card
+                  key={f.id}
+                  elevation={0}
+                  sx={{
+                    borderRadius: "20px",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    bgcolor: "background.paper",
+                    transition: "all 0.2s",
+                    "&:active": { transform: "scale(0.98)" }
+                  }}
+                >
+                  <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 2 }}>
+                    <Box sx={{ 
+                      width: 44, 
+                      height: 44, 
+                      borderRadius: "12px", 
+                      bgcolor: f.category === "bancaire" ? "info.50" : f.category === "maintenance" ? "warning.50" : "grey.50",
+                      color: f.category === "bancaire" ? "info.main" : f.category === "maintenance" ? "warning.main" : "grey.600",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0
+                    }}>
+                      {f.category === "bancaire" ? <MdCreditCard size={22} /> : f.category === "maintenance" ? <MdBuild size={22} /> : <MdReceipt size={22} />}
+                    </Box>
+
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2, mb: 0.5 }}>
+                        {f.description || "Frais"}
+                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                          {f.date_frais ? new Date(f.date_frais).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}
+                        </Typography>
+                        {f.recurrence && (
+                          <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: "divider" }} />
+                        )}
+                        <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 700 }}>
+                          {f.recurrence === "mensuel" ? "Mensuel" : f.recurrence === "hebdomadaire" ? "Hebdo" : ""}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Box sx={{ textAlign: "right", mr: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "error.main" }}>
+                        -{Number(f.montant).toFixed(2)} €
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                      <IconButton size="small" onClick={() => handleEditFrais(f)} sx={{ color: "primary.main", bgcolor: "primary.50", p: 0.5 }}>
+                        <MdEdit size={16} />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => handleDeleteFrais(f.id)} sx={{ color: "error.main", bgcolor: "error.50", p: 0.5 }}>
+                        <MdDelete size={16} />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                </Card>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setOpenFraisDialog(false)} variant="contained" sx={{ borderRadius: "14px", fontWeight: 700, textTransform: "none" }}>
             Fermer
           </Button>
         </DialogActions>

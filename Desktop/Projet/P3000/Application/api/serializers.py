@@ -797,10 +797,17 @@ class DistributeurReapproSessionSerializer(serializers.ModelSerializer):
 
 
 class DistributeurFraisSerializer(serializers.ModelSerializer):
-    """Frais distributeur : entretien, frais banque TPE, etc."""
+    """Frais distributeur : entretien, frais banque TPE, etc. Avec category et recurrence pour regroupement."""
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    recurrence_display = serializers.SerializerMethodField()
+
     class Meta:
         model = DistributeurFrais
         fields = '__all__'
+
+    def get_recurrence_display(self, obj):
+        choices = dict(getattr(self.Meta.model, 'RECURRENCE_CHOICES', []))
+        return choices.get(obj.recurrence or '', 'Ponctuel')
 
 
 class DistributeurCellSerializer(serializers.ModelSerializer):

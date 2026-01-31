@@ -13,13 +13,19 @@ import StockTab from "./StockTab";
 
 const MobileAppLayout = () => {
   const [value, setValue] = useState(1); // 0: Stats, 1: Distributeurs, 2: Documents, 3: Stock
+  const [distributeurToOpen, setDistributeurToOpen] = useState(null);
+
+  const handleOpenDistributeur = (distributeurId) => {
+    setDistributeurToOpen(distributeurId);
+    setValue(1);
+  };
 
   const renderContent = () => {
     switch (value) {
       case 0:
-        return <StatsTab />;
+        return <StatsTab onOpenDistributeur={handleOpenDistributeur} />;
       case 1:
-        return <DistributeursDashboard />;
+        return <DistributeursDashboard initialDistributeurId={distributeurToOpen} onDistributeurIdConsumed={() => setDistributeurToOpen(null)} />;
       case 2:
         return <DocumentsTab />;
       case 3:
@@ -78,6 +84,7 @@ const MobileAppLayout = () => {
           value={value}
           onChange={(event, newValue) => {
             setValue(newValue);
+            if (newValue !== 1) setDistributeurToOpen(null);
           }}
           showLabels
           sx={{

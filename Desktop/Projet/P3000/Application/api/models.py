@@ -964,6 +964,16 @@ class DistributeurReapproLigne(models.Model):
 
 class DistributeurFrais(models.Model):
     """Frais liés au distributeur : entretien, frais banque TPE, etc."""
+    CATEGORY_CHOICES = [
+        ("bancaire", "Frais bancaire / TPE"),
+        ("maintenance", "Maintenance / Entretien"),
+        ("autre", "Autre"),
+    ]
+    RECURRENCE_CHOICES = [
+        ("", "Ponctuel"),
+        ("hebdomadaire", "Hebdomadaire"),
+        ("mensuel", "Mensuel"),
+    ]
     distributeur = models.ForeignKey(
         Distributeur,
         on_delete=models.CASCADE,
@@ -976,6 +986,19 @@ class DistributeurFrais(models.Model):
         max_digits=10,
         decimal_places=2,
         help_text="Montant en € (toujours positif, déduit du bénéfice)",
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default="autre",
+        help_text="Type de frais pour regroupement (bancaire, maintenance, etc.)",
+    )
+    recurrence = models.CharField(
+        max_length=20,
+        choices=RECURRENCE_CHOICES,
+        blank=True,
+        default="",
+        help_text="Si récurrent : mensuel, hebdomadaire (pour regroupement par période)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -2398,6 +2398,12 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             for s in sessions_reappro
             for l in s.lignes.all()
         )
+        # CA réappro = somme (quantite * prix_vente) sur les mêmes sessions
+        total_ca = sum(
+            float(l.quantite or 0) * float(l.prix_vente or 0)
+            for s in sessions_reappro
+            for l in s.lignes.all()
+        )
 
         # Frais (entretien, TPE, etc.) dans la période
         frais_qs = DistributeurFrais.objects.filter(distributeur=distributeur)
@@ -2418,6 +2424,7 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             'benefice_reappro': round(benefice_reappro, 2),
             'total_frais': round(total_frais, 2),
             'benefice_total': round(benefice_total, 2),
+            'total_ca': round(total_ca, 2),
         })
 
     @action(detail=True, methods=['get'])
@@ -2532,6 +2539,101 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             'distributeur_id': distributeur.id,
             'produits': produits,
         })
+
+    @action(detail=False, methods=['get'], url_path='monthly_evolution')
+    def monthly_evolution(self, request):
+        """
+        Évolution mensuelle du CA et du bénéfice pour une année.
+        Query: year (requis), distributeur_id (optionnel). Si distributeur_id absent = tous les distributeurs.
+        Retourne: { months: [ { month, year, ca, benefice }, ... ] } pour les 12 mois.
+        """
+        year_param = request.query_params.get('year')
+        distributeur_id_param = request.query_params.get('distributeur_id')
+        if not year_param:
+            return Response({'error': 'Paramètre year requis'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            year = int(year_param)
+        except (ValueError, TypeError):
+            return Response({'error': 'Année invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if year < 2000 or year > 2100:
+            return Response({'error': 'Année invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs_dist = Distributeur.objects.all()
+        if distributeur_id_param:
+            try:
+                qs_dist = qs_dist.filter(id=int(distributeur_id_param))
+            except (ValueError, TypeError):
+                pass
+        distributeurs = list(qs_dist)
+
+        result = []
+        for month in range(1, 13):
+            start_date = date(year, month, 1)
+            _, last_day = calendar.monthrange(year, month)
+            end_date = date(year, month, last_day)
+
+            total_ca = 0.0
+            total_benefice = 0.0
+
+            for distributeur in distributeurs:
+                # CA = sum(quantite * prix_vente) sur les lignes des sessions terminées ce mois
+                ca_agg = DistributeurReapproLigne.objects.filter(
+                    session__distributeur=distributeur,
+                    session__statut='termine',
+                    session__date_fin__date__gte=start_date,
+                    session__date_fin__date__lte=end_date,
+                ).aggregate(
+                    ca=Sum(F('quantite') * F('prix_vente'), output_field=models.DecimalField(max_digits=12, decimal_places=2))
+                )
+                total_ca += float(ca_agg.get('ca') or 0)
+
+                # Bénéfice = même logique que resume pour ce mois (mouvements + réappro - frais)
+                mouvements = distributeur.mouvements.filter(
+                    date_mouvement__date__gte=start_date,
+                    date_mouvement__date__lte=end_date,
+                )
+                agg = mouvements.aggregate(
+                    total_entrees=Sum(
+                        F('quantite') * F('prix_unitaire'),
+                        filter=Q(mouvement_type='entree'),
+                        output_field=models.DecimalField(max_digits=12, decimal_places=2),
+                    ),
+                    total_sorties=Sum(
+                        F('quantite') * F('prix_unitaire'),
+                        filter=Q(mouvement_type='sortie'),
+                        output_field=models.DecimalField(max_digits=12, decimal_places=2),
+                    ),
+                )
+                total_entrees = float(agg.get('total_entrees') or 0)
+                total_sorties = float(agg.get('total_sorties') or 0)
+                benefice_mvt = total_entrees - total_sorties
+
+                sessions_reappro = DistributeurReapproSession.objects.filter(
+                    distributeur=distributeur,
+                    statut='termine',
+                    date_fin__date__gte=start_date,
+                    date_fin__date__lte=end_date,
+                ).prefetch_related('lignes')
+                benefice_reappro = sum(
+                    float(l.benefice) for s in sessions_reappro for l in s.lignes.all()
+                )
+
+                frais_qs = DistributeurFrais.objects.filter(
+                    distributeur=distributeur,
+                    date_frais__gte=start_date,
+                    date_frais__lte=end_date,
+                )
+                total_frais = float(frais_qs.aggregate(t=Sum('montant'))['t'] or 0)
+
+                total_benefice += benefice_mvt + benefice_reappro - total_frais
+
+            result.append({
+                'month': month,
+                'year': year,
+                'ca': round(total_ca, 2),
+                'benefice': round(total_benefice, 2),
+            })
+        return Response({'months': result})
 
 
 class DistributeurMouvementViewSet(viewsets.ModelViewSet):
