@@ -29,6 +29,7 @@ import CreationPartie from "./CreationPartie";
 import Dashboard from "./Dashboard/Dashboard";
 import DistributeursDashboard from "./Distributeurs/DistributeursDashboard";
 import MobileAppLayout from "./Distributeurs/MobileAppLayout";
+import DesktopAppLayout from "./Distributeurs/DesktopAppLayout";
 import Drive from "./Drive";
 import DriveV2 from "./DriveV2/DriveV2";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";
@@ -164,13 +165,11 @@ function App() {
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated} isMobile={isMobile}>
                 {isMobile ? (
-                  // Version mobile : avec navigation en bas (3 onglets)
+                  // Version mobile : avec navigation en bas (4 onglets)
                   <MobileAppLayout />
                 ) : (
-                  // Version desktop : avec Layout (header + sidebar)
-                  <Layout user={user} onLogout={handleLogout}>
-                    <DistributeursDashboard />
-                  </Layout>
+                  // Version desktop : avec sidebar moderne et navigation intégrée
+                  <DesktopAppLayout />
                 )}
               </ProtectedRoute>
             }

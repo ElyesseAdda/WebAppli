@@ -36,8 +36,11 @@ const MOIS_LABELS = [
   "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
 ];
 
-const StatsTab = ({ onOpenDistributeur }) => {
-  const isMobile = useIsMobile();
+const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
+  const isMobileHook = useIsMobile();
+  // Si isDesktop est passé en prop, l'utiliser, sinon détecter via hook
+  const isMobile = propIsDesktop !== undefined ? !propIsDesktop : isMobileHook;
+  const isDesktop = !isMobile;
   const now = new Date();
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("annuel"); // "mois" | "annuel" | "global"
@@ -223,9 +226,9 @@ const StatsTab = ({ onOpenDistributeur }) => {
       ? "Tous les distributeurs"
       : perDistributeur.find((d) => d.id === chartDistributeurId)?.nom || "Distributeur";
 
-  // Courbe : dimensions et échelles (SVG)
-  const chartWidth = 280;
-  const chartHeight = 180;
+  // Courbe : dimensions et échelles (SVG) - plus grand sur desktop
+  const chartWidth = isDesktop ? 600 : 280;
+  const chartHeight = isDesktop ? 250 : 180;
   const pad = { left: 36, right: 12, top: 12, bottom: 28 };
   const innerW = chartWidth - pad.left - pad.right;
   const innerH = chartHeight - pad.top - pad.bottom;
@@ -269,38 +272,41 @@ const StatsTab = ({ onOpenDistributeur }) => {
       sx={{
         width: "100%",
         minHeight: "100%",
-        pb: isMobile ? "120px" : 6,
+        pb: isMobile ? "120px" : 4,
+        bgcolor: isDesktop ? "transparent" : "background.default",
       }}
     >
-      {/* Header */}
-      <Box
-        sx={{
-          p: 2.5,
-          pb: 2,
-          bgcolor: "background.paper",
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <Typography
-          variant="h5"
+      {/* Header - masqué sur desktop car géré par DesktopAppLayout */}
+      {!isDesktop && (
+        <Box
           sx={{
-            fontWeight: 800,
-            letterSpacing: "-0.5px",
-            color: "text.primary",
+            p: 2.5,
+            pb: 2,
+            bgcolor: "background.paper",
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
           }}
         >
-          Vue globale
-        </Typography>
-      </Box>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 800,
+              letterSpacing: "-0.5px",
+              color: "text.primary",
+            }}
+          >
+            Vue globale
+          </Typography>
+        </Box>
+      )}
 
       {/* Cartes globales */}
-      <Box sx={{ px: 2, pt: 2 }}>
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12}>
+      <Box sx={{ px: isDesktop ? 0 : 2, pt: isDesktop ? 0 : 2 }}>
+        <Grid container spacing={isDesktop ? 3 : 2} sx={{ mb: 3 }}>
+          <Grid item xs={12} lg={isDesktop ? 6 : 12}>
             <Paper
               elevation={0}
               onClick={() => setOpenPeriodModal(true)}
@@ -379,13 +385,44 @@ const StatsTab = ({ onOpenDistributeur }) => {
             </Paper>
           </Grid>
 
-          <Grid item xs={6}>
+          <Grid item xs={6} lg={isDesktop ? 3 : 6}>
             <Paper
               elevation={0}
               onClick={() => setOpenMeilleursProduitsModal(true)}
               sx={{
-                p: 2.5,
-                borderRadius: "24px",
+                p: isDesktop ? 3 : 2.5,
+                borderRadius: isDesktop ? "20px" : "24px",
+                bgcolor: "background.paper",
+                border: "1px solid",
+                borderColor: "divider",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                "&:active": { transform: "scale(0.96)", bgcolor: "grey.50" },
+                "&:hover": isDesktop ? { 
+                  transform: "translateY(-4px)", 
+                  boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+                  borderColor: "primary.main"
+                } : {}
+              }}
+            >
+              <Box sx={{ p: isDesktop ? 1.5 : 1, borderRadius: "12px", bgcolor: "primary.50", color: "primary.main", alignSelf: "flex-start" }}>
+                <MdTrendingUp size={isDesktop ? 28 : 24} />
+              </Box>
+              <Typography variant={isDesktop ? "subtitle1" : "subtitle2"} sx={{ fontWeight: 800, mt: 1 }}>Top Produits</Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>Analyse détaillée</Typography>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={6} lg={isDesktop ? 3 : 6}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: isDesktop ? 3 : 2.5,
+                borderRadius: isDesktop ? "20px" : "24px",
                 bgcolor: "background.paper",
                 border: "1px solid",
                 borderColor: "divider",
@@ -394,38 +431,17 @@ const StatsTab = ({ onOpenDistributeur }) => {
                 flexDirection: "column",
                 gap: 1,
                 transition: "all 0.2s",
-                "&:active": { transform: "scale(0.96)", bgcolor: "grey.50" }
+                "&:hover": isDesktop ? { 
+                  transform: "translateY(-4px)", 
+                  boxShadow: "0 12px 24px rgba(0,0,0,0.1)"
+                } : {}
               }}
             >
-              <Box sx={{ p: 1, borderRadius: "12px", bgcolor: "primary.50", color: "primary.main", alignSelf: "flex-start" }}>
-                <MdTrendingUp size={24} />
+              <Box sx={{ p: isDesktop ? 1.5 : 1, borderRadius: "12px", bgcolor: "success.50", color: "success.main", alignSelf: "flex-start" }}>
+                <MdAttachMoney size={isDesktop ? 28 : 24} />
               </Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mt: 1 }}>Top Produits</Typography>
-              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>Analyse détaillée</Typography>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={6}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5,
-                borderRadius: "24px",
-                bgcolor: "background.paper",
-                border: "1px solid",
-                borderColor: "divider",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-                transition: "all 0.2s"
-              }}
-            >
-              <Box sx={{ p: 1, borderRadius: "12px", bgcolor: "success.50", color: "success.main", alignSelf: "flex-start" }}>
-                <MdAttachMoney size={24} />
-              </Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mt: 1 }}>CA Total</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 900, color: "success.main" }}>{stats.totalCA.toFixed(2)} €</Typography>
+              <Typography variant={isDesktop ? "subtitle1" : "subtitle2"} sx={{ fontWeight: 800, mt: 1 }}>CA Total</Typography>
+              <Typography variant={isDesktop ? "h5" : "h6"} sx={{ fontWeight: 900, color: "success.main" }}>{stats.totalCA.toFixed(2)} €</Typography>
             </Paper>
           </Grid>
         </Grid>
@@ -639,78 +655,86 @@ const StatsTab = ({ onOpenDistributeur }) => {
             </Typography>
           </Paper>
         ) : (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Grid container spacing={isDesktop ? 2 : 0} sx={{ gap: isDesktop ? 0 : 1.5, flexDirection: isDesktop ? "row" : "column" }}>
             {perDistributeur.map((d, index) => {
               const rank = index + 1;
               const pct = maxBenefice > 0 ? (d.benefice_total / maxBenefice) * 100 : 0;
               return (
-                <Card
-                  key={d.id}
-                  elevation={0}
-                  onClick={() => onOpenDistributeur?.(d.id)}
-                  onKeyDown={(e) => {
-                    if (onOpenDistributeur && (e.key === "Enter" || e.key === " ")) {
-                      e.preventDefault();
-                      onOpenDistributeur(d.id);
-                    }
-                  }}
-                  role={onOpenDistributeur ? "button" : undefined}
-                  tabIndex={onOpenDistributeur ? 0 : undefined}
-                  sx={{
-                    borderRadius: "20px",
-                    border: "1px solid",
-                    borderColor: "divider",
-                    bgcolor: "background.paper",
-                    overflow: "hidden",
-                    transition: "all 0.2s",
-                    cursor: onOpenDistributeur ? "pointer" : "default",
-                    "&:hover": onOpenDistributeur ? { borderColor: "primary.main", bgcolor: "action.hover" } : {},
-                    "&:active": isMobile ? { transform: "scale(0.98)" } : {},
-                  }}
-                >
-                  <Box sx={{ p: 2 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "12px",
-                          bgcolor: rank === 1 ? "#ffd70022" : rank === 2 ? "#c0c0c022" : rank === 3 ? "#cd7f3222" : "grey.100",
-                          color: rank === 1 ? "#ffd700" : rank === 2 ? "#9e9e9e" : rank === 3 ? "#cd7f32" : "text.secondary",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 900,
-                          fontSize: "1rem",
-                          flexShrink: 0,
-                          border: rank <= 3 ? "1px solid" : "none",
-                          borderColor: "inherit"
-                        }}
-                      >
-                        {rank <= 3 ? <MdEmojiEvents size={22} /> : rank}
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography
-                          variant="subtitle2"
+                <Grid item xs={12} md={isDesktop ? 6 : 12} lg={isDesktop ? 4 : 12} key={d.id}>
+                  <Card
+                    elevation={0}
+                    onClick={() => onOpenDistributeur?.(d.id)}
+                    onKeyDown={(e) => {
+                      if (onOpenDistributeur && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onOpenDistributeur(d.id);
+                      }
+                    }}
+                    role={onOpenDistributeur ? "button" : undefined}
+                    tabIndex={onOpenDistributeur ? 0 : undefined}
+                    sx={{
+                      borderRadius: isDesktop ? "16px" : "20px",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      bgcolor: "background.paper",
+                      overflow: "hidden",
+                      transition: "all 0.2s",
+                      cursor: onOpenDistributeur ? "pointer" : "default",
+                      height: "100%",
+                      "&:hover": onOpenDistributeur ? { 
+                        borderColor: "primary.main", 
+                        bgcolor: "action.hover",
+                        transform: isDesktop ? "translateY(-4px)" : "none",
+                        boxShadow: isDesktop ? "0 12px 24px rgba(0,0,0,0.1)" : "none"
+                      } : {},
+                      "&:active": isMobile ? { transform: "scale(0.98)" } : {},
+                    }}
+                  >
+                    <Box sx={{ p: isDesktop ? 2.5 : 2 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1.5 }}>
+                        <Box
                           sx={{
-                            fontWeight: 800,
-                            lineHeight: 1.2,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
+                            width: isDesktop ? 48 : 40,
+                            height: isDesktop ? 48 : 40,
+                            borderRadius: "12px",
+                            bgcolor: rank === 1 ? "#ffd70022" : rank === 2 ? "#c0c0c022" : rank === 3 ? "#cd7f3222" : "grey.100",
+                            color: rank === 1 ? "#ffd700" : rank === 2 ? "#9e9e9e" : rank === 3 ? "#cd7f32" : "text.secondary",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 900,
+                            fontSize: isDesktop ? "1.1rem" : "1rem",
+                            flexShrink: 0,
+                            border: rank <= 3 ? "1px solid" : "none",
+                            borderColor: "inherit"
                           }}
                         >
-                          {d.nom}
-                        </Typography>
-                        {d.emplacement && (
-                          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
-                            {d.emplacement}
+                          {rank <= 3 ? <MdEmojiEvents size={isDesktop ? 26 : 22} /> : rank}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography
+                            variant={isDesktop ? "subtitle1" : "subtitle2"}
+                            sx={{
+                              fontWeight: 800,
+                              lineHeight: 1.2,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {d.nom}
                           </Typography>
-                        )}
+                          {d.emplacement && (
+                            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                              {d.emplacement}
+                            </Typography>
+                          )}
+                        </Box>
+                        {!isDesktop && <MdChevronRight size={22} color="#ccc" />}
                       </Box>
-                      <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
                         <Typography
-                          variant="subtitle1"
+                          variant={isDesktop ? "h6" : "subtitle1"}
                           sx={{
                             fontWeight: 900,
                             color: d.benefice_total >= 0 ? "success.main" : "error.main",
@@ -724,28 +748,27 @@ const StatsTab = ({ onOpenDistributeur }) => {
                           </Typography>
                         )}
                       </Box>
-                      <MdChevronRight size={22} color="#ccc" />
+                      {maxBenefice > 0 && (
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.max(pct, 0)}
+                          sx={{
+                            height: isDesktop ? 8 : 6,
+                            borderRadius: 4,
+                            bgcolor: "grey.100",
+                            "& .MuiLinearProgress-bar": {
+                              borderRadius: 4,
+                              bgcolor: d.benefice_total >= 0 ? "success.main" : "error.main",
+                            },
+                          }}
+                        />
+                      )}
                     </Box>
-                    {maxBenefice > 0 && (
-                      <LinearProgress
-                        variant="determinate"
-                        value={Math.max(pct, 0)}
-                        sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          bgcolor: "grey.100",
-                          "& .MuiLinearProgress-bar": {
-                            borderRadius: 3,
-                            bgcolor: d.benefice_total >= 0 ? "success.main" : "error.main",
-                          },
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Card>
+                  </Card>
+                </Grid>
               );
             })}
-          </Box>
+          </Grid>
         )}
       </Box>
 

@@ -18,6 +18,7 @@ import {
   LinearProgress,
   FormControlLabel,
   Checkbox,
+  Grid,
 } from "@mui/material";
 import {
   MdAdd,
@@ -38,7 +39,9 @@ import StockProductDialog from "./StockProductDialog";
 import CreatePurchaseDialog from "./CreatePurchaseDialog";
 import StockLotEditDialog from "./StockLotEditDialog";
 
-const StockTab = () => {
+const StockTab = ({ isDesktop: propIsDesktop }) => {
+  const isMobile = !propIsDesktop;
+  const isDesktop = !!propIsDesktop;
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -230,53 +233,54 @@ const StockTab = () => {
     <Box
       sx={{
         width: "100%",
-        minHeight: "100vh",
-        bgcolor: "background.default",
-        pb: 12, // Espace pour la navigation flottante
+        minHeight: isDesktop ? "auto" : "100vh",
+        bgcolor: isDesktop ? "transparent" : "background.default",
+        pb: isDesktop ? 4 : 12, // Espace pour la navigation flottante sur mobile
       }}
     >
-      {/* Header */}
-      <Box
-        sx={{
-          p: 2.5,
-          bgcolor: "background.paper",
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-          <Typography
-            variant="h5"
-            sx={{ 
-              fontWeight: 800, 
-              letterSpacing: "-0.5px",
-              color: "text.primary" 
-            }}
-          >
-            Stock Central
-          </Typography>
-          <IconButton 
-            onClick={() => fetchProducts()}
-            sx={{ bgcolor: "action.hover", borderRadius: "12px" }}
-          >
-            <MdInventory size={22} color="#666" />
-          </IconButton>
-        </Box>
+      {/* Header - masqué sur desktop car géré par DesktopAppLayout */}
+      {!isDesktop && (
+        <Box
+          sx={{
+            p: 2.5,
+            bgcolor: "background.paper",
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <Typography
+              variant="h5"
+              sx={{ 
+                fontWeight: 800, 
+                letterSpacing: "-0.5px",
+                color: "text.primary" 
+              }}
+            >
+              Stock Central
+            </Typography>
+            <IconButton 
+              onClick={() => fetchProducts()}
+              sx={{ bgcolor: "action.hover", borderRadius: "12px" }}
+            >
+              <MdInventory size={22} color="#666" />
+            </IconButton>
+          </Box>
 
-        {/* Recherche */}
-        <TextField
-          fullWidth
-          placeholder="Rechercher un produit..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          size="medium"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <MdSearch size={24} color="#999" />
+          {/* Recherche */}
+          <TextField
+            fullWidth
+            placeholder="Rechercher un produit..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="medium"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <MdSearch size={24} color="#999" />
               </InputAdornment>
             ),
           }}
@@ -290,10 +294,47 @@ const StockTab = () => {
             },
           }}
         />
-      </Box>
+        </Box>
+      )}
+
+      {/* Barre de recherche pour desktop */}
+      {isDesktop && (
+        <Box sx={{ display: "flex", gap: 2, mb: 3, alignItems: "center" }}>
+          <TextField
+            placeholder="Rechercher un produit..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="medium"
+            sx={{
+              flex: 1,
+              maxWidth: 400,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "14px",
+                bgcolor: "background.paper",
+                "& fieldset": { borderColor: "divider" },
+                "&:hover fieldset": { borderColor: "primary.light" },
+                "&.Mui-focused fieldset": { borderColor: "primary.main" },
+              },
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <MdSearch size={22} color="#999" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <IconButton 
+            onClick={() => fetchProducts()}
+            sx={{ bgcolor: "background.paper", borderRadius: "12px", border: "1px solid", borderColor: "divider" }}
+          >
+            <MdInventory size={22} color="#666" />
+          </IconButton>
+        </Box>
+      )}
 
       {/* Liste des produits - Modern Grid */}
-      <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ p: isDesktop ? 0 : 2 }}>
         {filteredProducts.length === 0 ? (
           <Box
             sx={{
@@ -325,26 +366,33 @@ const StockTab = () => {
             </Typography>
           </Box>
         ) : (
-          filteredProducts.map((product) => {
-            // Seuil de stock bas arbitraire pour le visuel
-            const lowStockThreshold = 10;
-            const stockPercentage = Math.min((product.quantite / 50) * 100, 100); // 50 est le max pour la jauge
-            
-            return (
-              <Card
-                key={product.id}
-                elevation={0}
-                sx={{
-                  borderRadius: "28px",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: "background.paper",
-                  overflow: "hidden",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  "&:active": { transform: "scale(0.97)" },
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
-                }}
-              >
+          <Grid container spacing={isDesktop ? 3 : 2}>
+            {filteredProducts.map((product) => {
+              // Seuil de stock bas arbitraire pour le visuel
+              const lowStockThreshold = 10;
+              const stockPercentage = Math.min((product.quantite / 50) * 100, 100); // 50 est le max pour la jauge
+              
+              return (
+                <Grid item xs={12} md={isDesktop ? 6 : 12} lg={isDesktop ? 4 : 12} key={product.id}>
+                  <Card
+                    elevation={0}
+                    sx={{
+                      borderRadius: isDesktop ? "20px" : "28px",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      bgcolor: "background.paper",
+                      overflow: "hidden",
+                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                      "&:active": isMobile ? { transform: "scale(0.97)" } : {},
+                      "&:hover": isDesktop ? {
+                        transform: "translateY(-4px)",
+                        boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+                        borderColor: "primary.main"
+                      } : {},
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+                      height: "100%"
+                    }}
+                  >
                 <Box sx={{ p: 2.5 }}>
                   <Box sx={{ display: "flex", gap: 2.5, alignItems: "center", mb: 2.5 }}>
                     {/* Avatar / Image modernisé */}
@@ -565,8 +613,10 @@ const StockTab = () => {
                   </Typography>
                 </Box>
               </Card>
-            );
-          })
+            </Grid>
+              );
+            })}
+          </Grid>
         )}
       </Box>
 

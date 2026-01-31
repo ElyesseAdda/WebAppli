@@ -77,8 +77,11 @@ const defaultMouvementForm = {
   commentaire: "",
 };
 
-const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurIdConsumed }) => {
-  const isMobile = useIsMobile();
+const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurIdConsumed, isDesktop: propIsDesktop }) => {
+  const isMobileHook = useIsMobile();
+  // Si isDesktop est passé en prop, l'utiliser, sinon détecter via hook
+  const isMobile = propIsDesktop !== undefined ? !propIsDesktop : isMobileHook;
+  const isDesktop = !isMobile;
   const [distributeurs, setDistributeurs] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [mouvements, setMouvements] = useState([]);
@@ -633,42 +636,63 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
   // Vue liste des distributeurs (cards)
   const renderDistributeursList = () => (
     <Box sx={{ pb: 2 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-          px: isMobile ? 2 : 3,
-          pt: isMobile ? 2 : 3,
-        }}
-      >
-        <Typography 
-          variant="h5" 
-          sx={{ 
-            fontWeight: 800,
-            letterSpacing: "-0.5px",
-            color: "text.primary"
-          }}
-        >
-          Distributeurs
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<MdAdd />}
-          onClick={openCreateDistributeur}
-          sx={{ 
-            borderRadius: "12px",
-            textTransform: "none",
-            fontWeight: 600,
+      {/* Header - affiché uniquement sur mobile (desktop a déjà un header dans DesktopAppLayout) */}
+      {isMobile ? (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 3,
             px: 2,
-            boxShadow: "0 4px 12px rgba(25, 118, 210, 0.2)",
-            minHeight: 40
+            pt: 2,
           }}
         >
-          Nouveau
-        </Button>
-      </Box>
+          <Typography 
+            variant="h5" 
+            sx={{ 
+              fontWeight: 800,
+              letterSpacing: "-0.5px",
+              color: "text.primary"
+            }}
+          >
+            Distributeurs
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<MdAdd />}
+            onClick={openCreateDistributeur}
+            sx={{ 
+              borderRadius: "12px",
+              textTransform: "none",
+              fontWeight: 600,
+              px: 2,
+              boxShadow: "0 4px 12px rgba(25, 118, 210, 0.2)",
+              minHeight: 40
+            }}
+          >
+            Nouveau
+          </Button>
+        </Box>
+      ) : (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
+          <Button
+            variant="contained"
+            startIcon={<MdAdd />}
+            onClick={openCreateDistributeur}
+            sx={{ 
+              borderRadius: "12px",
+              textTransform: "none",
+              fontWeight: 700,
+              px: 3,
+              py: 1.2,
+              boxShadow: "0 4px 12px rgba(25, 118, 210, 0.2)",
+            }}
+          >
+            Nouveau distributeur
+          </Button>
+        </Box>
+      )}
 
       {loadingDistributeurs ? (
         <Box sx={{ p: 4, textAlign: "center" }}>
@@ -711,24 +735,30 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           </Button>
         </Box>
       ) : (
-        <Box sx={{ px: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+        <Grid container spacing={isDesktop ? 3 : 2} sx={{ px: isDesktop ? 0 : 2 }}>
           {distributeurs.map((distributeur) => (
-            <Card
-              key={distributeur.id}
-              elevation={0}
-              sx={{
-                borderRadius: "20px",
-                border: "1px solid",
-                borderColor: "divider",
-                bgcolor: "background.paper",
-                overflow: "hidden",
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:active": {
-                  transform: "scale(0.98)",
-                  bgcolor: "grey.50",
-                },
-              }}
-            >
+            <Grid item xs={12} md={isDesktop ? 6 : 12} lg={isDesktop ? 4 : 12} key={distributeur.id}>
+              <Card
+                elevation={0}
+                sx={{
+                  borderRadius: isDesktop ? "16px" : "20px",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                  overflow: "hidden",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                  height: "100%",
+                  "&:active": isMobile ? {
+                    transform: "scale(0.98)",
+                    bgcolor: "grey.50",
+                  } : {},
+                  "&:hover": isDesktop ? {
+                    transform: "translateY(-4px)",
+                    boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+                    borderColor: "primary.main"
+                  } : {},
+                }}
+              >
               <CardActionArea
                 onClick={() => handleSelectDistributeur(distributeur.id)}
                 sx={{ p: 0 }}
@@ -850,8 +880,9 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                 </IconButton>
               </Box>
             </Card>
+          </Grid>
           ))}
-        </Box>
+        </Grid>
       )}
     </Box>
   );
@@ -1594,7 +1625,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
       sx={{
         minHeight: isMobile ? "100vh" : "auto",
         height: isMobile ? "100vh" : "auto",
-        bgcolor: "background.default",
+        bgcolor: isDesktop ? "transparent" : "background.default",
         overflow: isMobile ? "hidden" : "auto",
         display: "flex",
         flexDirection: "column",
@@ -1613,7 +1644,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           overflowX: "hidden",
           WebkitOverflowScrolling: "touch",
           // Réserve en bas pour que la navbar horizontale (MobileAppLayout) ne masque rien en fin de scroll
-          pb: isMobile ? "120px" : 2,
+          pb: isMobile ? "120px" : 4,
         }}
       >
         {showMouvementReappro && selectedDistributeur ? (

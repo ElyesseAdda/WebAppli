@@ -32,8 +32,10 @@ import {
 } from "react-icons/md";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
-const DocumentsTab = () => {
-  const isMobile = useIsMobile();
+const DocumentsTab = ({ isDesktop: propIsDesktop }) => {
+  const isMobileHook = useIsMobile();
+  const isMobile = propIsDesktop !== undefined ? !propIsDesktop : isMobileHook;
+  const isDesktop = !isMobile;
   const [loading, setLoading] = useState(true);
   const [distributeurs, setDistributeurs] = useState([]);
   const [selectedDistributeur, setSelectedDistributeur] = useState("");
@@ -174,8 +176,8 @@ const DocumentsTab = () => {
       elevation={0}
       onClick={() => handleOpenPreview(monthData)}
       sx={{
-        p: 2,
-        borderRadius: "20px",
+        p: isDesktop ? 2.5 : 2,
+        borderRadius: isDesktop ? "16px" : "20px",
         border: "1px solid",
         borderColor: "divider",
         cursor: "pointer",
@@ -186,10 +188,16 @@ const DocumentsTab = () => {
         display: "flex",
         alignItems: "center",
         gap: 2,
-        "&:active": {
+        height: "100%",
+        "&:active": isMobile ? {
           transform: "scale(0.98)",
           bgcolor: "grey.50"
-        },
+        } : {},
+        "&:hover": isDesktop ? {
+          transform: "translateY(-4px)",
+          boxShadow: "0 12px 24px rgba(0,0,0,0.1)",
+          borderColor: "primary.main"
+        } : {},
       }}
     >
       {/* Header avec icône calendrier */}
@@ -268,24 +276,26 @@ const DocumentsTab = () => {
   }
 
   return (
-    <Box sx={{ p: 2, pb: 10, bgcolor: "grey.50", minHeight: "100%" }}>
-      {/* Header */}
-      <Box sx={{ mb: 4, mt: 1 }}>
-        <Typography
-          variant="h5"
-          sx={{
-            fontWeight: 900,
-            letterSpacing: "-1px",
-            color: "text.primary",
-            mb: 0.5
-          }}
-        >
-          Rapports Mensuels
-        </Typography>
-        <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>
-          Archives et documents
-        </Typography>
-      </Box>
+    <Box sx={{ p: isDesktop ? 0 : 2, pb: isDesktop ? 4 : 10, bgcolor: isDesktop ? "transparent" : "grey.50", minHeight: "100%" }}>
+      {/* Header - masqué sur desktop car géré par DesktopAppLayout */}
+      {!isDesktop && (
+        <Box sx={{ mb: 4, mt: 1 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 900,
+              letterSpacing: "-1px",
+              color: "text.primary",
+              mb: 0.5
+            }}
+          >
+            Rapports Mensuels
+          </Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>
+            Archives et documents
+          </Typography>
+        </Box>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3, borderRadius: "16px" }} onClose={() => setError("")}>
@@ -448,9 +458,9 @@ const DocumentsTab = () => {
               </Typography>
             </Paper>
           ) : (
-            <Grid container spacing={2}>
+            <Grid container spacing={isDesktop ? 3 : 2}>
               {filteredMonths.map((monthData) => (
-                <Grid item xs={12} key={`${monthData.year}-${monthData.month}`}>
+                <Grid item xs={12} md={isDesktop ? 6 : 12} lg={isDesktop ? 4 : 12} key={`${monthData.year}-${monthData.month}`}>
                   {renderMonthCard(monthData)}
                 </Grid>
               ))}
@@ -459,22 +469,20 @@ const DocumentsTab = () => {
         </Box>
       )}
 
-      {/* Dialog Preview */}
+      {/* Dialog Preview - Plein écran sur mobile ET desktop */}
       <Dialog
         open={previewOpen}
         onClose={handleClosePreview}
-        maxWidth="lg"
-        fullWidth
-        fullScreen={isMobile}
+        fullScreen
         PaperProps={{
           sx: {
-            borderRadius: isMobile ? 0 : "32px",
-            maxHeight: isMobile ? "100vh" : "92vh",
-            overflow: "hidden"
+            bgcolor: "background.default",
+            backgroundImage: "none",
           },
         }}
       >
-        <DialogTitle
+        {/* Header moderne plein écran */}
+        <Box
           sx={{
             display: "flex",
             alignItems: "center",
@@ -483,10 +491,22 @@ const DocumentsTab = () => {
             borderColor: "divider",
             bgcolor: "background.paper",
             py: 2,
-            px: 2.5
+            px: isDesktop ? 4 : 2.5,
+            flexShrink: 0,
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <IconButton 
+              onClick={handleClosePreview} 
+              sx={{ 
+                bgcolor: "grey.100", 
+                borderRadius: "12px",
+                width: 44,
+                height: 44,
+              }}
+            >
+              <MdClose size={22} />
+            </IconButton>
             <Box
               sx={{
                 width: 44,
@@ -502,7 +522,7 @@ const DocumentsTab = () => {
               <MdDescription size={24} />
             </Box>
             <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 900, lineHeight: 1.1 }}>
+              <Typography variant={isDesktop ? "h6" : "subtitle1"} sx={{ fontWeight: 900, lineHeight: 1.1 }}>
                 {previewMonth?.month_name} {previewMonth?.year}
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
@@ -510,18 +530,52 @@ const DocumentsTab = () => {
               </Typography>
             </Box>
           </Box>
-          <IconButton onClick={handleClosePreview} sx={{ bgcolor: "grey.100", borderRadius: "12px" }}>
-            <MdClose size={22} />
-          </IconButton>
-        </DialogTitle>
+          
+          {/* Boutons d'action à droite sur desktop */}
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Button
+              variant="outlined"
+              onClick={handleClosePreview}
+              sx={{
+                borderRadius: "12px",
+                py: 1,
+                px: 3,
+                fontWeight: 700,
+                textTransform: "none",
+                borderColor: "divider",
+                color: "text.primary",
+                display: { xs: "none", md: "flex" }
+              }}
+            >
+              Fermer
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleDownloadPdf}
+              disabled={downloadLoading}
+              startIcon={downloadLoading ? <CircularProgress size={18} color="inherit" /> : <MdDownload size={20} />}
+              sx={{
+                borderRadius: "12px",
+                py: 1,
+                px: 3,
+                fontWeight: 700,
+                textTransform: "none",
+                boxShadow: "0 4px 12px rgba(25, 118, 210, 0.25)",
+              }}
+            >
+              {downloadLoading ? "Génération..." : "Télécharger PDF"}
+            </Button>
+          </Box>
+        </Box>
 
-        <DialogContent 
-          sx={{ 
-            p: 0, 
+        {/* Contenu - iframe pleine page */}
+        <Box
+          sx={{
+            flex: 1,
+            overflow: "hidden",
             bgcolor: "grey.100",
             display: "flex",
             flexDirection: "column",
-            overflow: "hidden"
           }}
         >
           {previewMonth && (
@@ -531,59 +585,45 @@ const DocumentsTab = () => {
                 width: "100%",
                 height: "100%",
                 border: "none",
+                flex: 1,
               }}
               title="Preview du rapport"
             />
           )}
-        </DialogContent>
+        </Box>
 
-        <DialogActions 
-          sx={{ 
-            p: 2.5, 
-            bgcolor: "background.paper",
-            borderTop: "1px solid", 
-            borderColor: "divider", 
-            gap: 2,
-            flexDirection: isMobile ? "column" : "row",
-          }}
-        >
-          <Button
-            variant="contained"
-            onClick={handleDownloadPdf}
-            disabled={downloadLoading}
-            fullWidth={isMobile}
-            startIcon={downloadLoading ? <CircularProgress size={20} color="inherit" /> : <MdDownload size={22} />}
+        {/* Footer mobile uniquement */}
+        {isMobile && (
+          <Box
             sx={{
-              borderRadius: "16px",
-              py: 1.5,
-              px: 4,
-              fontWeight: 800,
-              textTransform: "none",
-              fontSize: "1rem",
-              boxShadow: "0 8px 20px rgba(25, 118, 210, 0.3)",
-              order: isMobile ? 1 : 2
-            }}
-          >
-            {downloadLoading ? "Génération..." : "Télécharger le PDF"}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={handleClosePreview}
-            fullWidth={isMobile}
-            sx={{
-              borderRadius: "16px",
-              py: 1.5,
-              px: 4,
-              fontWeight: 800,
-              textTransform: "none",
+              p: 2,
+              bgcolor: "background.paper",
+              borderTop: "1px solid",
               borderColor: "divider",
-              color: "text.primary",
-              order: isMobile ? 2 : 1
+              display: "flex",
+              gap: 2,
+              flexDirection: "column",
             }}
           >
-            Fermer
-          </Button>
-        </DialogActions>
+            <Button
+              variant="contained"
+              onClick={handleDownloadPdf}
+              disabled={downloadLoading}
+              fullWidth
+              startIcon={downloadLoading ? <CircularProgress size={20} color="inherit" /> : <MdDownload size={22} />}
+              sx={{
+                borderRadius: "14px",
+                py: 1.5,
+                fontWeight: 800,
+                textTransform: "none",
+                fontSize: "1rem",
+                boxShadow: "0 8px 20px rgba(25, 118, 210, 0.3)",
+              }}
+            >
+              {downloadLoading ? "Génération..." : "Télécharger le PDF"}
+            </Button>
+          </Box>
+        )}
       </Dialog>
     </Box>
   );

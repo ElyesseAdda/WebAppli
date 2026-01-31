@@ -34,12 +34,6 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         ],
       },
       {
-        key: "distributeurs",
-        label: "Distributeurs",
-        icon: MdBusiness,
-        to: "/distributeurs",
-      },
-      {
         key: "tableau",
         label: "Tableau",
         icon: MdTableChart,
@@ -103,6 +97,13 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         label: "Chemins Drive",
         icon: MdFolderShared,
         to: "/ChantiersDrivePaths",
+      },
+      // Distributeurs en bas de la sidebar
+      {
+        key: "distributeurs",
+        label: "Distributeurs",
+        icon: MdBusiness,
+        to: "/distributeurs",
       },
     ],
     []
