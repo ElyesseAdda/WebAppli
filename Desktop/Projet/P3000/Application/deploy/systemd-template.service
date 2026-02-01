@@ -1,0 +1,61 @@
+# =============================================================================
+# Template Systemd pour les clients P3000
+# =============================================================================
+# Remplacez les variables suivantes :
+#   ${CLIENT_NAME}   - Nom du client (ex: elekable)
+#   ${GUNICORN_PORT} - Port Gunicorn (ex: 8001)
+#   ${PROJECT_DIR}   - Chemin du projet (ex: /var/www/elekable)
+#
+# Installation :
+#   1. Copier vers /etc/systemd/system/${CLIENT_NAME}.service
+#   2. sudo systemctl daemon-reload
+#   3. sudo systemctl enable ${CLIENT_NAME}
+#   4. sudo systemctl start ${CLIENT_NAME}
+# =============================================================================
+
+[Unit]
+Description=Gunicorn daemon for ${CLIENT_NAME}
+After=network.target postgresql.service redis.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+
+# Répertoire de travail
+WorkingDirectory=${PROJECT_DIR}/Desktop/Projet/P3000/Application
+
+# Environnement
+Environment="DJANGO_SETTINGS_MODULE=Application.settings_production"
+Environment="PYTHONUNBUFFERED=1"
+
+# Commande de démarrage
+ExecStart=${PROJECT_DIR}/venv/bin/gunicorn \
+    --bind 127.0.0.1:${GUNICORN_PORT} \
+    --workers 3 \
+    --worker-class sync \
+    --timeout 120 \
+    --keepalive 2 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --access-logfile /var/log/gunicorn/${CLIENT_NAME}_access.log \
+    --error-logfile /var/log/gunicorn/${CLIENT_NAME}_error.log \
+    --capture-output \
+    --enable-stdio-inheritance \
+    Application.wsgi:application
+
+# Redémarrage automatique
+Restart=always
+RestartSec=3
+
+# Limites
+LimitNOFILE=65536
+
+# Sécurité
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

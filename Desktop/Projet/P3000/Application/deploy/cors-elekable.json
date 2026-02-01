@@ -1,0 +1,19 @@
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "AllowedOrigins": [
+      "http://127.0.0.1:8000",
+      "http://localhost:8000",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:8080",
+      "http://127.0.0.1:8080",
+      "http://72.60.90.127:8080",
+      "https://elekable.fr",
+      "https://www.elekable.fr"
+    ],
+    "ExposeHeaders": ["ETag", "x-amz-meta-custom-header"],
+    "MaxAgeSeconds": 3000
+  }
+]
