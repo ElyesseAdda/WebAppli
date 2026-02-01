@@ -89,9 +89,11 @@ class OnlyOfficeManager:
         # Si l'URL contient 127.0.0.1 ou localhost
         if parsed.hostname in ('127.0.0.1', 'localhost'):
             if is_production:
-                # En production : utiliser localhost:8000 (Docker sur Linux peut accéder au host)
+                # En production : utiliser le domaine public HTTPS
+                # Docker (réseau bridge) ne peut pas accéder à localhost de l'hôte
+                # On passe par Nginx/Internet pour atteindre Django
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                normalized = f"http://localhost:8000{parsed.path}{query_string}"
+                normalized = f"https://myp3000app.com{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (PROD): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
             else:
@@ -119,9 +121,9 @@ class OnlyOfficeManager:
             
             if (parsed.hostname in same_server_hostnames or 
                 parsed.hostname in (settings.ALLOWED_HOSTS if hasattr(settings, 'ALLOWED_HOSTS') else [])):
-                # Utiliser localhost car on est sur le même serveur
+                # Utiliser le domaine public HTTPS car Docker ne peut pas accéder à localhost
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                normalized = f"http://localhost:8000{parsed.path}{query_string}"
+                normalized = f"https://myp3000app.com{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (PROD same server): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
         
