@@ -188,18 +188,20 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
             }}>
               Description <span style={{ color: 'red' }}>*</span>
             </label>
-            <input
-              type="text"
+            <textarea
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="Entrez la description"
+              placeholder="Entrez la description (utilisez Entrée pour revenir à la ligne)"
               style={{
                 width: '100%',
                 padding: '10px',
                 border: '1px solid #dee2e6',
                 borderRadius: '6px',
-                fontSize: '14px'
+                fontSize: '14px',
+                minHeight: '80px',
+                resize: 'vertical',
+                fontFamily: 'inherit'
               }}
               required
             />

@@ -173,13 +173,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
               Description
             </label>
-            <input
-              type="text"
+            <textarea
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="Entrez la description"
-              style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px' }}
+              placeholder="Entrez la description (utilisez Entrée pour revenir à la ligne)"
+              style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px', minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
               required
             />
           </div>

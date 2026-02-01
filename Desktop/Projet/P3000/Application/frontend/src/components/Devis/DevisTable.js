@@ -1499,7 +1499,7 @@ const DevisTable = ({
                                                                                 >
                                                                                   <div {...ldDragProvided.dragHandleProps} style={{ cursor: 'grab', marginRight: '8px' }}>⋮</div>
                                                                                   {/* DÉSIGNATION */}
-                                                                                  <div style={{ flex: '0 0 50%' }}>{ligne.description}</div>
+                                                                                  <div style={{ flex: '0 0 50%', whiteSpace: 'pre-line' }}>{ligne.description}</div>
                                                                                   {/* U */}
                                                                                   <div style={{ flex: '0 0 80px', textAlign: 'center' }}>{ligne.unite}</div>
                                                                                   {/* QUANTITÉ */}

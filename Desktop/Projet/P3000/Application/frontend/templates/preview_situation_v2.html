@@ -87,8 +87,10 @@
         width: 320px;
         font-size: 0.8rem;
         padding-left: 22px;
-        height: 20px;
+        height: auto;
+        min-height: 20px;
         padding-right: 7px;
+        white-space: pre-line;
       }
       .designation {
         text-align: center;
@@ -758,7 +760,7 @@
                   {% endif %}
                   {% for ligne in sous_partie.lignes_details %}
                   <tr>
-                    <td class="ligne-details">{{ ligne.description }}</td>
+                    <td class="ligne-details">{{ ligne.description|linebreaksbr }}</td>
                     <td class="unitetableau">{{ ligne.unite }}</td>
                     <td class="quantitetableau">{{ ligne.quantity }}</td>
                     <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }}</td>
@@ -932,7 +934,7 @@
             {% endif %}
             {% for ligne in sous_partie.lignes_details %}
             <tr>
-              <td class="ligne-details">{{ ligne.description }}</td>
+              <td class="ligne-details">{{ ligne.description|linebreaksbr }}</td>
               <td class="unitetableau">{{ ligne.unite }}</td>
               <td class="quantitetableau">{{ ligne.quantity }}</td>
               <td class="prixtableau">{{ ligne.custom_price|format_montant_espace }}</td>

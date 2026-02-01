@@ -175,7 +175,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                           <TableCell
                             sx={{ width: "50px", padding: "8px" }}
                           ></TableCell>
-                          <TableCell sx={{ width: "300px", padding: "8px" }}>
+                          <TableCell sx={{ width: "300px", padding: "8px", whiteSpace: "pre-line" }}>
                             {ligne.description}
                           </TableCell>
                           <TableCell
@@ -288,6 +288,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                         sx={{ 
                           width: "300px", 
                           padding: "8px",
+                          whiteSpace: "pre-line",
                           // ✅ Appliquer les styles de la ligne spéciale
                           fontWeight: ligneStyles.fontWeight || 'normal',
                           fontStyle: ligneStyles.fontStyle || 'normal',
@@ -493,7 +494,7 @@ const SousPartieTable = ({
                 }}
               >
                 <TableCell sx={{ width: "50px", padding: "8px" }}></TableCell>
-                <TableCell sx={{ width: "300px", padding: "8px" }}>
+                <TableCell sx={{ width: "300px", padding: "8px", whiteSpace: "pre-line" }}>
                   {ligne.description}
                 </TableCell>
                 <TableCell
@@ -587,6 +588,7 @@ const SousPartieTable = ({
                       sx={{ 
                         width: "300px", 
                         padding: "8px",
+                        whiteSpace: "pre-line",
                         // ✅ Appliquer les styles de la ligne spéciale
                         fontWeight: ligneStyles.fontWeight || 'normal',
                         fontStyle: ligneStyles.fontStyle || 'normal',
@@ -2952,6 +2954,7 @@ const SituationCreationModal = ({
                         sx={{ 
                           width: "300px", 
                           padding: "8px",
+                          whiteSpace: "pre-line",
                           // ✅ Appliquer les styles de la ligne spéciale
                           fontWeight: ligneStyles.fontWeight || 'normal',
                           fontStyle: ligneStyles.fontStyle || 'normal',
