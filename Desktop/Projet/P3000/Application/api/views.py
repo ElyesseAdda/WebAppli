@@ -60,7 +60,7 @@ from .ecole_utils import (
     delete_ecole_assignments
 )
 import logging
-from django.db import transaction, models
+from django.db import transaction, models, IntegrityError
 from rest_framework.permissions import IsAdminUser, AllowAny
 from calendar import day_name
 import locale
@@ -3966,9 +3966,35 @@ def create_chantier_from_devis(request):
 
 @api_view(['POST'])
 def create_devis(request):
+    request_id = request.headers.get('X-Request-ID') or request.META.get('HTTP_X_REQUEST_ID') or 'no-request-id'
+    devis_chantier = request.data.get('devis_chantier', False)
+    numero_in = request.data.get('numero')
+
+    # ✅ Pré-check: éviter de créer des objets (AppelOffres, etc.) si le numéro existe déjà.
+    try:
+        if numero_in:
+            existing = Devis.objects.filter(numero=numero_in).only('id', 'numero').first()
+            if existing:
+                return Response(
+                    {
+                        'error': f"Numéro de devis déjà existant: {numero_in}",
+                        'duplicate_numero': numero_in,
+                        'existing_devis_id': getattr(existing, 'id', None)
+                    },
+                    status=400
+                )
+    except Exception:
+        # Si le pré-check échoue, on tente quand même la création (la contrainte DB protégera).
+        pass
+
     try:
         with transaction.atomic():
-            devis_chantier = request.data.get('devis_chantier', False)
+            # ✅ Garantir une seule création de Devis par requête.
+            # Sinon, pour devis_chantier=True, on peut créer 2 fois le même numero dans la même transaction
+            # (une fois dans la branche appel d'offres + une fois plus bas), ce qui déclenche une erreur "duplicate key"
+            # alors qu'aucun devis n'est finalement persisté (rollback).
+            devis = None
+            appel_offres = None
             
             # Si c'est un devis de chantier, créer un appel d'offres au lieu d'un chantier
             if devis_chantier:
@@ -4184,7 +4210,9 @@ def create_devis(request):
                         pass
             
             # Créer le devis (date_creation sera utilisée si fournie, sinon default=timezone.now)
-            devis = Devis.objects.create(**devis_data)
+            # ⚠️ Important : si devis_chantier=True, le devis a déjà été créé plus haut.
+            if devis is None:
+                devis = Devis.objects.create(**devis_data)
 
             # Associer le(s) client(s) de manière robuste
             # 1) Nettoyer la liste reçue du frontend pour retirer None/valeurs falsy
@@ -4252,7 +4280,24 @@ def create_devis(request):
             
             return Response(response_data, status=201)
             
+    except IntegrityError as e:
+        existing = None
+        try:
+            if numero_in:
+                existing = Devis.objects.filter(numero=numero_in).only('id', 'numero').first()
+        except Exception:
+            existing = None
+        return Response(
+            {
+                'error': f"Numéro de devis déjà existant: {numero_in}",
+                'duplicate_numero': numero_in,
+                'existing_devis_id': getattr(existing, 'id', None),
+            },
+            status=400
+        )
     except Exception as e:
+        # Garder un log d'erreur serveur minimal
+        logger.exception("[create_devis] unhandled error: %s", str(e))
         return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
@@ -4300,80 +4345,115 @@ def get_next_devis_number(request):
         
         # Déterminer le type de devis
         is_ts_devis = chantier_id and not devis_chantier
-        
-        # Pour tous les devis (travaux et TS), utiliser la même séquence globale "Devis de travaux n°XXX.2025"
-        # Chercher le dernier devis avec le format "Devis de travaux n°" (format principal)
-        last_devis_travaux = Devis.objects.filter(
+
+        # IMPORTANT:
+        # L'ancien code utilisait "le dernier devis par id" pour calculer la séquence.
+        # Si des numéros ont été modifiés/importés/supprimés, l'id n'est pas un indicateur fiable
+        # et on peut renvoyer un numéro déjà existant -> IntegrityError sur la contrainte unique.
+        #
+        # Ici on calcule la séquence à partir du MAX réel trouvé dans les numéros.
+        def _extract_seq_from_numero(numero: str):
+            if not numero:
+                return None
+            # Format principal: "Devis de travaux n°015.2026"
+            m = re.search(r'Devis de travaux n°(\d+)\.', numero)
+            if m:
+                try:
+                    return int(m.group(1))
+                except ValueError:
+                    return None
+            # Ancien format générique: "Devis n°017.2026"
+            m = re.search(r'Devis n°(\d+)\.', numero)
+            if m:
+                try:
+                    return int(m.group(1))
+                except ValueError:
+                    return None
+            # Ancien format: "DEV-001-26"
+            m = re.search(r'DEV-(\d+)-', numero)
+            if m:
+                try:
+                    return int(m.group(1))
+                except ValueError:
+                    return None
+            return None
+
+        sequences = []
+
+        # Format principal (année complète .2026)
+        for numero in Devis.objects.filter(
             numero__startswith="Devis de travaux n°",
             numero__contains=f".{current_year}"
-        ).order_by('-id').first()
-        
-        # Chercher aussi les anciens formats pour la compatibilité
-        if not last_devis_travaux:
-            # Chercher l'ancien format "Devis n°017.2025"
-            last_devis_old_generic = Devis.objects.filter(
-                numero__startswith="Devis n°",
-                numero__contains=f".{current_year}"
-            ).order_by('-id').first()
-            
-            if last_devis_old_generic:
-                try:
-                    # Extraire le numéro de séquence de l'ancien format générique
-                    sequence_match = re.search(r'Devis n°(\d+)\.', last_devis_old_generic.numero)
-                    if sequence_match:
-                        sequence = int(sequence_match.group(1))
-                        next_sequence = sequence + 1
-                    else:
-                        next_sequence = 1
-                except (ValueError, AttributeError):
-                    next_sequence = 1
-            else:
-                # Chercher l'ancien format "DEV-001-25"
-                last_devis_old_format = Devis.objects.filter(
-                    numero__startswith=f"DEV-"
-                ).order_by('-id').first()
-                
-                if last_devis_old_format:
-                    try:
-                        # Extraire le numéro de l'ancien format (ex: "001" de "DEV-001-25")
-                        old_sequence_match = re.search(r'DEV-(\d+)-', last_devis_old_format.numero)
-                        if old_sequence_match:
-                            sequence = int(old_sequence_match.group(1))
-                            next_sequence = sequence + 1
-                        else:
-                            next_sequence = 1
-                    except (ValueError, AttributeError):
-                        next_sequence = 1
-                else:
-                    next_sequence = 1
-        else:
-            try:
-                # Extraire le numéro de séquence du format "Devis de travaux n°017.2025"
-                sequence_match = re.search(r'Devis de travaux n°(\d+)\.', last_devis_travaux.numero)
-                if sequence_match:
-                    sequence = int(sequence_match.group(1))
-                    next_sequence = sequence + 1
-                else:
-                    next_sequence = 1
-            except (ValueError, AttributeError):
-                next_sequence = 1
+        ).values_list('numero', flat=True):
+            seq = _extract_seq_from_numero(numero)
+            if seq is not None:
+                sequences.append(seq)
+
+        # Ancien format générique "Devis n°"
+        for numero in Devis.objects.filter(
+            numero__startswith="Devis n°",
+            numero__contains=f".{current_year}"
+        ).values_list('numero', flat=True):
+            seq = _extract_seq_from_numero(numero)
+            if seq is not None:
+                sequences.append(seq)
+
+        # Ancien format "DEV-001-26" (suffixe année sur 2 chiffres)
+        for numero in Devis.objects.filter(
+            numero__startswith="DEV-",
+            numero__endswith=f"-{year_suffix}"
+        ).values_list('numero', flat=True):
+            seq = _extract_seq_from_numero(numero)
+            if seq is not None:
+                sequences.append(seq)
+
+        next_sequence = (max(sequences) + 1) if sequences else 1
         
         # Si c'est un devis TS, calculer le numéro de TS pour ce chantier
         next_ts_num = None
         if is_ts_devis:
-            # Compter les TS existants pour ce chantier
-            ts_count = Devis.objects.filter(
-                chantier_id=chantier_id,
-                devis_chantier=False,
-                numero__contains=f".{current_year}"
-            ).count()
-            next_ts_num = ts_count + 1
+            # IMPORTANT: éviter count()+1 (si TS n°02 a été supprimé, count()=2 peut renvoyer 3 alors que TS n°03 existe déjà).
+            ts_numbers = []
+            for numero in Devis.objects.filter(
+                Q(chantier_id=chantier_id) &
+                Q(devis_chantier=False) &
+                Q(numero__contains=f".{current_year}") &
+                Q(numero__contains=" - TS n°")
+            ).values_list('numero', flat=True):
+                m = re.search(r' - TS n°(\d+)$', numero)
+                if m:
+                    try:
+                        ts_numbers.append(int(m.group(1)))
+                    except ValueError:
+                        pass
+            next_ts_num = (max(ts_numbers) + 1) if ts_numbers else 1
+
             # Formater avec le suffixe TS
-            numero = f"Devis de travaux n°{str(next_sequence).zfill(3)}.{current_year} - TS n°{str(next_ts_num).zfill(2)}"
-            print(f"Génération du numéro de devis TS: {numero} (séquence globale: {next_sequence}, TS n°: {next_ts_num}, chantier: {chantier_id})")
+            candidate_sequence = next_sequence
+            while True:
+                numero = (
+                    f"Devis de travaux n°{str(candidate_sequence).zfill(3)}.{current_year} "
+                    f"- TS n°{str(next_ts_num).zfill(2)}"
+                )
+                if not Devis.objects.filter(numero=numero).exists():
+                    break
+                candidate_sequence += 1
+
+            next_sequence = candidate_sequence
+            print(
+                f"Génération du numéro de devis TS: {numero} "
+                f"(séquence globale: {next_sequence}, TS n°: {next_ts_num}, chantier: {chantier_id})"
+            )
         else:
             # Devis de travaux simple
-            numero = f"Devis de travaux n°{str(next_sequence).zfill(3)}.{current_year}"
+            candidate_sequence = next_sequence
+            while True:
+                numero = f"Devis de travaux n°{str(candidate_sequence).zfill(3)}.{current_year}"
+                if not Devis.objects.filter(numero=numero).exists():
+                    break
+                candidate_sequence += 1
+
+            next_sequence = candidate_sequence
             print(f"Génération du numéro de devis de travaux: {numero} (séquence: {next_sequence}, année: {current_year})")
         
         return Response({

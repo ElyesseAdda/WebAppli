@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { Select, MenuItem, FormControl, InputLabel, Button, Box, Typography } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
@@ -2034,6 +2034,9 @@ const DevisAvance = () => {
     } catch (error) {
     }
   }, [draftStorageKey]);
+
+  // ✅ Anti double-envoi: empêche 2 POST create-devis simultanés (double clic / latence UI)
+  const saveInFlightRef = useRef(false);
   
   const resetDevisFormState = React.useCallback(() => {
     setDevisData(createInitialDevisData());
@@ -2844,7 +2847,12 @@ const DevisAvance = () => {
 
   // Fonction pour sauvegarder le devis au format legacy
   const handleSaveDevis = async () => {
+    // Si un envoi est déjà en cours (même avant que le state isSaving se mette à jour), ignorer
+    if (saveInFlightRef.current) {
+      return;
+    }
     try {
+      saveInFlightRef.current = true;
       setIsSaving(true);
       
       // Valider les données avant transformation
@@ -3165,6 +3173,7 @@ const DevisAvance = () => {
       alert(`Erreur lors de la sauvegarde du devis:\n${errorMessage}`);
     } finally {
       setIsSaving(false);
+      saveInFlightRef.current = false;
     }
   };
   
