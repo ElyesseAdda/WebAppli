@@ -7,8 +7,9 @@ Script pour créer sur Elekable les mêmes identifiants que Peinture 3000.
   source /var/www/elekable/venv/bin/activate
   python create_users_elekable.py
 
-Ou via le shell Django :
-  python manage.py shell < create_users_elekable.py
+Important : utilise Application.settings_production pour lire DATABASE_URL
+du .env (p3000db_elekable), comme le fait Gunicorn. Sinon le script
+écrirait dans la mauvaise base (p3000db) et la connexion échouerait.
 """
 
 import os
@@ -17,11 +18,14 @@ import django
 import secrets
 import string
 
-# Configuration Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Application.settings')
+# Même settings que l'app en production (lit DATABASE_URL depuis .env)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Application.settings_production')
 django.setup()
 
-from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 def generate_password(length=15):
@@ -119,6 +123,13 @@ def main():
     print("=" * 55)
     print(f"Résumé: {created} utilisateur(s) créé(s) ou mot(s) de passe réinitialisé(s).")
     print("Connexion: admin / admin123 — autres: mêmes identifiants que Peinture 3000.")
+
+    # Vérification : test de connexion admin (même DB que l'app)
+    print()
+    if authenticate(username='admin', password='admin123'):
+        print("✅ Vérification OK : admin / admin123 accepté par Django (même base que l'app).")
+    else:
+        print("⚠️  Vérification échec : admin / admin123 refusé. Vérifiez DJANGO_SETTINGS_MODULE et .env (DATABASE_URL).")
 
 
 if __name__ == '__main__':
