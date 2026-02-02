@@ -44,11 +44,19 @@ def generate_password(length=15):
 
 
 def create_or_update_user(username, first_name, last_name, password, is_staff=True, is_superuser=False, email=''):
-    """Crée l'utilisateur s'il n'existe pas, sinon ne fait rien."""
-    if User.objects.filter(username=username).exists():
-        print(f"⚠️  L'utilisateur '{username}' existe déjà — ignoré")
-        return False
+    """Crée l'utilisateur s'il n'existe pas, sinon réinitialise son mot de passe (même identifiants que P3000)."""
     try:
+        user = User.objects.filter(username=username).first()
+        if user:
+            user.set_password(password)
+            user.first_name = first_name
+            user.last_name = last_name
+            user.email = email or f'{username}@elekable.fr'
+            user.is_staff = is_staff
+            user.is_superuser = is_superuser
+            user.save()
+            print(f"✅ Mot de passe réinitialisé pour '{username}' — {first_name} {last_name}")
+            return True
         User.objects.create_user(
             username=username,
             password=password,
@@ -109,8 +117,8 @@ def main():
         created += 1
 
     print("=" * 55)
-    print(f"Résumé: {created} utilisateur(s) créé(s).")
-    print("Connexion: mêmes identifiants que Peinture 3000 (sauf admin).")
+    print(f"Résumé: {created} utilisateur(s) créé(s) ou mot(s) de passe réinitialisé(s).")
+    print("Connexion: admin / admin123 — autres: mêmes identifiants que Peinture 3000.")
 
 
 if __name__ == '__main__':
