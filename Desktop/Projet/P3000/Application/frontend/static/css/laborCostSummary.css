@@ -50,6 +50,6 @@
 }
 
 .summary-table th {
-  background-color: rgba(27, 120, 188, 1);
+  background-color: var(--color-primary);
   color: white;
 }

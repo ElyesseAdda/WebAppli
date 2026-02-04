@@ -5,7 +5,7 @@ body {
 
 .add-button {
   background-color: transparent;
-  color: rgba(27, 120, 188, 1);
+  color: var(--color-primary);
 }
 
 .add-button:hover {
@@ -24,18 +24,18 @@ span {
 }
 
 .creation-form h2 {
-  color: rgba(27, 120, 188, 1);
+  color: var(--color-primary);
 }
 
 .valider {
-  background-color: rgba(27, 120, 188, 1);
+  background-color: var(--color-primary);
   margin-right: 1rem;
   width: auto;
   min-width: 150px;
 }
 
 .supprimer {
-  background-color: rgb(255, 54, 54);
+  background-color: var(--color-error);
   width: auto;
   min-width: 150px;
 }

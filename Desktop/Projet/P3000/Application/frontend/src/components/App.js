@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { COLORS } from "../constants/colors";
 import "./../../static/css/app.css";
 import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
@@ -58,14 +59,38 @@ import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
 
-// Créer un thème par défaut
+// Créer un thème par défaut avec les couleurs centralisées
 const theme = createTheme({
   palette: {
     primary: {
-      main: "#1976d2",
+      main: COLORS.primary,
+      dark: COLORS.primaryDark,
+      light: COLORS.primaryLight,
     },
     secondary: {
-      main: "#dc004e",
+      main: COLORS.secondary,
+      dark: COLORS.secondaryDark,
+      light: COLORS.secondaryLight,
+    },
+    error: {
+      main: COLORS.error,
+      dark: COLORS.errorDark,
+      light: COLORS.errorLight,
+    },
+    warning: {
+      main: COLORS.warning,
+      dark: COLORS.warningDark,
+      light: COLORS.warningLight,
+    },
+    success: {
+      main: COLORS.success,
+      dark: COLORS.successDark,
+      light: COLORS.successLight,
+    },
+    info: {
+      main: COLORS.info,
+      dark: COLORS.infoDark,
+      light: COLORS.infoLight,
     },
   },
   typography: {

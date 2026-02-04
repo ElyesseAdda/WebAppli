@@ -4,7 +4,7 @@
   top: 0px;
   height: 350px;
   width: 100%;
-  background-color: rgba(27, 120, 188, 1);
+  background-color: var(--color-primary);
   box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
   -webkit-box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);
   -moz-box-shadow: 6px 7px 20px -6px rgba(33, 33, 33, 1);

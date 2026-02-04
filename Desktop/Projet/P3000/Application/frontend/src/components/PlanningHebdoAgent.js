@@ -15,6 +15,7 @@ import isoWeek from "dayjs/plugin/isoWeek";
 import React, { useEffect, useState } from "react";
 
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
+import { PLANNING_PALETTE } from "../constants/colors";
 import "./../../static/css/planningHebdo.css";
 import LaborCostsSummary from "./LaborCostsSummary";
 
@@ -799,29 +800,8 @@ const PlanningHebdoAgent = ({
 
   // Fonction utilitaire pour générer une couleur unique par chantier
   function getColorForChantier(chantierId) {
-    // Palette de couleurs (ajustable)
-    const palette = [
-      "#1b78bc",
-      "#e57373",
-      "#81c784",
-      "#ffd54f",
-      "#ba68c8",
-      "#4dd0e1",
-      "#ff8a65",
-      "#a1887f",
-      "#90a4ae",
-      "#f06292",
-      "#7986cb",
-      "#dce775",
-      "#9575cd",
-      "#ffb74d",
-      "#aed581",
-      "#64b5f6",
-      "#fff176",
-      "#4db6ac",
-      "#f44336",
-      "#8d6e63",
-    ];
+    // Palette de couleurs centralisée
+    const palette = PLANNING_PALETTE;
     if (!chantierId) return "#bdbdbd";
     // Simple hash pour indexer la palette
     let hash = 0;

@@ -16,6 +16,7 @@ import IconButton from "@mui/material/IconButton";
 import { ResponsivePie } from "@nivo/pie";
 import React, { useState } from "react";
 import RecapCategoryDetails from "./RecapCategoryDetails";
+import { CHART_COLORS } from "../../constants/colors";
 
 const RecapSection = ({
   title,
@@ -31,11 +32,11 @@ const RecapSection = ({
   const [hoveredCategory, setHoveredCategory] = useState(null);
   const [hiddenCategories, setHiddenCategories] = useState([]);
 
-  // Définir les couleurs fixes pour chaque catégorie
+  // Définir les couleurs fixes pour chaque catégorie (utilisant les constantes centralisées)
   const fixedColors = {
-    materiel: "#FF9800", // orange
-    main_oeuvre: "#2196F3", // bleu
-    sous_traitant: "#4CAF50", // vert
+    materiel: CHART_COLORS.materiel, // orange
+    main_oeuvre: CHART_COLORS.mainOeuvre, // bleu
+    sous_traitant: CHART_COLORS.sousTraitant, // vert
   };
 
   // Fonction pour masquer/afficher une catégorie

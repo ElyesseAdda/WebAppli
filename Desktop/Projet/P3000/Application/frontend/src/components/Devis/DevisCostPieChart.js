@@ -8,18 +8,19 @@ import React, { useState, useMemo } from 'react';
 import { ResponsivePie } from '@nivo/pie';
 import { Box, Typography, IconButton, Collapse, Paper } from '@mui/material';
 import { FiChevronUp, FiChevronDown, FiX } from 'react-icons/fi';
+import { COLORS as APP_COLORS, CHART_COLORS } from '../../constants/colors';
 
 // Constantes de style
 const CHART_SIZE = 220; // Taille du graphique (agrandie)
 const PANEL_WIDTH = 320;
 
-// Couleurs par catégorie
+// Couleurs par catégorie (utilisant les constantes centralisées)
 const COLORS = {
-  mainOeuvre: '#2196F3',    // Bleu
-  materiel: '#FF9800',       // Orange
-  tauxFixe: '#9C27B0',       // Violet
-  margePositive: '#4CAF50',  // Vert (marge ≥ 20%)
-  margeNegative: '#F44336',  // Rouge (marge < 10%)
+  mainOeuvre: CHART_COLORS.mainOeuvre,    // Bleu
+  materiel: CHART_COLORS.materiel,         // Orange
+  tauxFixe: CHART_COLORS.tauxFixe,         // Violet
+  margePositive: CHART_COLORS.margePositive,  // Vert (marge ≥ 20%)
+  margeNegative: CHART_COLORS.margeNegative,  // Rouge (marge < 10%)
 };
 
 /**
@@ -256,7 +257,7 @@ const DevisCostPieChart = ({
             size="small" 
             onClick={() => setIsExpanded(!isExpanded)}
             sx={{ 
-              backgroundColor: '#1976d2',
+              backgroundColor: APP_COLORS.primary,
               color: 'white',
               width: 28,
               height: 28,
@@ -272,12 +273,12 @@ const DevisCostPieChart = ({
               size="small" 
               onClick={onClose}
               sx={{ 
-                backgroundColor: '#1976d2',
+                backgroundColor: APP_COLORS.primary,
                 color: 'white',
                 width: 28,
                 height: 28,
                 '&:hover': {
-                  backgroundColor: '#d32f2f',
+                  backgroundColor: APP_COLORS.error,
                 }
               }}
             >
@@ -399,7 +400,7 @@ const DevisCostPieChart = ({
                 p: 0.5, 
               }}
             >
-              <Typography variant="caption" sx={{ color: '#e65100', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ color: APP_COLORS.warningDark, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 ⚠️ Marge inférieure à 10%
               </Typography>
             </Box>
@@ -418,7 +419,7 @@ const DevisCostPieChart = ({
             size="small" 
             onClick={() => setIsLegendExpanded(!isLegendExpanded)}
             sx={{ 
-              backgroundColor: '#1976d2',
+              backgroundColor: APP_COLORS.primary,
               color: 'white',
               width: 28,
               height: 28,

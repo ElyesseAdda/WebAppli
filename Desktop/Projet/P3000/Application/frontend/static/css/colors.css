@@ -1,0 +1,88 @@
+/**
+ * Palette de couleurs centralisée
+ * Client: Elekable
+ * 
+ * Ce fichier contient toutes les variables CSS de couleur utilisées dans l'application.
+ * Pour changer les couleurs du client, modifiez uniquement ce fichier.
+ */
+
+:root {
+  /* ===========================
+     Couleurs principales du client
+     =========================== */
+  --color-primary: #40798C;
+  --color-primary-dark: #2D5563;
+  --color-primary-light: #6A9FB5;
+  --color-primary-rgb: 64, 121, 140;
+  
+  --color-secondary: #CAC4CE;
+  --color-secondary-dark: #B5AEB9;
+  --color-secondary-light: #DDD9DF;
+  --color-secondary-rgb: 202, 196, 206;
+  
+  --color-accent: #E53D00;
+  --color-accent-dark: #CC3600;
+  --color-accent-light: #FF5722;
+  --color-accent-rgb: 229, 61, 0;
+
+  /* ===========================
+     Couleurs sémantiques
+     =========================== */
+  --color-success: #4CAF50;
+  --color-success-dark: #2e7d32;
+  --color-success-light: #81c784;
+  --color-success-rgb: 76, 175, 80;
+  
+  --color-error: #d32f2f;
+  --color-error-dark: #c62828;
+  --color-error-light: #ef5350;
+  --color-error-rgb: 211, 47, 47;
+  
+  --color-warning: #FF9800;
+  --color-warning-dark: #ef6c00;
+  --color-warning-light: #ffb74d;
+  --color-warning-rgb: 255, 152, 0;
+  
+  --color-info: #2196F3;
+  --color-info-dark: #1976d2;
+  --color-info-light: #64b5f6;
+  --color-info-rgb: 33, 150, 243;
+
+  /* ===========================
+     Couleurs neutres
+     =========================== */
+  --color-text: #333333;
+  --color-text-muted: #666666;
+  --color-text-light: #999999;
+  
+  --color-border: #dee2e6;
+  --color-border-light: #e5e7eb;
+  --color-border-dark: #ccc;
+  
+  --color-background: #ffffff;
+  --color-background-alt: #f8f9fa;
+  --color-background-hover: #f3f4f6;
+  --color-background-dark: #e9ecef;
+
+  /* ===========================
+     Couleurs de la sidebar
+     =========================== */
+  --sidebar-bg: var(--color-background);
+  --sidebar-text: var(--color-text);
+  --sidebar-muted: var(--color-text-muted);
+  --sidebar-border: var(--color-border-light);
+  --sidebar-hover: var(--color-background-hover);
+  --sidebar-active-bg: rgba(var(--color-primary-rgb), 0.15);
+
+  /* ===========================
+     Couleurs des graphiques
+     =========================== */
+  --chart-color-1: var(--color-primary);
+  --chart-color-2: var(--color-accent);
+  --chart-color-3: var(--color-info);
+  --chart-color-4: var(--color-success);
+  --chart-color-5: var(--color-warning);
+  --chart-color-6: #9C27B0;
+  --chart-color-7: #00BCD4;
+  --chart-color-8: #795548;
+}

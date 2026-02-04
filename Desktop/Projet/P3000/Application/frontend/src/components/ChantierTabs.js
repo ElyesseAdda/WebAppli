@@ -27,6 +27,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { COLORS as APP_COLORS, CHART_COLORS, PLANNING_PALETTE } from "../constants/colors";
 
 // Composant pour l'affichage du contenu de l'onglet d'un chantier
 function ChantierTabPanel(props) {
@@ -234,7 +235,7 @@ const PaiementsSection = ({ data }) => {
   // Calculer le total des créances
   const totalCreances = data.total_en_attente || 0;
 
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
+  const COLORS = [APP_COLORS.info, APP_COLORS.success, APP_COLORS.warning, APP_COLORS.accent];
 
   return (
     <Grid container spacing={2}>

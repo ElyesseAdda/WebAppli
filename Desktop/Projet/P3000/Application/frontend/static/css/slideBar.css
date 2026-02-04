@@ -1,13 +1,5 @@
-/* Palette et variables utiles */
-:root {
-  --sidebar-bg: #ffffff;
-  --sidebar-text: #1f2937; /* gray-800 */
-  --sidebar-muted: #6b7280; /* gray-500 */
-  --sidebar-border: #e5e7eb; /* gray-200 */
-  --sidebar-hover: #f3f4f6; /* gray-100 */
-  --sidebar-active-bg: #eaf2ff; /* primary tint */
-  --primary: #1976d2; /* MUI primary */
-}
+/* Les variables sont maintenant définies dans colors.css */
+/* Ce fichier utilise les variables CSS centralisées */
 
 /* Reset minimal pour éviter les styles globaux parasites */
 body {
@@ -116,14 +108,14 @@ html {
 
 .slide-bar .link-container > ul > li > a.active {
   background: var(--sidebar-active-bg);
-  color: var(--primary);
+  color: var(--color-primary);
 }
 
 /* Icônes */
 .slide-bar .link-container svg {
   width: 24px;
   height: 24px;
-  color: var(--primary);
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 
@@ -160,7 +152,7 @@ html {
 
 .slide-bar .category-button.active {
   background: var(--sidebar-active-bg);
-  color: var(--primary);
+  color: var(--color-primary);
 }
 
 .slide-bar .category-left {
@@ -246,12 +238,12 @@ html {
 
 .slide-bar .submenu li a:hover {
   background: var(--sidebar-hover);
-  color: var(--primary);
+  color: var(--color-primary);
 }
 
 .slide-bar .submenu li a.active {
   background: var(--sidebar-active-bg);
-  color: var(--primary);
+  color: var(--color-primary);
 }
 
 /* Animation (optionnelle si on supprime display:none en JS) */
@@ -301,7 +293,7 @@ body .burger-button {
 
 .burger-button:focus,
 .close-button:focus {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 

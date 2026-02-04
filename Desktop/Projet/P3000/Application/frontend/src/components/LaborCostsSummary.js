@@ -26,6 +26,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import React, { useEffect, useState } from "react";
 import { FaTimes } from "react-icons/fa";
+import { COLORS } from "../constants/colors";
 import "./../../static/css/laborCostSummary.css";
 
 const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
@@ -230,7 +231,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                       <Typography
                         variant="h6"
                         style={{
-                          color: "rgba(27, 120, 188, 1)",
+                          color: COLORS.primary,
                           fontWeight: 700,
                         }}
                       >
@@ -306,7 +307,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                           </Typography>
                           <Typography
                             style={{
-                              color: "rgba(27, 120, 188, 1)",
+                              color: COLORS.primary,
                               fontWeight: 700,
                             }}
                           >
@@ -320,7 +321,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                           <Typography
                             color="textSecondary"
                             style={{
-                              color: "rgba(27, 120, 188, 1)",
+                              color: COLORS.primary,
                               fontWeight: 700,
                             }}
                           >
@@ -459,7 +460,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                     <Typography
                       variant="h6"
                       style={{
-                        color: "rgba(27, 120, 188, 1)",
+                        color: COLORS.primary,
                         fontWeight: 700,
                       }}
                     >
@@ -545,7 +546,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         </Typography>
                         <Typography
                           style={{
-                            color: "rgba(27, 120, 188, 1)",
+                            color: COLORS.primary,
                             fontWeight: 700,
                           }}
                         >
@@ -561,7 +562,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         <Typography
                           color="textSecondary"
                           style={{
-                            color: "rgba(27, 120, 188, 1)",
+                            color: COLORS.primary,
                             fontWeight: 700,
                           }}
                         >

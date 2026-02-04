@@ -7,11 +7,11 @@
 }
 
 .MuiTableRow-root:nth-of-type(even) {
-  background-color: rgba(217, 217, 217, 0.5);
+  background-color: var(--color-background-dark);
 }
 
 .MuiTableRow-root:hover {
-  background-color: rgba(27, 120, 188, 0.1);
+  background-color: rgba(var(--color-primary-rgb), 0.1);
 }
 
 @media (max-width: 1200px) {

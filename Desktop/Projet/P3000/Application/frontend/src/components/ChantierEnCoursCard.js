@@ -1,5 +1,6 @@
 import { Box, Card, CardContent, Typography } from "@mui/material";
 import React from "react";
+import { COLORS as APP_COLORS } from "../constants/colors";
 
 const ChantierEnCoursCard = ({ chantierEnCours, montantTotal }) => {
   const data = [
@@ -7,7 +8,7 @@ const ChantierEnCoursCard = ({ chantierEnCours, montantTotal }) => {
     { name: "Autres", value: Math.max(10 - (chantierEnCours || 0), 0) },
   ];
 
-  const COLORS = ["#1B78BC", "#E0E0E0"];
+  const COLORS = [APP_COLORS.primary, APP_COLORS.border];
 
   // Fonction pour formater le montant en euros
   const formatMontant = (montant) => {

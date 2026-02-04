@@ -1,6 +1,7 @@
 import { Box, Grid, Paper, Typography } from "@mui/material";
 import { ResponsivePie } from "@nivo/pie";
 import React from "react";
+import { COLORS } from "../../constants/colors";
 
 const RecapSyntheseSection = ({ data }) => {
   if (!data) return null;
@@ -39,19 +40,19 @@ const RecapSyntheseSection = ({ data }) => {
       id: "Taux fixe",
       label: "Taux fixe",
       value: montant_taux_fixe,
-      color: "#1976d2", // bleu
+      color: COLORS.info, // bleu
     },
     {
       id: "Coût chantier",
       label: "Coût chantier",
       value: cout_chantier,
-      color: "#FF7043", // orange foncé
+      color: COLORS.warning, // orange
     },
     {
       id: "Bénéfice",
       label: "Bénéfice",
       value: benefice,
-      color: benefice >= 0 ? "#43A047" : "#d32f2f", // vert ou rouge
+      color: benefice >= 0 ? COLORS.success : COLORS.error, // vert ou rouge
     },
   ];
 
