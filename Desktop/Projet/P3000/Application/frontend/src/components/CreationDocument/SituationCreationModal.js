@@ -27,6 +27,7 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
+import { COLORS, withOpacity } from "../../constants/colors";
 
 const MOIS = [
   { value: 1, label: "Janvier" },
@@ -106,7 +107,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
   // Fonction pour obtenir la couleur de comparaison
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    if (current > previous) return COLORS.success; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -114,7 +115,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
     <>
       <TableRow
         sx={{
-          backgroundColor: "rgba(27, 120, 188, 1)",
+          backgroundColor: COLORS.primary,
           "& td": { color: "white", padding: "8px" },
         }}
       >
@@ -168,7 +169,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                           key={ligne.id}
                           sx={{
                             backgroundColor:
-                              index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                              index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
                             "& td": { padding: "8px" },
                           }}
                         >
@@ -279,7 +280,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                       key={ligne.id}
                       sx={{
                         backgroundColor:
-                          index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                          index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
                         "& td": { padding: "8px" },
                       }}
                     >
@@ -433,7 +434,7 @@ const SousPartieTable = ({
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    if (current > previous) return COLORS.success; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -443,7 +444,7 @@ const SousPartieTable = ({
         <TableBody>
           <TableRow
             sx={{
-              backgroundColor: "rgb(157, 197, 226)",
+              backgroundColor: COLORS.primaryLight,
               "& td": { padding: "8px" },
             }}
           >
@@ -489,7 +490,7 @@ const SousPartieTable = ({
                 key={ligne.id}
                 sx={{
                   backgroundColor:
-                    index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                    index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
                   "& td": { padding: "8px" },
                 }}
               >
@@ -579,7 +580,7 @@ const SousPartieTable = ({
                     key={ligne.id}
                     sx={{
                       backgroundColor:
-                        index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                        index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
                       "& td": { padding: "8px" },
                     }}
                   >
@@ -709,7 +710,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    if (current > previous) return COLORS.success; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -719,7 +720,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
         <TableBody>
           <TableRow
             sx={{
-              backgroundColor: "rgb(157, 197, 226)",
+              backgroundColor: COLORS.primaryLight,
               "& td": { padding: "8px" },
             }}
           >
@@ -762,7 +763,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                         key={ts.id}
                         sx={{
                           backgroundColor:
-                            index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                            index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
                           "& td": { padding: "8px" },
                         }}
                       >
@@ -893,7 +894,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
     <>
       <TableRow
         sx={{
-          backgroundColor: "rgba(27, 120, 188, 1)",
+          backgroundColor: COLORS.primary,
           "& td": { color: "white", padding: "8px" },
         }}
       >
@@ -2155,7 +2156,7 @@ const SituationCreationModal = ({
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
+    if (current > previous) return COLORS.success; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -2943,7 +2944,7 @@ const SituationCreationModal = ({
                       key={ligne.id}
                       sx={{
                         backgroundColor:
-                          index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
+                          index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
                         "& td": { padding: "8px" },
                       }}
                     >

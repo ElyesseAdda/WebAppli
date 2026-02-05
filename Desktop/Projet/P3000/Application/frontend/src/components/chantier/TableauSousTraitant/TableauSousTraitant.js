@@ -32,6 +32,7 @@ import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, Add
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
+import { COLORS } from "../../../constants/colors";
 
 const TableauSousTraitant = () => {
   const [data, setData] = useState([]);
@@ -2063,7 +2064,7 @@ const TableauSousTraitant = () => {
                         <TableRow
                           key={`recap-${row.mois}`}
                           sx={{
-                            backgroundColor: "#000000", // Fond noir
+                            backgroundColor: COLORS.black, // Fond noir
                             fontWeight: "bold",
                             borderTop: "2px solid rgba(255, 255, 255, 0.2)",
                             borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
@@ -2077,7 +2078,7 @@ const TableauSousTraitant = () => {
                             <Typography
                               sx={{
                                 fontWeight: "bold",
-                                color: "#ffffff",
+                                color: COLORS.white,
                                 fontSize: "0.95rem",
                               }}
                             >
@@ -2085,10 +2086,10 @@ const TableauSousTraitant = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
@@ -2096,8 +2097,8 @@ const TableauSousTraitant = () => {
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
                                 color: row.totaux.totalAPayer !== 0 
-                                  ? "#ff6b6b" // Rouge clair si différent de 0
-                                  : "#ffffff", // Blanc si égal à 0
+                                  ? COLORS.errorLight // Rouge clair si différent de 0
+                                  : COLORS.white, // Blanc si égal à 0
                               }}
                             >
                               {formatNumber(row.totaux.totalAPayer)} €
@@ -2108,40 +2109,40 @@ const TableauSousTraitant = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ffffff",
+                                color: COLORS.white,
                               }}
                             >
                               {formatNumber(row.totaux.totalPaye)} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ff6b6b", // Rouge clair pour l'écart
+                                color: COLORS.errorLight, // Rouge clair pour l'écart
                               }}
                             >
                               {row.totaux.totalEcart < 0 ? "-" : ""}{formatNumber(Math.abs(row.totaux.totalEcart))} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                         </TableRow>
                       );
@@ -2153,7 +2154,7 @@ const TableauSousTraitant = () => {
                       const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
 
                       // Alternance simple basée sur l'ordre d'affichage : bleu clair / blanc
-                      const backgroundColor = isEvenRow ? "rgba(27, 120, 188, 0.05)" : "#ffffff";
+                      const backgroundColor = isEvenRow ? "rgba(27, 120, 188, 0.05)" : COLORS.white;
                       // Si c'est un nouveau chantier, accentuer la séparation
                       const borderTop = row.isNewChantier ? "2px solid rgba(27, 120, 188, 0.2)" : "none";
                       
@@ -2163,7 +2164,7 @@ const TableauSousTraitant = () => {
                           sx={{
                             backgroundColor: backgroundColor,
                             borderTop: borderTop,
-                            "&:hover": { backgroundColor: isEvenRow ? "rgba(27, 120, 188, 0.1)" : "#f0f0f0" },
+                            "&:hover": { backgroundColor: isEvenRow ? "rgba(27, 120, 188, 0.1)" : COLORS.backgroundHover },
                           }}
                         >
                           {isFirstRowOfMois ? (
@@ -2174,7 +2175,7 @@ const TableauSousTraitant = () => {
                                 verticalAlign: "middle",
                                 textAlign: "center",
                                 borderRight: "1px solid #e0e0e0",
-                                backgroundColor: "#ffffff", // Background blanc sans alternance
+                                backgroundColor: COLORS.white, // Background blanc sans alternance
                               }}
                             >
                               <Typography
@@ -2196,7 +2197,7 @@ const TableauSousTraitant = () => {
                                 verticalAlign: "middle",
                                 textAlign: "center",
                                 borderRight: "1px solid #e0e0e0",
-                                backgroundColor: "#ffffff", // Background blanc sans alternance
+                                backgroundColor: COLORS.white, // Background blanc sans alternance
                               }}
                             >
                               <Typography
@@ -2324,7 +2325,7 @@ const TableauSousTraitant = () => {
                                       component="span" 
                                       sx={{ 
                                         fontSize: "0.65rem", 
-                                        color: item.ajustement_montant > 0 ? "#4caf50" : "#f44336",
+                                        color: item.ajustement_montant > 0 ? COLORS.success : COLORS.error,
                                         ml: 0.5 
                                       }}
                                     >
@@ -2615,7 +2616,7 @@ const TableauSousTraitant = () => {
                               sx={{
                                 fontSize: "0.75rem",
                                 color:
-                                  item.ecart > 0 ? "#d32f2f" : "#2e7d32",
+                                  item.ecart > 0 ? COLORS.error : COLORS.successDark,
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >
@@ -3038,7 +3039,7 @@ const TableauSousTraitant = () => {
             <DialogContent sx={{ pt: 2 }}>
               {/* Détail par chantier */}
               {currentAjustement?.chantiersDetails && currentAjustement.chantiersDetails.length > 0 && (
-                <Box sx={{ mb: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                <Box sx={{ mb: 3, p: 2, bgcolor: COLORS.backgroundHover, borderRadius: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                     Détail par chantier
                   </Typography>
@@ -3086,14 +3087,14 @@ const TableauSousTraitant = () => {
               />
               
               {/* Récapitulatif */}
-              <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+              <Box sx={{ mt: 2, p: 2, bgcolor: COLORS.infoLight, borderRadius: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography variant="body2">Total planning :</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {formatNumber(currentAjustement?.a_payer_labor_cost || 0)} €
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? COLORS.successDark : COLORS.errorDark }}>
                   <Typography variant="body2">
                     Ajustement {ajustementFormData.description ? `(${ajustementFormData.description})` : ''} :
                   </Typography>

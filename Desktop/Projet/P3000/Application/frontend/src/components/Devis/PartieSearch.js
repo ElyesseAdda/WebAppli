@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Select from 'react-select';
 import Fuse from 'fuse.js';
 import { FiPlus, FiX, FiSearch } from 'react-icons/fi';
+import { COLORS } from '../../constants/colors';
 
 const PartieSearch = ({
   selectedParties = [],
@@ -118,12 +119,12 @@ const PartieSearch = ({
       borderRadius: '6px',
       boxShadow: state.isFocused ? '0 0 0 0.2rem rgba(25, 118, 210, 0.25)' : 'none',
       '&:hover': {
-        borderColor: '#1976d2'
+        borderColor: COLORS.infoDark
       }
     }),
     placeholder: (provided) => ({
       ...provided,
-      color: '#6c757d',
+      color: COLORS.textLight,
       fontSize: '14px'
     }),
     input: (provided) => ({
@@ -133,9 +134,9 @@ const PartieSearch = ({
     option: (provided, state) => ({
       ...provided,
       backgroundColor: state.isSelected 
-        ? '#1976d2' 
+        ? COLORS.infoDark 
         : state.isFocused 
-          ? '#e3f2fd' 
+          ? COLORS.infoLight 
           : 'white',
       color: state.isSelected ? 'white' : '#333',
       fontSize: '14px',
@@ -149,7 +150,7 @@ const PartieSearch = ({
     }),
     noOptionsMessage: (provided) => ({
       ...provided,
-      color: '#6c757d',
+      color: COLORS.textLight,
       fontSize: '14px',
       padding: '12px'
     })
@@ -274,7 +275,7 @@ const PartieSearch = ({
             components={{
               DropdownIndicator: () => <FiSearch style={{ marginRight: '8px', color: 'rgba(255,255,255,0.8)', fontSize: '18px' }} />,
               CreateOption: ({ children, ...props }) => (
-                <div {...props} style={{ ...props.style, color: '#1976d2', fontWeight: '600', fontSize: '16px' }}>
+                <div {...props} style={{ ...props.style, color: COLORS.infoDark, fontWeight: '600', fontSize: '16px' }}>
                   <FiPlus style={{ marginRight: '8px' }} />
                   {children}
                 </div>

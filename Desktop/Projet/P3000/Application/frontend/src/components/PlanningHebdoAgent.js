@@ -15,7 +15,7 @@ import isoWeek from "dayjs/plugin/isoWeek";
 import React, { useEffect, useState } from "react";
 
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
-import { PLANNING_PALETTE } from "../constants/colors";
+import { COLORS, PLANNING_PALETTE, withOpacity } from "../constants/colors";
 import "./../../static/css/planningHebdo.css";
 import LaborCostsSummary from "./LaborCostsSummary";
 
@@ -802,7 +802,7 @@ const PlanningHebdoAgent = ({
   function getColorForChantier(chantierId) {
     // Palette de couleurs centralisée
     const palette = PLANNING_PALETTE;
-    if (!chantierId) return "#bdbdbd";
+    if (!chantierId) return COLORS.borderLight;
     // Simple hash pour indexer la palette
     let hash = 0;
     const str = chantierId.toString();
@@ -817,7 +817,7 @@ const PlanningHebdoAgent = ({
   const getCellStyle = (hour, day, scheduleData) => {
     // Vérifier si c'est une heure de pause
     if (isPauseHour(hour)) {
-      return "#e8e8e8"; // Gris clair doux pour les heures de pause
+      return COLORS.backgroundDark; // Gris clair doux pour les heures de pause
     }
 
     // Convertir le format de date pour la comparaison
@@ -845,7 +845,7 @@ const PlanningHebdoAgent = ({
 
       // Si pas d'événement, appliquer le style jour férié (gris léger)
       if (!hasEvent) {
-        return "#e0e0e0"; // Gris léger pour les jours fériés
+        return COLORS.borderLight; // Gris léger pour les jours fériés
       }
     }
 
@@ -862,22 +862,22 @@ const PlanningHebdoAgent = ({
     if (hasEvent) {
       // Couleur selon le sous-type
       if (hasEvent.event_type === "absence") {
-        if (hasEvent.subtype === "justifiee") return "#fbc02d"; // jaune
-        if (hasEvent.subtype === "injustifiee") return "#d32f2f"; // rouge foncé
-        if (hasEvent.subtype === "maladie") return "#1976d2"; // bleu
-        if (hasEvent.subtype === "rtt") return "#7b1fa2"; // violet
-        return "red";
+        if (hasEvent.subtype === "justifiee") return COLORS.warningLight; // jaune
+        if (hasEvent.subtype === "injustifiee") return COLORS.error; // rouge foncé
+        if (hasEvent.subtype === "maladie") return COLORS.infoDark; // bleu
+        if (hasEvent.subtype === "rtt") return COLORS.accentDark; // violet
+        return COLORS.error;
       }
       if (hasEvent.event_type === "conge") {
-        if (hasEvent.subtype === "paye") return "#388e3c"; // vert foncé
-        if (hasEvent.subtype === "sans_solde") return "#ffa000"; // orange
-        if (hasEvent.subtype === "parental") return "#0288d1"; // bleu clair
+        if (hasEvent.subtype === "paye") return COLORS.successDark; // vert foncé
+        if (hasEvent.subtype === "sans_solde") return COLORS.warningDark; // orange
+        if (hasEvent.subtype === "parental") return COLORS.info; // bleu clair
         if (
           hasEvent.subtype === "maternite" ||
           hasEvent.subtype === "paternite"
         )
-          return "#f06292"; // rose
-        return "purple";
+          return COLORS.accentLight; // rose
+        return COLORS.accent;
       }
     }
 
@@ -1097,7 +1097,7 @@ const PlanningHebdoAgent = ({
                     style={{
                       marginLeft: "10px",
                       fontSize: "12px",
-                      color: "#666",
+                      color: COLORS.textMuted,
                     }}
                   >
                     (Dernière: {lastSelectedCell.hour} - {lastSelectedCell.day})
@@ -1114,14 +1114,14 @@ const PlanningHebdoAgent = ({
                     onClick={validateSelection}
                     disabled={selectedCells.length === 0}
                     sx={{
-                      backgroundColor: "#1976d2",
+                      backgroundColor: COLORS.infoDark,
                       color: "white",
                       "&:hover": {
-                        backgroundColor: "#1565c0",
+                        backgroundColor: COLORS.infoDark,
                         transform: "scale(1.05)",
                       },
                       "&:disabled": {
-                        backgroundColor: "#1976d2",
+                        backgroundColor: COLORS.infoDark,
                         color: "white",
                         opacity: 0.5,
                       },
@@ -1141,14 +1141,14 @@ const PlanningHebdoAgent = ({
                     onClick={deleteChantierAssignment}
                     disabled={selectedCells.length === 0}
                     sx={{
-                      backgroundColor: "#f44336",
+                      backgroundColor: COLORS.error,
                       color: "white",
                       "&:hover": {
-                        backgroundColor: "#d32f2f",
+                        backgroundColor: COLORS.error,
                         transform: "scale(1.05)",
                       },
                       "&:disabled": {
-                        backgroundColor: "#f44336",
+                        backgroundColor: COLORS.error,
                         color: "white",
                         opacity: 0.5,
                       },
@@ -1189,7 +1189,7 @@ const PlanningHebdoAgent = ({
                 <IconButton
                   size="small"
                   sx={{
-                    color: "#1976d2",
+                    color: COLORS.infoDark,
                     "&:hover": {
                       backgroundColor: "rgba(25, 118, 210, 0.1)",
                     },
@@ -1299,7 +1299,7 @@ const PlanningHebdoAgent = ({
                                           style={{
                                             marginLeft: "4px",
                                             fontSize: "12px",
-                                            color: "#ff5722",
+                                            color: COLORS.accentLight,
                                             fontWeight: "bold",
                                           }}
                                         >
@@ -1311,9 +1311,9 @@ const PlanningHebdoAgent = ({
                                           style={{
                                             marginTop: "2px",
                                             fontSize: "12px",
-                                            color: "#ffffff",
+                                            color: COLORS.white,
                                             fontWeight: "bold",
-                                            backgroundColor: "#ff5722",
+                                            backgroundColor: COLORS.accentLight,
                                             padding: "2px 6px",
                                             borderRadius: "4px",
                                             border: "2px solid #d32f2f",
@@ -1375,7 +1375,7 @@ const PlanningHebdoAgent = ({
                 marginTop: "20px",
                 marginBottom: "15px",
                 padding: "16px",
-                backgroundColor: "#f0f8ff",
+                backgroundColor: COLORS.infoLight,
                 borderRadius: "12px",
                 border: "2px solid #2196f3",
               }}
@@ -1386,7 +1386,7 @@ const PlanningHebdoAgent = ({
                   alignItems: "center",
                   fontSize: "16px",
                   fontWeight: "600",
-                  color: "#1976d2",
+                  color: COLORS.infoDark,
                   marginBottom: "8px",
                   gap: "8px",
                 }}
@@ -1418,14 +1418,14 @@ const PlanningHebdoAgent = ({
                     fontWeight: "600",
                     textAlign: "center",
                     backgroundColor: "white",
-                    color: "#1976d2",
+                    color: COLORS.infoDark,
                   }}
                   placeholder="0"
                 />
                 <span
                   style={{
                     fontSize: "14px",
-                    color: "#1976d2",
+                    color: COLORS.infoDark,
                     fontWeight: "500",
                   }}
                 >
@@ -1438,7 +1438,7 @@ const PlanningHebdoAgent = ({
                       borderRadius: "12px",
                       fontSize: "11px",
                       fontWeight: "600",
-                      backgroundColor: "#4caf50",
+                      backgroundColor: COLORS.success,
                       color: "white",
                     }}
                   >
@@ -1454,9 +1454,9 @@ const PlanningHebdoAgent = ({
                 marginTop: "10px",
                 marginBottom: "20px",
                 padding: "16px",
-                backgroundColor: isSav ? "#fff3e0" : "#f8f9fa",
+                backgroundColor: isSav ? COLORS.warningLight : COLORS.backgroundAlt,
                 borderRadius: "12px",
-                border: `2px solid ${isSav ? "#ff9800" : "#e0e0e0"}`,
+                border: `2px solid ${isSav ? COLORS.warning : COLORS.borderLight}`,
                 transition: "all 0.3s ease",
                 cursor: "pointer",
               }}
@@ -1477,8 +1477,8 @@ const PlanningHebdoAgent = ({
                       width: "20px",
                       height: "20px",
                       borderRadius: "4px",
-                      border: `2px solid ${isSav ? "#ff9800" : "#ccc"}`,
-                      backgroundColor: isSav ? "#ff9800" : "transparent",
+                      border: `2px solid ${isSav ? COLORS.warning : COLORS.borderDark}`,
+                      backgroundColor: isSav ? COLORS.warning : "transparent",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1503,7 +1503,7 @@ const PlanningHebdoAgent = ({
                       style={{
                         fontSize: "16px",
                         fontWeight: "600",
-                        color: isSav ? "#e65100" : "#333",
+                        color: isSav ? COLORS.warningDark : COLORS.text,
                         display: "flex",
                         alignItems: "center",
                         gap: "8px",
@@ -1515,7 +1515,7 @@ const PlanningHebdoAgent = ({
                     <div
                       style={{
                         fontSize: "13px",
-                        color: isSav ? "#bf360c" : "#666",
+                        color: isSav ? COLORS.warningDark : COLORS.textMuted,
                         marginTop: "2px",
                         marginLeft: "26px",
                       }}
@@ -1530,8 +1530,8 @@ const PlanningHebdoAgent = ({
                     borderRadius: "12px",
                     fontSize: "11px",
                     fontWeight: "600",
-                    backgroundColor: isSav ? "#ff9800" : "#e0e0e0",
-                    color: isSav ? "white" : "#666",
+                    backgroundColor: isSav ? COLORS.warning : COLORS.borderLight,
+                    color: isSav ? "white" : COLORS.textMuted,
                     transition: "all 0.2s ease",
                   }}
                 >
@@ -1558,7 +1558,7 @@ const PlanningHebdoAgent = ({
                 variant="contained"
                 onClick={closeChantierModal}
                 sx={{
-                  backgroundColor: "#ccc",
+                  backgroundColor: COLORS.borderDark,
                   color: "black",
                   "&:hover": {
                     backgroundColor: "#999",

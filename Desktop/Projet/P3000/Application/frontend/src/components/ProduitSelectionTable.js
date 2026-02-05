@@ -24,6 +24,7 @@ import { bonCommandeService } from "../services/bonCommandeService";
 import { updateChantierMaterialCost } from "../services/chantierService";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import NewProductForm from "./NewProductForm";
+import { COLORS } from "../constants/colors";
 
 function ProduitSelectionTable({
   open,
@@ -495,7 +496,7 @@ function ProduitSelectionTable({
       {error && (
         <Box sx={{ px: 3, py: 2 }}>
           <Box sx={{ 
-            backgroundColor: '#ffebee', 
+            backgroundColor: COLORS.errorLight, 
             padding: 2, 
             borderRadius: 1,
             border: '1px solid #f44336',
@@ -575,7 +576,7 @@ function ProduitSelectionTable({
               {filteredProducts.map((product, idx) => {
                 const isSelected = selectedProducts[product.id];
                 const edited = editedProducts[product.id] || {};
-                const rowColor = idx % 2 === 0 ? "#fafafa" : "#fff";
+                const rowColor = idx % 2 === 0 ? COLORS.backgroundHover : "#fff";
                 return (
                   <TableRow
                     key={product.id}

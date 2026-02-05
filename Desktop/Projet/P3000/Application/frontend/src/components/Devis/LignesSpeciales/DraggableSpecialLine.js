@@ -1,5 +1,6 @@
 import React from 'react';
 import { Draggable } from 'react-beautiful-dnd';
+import { COLORS } from '../../../constants/colors';
 
 const DraggableSpecialLine = ({ line, index, onEdit, onRemove, formatMontantEspace, setHoveredSpecialLineId, setHoveredSpecialLinePosition, setIsSpecialLineIconsAnimatingOut, hoverTimeoutRef, isSpecialLineIconsAnimatingOut, hoveredSpecialLineId }) => {
   // Calculer le montant
@@ -112,7 +113,7 @@ const DraggableSpecialLine = ({ line, index, onEdit, onRemove, formatMontantEspa
                 fontSize: '16px', 
                 fontWeight: 'bold',
                 marginLeft: '10px',
-                color: line.data.type === 'reduction' ? '#d32f2f' : line.data.type === 'addition' ? '#1976d2' : '#9e9e9e'
+                color: line.data.type === 'reduction' ? COLORS.error : line.data.type === 'addition' ? COLORS.infoDark : COLORS.textLight
               }}>
                 {formatMontantEspace(amount)} €
               </span>

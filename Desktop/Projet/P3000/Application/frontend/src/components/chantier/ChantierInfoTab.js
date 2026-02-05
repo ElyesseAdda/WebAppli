@@ -42,6 +42,7 @@ import universalDriveGenerator from "../../utils/universalDriveGenerator";
 import SituationCreationModal from "../CreationDocument/SituationCreationModal";
 import SousTraitanceModal from "../SousTraitance/SousTraitanceModal";
 import ContactSocieteModal from "../ContactSocieteModal";
+import { COLORS } from "../../constants/colors";
 
 // Fonction utilitaire pour vérifier les permissions selon le statut du chantier
 const canPerformAction = (statut, action) => {
@@ -403,7 +404,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           })}`}
         >
           <Box
-            sx={{ width: `${pourcentages.non_envoye}%`, background: "#ff9800" }}
+            sx={{ width: `${pourcentages.non_envoye}%`, background: COLORS.warning }}
           />
         </Tooltip>
       )}
@@ -416,7 +417,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           )}`}
         >
           <Box
-            sx={{ width: `${pourcentages.en_attente}%`, background: "#1976d2" }}
+            sx={{ width: `${pourcentages.en_attente}%`, background: COLORS.infoDark }}
           />
         </Tooltip>
       )}
@@ -429,7 +430,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           )}`}
         >
           <Box
-            sx={{ width: `${pourcentages.retard}%`, background: "#d32f2f" }}
+            sx={{ width: `${pourcentages.retard}%`, background: COLORS.error }}
           />
         </Tooltip>
       )}
@@ -441,7 +442,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             currency: "EUR",
           })}`}
         >
-          <Box sx={{ width: `${pourcentages.paye}%`, background: "#2e7d32" }} />
+          <Box sx={{ width: `${pourcentages.paye}%`, background: COLORS.successDark }} />
         </Tooltip>
       )}
     </Box>
@@ -502,13 +503,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const getCategorieColor = (categorie) => {
     switch (categorie) {
       case "non_envoye":
-        return "#ff9800"; // orange
+        return COLORS.warning; // orange
       case "en_attente":
-        return "#1976d2"; // bleu
+        return COLORS.infoDark; // bleu
       case "retard":
-        return "#d32f2f"; // rouge
+        return COLORS.error; // rouge
       case "paye":
-        return "#2e7d32"; // vert
+        return COLORS.successDark; // vert
       default:
         return "inherit";
     }
@@ -958,7 +959,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 variant="subtitle2"
                 sx={{
                   fontWeight: 600,
-                  color: "#6e6e6e",
+                  color: COLORS.textMuted,
                   mb: 1,
                   fontFamily: "Roboto Slab, serif",
                 }}
@@ -984,7 +985,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 variant="subtitle2"
                 sx={{
                   fontWeight: 600,
-                  color: "#6e6e6e",
+                  color: COLORS.textMuted,
                   mb: 1,
                   fontFamily: "Roboto Slab, serif",
                 }}
@@ -1013,7 +1014,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 variant="subtitle2"
                 sx={{
                   fontWeight: 600,
-                  color: "#6e6e6e",
+                  color: COLORS.textMuted,
                   mb: 1,
                   fontFamily: "Roboto Slab, serif",
                 }}
@@ -1041,7 +1042,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 variant="subtitle2"
                 sx={{
                   fontWeight: 600,
-                  color: "#6e6e6e",
+                  color: COLORS.textMuted,
                   mb: 1,
                   fontFamily: "Roboto Slab, serif",
                 }}
@@ -1067,7 +1068,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                 variant="subtitle2"
                 sx={{
                   fontWeight: 600,
-                  color: "#6e6e6e",
+                  color: COLORS.textMuted,
                   mb: 1,
                   fontFamily: "Roboto Slab, serif",
                 }}
@@ -1094,15 +1095,15 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                         ? "rgba(211, 47, 47, 0.1)"
                         : chantierData?.statut === "En attente"
                         ? "rgba(255, 152, 0, 0.1)"
-                        : "#e0e0e0",
+                        : COLORS.borderLight,
                     color:
                       chantierData?.statut === "En Cours"
-                        ? "#2e7d32"
+                        ? COLORS.successDark
                         : chantierData?.statut === "Terminé"
-                        ? "#d32f2f"
+                        ? COLORS.error
                         : chantierData?.statut === "En attente"
-                        ? "#ff9800"
-                        : "#757575",
+                        ? COLORS.warning
+                        : COLORS.textMuted,
                     borderRadius: 8,
                     padding: "2px 12px",
                     fontWeight: 700,
@@ -1132,15 +1133,15 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           onClick={() => setOpenSousTraitance(true)}
           disabled={!canPerformAction(chantierData?.statut, "canManageSousTraitance")}
           sx={{
-            backgroundColor: "#1976d2",
+            backgroundColor: COLORS.infoDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: "#1565c0",
+              backgroundColor: COLORS.infoDark,
               boxShadow: 5,
             },
             "&:disabled": {
-              backgroundColor: "#e0e0e0",
-              color: "#9e9e9e",
+              backgroundColor: COLORS.borderLight,
+              color: COLORS.textLight,
             },
           }}
           title={
@@ -1160,15 +1161,15 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           onClick={() => setOpenSituationModal(true)}
           disabled={!canPerformAction(chantierData?.statut, "canCreateSituation")}
           sx={{
-            backgroundColor: "#388e3c",
+            backgroundColor: COLORS.successDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: "#2e7d32",
+              backgroundColor: COLORS.successDark,
               boxShadow: 5,
             },
             "&:disabled": {
-              backgroundColor: "#e0e0e0",
-              color: "#9e9e9e",
+              backgroundColor: COLORS.borderLight,
+              color: COLORS.textLight,
             },
           }}
           title={
@@ -1192,16 +1193,16 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           }}
           disabled={!canPerformAction(chantierData?.statut, "canCreateDevis")}
           sx={{
-            backgroundColor: "#ff9800",
+            backgroundColor: COLORS.warning,
             color: "white",
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: "#fb8c00",
+              backgroundColor: COLORS.warningDark,
               boxShadow: 5,
             },
             "&:disabled": {
-              backgroundColor: "#e0e0e0",
-              color: "#9e9e9e",
+              backgroundColor: COLORS.borderLight,
+              color: COLORS.textLight,
             },
           }}
           title={
@@ -1224,11 +1225,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             );
           }}
           sx={{
-            backgroundColor: "#424242",
+            backgroundColor: COLORS.text,
             color: "white",
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: "#212121",
+              backgroundColor: COLORS.black,
               boxShadow: 5,
             },
           }}
@@ -1242,11 +1243,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             window.open(`/TableauFacturation`, "_blank");
           }}
           sx={{
-            backgroundColor: "#9c27b0",
+            backgroundColor: COLORS.accent,
             color: "white",
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: "#7b1fa2",
+              backgroundColor: COLORS.accentDark,
               boxShadow: 5,
             },
           }}
@@ -1258,11 +1259,11 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           startIcon={<FaCloud />}
           onClick={handleOpenDrive}
           sx={{
-            backgroundColor: "#00bcd4",
+            backgroundColor: COLORS.info,
             color: "white",
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: "#00acc1",
+              backgroundColor: COLORS.infoDark,
               boxShadow: 5,
             },
           }}
@@ -1349,7 +1350,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       <Box>
                         <Typography
                           sx={{
-                            color: "#388e3c",
+                            color: COLORS.successDark,
                             fontWeight: 600,
                             fontSize: "1rem",
                             fontFamily: "Roboto, Arial, sans-serif",
@@ -1369,7 +1370,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       <Box>
                         <Typography
                           sx={{
-                            color: "#d32f2f",
+                            color: COLORS.error,
                             fontWeight: 600,
                             fontSize: "1rem",
                             fontFamily: "Roboto, Arial, sans-serif",
@@ -1389,7 +1390,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       <Box>
                         <Typography
                           sx={{
-                            color: "#1976d2",
+                            color: COLORS.infoDark,
                             fontWeight: 600,
                             fontSize: "1rem",
                             fontFamily: "Roboto, Arial, sans-serif",
@@ -1422,7 +1423,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       align="center"
                       sx={{
                         fontWeight: 700,
-                        color: "#1976d2",
+                        color: COLORS.infoDark,
                         fontFamily: "Roboto, Arial, sans-serif",
                       }}
                     >
@@ -1440,13 +1441,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                           onClick={() => setState({ ...state, showDecomposition: !state.showDecomposition })}
                           sx={{
                             cursor: "pointer",
-                            color: "#999",
+                            color: COLORS.textLight,
                             fontSize: "1.2rem",
                             padding: "4px",
                             borderRadius: "50%",
                             transition: "all 0.2s ease",
                             "&:hover": {
-                              color: "#1976d2",
+                              color: COLORS.infoDark,
                               backgroundColor: "rgba(25, 118, 210, 0.1)",
                             },
                           }}
@@ -1463,7 +1464,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   <Card
                     sx={{
                       borderRadius: "10px",
-                      backgroundColor: "#f8f9fa",
+                      backgroundColor: COLORS.backgroundAlt,
                       boxShadow: 2,
                       border: "1px solid #e0e0e0",
                     }}
@@ -1473,7 +1474,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                         variant="h6"
                         sx={{
                           fontWeight: 600,
-                          color: "#1976d2",
+                          color: COLORS.infoDark,
                           fontFamily: "Roboto, Arial, sans-serif",
                           mb: 2,
                         }}
@@ -1494,7 +1495,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                                 variant="subtitle1"
                                 sx={{
                                   fontWeight: 600,
-                                  color: "#388e3c",
+                                  color: COLORS.successDark,
                                   mb: 1,
                                 }}
                               >
@@ -1518,7 +1519,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                                 variant="subtitle1"
                                 sx={{
                                   fontWeight: 600,
-                                  color: "#d32f2f",
+                                  color: COLORS.error,
                                   mb: 1,
                                 }}
                               >
@@ -1530,7 +1531,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                                     variant="body2" 
                                     sx={{ 
                                       fontWeight: 500, 
-                                      color: "#1976d2",
+                                      color: COLORS.infoDark,
                                       mb: 0.5 
                                     }}
                                   >
@@ -1556,7 +1557,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                                 variant="subtitle1"
                                 sx={{
                                   fontWeight: 600,
-                                  color: "#ff9800",
+                                  color: COLORS.warning,
                                   mb: 1,
                                 }}
                               >
@@ -1587,7 +1588,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                               variant="subtitle1"
                               sx={{
                                 fontWeight: 600,
-                                color: "#1976d2",
+                                color: COLORS.infoDark,
                                 mb: 1,
                               }}
                             >
@@ -1603,7 +1604,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                               variant="body2"
                               sx={{
                                 fontWeight: 600,
-                                color: "#1976d2",
+                                color: COLORS.infoDark,
                                 mt: 1,
                               }}
                             >
@@ -1669,7 +1670,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       <Box>
                         <Typography
                           sx={{
-                            color: "#388e3c",
+                            color: COLORS.successDark,
                             fontWeight: 600,
                             fontSize: "1rem",
                             fontFamily: "Roboto, Arial, sans-serif",
@@ -1684,7 +1685,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                           }}
                         >
                           {loadingMainOeuvre ? (
-                            <span style={{ color: "#1976d2" }}>
+                            <span style={{ color: COLORS.infoDark }}>
                               Chargement...
                             </span>
                           ) : (
@@ -1695,7 +1696,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       <Box>
                         <Typography
                           sx={{
-                            color: "#d32f2f",
+                            color: COLORS.error,
                             fontWeight: 600,
                             fontSize: "1rem",
                             fontFamily: "Roboto, Arial, sans-serif",
@@ -1715,7 +1716,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       <Box>
                         <Typography
                           sx={{
-                            color: "#1976d2",
+                            color: COLORS.infoDark,
                             fontWeight: 600,
                             fontSize: "1rem",
                             fontFamily: "Roboto, Arial, sans-serif",
@@ -1748,7 +1749,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       align="center"
                       sx={{
                         fontWeight: 700,
-                        color: "#1976d2",
+                        color: COLORS.infoDark,
                         fontFamily: "Roboto, Arial, sans-serif",
                       }}
                     >
@@ -1786,8 +1787,8 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                             (chantierData?.cout_materiel || 0) +
                             (chantierData?.cout_sous_traitance || 0)) >=
                         0
-                          ? "#2e7d32"
-                          : "#d32f2f",
+                          ? COLORS.successDark
+                          : COLORS.error,
                     }}
                   >
                     Marge:{" "}
@@ -1842,7 +1843,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                     variant="body1"
                     sx={{
                       fontWeight: 700,
-                      color: "#1976d2",
+                      color: COLORS.infoDark,
                       fontFamily: "Roboto, Arial, sans-serif",
                     }}
                   >
@@ -1853,7 +1854,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                     variant="body2"
                     sx={{
                       fontWeight: 700,
-                      color: "#6e6e6e",
+                      color: COLORS.textMuted,
                       fontFamily: "Roboto, Arial, sans-serif",
                     }}
                   >
@@ -1884,7 +1885,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       sx={{
                         width: 16,
                         height: 16,
-                        bgcolor: "#ff9800",
+                        bgcolor: COLORS.warning,
                         borderRadius: "50%",
                       }}
                     />{" "}
@@ -1895,7 +1896,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       sx={{
                         width: 16,
                         height: 16,
-                        bgcolor: "#1976d2",
+                        bgcolor: COLORS.infoDark,
                         borderRadius: "50%",
                       }}
                     />{" "}
@@ -1906,7 +1907,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       sx={{
                         width: 16,
                         height: 16,
-                        bgcolor: "#2e7d32",
+                        bgcolor: COLORS.successDark,
                         borderRadius: "50%",
                       }}
                     />{" "}
@@ -1917,7 +1918,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       sx={{
                         width: 16,
                         height: 16,
-                        bgcolor: "#d32f2f",
+                        bgcolor: COLORS.error,
                         borderRadius: "50%",
                       }}
                     />{" "}
@@ -1988,7 +1989,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                               {situation.date_paiement_reel ? (
                                 <>
                                   <FaCheckCircle
-                                    color="#2e7d32"
+                                    color={COLORS.successDark}
                                     style={{ verticalAlign: "middle" }}
                                   />{" "}
                                   Payée
@@ -1996,7 +1997,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                               ) : isRetardPaiement(situation) ? (
                                 <>
                                   <FaExclamationCircle
-                                    color="#d32f2f"
+                                    color={COLORS.error}
                                     style={{ verticalAlign: "middle" }}
                                   />{" "}
                                   Retard de paiement
@@ -2004,7 +2005,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                               ) : situation.date_envoi ? (
                                 <>
                                   <FaHourglassHalf
-                                    color="#1976d2"
+                                    color={COLORS.infoDark}
                                     style={{ verticalAlign: "middle" }}
                                   />{" "}
                                   En attente
@@ -2012,7 +2013,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                               ) : (
                                 <>
                                   <FaExclamationCircle
-                                    color="#ff9800"
+                                    color={COLORS.warning}
                                     style={{ verticalAlign: "middle" }}
                                   />{" "}
                                   Non envoyée
@@ -2157,7 +2158,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         <DialogTitle>Modifier les informations du chantier</DialogTitle>
         <DialogContent>
           <Box sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
+            <Typography variant="h6" sx={{ mb: 2, color: COLORS.infoDark }}>
               Informations du chantier
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2199,7 +2200,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               </Grid>
             </Grid>
 
-            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
               Informations de la maîtrise d'ouvrage
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2265,7 +2266,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             </Grid>
 
             {/* Section Contact Société */}
-            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
 Maitre d'ouvrage
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2343,7 +2344,7 @@ Maitre d'ouvrage
             </Grid>
 
             {/* Section Assistance à la maîtrise d'ouvrage */}
-            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
               Assistance à la maîtrise d'ouvrage
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2420,7 +2421,7 @@ Maitre d'ouvrage
             </Grid>
 
             {/* Section Maitre d'oeuvre */}
-            <Typography variant="h6" sx={{ color: "#1976d2", mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
               Maitre d'oeuvre
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2496,7 +2497,7 @@ Maitre d'ouvrage
               </Grid>
             </Grid>
 
-            <Typography variant="h6" sx={{ mb: 2, color: "#1976d2" }}>
+            <Typography variant="h6" sx={{ mb: 2, color: COLORS.infoDark }}>
               Adresse du chantier
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2554,7 +2555,7 @@ Maitre d'ouvrage
             </Grid>
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="h6" sx={{ color: "#1976d2" }}>
+              <Typography variant="h6" sx={{ color: COLORS.infoDark }}>
                 Contact Devis
               </Typography>
               {societeId && (

@@ -19,6 +19,7 @@ import ContactSocieteModal from './ContactSocieteModal';
 import DrivePathSelector from './Devis/DrivePathSelector';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
+import { COLORS } from '../constants/colors';
 
 const createInitialDevisData = () => ({
   numero: '',
@@ -93,8 +94,8 @@ const RECURRING_SPECIAL_LINE_TEMPLATE = {
     value: 0
   },
   styles: {
-    backgroundColor: '#fbff24',
-    color: '#ff3838',
+    backgroundColor: COLORS.warningLight,
+    color: COLORS.error,
     fontWeight: 'bold',
     textAlign: 'left'
   },
@@ -3211,7 +3212,7 @@ const DevisAvance = () => {
       padding: '20px 10px',
       marginRight: '150px', // Espace pour la sidebar
       minHeight: 'auto', // Changé de 100vh à auto
-      backgroundColor: '#f5f5f5',
+      backgroundColor: COLORS.backgroundHover,
       borderRadius: '10px',
     }}>
       <div style={{
@@ -3230,7 +3231,7 @@ const DevisAvance = () => {
         
         {/* En-tête de la page */}
         <div style={{
-          backgroundColor: '#1976d2',
+          backgroundColor: COLORS.infoDark,
           color: 'white',
           padding: '20px 30px',
           textAlign: 'center'
@@ -3248,14 +3249,14 @@ const DevisAvance = () => {
           
           {/* Section 0: Sélection du chantier */}
           <div style={{
-            backgroundColor: '#e3f2fd',
+            backgroundColor: COLORS.infoLight,
             border: '2px solid #1976d2',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -3293,7 +3294,7 @@ const DevisAvance = () => {
                 </Select>
               </FormControl>
               
-              <Typography sx={{ color: '#6c757d', fontSize: '14px' }}>
+              <Typography sx={{ color: COLORS.textMuted, fontSize: '14px' }}>
                 ou
               </Typography>
               
@@ -3318,8 +3319,8 @@ const DevisAvance = () => {
                 }}
                 // Permettre de recliquer même si déjà en mode appel d'offres (pour recommencer)
                 sx={{
-                  backgroundColor: '#ff9800',
-                  '&:hover': { backgroundColor: '#f57c00' },
+                  backgroundColor: COLORS.warning,
+                  '&:hover': { backgroundColor: COLORS.warningDark },
                   textTransform: 'none',
                   fontWeight: 'bold'
                 }}
@@ -3329,7 +3330,7 @@ const DevisAvance = () => {
             </Box>
             
             {devisType === "chantier" && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
+              <Box sx={{ mt: 2, p: 2, backgroundColor: COLORS.warningLight, borderRadius: '4px', border: '1px solid #ffc107' }}>
                 <Typography variant="body2" color="text.secondary">
                   <strong>Appel d'offres :</strong> Aucun chantier ne sera créé. Les informations du chantier seront stockées dans l'appel d'offres.
                 </Typography>
@@ -3347,14 +3348,14 @@ const DevisAvance = () => {
           
           {/* Section 1: Client et contact */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -3411,14 +3412,14 @@ const DevisAvance = () => {
 
           {/* Section 2: Chantier */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -3451,14 +3452,14 @@ const DevisAvance = () => {
 
           {/* Section 3: Informations générales */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -3470,7 +3471,7 @@ const DevisAvance = () => {
             
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <div style={{ maxWidth: '600px', width: '100%' }}>
-                <h3 style={{ color: '#495057', fontSize: '16px', margin: '0 0 15px 0', textAlign: 'center' }}>
+                <h3 style={{ color: COLORS.text, fontSize: '16px', margin: '0 0 15px 0', textAlign: 'center' }}>
                   Informations du devis
                 </h3>
                 <DevisHeader 
@@ -3492,14 +3493,14 @@ const DevisAvance = () => {
           {/* Section 4: Chemin du drive - Afficher uniquement pour les nouveaux chantiers et les appels d'offres (pas pour les devis TS) */}
           {((devisType === "normal" && (selectedChantierId === null || selectedChantierId === -1)) || devisType === "chantier") && (
             <div style={{
-              backgroundColor: '#f8f9fa',
+              backgroundColor: COLORS.backgroundAlt,
               border: '1px solid #e9ecef',
               borderRadius: '8px',
               padding: '25px',
               marginBottom: '30px'
             }}>
               <h2 style={{
-                color: '#1976d2',
+                color: COLORS.infoDark,
                 fontSize: '20px',
                 fontWeight: 'bold',
                 margin: '0 0 20px 0',
@@ -3525,7 +3526,7 @@ const DevisAvance = () => {
                     </Typography>
                     <Typography variant="body1" style={{ 
                       fontFamily: 'monospace',
-                      color: effectiveDrivePath ? '#1976d2' : '#6c757d'
+                      color: effectiveDrivePath ? COLORS.infoDark : COLORS.textMuted
                     }}>
                       {displayDrivePath(effectiveDrivePath) || '(Chemin par défaut non disponible)'}
                     </Typography>
@@ -3565,14 +3566,14 @@ const DevisAvance = () => {
 
           {/* Section 5: Détail du devis */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -3654,14 +3655,14 @@ const DevisAvance = () => {
 
           {/* Section 6: Récapitulatif */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -3693,14 +3694,14 @@ const DevisAvance = () => {
 
           {/* Section 6: Actions */}
           <div style={{
-            backgroundColor: '#e3f2fd',
+            backgroundColor: COLORS.infoLight,
             border: '1px solid #1976d2',
             borderRadius: '8px',
             padding: '25px',
             textAlign: 'center'
           }}>
             <h3 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '18px',
               fontWeight: 'bold',
               margin: '0 0 15px 0'
@@ -3712,7 +3713,7 @@ const DevisAvance = () => {
                 onClick={handleSaveDevis}
                 disabled={isSaving}
                 style={{
-                  backgroundColor: isSaving ? '#6c757d' : '#1976d2',
+                  backgroundColor: isSaving ? COLORS.textMuted : COLORS.infoDark,
                   color: 'white',
                   border: 'none',
                   padding: '12px 24px',
@@ -3799,7 +3800,7 @@ const DevisAvance = () => {
                 }
                 }}
                 style={{
-                  backgroundColor: '#28a745',
+                  backgroundColor: COLORS.success,
                   color: 'white',
                   border: 'none',
                   padding: '12px 24px',
@@ -3815,7 +3816,7 @@ const DevisAvance = () => {
               <button
                 onClick={handleResetDraft}
                 style={{
-                  backgroundColor: '#9e9e9e',
+                  backgroundColor: COLORS.textLight,
                   color: 'white',
                   border: 'none',
                   padding: '12px 24px',

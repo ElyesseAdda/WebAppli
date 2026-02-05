@@ -6,6 +6,7 @@ import { FiX } from 'react-icons/fi';
 import SousPartieSearch from './SousPartieSearch';
 import LigneDetailSearch from './LigneDetailSearch';
 import LigneSpecialeRow from './LignesSpeciales/LigneSpecialeRow';
+import { COLORS } from '../../constants/colors';
 
 /**
  * Rendu unifié avec Droppables hiérarchiques
@@ -193,7 +194,7 @@ const DevisTableUnified = ({
                   
                   {/* ZONE DES SOUS-PARTIES */}
                   <div style={{ 
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: COLORS.backgroundAlt,
                     padding: '12px 20px',
                     border: '1px solid #dee2e6',
                     borderTop: 'none',

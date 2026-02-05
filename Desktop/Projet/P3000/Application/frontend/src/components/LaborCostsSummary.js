@@ -219,7 +219,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
           {loading ? (
             <div>Chargement...</div>
           ) : error ? (
-            <div style={{ color: "red" }}>{error}</div>
+            <div style={{ color: COLORS.error }}>{error}</div>
           ) : mode === "chantier" ? (
             summary.length === 0 ? (
               <div>Aucune donnée pour ce mois.</div>
@@ -301,7 +301,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         <Box>
                           <Typography
                             fontWeight="bold"
-                            style={{ color: "rgba(27, 120, 188, 1)" }}
+                            style={{ color: COLORS.primary }}
                           >
                             Total
                           </Typography>
@@ -540,7 +540,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                       <Box>
                         <Typography
                           fontWeight="bold"
-                          style={{ color: "rgba(27, 120, 188, 1)" }}
+                          style={{ color: COLORS.primary }}
                         >
                           Total
                         </Typography>

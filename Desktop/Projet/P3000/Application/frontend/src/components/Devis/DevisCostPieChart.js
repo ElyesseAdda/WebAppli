@@ -258,11 +258,11 @@ const DevisCostPieChart = ({
             onClick={() => setIsExpanded(!isExpanded)}
             sx={{ 
               backgroundColor: APP_COLORS.primary,
-              color: 'white',
+              color: APP_COLORS.white,
               width: 28,
               height: 28,
               '&:hover': {
-                backgroundColor: '#1565c0',
+                backgroundColor: CHART_COLORS.lightBlue,
               }
             }}
           >
@@ -274,7 +274,7 @@ const DevisCostPieChart = ({
               onClick={onClose}
               sx={{ 
                 backgroundColor: APP_COLORS.primary,
-                color: 'white',
+                color: APP_COLORS.white,
                 width: 28,
                 height: 28,
                 '&:hover': {
@@ -302,7 +302,7 @@ const DevisCostPieChart = ({
               borderColor={{ from: 'color', modifiers: [['darker', 0.2]] }}
               enableArcLinkLabels={false}
               arcLabelsSkipAngle={20}
-              arcLabelsTextColor="#ffffff"
+              arcLabelsTextColor={APP_COLORS.white}
               arcLabel={(d) => {
                 // Pour la marge, afficher le taux de marge réel, pas la part dans le total
                 if (d.id === 'marge') {
@@ -313,7 +313,7 @@ const DevisCostPieChart = ({
               tooltip={({ datum }) => (
                 <Box
                   sx={{
-                    backgroundColor: 'white',
+                    backgroundColor: APP_COLORS.white,
                     padding: '8px 12px',
                     borderRadius: '4px',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
@@ -325,7 +325,7 @@ const DevisCostPieChart = ({
                   <Typography variant="body2">
                     {formatMontant(datum.value)}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#666' }}>
+                  <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
                     {datum.id === 'marge' 
                       ? `Taux de marge : ${chartData.totals.pourcentageMarge.toFixed(1)}%`
                       : `${Math.round((datum.value / chartData.totals.total) * 100)}% du total`
@@ -351,7 +351,7 @@ const DevisCostPieChart = ({
             <Typography 
               variant="caption" 
               sx={{ 
-                color: '#1565c0',
+                color: CHART_COLORS.lightBlue,
                 fontWeight: 500,
                 display: 'block',
                 overflow: 'hidden',
@@ -361,7 +361,7 @@ const DevisCostPieChart = ({
             >
               {chartData.lineDescription}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#666' }}>
+            <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
               Quantité : {chartData.quantity}
             </Typography>
           </Box>
@@ -370,15 +370,15 @@ const DevisCostPieChart = ({
         {/* Total et marge (toujours visible) */}
         <Box sx={{ px: 2, py: 1, mx: 1, mb: 0.5 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#333' }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', color: APP_COLORS.text }}>
               {chartData.isHovered ? 'Total ligne' : 'Total estimé'}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', color: APP_COLORS.infoDark }}>
               {formatMontant(chartData.totals.total)}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
-            <Typography variant="caption" sx={{ color: '#666' }}>
+            <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
               Marge
             </Typography>
             <Typography 
@@ -420,11 +420,11 @@ const DevisCostPieChart = ({
             onClick={() => setIsLegendExpanded(!isLegendExpanded)}
             sx={{ 
               backgroundColor: APP_COLORS.primary,
-              color: 'white',
+              color: APP_COLORS.white,
               width: 28,
               height: 28,
               '&:hover': {
-                backgroundColor: '#1565c0',
+                backgroundColor: CHART_COLORS.lightBlue,
               }
             }}
           >
@@ -438,20 +438,20 @@ const DevisCostPieChart = ({
             {/* Valeurs brutes de la ligne (si sélectionnée) */}
             {chartData.isHovered && currentHoveredLine && (
               <Box sx={{ mb: 1.5, p: 1 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: '#1565c0', display: 'block', mb: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: CHART_COLORS.lightBlue, display: 'block', mb: 0.5 }}>
                   Valeurs unitaires :
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  <Typography variant="caption" sx={{ color: '#555' }}>
+                  <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
                     <strong>MO:</strong> {currentHoveredLine.cout_main_oeuvre}€
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#555' }}>
+                  <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
                     <strong>Mat:</strong> {currentHoveredLine.cout_materiel}€
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#555' }}>
+                  <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
                     <strong>TF:</strong> {currentHoveredLine.taux_fixe}%
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#555' }}>
+                  <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
                     <strong>Marge:</strong> {currentHoveredLine.marge_devis ?? currentHoveredLine.marge}%
                   </Typography>
                 </Box>
@@ -511,7 +511,7 @@ const LegendItem = ({ color, label, value, suffix = '', highlight = false }) => 
           backgroundColor: color,
         }} 
       />
-      <Typography variant="caption" sx={{ color: '#555' }}>
+      <Typography variant="caption" sx={{ color: APP_COLORS.textMuted }}>
         {label}
       </Typography>
     </Box>
@@ -519,7 +519,7 @@ const LegendItem = ({ color, label, value, suffix = '', highlight = false }) => 
       variant="caption" 
       sx={{ 
         fontWeight: highlight ? 'bold' : 'normal',
-        color: highlight ? '#d32f2f' : '#333',
+        color: highlight ? APP_COLORS.error : APP_COLORS.text,
       }}
     >
       {formatMontant(value)}{suffix}

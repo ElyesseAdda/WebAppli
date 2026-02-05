@@ -24,6 +24,7 @@ import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { useSituationsManager } from "../hooks/useSituationsManager";
+import { COLORS } from "../constants/colors";
 
 const DateEnvoiModal = ({ open, onClose, situation, onSubmit }) => {
   const [dateEnvoi, setDateEnvoi] = useState("");
@@ -670,9 +671,9 @@ const TableauSuivi = () => {
                   <TableRow
                     key={situation.id}
                     sx={{
-                      "&:nth-of-type(odd)": { backgroundColor: "#f5f5f5" },
-                      "&:nth-of-type(even)": { backgroundColor: "#ffffff" },
-                      "&:hover": { backgroundColor: "#f5f5f5" },
+                      "&:nth-of-type(odd)": { backgroundColor: COLORS.backgroundHover },
+                      "&:nth-of-type(even)": { backgroundColor: COLORS.white },
+                      "&:hover": { backgroundColor: COLORS.backgroundHover },
                     }}
                   >
                     <TableCell sx={commonBodyCellStyle}>

@@ -110,7 +110,7 @@ const RecapSyntheseSection = ({ data }) => {
                 </Typography>
                 <Typography
                   variant="h6"
-                  sx={{ color: "#1976d2", fontWeight: 700 }}
+                  sx={{ color: COLORS.infoDark, fontWeight: 700 }}
                 >
                   {montant_taux_fixe.toLocaleString("fr-FR", {
                     minimumFractionDigits: 2,
@@ -122,7 +122,7 @@ const RecapSyntheseSection = ({ data }) => {
                 <Typography color="text.secondary">Paiements reçus</Typography>
                 <Typography
                   variant="h6"
-                  style={{ color: "#43A047", fontWeight: 700 }}
+                  style={{ color: COLORS.success, fontWeight: 700 }}
                 >
                   {total_paiements_recus.toLocaleString("fr-FR", {
                     minimumFractionDigits: 2,
@@ -134,7 +134,7 @@ const RecapSyntheseSection = ({ data }) => {
                 <Typography color="text.secondary">Coût chantier</Typography>
                 <Typography
                   variant="h6"
-                  style={{ color: "#d32f2f", fontWeight: 700 }}
+                  style={{ color: COLORS.error, fontWeight: 700 }}
                 >
                   -{" "}
                   {cout_chantier.toLocaleString("fr-FR", {
@@ -148,7 +148,7 @@ const RecapSyntheseSection = ({ data }) => {
                 <Typography
                   variant="h6"
                   style={{
-                    color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                    color: benefice >= 0 ? COLORS.success : COLORS.error,
                     fontWeight: 700,
                   }}
                 >
@@ -172,7 +172,7 @@ const RecapSyntheseSection = ({ data }) => {
           }}
         >
           <Box
-            sx={{ width: "2px", height: "90%", bgcolor: "#BDBDBD", mx: "auto" }}
+            sx={{ width: "2px", height: "90%", bgcolor: COLORS.borderLight, mx: "auto" }}
           />
         </Grid>
         {/* Section Droite : PieChart */}
@@ -212,7 +212,7 @@ const RecapSyntheseSection = ({ data }) => {
                 fontWeight={700}
                 sx={{
                   fontSize: getFontSize(benefice),
-                  color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                  color: benefice >= 0 ? COLORS.success : COLORS.error,
                 }}
               >
                 {Number(benefice).toLocaleString("fr-FR", {
@@ -225,7 +225,7 @@ const RecapSyntheseSection = ({ data }) => {
                 sx={{
                   fontSize: getFontSize(benefice) * 0.7,
                   ml: 0.5,
-                  color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                  color: benefice >= 0 ? COLORS.success : COLORS.error,
                 }}
               >
                 €

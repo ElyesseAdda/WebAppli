@@ -1,6 +1,6 @@
 import { Box, Card, CardContent, Typography } from "@mui/material";
 import React from "react";
-import { COLORS as APP_COLORS } from "../constants/colors";
+import { COLORS as APP_COLORS, withOpacity } from "../constants/colors";
 
 const ChantierEnCoursCard = ({ chantierEnCours, montantTotal }) => {
   const data = [
@@ -22,7 +22,7 @@ const ChantierEnCoursCard = ({ chantierEnCours, montantTotal }) => {
     <Card
       sx={{
         minHeight: 150,
-        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+        boxShadow: `0 4px 6px ${withOpacity(APP_COLORS.black, 0.1)}`,
         borderRadius: "10px",
         width: 450,
       }}

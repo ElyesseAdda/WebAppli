@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import { COLORS, withOpacity } from '../../constants/colors';
 
 const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, partieId, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -145,7 +146,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: withOpacity(COLORS.black, 0.5),
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -155,7 +156,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
     onMouseDown={() => setIsMouseDown(true)}
     onMouseUp={() => setIsMouseDown(false)}>
       <div style={{
-        backgroundColor: 'white',
+        backgroundColor: COLORS.white,
         borderRadius: '8px',
         padding: '30px',
         maxWidth: '900px',
@@ -171,7 +172,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
           marginBottom: '20px',
           fontSize: '20px',
           fontWeight: 'bold',
-          color: '#1976d2'
+          color: COLORS.infoDark
         }}>
           ✨ Créer une nouvelle ligne de détail
         </h2>
@@ -184,9 +185,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               marginBottom: '8px',
               fontWeight: '600',
               fontSize: '14px',
-              color: '#333'
+              color: COLORS.text
             }}>
-              Description <span style={{ color: 'red' }}>*</span>
+              Description <span style={{ color: COLORS.error }}>*</span>
             </label>
             <textarea
               name="description"
@@ -196,7 +197,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               style={{
                 width: '100%',
                 padding: '10px',
-                border: '1px solid #dee2e6',
+                border: `1px solid ${COLORS.border}`,
                 borderRadius: '6px',
                 fontSize: '14px',
                 minHeight: '80px',
@@ -215,9 +216,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: '#333'
+                color: COLORS.text
               }}>
-                Unité <span style={{ color: 'red' }}>*</span>
+                Unité <span style={{ color: COLORS.error }}>*</span>
               </label>
               <input
                 type="text"
@@ -228,7 +229,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: '1px solid #dee2e6',
+                  border: `1px solid ${COLORS.border}`,
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -242,9 +243,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: '#333'
+                color: COLORS.text
               }}>
-                Prix unitaire (€) <span style={{ color: 'red' }}>*</span>
+                Prix unitaire (€) <span style={{ color: COLORS.error }}>*</span>
               </label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 {useModeCalcul ? (
@@ -252,12 +253,12 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                   <div style={{
                     flex: '1',
                     padding: '10px',
-                    border: '2px solid #1976d2',
+                    border: `2px solid ${COLORS.infoDark}`,
                     borderRadius: '6px',
                     fontSize: '14px',
                     fontWeight: 'bold',
-                    backgroundColor: '#e3f2fd',
-                    color: '#1976d2',
+                    backgroundColor: COLORS.infoLight,
+                    color: COLORS.infoDark,
                     display: 'flex',
                     alignItems: 'center'
                   }}>
@@ -275,7 +276,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                     style={{
                       flex: '1',
                       padding: '10px',
-                      border: '1px solid #dee2e6',
+                      border: `1px solid ${COLORS.border}`,
                       borderRadius: '6px',
                       fontSize: '14px'
                     }}
@@ -287,9 +288,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   style={{
                     padding: '10px',
-                    border: '1px solid #dee2e6',
+                    border: `1px solid ${COLORS.border}`,
                     borderRadius: '6px',
-                    backgroundColor: 'white',
+                    backgroundColor: COLORS.white,
                     cursor: 'pointer',
                     fontSize: '16px',
                     display: 'flex',
@@ -304,12 +305,12 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 </button>
               </div>
               {useModeCalcul && (
-                <div style={{ fontSize: '12px', color: '#28a745', marginTop: '4px', fontWeight: '600' }}>
+                <div style={{ fontSize: '12px', color: COLORS.success, marginTop: '4px', fontWeight: '600' }}>
                   ✓ Prix calculé automatiquement en fonction des coûts
                 </div>
               )}
               {!useModeCalcul && showAdvanced && (
-                <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: COLORS.textMuted, marginTop: '4px' }}>
                   Remplissez les champs ci-dessous pour calculer le prix automatiquement
                 </div>
               )}
@@ -319,7 +320,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
           {/* Champs avancés */}
           {showAdvanced && (
             <div style={{
-              backgroundColor: '#f8f9fa',
+              backgroundColor: COLORS.backgroundAlt,
               padding: '20px',
               borderRadius: '6px',
               marginBottom: '20px',
@@ -333,7 +334,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: '#333'
+                color: COLORS.text
               }}>
                 Coût main d'œuvre (€)
               </label>
@@ -347,7 +348,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: '1px solid #dee2e6',
+                  border: `1px solid ${COLORS.border}`,
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -360,7 +361,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: '#333'
+                color: COLORS.text
               }}>
                 Coût matériel (€)
               </label>
@@ -374,7 +375,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: '1px solid #dee2e6',
+                  border: `1px solid ${COLORS.border}`,
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -387,7 +388,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: '#333'
+                color: COLORS.text
               }}>
                 Taux fixe (%)
               </label>
@@ -401,7 +402,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: '1px solid #dee2e6',
+                  border: `1px solid ${COLORS.border}`,
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -414,7 +415,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: '#333'
+                color: COLORS.text
               }}>
                 Marge (%) : {formData.marge}%
               </label>
@@ -431,7 +432,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                     flex: '1',
                     height: '8px',
                     borderRadius: '5px',
-                    background: '#dee2e6',
+                    background: COLORS.border,
                     outline: 'none',
                     cursor: 'pointer'
                   }}
@@ -447,7 +448,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                   style={{
                     width: '80px',
                     padding: '8px',
-                    border: '1px solid #dee2e6',
+                    border: `1px solid ${COLORS.border}`,
                     borderRadius: '6px',
                     fontSize: '14px',
                     textAlign: 'center'
@@ -460,8 +461,8 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
 
           {error && (
             <div style={{
-              backgroundColor: '#ffebee',
-              color: '#c62828',
+              backgroundColor: COLORS.errorLight,
+              color: COLORS.errorDark,
               padding: '10px',
               borderRadius: '6px',
               marginBottom: '20px'
@@ -480,10 +481,10 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               onClick={onClose}
               style={{
                 padding: '10px 20px',
-                border: '1px solid #dee2e6',
+                border: `1px solid ${COLORS.border}`,
                 borderRadius: '6px',
-                backgroundColor: 'white',
-                color: '#333',
+                backgroundColor: COLORS.white,
+                color: COLORS.text,
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: '600'
@@ -498,8 +499,8 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 padding: '10px 20px',
                 border: 'none',
                 borderRadius: '6px',
-                backgroundColor: isLoading ? '#ccc' : '#1976d2',
-                color: 'white',
+                backgroundColor: isLoading ? COLORS.borderDark : COLORS.infoDark,
+                color: COLORS.white,
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
                 fontWeight: '600'

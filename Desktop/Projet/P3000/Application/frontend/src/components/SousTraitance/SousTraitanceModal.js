@@ -46,6 +46,7 @@ import ContratSansDocumentForm from "./ContratSansDocumentForm";
 import SousTraitantForm from "./SousTraitantForm";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
+import { COLORS } from "../../constants/colors";
 
 const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [sousTraitants, setSousTraitants] = useState([]);
@@ -220,7 +221,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     
     return parts.map((part, index) => 
       regex.test(part) ? (
-        <span key={index} style={{ backgroundColor: '#ffeb3b', fontWeight: 'bold' }}>
+        <span key={index} style={{ backgroundColor: COLORS.warningLight, fontWeight: 'bold' }}>
           {part}
         </span>
       ) : part
@@ -565,7 +566,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                             variant="caption"
                             sx={{
                               backgroundColor: "rgba(255, 152, 0, 0.1)",
-                              color: "#f57c00",
+                              color: COLORS.warningDark,
                               px: 1,
                               py: 0.5,
                               borderRadius: 1,
@@ -595,7 +596,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           }}
                           sx={{
                             mr: 2.5,
-                            color: "#2e7d32",
+                            color: COLORS.successDark,
                             "&:hover": {
                               backgroundColor: "rgba(46, 125, 50, 0.1)",
                             },
@@ -616,7 +617,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           }}
                           sx={{
                             mr: 2.5,
-                            color: "#9c27b0",
+                            color: COLORS.accent,
                             "&:hover": {
                               backgroundColor: "rgba(156, 39, 176, 0.1)",
                             },
@@ -636,7 +637,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                               }}
                               sx={{
                                 mr: sousTraitant.contrat.sans_contrat ? 1 : 2.5,
-                                color: "#1976d2",
+                                color: COLORS.infoDark,
                                 "&:hover": {
                                   backgroundColor: "rgba(25, 118, 210, 0.1)",
                                 },
@@ -656,7 +657,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   }}
                                   sx={{
                                     mr: 1,
-                                    color: "#1976d2",
+                                    color: COLORS.infoDark,
                                     "&:hover": {
                                       backgroundColor: "rgba(25, 118, 210, 0.1)",
                                     },
@@ -674,7 +675,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   }}
                                   sx={{
                                     mr: 2.5,
-                                    color: "#d32f2f",
+                                    color: COLORS.error,
                                     "&:hover": {
                                       backgroundColor: "rgba(211, 47, 47, 0.1)",
                                     },
@@ -696,7 +697,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                             }}
                             sx={{
                               mr: 2.5,
-                              color: "#1976d2",
+                              color: COLORS.infoDark,
                               "&:hover": {
                                 backgroundColor: "rgba(25, 118, 210, 0.1)",
                               },
@@ -836,7 +837,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                             )
                                           }
                                           sx={{
-                                            color: "#d32f2f",
+                                            color: COLORS.error,
                                             "&:hover": {
                                               backgroundColor:
                                                 "rgba(211, 47, 47, 0.1)",
@@ -957,7 +958,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                                   handleDeleteAvenant(avenant.id)
                                                 }
                                                 sx={{
-                                                  color: "#d32f2f",
+                                                  color: COLORS.error,
                                                   "&:hover": {
                                                     backgroundColor:
                                                       "rgba(211, 47, 47, 0.1)",
@@ -1056,7 +1057,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   '&:hover fieldset': {
-                    borderColor: '#1976d2',
+                    borderColor: COLORS.infoDark,
                   },
                 },
               }}
@@ -1136,7 +1137,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           variant="caption"
                           sx={{
                             backgroundColor: "rgba(76, 175, 80, 0.1)",
-                            color: "#2e7d32",
+                            color: COLORS.successDark,
                             px: 1,
                             py: 0.5,
                             borderRadius: 1,

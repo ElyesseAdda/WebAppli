@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { COLORS } from '../../constants/colors';
 
 const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace, onTvaRateChange }) => {
   // État local pour gérer la valeur pendant la saisie
@@ -48,7 +49,7 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
     }}>
       {/* En-tête du récapitulatif */}
       <div style={{
-        backgroundColor: '#28a745',
+        backgroundColor: COLORS.success,
         color: 'white',
         padding: '15px 20px',
         fontWeight: 'bold',
@@ -67,22 +68,22 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
         }}>
           <div style={{
             padding: '12px 15px',
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #dee2e6',
             borderRadius: '4px',
             fontSize: '14px',
-            color: '#495057'
+            color: COLORS.textMuted
           }}>
             Montant HT
           </div>
           <div style={{
             padding: '12px 20px',
-            backgroundColor: '#e3f2fd',
+            backgroundColor: COLORS.infoLight,
             border: '1px solid #1976d2',
             borderRadius: '4px',
             fontSize: '16px',
             fontWeight: 'bold',
-            color: '#1976d2',
+            color: COLORS.infoDark,
             textAlign: 'center',
             minWidth: '120px'
           }}>
@@ -98,11 +99,11 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
         }}>
           <div style={{
             padding: '12px 15px',
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #dee2e6',
             borderRadius: '4px',
             fontSize: '14px',
-            color: '#495057',
+            color: COLORS.textMuted,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -130,12 +131,12 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
           </div>
           <div style={{
             padding: '12px 20px',
-            backgroundColor: '#fff3cd',
+            backgroundColor: COLORS.warningLight,
             border: '1px solid #ffc107',
             borderRadius: '4px',
             fontSize: '16px',
             fontWeight: 'bold',
-            color: '#856404',
+            color: COLORS.warningDark,
             textAlign: 'center',
             minWidth: '120px'
           }}>
@@ -151,18 +152,18 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
         }}>
           <div style={{
             padding: '12px 15px',
-            backgroundColor: '#d4edda',
+            backgroundColor: COLORS.successLight,
             border: '2px solid #28a745',
             borderRadius: '4px',
             fontSize: '16px',
             fontWeight: 'bold',
-            color: '#155724'
+            color: COLORS.successDark
           }}>
             TOTAL TTC
           </div>
           <div style={{
             padding: '12px 20px',
-            backgroundColor: '#28a745',
+            backgroundColor: COLORS.success,
             border: '2px solid #28a745',
             borderRadius: '4px',
             fontSize: '18px',
@@ -178,11 +179,11 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
         {/* Pied de page */}
         <div style={{
           padding: '15px',
-          backgroundColor: '#f8f9fa',
+          backgroundColor: COLORS.backgroundAlt,
           border: '1px solid #dee2e6',
           borderRadius: '4px',
           fontSize: '12px',
-          color: '#6c757d',
+          color: COLORS.textLight,
           textAlign: 'center'
         }}>
           <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>

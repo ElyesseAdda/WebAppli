@@ -1,10 +1,11 @@
 import React from 'react';
+import { COLORS } from '../../constants/colors';
 
 const DevisHeader = ({ devisData, formatDate, onDateChange, isGeneratingNumber }) => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
       <div>
-        <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+        <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
           Numéro de devis
         </label>
         <input
@@ -23,19 +24,19 @@ const DevisHeader = ({ devisData, formatDate, onDateChange, isGeneratingNumber }
           style={{
             width: '100%',
             padding: '12px',
-            backgroundColor: isGeneratingNumber ? '#f8f9fa' : 'white',
+            backgroundColor: isGeneratingNumber ? COLORS.backgroundAlt : 'white',
             border: '1px solid #ced4da',
             borderRadius: '4px',
             fontSize: '16px',
             fontWeight: 'bold',
-            color: '#1976d2',
+            color: COLORS.infoDark,
             textAlign: 'center'
           }}
         />
       </div>
       
       <div>
-        <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+        <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
           Date de création
         </label>
         <input
@@ -53,7 +54,7 @@ const DevisHeader = ({ devisData, formatDate, onDateChange, isGeneratingNumber }
             border: '1px solid #ced4da',
             borderRadius: '4px',
             fontSize: '14px',
-            color: '#495057',
+            color: COLORS.textMuted,
             textAlign: 'center'
           }}
         />

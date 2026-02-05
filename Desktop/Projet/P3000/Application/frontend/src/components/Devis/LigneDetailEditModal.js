@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import { COLORS, withOpacity } from '../../constants/colors';
 
 const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -141,7 +142,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: withOpacity(COLORS.black, 0.5),
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -153,7 +154,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
     >
       <div
         style={{
-          backgroundColor: 'white',
+          backgroundColor: COLORS.white,
           borderRadius: '8px',
           padding: '30px',
           maxWidth: '900px',
@@ -165,12 +166,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
       >
-        <h2 style={{ marginTop: 0, marginBottom: '20px', fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+        <h2 style={{ marginTop: 0, marginBottom: '20px', fontSize: '20px', fontWeight: 'bold', color: COLORS.infoDark }}>
           ✏️ Modifier la ligne de détail
         </h2>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
               Description
             </label>
             <textarea
@@ -178,14 +179,14 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
               value={formData.description}
               onChange={handleChange}
               placeholder="Entrez la description (utilisez Entrée pour revenir à la ligne)"
-              style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px', minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
+              style={{ width: '100%', padding: '10px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', fontSize: '14px', minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
               required
             />
           </div>
 
           <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
                 Unité
               </label>
               <input
@@ -194,13 +195,13 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                 value={formData.unite}
                 onChange={handleChange}
                 placeholder="Ex: m², unité, h, ml"
-                style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px' }}
+                style={{ width: '100%', padding: '10px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', fontSize: '14px' }}
                 required
               />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
-                Prix unitaire (€) <span style={{ color: 'red' }}>*</span>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
+                Prix unitaire (€) <span style={{ color: COLORS.error }}>*</span>
               </label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 {useModeCalcul ? (
@@ -209,12 +210,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                     style={{
                       flex: 1,
                       padding: '10px',
-                      border: '2px solid #1976d2',
+                      border: `2px solid ${COLORS.infoDark}`,
                       borderRadius: '6px',
                       fontSize: '14px',
                       fontWeight: 'bold',
-                      backgroundColor: '#e3f2fd',
-                      color: '#1976d2',
+                      backgroundColor: COLORS.infoLight,
+                      color: COLORS.infoDark,
                       display: 'flex',
                       alignItems: 'center'
                     }}
@@ -233,7 +234,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                     style={{
                       flex: 1,
                       padding: '10px',
-                      border: '1px solid #dee2e6',
+                      border: `1px solid ${COLORS.border}`,
                       borderRadius: '6px',
                       fontSize: '14px'
                     }}
@@ -245,9 +246,9 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   style={{
                     padding: '10px',
-                    border: '1px solid #dee2e6',
+                    border: `1px solid ${COLORS.border}`,
                     borderRadius: '6px',
-                    backgroundColor: 'white',
+                    backgroundColor: COLORS.white,
                     cursor: 'pointer',
                     fontSize: '16px',
                     display: 'flex',
@@ -262,12 +263,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                 </button>
               </div>
               {useModeCalcul && (
-                <div style={{ fontSize: '12px', color: '#28a745', marginTop: '4px', fontWeight: '600' }}>
+                <div style={{ fontSize: '12px', color: COLORS.success, marginTop: '4px', fontWeight: '600' }}>
                   ✓ Prix calculé automatiquement en fonction des coûts
                 </div>
               )}
               {!useModeCalcul && showAdvanced && (
-                <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: COLORS.textMuted, marginTop: '4px' }}>
                   Remplissez les champs ci-dessous pour calculer le prix automatiquement
                 </div>
               )}
@@ -277,7 +278,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
           {showAdvanced && (
             <div
               style={{
-                backgroundColor: '#f8f9fa',
+                backgroundColor: COLORS.backgroundAlt,
                 padding: '20px',
                 borderRadius: '6px',
                 marginBottom: '20px',
@@ -287,7 +288,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
               }}
             >
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
                   Coût main d'œuvre (€)
                 </label>
                 <input
@@ -297,12 +298,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                   value={formData.cout_main_oeuvre}
                   onChange={handleChange}
                   placeholder="0.00"
-                  style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px' }}
+                  style={{ width: '100%', padding: '10px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', fontSize: '14px' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
                   Coût matériel (€)
                 </label>
                 <input
@@ -312,12 +313,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                   value={formData.cout_materiel}
                   onChange={handleChange}
                   placeholder="0.00"
-                  style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px' }}
+                  style={{ width: '100%', padding: '10px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', fontSize: '14px' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
                   Taux fixe (%)
                 </label>
                 <input
@@ -327,12 +328,12 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                   value={formData.taux_fixe}
                   onChange={handleChange}
                   placeholder="20"
-                  style={{ width: '100%', padding: '10px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px' }}
+                  style={{ width: '100%', padding: '10px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', fontSize: '14px' }}
                 />
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: '#333' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px', color: COLORS.text }}>
                   Marge (%) : {formData.marge}%
                 </label>
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
@@ -344,7 +345,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                     step="0.01"
                     value={formData.marge}
                     onChange={handleChange}
-                    style={{ flex: 1, height: '8px', borderRadius: '5px', background: '#dee2e6', outline: 'none', cursor: 'pointer' }}
+                    style={{ flex: 1, height: '8px', borderRadius: '5px', background: COLORS.border, outline: 'none', cursor: 'pointer' }}
                   />
                   <input
                     type="number"
@@ -354,7 +355,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                     name="marge"
                     value={formData.marge}
                     onChange={handleChange}
-                    style={{ width: '80px', padding: '8px', border: '1px solid #dee2e6', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }}
+                    style={{ width: '80px', padding: '8px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', fontSize: '14px', textAlign: 'center' }}
                   />
                 </div>
               </div>
@@ -362,7 +363,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
           )}
 
           {error && (
-            <div style={{ backgroundColor: '#ffebee', color: '#c62828', padding: '10px', borderRadius: '6px', marginBottom: '20px' }}>
+            <div style={{ backgroundColor: COLORS.errorLight, color: COLORS.errorDark, padding: '10px', borderRadius: '6px', marginBottom: '20px' }}>
               {error}
             </div>
           )}
@@ -371,14 +372,14 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
             <button
               type="button"
               onClick={onClose}
-              style={{ padding: '10px 20px', border: '1px solid #dee2e6', borderRadius: '6px', backgroundColor: 'white', color: '#333', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}
+              style={{ padding: '10px 20px', border: `1px solid ${COLORS.border}`, borderRadius: '6px', backgroundColor: COLORS.white, color: COLORS.text, cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              style={{ padding: '10px 20px', border: 'none', borderRadius: '6px', backgroundColor: isLoading ? '#ccc' : '#1976d2', color: 'white', cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '600' }}
+              style={{ padding: '10px 20px', border: 'none', borderRadius: '6px', backgroundColor: isLoading ? COLORS.borderDark : COLORS.infoDark, color: COLORS.white, cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '600' }}
             >
               {isLoading ? 'Mise à jour...' : 'Enregistrer'}
             </button>

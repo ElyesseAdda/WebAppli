@@ -20,6 +20,7 @@ import { AiFillFilePdf } from "react-icons/ai";
 import { FaClipboardList } from "react-icons/fa";
 import { TfiMore } from "react-icons/tfi";
 import { useNavigate } from "react-router-dom";
+import { COLORS } from "../constants/colors";
 import {
   AlignedCell,
   CenteredTableCell,
@@ -1043,7 +1044,7 @@ const ListeDevis = () => {
   return (
     <div
       style={{
-        backgroundColor: "#ffffff",
+        backgroundColor: COLORS.white,
         width: "100%",
         maxWidth: "1400px",
         height: "auto",

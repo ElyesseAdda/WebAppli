@@ -13,6 +13,7 @@ import PendingSpecialLines from './LignesSpeciales/PendingSpecialLines';
 import SpecialLineEditModal from './LignesSpeciales/SpecialLineEditModal';
 import LigneSpecialeRow from './LignesSpeciales/LigneSpecialeRow';
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
+import { COLORS, CHART_COLORS, withOpacity } from '../../constants/colors';
 
 // ✅ Constante pour "Lignes directes"
 const DIRECT_LINES_DESCRIPTION = "Lignes directes";
@@ -92,7 +93,7 @@ const PlacementZone = ({ position, onPlaceLineAt, isActive, lineAwaitingPlacemen
         margin: '4px 0',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         transform: isHovered ? 'translateY(-2px) scale(1.01)' : 'translateY(0) scale(1)',
-        color: isHovered ? '#1565c0' : '#42a5f5'
+        color: isHovered ? CHART_COLORS.lightBlue : COLORS.infoLight
       }}
       title="Cliquez pour placer la ligne spéciale ici"
     >
@@ -466,7 +467,7 @@ const DevisTable = ({
           position: 'sticky',
           top: 0,
           zIndex: 101,
-          backgroundColor: draggingType === 'PARTIE' ? '#1976d2' : draggingType === 'SOUS_PARTIE' ? '#0288d1' : '#4caf50',
+          backgroundColor: draggingType === 'PARTIE' ? COLORS.infoDark : draggingType === 'SOUS_PARTIE' ? COLORS.info : COLORS.success,
           color: 'white',
           padding: '12px 20px',
           textAlign: 'center',
@@ -518,7 +519,7 @@ const DevisTable = ({
             position: 'sticky',
             top: 0,
             zIndex: 101,
-            backgroundColor: '#1976d2',
+            backgroundColor: COLORS.infoDark,
             color: 'white',
             padding: '15px 20px',
             textAlign: 'center',
@@ -534,7 +535,7 @@ const DevisTable = ({
             <button
               onClick={onCancelBaseSelection}
               style={{
-                backgroundColor: '#d32f2f',
+                backgroundColor: COLORS.error,
                 color: 'white',
                 border: 'none',
                 padding: '8px 16px',
@@ -567,7 +568,7 @@ const DevisTable = ({
                 });
               }}
               style={{
-                backgroundColor: '#28a745',
+                backgroundColor: COLORS.success,
                 color: 'white',
                 padding: '15px 20px',
                 borderRadius: '6px',
@@ -604,7 +605,7 @@ const DevisTable = ({
       )}
       {/* En-tête du tableau */}
       <div style={{
-        backgroundColor: '#1976d2',
+        backgroundColor: COLORS.infoDark,
         color: 'white',
         padding: '15px 20px',
         fontWeight: 'bold',
@@ -617,13 +618,13 @@ const DevisTable = ({
       <div style={{ overflowX: 'auto', overflowY: 'visible', marginBottom: '0' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
-            <tr style={{ backgroundColor: '#e3f2fd' }}>
+            <tr style={{ backgroundColor: COLORS.infoLight }}>
               <td colSpan="5" style={{
                 padding: '15px 20px',
                 border: '1px solid #dee2e6',
                 fontSize: '16px',
                 fontWeight: 'bold',
-                color: '#1976d2'
+                color: COLORS.infoDark
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span>📋 Nature des travaux :</span>
@@ -658,14 +659,14 @@ const DevisTable = ({
       <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: '#f8f9fa' }}>
+            <tr style={{ backgroundColor: COLORS.backgroundAlt }}>
               <th style={{
                 padding: '12px',
                 textAlign: 'left',
                 border: '1px solid #dee2e6',
                 fontWeight: 'bold',
                 fontSize: '14px',
-                color: '#495057',
+                color: COLORS.text,
                 width: '50%'
               }}>
                 DÉSIGNATION
@@ -676,7 +677,7 @@ const DevisTable = ({
                 border: '1px solid #dee2e6',
                 fontWeight: 'bold',
                 fontSize: '14px',
-                color: '#495057',
+                color: COLORS.text,
                 width: '80px'
               }}>
                 U
@@ -687,7 +688,7 @@ const DevisTable = ({
                 border: '1px solid #dee2e6',
                 fontWeight: 'bold',
                 fontSize: '14px',
-                color: '#495057',
+                color: COLORS.text,
                 width: '100px'
               }}>
                 QUANTITÉ
@@ -698,7 +699,7 @@ const DevisTable = ({
                 border: '1px solid #dee2e6',
                 fontWeight: 'bold',
                 fontSize: '14px',
-                color: '#495057',
+                color: COLORS.text,
                 width: '120px'
               }}>
                 PRIX UNITAIRE
@@ -709,7 +710,7 @@ const DevisTable = ({
                 border: '1px solid #dee2e6',
                 fontWeight: 'bold',
                 fontSize: '14px',
-                color: '#495057',
+                color: COLORS.text,
                 width: '140px'
               }}>
                 TOTAL HT
@@ -765,7 +766,7 @@ const DevisTable = ({
               <tr>
                 <td colSpan="5" style={{ padding: '0', border: 'none' }}>
                   <div style={{
-                    backgroundColor: '#fff3cd',
+                    backgroundColor: COLORS.warningLight,
                     border: '2px solid #ffc107',
                     borderRadius: '8px',
                     padding: '12px 20px',
@@ -774,7 +775,7 @@ const DevisTable = ({
                     alignItems: 'center',
                     gap: '12px',
                     fontWeight: 'bold',
-                    color: '#856404'
+                    color: COLORS.warningDark
                   }}>
                     <span style={{ fontSize: '24px' }}>📍</span>
                     <div>
@@ -783,7 +784,7 @@ const DevisTable = ({
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 'normal', marginTop: '4px' }}>
                         👆 Cliquez sur une <span style={{ 
-                          backgroundColor: '#2196f3', 
+                          backgroundColor: COLORS.info, 
                           color: 'white', 
                           padding: '2px 8px', 
                           borderRadius: '4px',
@@ -795,7 +796,7 @@ const DevisTable = ({
                       onClick={onCancelPlacement}
                       style={{
                         marginLeft: 'auto',
-                        backgroundColor: '#dc3545',
+                        backgroundColor: COLORS.error,
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
@@ -1051,7 +1052,7 @@ const DevisTable = ({
                                           
                                           {/* ZONE DES SOUS-PARTIES - Droppable hiérarchique */}
                                           <div style={{ 
-                                            backgroundColor: '#f8f9fa',
+                                            backgroundColor: COLORS.backgroundAlt,
                                             padding: '12px 20px',
                                             border: '1px solid #dee2e6',
                                             borderTop: 'none',
@@ -1172,7 +1173,7 @@ const DevisTable = ({
                                                             <div 
                                                               style={{ 
                                                                 backgroundColor: 'rgb(157, 197, 226)',
-                                                                color: '#333',
+                                                                color: COLORS.text,
                                                                 padding: '10px 15px',
                                                                 borderRadius: '4px 4px 0 0',
                                                                 boxShadow: spDragSnapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
@@ -1273,7 +1274,7 @@ const DevisTable = ({
                                                                     border: '1px solid rgba(0,0,0,0.2)',
                                                                     borderRadius: '4px',
                                                                     backgroundColor: sp.numero ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
-                                                                    color: '#333',
+                                                                    color: COLORS.text,
                                                                     fontSize: '12px',
                                                                     fontWeight: 'bold',
                                                                     cursor: 'pointer'
@@ -1297,7 +1298,7 @@ const DevisTable = ({
                                                             
                                                             {/* ZONE DES LIGNES DÉTAILS */}
                                                             <div style={{ 
-                                                              backgroundColor: '#fff',
+                                                              backgroundColor: COLORS.white,
                                                               padding: isDirectLines ? '36px 12px 8px 12px' : '8px 12px',
                                                               border: '1px solid #dee2e6',
                                                               borderTop: isDirectLines ? '1px solid #dee2e6' : 'none',
@@ -1323,7 +1324,7 @@ const DevisTable = ({
                                                                     border: 'none',
                                                                     borderRadius: '4px',
                                                                     backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                                                                    color: '#f44336',
+                                                                    color: COLORS.error,
                                                                     cursor: 'pointer',
                                                                     display: 'flex',
                                                                     alignItems: 'center',
@@ -1454,7 +1455,7 @@ const DevisTable = ({
                                                                               >
                                                                                 <div 
                                                                                   style={{ 
-                                                                                    backgroundColor: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? '#e3f2fd' : '#fff',
+                                                                                    backgroundColor: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? COLORS.infoLight : COLORS.white,
                                                                                     border: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? '2px solid #1976d2' : '1px solid #dee2e6',
                                                                                     borderRadius: '4px',
                                                                                     padding: '6px 10px',
@@ -1706,7 +1707,7 @@ const DevisTable = ({
                                 borderRadius: '8px',
                                 border: '2px dashed rgba(255,56,56,0.4)',
                                 backgroundColor: 'rgba(251,255,36,0.35)',
-                                color: '#ff3838',
+                                color: COLORS.error,
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
                                 display: 'flex',
@@ -1950,7 +1951,7 @@ const DevisTable = ({
                                 fontWeight: '600'
                               }}
                             />
-                            <div style={{ fontSize: '12px', color: '#666', fontWeight: '600' }}>%</div>
+                            <div style={{ fontSize: '12px', color: COLORS.textMuted, fontWeight: '600' }}>%</div>
                             <input
                               type="range"
                               min="0"
@@ -1970,7 +1971,7 @@ const DevisTable = ({
                                 flex: 1,
                                 height: '6px',
                                 borderRadius: '5px',
-                                background: '#dee2e6',
+                                background: COLORS.border,
                                 outline: 'none',
                                 cursor: 'pointer'
                               }}
@@ -2111,7 +2112,7 @@ const DevisTable = ({
           right: '20px',
           padding: '12px 24px',
           borderRadius: '8px',
-          backgroundColor: '#1976d2',
+          backgroundColor: COLORS.infoDark,
           color: 'white',
           border: 'none',
           cursor: 'pointer',
@@ -2126,11 +2127,11 @@ const DevisTable = ({
         }}
         onMouseEnter={(e) => {
           e.target.style.transform = 'scale(1.05)';
-          e.target.style.backgroundColor = '#1565c0';
+          e.target.style.backgroundColor = CHART_COLORS.lightBlue;
         }}
         onMouseLeave={(e) => {
           e.target.style.transform = 'scale(1)';
-          e.target.style.backgroundColor = '#1976d2';
+          e.target.style.backgroundColor = COLORS.infoDark;
         }}
       >
         <span style={{ fontSize: '18px' }}>+</span>
@@ -2248,7 +2249,7 @@ const DevisTable = ({
           right: '20px',
           padding: '12px 24px',
           borderRadius: '8px',
-          backgroundColor: '#1976d2',
+          backgroundColor: COLORS.infoDark,
           color: 'white',
           border: 'none',
           cursor: 'pointer',
@@ -2263,11 +2264,11 @@ const DevisTable = ({
         }}
         onMouseEnter={(e) => {
           e.target.style.transform = 'scale(1.05)';
-          e.target.style.backgroundColor = '#1565c0';
+          e.target.style.backgroundColor = CHART_COLORS.lightBlue;
         }}
         onMouseLeave={(e) => {
           e.target.style.transform = 'scale(1)';
-          e.target.style.backgroundColor = '#1976d2';
+          e.target.style.backgroundColor = COLORS.infoDark;
         }}
       >
         <span style={{ fontSize: '18px' }}>+</span>

@@ -18,6 +18,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useDashboardFilters } from "../DashboardFiltersContext";
 import StatusChangeModal from "../../StatusChangeModal";
+import { COLORS } from "../../../constants/colors";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -195,7 +196,7 @@ const SituationsSummary = () => {
         component="h3"
         sx={{
           mb: 3,
-          color: "#64748b", // text-slate-500
+          color: COLORS.textLight, // text-slate-500
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.5px",
@@ -228,7 +229,7 @@ const SituationsSummary = () => {
               variant="h3"
               component="span"
               sx={{
-                color: "#1e293b", // text-slate-800 - gris très foncé
+                color: COLORS.text, // text-slate-800 - gris très foncé
                 fontWeight: "bold",
                 lineHeight: 1,
               }}
@@ -238,7 +239,7 @@ const SituationsSummary = () => {
             <Typography
               variant="body1"
               sx={{
-                color: "#94a3b8", // text-slate-400 - gris clair
+                color: COLORS.textMuted, // text-slate-400 - gris clair
                 fontWeight: 500,
               }}
             >
@@ -250,12 +251,12 @@ const SituationsSummary = () => {
           <Typography
             variant="h6"
             sx={{
-              color: "#64748b", // text-slate-500 - gris moyen
+              color: COLORS.textLight, // text-slate-500 - gris moyen
               fontWeight: 600,
             }}
           >
             Montant:{" "}
-            <Box component="span" sx={{ color: "#6366f1" }}>
+            <Box component="span" sx={{ color: COLORS.accent }}>
               {formatNumber(montantHTCumule)} €
             </Box>
           </Typography>
@@ -264,7 +265,7 @@ const SituationsSummary = () => {
         {/* Icône circulaire - rapprochée des statistiques */}
         <Box
           sx={{
-            backgroundColor: "#eef2ff", // bg-indigo-50 - fond indigo très clair
+            backgroundColor: COLORS.accentLight, // bg-indigo-50 - fond indigo très clair
             borderRadius: "50%", // cercle
             width: 100, // 100px
             height: 100, // 100px
@@ -297,7 +298,7 @@ const SituationsSummary = () => {
           right: 0,
           width: "100%",
           height: "6px", // h-1.5 (1.5 * 4px = 6px)
-          backgroundColor: "#f8fafc", // bg-slate-50
+          backgroundColor: COLORS.backgroundAlt, // bg-slate-50
           borderRadius: "0 0 16px 16px", // Arrondi en bas pour correspondre au Paper
           overflow: "hidden",
           zIndex: 2, // Au-dessus du contenu pour être toujours visible
@@ -307,7 +308,7 @@ const SituationsSummary = () => {
           sx={{
             height: "100%",
             width: `${pourcentageValidees}%`, // Pourcentage de situations validées/facturées
-            backgroundColor: "#6366f1", // indigo-500 - barre de progression
+            backgroundColor: COLORS.accent, // indigo-500 - barre de progression
             borderRadius: "0 0 0 16px", // Arrondi en bas à gauche
             transition: "width 0.3s ease",
           }}
@@ -324,11 +325,11 @@ const SituationsSummary = () => {
           width: 32,
           height: 32,
           backgroundColor: "transparent",
-          color: "#9ca3af", // gris discret
+          color: COLORS.textLight, // gris discret
           zIndex: 2, // Au-dessus de la barre de progression
           "&:hover": {
-            backgroundColor: "#f3f4f6", // gris très clair au hover
-            color: "#374151", // gris foncé au hover
+            backgroundColor: COLORS.backgroundHover, // gris très clair au hover
+            color: COLORS.textMuted, // gris foncé au hover
           },
           transition: "all 0.2s ease",
         }}
@@ -367,33 +368,33 @@ const SituationsSummary = () => {
           <TableContainer>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ backgroundColor: "#eef2ff" }}> {/* bg-indigo-50 */}
-                  <TableCell sx={{ fontWeight: "bold", color: "#4f46e5" }}>
+                <TableRow sx={{ backgroundColor: COLORS.accentLight }}> {/* bg-indigo-50 */}
+                  <TableCell sx={{ fontWeight: "bold", color: COLORS.accent }}>
                     N° Situation
                   </TableCell>
-                  <TableCell sx={{ fontWeight: "bold", color: "#4f46e5" }}>
+                  <TableCell sx={{ fontWeight: "bold", color: COLORS.accent }}>
                     Chantier
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: "bold", color: "#4f46e5" }}
+                    sx={{ fontWeight: "bold", color: COLORS.accent }}
                     align="center"
                   >
                     Période
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: "bold", color: "#4f46e5" }}
+                    sx={{ fontWeight: "bold", color: COLORS.accent }}
                     align="center"
                   >
                     % Avancement
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: "bold", color: "#4f46e5" }}
+                    sx={{ fontWeight: "bold", color: COLORS.accent }}
                     align="right"
                   >
                     Montant HT
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: "bold", color: "#4f46e5" }}
+                    sx={{ fontWeight: "bold", color: COLORS.accent }}
                     align="center"
                   >
                     Statut
@@ -415,7 +416,7 @@ const SituationsSummary = () => {
                       key={situation.id}
                       hover
                       sx={{
-                        backgroundColor: index % 2 === 0 ? "#fafafa" : "#fff",
+                        backgroundColor: index % 2 === 0 ? COLORS.backgroundHover : "#fff",
                         "&:hover": {
                           backgroundColor: "action.hover",
                         },
@@ -426,11 +427,11 @@ const SituationsSummary = () => {
                           onClick={() => handlePreviewSituation(situation.id)}
                           sx={{
                             cursor: "pointer",
-                            color: "#4f46e5", // indigo-600
+                            color: COLORS.accent, // indigo-600
                             fontWeight: 600,
                             "&:hover": {
                               textDecoration: "underline",
-                              color: "#6366f1", // indigo-500 au hover
+                              color: COLORS.accent, // indigo-500 au hover
                             },
                           }}
                         >
@@ -448,7 +449,7 @@ const SituationsSummary = () => {
                         align="right"
                         sx={{
                           fontWeight: 500,
-                          color: "#4f46e5", // indigo-600 - texte montant
+                          color: COLORS.accent, // indigo-600 - texte montant
                         }}
                       >
                         {formatNumber(

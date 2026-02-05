@@ -18,6 +18,7 @@ import WarningIcon from "@mui/icons-material/Warning";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useDashboardFilters } from "../DashboardFiltersContext";
+import { COLORS } from "../../../constants/colors";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -183,7 +184,7 @@ const LatePaymentsSummary = () => {
           component="h3"
           sx={{
             mb: 3,
-            color: "#64748b",
+            color: COLORS.textLight,
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.5px",
@@ -216,7 +217,7 @@ const LatePaymentsSummary = () => {
                 variant="h3"
                 component="span"
                 sx={{
-                  color: "#1e293b",
+                  color: COLORS.text,
                   fontWeight: "bold",
                   lineHeight: 1,
                 }}
@@ -226,7 +227,7 @@ const LatePaymentsSummary = () => {
               <Typography
                 variant="body1"
                 sx={{
-                  color: "#94a3b8",
+                  color: COLORS.textMuted,
                   fontWeight: 500,
                 }}
               >
@@ -238,12 +239,12 @@ const LatePaymentsSummary = () => {
             <Typography
               variant="h6"
               sx={{
-                color: "#64748b",
+                color: COLORS.textLight,
                 fontWeight: 600,
               }}
             >
               Montant:{" "}
-              <Box component="span" sx={{ color: "#dc2626" }}>
+              <Box component="span" sx={{ color: COLORS.error }}>
                 {formatNumber(montantHTCumule)} €
               </Box>
             </Typography>
@@ -252,7 +253,7 @@ const LatePaymentsSummary = () => {
           {/* Icône circulaire - rapprochée des statistiques */}
           <Box
             sx={{
-              backgroundColor: "#fee2e2",
+              backgroundColor: COLORS.errorLight,
               borderRadius: "50%",
               width: 100,
               height: 100,
@@ -269,7 +270,7 @@ const LatePaymentsSummary = () => {
             <WarningIcon
               sx={{
                 fontSize: 50,
-                color: "#dc2626",
+                color: COLORS.error,
               }}
             />
           </Box>
@@ -284,7 +285,7 @@ const LatePaymentsSummary = () => {
             right: 0,
             width: "100%",
             height: "6px",
-            backgroundColor: "#f8fafc",
+            backgroundColor: COLORS.backgroundAlt,
             borderRadius: "0 0 16px 16px",
             overflow: "hidden",
             zIndex: 2,
@@ -294,7 +295,7 @@ const LatePaymentsSummary = () => {
             sx={{
               height: "100%",
               width: `${pourcentageProgression}%`,
-              backgroundColor: "#dc2626",
+              backgroundColor: COLORS.error,
               borderRadius: "0 0 0 16px",
               transition: "width 0.3s ease",
             }}
@@ -311,11 +312,11 @@ const LatePaymentsSummary = () => {
             width: 32,
             height: 32,
             backgroundColor: "transparent",
-            color: "#9ca3af",
+            color: COLORS.textLight,
             zIndex: 2,
             "&:hover": {
-              backgroundColor: "#f3f4f6",
-              color: "#374151",
+              backgroundColor: COLORS.backgroundHover,
+              color: COLORS.textMuted,
             },
             transition: "all 0.2s ease",
           }}
@@ -353,36 +354,36 @@ const LatePaymentsSummary = () => {
             <TableContainer>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: "#fee2e2" }}>
-                    <TableCell sx={{ fontWeight: "bold", color: "#991b1b" }}>
+                  <TableRow sx={{ backgroundColor: COLORS.errorLight }}>
+                    <TableCell sx={{ fontWeight: "bold", color: COLORS.errorDark }}>
                       Type
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold", color: "#991b1b" }}>
+                    <TableCell sx={{ fontWeight: "bold", color: COLORS.errorDark }}>
                       N°
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold", color: "#991b1b" }}>
+                    <TableCell sx={{ fontWeight: "bold", color: COLORS.errorDark }}>
                       Chantier
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#991b1b" }}
+                      sx={{ fontWeight: "bold", color: COLORS.errorDark }}
                       align="center"
                     >
                       Période
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#991b1b" }}
+                      sx={{ fontWeight: "bold", color: COLORS.errorDark }}
                       align="center"
                     >
                       Date Paiement Attendue
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#991b1b" }}
+                      sx={{ fontWeight: "bold", color: COLORS.errorDark }}
                       align="center"
                     >
                       Jours de Retard
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#991b1b" }}
+                      sx={{ fontWeight: "bold", color: COLORS.errorDark }}
                       align="right"
                     >
                       Montant HT
@@ -406,7 +407,7 @@ const LatePaymentsSummary = () => {
                           key={`${payment.type}-${payment.id}`}
                           hover
                           sx={{
-                            backgroundColor: index % 2 === 0 ? "#fafafa" : "#fff",
+                            backgroundColor: index % 2 === 0 ? COLORS.backgroundHover : "#fff",
                             "&:hover": {
                               backgroundColor: "action.hover",
                             },
@@ -417,8 +418,8 @@ const LatePaymentsSummary = () => {
                               label={payment.type === "situation" ? "Situation" : "Facture"}
                               size="small"
                               sx={{
-                                backgroundColor: payment.type === "situation" ? "#dbeafe" : "#f3e8ff",
-                                color: payment.type === "situation" ? "#1e40af" : "#6b21a8",
+                                backgroundColor: payment.type === "situation" ? COLORS.infoLight : COLORS.accentLight,
+                                color: payment.type === "situation" ? COLORS.infoDark : COLORS.accentDark,
                                 fontWeight: 600,
                               }}
                             />
@@ -428,11 +429,11 @@ const LatePaymentsSummary = () => {
                               onClick={() => handlePreview(payment)}
                               sx={{
                                 cursor: "pointer",
-                                color: "#991b1b",
+                                color: COLORS.errorDark,
                                 fontWeight: 600,
                                 "&:hover": {
                                   textDecoration: "underline",
-                                  color: "#dc2626",
+                                  color: COLORS.error,
                                 },
                               }}
                             >
@@ -449,7 +450,7 @@ const LatePaymentsSummary = () => {
                             <Typography
                               sx={{
                                 fontWeight: 500,
-                                color: "#991b1b",
+                                color: COLORS.errorDark,
                               }}
                             >
                               {formatDate(payment.date_paiement_attendue)}
@@ -459,7 +460,7 @@ const LatePaymentsSummary = () => {
                             <Typography
                               sx={{
                                 fontWeight: 600,
-                                color: "#dc2626",
+                                color: COLORS.error,
                               }}
                             >
                               {joursRetard} jour{joursRetard > 1 ? "s" : ""}
@@ -469,7 +470,7 @@ const LatePaymentsSummary = () => {
                             align="right"
                             sx={{
                               fontWeight: 500,
-                              color: "#991b1b",
+                              color: COLORS.errorDark,
                             }}
                           >
                             {formatNumber(payment.montant_ht || 0)} €

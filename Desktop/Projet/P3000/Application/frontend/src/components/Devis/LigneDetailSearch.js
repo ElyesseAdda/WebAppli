@@ -3,6 +3,7 @@ import Select from 'react-select';
 import Fuse from 'fuse.js';
 import axios from 'axios';
 import LigneDetailCreateModal from './LigneDetailCreateModal';
+import { COLORS } from '../../constants/colors';
 
 const LigneDetailSearch = ({
   sousPartieId,
@@ -165,12 +166,12 @@ const LigneDetailSearch = ({
       borderRadius: '6px',
       fontSize: '13px',
       '&:hover': {
-        borderColor: '#1976d2'
+        borderColor: COLORS.infoDark
       }
     }),
     placeholder: (provided) => ({
       ...provided,
-      color: '#6c757d',
+      color: COLORS.textLight,
       fontSize: '13px'
     }),
     input: (provided) => ({
@@ -190,9 +191,9 @@ const LigneDetailSearch = ({
     option: (provided, state) => ({
       ...provided,
       backgroundColor: state.isSelected 
-        ? '#1976d2' 
+        ? COLORS.infoDark 
         : state.isFocused 
-          ? '#e3f2fd' 
+          ? COLORS.infoLight 
           : 'white',
       color: state.isSelected ? 'white' : '#333',
       fontSize: '13px',
@@ -200,7 +201,7 @@ const LigneDetailSearch = ({
     }),
     noOptionsMessage: (provided) => ({
       ...provided,
-      color: '#6c757d',
+      color: COLORS.textLight,
       fontSize: '13px',
       padding: '10px'
     })

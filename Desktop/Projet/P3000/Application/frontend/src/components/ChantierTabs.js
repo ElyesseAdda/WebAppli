@@ -204,7 +204,7 @@ const ResourcesIndicator = ({ data }) => {
               <Tooltip
                 formatter={(value) => [`${value}%`, "Taux d'occupation"]}
               />
-              <Bar dataKey="taux" fill="#8884d8" name="Taux d'occupation" />
+              <Bar dataKey="taux" fill={CHART_COLORS.purple} name="Taux d'occupation" />
             </BarChart>
           </ResponsiveContainer>
         </Box>
@@ -257,7 +257,7 @@ const PaiementsSection = ({ data }) => {
                       `${name}: ${(percent * 100).toFixed(0)}%`
                     }
                     outerRadius={80}
-                    fill="#8884d8"
+                    fill={CHART_COLORS.purple}
                     dataKey="value"
                   >
                     {creancesData.map((entry, index) => (

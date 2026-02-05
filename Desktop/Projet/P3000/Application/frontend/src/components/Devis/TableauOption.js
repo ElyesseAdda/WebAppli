@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import DevisTable from './DevisTable';
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
+import { COLORS } from '../../constants/colors';
 
 const TableauOption = ({ 
   devisData,
@@ -260,7 +261,7 @@ const TableauOption = ({
 
   return (
     <div style={{
-      backgroundColor: '#fff3cd',
+      backgroundColor: COLORS.warningLight,
       border: '2px solid #ffc107',
       borderRadius: '8px',
       padding: '25px',
@@ -281,7 +282,7 @@ const TableauOption = ({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <h2 style={{
-          color: '#856404',
+          color: COLORS.warningDark,
           fontSize: '20px',
           fontWeight: 'bold',
           margin: 0,
@@ -300,7 +301,7 @@ const TableauOption = ({
           ⭐ Options (prestations supplémentaires)
         </h2>
         <span style={{
-          color: '#856404',
+          color: COLORS.warningDark,
           fontSize: '14px',
           fontStyle: 'italic'
         }}>
@@ -311,7 +312,7 @@ const TableauOption = ({
       {isExpanded && (
         <>
           <p style={{
-            color: '#856404',
+            color: COLORS.warningDark,
             fontSize: '14px',
             marginBottom: '20px',
             fontStyle: 'italic'

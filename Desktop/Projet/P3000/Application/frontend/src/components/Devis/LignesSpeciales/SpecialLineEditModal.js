@@ -20,6 +20,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SpecialLinePreview from './SpecialLinePreview';
 import ColorPicker from './ColorPicker';
+import { COLORS } from '../../../constants/colors';
 
 const SpecialLineEditModal = ({ 
   open, 
@@ -172,7 +173,7 @@ const SpecialLineEditModal = ({
             
             {/* Affichage de la base sélectionnée (lecture seule en édition) */}
             {editedLine.baseCalculation && (
-              <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
+              <Box sx={{ mt: 1, p: 1.5, backgroundColor: COLORS.successLight, borderRadius: '4px', border: '1px solid #4caf50' }}>
                 <Typography variant="body2" sx={{ fontSize: '13px' }}>
                   <strong>Base :</strong> {editedLine.baseCalculation.label}
                 </Typography>

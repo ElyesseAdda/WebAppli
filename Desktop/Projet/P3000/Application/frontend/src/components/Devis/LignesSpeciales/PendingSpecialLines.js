@@ -1,6 +1,7 @@
 import React from 'react';
 import { Droppable } from 'react-beautiful-dnd';
 import DraggableSpecialLine from './DraggableSpecialLine';
+import { COLORS } from '../../../constants/colors';
 
 const PendingSpecialLines = ({ 
   lines, 
@@ -22,7 +23,7 @@ const PendingSpecialLines = ({
           {...provided.droppableProps}
           style={{
             minHeight: '100px',
-            backgroundColor: snapshot.isDraggingOver ? '#fff9e6' : 'transparent',
+            backgroundColor: snapshot.isDraggingOver ? COLORS.warningLight : 'transparent',
             borderRadius: '4px',
             transition: 'background-color 0.2s ease'
           }}

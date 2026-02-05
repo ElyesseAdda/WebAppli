@@ -76,6 +76,10 @@ export const CHART_COLORS = {
   tauxFixe: '#9C27B0',
   margePositive: COLORS.success,
   margeNegative: COLORS.error,
+  // Couleurs additionnelles pour graphiques
+  purple: '#8884d8',
+  green: '#43A047',
+  lightBlue: '#1565c0',
 };
 
 // Palette pour les plannings et calendriers (20 couleurs)

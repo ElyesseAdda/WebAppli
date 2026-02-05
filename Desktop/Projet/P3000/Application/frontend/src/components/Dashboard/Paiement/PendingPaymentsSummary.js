@@ -18,6 +18,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useDashboardFilters } from "../DashboardFiltersContext";
+import { COLORS } from "../../../constants/colors";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -187,7 +188,7 @@ const PendingPaymentsSummary = () => {
           component="h3"
           sx={{
             mb: 3,
-            color: "#64748b",
+            color: COLORS.textLight,
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.5px",
@@ -220,7 +221,7 @@ const PendingPaymentsSummary = () => {
                 variant="h3"
                 component="span"
                 sx={{
-                  color: "#1e293b",
+                  color: COLORS.text,
                   fontWeight: "bold",
                   lineHeight: 1,
                 }}
@@ -230,7 +231,7 @@ const PendingPaymentsSummary = () => {
               <Typography
                 variant="body1"
                 sx={{
-                  color: "#94a3b8",
+                  color: COLORS.textMuted,
                   fontWeight: 500,
                 }}
               >
@@ -242,12 +243,12 @@ const PendingPaymentsSummary = () => {
             <Typography
               variant="h6"
               sx={{
-                color: "#64748b",
+                color: COLORS.textLight,
                 fontWeight: 600,
               }}
             >
               Montant:{" "}
-              <Box component="span" sx={{ color: "#f59e0b" }}>
+              <Box component="span" sx={{ color: COLORS.warning }}>
                 {formatNumber(montantHTCumule)} €
               </Box>
             </Typography>
@@ -256,7 +257,7 @@ const PendingPaymentsSummary = () => {
           {/* Icône circulaire - rapprochée des statistiques */}
           <Box
             sx={{
-              backgroundColor: "#fef3c7",
+              backgroundColor: COLORS.warningLight,
               borderRadius: "50%",
               width: 100,
               height: 100,
@@ -273,7 +274,7 @@ const PendingPaymentsSummary = () => {
             <AccessTimeIcon
               sx={{
                 fontSize: 50,
-                color: "#f59e0b",
+                color: COLORS.warning,
               }}
             />
           </Box>
@@ -288,7 +289,7 @@ const PendingPaymentsSummary = () => {
             right: 0,
             width: "100%",
             height: "6px",
-            backgroundColor: "#f8fafc",
+            backgroundColor: COLORS.backgroundAlt,
             borderRadius: "0 0 16px 16px",
             overflow: "hidden",
             zIndex: 2,
@@ -298,7 +299,7 @@ const PendingPaymentsSummary = () => {
             sx={{
               height: "100%",
               width: `${pourcentageProgression}%`,
-              backgroundColor: "#f59e0b",
+              backgroundColor: COLORS.warning,
               borderRadius: "0 0 0 16px",
               transition: "width 0.3s ease",
             }}
@@ -315,11 +316,11 @@ const PendingPaymentsSummary = () => {
             width: 32,
             height: 32,
             backgroundColor: "transparent",
-            color: "#9ca3af",
+            color: COLORS.textLight,
             zIndex: 2,
             "&:hover": {
-              backgroundColor: "#f3f4f6",
-              color: "#374151",
+              backgroundColor: COLORS.backgroundHover,
+              color: COLORS.textMuted,
             },
             transition: "all 0.2s ease",
           }}
@@ -357,30 +358,30 @@ const PendingPaymentsSummary = () => {
             <TableContainer>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: "#fef3c7" }}>
-                    <TableCell sx={{ fontWeight: "bold", color: "#92400e" }}>
+                  <TableRow sx={{ backgroundColor: COLORS.warningLight }}>
+                    <TableCell sx={{ fontWeight: "bold", color: COLORS.warningDark }}>
                       Type
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold", color: "#92400e" }}>
+                    <TableCell sx={{ fontWeight: "bold", color: COLORS.warningDark }}>
                       N°
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold", color: "#92400e" }}>
+                    <TableCell sx={{ fontWeight: "bold", color: COLORS.warningDark }}>
                       Chantier
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#92400e" }}
+                      sx={{ fontWeight: "bold", color: COLORS.warningDark }}
                       align="center"
                     >
                       Période
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#92400e" }}
+                      sx={{ fontWeight: "bold", color: COLORS.warningDark }}
                       align="center"
                     >
                       Date Paiement Attendue
                     </TableCell>
                     <TableCell
-                      sx={{ fontWeight: "bold", color: "#92400e" }}
+                      sx={{ fontWeight: "bold", color: COLORS.warningDark }}
                       align="right"
                     >
                       Montant HT
@@ -404,7 +405,7 @@ const PendingPaymentsSummary = () => {
                           key={`${payment.type}-${payment.id}`}
                           hover
                           sx={{
-                            backgroundColor: index % 2 === 0 ? "#fafafa" : "#fff",
+                            backgroundColor: index % 2 === 0 ? COLORS.backgroundHover : "#fff",
                             "&:hover": {
                               backgroundColor: "action.hover",
                             },
@@ -415,8 +416,8 @@ const PendingPaymentsSummary = () => {
                               label={payment.type === "situation" ? "Situation" : "Facture"}
                               size="small"
                               sx={{
-                                backgroundColor: payment.type === "situation" ? "#dbeafe" : "#f3e8ff",
-                                color: payment.type === "situation" ? "#1e40af" : "#6b21a8",
+                                backgroundColor: payment.type === "situation" ? COLORS.infoLight : "#f3e8ff",
+                                color: payment.type === "situation" ? COLORS.infoDark : COLORS.accentDark,
                                 fontWeight: 600,
                               }}
                             />
@@ -426,11 +427,11 @@ const PendingPaymentsSummary = () => {
                               onClick={() => handlePreview(payment)}
                               sx={{
                                 cursor: "pointer",
-                                color: "#92400e",
+                                color: COLORS.warningDark,
                                 fontWeight: 600,
                                 "&:hover": {
                                   textDecoration: "underline",
-                                  color: "#f59e0b",
+                                  color: COLORS.warning,
                                 },
                               }}
                             >
@@ -447,7 +448,7 @@ const PendingPaymentsSummary = () => {
                             <Typography
                               sx={{
                                 fontWeight: upcoming ? 600 : 500,
-                                color: upcoming ? "#f59e0b" : "#64748b",
+                                color: upcoming ? COLORS.warning : COLORS.textLight,
                               }}
                             >
                               {formatDate(payment.date_paiement_attendue)}
@@ -457,7 +458,7 @@ const PendingPaymentsSummary = () => {
                             align="right"
                             sx={{
                               fontWeight: 500,
-                              color: "#92400e",
+                              color: COLORS.warningDark,
                             }}
                           >
                             {formatNumber(payment.montant_ht || 0)} €

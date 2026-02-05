@@ -16,6 +16,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SpecialLinePreview from './SpecialLinePreview';
 import ColorPicker from './ColorPicker';
+import { COLORS } from '../../../constants/colors';
 
 const SpecialLinesCreator = ({ 
   open,
@@ -219,14 +220,14 @@ const SpecialLinesCreator = ({
             />
             
             {/* Info placement visuel */}
-            <Box sx={{ mt: 2, p: 2, border: '2px solid #2196f3', borderRadius: 1, backgroundColor: '#e3f2fd' }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#1565c0' }}>
+            <Box sx={{ mt: 2, p: 2, border: '2px solid #2196f3', borderRadius: 1, backgroundColor: COLORS.infoLight }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: COLORS.infoDark }}>
                 📍 Placement de la ligne
               </Typography>
               
               <Typography variant="body2" sx={{ color: '#555' }}>
                 Après avoir créé la ligne, cliquez sur une <span style={{ 
-                  backgroundColor: '#2196f3', 
+                  backgroundColor: COLORS.info, 
                   color: 'white', 
                   padding: '2px 8px', 
                   borderRadius: '4px',
@@ -316,7 +317,7 @@ const SpecialLinesCreator = ({
             {newLine.valueType === "percentage" && (
               <Box sx={{ mt: 2 }}>
                 {newLine.baseCalculation ? (
-                  <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#e8f5e9', borderRadius: '4px', border: '1px solid #4caf50' }}>
+                  <Box sx={{ mt: 1, p: 1.5, backgroundColor: COLORS.successLight, borderRadius: '4px', border: '1px solid #4caf50' }}>
                     <Typography variant="body2" sx={{ fontSize: '13px', mb: 1 }}>
                       <strong>Base sélectionnée :</strong> {newLine.baseCalculation.label}
                     </Typography>
@@ -334,8 +335,8 @@ const SpecialLinesCreator = ({
                     </Button>
                   </Box>
                 ) : (
-                  <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#fff3cd', borderRadius: '4px', border: '1px solid #ffc107' }}>
-                    <Typography variant="body2" sx={{ fontSize: '12px', color: '#856404' }}>
+                  <Box sx={{ mt: 1, p: 1.5, backgroundColor: COLORS.warningLight, borderRadius: '4px', border: '1px solid #ffc107' }}>
+                    <Typography variant="body2" sx={{ fontSize: '12px', color: COLORS.warningDark }}>
                       💡 Cliquez sur le Montant HT total, une partie ou sous-partie dans le tableau pour sélectionner la base de calcul
                     </Typography>
                   </Box>

@@ -31,6 +31,7 @@ import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon } fr
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
+import { COLORS } from "../../../constants/colors";
 
 const TableauFournisseur = () => {
   const [data, setData] = useState([]);
@@ -1489,7 +1490,7 @@ const TableauFournisseur = () => {
                         <TableRow
                           key={`recap-${row.mois}`}
                           sx={{
-                            backgroundColor: "#000000", // Fond noir
+                            backgroundColor: COLORS.black, // Fond noir
                             fontWeight: "bold",
                             borderTop: "2px solid rgba(255, 255, 255, 0.2)",
                             borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
@@ -1503,7 +1504,7 @@ const TableauFournisseur = () => {
                             <Typography
                               sx={{
                                 fontWeight: "bold",
-                                color: "#ffffff",
+                                color: COLORS.white,
                                 fontSize: "0.95rem",
                               }}
                             >
@@ -1511,10 +1512,10 @@ const TableauFournisseur = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
@@ -1522,8 +1523,8 @@ const TableauFournisseur = () => {
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
                                 color: row.totaux.totalAPayer !== 0 
-                                  ? "#ff6b6b" // Rouge clair si différent de 0
-                                  : "#ffffff", // Blanc si égal à 0
+                                  ? COLORS.errorLight // Rouge clair si différent de 0
+                                  : COLORS.white, // Blanc si égal à 0
                               }}
                             >
                               {formatNumber(row.totaux.totalAPayer)} €
@@ -1534,40 +1535,40 @@ const TableauFournisseur = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ffffff",
+                                color: COLORS.white,
                               }}
                             >
                               {formatNumber(row.totaux.totalPaye)} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ff6b6b", // Rouge clair pour l'écart
+                                color: COLORS.errorLight, // Rouge clair pour l'écart
                               }}
                             >
                               {row.totaux.totalEcart < 0 ? "-" : ""}{formatNumber(Math.abs(row.totaux.totalEcart))} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography sx={{ color: COLORS.white }}>-</Typography>
                           </TableCell>
                         </TableRow>
                       );
@@ -1579,7 +1580,7 @@ const TableauFournisseur = () => {
                       const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
 
                       // Alternance simple basée sur l'ordre d'affichage : bleu clair / blanc
-                      const backgroundColor = isEvenRow ? "rgba(27, 120, 188, 0.05)" : "#ffffff";
+                      const backgroundColor = isEvenRow ? "rgba(27, 120, 188, 0.05)" : COLORS.white;
                       // Si c'est un nouveau chantier, accentuer la séparation
                       const borderTop = row.isNewChantier ? "2px solid rgba(27, 120, 188, 0.2)" : "none";
                       
@@ -1589,7 +1590,7 @@ const TableauFournisseur = () => {
                           sx={{
                             backgroundColor: backgroundColor,
                             borderTop: borderTop,
-                            "&:hover": { backgroundColor: isEvenRow ? "rgba(27, 120, 188, 0.1)" : "#f0f0f0" },
+                            "&:hover": { backgroundColor: isEvenRow ? "rgba(27, 120, 188, 0.1)" : COLORS.backgroundHover },
                           }}
                         >
                           {isFirstRowOfMois ? (
@@ -1600,7 +1601,7 @@ const TableauFournisseur = () => {
                                 verticalAlign: "middle",
                                 textAlign: "center",
                                 borderRight: "1px solid #e0e0e0",
-                                backgroundColor: "#ffffff", // Background blanc sans alternance
+                                backgroundColor: COLORS.white, // Background blanc sans alternance
                               }}
                             >
                               <Typography
@@ -1622,7 +1623,7 @@ const TableauFournisseur = () => {
                                 verticalAlign: "middle",
                                 textAlign: "center",
                                 borderRight: "1px solid #e0e0e0",
-                                backgroundColor: "#ffffff", // Background blanc sans alternance
+                                backgroundColor: COLORS.white, // Background blanc sans alternance
                               }}
                             >
                               <Typography
@@ -1882,7 +1883,7 @@ const TableauFournisseur = () => {
                               sx={{
                                 fontSize: "0.75rem",
                                 color:
-                                  item.ecart > 0 ? "#d32f2f" : "#2e7d32",
+                                  item.ecart > 0 ? COLORS.error : COLORS.successDark,
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >

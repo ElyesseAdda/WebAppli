@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { MdAdd, MdEdit, MdDelete, MdPerson } from 'react-icons/md';
 import axios from 'axios';
+import { COLORS } from '../constants/colors';
 
 const ContactSocieteModal = ({ open, onClose, societeId, societeName, onContactChange }) => {
   const [contacts, setContacts] = useState([]);
@@ -343,9 +344,9 @@ const ContactSocieteModal = ({ open, onClose, societeId, societeName, onContactC
               type="submit"
               variant="contained"
               sx={{
-                backgroundColor: '#1976d2',
+                backgroundColor: COLORS.infoDark,
                 '&:hover': {
-                  backgroundColor: '#1565c0',
+                  backgroundColor: COLORS.infoDark,
                 },
               }}
             >

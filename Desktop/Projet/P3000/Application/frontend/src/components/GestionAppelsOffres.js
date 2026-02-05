@@ -33,6 +33,7 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import DrivePathSelector from "./Devis/DrivePathSelector";
+import { COLORS } from "../constants/colors";
 
 // Fonction pour slugifier un texte (similaire à custom_slugify du backend)
 const customSlugify = (text) => {
@@ -259,7 +260,7 @@ const GestionAppelsOffres = () => {
           <TableContainer>
             <Table>
               <TableHead>
-                <TableRow sx={{ backgroundColor: "#1976d2" }}>
+                <TableRow sx={{ backgroundColor: COLORS.infoDark }}>
                   <TableCell sx={{ color: "white", fontWeight: "bold" }}>
                     Nom du projet
                   </TableCell>

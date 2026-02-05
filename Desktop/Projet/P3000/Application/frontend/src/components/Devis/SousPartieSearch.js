@@ -3,6 +3,7 @@ import Select from 'react-select';
 import Fuse from 'fuse.js';
 import { FiPlus, FiX, FiSearch } from 'react-icons/fi';
 import axios from 'axios';
+import { COLORS } from '../../constants/colors';
 
 // ✅ Constante pour "Lignes directes" (option par défaut)
 const DIRECT_LINES_DESCRIPTION = "Lignes directes";
@@ -227,12 +228,12 @@ const SousPartieSearch = ({
       borderRadius: '6px',
       boxShadow: state.isFocused ? '0 0 0 0.2rem rgba(25, 118, 210, 0.25)' : 'none',
       '&:hover': {
-        borderColor: '#1976d2'
+        borderColor: COLORS.infoDark
       }
     }),
     placeholder: (provided) => ({
       ...provided,
-      color: '#6c757d',
+      color: COLORS.textLight,
       fontSize: '14px'
     }),
     input: (provided) => ({
@@ -252,9 +253,9 @@ const SousPartieSearch = ({
     option: (provided, state) => ({
       ...provided,
       backgroundColor: state.isSelected 
-        ? '#1976d2' 
+        ? COLORS.infoDark 
         : state.isFocused 
-          ? '#e3f2fd' 
+          ? COLORS.infoLight 
           : 'white',
       color: state.isSelected ? 'white' : '#333',
       fontSize: '14px',
@@ -262,7 +263,7 @@ const SousPartieSearch = ({
     }),
     noOptionsMessage: (provided) => ({
       ...provided,
-      color: '#6c757d',
+      color: COLORS.textLight,
       fontSize: '14px',
       padding: '12px'
     })

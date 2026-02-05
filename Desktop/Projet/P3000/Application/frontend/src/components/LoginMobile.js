@@ -14,6 +14,7 @@ import { Visibility, VisibilityOff, Person, Lock } from "@mui/icons-material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import logo from "../img/apple-touch-icon.png";
+import { COLORS } from "../constants/colors";
 
 // Thème mobile optimisé
 const mobileTheme = createTheme({
@@ -22,7 +23,7 @@ const mobileTheme = createTheme({
       main: "#1976d2",
     },
     background: {
-      default: "#ffffff",
+      default: COLORS.white,
       paper: "#ffffff",
     },
   },

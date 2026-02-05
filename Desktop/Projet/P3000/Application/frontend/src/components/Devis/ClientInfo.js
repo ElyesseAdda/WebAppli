@@ -1,6 +1,7 @@
 import React from 'react';
 import { TextField, Select, MenuItem, FormControl, InputLabel, Button } from '@mui/material';
 import { MdAdd } from 'react-icons/md';
+import { COLORS } from '../../constants/colors';
 
 const ClientInfo = ({ 
   client, 
@@ -25,7 +26,7 @@ const ClientInfo = ({
         padding: '20px'
       }}>
         <h3 style={{
-          color: '#1976d2',
+          color: COLORS.infoDark,
           fontSize: '16px',
           fontWeight: 'bold',
           margin: '0 0 15px 0',
@@ -35,7 +36,7 @@ const ClientInfo = ({
           🏢 Société
         </h3>
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
             Nom de la société
           </label>
           {isEditable ? (
@@ -49,18 +50,18 @@ const ClientInfo = ({
           ) : (
             <div style={{
               padding: '10px',
-              backgroundColor: '#f8f9fa',
+              backgroundColor: COLORS.backgroundAlt,
               border: '1px solid #ced4da',
               borderRadius: '4px',
               fontSize: '14px',
-              color: '#495057'
+              color: COLORS.textMuted
             }}>
               {societe.nom_societe || ''}
             </div>
           )}
         </div>
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
             Adresse
           </label>
           {isEditable ? (
@@ -74,18 +75,18 @@ const ClientInfo = ({
           ) : (
             <div style={{
               padding: '10px',
-              backgroundColor: '#f8f9fa',
+              backgroundColor: COLORS.backgroundAlt,
               border: '1px solid #ced4da',
               borderRadius: '4px',
               fontSize: '14px',
-              color: '#495057'
+              color: COLORS.textMuted
             }}>
               {societe.rue_societe || ''}
             </div>
           )}
         </div>
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
             Code postal
           </label>
           {isEditable ? (
@@ -99,18 +100,18 @@ const ClientInfo = ({
           ) : (
             <div style={{
               padding: '10px',
-              backgroundColor: '#f8f9fa',
+              backgroundColor: COLORS.backgroundAlt,
               border: '1px solid #ced4da',
               borderRadius: '4px',
               fontSize: '14px',
-              color: '#495057'
+              color: COLORS.textMuted
             }}>
               {societe.codepostal_societe || ''}
             </div>
           )}
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
             Ville
           </label>
           {isEditable ? (
@@ -124,11 +125,11 @@ const ClientInfo = ({
           ) : (
             <div style={{
               padding: '10px',
-              backgroundColor: '#f8f9fa',
+              backgroundColor: COLORS.backgroundAlt,
               border: '1px solid #ced4da',
               borderRadius: '4px',
               fontSize: '14px',
-              color: '#495057'
+              color: COLORS.textMuted
             }}>
               {societe.ville_societe || ''}
             </div>
@@ -145,7 +146,7 @@ const ClientInfo = ({
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
           <h3 style={{
-            color: '#1976d2',
+            color: COLORS.infoDark,
             fontSize: '16px',
             fontWeight: 'bold',
             margin: 0,
@@ -209,96 +210,96 @@ const ClientInfo = ({
           return (
             <>
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
                   {selectedContact ? 'Civilité' : 'Prénom'}
                 </label>
                 <div style={{
                   padding: '10px',
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: COLORS.backgroundAlt,
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: COLORS.textMuted
                 }}>
                   {selectedContact ? (displayContact.civilite || '') : displayContact.prenom}
                 </div>
               </div>
               {selectedContact && (
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
                     Prénom
                   </label>
                   <div style={{
                     padding: '10px',
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: COLORS.backgroundAlt,
                     border: '1px solid #ced4da',
                     borderRadius: '4px',
                     fontSize: '14px',
-                    color: '#495057'
+                    color: COLORS.textMuted
                   }}>
                     {displayContact.prenom || ''}
                   </div>
                 </div>
               )}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
                   Nom
                 </label>
                 <div style={{
                   padding: '10px',
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: COLORS.backgroundAlt,
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: COLORS.textMuted
                 }}>
                   {displayContact.nom || ''}
                 </div>
               </div>
               {displayContact.poste && (
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
                     Poste
                   </label>
                   <div style={{
                     padding: '10px',
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: COLORS.backgroundAlt,
                     border: '1px solid #ced4da',
                     borderRadius: '4px',
                     fontSize: '14px',
-                    color: '#495057'
+                    color: COLORS.textMuted
                   }}>
                     {displayContact.poste}
                   </div>
                 </div>
               )}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
                   Email
                 </label>
                 <div style={{
                   padding: '10px',
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: COLORS.backgroundAlt,
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
                   fontSize: '14px',
-                  color: '#495057',
+                  color: COLORS.textMuted,
                   wordBreak: 'break-all'
                 }}>
                   {displayContact.email || ''}
                 </div>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
                   Téléphone
                 </label>
                 <div style={{
                   padding: '10px',
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: COLORS.backgroundAlt,
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: COLORS.textMuted
                 }}>
                   {formatPhoneNumber(displayContact.telephone)}
                 </div>

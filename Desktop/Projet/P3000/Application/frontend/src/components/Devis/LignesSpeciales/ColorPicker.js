@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import axios from 'axios';
 import ColorModal from './ColorModal';
+import { COLORS } from '../../../constants/colors';
 
 const ColorPicker = ({ value, onChange, label }) => {
   const [customColors, setCustomColors] = useState([]);
@@ -81,7 +82,7 @@ const ColorPicker = ({ value, onChange, label }) => {
                   top: '50%',
                   left: '50%',
                   transform: 'translate(-50%, -50%)',
-                  color: '#1976d2',
+                  color: COLORS.infoDark,
                   fontSize: '16px',
                   fontWeight: 'bold'
                 }}>

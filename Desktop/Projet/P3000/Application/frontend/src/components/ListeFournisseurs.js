@@ -27,6 +27,7 @@ import {
   MdStore,
 } from "react-icons/md";
 import axios from "axios";
+import { COLORS } from "../constants/colors";
 
 const ListeFournisseurs = () => {
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -203,7 +204,7 @@ const ListeFournisseurs = () => {
       {/* En-tête */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <MdBusiness size={32} color="#1976d2" />
+          <MdBusiness size={32} color={COLORS.infoDark} />
           <Typography variant="h4" component="h1">
             Gestion des Fournisseurs
           </Typography>
@@ -213,7 +214,7 @@ const ListeFournisseurs = () => {
           startIcon={<MdAdd />}
           onClick={() => handleOpenModal()}
           sx={{
-            backgroundColor: "#1976d2",
+            backgroundColor: COLORS.infoDark,
             "&:hover": {
               backgroundColor: "#1565c0",
             },
@@ -227,7 +228,7 @@ const ListeFournisseurs = () => {
       <TableContainer component={Paper} sx={{ mt: 2 }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+            <TableRow sx={{ backgroundColor: COLORS.backgroundHover }}>
               <TableCell sx={{ fontWeight: "bold" }}>Nom</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Téléphone</TableCell>
@@ -369,7 +370,7 @@ const ListeFournisseurs = () => {
                           p: 2,
                           border: "1px solid #e0e0e0",
                           borderRadius: 1,
-                          backgroundColor: "#fafafa",
+                          backgroundColor: COLORS.backgroundHover,
                         }}
                       >
                         <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
@@ -425,7 +426,7 @@ const ListeFournisseurs = () => {
               type="submit"
               variant="contained"
               sx={{
-                backgroundColor: "#1976d2",
+                backgroundColor: COLORS.infoDark,
                 "&:hover": {
                   backgroundColor: "#1565c0",
                 },

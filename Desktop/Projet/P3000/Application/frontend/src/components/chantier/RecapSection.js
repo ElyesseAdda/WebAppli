@@ -16,7 +16,7 @@ import IconButton from "@mui/material/IconButton";
 import { ResponsivePie } from "@nivo/pie";
 import React, { useState } from "react";
 import RecapCategoryDetails from "./RecapCategoryDetails";
-import { CHART_COLORS } from "../../constants/colors";
+import { COLORS, CHART_COLORS } from "../../constants/colors";
 
 const RecapSection = ({
   title,
@@ -53,7 +53,7 @@ const RecapSection = ({
       id: cat.replace("_", " ").toUpperCase(),
       label: cat.replace("_", " ").toUpperCase(),
       value: data[cat].total || 0,
-      color: fixedColors[cat] || colors[cat] || "#8884d8",
+      color: fixedColors[cat] || colors[cat] || CHART_COLORS.purple,
       key: cat,
     }));
 
@@ -195,7 +195,7 @@ const RecapSection = ({
                           backgroundColor:
                             fixedColors[cat] || colors[cat] || "primary.main",
                           mr: 1,
-                          border: "1px solid #ccc",
+                          border: `1px solid ${COLORS.borderDark}`,
                         }}
                       />
                       <Typography
@@ -245,17 +245,17 @@ const RecapSection = ({
         <IconButton
           onClick={handleToggleDetailsMode}
           sx={{
-            backgroundColor: detailsMode ? "#eee" : "#fff",
-            border: "1px solid #ccc",
+            backgroundColor: detailsMode ? COLORS.backgroundDark : COLORS.white,
+            border: `1px solid ${COLORS.borderDark}`,
             width: 40,
             height: 40,
             transition: "background 0.2s",
           }}
         >
           {detailsMode ? (
-            <RemoveIcon fontSize="medium" sx={{ color: "#f44336" }} />
+            <RemoveIcon fontSize="medium" sx={{ color: COLORS.error }} />
           ) : (
-            <AddIcon fontSize="medium" sx={{ color: "#2196F3" }} />
+            <AddIcon fontSize="medium" sx={{ color: COLORS.info }} />
           )}
         </IconButton>
       </Box>
@@ -289,7 +289,7 @@ const RecapSection = ({
                   background: "white",
                   borderRadius: 1,
                   boxShadow: "none",
-                  border: "1px solid #eee",
+                  border: `1px solid ${COLORS.backgroundDark}`,
                 }}
               >
                 <AccordionSummary
@@ -307,7 +307,7 @@ const RecapSection = ({
                         backgroundColor:
                           fixedColors[cat] || colors[cat] || "primary.main",
                         mr: 1.5,
-                        border: "1px solid #ccc",
+                        border: `1px solid ${COLORS.borderDark}`,
                       }}
                     />
                     <Typography variant="body1" fontWeight={700}>

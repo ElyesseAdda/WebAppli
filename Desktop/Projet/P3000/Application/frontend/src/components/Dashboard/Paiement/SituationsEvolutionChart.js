@@ -10,6 +10,7 @@ import CreditCardIcon from "@mui/icons-material/CreditCard";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useDashboardFilters } from "../DashboardFiltersContext";
+import { COLORS } from "../../../constants/colors";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -194,7 +195,7 @@ const SituationsEvolutionChart = () => {
         <CreditCardIcon
           sx={{
             fontSize: 32,
-            color: "#1976d2",
+            color: COLORS.infoDark,
           }}
         />
         <Box>
@@ -202,7 +203,7 @@ const SituationsEvolutionChart = () => {
             variant="h6"
             component="h3"
             sx={{
-              color: "#64748b",
+              color: COLORS.textLight,
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.5px",
@@ -214,7 +215,7 @@ const SituationsEvolutionChart = () => {
           <Typography
             variant="body2"
             sx={{
-              color: "#94a3b8",
+              color: COLORS.textMuted,
               fontWeight: 500,
             }}
           >
@@ -235,14 +236,14 @@ const SituationsEvolutionChart = () => {
             sx={{
               width: 16,
               height: 16,
-              backgroundColor: "#1976d2",
+              backgroundColor: COLORS.infoDark,
               borderRadius: "4px",
             }}
           />
           <Typography
             variant="body2"
             sx={{
-              color: "#64748b",
+              color: COLORS.textLight,
               fontWeight: 500,
             }}
           >
@@ -272,7 +273,7 @@ const SituationsEvolutionChart = () => {
             y1={padding.top}
             x2={padding.left}
             y2={padding.top + graphHeight}
-            stroke="#e2e8f0"
+            stroke={COLORS.borderLight}
             strokeWidth="2"
           />
           
@@ -282,7 +283,7 @@ const SituationsEvolutionChart = () => {
             y1={padding.top + graphHeight}
             x2={padding.left + graphWidth}
             y2={padding.top + graphHeight}
-            stroke="#e2e8f0"
+            stroke={COLORS.borderLight}
             strokeWidth="2"
           />
 
@@ -297,7 +298,7 @@ const SituationsEvolutionChart = () => {
                   y1={y}
                   x2={padding.left + graphWidth}
                   y2={y}
-                  stroke="#f1f5f9"
+                  stroke={COLORS.backgroundAlt}
                   strokeWidth="1"
                   strokeDasharray="4,4"
                 />
@@ -306,7 +307,7 @@ const SituationsEvolutionChart = () => {
                   y={y + 4}
                   textAnchor="end"
                   fontSize="12"
-                  fill="#94a3b8"
+                  fill={COLORS.textMuted}
                 >
                   {formatNumber(value)} €
                 </text>
@@ -322,7 +323,7 @@ const SituationsEvolutionChart = () => {
               y={padding.top + graphHeight + 25}
               textAnchor="middle"
               fontSize="12"
-              fill="#64748b"
+              fill={COLORS.textLight}
             >
               {point.label}
             </text>
@@ -332,8 +333,8 @@ const SituationsEvolutionChart = () => {
           {points.length > 1 && (
             <defs>
               <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#1976d2" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#1976d2" stopOpacity="0.05" />
+                <stop offset="0%" stopColor={COLORS.infoDark} stopOpacity="0.3" />
+                <stop offset="100%" stopColor={COLORS.infoDark} stopOpacity="0.05" />
               </linearGradient>
             </defs>
           )}
@@ -349,7 +350,7 @@ const SituationsEvolutionChart = () => {
           <path
             d={pathData}
             fill="none"
-            stroke="#1976d2"
+            stroke={COLORS.infoDark}
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -364,7 +365,7 @@ const SituationsEvolutionChart = () => {
                 y1={padding.top + graphHeight}
                 x2={tooltipData.x}
                 y2={tooltipData.y}
-                stroke="#94a3b8"
+                stroke={COLORS.textMuted}
                 strokeWidth="1"
                 strokeDasharray="4,4"
                 opacity="0.6"
@@ -375,7 +376,7 @@ const SituationsEvolutionChart = () => {
                 y1={tooltipData.y}
                 x2={tooltipData.x}
                 y2={tooltipData.y}
-                stroke="#94a3b8"
+                stroke={COLORS.textMuted}
                 strokeWidth="1"
                 strokeDasharray="4,4"
                 opacity="0.6"
@@ -403,7 +404,7 @@ const SituationsEvolutionChart = () => {
                   cx={point.x}
                   cy={point.y}
                   r={isHovered ? "6" : "5"}
-                  fill="#1976d2"
+                  fill={COLORS.infoDark}
                   stroke="white"
                   strokeWidth={isHovered ? "3" : "2"}
                   style={{ pointerEvents: "none", transition: "r 0.2s, stroke-width 0.2s" }}

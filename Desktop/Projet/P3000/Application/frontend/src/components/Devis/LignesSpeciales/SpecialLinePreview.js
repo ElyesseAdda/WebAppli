@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
+import { COLORS } from '../../../constants/colors';
 
 const SpecialLinePreview = ({ 
   line, 
@@ -99,7 +100,7 @@ const SpecialLinePreview = ({
                 textAlign: 'right',
                 fontSize: '14px',
                 fontWeight: 'bold',
-                color: line.type === 'reduction' ? '#d32f2f' : '#1976d2'
+                color: line.type === 'reduction' ? COLORS.error : COLORS.infoDark
               }}>
                 {line.type === 'reduction' && '-'}
                 {calculateAmount()} €

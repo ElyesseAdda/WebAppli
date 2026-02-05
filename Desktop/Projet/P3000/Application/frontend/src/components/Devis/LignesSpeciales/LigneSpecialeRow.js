@@ -1,5 +1,6 @@
 import React from 'react';
 import { Draggable } from 'react-beautiful-dnd';
+import { COLORS } from '../../../constants/colors';
 
 /**
  * Composant pour afficher une ligne spéciale dans le tableau du devis
@@ -141,9 +142,9 @@ const LigneSpecialeRow = ({
 
   // Couleur du montant selon le type
   const amountColor = 
-    typeSpeciale === 'reduction' ? '#d32f2f' :
-    typeSpeciale === 'addition' ? '#1976d2' : 
-    '#9e9e9e';
+    typeSpeciale === 'reduction' ? COLORS.error :
+    typeSpeciale === 'addition' ? COLORS.infoDark : 
+    COLORS.textLight;
 
   return (
     <div

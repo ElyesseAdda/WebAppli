@@ -28,6 +28,7 @@ import { useDevisHandlers } from './hooks/useDevisHandlers';
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
 import { validateBeforeTransform, transformToLegacyFormat } from '../../utils/DevisLegacyTransformer';
 import { generatePDFDrive } from '../../utils/universalDriveGenerator';
+import { COLORS } from '../../constants/colors';
 
 const { sortByIndexGlobal, reindexAll, getNextIndex } = DevisIndexManager;
 
@@ -48,8 +49,8 @@ const RECURRING_SPECIAL_LINE_TEMPLATE = {
     value: 0
   },
   styles: {
-    backgroundColor: '#fbff24',
-    color: '#ff3838',
+    backgroundColor: COLORS.warningLight,
+    color: COLORS.error,
     fontWeight: 'bold',
     textAlign: 'left'
   },
@@ -971,7 +972,7 @@ const ModificationDevisV2 = () => {
       padding: '20px 10px',
       marginRight: '150px',
       minHeight: 'auto',
-      backgroundColor: '#f5f5f5',
+      backgroundColor: COLORS.backgroundHover,
       borderRadius: '10px',
     }}>
       <div style={{
@@ -990,7 +991,7 @@ const ModificationDevisV2 = () => {
         
         {/* En-tête de la page */}
         <div style={{
-          backgroundColor: '#ff9800',
+          backgroundColor: COLORS.warning,
           color: 'white',
           padding: '20px 30px',
           textAlign: 'center'
@@ -1008,14 +1009,14 @@ const ModificationDevisV2 = () => {
           
           {/* Section Client et contact */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1040,14 +1041,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Chantier */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1066,14 +1067,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Informations générales */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1103,14 +1104,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Détail du devis */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1189,14 +1190,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Récapitulatif */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: COLORS.backgroundAlt,
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: '#1976d2',
+              color: COLORS.infoDark,
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1247,7 +1248,7 @@ const ModificationDevisV2 = () => {
                 onClick={handleSaveDevis}
                 disabled={isSaving}
                 style={{
-                  backgroundColor: isSaving ? '#6c757d' : '#ff9800',
+                  backgroundColor: isSaving ? '#6c757d' : COLORS.warning,
                   color: 'white',
                   border: 'none',
                   padding: '12px 24px',
