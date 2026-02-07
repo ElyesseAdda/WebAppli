@@ -437,6 +437,7 @@ class PDFManager:
         Returns:
             Tuple[bool, str, str, bool]: (succès, message, chemin_s3, conflit_détecté)
         """
+        temp_pdf_path = None
         try:
             # 1. Vérifier les dépendances
             deps_ok, error_msg = self.check_dependencies()
@@ -446,17 +447,21 @@ class PDFManager:
             # 2. Déterminer le script Node.js à utiliser
             if document_type in ['planning_hebdo', 'planning_mensuel']:
                 script_name = 'generate_pdf.js'
-                output_filename = 'planning_temp.pdf'
             elif document_type == 'rapport_agents':
                 script_name = 'generate_monthly_agents_pdf.js'
-                output_filename = 'rapport_agents_temp.pdf'
             else:
                 # Utiliser le script par défaut
                 script_name = 'generate_pdf.js'
-                output_filename = f"{document_type}_temp.pdf"
             
             script_path = os.path.join(self.node_scripts_dir, script_name)
-            temp_pdf_path = os.path.join(self.temp_dir, output_filename)
+            
+            # Utiliser un fichier temporaire unique (évite les conflits de permissions
+            # entre root et www-data sur un fichier partagé dans /tmp/)
+            temp_file = tempfile.NamedTemporaryFile(
+                suffix='.pdf', prefix=f'{document_type}_', delete=False
+            )
+            temp_pdf_path = temp_file.name
+            temp_file.close()
             
             # 3. Générer le PDF avec Puppeteer
             # print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
@@ -547,6 +552,13 @@ class PDFManager:
             return False, f"Erreur lors de la génération du PDF: {error_detail}", "", False
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", "", False
+        finally:
+            # Nettoyage du fichier temporaire en cas d'erreur
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                try:
+                    os.unlink(temp_pdf_path)
+                except OSError:
+                    pass
 
     def download_pdf_from_s3(self, s3_path: str) -> Tuple[bool, str, bytes]:
         """
@@ -736,6 +748,7 @@ class PDFManager:
         Returns:
             Tuple[bool, str, str]: (succès, message, chemin_s3)
         """
+        temp_pdf_path = None
         try:
             # 1. Vérifier les dépendances
             deps_ok, error_msg = self.check_dependencies()
@@ -745,17 +758,21 @@ class PDFManager:
             # 2. Déterminer le script Node.js à utiliser
             if document_type in ['planning_hebdo', 'planning_mensuel']:
                 script_name = 'generate_pdf.js'
-                output_filename = 'planning_temp.pdf'
             elif document_type == 'rapport_agents':
                 script_name = 'generate_monthly_agents_pdf.js'
-                output_filename = 'rapport_agents_temp.pdf'
             else:
                 # Utiliser le script par défaut
                 script_name = 'generate_pdf.js'
-                output_filename = f"{document_type}_temp.pdf"
             
             script_path = os.path.join(self.node_scripts_dir, script_name)
-            temp_pdf_path = os.path.join(self.temp_dir, output_filename)
+            
+            # Utiliser un fichier temporaire unique (évite les conflits de permissions
+            # entre root et www-data sur un fichier partagé dans /tmp/)
+            temp_file = tempfile.NamedTemporaryFile(
+                suffix='.pdf', prefix=f'{document_type}_', delete=False
+            )
+            temp_pdf_path = temp_file.name
+            temp_file.close()
             
             # 3. Générer le PDF avec Puppeteer
             # print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
@@ -823,6 +840,13 @@ class PDFManager:
             return False, f"Erreur lors de la génération du PDF: {error_detail}", ""
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", ""
+        finally:
+            # Nettoyage du fichier temporaire en cas d'erreur
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                try:
+                    os.unlink(temp_pdf_path)
+                except OSError:
+                    pass
 
     def cleanup_old_historique_files(self, days_old: int = 30) -> bool:
         """
