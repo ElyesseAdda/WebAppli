@@ -62,14 +62,26 @@ class FrontendAppView(TemplateView):
                 })
         
         # Ajouter l'URL du serveur OnlyOffice pour le template
-        # IMPORTANT : Utiliser directement ONLYOFFICE_SERVER_URL depuis les settings
-        # En production, cela pointe vers https://office.myp3000app.com (sous-domaine)
-        # En développement, cela pointe vers http://localhost:8080 ou host.docker.internal
+        # En production : utiliser le reverse proxy Nginx via /onlyoffice/ sur le domaine public
+        # En développement : utiliser http://localhost:8080 directement
         onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', 'http://localhost:8080')
         
-        # Si l'URL est en HTTP et la requête est en HTTPS, convertir
-        if onlyoffice_url.startswith('http://') and self.request.is_secure():
-            onlyoffice_url = onlyoffice_url.replace('http://', 'https://', 1)
+        if self.request.is_secure():
+            # En HTTPS (production) : si l'URL pointe vers localhost/127.0.0.1 (Docker interne),
+            # la convertir en URL publique via le reverse proxy Nginx /onlyoffice/
+            # Le navigateur ne peut pas accéder à localhost:8080 depuis une page HTTPS
+            from urllib.parse import urlparse
+            parsed = urlparse(onlyoffice_url)
+            if parsed.hostname in ('127.0.0.1', 'localhost', 'host.docker.internal'):
+                # Construire l'URL via le reverse proxy /onlyoffice/ du domaine public
+                public_domain = getattr(settings, 'CLIENT_PUBLIC_DOMAIN', '')
+                if not public_domain:
+                    # Fallback : utiliser le Host de la requête
+                    public_domain = self.request.get_host().split(':')[0]
+                onlyoffice_url = f"https://{public_domain}/onlyoffice"
+            elif onlyoffice_url.startswith('http://'):
+                # Convertir HTTP en HTTPS pour les autres URLs
+                onlyoffice_url = onlyoffice_url.replace('http://', 'https://', 1)
         
         context.update({
             'debug': settings.DEBUG,

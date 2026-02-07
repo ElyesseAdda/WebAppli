@@ -28,6 +28,8 @@ Ce document recense les **valeurs codées en dur** dans le projet à adapter pou
 | `api/views_drive/onlyoffice.py` | **REFACTORÉ** : `check_availability()` — vérification SSL | Remplacement de `72.60.90.127` en dur par détection dynamique d'IP via `_is_ip_address()`. |
 | `api/views_drive/onlyoffice.py` | **AJOUTÉ** : méthodes helpers `_get_public_domain()`, `_get_known_hostnames()`, `_is_ip_address()` | Méthodes utilitaires pour la résolution dynamique des domaines. |
 | `api/views_drive/views.py` | **MODIFIÉ** : `verify_ssl` dans `check_onlyoffice` | Remplacement de `72.60.90.127` en dur par détection dynamique d'adresse IP via regex. |
+| `frontend/views.py` | **MODIFIÉ** : `get_context_data()` — URL OnlyOffice pour le template | Détection automatique : si `ONLYOFFICE_SERVER_URL` pointe vers localhost/127.0.0.1 et la page est en HTTPS, redirige vers `https://{domaine_public}/onlyoffice/` (reverse proxy Nginx). Corrige le chargement de `api.js` pour les clients multi-VPS. |
+| `deploy/env-elekable.example` | **MODIFIÉ** : ajout section MULTI-CLIENT + documentation OnlyOffice | Ajout `CLIENT_PUBLIC_DOMAIN`, `CLIENT_APP_NAME`. Documentation de la détection automatique OnlyOffice. |
 
 ### C. Frontend — titre et liens dynamiques
 

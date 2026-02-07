@@ -68,7 +68,19 @@ EMAIL_HOST_USER=
 EMAIL_HOST_PASSWORD=
 
 # -----------------------------------------------------------------------------
-# ONLYOFFICE (partagé - même config que P3000)
+# MULTI-CLIENT
 # -----------------------------------------------------------------------------
-# ONLYOFFICE_SERVER_URL=http://127.0.0.1:8080
-# ONLYOFFICE_JWT_SECRET=MEME_SECRET_QUE_P3000
+CLIENT_PUBLIC_DOMAIN=elekable.fr
+CLIENT_APP_NAME=Webapplication Elekable
+
+# -----------------------------------------------------------------------------
+# ONLYOFFICE (partagé - même Docker que P3000 sur le même VPS)
+# -----------------------------------------------------------------------------
+# IMPORTANT : Laisser ONLYOFFICE_SERVER_URL sur l'URL interne Docker (http://127.0.0.1:8080).
+# Le code détecte automatiquement que c'est une adresse locale en HTTPS et redirige
+# vers https://elekable.fr/onlyoffice/ (reverse proxy Nginx).
+# Si cela ne fonctionne pas, forcer explicitement :
+#   ONLYOFFICE_SERVER_URL=https://elekable.fr/onlyoffice
+ONLYOFFICE_SERVER_URL=http://127.0.0.1:8080
+ONLYOFFICE_JWT_SECRET=MEME_SECRET_QUE_P3000
+ONLYOFFICE_JWT_ENABLED=true
