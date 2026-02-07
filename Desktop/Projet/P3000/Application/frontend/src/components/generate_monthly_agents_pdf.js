@@ -9,9 +9,18 @@ async function generateMonthlyAgentsPDF() {
 
   console.log("URL de prévisualisation:", previewUrl);
 
+  // Détecter le navigateur disponible (google-chrome-stable fonctionne avec www-data)
+  const fs = require("fs");
+  let chromiumPath = "/usr/bin/chromium-browser";
+  if (fs.existsSync("/usr/bin/google-chrome-stable")) {
+    chromiumPath = "/usr/bin/google-chrome-stable";
+  } else if (fs.existsSync("/usr/bin/chromium")) {
+    chromiumPath = "/usr/bin/chromium";
+  }
+
   try {
     const browser = await puppeteer.launch({
-      executablePath: "/usr/bin/chromium-browser", // chemin exact de Chromium
+      executablePath: chromiumPath,
       headless: true,
       args: [
         "--no-sandbox",
