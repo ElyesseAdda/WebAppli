@@ -42,7 +42,18 @@ Ce document recense les **valeurs codées en dur** dans le projet à adapter pou
 | `frontend/templates/frontend/index.html` | **MODIFIÉ** : `<title>` et `<meta description>` | Valeurs en dur `"Webapplication P3000"` et `"Application P3000"` → `{{ entreprise.nom_application\|default:... }}` via context processor. |
 | `frontend/templates/frontend/index_production.html` | **MODIFIÉ** : `<title>`, `<meta description>`, `apple-mobile-web-app-title` | Idem — remplacé par variables Django template. |
 
-### D. Scripts de déploiement — paramétrage
+### D. Génération PDF — compatibilité www-data et HTTPS
+
+| Fichier | Modification | Détails |
+|---------|-------------|---------|
+| `api/views.py` | **MODIFIÉ** : `generate_pdf_from_preview()` (2 copies, lignes ~782 et ~1575) | Remplacement de l'écriture PDF dans le répertoire source (`frontend/src/components/devis.pdf`) par un fichier temporaire (`tempfile.NamedTemporaryFile`). Le chemin temp est passé en argument à `generate_pdf.js`. Ajout `timeout=60`, nettoyage `finally`/`os.unlink`. Corrige `EACCES: permission denied` quand Gunicorn tourne sous `www-data`. |
+| `api/views.py` | **MODIFIÉ** : `generate_facture_pdf_from_preview()` (ligne ~5499) | Même correction : fichier temporaire au lieu du répertoire source. Ajout `timeout=60`, nettoyage `finally`/`os.unlink`. |
+| `Application/settings_production.py` | **AJOUTÉ** : `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` | Permet à `request.build_absolute_uri()` de générer des URLs `https://` au lieu de `http://`. Nécessaire car Nginx termine le SSL et proxifie en HTTP vers Gunicorn. Sans cela, Puppeteer reçoit une URL `http://` qui peut échouer. |
+| `api/pdf_manager.py` | **MODIFIÉ** : `generate_andStore_pdf()` et `replace_file_with_confirmation()` | Inclut `e.stderr` dans les messages d'erreur `CalledProcessError` au lieu de `str(e)` seul. Facilite le diagnostic des erreurs Puppeteer. |
+| `frontend/src/components/generate_pdf.js` | **MODIFIÉ** : détection Chromium | Priorité à `/usr/bin/google-chrome-stable` (non-Snap, compatible `www-data`) sur `/usr/bin/chromium-browser` (Snap, root uniquement). |
+| `frontend/src/components/generate_monthly_agents_pdf.js` | **MODIFIÉ** : détection Chromium | Idem — même logique de priorité Chrome Stable > Chromium Snap. |
+
+### E. Scripts de déploiement — paramétrage
 
 | Fichier | Modification | Détails |
 |---------|-------------|---------|
@@ -184,4 +195,4 @@ DATABASE_URL=postgresql://...
 
 ---
 
-*Dernière mise à jour : refactoring multi-client — modèle EntrepriseConfig, OnlyOffice dynamique, frontend dynamique, scripts paramétrés.*
+*Dernière mise à jour : fix PDF generation — fichiers temporaires pour www-data, SECURE_PROXY_SSL_HEADER pour HTTPS, détection Chrome Stable, meilleurs messages d'erreur pdf_manager.*

@@ -543,7 +543,8 @@ class PDFManager:
         except subprocess.TimeoutExpired:
             return False, "Timeout lors de la génération du PDF (60 secondes)", "", False
         except subprocess.CalledProcessError as e:
-            return False, f"Erreur lors de la génération du PDF: {str(e)}", "", False
+            error_detail = e.stderr if e.stderr else str(e)
+            return False, f"Erreur lors de la génération du PDF: {error_detail}", "", False
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", "", False
 
@@ -818,7 +819,8 @@ class PDFManager:
         except subprocess.TimeoutExpired:
             return False, "Timeout lors de la génération du PDF (60 secondes)", ""
         except subprocess.CalledProcessError as e:
-            return False, f"Erreur lors de la génération du PDF: {str(e)}", ""
+            error_detail = e.stderr if e.stderr else str(e)
+            return False, f"Erreur lors de la génération du PDF: {error_detail}", ""
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", ""
 
