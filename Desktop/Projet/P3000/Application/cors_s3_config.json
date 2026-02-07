@@ -8,11 +8,9 @@
       "http://localhost:3000",
       "http://127.0.0.1:3000",
       "http://localhost:8080",
-      "http://127.0.0.1:8080",
-      "http://72.60.90.127:8080",
-      "https://myp3000app.com",
-      "https://www.myp3000app.com"
+      "http://127.0.0.1:8080"
     ],
+    "_comment": "Ajouter les origines de production du client (domaine public HTTPS et URL OnlyOffice). Utiliser configure_s3_cors.py pour generer automatiquement depuis le .env",
     "ExposeHeaders": ["ETag", "x-amz-meta-custom-header"],
     "MaxAgeSeconds": 3000
   }

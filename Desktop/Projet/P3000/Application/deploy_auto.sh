@@ -69,7 +69,7 @@ echo "[INFO] 🚀 Redémarrage de Gunicorn..."
 systemctl start gunicorn
 
 echo "[INFO] ✅ Gunicorn redémarré avec succès"
-echo "[INFO] 🌐 Application disponible sur: https://myp3000app.com"
+echo "[INFO] 🌐 Application disponible sur: ${CLIENT_BASE_URL:-https://myp3000app.com}"
 
 echo "[INFO] 📊 Statut du service:"
 systemctl status gunicorn --no-pager

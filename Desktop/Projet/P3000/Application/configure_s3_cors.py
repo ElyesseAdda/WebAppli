@@ -11,24 +11,57 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def configure_s3_cors():
-    """Configure CORS sur le bucket S3"""
+    """Configure CORS sur le bucket S3.
+    
+    Les origines sont construites dynamiquement :
+    - Origines locales de dev (localhost, 127.0.0.1)
+    - Domaine public du client (depuis CLIENT_PUBLIC_DOMAIN ou ALLOWED_HOSTS dans .env)
+    - IP/URL du serveur OnlyOffice (depuis ONLYOFFICE_SERVER_URL dans .env)
+    """
+    
+    # Origines de base (dev local)
+    allowed_origins = [
+        "http://127.0.0.1:8000",
+        "http://localhost:8000", 
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",  # OnlyOffice local
+        "http://127.0.0.1:8080",  # OnlyOffice local
+    ]
+    
+    # Ajouter le domaine public du client depuis l'environnement
+    client_domain = os.getenv('CLIENT_PUBLIC_DOMAIN', '')
+    if client_domain:
+        allowed_origins.append(f"https://{client_domain}")
+        if not client_domain.startswith('www.'):
+            allowed_origins.append(f"https://www.{client_domain}")
+    
+    # Fallback : lire ALLOWED_HOSTS pour trouver le domaine public
+    allowed_hosts = os.getenv('ALLOWED_HOSTS', '')
+    if allowed_hosts:
+        for host in allowed_hosts.split(','):
+            host = host.strip()
+            if host and host not in ('localhost', '127.0.0.1', 'host.docker.internal', '*'):
+                https_origin = f"https://{host}"
+                if https_origin not in allowed_origins:
+                    allowed_origins.append(https_origin)
+    
+    # Ajouter l'origine du serveur OnlyOffice de production
+    onlyoffice_url = os.getenv('ONLYOFFICE_SERVER_URL', '')
+    if onlyoffice_url and 'localhost' not in onlyoffice_url and '127.0.0.1' not in onlyoffice_url:
+        # Extraire l'origine (scheme + host + port)
+        from urllib.parse import urlparse
+        parsed = urlparse(onlyoffice_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        if origin not in allowed_origins:
+            allowed_origins.append(origin)
     
     # Configuration CORS
     cors_configuration = [
         {
             "AllowedHeaders": ["*"],
             "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "HEAD"],
-            "AllowedOrigins": [
-                "http://127.0.0.1:8000",
-                "http://localhost:8000", 
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:8080",  # OnlyOffice local
-                "http://127.0.0.1:8080",  # OnlyOffice local
-                "http://72.60.90.127:8080",  # OnlyOffice production
-                "https://myp3000app.com",
-                "https://www.myp3000app.com"
-            ],
+            "AllowedOrigins": allowed_origins,
             "ExposeHeaders": ["ETag", "x-amz-meta-custom-header"],
             "MaxAgeSeconds": 3000
         }
@@ -73,7 +106,7 @@ def configure_s3_cors():
 
 if __name__ == "__main__":
     # Charger les variables d'environnement Django
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Application.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', os.getenv('DJANGO_SETTINGS_MODULE', 'Application.settings'))
     
     try:
         import django

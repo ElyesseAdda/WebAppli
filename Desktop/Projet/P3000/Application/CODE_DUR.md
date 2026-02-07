@@ -1,124 +1,185 @@
 # Code en dur — Multi-client
 
-Ce document recense les **valeurs codées en dur** dans le projet à adapter pour la gestion multi-client (P3000, Elekable, futurs clients). À modifier plus tard pour centraliser la configuration (variables d’environnement, settings par client).
+Ce document recense les **valeurs codées en dur** dans le projet à adapter pour la gestion multi-client (P3000, Elekable, futurs clients). Il trace aussi les **modifications déjà effectuées** sur la branche `client/elekable` pour pouvoir les reproduire sur `main`.
 
 ---
 
-## 1. Settings Django et base de données
+## Modifications effectuées (branche client/elekable)
 
-### Cas corrigé : script utilisateurs et mauvaise base
+### A. Modèle EntrepriseConfig (nouveau)
 
-**Problème** : Un script lancé avec `Application.settings` se connecte à la base codée en dur (`p3000db`). En production Elekable, l’app utilise `Application.settings_production` et `DATABASE_URL` du `.env` → `p3000db_elekable`. Les mots de passe étaient donc modifiés dans la mauvaise base.
+| Fichier | Modification | Détails |
+|---------|-------------|---------|
+| `api/models.py` | **AJOUTÉ** : modèle `EntrepriseConfig` (singleton, pk=1) | Stocke l'identité de l'entreprise : nom, adresse, RCS, email, téléphone, représentant, nom_application, domaine_public. Méthode `get_config()` pour récupérer/créer le singleton. |
+| `api/context_processors.py` | **CRÉÉ** | Context processor Django qui injecte `{{ entreprise }}` dans tous les templates automatiquement. |
+| `Application/settings_base.py` | **MODIFIÉ** : ajout du context processor `api.context_processors.entreprise_config` dans `TEMPLATES` | Permet l'injection automatique dans les templates. |
+| `Application/settings_base.py` | **AJOUTÉ** : `CLIENT_PUBLIC_DOMAIN` et `CLIENT_APP_NAME` | Lus depuis `.env`, utilisés par OnlyOffice et le frontend. |
+| `api/serializers.py` | **AJOUTÉ** : `EntrepriseConfigSerializer` + import `EntrepriseConfig` | Serializer lecture seule pour l'endpoint API. |
+| `api/views.py` | **AJOUTÉ** : vue `get_entreprise_config` | Endpoint `GET /api/entreprise-config/` pour le frontend. |
+| `api/urls.py` | **AJOUTÉ** : `path('entreprise-config/', ...)` + import | Route API pour la config entreprise. |
+| `api/management/commands/setup_entreprise_config.py` | **CRÉÉ** | Commande `python manage.py setup_entreprise_config --preset elekable` pour initialiser la config. |
+| `api/migrations/0092_add_entreprise_config.py` | **CRÉÉ** | Migration pour le nouveau modèle. |
 
-**Solution appliquée** : `create_users_elekable.py` utilise désormais `Application.settings_production`.
+### B. OnlyOffice — domaines dynamiques
 
-### Fichiers à adapter
+| Fichier | Modification | Détails |
+|---------|-------------|---------|
+| `api/views_drive/onlyoffice.py` | **REFACTORÉ** : `normalize_file_url()` et `normalize_callback_url()` | Remplacement de `myp3000app.com`, `www.myp3000app.com`, `72.60.90.127` en dur par des méthodes dynamiques `_get_public_domain()` (lit `settings.CLIENT_PUBLIC_DOMAIN` ou premier hôte public de `ALLOWED_HOSTS`) et `_get_known_hostnames()`. |
+| `api/views_drive/onlyoffice.py` | **REFACTORÉ** : `check_availability()` — vérification SSL | Remplacement de `72.60.90.127` en dur par détection dynamique d'IP via `_is_ip_address()`. |
+| `api/views_drive/onlyoffice.py` | **AJOUTÉ** : méthodes helpers `_get_public_domain()`, `_get_known_hostnames()`, `_is_ip_address()` | Méthodes utilitaires pour la résolution dynamique des domaines. |
+| `api/views_drive/views.py` | **MODIFIÉ** : `verify_ssl` dans `check_onlyoffice` | Remplacement de `72.60.90.127` en dur par détection dynamique d'adresse IP via regex. |
 
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `Application/wsgi.py` | `DJANGO_SETTINGS_MODULE = 'Application.settings'` | Utiliser `os.getenv('DJANGO_SETTINGS_MODULE', 'Application.settings_production')` ou laisser le service systemd/entrypoint définir la variable |
-| `Application/asgi.py` | `DJANGO_SETTINGS_MODULE = 'Application.settings'` | Idem |
-| `manage.py` | `DJANGO_SETTINGS_MODULE = 'Application.settings'` | Garder pour dev local ; en prod utiliser `Application.settings_production` via env |
-| `create_users.py` | `Application.settings` | Si utilisé sur un client : utiliser `Application.settings_production` ou lire `DJANGO_SETTINGS_MODULE` depuis l’env |
-| `create_users_simple.py` | `Application.settings` | Idem |
-| `create_users_amelioration.py` | `Application.settings` | Idem (script P3000) ; pour un client, utiliser `settings_production` |
-| `configure_s3_cors.py` | `Application.settings` | Utiliser `Application.settings_production` si exécuté en prod client |
-| `rollback_migration.py` | `Application.settings` | Idem |
-| `force_logout.py` | `Application.settings` | Idem |
-| `check_db_structure.py` | `Application.settings` | Idem |
-| `backup_safe.py` | `Application.settings` | Idem |
+### C. Frontend — titre et liens dynamiques
 
-### Base de données
+| Fichier | Modification | Détails |
+|---------|-------------|---------|
+| `frontend/src/services/entrepriseConfigService.js` | **CRÉÉ** | Service singleton pour appeler `GET /api/entreprise-config/` avec cache. |
+| `frontend/src/components/PageTitleManager.js` | **MODIFIÉ** : `BASE_TITLE` remplacé par config dynamique | Charge le `nom_application` depuis l'API via `entrepriseConfigService`. Fallback : `"Webapplication P3000"`. |
+| `frontend/src/components/Distributeurs/DesktopAppLayout.js` | **MODIFIÉ** : lien retour et tooltip | `href="https://myp3000app.com/"` → `href={returnUrl}` (dynamique depuis config). `"Retour à P3000"` → `returnLabel` dynamique. |
+| `frontend/src/components/Distributeurs/MouvementReapproPage.js` | **MODIFIÉ** : clé localStorage | `"myp3000_reappro_en_cours"` → `"app_reappro_en_cours"` (suppression préfixe client). |
+| `frontend/templates/frontend/index.html` | **MODIFIÉ** : `<title>` et `<meta description>` | Valeurs en dur `"Webapplication P3000"` et `"Application P3000"` → `{{ entreprise.nom_application\|default:... }}` via context processor. |
+| `frontend/templates/frontend/index_production.html` | **MODIFIÉ** : `<title>`, `<meta description>`, `apple-mobile-web-app-title` | Idem — remplacé par variables Django template. |
 
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `Application/settings.py` | `'NAME': 'p3000db_local'`, `'NAME': 'p3000db'`, `'PASSWORD': 'Boumediene30'` | Ne pas utiliser ce settings en prod client ; tout passer par `settings_production` + `DATABASE_URL` dans `.env` |
-| `Application/settings_base.py` | `default_hosts = 'myp3000app.com,...'`, `'NAME': os.getenv('DB_NAME', 'p3000db')`, `'PASSWORD': os.getenv('DB_PASSWORD', 'Boumediene30')` | Les défauts sont P3000 ; les clients surchargent via `.env` (OK). Documenter que les valeurs par défaut = P3000 |
-| `Application/settings_local.py` | `'NAME': 'p3000db_local'`, `'PASSWORD': 'Boumediene30'` | Réservé au dev local ; OK |
+### D. Scripts de déploiement — paramétrage
 
----
-
-## 2. Domaines et hôtes
-
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `Application/settings.py` | `ALLOWED_HOSTS = ['myp3000app.com', ...]`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | En prod client, tout doit venir du `.env` (déjà le cas si on utilise `settings_production` qui hérite de `settings_base` + env) |
-| `Application/settings_base.py` | `default_hosts = 'myp3000app.com,www.myp3000app.com,72.60.90.127,...'` | Défaut P3000 ; les clients définissent `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` / `CORS_ALLOWED_ORIGINS` dans `.env` |
-| `api/views_drive/onlyoffice.py` | `myp3000app.com`, `www.myp3000app.com`, `72.60.90.127` en dur dans `normalize_file_url` et `normalize_callback_url` | Remplacer par `settings.ALLOWED_HOSTS` ou une variable du type `CLIENT_DOMAIN` / `BASE_URL` lue depuis `settings` (ex. `getattr(settings, 'CLIENT_PUBLIC_DOMAIN', None)` ou premier élément de `ALLOWED_HOSTS` sans localhost) |
-| `api/views_drive/views.py` | `72.60.90.127` pour `verify_ssl` | Utiliser une config dérivée du domaine client (env ou settings) |
-| `frontend/views.py` | Commentaire `https://office.myp3000app.com` | Documenter ou remplacer par une config dynamique si sous-domaine par client |
-| `verifier_myp3000app.py` | `domaine = "myp3000app.com"`, `ip_attendue = "72.60.90.127"` | Script spécifique P3000 ; renommer ou paramétrer par client (arg/env) |
-| `deploy_production.sh` | `https://myp3000app.com` dans messages | Variable `BASE_URL` ou `CLIENT_DOMAIN` selon déploiement |
-| `validate_deployment.sh` | `BASE_URL="https://myp3000app.com"` | Lire depuis env ou argument |
-| `validate_headers.sh` | `BASE_URL`, `LOCAL_URL` avec myp3000app / 8000 | Paramétrer par client |
-| `validate_nginx_config.sh` | `nginx_myp3000app.conf`, `myp3000app.com` | Nom de config et domaine en argument ou env |
-| `restart_app.sh` | `https://myp3000app.com` | Variable selon client |
-| `deploy_auto.sh` | `https://myp3000app.com` | Idem |
-| `cors_s3_config.json` | `myp3000app.com`, `72.60.90.127:8080` | Générer ou choisir par client (ex. script qui lit le .env du client) |
-| `configure_s3_cors.py` | `myp3000app.com`, `127.0.0.1:8000`, `72.60.90.127:8080` | Lire domaines et origines depuis settings/env |
+| Fichier | Modification | Détails |
+|---------|-------------|---------|
+| `configure_s3_cors.py` | **REFACTORÉ** : origines CORS dynamiques | Les origines sont construites depuis `CLIENT_PUBLIC_DOMAIN`, `ALLOWED_HOSTS`, et `ONLYOFFICE_SERVER_URL` (env). `DJANGO_SETTINGS_MODULE` lit aussi la variable d'env au lieu de forcer `Application.settings`. |
+| `cors_s3_config.json` | **MODIFIÉ** : suppression domaines en dur | Seules les origines locales restent. Commentaire ajouté pour utiliser `configure_s3_cors.py`. |
+| `validate_deployment.sh` | **MODIFIÉ** : `BASE_URL`, `PROJECT_DIR` | Lus depuis `$CLIENT_BASE_URL` / `$PROJECT_DIR` (env) avec fallback P3000. |
+| `validate_headers.sh` | **MODIFIÉ** : `BASE_URL` | Lu depuis `$CLIENT_BASE_URL` (env) avec fallback P3000. |
+| `restart_app.sh` | **MODIFIÉ** : `PROJECT_DIR`, `VENV_PATH`, URL affichée | Paramétrables via env avec fallback P3000. |
+| `deploy_production.sh` | **MODIFIÉ** : URL affichée en fin de déploiement | `https://myp3000app.com` → `${CLIENT_BASE_URL:-https://myp3000app.com}`. |
+| `deploy_auto.sh` | **MODIFIÉ** : URL affichée en fin de déploiement | Idem. |
 
 ---
 
-## 3. Ports
+## Valeurs encore en dur (à traiter manuellement par client)
 
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `gunicorn.conf.py` | `bind = '127.0.0.1:8000'` | Réservé P3000 ; les clients ont leur propre service (ex. 8001). Ne pas partager ce fichier ou le surcharger par env (ex. `GUNICORN_PORT`) |
-| `api/views_drive/onlyoffice.py` | `host.docker.internal:8000` en dev | Variable type `DJANGO_PORT` ou déduire de `RUNSERVER_PORT` / config dev |
-| `frontend/src/utils/universalDriveGenerator.js` | `http://localhost:8000/api` | Déjà conditionnel (dev) ; s’assurer que l’API de prod vient d’une config (env au build ou reverse proxy) |
-| `frontend/src/components/pdf_drive_functions.js` | `http://localhost:8000/api` | Idem |
-| `frontend/src/components/pdf_drive_functions_new.js` | Idem | Idem |
-| `api/management/commands/regenerate_pdfs.py` | `http://localhost:8000/api/...` | Utiliser `settings.SITE_URL` ou variable d’env (ex. `BASE_URL`) pour construire l’URL |
+### 1. Templates HTML (PDF, contrats, factures)
 
----
+**Géré manuellement** : les templates ci-dessous contiennent l'identité Elekable en dur. Ils doivent être adaptés manuellement pour chaque client.
 
-## 4. Emails et identité client (scripts utilisateurs)
+| Fichier | Valeurs en dur |
+|---------|---------------|
+| `frontend/templates/preview_devis.html` | `SAS ELEKABLE`, adresse, email, téléphone |
+| `frontend/templates/preview_devis_v2.html` | Idem |
+| `frontend/templates/preview_situation.html` | Idem |
+| `frontend/templates/preview_situation_v2.html` | Idem |
+| `frontend/templates/facture.html` | Idem |
+| `frontend/templates/facture_v2.html` | Idem + `signature_p3000.png` |
+| `frontend/templates/bon_commande.html` | Idem |
+| `frontend/templates/sous_traitance/contrat_btp.html` | `SAS ELEKABLE`, `Amara MAJRI`, adresse, RCS, capital |
+| `frontend/templates/sous_traitance/contrat_nettoyage.html` | Idem |
+| `frontend/templates/sous_traitance/avenant_btp.html` | Idem + `Info p3000.png` |
+| `frontend/templates/sous_traitance/avenant_nettoyage.html` | Idem |
 
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `create_users_elekable.py` | `@elekable.fr` pour les emails, `admin@elekable.fr` | Variable `CLIENT_DOMAIN` ou `EMAIL_DOMAIN` (env) pour rendre le script réutilisable pour d’autres clients |
+**Note** : Le context processor `{{ entreprise }}` est disponible dans ces templates si vous souhaitez les rendre dynamiques ultérieurement.
 
----
+### 2. Assets statiques (logos, signatures, tampons)
 
-## 5. S3 / Stockage
+| Fichier/Asset | Note |
+|---------------|------|
+| `logo.png` | Logo de l'entreprise — à remplacer par client |
+| `signature_p3000.png` | Signature/cachet P3000 — à remplacer par client |
+| `Info p3000.png` | Tampon info P3000 — à remplacer par client |
 
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `configure_s3_cors.py` | `bucket_name = os.getenv('AWS_STORAGE_BUCKET_NAME', 'agency-drive-prod')` | Défaut P3000 ; les clients ont leur bucket dans `.env` (déjà le cas). Documenter que le défaut = P3000 |
-| `.env` / exemples | `AWS_STORAGE_BUCKET_NAME=agency-drive-prod` | Par déploiement ; ne pas commiter de secrets ; garder des exemples par client (comme `env-elekable.example`) |
+### 3. Couleurs
 
----
+| Fichier | Note |
+|---------|------|
+| `frontend/src/constants/colors.js` | Commentaire "Client: Elekable" — couleurs à adapter par client |
+| `frontend/static/css/colors.css` | Idem |
 
-## 6. Mots de passe et secrets (documentation uniquement)
+### 4. Settings Django et base de données
 
-Ne pas mettre de vrais mots de passe dans le dépôt. Les fichiers suivants contiennent des références à des mots de passe ou noms de base ; à garder en exemples / templates uniquement, avec des placeholders :
+| Fichier | Code en dur | Note |
+|---------|-------------|------|
+| `Application/settings.py` | `ALLOWED_HOSTS`, `CORS`, `CSRF` avec `myp3000app.com` | En prod client, tout vient du `.env` via `settings_production` |
+| `Application/settings_base.py` | `default_hosts = 'myp3000app.com,...'` | Défaut P3000 ; surchargé par `.env` |
+| `Application/settings.py` | `'NAME': 'p3000db'`, `'PASSWORD': 'Boumediene30'` | Dev local uniquement |
+| `Application/settings_base.py` | `os.getenv('DB_NAME', 'p3000db')`, `os.getenv('DB_PASSWORD', 'Boumediene30')` | Défauts P3000 ; surchargés par `.env` |
+
+### 5. Scripts Django (settings module)
+
+| Fichier | Code en dur | Note |
+|---------|-------------|------|
+| `Application/wsgi.py` | `Application.settings` | Service systemd définit la variable |
+| `Application/asgi.py` | `Application.settings` | Idem |
+| `manage.py` | `Application.settings` | OK pour dev local |
+| `create_users.py`, `create_users_simple.py`, `create_users_amelioration.py` | `Application.settings` | Utiliser `settings_production` en prod client |
+| `rollback_migration.py`, `force_logout.py`, `check_db_structure.py`, `backup_safe.py` | `Application.settings` | Idem |
+
+### 6. Emails et identité client (scripts)
+
+| Fichier | Code en dur |
+|---------|-------------|
+| `create_users_elekable.py` | `@elekable.fr`, `admin@elekable.fr` |
+
+### 7. Ports
+
+| Fichier | Code en dur | Note |
+|---------|-------------|------|
+| `gunicorn.conf.py` | `bind = '127.0.0.1:8000'` | Chaque client a son port |
+| `api/views_drive/onlyoffice.py` | `host.docker.internal:8000` en dev | Port de dev |
+| `frontend/src/utils/universalDriveGenerator.js` | `http://localhost:8000/api` | Dev uniquement |
+| `frontend/src/components/pdf_drive_functions.js` | `http://localhost:8000/api` | Dev uniquement |
+| `api/management/commands/regenerate_pdfs.py` | `http://localhost:8000/api/...` | À paramétrer par `BASE_URL` |
+
+### 8. Nginx et déploiement
+
+| Fichier | Code en dur | Note |
+|---------|-------------|------|
+| `nginx_myp3000app.conf` | `myp3000app.com`, certs LetsEncrypt | Spécifique P3000 |
+| `verifier_myp3000app.py` | `myp3000app.com`, `72.60.90.127` | Script spécifique P3000 |
+| `validate_nginx_config.sh` | `nginx_myp3000app.conf`, `myp3000app.com` | À paramétrer |
+
+### 9. Mots de passe et secrets
+
+Ne pas commiter de secrets. Utiliser des placeholders dans les exemples.
 
 | Fichier | Note |
 |---------|------|
 | `Application/settings.py` | `PASSWORD` en dur pour dev local |
 | `Application/settings_base.py` | Défaut `DB_PASSWORD` |
-| `myp3000app.env`, `setup_production_env.sh`, `scripts/setup_production_env.py` | Exemples ; utiliser des placeholders type `VOTRE_MOT_DE_PASSE` |
+| `myp3000app.env`, `setup_production_env.sh`, `scripts/setup_production_env.py` | Exemples avec valeurs réelles à remplacer par des placeholders |
 
 ---
 
-## 7. Nginx et déploiement
+## Variables d'environnement multi-client
 
-| Fichier | Code en dur | Action recommandée |
-|---------|-------------|--------------------|
-| `nginx_myp3000app.conf` | `myp3000app.com`, chemins certs LetsEncrypt | Fichier spécifique P3000 ; les clients ont leur propre conf (ex. `deploy/nginx-template.conf` + substitution) |
-| `deploy/setup-new-client.sh` | Noms de base `p3000db_${CLIENT_NAME}`, exemples elekable/8001 | Déjà paramétré par arguments ; documenter la convention |
-| `deploy/systemd-template.service` | `DJANGO_SETTINGS_MODULE=Application.settings_production` | OK ; commun à tous les clients. Seul le port / chemin changent par client |
-| `deploy/deploy-client.sh` | `Application.settings_production` | OK |
+Variables à définir dans le `.env` de chaque client :
+
+```bash
+# Identité client (utilisé par Django et les scripts)
+CLIENT_PUBLIC_DOMAIN=myp3000app.com        # Domaine public de l'application
+CLIENT_APP_NAME=Webapplication P3000       # Nom affiché de l'application
+CLIENT_BASE_URL=https://myp3000app.com     # URL complète (pour les scripts shell)
+
+# Infrastructure (déjà existant)
+ALLOWED_HOSTS=myp3000app.com,www.myp3000app.com,...
+CORS_ALLOWED_ORIGINS=https://myp3000app.com,...
+CSRF_TRUSTED_ORIGINS=https://myp3000app.com,...
+AWS_STORAGE_BUCKET_NAME=agency-drive-prod
+ONLYOFFICE_SERVER_URL=http://72.60.90.127:8080
+DATABASE_URL=postgresql://...
+```
 
 ---
 
-## 8. Récapitulatif des actions prioritaires
+## Comment configurer un nouveau client
 
-1. **OnlyOffice / domaines** : Dans `api/views_drive/onlyoffice.py`, remplacer les domaines et IP en dur par une config (ex. `CLIENT_PUBLIC_DOMAIN` ou premier hôte public dans `ALLOWED_HOSTS`).
-2. **Scripts Django (create_users, backup, rollback, etc.)** : Lorsqu’ils sont exécutés sur un environnement client, utiliser `Application.settings_production` (ou `DJANGO_SETTINGS_MODULE` défini par l’env) pour pointer vers la bonne base et la bonne config.
-3. **Frontend** : Vérifier que l’URL de l’API en production ne dépend pas d’un host/port en dur (utilisation du même domaine que le front, ou variable d’environnement au build).
-4. **Validation / déploiement** : Paramétrer les scripts de validation (URL, config Nginx) par client (arguments ou variables d’environnement).
+1. Créer le `.env` avec les variables ci-dessus
+2. Exécuter la migration : `python manage.py migrate`
+3. Initialiser la config entreprise :
+   ```bash
+   python manage.py setup_entreprise_config --preset elekable
+   # ou manuellement :
+   python manage.py setup_entreprise_config --nom "SAS MON CLIENT" --email "contact@client.fr" ...
+   ```
+4. Adapter manuellement : templates HTML (PDF), assets (logo, signature), couleurs
+5. Configurer CORS S3 : `python manage.py configure_s3_cors` (ou `python configure_s3_cors.py`)
 
 ---
 
-*Dernière mise à jour : suite à la correction du script `create_users_elekable.py` (utilisation de `Application.settings_production` pour cibler la base Elekable).*
+*Dernière mise à jour : refactoring multi-client — modèle EntrepriseConfig, OnlyOffice dynamique, frontend dynamique, scripts paramétrés.*

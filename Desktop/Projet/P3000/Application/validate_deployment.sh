@@ -5,10 +5,10 @@
 
 set -e
 
-# Configuration
-PROJECT_DIR="/var/www/p3000/Desktop/Projet/P3000/Application"
-BASE_URL="https://myp3000app.com"
-LOCAL_URL="http://localhost:8000"
+# Configuration (peut être surchargée par des variables d'environnement)
+PROJECT_DIR="${PROJECT_DIR:-/var/www/p3000/Desktop/Projet/P3000/Application}"
+BASE_URL="${CLIENT_BASE_URL:-${BASE_URL:-https://myp3000app.com}}"
+LOCAL_URL="${LOCAL_URL:-http://localhost:8000}"
 TIMEOUT=30
 
 # Couleurs pour les messages

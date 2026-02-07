@@ -19,12 +19,64 @@ class OnlyOfficeManager:
     """
     
     @staticmethod
+    def _get_public_domain():
+        """
+        Retourne le domaine public du client depuis les settings.
+        Utilise CLIENT_PUBLIC_DOMAIN, ou le premier domaine non-localhost de ALLOWED_HOSTS.
+        """
+        domain = getattr(settings, 'CLIENT_PUBLIC_DOMAIN', '')
+        if domain:
+            return domain
+        
+        # Fallback : premier hôte public dans ALLOWED_HOSTS
+        for host in getattr(settings, 'ALLOWED_HOSTS', []):
+            if host not in ('localhost', '127.0.0.1', 'host.docker.internal', '*', ''):
+                return host
+        
+        return ''
+    
+    @staticmethod
+    def _get_known_hostnames():
+        """
+        Retourne la liste des hostnames connus (domaine public, IP du serveur, etc.)
+        pour identifier les URLs du même serveur.
+        """
+        domain = OnlyOfficeManager._get_public_domain()
+        hostnames = {'127.0.0.1', 'localhost'}
+        
+        if domain:
+            hostnames.add(domain)
+            # Ajouter aussi la version www si applicable
+            if not domain.startswith('www.'):
+                hostnames.add(f'www.{domain}')
+        
+        # Ajouter tous les ALLOWED_HOSTS
+        for host in getattr(settings, 'ALLOWED_HOSTS', []):
+            if host and host != '*':
+                hostnames.add(host)
+        
+        # Ajouter le hostname du serveur OnlyOffice
+        onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', '')
+        if onlyoffice_url:
+            parsed = urlparse(onlyoffice_url)
+            if parsed.hostname:
+                hostnames.add(parsed.hostname)
+        
+        return hostnames
+    
+    @staticmethod
+    def _is_ip_address(hostname):
+        """Vérifie si le hostname est une adresse IP."""
+        import re
+        return bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', hostname or ''))
+    
+    @staticmethod
     def normalize_file_url(url: str) -> str:
         """
         Normalise l'URL du fichier pour qu'elle soit accessible depuis OnlyOffice (Docker).
         
         IMPORTANT : OnlyOffice (dans Docker) doit accéder au proxy Django via Internet (domaine public).
-        En production, on utilise toujours le domaine public HTTPS (myp3000app.com) pour que
+        En production, on utilise toujours le domaine public HTTPS pour que
         OnlyOffice puisse télécharger les fichiers via le reverse proxy Nginx.
         
         En développement local : utilise host.docker.internal pour Docker Desktop
@@ -40,16 +92,18 @@ class OnlyOfficeManager:
         
         parsed = urlparse(url)
         is_production = not settings.DEBUG
+        public_domain = OnlyOfficeManager._get_public_domain()
+        known_hostnames = OnlyOfficeManager._get_known_hostnames()
         
-        if is_production:
+        if is_production and public_domain:
             # En production : utiliser TOUJOURS le domaine public HTTPS
             # OnlyOffice (Docker) accède via Internet, donc il doit utiliser le domaine public
             if parsed.hostname in ('127.0.0.1', 'localhost'):
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                return f"https://myp3000app.com{parsed.path}{query_string}"
+                return f"https://{public_domain}{parsed.path}{query_string}"
             
-            # Si l'URL utilise déjà le domaine public, s'assurer qu'elle est en HTTPS
-            if parsed.hostname in ('myp3000app.com', 'www.myp3000app.com', '72.60.90.127'):
+            # Si l'URL utilise un hostname connu, s'assurer qu'elle est en HTTPS
+            if parsed.hostname in known_hostnames:
                 if parsed.scheme != 'https':
                     query_string = f"?{parsed.query}" if parsed.query else ""
                     return f"https://{parsed.hostname}{parsed.path}{query_string}"
@@ -68,8 +122,8 @@ class OnlyOfficeManager:
         """
         Normalise l'URL de callback pour qu'elle soit accessible depuis le conteneur Docker.
         
-        IMPORTANT : En production, OnlyOffice (Docker) doit accéder au callback Django via localhost
-        car ils sont sur le même serveur. Le callback est interne au serveur.
+        IMPORTANT : En production, OnlyOffice (Docker) doit accéder au callback Django via
+        le domaine public HTTPS car Docker (réseau bridge) ne peut pas accéder à localhost.
         
         En développement local (Docker Desktop Windows/Mac) : utilise host.docker.internal
         
@@ -85,15 +139,16 @@ class OnlyOfficeManager:
         parsed = urlparse(url)
         is_production = not settings.DEBUG
         original_url = url
+        public_domain = OnlyOfficeManager._get_public_domain()
+        known_hostnames = OnlyOfficeManager._get_known_hostnames()
         
         # Si l'URL contient 127.0.0.1 ou localhost
         if parsed.hostname in ('127.0.0.1', 'localhost'):
-            if is_production:
+            if is_production and public_domain:
                 # En production : utiliser le domaine public HTTPS
                 # Docker (réseau bridge) ne peut pas accéder à localhost de l'hôte
-                # On passe par Nginx/Internet pour atteindre Django
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                normalized = f"https://myp3000app.com{parsed.path}{query_string}"
+                normalized = f"https://{public_domain}{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (PROD): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
             else:
@@ -103,27 +158,14 @@ class OnlyOfficeManager:
                 logger.info(f"[OnlyOffice] Normalisation callback (DEV): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
         
-        # Si l'URL utilise un domaine/IP externe en production
-        # OnlyOffice et Django sont sur le même serveur, donc utiliser localhost
-        if is_production and parsed.hostname:
-            onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
-            onlyoffice_parsed = urlparse(onlyoffice_url)
-            
-            # Liste des hostnames qui indiquent qu'on est sur le même serveur
-            same_server_hostnames = [
-                onlyoffice_parsed.hostname,
-                'myp3000app.com',
-                'www.myp3000app.com',
-                '72.60.90.127',
-                '127.0.0.1',
-                'localhost'
-            ]
-            
-            if (parsed.hostname in same_server_hostnames or 
-                parsed.hostname in (settings.ALLOWED_HOSTS if hasattr(settings, 'ALLOWED_HOSTS') else [])):
+        # Si l'URL utilise un domaine/IP connu en production
+        # OnlyOffice et Django sont sur le même serveur
+        if is_production and parsed.hostname and public_domain:
+            if (parsed.hostname in known_hostnames or 
+                parsed.hostname in getattr(settings, 'ALLOWED_HOSTS', [])):
                 # Utiliser le domaine public HTTPS car Docker ne peut pas accéder à localhost
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                normalized = f"https://myp3000app.com{parsed.path}{query_string}"
+                normalized = f"https://{public_domain}{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (PROD same server): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
         
@@ -235,8 +277,9 @@ class OnlyOfficeManager:
         """
         try:
             healthcheck_url = f"{settings.ONLYOFFICE_SERVER_URL}/healthcheck"
-        # Désactiver la vérification SSL pour les certificats auto-signés
-            verify_ssl = not settings.ONLYOFFICE_SERVER_URL.startswith('https://127.0.0.1') and not settings.ONLYOFFICE_SERVER_URL.startswith('https://72.60.90.127')
+            # Désactiver la vérification SSL pour les certificats auto-signés (IP ou localhost)
+            onlyoffice_parsed = urlparse(settings.ONLYOFFICE_SERVER_URL)
+            verify_ssl = not OnlyOfficeManager._is_ip_address(onlyoffice_parsed.hostname) and onlyoffice_parsed.hostname not in ('localhost', '127.0.0.1')
             response = requests.get(healthcheck_url, timeout=5, verify=verify_ssl)
             
             is_available = response.status_code == 200 and response.text.strip().lower() == 'true'

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Drawer,
@@ -27,6 +27,7 @@ import DistributeursDashboard from "./DistributeursDashboard";
 import StatsTab from "./StatsTab";
 import DocumentsTab from "./DocumentsTab";
 import StockTab from "./StockTab";
+import entrepriseConfigService from "../../services/entrepriseConfigService";
 
 // Logo client
 import mjrLogo from "../../img/MJR SERVICES logo.jpg";
@@ -66,6 +67,21 @@ const DesktopAppLayout = () => {
   const [selectedTab, setSelectedTab] = useState(1); // 0: Stats, 1: Distributeur, 2: Stock, 3: Documents
   const [distributeurToOpen, setDistributeurToOpen] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [appConfig, setAppConfig] = useState({ nom_application: "P3000", domaine_public: "" });
+
+  useEffect(() => {
+    entrepriseConfigService.getConfig().then((config) => {
+      if (config) {
+        setAppConfig(config);
+      }
+    });
+  }, []);
+
+  // URL de retour vers l'application principale
+  const returnUrl = appConfig.domaine_public
+    ? `https://${appConfig.domaine_public}/`
+    : "/";
+  const returnLabel = `Retour à ${appConfig.nom_application || "l'application"}`;
 
   const handleOpenDistributeur = (distributeurId) => {
     setDistributeurToOpen(distributeurId);
@@ -308,10 +324,10 @@ const DesktopAppLayout = () => {
           <Divider sx={{ mb: 2 }} />
           
           {/* Bouton retour à l'application principale */}
-          <Tooltip title={sidebarCollapsed ? "Retour à P3000" : ""} placement="right">
+          <Tooltip title={sidebarCollapsed ? returnLabel : ""} placement="right">
             <Box
               component="a"
-              href="https://myp3000app.com/"
+              href={returnUrl}
               sx={{
                 display: "flex",
                 alignItems: "center",
@@ -349,7 +365,7 @@ const DesktopAppLayout = () => {
               {!sidebarCollapsed && (
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                    Retour à P3000
+                    {returnLabel}
                   </Typography>
                   <Typography variant="caption" sx={{ opacity: 0.7, fontSize: "0.7rem" }}>
                     Application principale

@@ -477,7 +477,7 @@ post_deployment_check() {
     log "📊 Statut des services:"
     systemctl status gunicorn --no-pager -l
     
-    log_success "🌐 Application disponible sur: https://myp3000app.com"
+    log_success "🌐 Application disponible sur: ${CLIENT_BASE_URL:-https://myp3000app.com}"
 }
 
 # Fonction principale

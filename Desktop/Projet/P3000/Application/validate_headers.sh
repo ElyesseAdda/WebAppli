@@ -5,9 +5,9 @@
 
 set -e
 
-# Configuration
-LOCAL_URL="http://localhost:8000"
-BASE_URL="https://myp3000app.com"
+# Configuration (peut être surchargée par des variables d'environnement)
+LOCAL_URL="${LOCAL_URL:-http://localhost:8000}"
+BASE_URL="${CLIENT_BASE_URL:-${BASE_URL:-https://myp3000app.com}}"
 
 # Couleurs
 GREEN='\033[0;32m'

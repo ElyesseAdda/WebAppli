@@ -1,3 +1,4 @@
+import os
 from django.db import models
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.utils import timezone
@@ -3486,6 +3487,61 @@ class Document(models.Model):
     def get_download_url(self):
         """Retourne l'URL de téléchargement (sera implémentée avec les URLs présignées)"""
         return f"/api/drive/download/{self.id}/"
+
+
+class EntrepriseConfig(models.Model):
+    """
+    Configuration de l'entreprise utilisatrice de l'application (singleton).
+    Stocke l'identité de l'entreprise cliente (nom, adresse, contact, infos légales).
+    Une seule instance autorisée (pk=1).
+    """
+    nom = models.CharField(max_length=200, verbose_name="Raison sociale")  # ex: "SAS ELEKABLE"
+    forme_juridique = models.CharField(max_length=50, blank=True, default='', verbose_name="Forme juridique")  # ex: "SAS"
+    capital = models.CharField(max_length=50, blank=True, default='', verbose_name="Capital social")  # ex: "1 000,00€"
+    adresse = models.CharField(max_length=300, verbose_name="Adresse")  # ex: "64, Boulevard les Arbousiers"
+    code_postal = models.CharField(max_length=10, verbose_name="Code postal")
+    ville = models.CharField(max_length=100, verbose_name="Ville")
+    rcs = models.CharField(max_length=100, blank=True, default='', verbose_name="RCS")  # ex: "Aix-en-Provence 978 038 248"
+    siret = models.CharField(max_length=50, blank=True, default='', verbose_name="SIRET")
+    tva_intra = models.CharField(max_length=50, blank=True, default='', verbose_name="TVA intracommunautaire")
+    email = models.EmailField(blank=True, default='', verbose_name="Email de contact")
+    telephone = models.CharField(max_length=30, blank=True, default='', verbose_name="Téléphone")
+    representant_nom = models.CharField(max_length=200, blank=True, default='', verbose_name="Nom du représentant")
+    representant_fonction = models.CharField(max_length=100, blank=True, default='', verbose_name="Fonction du représentant")
+    nom_application = models.CharField(max_length=100, default='Webapplication P3000', verbose_name="Nom de l'application")
+    domaine_public = models.CharField(max_length=200, blank=True, default='', verbose_name="Domaine public", help_text="Ex: myp3000app.com")
+
+    class Meta:
+        verbose_name = "Configuration entreprise"
+        verbose_name_plural = "Configuration entreprise"
+
+    def __str__(self):
+        return self.nom or "Configuration entreprise"
+
+    def save(self, *args, **kwargs):
+        # Singleton : force toujours pk=1
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Empêche la suppression du singleton
+        pass
+
+    @classmethod
+    def get_config(cls):
+        """Récupère ou crée la configuration entreprise (singleton)."""
+        obj, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                'nom': os.getenv('CLIENT_COMPANY_NAME', 'Mon Entreprise'),
+                'adresse': '',
+                'code_postal': '',
+                'ville': '',
+                'nom_application': os.getenv('CLIENT_APP_NAME', 'Webapplication P3000'),
+                'domaine_public': os.getenv('CLIENT_PUBLIC_DOMAIN', ''),
+            }
+        )
+        return obj
 
 
 # Signal pour créer automatiquement les émetteurs après les migrations

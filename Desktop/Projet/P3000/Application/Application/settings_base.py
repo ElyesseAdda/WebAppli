@@ -99,6 +99,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'api.context_processors.entreprise_config',
             ],
         },
     },
@@ -187,6 +188,12 @@ ONLYOFFICE_JWT_HEADER = os.getenv('ONLYOFFICE_JWT_HEADER', 'Authorization')
 # Le middleware OnlyOfficeFrameOptionsMiddleware gère spécifiquement les pages OnlyOffice
 # Pour les autres pages, on garde DENY par défaut pour la sécurité
 X_FRAME_OPTIONS = 'DENY'
+
+# Configuration multi-client
+# Domaine public du client (ex: myp3000app.com, elekable.monapp.com)
+# Utilisé par OnlyOffice pour normaliser les URLs, et par le frontend
+CLIENT_PUBLIC_DOMAIN = os.getenv('CLIENT_PUBLIC_DOMAIN', '')
+CLIENT_APP_NAME = os.getenv('CLIENT_APP_NAME', 'Webapplication P3000')
 
 # Version de l'application
 VERSION = '1.0.0'

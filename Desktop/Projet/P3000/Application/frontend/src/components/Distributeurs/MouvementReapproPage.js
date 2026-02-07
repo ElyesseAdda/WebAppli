@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import { MdArrowBack, MdCheck, MdExpandLess, MdExpandMore, MdClose } from "react-icons/md";
 
-const REAPPRO_STORAGE_KEY = "myp3000_reappro_en_cours";
+const REAPPRO_STORAGE_KEY = "app_reappro_en_cours";
 
 const saveReapproToStorage = (distributeurId, sessionId) => {
   try {

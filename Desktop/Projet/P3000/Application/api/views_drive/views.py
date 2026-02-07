@@ -785,7 +785,11 @@ def check_onlyoffice_view(request):
         healthcheck_url = f"{onlyoffice_url}/healthcheck"
         try:
             # Si l'URL est HTTPS avec une IP, désactiver la vérification SSL (certificat auto-signé)
-            verify_ssl = not (onlyoffice_url.startswith('https://127.0.0.1') or onlyoffice_url.startswith('https://72.60.90.127'))
+            from urllib.parse import urlparse as _urlparse
+            import re as _re
+            _parsed = _urlparse(onlyoffice_url)
+            _is_ip = bool(_re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', _parsed.hostname or ''))
+            verify_ssl = not (_is_ip or _parsed.hostname in ('localhost', '127.0.0.1'))
             response = requests.get(healthcheck_url, timeout=5, verify=verify_ssl)
             is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
             

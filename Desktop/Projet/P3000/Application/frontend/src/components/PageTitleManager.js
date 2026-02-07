@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { matchPath, useLocation } from "react-router-dom";
+import entrepriseConfigService from "../services/entrepriseConfigService";
 
-const BASE_TITLE = "Webapplication P3000";
+const DEFAULT_TITLE = "Webapplication P3000";
 
 const ROUTE_TITLES = [
   { path: "/", title: "Dashboard" },
@@ -42,22 +43,31 @@ const ROUTE_TITLES = [
   { path: "/StockForm", title: "Stock" },
 ];
 
-const resolveTitle = (pathname) => {
+const resolveTitle = (pathname, baseTitle) => {
   const match = ROUTE_TITLES.find((route) =>
     matchPath({ path: route.path, end: true }, pathname)
   );
   if (!match) {
-    return BASE_TITLE;
+    return baseTitle;
   }
-  return `${match.title} | ${BASE_TITLE}`;
+  return `${match.title} | ${baseTitle}`;
 };
 
 const PageTitleManager = () => {
   const location = useLocation();
+  const [baseTitle, setBaseTitle] = useState(DEFAULT_TITLE);
 
   useEffect(() => {
-    document.title = resolveTitle(location.pathname);
-  }, [location.pathname]);
+    entrepriseConfigService.getConfig().then((config) => {
+      if (config && config.nom_application) {
+        setBaseTitle(config.nom_application);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    document.title = resolveTitle(location.pathname, baseTitle);
+  }, [location.pathname, baseTitle]);
 
   return null;
 };

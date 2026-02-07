@@ -5,7 +5,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Application P3000 - Gestion de chantiers et devis" />
+    <meta name="description" content="{{ entreprise.nom_application|default:'Application' }} - Gestion de chantiers et devis" />
     <meta name="theme-color" content="#40798C" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{% static 'apple-touch-icon.png' %}" />
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'apple-touch-icon.png' %}" />
     <link rel="manifest" href="{% static 'manifest.json' %}" />
-    <title>Webapplication P3000</title>
+    <title>{{ entreprise.nom_application|default:'Webapplication P3000' }}</title>
 
     <!-- External dependencies -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>

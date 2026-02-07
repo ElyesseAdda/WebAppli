@@ -10,7 +10,8 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    EntrepriseConfig
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -2188,3 +2189,18 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
             })
         
         return data
+
+
+class EntrepriseConfigSerializer(serializers.ModelSerializer):
+    """Serializer pour la configuration entreprise (lecture seule pour le frontend)."""
+    class Meta:
+        model = EntrepriseConfig
+        fields = [
+            'nom', 'forme_juridique', 'capital',
+            'adresse', 'code_postal', 'ville',
+            'rcs', 'siret', 'tva_intra',
+            'email', 'telephone',
+            'representant_nom', 'representant_fonction',
+            'nom_application', 'domaine_public',
+        ]
+        read_only_fields = fields

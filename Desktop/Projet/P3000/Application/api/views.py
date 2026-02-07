@@ -15111,3 +15111,22 @@ def distributeur_available_months(request, distributeur_id):
         'distributeur_nom': distributeur.nom,
         'months': result
     })
+
+
+# ============================================================================
+# Configuration entreprise (multi-client)
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_entreprise_config(request):
+    """
+    Retourne la configuration de l'entreprise utilisatrice de l'application.
+    Utilisé par le frontend React pour afficher le nom de l'app, les liens, etc.
+    """
+    from .models import EntrepriseConfig
+    from .serializers import EntrepriseConfigSerializer
+    
+    config = EntrepriseConfig.get_config()
+    serializer = EntrepriseConfigSerializer(config)
+    return Response(serializer.data)
