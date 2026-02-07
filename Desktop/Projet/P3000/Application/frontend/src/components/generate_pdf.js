@@ -8,8 +8,19 @@ async function generatePDF() {
   const pdfPath = args[1] || path.resolve(__dirname, "devis.pdf"); // Par défaut devis.pdf
 
   // Détecter l'environnement : production (Linux) ou local (Windows/autre)
-  const isProduction = process.platform === "linux" && fs.existsSync("/usr/bin/chromium-browser");
-  const chromiumPath = isProduction ? "/usr/bin/chromium-browser" : undefined;
+  // Priorité : google-chrome-stable (fonctionne avec www-data, pas de Snap)
+  // Fallback : chromium-browser (Snap, fonctionne uniquement en root)
+  const isProduction = process.platform === "linux";
+  let chromiumPath = undefined;
+  if (isProduction) {
+    if (fs.existsSync("/usr/bin/google-chrome-stable")) {
+      chromiumPath = "/usr/bin/google-chrome-stable";
+    } else if (fs.existsSync("/usr/bin/chromium-browser")) {
+      chromiumPath = "/usr/bin/chromium-browser";
+    } else if (fs.existsSync("/usr/bin/chromium")) {
+      chromiumPath = "/usr/bin/chromium";
+    }
+  }
 
   // Configuration des arguments selon l'environnement
   const launchArgs = [
