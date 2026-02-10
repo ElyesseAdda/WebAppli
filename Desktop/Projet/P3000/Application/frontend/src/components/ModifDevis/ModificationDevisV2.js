@@ -328,8 +328,40 @@ const ModificationDevisV2 = () => {
   const loadParties = useCallback(async () => {
     try {
       setIsLoadingParties(true);
-      const response = await axios.get('/api/parties/');
-      setAvailableParties(response.data);
+      // DRF peut paginer: {count, next, previous, results: [...]}
+      const firstResponse = await axios.get('/api/parties/');
+      const firstRaw = firstResponse.data;
+
+      let allParties = [];
+      if (Array.isArray(firstRaw)) {
+        allParties = firstRaw;
+      } else if (firstRaw && Array.isArray(firstRaw.results)) {
+        allParties = [...firstRaw.results];
+
+        // Récupérer toutes les pages pour avoir TOUTES les parties
+        let nextUrl = firstRaw.next;
+        let guard = 0;
+        while (nextUrl && guard < 50) {
+          guard += 1;
+          const nextResp = await axios.get(nextUrl);
+          const nextRaw = nextResp.data;
+
+          if (Array.isArray(nextRaw)) {
+            // Format non paginé (cas atypique)
+            allParties = nextRaw;
+            break;
+          }
+
+          if (nextRaw && Array.isArray(nextRaw.results)) {
+            allParties = allParties.concat(nextRaw.results);
+            nextUrl = nextRaw.next;
+          } else {
+            break;
+          }
+        }
+      }
+
+      setAvailableParties(allParties);
     } catch (err) {
       console.error('Erreur lors du chargement des parties:', err);
     } finally {
@@ -540,9 +572,10 @@ const ModificationDevisV2 = () => {
   // Rechercher les parties
   const searchParties = useCallback(async (inputValue) => {
     try {
+      const partiesArray = Array.isArray(availableParties) ? availableParties : [];
       // ✅ Utiliser availableParties comme source principale (contient TOUTES les parties)
       // car l'endpoint /api/parties/search/ limite à 50 résultats
-      const localResults = availableParties
+      const localResults = partiesArray
         .filter(partie => {
           if (!inputValue) return true;
           const searchLower = inputValue.toLowerCase();
@@ -559,7 +592,7 @@ const ModificationDevisV2 = () => {
         }));
       
       // Si availableParties est vide ou si on veut compléter avec l'API (optionnel)
-      if (localResults.length === 0 || availableParties.length === 0) {
+      if (localResults.length === 0 || partiesArray.length === 0) {
         try {
           const params = inputValue ? { q: inputValue } : {};
           const response = await axios.get('/api/parties/search/', { params });
@@ -579,7 +612,8 @@ const ModificationDevisV2 = () => {
       return localResults;
     } catch (error) {
       // En cas d'erreur, retourner au moins les parties locales filtrées
-      return availableParties
+      const partiesArray = Array.isArray(availableParties) ? availableParties : [];
+      return partiesArray
         .filter(partie => {
           if (!inputValue) return true;
           const searchLower = inputValue.toLowerCase();
