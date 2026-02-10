@@ -29,6 +29,8 @@ import {
   Folder as FolderIcon,
   NavigateNext as NavigateNextIcon,
   ContentPaste as PasteIcon,
+  ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import DriveExplorer, { displayFilename } from './DriveExplorer';
@@ -119,6 +121,11 @@ const DriveV2 = () => {
   const [pasteProgressModalOpen, setPasteProgressModalOpen] = useState(false);
   const [pasteProgressData, setPasteProgressData] = useState(null);
   const cancelPasteRef = useRef(false);
+
+  // Historique de navigation : retour / avant (max 50 entrées)
+  const MAX_HISTORY = 50;
+  const [backHistory, setBackHistory] = useState([]);
+  const [forwardHistory, setForwardHistory] = useState([]);
 
   // Hook pour gérer la copie interne du Drive
   const { 
@@ -347,10 +354,48 @@ const DriveV2 = () => {
     }
   }, [draggedItemsFromExplorer]);
 
-  // Naviguer vers un dossier
+  // Naviguer vers un dossier (sans modifier l'historique - pour usage interne back/forward)
   const handleNavigateToFolder = useCallback((folderPath) => {
     fetchFolderContent(folderPath);
   }, [fetchFolderContent]);
+
+  // Navigation utilisateur (clic dossier / breadcrumb) : enregistre dans l'historique
+  const handleUserNavigateToFolder = useCallback((folderPath) => {
+    if (currentPath !== folderPath) {
+      setBackHistory((prev) => {
+        const next = [...prev, currentPath].slice(-MAX_HISTORY);
+        return next;
+      });
+      setForwardHistory([]);
+    }
+    fetchFolderContent(folderPath);
+  }, [currentPath, fetchFolderContent]);
+
+  // Revenir en arrière (dernier dossier visité)
+  const handleGoBack = useCallback(() => {
+    if (backHistory.length > 0) {
+      const previousPath = backHistory[backHistory.length - 1];
+      setBackHistory((prev) => prev.slice(0, -1));
+      setForwardHistory((prev) => [...prev, currentPath].slice(-MAX_HISTORY));
+      fetchFolderContent(previousPath);
+    } else if (currentPath) {
+      // Fallback : dossier parent
+      const segments = currentPath.split('/').filter(Boolean);
+      segments.pop();
+      const parentPath = segments.join('/');
+      setForwardHistory((prev) => [...prev, currentPath].slice(-MAX_HISTORY));
+      fetchFolderContent(parentPath);
+    }
+  }, [currentPath, backHistory, fetchFolderContent]);
+
+  // Revenir en avant (élément qu'on avait quitté en cliquant "Retour")
+  const handleGoForward = useCallback(() => {
+    if (forwardHistory.length === 0) return;
+    const nextPath = forwardHistory[forwardHistory.length - 1];
+    setForwardHistory((prev) => prev.slice(0, -1));
+    setBackHistory((prev) => [...prev, currentPath].slice(-MAX_HISTORY));
+    fetchFolderContent(nextPath);
+  }, [currentPath, forwardHistory, fetchFolderContent]);
 
   // Créer un nouveau dossier
   const handleCreateFolder = async () => {
@@ -538,6 +583,40 @@ const DriveV2 = () => {
       {/* Header */}
       <DriveHeader elevation={2}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', flex: 1, minWidth: 0, overflow: 'hidden', maxWidth: '100%' }}>
+          {/* Flèche Retour */}
+          <Tooltip title={backHistory.length > 0 ? "Dossier précédent" : "Dossier parent"}>
+            <span>
+              <IconButton
+                onClick={handleGoBack}
+                disabled={backHistory.length === 0 && !currentPath}
+                size="medium"
+                sx={{
+                  flexShrink: 0,
+                  '&:disabled': { opacity: 0.5 },
+                }}
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          {/* Flèche Avant */}
+          <Tooltip title="Dossier suivant (récemment visité)">
+            <span>
+              <IconButton
+                onClick={handleGoForward}
+                disabled={forwardHistory.length === 0}
+                size="medium"
+                sx={{
+                  flexShrink: 0,
+                  '&:disabled': { opacity: 0.5 },
+                }}
+              >
+                <ArrowForwardIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+
           {/* Titre */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
             <Typography variant="h5" component="h1">
@@ -558,7 +637,7 @@ const DriveV2 = () => {
                     key={index}
                     component="button"
                     variant="body1"
-                    onClick={() => handleNavigateToFolder(item.path)}
+                    onClick={() => handleUserNavigateToFolder(item.path)}
                     onDragOver={(e) => handleDragOverBreadcrumb(e, item.path)}
                     onDragLeave={handleDragLeaveBreadcrumb}
                     onDrop={(e) => handleDropOnBreadcrumb(e, item.path)}
@@ -734,13 +813,13 @@ const DriveV2 = () => {
           <DriveSearch
             searchTerm={searchTerm}
             onClose={handleCloseSearch}
-            onNavigate={handleNavigateToFolder}
+            onNavigate={handleUserNavigateToFolder}
           />
         ) : (
           <DriveExplorer
             folders={folderContent.folders}
             files={folderContent.files}
-            onNavigateToFolder={handleNavigateToFolder}
+            onNavigateToFolder={handleUserNavigateToFolder}
             onDeleteItem={deleteItem}
             onRefresh={refreshContent}
             onDropFiles={handleDropFiles}
