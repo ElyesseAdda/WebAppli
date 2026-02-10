@@ -223,6 +223,9 @@ const DevisAvance = () => {
   const [selectedChantierId, setSelectedChantierId] = useState(null);
   const [showChantierForm, setShowChantierForm] = useState(false);
   const [isLoadingChantiers, setIsLoadingChantiers] = useState(false);
+  const [chantierSearchQuery, setChantierSearchQuery] = useState('');
+  const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
+  const chantierDropdownRef = useRef(null);
   
   // États pour la création de nouveau chantier (même logique que CreationDevis.js)
   const [pendingChantierData, setPendingChantierData] = useState(() => createInitialPendingChantierData());
@@ -3231,6 +3234,18 @@ const DevisAvance = () => {
     loadParties();
   }, []);
 
+  // Fermer la liste chantier au clic à l'extérieur
+  useEffect(() => {
+    if (!chantierDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (chantierDropdownRef.current && !chantierDropdownRef.current.contains(e.target)) {
+        setChantierDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chantierDropdownOpen]);
+
   useEffect(() => {
     const hasAtLeastOnePartie = devisItems.some(item => item.type === 'partie');
     const recurringLineExists = devisItems.some(isRecurringSpecialLine);
@@ -3300,31 +3315,112 @@ const DevisAvance = () => {
             </h2>
             
             <Box sx={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <FormControl sx={{ minWidth: 300, flex: 1 }}>
-                <InputLabel shrink>Chantier existant</InputLabel>
-                <Select
-                  value={selectedChantierId || ''}
-                  onChange={(e) => handleChantierSelection(e.target.value)}
-                  disabled={isLoadingChantiers} // Permettre de recliquer même si appel d'offres
-                  displayEmpty
-                  notched
-                >
-                  <MenuItem value="">
-                    <em>-- Choisir un chantier --</em>
-                  </MenuItem>
-                  {chantiers
-                    .filter((chantier) => chantier.chantier_name !== "École - Formation")
-                    .filter(
-                      (chantier) =>
-                        chantier.state_chantier !== "Terminé" &&
-                        chantier.state_chantier !== "En attente"
-                    )
-                    .map((chantier) => (
-                      <MenuItem key={chantier.id} value={chantier.id}>
-                        {chantier.chantier_name}
-                      </MenuItem>
-                    ))}
-                </Select>
+              <FormControl sx={{ minWidth: 300, flex: 1 }} ref={chantierDropdownRef}>
+                <InputLabel shrink sx={{ backgroundColor: 'transparent', px: 0.5 }}>
+                  Chantier existant
+                </InputLabel>
+                <input
+                  type="text"
+                  placeholder="Rechercher un chantier..."
+                  value={
+                    selectedChantierId && selectedChantierId !== -1
+                      ? (chantiers.find((c) => c.id === selectedChantierId)?.chantier_name ?? '')
+                      : chantierSearchQuery
+                  }
+                  onChange={(e) => {
+                    setChantierSearchQuery(e.target.value);
+                    if (selectedChantierId && selectedChantierId !== -1) {
+                      handleChantierSelection('');
+                    }
+                    setChantierDropdownOpen(true);
+                  }}
+                  onFocus={() => setChantierDropdownOpen(true)}
+                  disabled={isLoadingChantiers}
+                  style={{
+                    width: '100%',
+                    padding: '14px 12px 14px 12px',
+                    marginTop: '8px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {chantierDropdownOpen && (
+                  <ul
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      margin: 0,
+                      marginTop: '4px',
+                      padding: 0,
+                      listStyle: 'none',
+                      maxHeight: '240px',
+                      overflowY: 'auto',
+                      backgroundColor: '#fff',
+                      border: '2px solid #2196f3',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 10,
+                    }}
+                  >
+                    {(() => {
+                      const chantiersEnCours = chantiers
+                        .filter((c) => c.chantier_name !== 'École - Formation')
+                        .filter(
+                          (c) =>
+                            c.state_chantier !== 'Terminé' &&
+                            c.state_chantier !== 'En attente'
+                        );
+                      const sorted = [...chantiersEnCours].sort((a, b) =>
+                        (a.chantier_name || '').localeCompare(b.chantier_name || '', 'fr')
+                      );
+                      const filtered = chantierSearchQuery.trim()
+                        ? sorted.filter((c) =>
+                            (c.chantier_name || '')
+                              .toLowerCase()
+                              .includes(chantierSearchQuery.trim().toLowerCase())
+                          )
+                        : sorted;
+                      if (filtered.length === 0) {
+                        return (
+                          <li style={{ padding: '12px 14px', color: '#666', fontSize: '14px' }}>
+                            Aucun chantier trouvé
+                          </li>
+                        );
+                      }
+                      return filtered.map((chantier) => (
+                        <li
+                          key={chantier.id}
+                          onClick={() => {
+                            handleChantierSelection(chantier.id);
+                            setChantierDropdownOpen(false);
+                            setChantierSearchQuery('');
+                          }}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            borderBottom: '1px solid #eee',
+                            backgroundColor:
+                              selectedChantierId === chantier.id ? '#e3f2fd' : 'transparent',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#e3f2fd';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              selectedChantierId === chantier.id ? '#e3f2fd' : 'transparent';
+                          }}
+                        >
+                          {chantier.chantier_name}
+                        </li>
+                      ));
+                    })()}
+                  </ul>
+                )}
               </FormControl>
               
               <Typography sx={{ color: '#6c757d', fontSize: '14px' }}>

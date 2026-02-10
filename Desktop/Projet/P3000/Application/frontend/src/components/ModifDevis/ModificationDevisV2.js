@@ -2,7 +2,7 @@
  * ModificationDevisV2 - Composant principal pour la modification de devis
  * Basé sur le même système que DevisAvance mais pour l'édition de devis existants
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Box, Typography, CircularProgress, Alert, Button } from '@mui/material';
@@ -125,6 +125,12 @@ const ModificationDevisV2 = () => {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
+
+  // États pour la sélection de chantier (barre de recherche + liste)
+  const [chantiers, setChantiers] = useState([]);
+  const [chantierSearchQuery, setChantierSearchQuery] = useState('');
+  const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
+  const chantierDropdownRef = useRef(null);
 
   // Hook de chargement
   const {
@@ -491,6 +497,83 @@ const ModificationDevisV2 = () => {
     }
   }, []);
 
+  // Changer le chantier (fetch détails et mettre à jour client/societe/chantier)
+  const handleChantierChange = useCallback(async (chantierId) => {
+    if (!chantierId) return;
+    try {
+      const chantierResponse = await axios.get(`/api/chantier/${chantierId}/`);
+      const chantierData = chantierResponse.data;
+      setSelectedChantierId(chantierId);
+      setChantier({
+        chantier_name: chantierData.chantier_name || '',
+        rue: chantierData.rue || '',
+        code_postal: chantierData.code_postal || '',
+        ville: chantierData.ville || ''
+      });
+      if (chantierData.societe) {
+        if (typeof chantierData.societe === 'object' && chantierData.societe.id) {
+          setSociete({
+            nom_societe: chantierData.societe.nom_societe || '',
+            rue_societe: chantierData.societe.rue_societe || '',
+            codepostal_societe: chantierData.societe.codepostal_societe || '',
+            ville_societe: chantierData.societe.ville_societe || ''
+          });
+          await fetchContactsSociete(chantierData.societe.id);
+          if (chantierData.societe.client_name) {
+            const clientId = typeof chantierData.societe.client_name === 'object'
+              ? chantierData.societe.client_name.id
+              : chantierData.societe.client_name;
+            if (clientId) {
+              const clientResponse = await axios.get(`/api/client/${clientId}/`);
+              const clientData = clientResponse.data;
+              setClient({
+                name: clientData.name || '',
+                surname: clientData.surname || '',
+                civilite: clientData.civilite || 'M.',
+                poste: clientData.poste || '',
+                client_mail: clientData.client_mail || '',
+                phone_Number: String(clientData.phone_Number || '')
+              });
+              setClientId(clientId);
+            }
+          }
+        } else if (typeof chantierData.societe === 'number') {
+          const societeResponse = await axios.get(`/api/societe/${chantierData.societe}/`);
+          const societeData = societeResponse.data;
+          setSociete({
+            nom_societe: societeData.nom_societe || '',
+            rue_societe: societeData.rue_societe || '',
+            codepostal_societe: societeData.codepostal_societe || '',
+            ville_societe: societeData.ville_societe || ''
+          });
+          await fetchContactsSociete(chantierData.societe);
+          if (societeData.client_name) {
+            const clientId = typeof societeData.client_name === 'object'
+              ? societeData.client_name.id
+              : societeData.client_name;
+            if (clientId) {
+              const clientResponse = await axios.get(`/api/client/${clientId}/`);
+              const clientData = clientResponse.data;
+              setClient({
+                name: clientData.name || '',
+                surname: clientData.surname || '',
+                civilite: clientData.civilite || 'M.',
+                poste: clientData.poste || '',
+                client_mail: clientData.client_mail || '',
+                phone_Number: String(clientData.phone_Number || '')
+              });
+              setClientId(clientId);
+            }
+          }
+        }
+      }
+      setChantierDropdownOpen(false);
+      setChantierSearchQuery('');
+    } catch (error) {
+      console.error('Erreur lors du chargement du chantier:', error);
+    }
+  }, [fetchContactsSociete]);
+
   // Initialiser les données quand le devis est chargé
   useEffect(() => {
     if (loadedDevisData) {
@@ -568,6 +651,36 @@ const ModificationDevisV2 = () => {
   useEffect(() => {
     loadParties();
   }, [loadParties]);
+
+  // Charger les chantiers (en cours uniquement)
+  useEffect(() => {
+    const fetchChantiers = async () => {
+      try {
+        const response = await axios.get('/api/chantier/');
+        const filtered = response.data.filter(
+          (c) =>
+            c.state_chantier !== 'Terminé' &&
+            c.state_chantier !== 'En attente'
+        );
+        setChantiers(filtered);
+      } catch (err) {
+        console.error('Erreur chargement chantiers:', err);
+      }
+    };
+    fetchChantiers();
+  }, []);
+
+  // Fermer la liste chantier au clic à l'extérieur
+  useEffect(() => {
+    if (!chantierDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (chantierDropdownRef.current && !chantierDropdownRef.current.contains(e.target)) {
+        setChantierDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chantierDropdownOpen]);
 
   // Rechercher les parties
   const searchParties = useCallback(async (inputValue) => {
@@ -1090,6 +1203,102 @@ const ModificationDevisV2 = () => {
             }}>
               🏗️ Adresse du chantier
             </h2>
+
+            <Box ref={chantierDropdownRef} sx={{ position: 'relative', marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
+                Chantier
+              </label>
+              <input
+                type="text"
+                placeholder="Rechercher un chantier..."
+                value={
+                  selectedChantierId
+                    ? (chantiers.find((c) => c.id === selectedChantierId)?.chantier_name ?? chantier.chantier_name ?? '')
+                    : chantierSearchQuery
+                }
+                onChange={(e) => {
+                  setChantierSearchQuery(e.target.value);
+                  setChantierDropdownOpen(true);
+                }}
+                onFocus={() => setChantierDropdownOpen(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {chantierDropdownOpen && (
+                <ul
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    margin: 0,
+                    marginTop: '4px',
+                    padding: 0,
+                    listStyle: 'none',
+                    maxHeight: '240px',
+                    overflowY: 'auto',
+                    backgroundColor: '#fff',
+                    border: '2px solid #2196f3',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 10,
+                  }}
+                >
+                  {(() => {
+                    const chantiersEnCours = chantiers.filter(
+                      (c) =>
+                        c.state_chantier !== 'Terminé' &&
+                        c.state_chantier !== 'En attente'
+                    );
+                    const sorted = [...chantiersEnCours].sort((a, b) =>
+                      (a.chantier_name || '').localeCompare(b.chantier_name || '', 'fr')
+                    );
+                    const filtered = chantierSearchQuery.trim()
+                      ? sorted.filter((c) =>
+                          (c.chantier_name || '')
+                            .toLowerCase()
+                            .includes(chantierSearchQuery.trim().toLowerCase())
+                        )
+                      : sorted;
+                    if (filtered.length === 0) {
+                      return (
+                        <li style={{ padding: '12px 14px', color: '#666', fontSize: '14px' }}>
+                          Aucun chantier trouvé
+                        </li>
+                      );
+                    }
+                    return filtered.map((ch) => (
+                      <li
+                        key={ch.id}
+                        onClick={() => handleChantierChange(ch.id)}
+                        style={{
+                          padding: '10px 14px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          borderBottom: '1px solid #eee',
+                          backgroundColor: selectedChantierId === ch.id ? '#e3f2fd' : 'transparent',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#e3f2fd';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor =
+                            selectedChantierId === ch.id ? '#e3f2fd' : 'transparent';
+                        }}
+                      >
+                        {ch.chantier_name}
+                      </li>
+                    ));
+                  })()}
+                </ul>
+              )}
+            </Box>
             
             <ChantierInfo 
               chantier={chantier} 

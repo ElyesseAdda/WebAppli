@@ -12,7 +12,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
 import isoWeek from "dayjs/plugin/isoWeek";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import "./../../static/css/planningHebdo.css";
@@ -86,6 +86,9 @@ const PlanningHebdoAgent = ({
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
   const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
   const [overtimeHours, setOvertimeHours] = useState(0); // État pour les heures supplémentaires
+  const [chantierSearchQuery, setChantierSearchQuery] = useState("");
+  const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
+  const chantierDropdownRef = useRef(null);
 
   // Nouvel état pour le modal de copie
   const [targetAgentId, setTargetAgentId] = useState(null);
@@ -248,6 +251,18 @@ const PlanningHebdoAgent = ({
 
     fetchChantiers();
   }, []);
+
+  // Fermer la liste chantiers au clic à l'extérieur
+  useEffect(() => {
+    if (!chantierDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (chantierDropdownRef.current && !chantierDropdownRef.current.contains(e.target)) {
+        setChantierDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [chantierDropdownOpen]);
 
   // Charger les jours fériés de la semaine
   useEffect(() => {
@@ -557,6 +572,8 @@ const PlanningHebdoAgent = ({
     setLastSelectedCell(null); // Réinitialiser la dernière cellule sélectionnée
     setIsSav(false); // Réinitialiser la checkbox SAV
     setOvertimeHours(0); // Réinitialiser les heures supplémentaires
+    setChantierSearchQuery("");
+    setChantierDropdownOpen(false);
   };
 
   // Fonction pour gérer le changement d'agent
@@ -1365,29 +1382,118 @@ const PlanningHebdoAgent = ({
       {/* Modal pour sélectionner un chantier */}
       {isChantierModalOpen && (
         <div className="modal">
-          <div className="modal-content">
+          <div className="modal-content modal-content-chantier">
             <h2>Sélectionner un chantier</h2>
-            <select
-              value={selectedChantier ? selectedChantier.id : ""}
-              onChange={(e) => {
-                const selectedId = Number(e.target.value);
-                const chantier = chantiers.find((c) => c.id === selectedId);
-                setSelectedChantier(chantier);
-              }}
+            <div
+              className="chantier-search-wrapper"
+              ref={chantierDropdownRef}
+              style={{ position: "relative", marginTop: "10px" }}
             >
-              <option value="">--Sélectionner un chantier--</option>
-              {chantiers
-                .filter(
-                  (chantier) =>
-                    chantier.state_chantier !== "Terminé" &&
-                    chantier.state_chantier !== "En attente"
-                )
-                .map((chantier) => (
-                  <option key={chantier.id} value={chantier.id}>
-                    {chantier.chantier_name}
-                  </option>
-                ))}
-            </select>
+              <input
+                type="text"
+                className="chantier-search-input"
+                placeholder="Rechercher un chantier..."
+                value={selectedChantier ? selectedChantier.chantier_name : chantierSearchQuery}
+                onChange={(e) => {
+                  setSelectedChantier(null);
+                  setChantierSearchQuery(e.target.value);
+                  setChantierDropdownOpen(true);
+                }}
+                onFocus={() => setChantierDropdownOpen(true)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "2px solid #e0e0e0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+              {chantierDropdownOpen && (
+                <ul
+                  className="chantier-search-list"
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    margin: 0,
+                    marginTop: "4px",
+                    padding: 0,
+                    listStyle: "none",
+                    maxHeight: "240px",
+                    overflowY: "auto",
+                    backgroundColor: "#fff",
+                    border: "2px solid #2196f3",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    zIndex: 10,
+                  }}
+                >
+                  {(() => {
+                    const chantiersEnCours = chantiers.filter(
+                      (c) =>
+                        c.state_chantier !== "Terminé" &&
+                        c.state_chantier !== "En attente"
+                    );
+                    const sorted = [...chantiersEnCours].sort((a, b) =>
+                      (a.chantier_name || "").localeCompare(b.chantier_name || "", "fr")
+                    );
+                    const filtered = chantierSearchQuery.trim()
+                      ? sorted.filter((c) =>
+                          (c.chantier_name || "")
+                            .toLowerCase()
+                            .includes(chantierSearchQuery.trim().toLowerCase())
+                        )
+                      : sorted;
+                    if (filtered.length === 0) {
+                      return (
+                        <li
+                          style={{
+                            padding: "12px 14px",
+                            color: "#666",
+                            fontSize: "14px",
+                          }}
+                        >
+                          Aucun chantier trouvé
+                        </li>
+                      );
+                    }
+                    return filtered.map((chantier) => (
+                      <li
+                        key={chantier.id}
+                        onClick={() => {
+                          setSelectedChantier(chantier);
+                          setChantierDropdownOpen(false);
+                          setChantierSearchQuery("");
+                        }}
+                        style={{
+                          padding: "10px 14px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          borderBottom: "1px solid #eee",
+                          backgroundColor:
+                            selectedChantier?.id === chantier.id
+                              ? "#e3f2fd"
+                              : "transparent",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "#e3f2fd";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor =
+                            selectedChantier?.id === chantier.id
+                              ? "#e3f2fd"
+                              : "transparent";
+                        }}
+                      >
+                        {chantier.chantier_name}
+                      </li>
+                    ));
+                  })()}
+                </ul>
+              )}
+            </div>
 
             {/* Champ Heures Supplémentaires */}
             <div
@@ -1615,6 +1721,11 @@ const PlanningHebdoAgent = ({
           box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
+        .modal-content.modal-content-chantier {
+          width: 400px;
+          max-width: 95vw;
+        }
+
         .modal-content h2 {
           margin-top: 0;
         }
@@ -1623,6 +1734,11 @@ const PlanningHebdoAgent = ({
           width: 100%;
           padding: 8px;
           margin-top: 10px;
+        }
+
+        .chantier-search-input:focus {
+          outline: none;
+          border-color: #2196f3 !important;
         }
 
         .modal-content button {
