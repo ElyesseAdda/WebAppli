@@ -16,15 +16,22 @@ import { useNavigate } from "react-router-dom";
 import logo from "../img/apple-touch-icon.png";
 import { COLORS } from "../constants/colors";
 
-// Thème mobile optimisé
+// Thème mobile optimisé - couleurs Elekable
 const mobileTheme = createTheme({
   palette: {
     primary: {
-      main: "#1976d2",
+      main: COLORS.primary,
+    },
+    secondary: {
+      main: COLORS.accent,
+    },
+    text: {
+      primary: COLORS.text,
+      secondary: COLORS.textMuted,
     },
     background: {
-      default: COLORS.white,
-      paper: "#ffffff",
+      default: COLORS.background,
+      paper: COLORS.white,
     },
   },
   typography: {

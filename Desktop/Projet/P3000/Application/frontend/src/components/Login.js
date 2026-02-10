@@ -17,23 +17,24 @@ import {
 import { Visibility, VisibilityOff, Person, Lock } from '@mui/icons-material';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import logo from '../img/logo.png';
+import { COLORS } from '../constants/colors';
 
 // --- CONFIGURATION DU THÈME MUI ---
-// Création d'un thème personnalisé pour intégrer les couleurs de Peinture 3000
+// Utilise les couleurs Elekable (colors.js / colors.css)
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1E73BE', // Le bleu principal du logo
+      main: COLORS.primary,
     },
     secondary: {
-      main: '#CEDC00', // Le jaune du logo
+      main: COLORS.accent,
     },
     text: {
-      primary: '#2c3e50', // Texte sombre
-      secondary: '#95a5a6', // Texte gris
+      primary: COLORS.text,
+      secondary: COLORS.textMuted,
     },
     background: {
-      default: '#fdfdfd',
+      default: COLORS.background,
     }
   },
   typography: {
@@ -58,7 +59,7 @@ const theme = createTheme({
         root: {
           marginBottom: '16px',
           '& .MuiOutlinedInput-root': {
-            backgroundColor: '#ffffff',
+            backgroundColor: COLORS.background,
             borderRadius: '8px',
           }
         }
@@ -142,31 +143,15 @@ const Login = ({ onLoginSuccess }) => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <style>
-        {`
-          @keyframes shimmer {
-            0% {
-              background-position: 0% center;
-            }
-            50% {
-              background-position: 100% center;
-            }
-            100% {
-              background-position: 0% center;
-            }
-          }
-        `}
-      </style>
       <Grid container component="main" sx={{ height: '100vh', overflow: 'hidden' }}>
         
-        {/* --- PARTIE GAUCHE : LA MARQUE (Bleu) --- */}
+        {/* --- PARTIE GAUCHE : LA MARQUE (couleurs Elekable) --- */}
         <Grid 
           item 
           xs={12} 
           md={6} 
           sx={{
-            // Dégradé identique à la version précédente
-            background: 'linear-gradient(135deg, #1E73BE 0%, #16538a 100%)',
+            background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryLight} 100%)`,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
@@ -204,7 +189,6 @@ const Login = ({ onLoginSuccess }) => {
                   width: '100%', 
                   height: 'auto', 
                   objectFit: 'contain',
-                  filter: 'brightness(0) invert(1)'
                 }} 
               />
             </Box>
@@ -216,19 +200,14 @@ const Login = ({ onLoginSuccess }) => {
                 fontWeight: 700, 
                 lineHeight: 1.2, 
                 fontSize: { xs: '1.25rem', md: '2.5rem' },
-                background: 'linear-gradient(90deg, #CEDC00 0%, #E8F500 50%, #CEDC00 100%)',
-                backgroundSize: '200% auto',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                animation: 'shimmer 3s ease-in-out infinite',
-                textShadow: '0 0 20px rgba(206, 220, 0, 0.3)',
+                color: COLORS.textOnDark,
+                textShadow: `0 0 20px rgba(${COLORS.textOnDarkRgb}, 0.3)`,
               }}
             >
               Pilotage centralisé<br />de vos chantiers.
             </Typography>
             
-            <Typography variant="subtitle1" sx={{ mt: 2, color: 'rgba(255, 255, 255, 0.75)', fontWeight: 600, fontSize: { xs: '0.875rem', md: '1.5rem' } }}>
+            <Typography variant="subtitle1" sx={{ mt: 2, color: COLORS.textOnDark, opacity: 0.85, fontWeight: 600, fontSize: { xs: '0.875rem', md: '1.5rem' } }}>
               Suite de gestion administrative et technique
             </Typography>
           </Box>
@@ -347,12 +326,13 @@ const Login = ({ onLoginSuccess }) => {
                 sx={{ 
                   mt: 3, 
                   mb: 2, 
-                  bgcolor: 'text.primary',
+                  bgcolor: COLORS.primary,
+                  color: COLORS.textOnDark,
                   '&:hover': {
-                    bgcolor: 'primary.main',
+                    bgcolor: COLORS.primaryLight,
                   },
                   '&:disabled': {
-                    bgcolor: 'text.secondary',
+                    bgcolor: COLORS.textMuted,
                   },
                   py: 1.5
                 }}
@@ -367,12 +347,12 @@ const Login = ({ onLoginSuccess }) => {
               <Grid container alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
                 <Grid item>
                   <FormControlLabel
-                    control={<Checkbox value="remember" color="primary" sx={{ '&.Mui-checked': { color: 'primary.main' } }} />}
+                    control={<Checkbox value="remember" sx={{ color: COLORS.primary, '&.Mui-checked': { color: COLORS.primary } }} />}
                     label={<Typography variant="body2" color="text.secondary">Rester connecté</Typography>}
                   />
                 </Grid>
                 <Grid item>
-                  <Link href="#" variant="body2" sx={{ color: 'primary.main', fontWeight: 600, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                  <Link href="#" variant="body2" sx={{ color: COLORS.primary, fontWeight: 600, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                     Mot de passe oublié ?
                   </Link>
                 </Grid>
