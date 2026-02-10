@@ -3386,6 +3386,27 @@ class PaiementFournisseurMateriel(models.Model):
             return float(self.montant_a_payer) * 1.20
         return 0
 
+class RecapFinancierPreference(models.Model):
+    """
+    Préférences du récap financier par chantier (ex: liste des fournisseurs à afficher).
+    one-to-one avec Chantier.
+    """
+    chantier = models.OneToOneField(
+        'Chantier',
+        on_delete=models.CASCADE,
+        related_name='recap_financier_preference'
+    )
+    # Liste des noms de fournisseurs à afficher dans le récap matériel. None ou [] = tous afficher
+    fournisseurs_visibles = models.JSONField(default=None, null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Préférence Récap Financier'
+        verbose_name_plural = 'Préférences Récap Financier'
+
+    def __str__(self):
+        return f"Récap préf. {self.chantier.chantier_name}"
+
+
 class FactureFournisseurMateriel(models.Model):
     """Modèle pour gérer les factures liées aux paiements fournisseur matériel"""
     paiement = models.ForeignKey(PaiementFournisseurMateriel, on_delete=models.CASCADE, related_name='factures')

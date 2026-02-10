@@ -1,7 +1,14 @@
 import {
   Box,
   Button,
+  Checkbox,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  InputAdornment,
   Paper,
   Table,
   TableBody,
@@ -9,11 +16,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import axios from "axios";
 import React from "react";
-import { FaTimes } from "react-icons/fa";
+import { FaFilter, FaTimes } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 
 const RecapCategoryDetails = ({
@@ -229,6 +237,77 @@ const RecapCategoryDetails = ({
   const [saveError, setSaveError] = React.useState(null);
   const [saveSuccess, setSaveSuccess] = React.useState(false);
 
+  // Filtre fournisseurs affichés (null = tous, sinon Set des noms à afficher) — chargé depuis la DB
+  const [visibleFournisseurs, setVisibleFournisseurs] = React.useState(null);
+  const [modalFournisseursOpen, setModalFournisseursOpen] = React.useState(false);
+  const [modalSearch, setModalSearch] = React.useState("");
+  const [modalSelected, setModalSelected] = React.useState(new Set());
+  const [savingFournisseursFilter, setSavingFournisseursFilter] = React.useState(false);
+
+  // Ouvrir le modal : initialiser la sélection (tous cochés si "tous visibles", sinon sélection actuelle)
+  const handleOpenFournisseursModal = () => {
+    setModalSearch("");
+    setModalSelected(
+      visibleFournisseurs === null
+        ? new Set(fournisseurs)
+        : new Set(visibleFournisseurs)
+    );
+    setModalFournisseursOpen(true);
+  };
+
+  const handleCloseFournisseursModal = () => {
+    setModalFournisseursOpen(false);
+    setModalSearch("");
+  };
+
+  const handleApplyFournisseursFilter = async () => {
+    setSavingFournisseursFilter(true);
+    try {
+      const payload =
+        modalSelected.size === fournisseurs.length
+          ? { fournisseurs_visibles: null }
+          : { fournisseurs_visibles: Array.from(modalSelected) };
+      await axios.put(
+        `/api/chantier/${chantierId}/recap-fournisseurs-affichage/`,
+        payload
+      );
+      if (modalSelected.size === fournisseurs.length) {
+        setVisibleFournisseurs(null);
+      } else {
+        setVisibleFournisseurs(new Set(modalSelected));
+      }
+      handleCloseFournisseursModal();
+    } catch (err) {
+      console.error("Erreur sauvegarde préférence fournisseurs:", err);
+    } finally {
+      setSavingFournisseursFilter(false);
+    }
+  };
+
+  const handleToggleFournisseurModal = (name) => {
+    setModalSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const handleSelectAllFournisseurs = (checked) => {
+    setModalSelected(checked ? new Set(fournisseurs) : new Set());
+  };
+
+  // Liste des fournisseurs à afficher dans le tableau (filtrée par sélection + recherche dans le modal)
+  const displayedFournisseurs =
+    visibleFournisseurs === null
+      ? fournisseurs
+      : fournisseurs.filter((f) => visibleFournisseurs.has(f));
+
+  // Pour le modal : fournisseurs filtrés par la barre de recherche
+  const fournisseursFilteredBySearch = fournisseurs.filter((f) =>
+    f.toLowerCase().includes((modalSearch || "").toLowerCase().trim())
+  );
+
   // Fonction pour charger les paiements depuis l'API
   const loadPaiements = React.useCallback(async () => {
     if (category === "materiel" && open && chantierId) {
@@ -237,6 +316,28 @@ const RecapCategoryDetails = ({
         const fournisseursRes = await axios.get("/api/fournisseurs/");
         const fournisseursList = fournisseursRes.data.map((f) => f.name);
         setFournisseurs(fournisseursList);
+
+        // Charger la préférence "fournisseurs à afficher" pour ce chantier (sauvegardée en DB)
+        try {
+          const prefRes = await axios.get(
+            `/api/chantier/${chantierId}/recap-fournisseurs-affichage/`
+          );
+          const list = prefRes.data?.fournisseurs_visibles;
+          if (list && Array.isArray(list) && list.length > 0) {
+            const validNames = list.filter((name) =>
+              fournisseursList.includes(name)
+            );
+            setVisibleFournisseurs(
+              validNames.length === fournisseursList.length
+                ? null
+                : new Set(validNames)
+            );
+          } else {
+            setVisibleFournisseurs(null);
+          }
+        } catch (_) {
+          setVisibleFournisseurs(null);
+        }
 
         // Initialiser tous les fournisseurs à 0 pour éviter les champs vides
         const paiementsInit = {};
@@ -380,9 +481,25 @@ const RecapCategoryDetails = ({
         {/* Tableau édition matériel */}
         {category === "materiel" && (
           <Box mb={2}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Paiements matériel par fournisseur (mois/année)
-            </Typography>
+            <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
+              <Typography variant="subtitle1">
+                Paiements matériel par fournisseur (mois/année)
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<FaFilter />}
+                onClick={handleOpenFournisseursModal}
+                disabled={fournisseurs.length === 0}
+              >
+                Choisir les fournisseurs à afficher
+                {visibleFournisseurs !== null && (
+                  <Typography component="span" sx={{ ml: 0.5, opacity: 0.8 }}>
+                    ({displayedFournisseurs.length}/{fournisseurs.length})
+                  </Typography>
+                )}
+              </Button>
+            </Box>
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -392,14 +509,16 @@ const RecapCategoryDetails = ({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {fournisseurs.length === 0 ? (
+                  {displayedFournisseurs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={2} align="center">
-                        Aucun fournisseur
+                        {fournisseurs.length === 0
+                          ? "Aucun fournisseur"
+                          : "Aucun fournisseur sélectionné. Cliquez sur « Choisir les fournisseurs à afficher »."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    fournisseurs.map((f) => (
+                    displayedFournisseurs.map((f) => (
                       <TableRow key={f}>
                         <TableCell>{f}</TableCell>
                         <TableCell>
@@ -436,6 +555,98 @@ const RecapCategoryDetails = ({
                 <Typography color="error.main">{saveError}</Typography>
               )}
             </Box>
+
+            {/* Modal : choisir les fournisseurs à afficher */}
+            <Dialog
+              open={modalFournisseursOpen}
+              onClose={handleCloseFournisseursModal}
+              maxWidth="sm"
+              fullWidth
+              PaperProps={{ sx: { borderRadius: 2 } }}
+            >
+              <DialogTitle>
+                Fournisseurs à afficher pour ce chantier
+              </DialogTitle>
+              <DialogContent dividers>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Rechercher un fournisseur"
+                  value={modalSearch}
+                  onChange={(e) => setModalSearch(e.target.value)}
+                  sx={{ mb: 2 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <FaFilter style={{ opacity: 0.6 }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleSelectAllFournisseurs(true)}
+                  >
+                    Tout cocher
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleSelectAllFournisseurs(false)}
+                  >
+                    Tout décocher
+                  </Button>
+                </Box>
+                <Box
+                  sx={{
+                    maxHeight: 320,
+                    overflowY: "auto",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    p: 0.5,
+                  }}
+                >
+                  {fournisseursFilteredBySearch.length === 0 ? (
+                    <Typography color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
+                      Aucun fournisseur ne correspond à la recherche.
+                    </Typography>
+                  ) : (
+                    fournisseursFilteredBySearch.map((f) => (
+                      <FormControlLabel
+                        key={f}
+                        control={
+                          <Checkbox
+                            checked={modalSelected.has(f)}
+                            onChange={() => handleToggleFournisseurModal(f)}
+                            size="small"
+                          />
+                        }
+                        label={f}
+                        sx={{ display: "block", mr: 0 }}
+                      />
+                    ))
+                  )}
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {modalSelected.size} fournisseur(s) sélectionné(s)
+                </Typography>
+              </DialogContent>
+              <DialogActions sx={{ px: 2, pb: 1 }}>
+                <Button onClick={handleCloseFournisseursModal} disabled={savingFournisseursFilter}>
+                  Annuler
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleApplyFournisseursFilter}
+                  disabled={savingFournisseursFilter}
+                >
+                  {savingFournisseursFilter ? "Enregistrement…" : "Enregistrer"}
+                </Button>
+              </DialogActions>
+            </Dialog>
           </Box>
         )}
         {/* Tableau classique pour les autres catégories */}

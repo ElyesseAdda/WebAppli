@@ -157,6 +157,7 @@ CSRF_EXEMPT_PATTERNS = [
     r'^/api/recalculate_labor_costs/$',
     r'^/api/chantier/.*/recap-financier/$',
     r'^/api/chantier/.*/paiements-materiel/$',
+    r'^/api/chantier/.*/recap-fournisseurs-affichage/$',
     r'^/api/fournisseurs/$',
     r'^/api/recalculate_labor_costs_month/$',
     r'^/api/schedule/monthly_summary/$',

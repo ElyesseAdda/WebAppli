@@ -47,6 +47,7 @@ from .models import (
     ChantierLigneSupplementaire, SituationLigneAvenant,ChantierLigneSupplementaire,AgencyExpense,AgencyExpenseOverride,AgencyExpenseMonth,PaiementSousTraitant,PaiementGlobalSousTraitant,PaiementFournisseurMateriel,
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
+    RecapFinancierPreference,
     SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
 )
 from .drive_automation import drive_automation
@@ -11177,6 +11178,40 @@ class PaiementFournisseurMaterielAPIView(APIView):
             results.append(obj)
         serializer = PaiementFournisseurMaterielSerializer(results, many=True)
         return Response(serializer.data)
+
+
+class RecapFournisseursAffichageAPIView(APIView):
+    """
+    GET : retourne la liste des fournisseurs à afficher pour le récap matériel de ce chantier.
+    PUT/PATCH : enregistre la liste (body: { "fournisseurs_visibles": ["Nom1", "Nom2"] ou null pour tous }).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, chantier_id):
+        try:
+            pref = RecapFinancierPreference.objects.get(chantier_id=chantier_id)
+            return Response({"fournisseurs_visibles": pref.fournisseurs_visibles})
+        except RecapFinancierPreference.DoesNotExist:
+            return Response({"fournisseurs_visibles": None})
+
+    def put(self, request, chantier_id):
+        fournisseurs_visibles = request.data.get("fournisseurs_visibles")
+        if fournisseurs_visibles is not None and not isinstance(fournisseurs_visibles, list):
+            return Response(
+                {"error": "fournisseurs_visibles doit être une liste ou null"},
+                status=400
+            )
+        pref, _ = RecapFinancierPreference.objects.get_or_create(
+            chantier_id=chantier_id,
+            defaults={"fournisseurs_visibles": fournisseurs_visibles}
+        )
+        pref.fournisseurs_visibles = fournisseurs_visibles
+        pref.save()
+        return Response({"fournisseurs_visibles": pref.fournisseurs_visibles})
+
+    def patch(self, request, chantier_id):
+        return self.put(request, chantier_id)
+
 
 def _get_tableau_fournisseur_data(chantier_id=None):
     """
