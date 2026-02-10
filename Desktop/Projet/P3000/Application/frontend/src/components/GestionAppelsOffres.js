@@ -9,7 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   Container,
   Dialog,
   DialogActions,
@@ -32,7 +31,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DrivePathSelector from "./Devis/DrivePathSelector";
 
 // Fonction pour slugifier un texte (similaire à custom_slugify du backend)
@@ -93,16 +92,28 @@ const GestionAppelsOffres = () => {
   const [showTransformModal, setShowTransformModal] = useState(false);
   const [selectedAppelOffresForTransform, setSelectedAppelOffresForTransform] = useState(null);
   const [syncingMontants, setSyncingMontants] = useState(false);
+  const [filterStatut, setFilterStatut] = useState(null); // null = tous, 'valide' | 'en_attente' | 'refuse'
 
   useEffect(() => {
     fetchAppelsOffres();
   }, []);
 
+  const sortOrderStatut = (ao) => {
+    if (ao.deja_transforme) return 0;
+    if (ao.statut === "valide") return 1;
+    if (ao.statut === "en_attente") return 2;
+    if (ao.statut === "refuse") return 3;
+    return 4;
+  };
+
   const fetchAppelsOffres = async () => {
     try {
       setLoading(true);
       const response = await axios.get("/api/appels-offres/");
-      setAppelsOffres(response.data);
+      const sorted = [...(response.data || [])].sort(
+        (a, b) => sortOrderStatut(a) - sortOrderStatut(b)
+      );
+      setAppelsOffres(sorted);
     } catch (error) {
       showAlert("Erreur lors du chargement des appels d'offres", "error");
     } finally {
@@ -257,6 +268,24 @@ const GestionAppelsOffres = () => {
     }).format(montant || 0);
   };
 
+  const statsByStatut = useMemo(() => {
+    const validé = appelsOffres.filter((ao) => ao.statut === "valide");
+    const enAttente = appelsOffres.filter((ao) => ao.statut === "en_attente");
+    const refuse = appelsOffres.filter((ao) => ao.statut === "refuse");
+    const sum = (list) => list.reduce((acc, ao) => acc + (ao.montant_ht || 0), 0);
+    return {
+      tous: { sum: sum(appelsOffres), count: appelsOffres.length },
+      valide: { sum: sum(validé), count: validé.length },
+      en_attente: { sum: sum(enAttente), count: enAttente.length },
+      refuse: { sum: sum(refuse), count: refuse.length },
+    };
+  }, [appelsOffres]);
+
+  const appelsOffresFiltered =
+    filterStatut == null
+      ? appelsOffres
+      : appelsOffres.filter((ao) => ao.statut === filterStatut);
+
   if (loading) {
     return (
       <Container maxWidth="lg">
@@ -302,6 +331,120 @@ const GestionAppelsOffres = () => {
           </Alert>
         )}
 
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 1.5,
+            mb: 3,
+            alignItems: "stretch",
+          }}
+        >
+          {[
+            { key: null, label: "Tous", color: "#6366f1", lightBg: "#eef2ff", stats: statsByStatut.tous },
+            { key: "valide", label: "Validé", color: "#10b981", lightBg: "#ecfdf5", stats: statsByStatut.valide },
+            { key: "en_attente", label: "En attente", color: "#f59e0b", lightBg: "#fffbeb", stats: statsByStatut.en_attente },
+            { key: "refuse", label: "Refusé", color: "#ef4444", lightBg: "#fef2f2", stats: statsByStatut.refuse },
+          ].map(({ key, label, color, lightBg, stats }) => {
+            const isActive = filterStatut === key;
+            return (
+              <Box
+                key={label}
+                onClick={() => setFilterStatut(key)}
+                sx={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  px: 2,
+                  py: 1,
+                  borderRadius: "12px",
+                  border: `1.5px solid ${isActive ? color : "transparent"}`,
+                  bgcolor: isActive ? lightBg : "rgba(255,255,255,0.06)",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: isActive
+                    ? `0 0 0 1px ${color}22, 0 4px 12px ${color}18`
+                    : "0 1px 3px rgba(0,0,0,0.08)",
+                  transition: "all 0.25s cubic-bezier(.4,0,.2,1)",
+                  minWidth: 140,
+                  position: "relative",
+                  overflow: "hidden",
+                  "&:hover": {
+                    border: `1.5px solid ${color}88`,
+                    boxShadow: `0 4px 16px ${color}20`,
+                    transform: "translateY(-1px)",
+                  },
+                  "&::before": isActive ? {
+                    content: '""',
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: "3px",
+                    background: `linear-gradient(90deg, ${color}, ${color}99)`,
+                    borderRadius: "12px 12px 0 0",
+                  } : {},
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    bgcolor: color,
+                    flexShrink: 0,
+                    boxShadow: isActive ? `0 0 8px ${color}66` : "none",
+                    transition: "box-shadow 0.25s ease",
+                  }}
+                />
+                <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <Typography
+                    sx={{
+                      fontSize: "0.68rem",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: isActive ? color : "text.secondary",
+                      lineHeight: 1.2,
+                      transition: "color 0.25s ease",
+                    }}
+                  >
+                    {label}
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 0.5,
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        bgcolor: isActive ? color : "rgba(0,0,0,0.1)",
+                        color: isActive ? "#fff" : "text.secondary",
+                        px: 0.7,
+                        py: 0.1,
+                        borderRadius: "6px",
+                        transition: "all 0.25s ease",
+                      }}
+                    >
+                      {stats.count}
+                    </Box>
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      color: isActive ? color : "text.primary",
+                      lineHeight: 1.3,
+                      whiteSpace: "nowrap",
+                      transition: "color 0.25s ease",
+                    }}
+                  >
+                    {formatMontant(stats.sum)}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+
         <Paper elevation={3}>
           <TableContainer>
             <Table>
@@ -328,16 +471,18 @@ const GestionAppelsOffres = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {appelsOffres.length === 0 ? (
+                {appelsOffresFiltered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center">
                       <Typography variant="body1" color="textSecondary">
-                        Aucun appel d'offres trouvé
+                        {appelsOffres.length === 0
+                          ? "Aucun appel d'offres trouvé"
+                          : `Aucun appel d'offres avec le statut sélectionné. Cliquez sur « Tous » pour tout afficher.`}
                       </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  appelsOffres.map((appelOffres) => (
+                  appelsOffresFiltered.map((appelOffres) => (
                     <TableRow key={appelOffres.id}>
                       <TableCell>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -345,12 +490,38 @@ const GestionAppelsOffres = () => {
                             {appelOffres.chantier_name}
                           </Typography>
                           {appelOffres.deja_transforme && (
-                            <Chip
-                              label="Transformé"
-                              color="success"
-                              size="small"
-                              sx={{ fontSize: "0.7rem", height: "20px" }}
-                            />
+                            <Box
+                              sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: "6px",
+                                bgcolor: "#ecfdf5",
+                                border: "1px solid #10b98133",
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: "50%",
+                                  bgcolor: "#10b981",
+                                  boxShadow: "0 0 6px #10b98155",
+                                }}
+                              />
+                              <Typography
+                                sx={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  color: "#10b981",
+                                  lineHeight: 1,
+                                }}
+                              >
+                                Transformé
+                              </Typography>
+                            </Box>
                           )}
                         </Box>
                         {appelOffres.description && (
@@ -382,11 +553,48 @@ const GestionAppelsOffres = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={getStatutLabel(appelOffres.statut)}
-                          color={getStatutColor(appelOffres.statut)}
-                          size="small"
-                        />
+                        {(() => {
+                          const statutStyles = {
+                            valide: { color: "#10b981", bg: "#ecfdf5", border: "#10b98133" },
+                            en_attente: { color: "#f59e0b", bg: "#fffbeb", border: "#f59e0b33" },
+                            refuse: { color: "#ef4444", bg: "#fef2f2", border: "#ef444433" },
+                          };
+                          const s = statutStyles[appelOffres.statut] || { color: "#6b7280", bg: "#f3f4f6", border: "#6b728033" };
+                          return (
+                            <Box
+                              sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 0.75,
+                                px: 1.5,
+                                py: 0.5,
+                                borderRadius: "8px",
+                                bgcolor: s.bg,
+                                border: `1px solid ${s.border}`,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: "50%",
+                                  bgcolor: s.color,
+                                  boxShadow: `0 0 6px ${s.color}55`,
+                                }}
+                              />
+                              <Typography
+                                sx={{
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  color: s.color,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {getStatutLabel(appelOffres.statut)}
+                              </Typography>
+                            </Box>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         {formatDate(appelOffres.date_debut)}
