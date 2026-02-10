@@ -44,12 +44,19 @@ def generate_password(length=15):
     return ''.join(password)
 
 def create_user(username, first_name, last_name, password=None):
-    """Créer un utilisateur avec le mot de passe hashé"""
+    """Créer un utilisateur avec le mot de passe hashé (ou mettre à jour le mdp si existe)."""
     try:
-        # Vérifier si l'utilisateur existe déjà
-        if User.objects.filter(username=username).exists():
-            print(f"❌ L'utilisateur '{username}' existe déjà")
-            return False
+        user = User.objects.filter(username=username).first()
+        if user:
+            if password:
+                user.set_password(password)
+                user.first_name = first_name
+                user.last_name = last_name
+                user.save()
+                print(f"✅ Mot de passe mis à jour pour '{username}' — {first_name} {last_name}")
+            else:
+                print(f"⚠️  L'utilisateur '{username}' existe déjà (mot de passe inchangé)")
+            return True
         
         # Générer un mot de passe si non fourni
         if password is None:
@@ -79,36 +86,13 @@ def create_user(username, first_name, last_name, password=None):
 
 def main():
     """Fonction principale"""
-    print("🚀 Création des utilisateurs P3000")
+    from users_config import USERS_SHARED
+
+    print("🚀 Création des utilisateurs P3000 (mêmes identifiants que Elekable)")
     print("=" * 50)
     
-    # Liste des utilisateurs à créer
-    users_to_create = [
-        {
-            'username': 'amajri',
-            'first_name': 'Amajri',
-            'last_name': 'User',
-            'password': 'K9#mP2$vL8@nQ4'
-        },
-        {
-            'username': 'abelaoued',
-            'first_name': 'Abelaoued', 
-            'last_name': 'User',
-            'password': 'R7#tN5$wX2@kM9'
-        },
-        {
-            'username': 'saitatmane',
-            'first_name': 'Saitatmane',
-            'last_name': 'User', 
-            'password': 'H4#jF8$qZ6@bP3'
-        },
-        {
-            'username': 'rkefi',
-            'first_name': 'Rkefi',
-            'last_name': 'User',
-            'password': None  # Sera généré automatiquement
-        }
-    ]
+    # Même liste que Elekable (users_config.py)
+    users_to_create = USERS_SHARED
     
     success_count = 0
     

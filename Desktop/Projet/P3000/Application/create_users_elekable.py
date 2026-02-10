@@ -78,27 +78,14 @@ def create_or_update_user(username, first_name, last_name, password, is_staff=Tr
 
 
 def main():
+    from users_config import USERS_SHARED, USER_ADMIN_ELEKABLE
+
     print("Création des identifiants Elekable (mêmes que Peinture 3000)")
     print("=" * 55)
 
-    # Même liste que create_users_amelioration.py (Peinture 3000)
-    users = [
-        {'username': 'amajri', 'first_name': 'Amajri', 'last_name': 'User', 'password': 'K9#mP2$vL8@nQ4'},
-        {'username': 'abelaoued', 'first_name': 'Abelaoued', 'last_name': 'User', 'password': 'R7#tN5$wX2@kM9'},
-        {'username': 'saitatmane', 'first_name': 'Saitatmane', 'last_name': 'User', 'password': 'H4#jF8$qZ6@bP3'},
-        {'username': 'rkefi', 'first_name': 'Rkefi', 'last_name': 'User', 'password': None},  # généré ci-dessous
-    ]
-
-    # Utilisateur admin (comme sur P3000)
-    admin_user = {
-        'username': 'admin',
-        'first_name': 'Administrateur',
-        'last_name': 'Elekable',
-        'password': 'admin123',
-        'is_staff': True,
-        'is_superuser': True,
-        'email': 'admin@elekable.fr',
-    }
+    # Même liste que P3000 (users_config.py) — mêmes identifiants
+    users = USERS_SHARED
+    admin_user = USER_ADMIN_ELEKABLE
 
     created = 0
 
@@ -106,8 +93,6 @@ def main():
         pwd = u.get('password') or generate_password()
         if create_or_update_user(u['username'], u['first_name'], u['last_name'], pwd):
             created += 1
-            if not u.get('password'):
-                print(f"   Mot de passe généré pour rkefi: {pwd}")
 
     if create_or_update_user(
         admin_user['username'],
