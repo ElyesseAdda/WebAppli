@@ -3,6 +3,7 @@ import {
   Transform as TransformIcon,
   Visibility as VisibilityIcon,
   Folder as FolderIcon,
+  Sync as SyncIcon,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -91,6 +92,7 @@ const GestionAppelsOffres = () => {
   const [selectedAppelOffresForDrivePath, setSelectedAppelOffresForDrivePath] = useState(null);
   const [showTransformModal, setShowTransformModal] = useState(false);
   const [selectedAppelOffresForTransform, setSelectedAppelOffresForTransform] = useState(null);
+  const [syncingMontants, setSyncingMontants] = useState(false);
 
   useEffect(() => {
     fetchAppelsOffres();
@@ -112,6 +114,36 @@ const GestionAppelsOffres = () => {
     setAlertMessage(message);
     setAlertSeverity(severity);
     setTimeout(() => setAlertMessage(""), 5000);
+  };
+
+  const handleRafraichirMontants = async () => {
+    try {
+      setSyncingMontants(true);
+      const response = await axios.post("/api/appels-offres/sync_montants_depuis_devis/", {});
+      const { updated, skipped, errors } = response.data;
+      fetchAppelsOffres();
+      if (errors > 0) {
+        showAlert(
+          `${updated} montant(s) mis à jour. ${errors} erreur(s).`,
+          "warning"
+        );
+      } else if (updated > 0) {
+        showAlert(
+          `${updated} appel(s) d'offres mis à jour depuis le devis de chantier.`,
+          "success"
+        );
+      } else {
+        showAlert(
+          "Aucune mise à jour nécessaire (montants déjà à jour).",
+          "info"
+        );
+      }
+    } catch (error) {
+      const msg = error.response?.data?.error || "Erreur lors du rafraîchissement des montants";
+      showAlert(msg, "error");
+    } finally {
+      setSyncingMontants(false);
+    }
   };
 
   const handleTransformerEnChantier = (appelOffres) => {
@@ -238,16 +270,31 @@ const GestionAppelsOffres = () => {
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
-        <Typography
-          variant="h4"
-          gutterBottom
-          sx={{
-            color: "white",
-            backgroundColor: "transparent",
-          }}
-        >
-          Gestion des Appels d'Offres
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2, mb: 2 }}>
+          <Typography
+            variant="h4"
+            sx={{
+              color: "white",
+              backgroundColor: "transparent",
+            }}
+          >
+            Gestion des Appels d'Offres
+          </Typography>
+          <Tooltip title="Rafraîchir les montants des appels transformés à partir du devis de chantier actuel">
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<SyncIcon />}
+                onClick={handleRafraichirMontants}
+                disabled={syncingMontants}
+                size="small"
+                sx={{ backgroundColor: "white" }}
+              >
+                {syncingMontants ? "Rafraîchissement…" : "Rafraîchir les montants"}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
 
         {alertMessage && (
           <Alert severity={alertSeverity} sx={{ mb: 2 }}>

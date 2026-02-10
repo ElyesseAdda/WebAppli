@@ -13083,15 +13083,37 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def get_queryset(self):
-        """Filtrer selon les paramètres"""
-        queryset = AppelOffres.objects.all()
-        
+        """Filtrer selon les paramètres. Prefetch du devis de chantier pour les montants affichés."""
+        queryset = AppelOffres.objects.select_related('societe').prefetch_related(
+            Prefetch(
+                'chantier_transformé',
+                Chantier.objects.prefetch_related(
+                    Prefetch('devis', Devis.objects.filter(devis_chantier=True))
+                )
+            )
+        )
         # Filtre par statut
         statut = self.request.query_params.get('statut', None)
         if statut:
             queryset = queryset.filter(statut=statut)
-        
         return queryset.order_by('-date_debut')
+
+    @action(detail=False, methods=['post'], url_path='sync_montants_depuis_devis')
+    def sync_montants_depuis_devis(self, request):
+        """
+        Rafraîchit les montants (HT/TTC) des appels d'offres déjà transformés
+        à partir du devis de chantier actuel. Retourne le nombre d'éléments mis à jour.
+        """
+        from api.appel_offres_sync import sync_appel_offres_montants_depuis_devis
+        dry_run = request.data.get('dry_run', False) if request.data else False
+        result = sync_appel_offres_montants_depuis_devis(dry_run=dry_run)
+        return Response({
+            'message': f"{result['updated']} appel(s) d'offres mis à jour depuis le devis de chantier.",
+            'updated': result['updated'],
+            'skipped': result['skipped'],
+            'errors': result['errors'],
+            'details': result['details'],
+        }, status=200)
     
     @action(detail=True, methods=['put', 'patch'])
     def update_drive_path(self, request, pk=None):

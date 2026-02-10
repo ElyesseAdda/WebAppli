@@ -1934,24 +1934,42 @@ class AppelOffresSerializer(serializers.ModelSerializer):
     deja_transforme = serializers.SerializerMethodField()
     chantier_transformé_id = serializers.SerializerMethodField()
     chantier_transformé_name = serializers.SerializerMethodField()
-    
+
+    def _get_devis_chantier(self, obj):
+        """Retourne le devis de chantier (devis_chantier=True) du chantier transformé si existant.
+        Utilise le prefetch du viewset (chantier_transformé -> devis) en liste pour éviter N+1."""
+        if not obj.chantier_transformé:
+            return None
+        return obj.chantier_transformé.devis.filter(devis_chantier=True).first()
+
     def get_deja_transforme(self, obj):
         """Vérifie si l'appel d'offres a déjà été transformé en chantier"""
         # ✅ Utiliser le champ chantier_transformé qui persiste même après rechargement
         return obj.chantier_transformé is not None
-    
+
     def get_chantier_transformé_id(self, obj):
         """Retourne l'ID du chantier transformé si existant"""
         if obj.chantier_transformé:
             return obj.chantier_transformé.id
         return None
-    
+
     def get_chantier_transformé_name(self, obj):
         """Retourne le nom du chantier transformé si existant"""
         if obj.chantier_transformé:
             return obj.chantier_transformé.chantier_name
         return None
-    
+
+    def to_representation(self, instance):
+        """Affiche les montants du devis de chantier quand l'appel d'offres a été transformé."""
+        data = super().to_representation(instance)
+        devis = self._get_devis_chantier(instance)
+        if devis is not None:
+            if devis.price_ht is not None:
+                data['montant_ht'] = float(devis.price_ht)
+            if devis.price_ttc is not None:
+                data['montant_ttc'] = float(devis.price_ttc)
+        return data
+
     class Meta:
         model = AppelOffres
         fields = '__all__'
