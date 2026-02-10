@@ -1,8 +1,18 @@
 import { Box, Button, MenuItem, Select, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Typography } from "@mui/material";
 import axios from "axios";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => {
+  // Agents dans l'effectif uniquement (exclure retirés de l'effectif)
+  const agentsEffectif = React.useMemo(
+    () => agents.filter((a) => a.is_active !== false),
+    [agents]
+  );
+
+  const [agentSearchQuery, setAgentSearchQuery] = useState("");
+  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
+  const agentDropdownRef = useRef(null);
+
   const [agentData, setAgentData] = React.useState({
     id: "",
     name: "",
@@ -35,8 +45,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     "dimanche",
   ];
 
-  const handleAgentSelect = (e) => {
-    const selectedAgent = agents.find((agent) => agent.id === e.target.value);
+  const handleAgentSelect = (selectedAgent) => {
     if (selectedAgent) {
       setAgentData({
         ...selectedAgent,
@@ -58,8 +67,30 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
         is_active: selectedAgent.is_active !== undefined ? selectedAgent.is_active : true,
         date_desactivation: selectedAgent.date_desactivation || null,
       });
+      setAgentSearchQuery("");
+      setAgentDropdownOpen(false);
     }
   };
+
+  // Fermer la liste au clic à l'extérieur
+  useEffect(() => {
+    if (!isOpen || !agentDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (agentDropdownRef.current && !agentDropdownRef.current.contains(e.target)) {
+        setAgentDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, agentDropdownOpen]);
+
+  // Réinitialiser la recherche à la fermeture du modal
+  useEffect(() => {
+    if (!isOpen) {
+      setAgentSearchQuery("");
+      setAgentDropdownOpen(false);
+    }
+  }, [isOpen]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -208,22 +239,115 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             </Alert>
           )}
           
-          <Select
-            value={agentData.id || ""}
-            onChange={handleAgentSelect}
-            displayEmpty
-            fullWidth
-            margin="normal"
-          >
-            <MenuItem value="" disabled>
-              Sélectionner un agent
-            </MenuItem>
-            {agents.map((agent) => (
-              <MenuItem key={agent.id} value={agent.id}>
-                {`${agent.name} ${agent.surname}`}
-              </MenuItem>
-            ))}
-          </Select>
+          <Box ref={agentDropdownRef} sx={{ position: "relative", marginTop: 2, marginBottom: 2 }}>
+            <Typography component="label" sx={{ display: "block", fontSize: 12, color: "text.secondary", mb: 0.5 }}>
+              Agent
+            </Typography>
+            <input
+              type="text"
+              placeholder="Rechercher un agent..."
+              value={
+                agentData.id
+                  ? `${agentData.name || ""} ${agentData.surname || ""}`.trim()
+                  : agentSearchQuery
+              }
+              onChange={(e) => {
+                setAgentSearchQuery(e.target.value);
+                if (agentData.id) {
+                  setAgentData({
+                    id: "",
+                    name: "",
+                    surname: "",
+                    address: "",
+                    phone_Number: "",
+                    taux_Horaire: "",
+                    conge: "",
+                    heure_debut: "",
+                    heure_fin: "",
+                    heure_pause_debut: "",
+                    heure_pause_fin: "",
+                    jours_travail: [],
+                    is_active: true,
+                    date_desactivation: null,
+                  });
+                }
+                setAgentDropdownOpen(true);
+              }}
+              onFocus={() => setAgentDropdownOpen(true)}
+              style={{
+                width: "100%",
+                padding: "14px 12px",
+                border: "2px solid #e0e0e0",
+                borderRadius: "8px",
+                fontSize: "14px",
+                boxSizing: "border-box",
+              }}
+            />
+            {agentDropdownOpen && (
+              <ul
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  margin: 0,
+                  marginTop: "4px",
+                  padding: 0,
+                  listStyle: "none",
+                  maxHeight: "240px",
+                  overflowY: "auto",
+                  backgroundColor: "#fff",
+                  border: "2px solid #1976d2",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  zIndex: 10,
+                }}
+              >
+                {(() => {
+                  const sorted = [...agentsEffectif].sort((a, b) => {
+                    const na = `${a.name || ""} ${a.surname || ""}`.trim();
+                    const nb = `${b.name || ""} ${b.surname || ""}`.trim();
+                    return na.localeCompare(nb, "fr");
+                  });
+                  const filtered = agentSearchQuery.trim()
+                    ? sorted.filter((agent) => {
+                        const full = `${agent.name || ""} ${agent.surname || ""}`.toLowerCase();
+                        return full.includes(agentSearchQuery.trim().toLowerCase());
+                      })
+                    : sorted;
+                  if (filtered.length === 0) {
+                    return (
+                      <li style={{ padding: "12px 14px", color: "#666", fontSize: "14px" }}>
+                        Aucun agent trouvé
+                      </li>
+                    );
+                  }
+                  return filtered.map((agent) => (
+                    <li
+                      key={agent.id}
+                      onClick={() => handleAgentSelect(agent)}
+                      style={{
+                        padding: "10px 14px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        borderBottom: "1px solid #eee",
+                        backgroundColor: agentData.id === agent.id ? "#e3f2fd" : "transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#e3f2fd";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          agentData.id === agent.id ? "#e3f2fd" : "transparent";
+                      }}
+                    >
+                      {`${agent.name || ""} ${agent.surname || ""}`.trim()}
+                    </li>
+                  ));
+                })()}
+              </ul>
+            )}
+          </Box>
           
           {/* Statut de l'agent */}
           {agentData.id && (
@@ -295,6 +419,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             onChange={handleChange}
             fullWidth
             margin="normal"
+            InputLabelProps={{ shrink: true }}
           />
           <TextField
             label="Heure de fin"
@@ -304,6 +429,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             onChange={handleChange}
             fullWidth
             margin="normal"
+            InputLabelProps={{ shrink: true }}
           />
           <TextField
             label="Heure de pause début"
@@ -313,6 +439,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             onChange={handleChange}
             fullWidth
             margin="normal"
+            InputLabelProps={{ shrink: true }}
           />
           <TextField
             label="Heure de pause fin"
@@ -322,6 +449,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             onChange={handleChange}
             fullWidth
             margin="normal"
+            InputLabelProps={{ shrink: true }}
           />
           <TextField
             label="Jours de travail"

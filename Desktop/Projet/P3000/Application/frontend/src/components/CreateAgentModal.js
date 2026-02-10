@@ -219,6 +219,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Heure de fin"
@@ -228,6 +229,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Heure de début de pause"
@@ -237,6 +239,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Heure de fin de pause"
@@ -246,6 +249,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
           </>
         )}
