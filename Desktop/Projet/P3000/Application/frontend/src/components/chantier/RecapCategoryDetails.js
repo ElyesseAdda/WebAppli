@@ -256,11 +256,10 @@ const RecapCategoryDetails = ({
         // Mettre à jour avec les montants À PAYER existants depuis l'API
         paiementsSauvegardes.forEach((paiement) => {
           if (paiement.fournisseur) {
-            // Utiliser montant_a_payer s'il existe et est > 0, sinon utiliser montant
-            // Cette logique correspond à celle du backend pour le calcul du total
-            const montantAPayer = parseFloat(paiement.montant_a_payer) || 0;
+            // Utiliser montant_a_payer s'il est renseigné (y compris 0 et négatif), sinon utiliser montant
+            const montantAPayer = parseFloat(paiement.montant_a_payer);
             const montant = parseFloat(paiement.montant) || 0;
-            const montantFinal = (montantAPayer > 0) ? montantAPayer : montant;
+            const montantFinal = (paiement.montant_a_payer != null && paiement.montant_a_payer !== '' && !isNaN(montantAPayer)) ? montantAPayer : montant;
             // En mode global, additionner tous les montants pour chaque fournisseur
             // En mode période, remplacer (car un seul paiement par fournisseur/mois)
             if (global) {
@@ -295,10 +294,10 @@ const RecapCategoryDetails = ({
         if (documents) {
           documents.forEach((doc) => {
             if (doc.fournisseur) {
-              // Utiliser montant_a_payer s'il existe et est > 0, sinon utiliser montant
-              const montantAPayer = parseFloat(doc.montant_a_payer) || 0;
+              // Utiliser montant_a_payer s'il est renseigné (y compris 0 et négatif), sinon utiliser montant
+              const montantAPayer = parseFloat(doc.montant_a_payer);
               const montant = parseFloat(doc.montant) || 0;
-              const montantFinal = (montantAPayer > 0) ? montantAPayer : montant;
+              const montantFinal = (doc.montant_a_payer != null && doc.montant_a_payer !== '' && !isNaN(montantAPayer)) ? montantAPayer : montant;
               if (global) {
                 paiementsInit[doc.fournisseur] = Number(paiementsInit[doc.fournisseur] || 0) + Number(montantFinal);
               } else {
@@ -327,7 +326,7 @@ const RecapCategoryDetails = ({
     setSaveSuccess(false);
     try {
       const payload = fournisseurs
-        .filter((f) => paiements[f] && !isNaN(Number(paiements[f])))
+        .filter((f) => paiements[f] !== undefined && paiements[f] !== '' && paiements[f] !== null && !isNaN(Number(paiements[f])))
         .map((f) => ({
           fournisseur: f,
           montant: 0, // Montant payé reste à 0 (non modifiable par l'utilisateur ici)
@@ -406,9 +405,9 @@ const RecapCategoryDetails = ({
                         <TableCell>
                           <input
                             type="number"
-                            min={0}
                             step={0.01}
-                            value={paiements[f] !== undefined && paiements[f] !== null ? paiements[f] : ""}
+                            placeholder="0"
+                            value={paiements[f] !== undefined && paiements[f] !== null && paiements[f] !== '' ? paiements[f] : ""}
                             onChange={(e) =>
                               handleChangeMontant(f, e.target.value)
                             }

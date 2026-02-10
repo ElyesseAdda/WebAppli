@@ -10934,15 +10934,14 @@ class RecapFinancierChantierAPIView(APIView):
                 "numero": None,
                 "date": pm.date_saisie.date() if hasattr(pm.date_saisie, 'date') else pm.date_saisie,
                 "montant": float(pm.montant),  # Montant payé (non modifiable)
-                "montant_a_payer": float(pm.montant_a_payer) if pm.montant_a_payer else 0,  # Montant à payer (modifiable)
+                "montant_a_payer": float(pm.montant_a_payer) if pm.montant_a_payer is not None else 0,  # Montant à payer (modifiable, y compris 0 et négatif)
                 "statut": "payé",  # On considère que tout paiement saisi est payé
                 "fournisseur": pm.fournisseur,
             }
         
-        # Utiliser montant_a_payer pour le total car c'est ce que l'utilisateur saisit comme dépense
-        # Si montant_a_payer n'existe pas ou est 0, utiliser montant comme fallback
+        # Utiliser montant_a_payer pour le total (y compris 0 et négatifs) quand il est renseigné, sinon montant
         total_materiel = float(sum(
-            (float(pm.montant_a_payer) if pm.montant_a_payer and float(pm.montant_a_payer) > 0 else float(pm.montant or 0)) 
+            (float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0))
             for pm in paiements_materiel
         ))
         documents_materiel = [paiement_materiel_to_doc(pm) for pm in paiements_materiel]
@@ -11055,6 +11054,7 @@ class PaiementFournisseurMaterielAPIView(APIView):
                 date_paiement_existante = existing.date_paiement
                 date_envoi_existante = existing.date_envoi
             except PaiementFournisseurMateriel.DoesNotExist:
+                existing = None
                 montant_paye_existant = 0
                 date_paiement_existante = None
                 date_envoi_existante = None
@@ -11103,11 +11103,24 @@ class PaiementFournisseurMaterielAPIView(APIView):
                 from datetime import timedelta
                 date_paiement_prevue = date_envoi + timedelta(days=45)
             
+            # Accepter montant_a_payer tel quel (y compris 0 et négatif) pour persistance correcte
+            from decimal import Decimal
+            montant_a_payer_input = paiement_data.get('montant_a_payer')
+            if montant_a_payer_input is not None and montant_a_payer_input != '':
+                try:
+                    montant_a_payer_value = Decimal(str(montant_a_payer_input))
+                except (TypeError, ValueError, Exception):
+                    montant_a_payer_value = getattr(existing, 'montant_a_payer', None) if existing else Decimal('0')
+                    montant_a_payer_value = montant_a_payer_value if montant_a_payer_value is not None else Decimal('0')
+            else:
+                montant_a_payer_value = getattr(existing, 'montant_a_payer', None) if existing else Decimal('0')
+                montant_a_payer_value = montant_a_payer_value if montant_a_payer_value is not None else Decimal('0')
+            
             defaults = {
                 # Montant payé (modifiable par l'utilisateur)
                 'montant': nouveau_montant,
-                # Les montants saisis par l'utilisateur sont toujours les montants à payer
-                'montant_a_payer': paiement_data.get('montant_a_payer', 0),
+                # Montant à payer (y compris 0 et négatif)
+                'montant_a_payer': montant_a_payer_value,
                 # Date de paiement
                 'date_paiement': date_paiement,
                 # Date d'envoi
@@ -11203,11 +11216,10 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         annee_2_digits = str(paiement.annee)[-2:]
         key = f"{paiement.mois:02d}/{annee_2_digits}"
         
-        # Montant à payer : utiliser montant_a_payer s'il existe et est > 0, sinon utiliser montant
-        # Cette logique correspond à celle du récap financier pour la cohérence
-        montant_a_payer_decimal = Decimal(str(paiement.montant_a_payer)) if paiement.montant_a_payer else Decimal('0')
+        # Montant à payer : utiliser montant_a_payer s'il est renseigné (y compris 0 et négatif), sinon montant
+        montant_a_payer_decimal = Decimal(str(paiement.montant_a_payer)) if paiement.montant_a_payer is not None else Decimal('0')
         montant_decimal = Decimal(str(paiement.montant)) if paiement.montant else Decimal('0')
-        montant_a_payer = montant_a_payer_decimal if montant_a_payer_decimal > 0 else montant_decimal
+        montant_a_payer = montant_a_payer_decimal if paiement.montant_a_payer is not None else montant_decimal
         
         # Montant payé : utiliser le champ montant
         montant_paye = montant_decimal

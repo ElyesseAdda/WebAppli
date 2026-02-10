@@ -246,11 +246,13 @@ const TableauFournisseur = () => {
                   date_paiement_facture: f.date_paiement_facture || null
                 }));
                 
+                const aPayerUpdated = getAPayerFromResponse(updatedPaiement, item.a_payer);
+                const payeUpdated = Number(updatedPaiement.montant) || 0;
                 return {
                   ...item,
-                  paye: parseFloat(updatedPaiement.montant) || 0,
-                  a_payer: parseFloat(updatedPaiement.montant_a_payer) || item.a_payer,
-                  ecart: (parseFloat(updatedPaiement.montant_a_payer) || item.a_payer) - (parseFloat(updatedPaiement.montant) || 0),
+                  paye: payeUpdated,
+                  a_payer: aPayerUpdated,
+                  ecart: aPayerUpdated - payeUpdated,
                   factures: facturesMapped.length > 0 ? facturesMapped : (item.factures || []),
                   date_paiement: updatedPaiement.date_paiement !== undefined ? updatedPaiement.date_paiement : item.date_paiement,
                   date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : item.date_envoi,
@@ -434,11 +436,12 @@ const TableauFournisseur = () => {
                 date_paiement_facture: f.date_paiement_facture || null
               }));
               
+              const aPayerUpdated = getAPayerFromResponse(updatedPaiement, item.a_payer);
               return {
                 ...item,
                 paye: 0,
-                a_payer: parseFloat(updatedPaiement.montant_a_payer) || item.a_payer,
-                ecart: (parseFloat(updatedPaiement.montant_a_payer) || item.a_payer) - 0,
+                a_payer: aPayerUpdated,
+                ecart: aPayerUpdated - 0,
                 factures: facturesMapped.length > 0 ? facturesMapped : (item.factures || []),
                 date_paiement: updatedPaiement.date_paiement !== undefined ? updatedPaiement.date_paiement : null,
                 date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : item.date_envoi,
@@ -647,11 +650,13 @@ const TableauFournisseur = () => {
           );
           
           if (dataIndex !== -1) {
+            const aPayerUpdated = getAPayerFromResponse(updatedPaiement, updatedData[dataIndex].a_payer);
+            const payeUpdated = Number(updatedPaiement.montant) || 0;
             updatedData[dataIndex] = {
               ...updatedData[dataIndex],
-              paye: parseFloat(updatedPaiement.montant) || 0,
-              a_payer: parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer,
-              ecart: (parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer) - (parseFloat(updatedPaiement.montant) || 0),
+              paye: payeUpdated,
+              a_payer: aPayerUpdated,
+              ecart: aPayerUpdated - payeUpdated,
               factures: updatedPaiement.factures || updatedData[dataIndex].factures || [],
               date_paiement: updatedPaiement.date_paiement || updatedData[dataIndex].date_paiement || null,
               date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : updatedData[dataIndex].date_envoi,
@@ -812,11 +817,12 @@ const TableauFournisseur = () => {
           );
           
           if (dataIndex !== -1) {
+            const aPayerUpdated = getAPayerFromResponse(updatedPaiement, updatedData[dataIndex].a_payer);
             updatedData[dataIndex] = {
               ...updatedData[dataIndex],
               paye: 0, // Réinitialisé à 0
-              a_payer: parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer,
-              ecart: (parseFloat(updatedPaiement.montant_a_payer) || updatedData[dataIndex].a_payer) - 0,
+              a_payer: aPayerUpdated,
+              ecart: aPayerUpdated - 0,
               factures: updatedPaiement.factures || updatedData[dataIndex].factures || [],
               date_paiement: updatedPaiement.date_paiement !== undefined ? updatedPaiement.date_paiement : null, // Utiliser la valeur du backend
               date_envoi: updatedPaiement.date_envoi !== undefined ? updatedPaiement.date_envoi : updatedData[dataIndex].date_envoi,
@@ -1096,7 +1102,7 @@ const TableauFournisseur = () => {
       
       const key = `${item.mois}_${item.fournisseur}_${item.chantier_id}`;
       // Montant à payer est toujours en lecture seule (non modifiable)
-      const aPayerValue = item.a_payer || 0;
+      const aPayerValue = item.a_payer ?? 0;
       // Seul le montant payé peut être modifié par l'utilisateur
       const payeValue = editedValuesPaye[key] !== undefined 
         ? editedValuesPaye[key] 
@@ -1195,12 +1201,27 @@ const TableauFournisseur = () => {
     );
   };
 
-  // Formater un nombre avec 2 décimales
+  // Formater un nombre avec 2 décimales (gère les montants négatifs et 0)
   const formatNumber = (num) => {
-    return Number(num || 0).toLocaleString("fr-FR", {
+    return Number(num ?? 0).toLocaleString("fr-FR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  };
+
+  // Récupérer montant_a_payer depuis la réponse API (préserve 0 et négatifs)
+  const getAPayerFromResponse = (updatedPaiement, fallback) => {
+    const v = updatedPaiement?.montant_a_payer;
+    if (v === null || v === undefined || v === "") return fallback;
+    const n = Number(v);
+    return isNaN(n) ? fallback : n;
+  };
+
+  // Couleur pour les montants (rouge si négatif pour "à payer", rouge/vert pour écart)
+  const colorForAmount = (value, isEcart = false) => {
+    const n = Number(value ?? 0);
+    if (isEcart) return n > 0 ? "#d32f2f" : "#2e7d32";
+    return n < 0 ? "#d32f2f" : "rgba(27, 120, 188, 1)";
   };
 
   // Calculer les totaux pour un mois
@@ -1522,8 +1543,8 @@ const TableauFournisseur = () => {
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
                                 color: row.totaux.totalAPayer !== 0 
-                                  ? "#ff6b6b" // Rouge clair si différent de 0
-                                  : "#ffffff", // Blanc si égal à 0
+                                  ? colorForAmount(row.totaux.totalAPayer) 
+                                  : "#ffffff",
                               }}
                             >
                               {formatNumber(row.totaux.totalAPayer)} €
@@ -1548,10 +1569,10 @@ const TableauFournisseur = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ff6b6b", // Rouge clair pour l'écart
+                                color: colorForAmount(row.totaux.totalEcart, true),
                               }}
                             >
-                              {row.totaux.totalEcart < 0 ? "-" : ""}{formatNumber(Math.abs(row.totaux.totalEcart))} €
+                              {formatNumber(row.totaux.totalEcart)} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
@@ -1650,7 +1671,7 @@ const TableauFournisseur = () => {
                             <Typography
                               sx={{
                                 fontSize: "0.8rem",
-                                color: "text.primary",
+                                color: colorForAmount(item.a_payer),
                                 textAlign: "center",
                               }}
                             >
@@ -1881,8 +1902,7 @@ const TableauFournisseur = () => {
                             <Typography
                               sx={{
                                 fontSize: "0.75rem",
-                                color:
-                                  item.ecart > 0 ? "#d32f2f" : "#2e7d32",
+                                color: colorForAmount(item.ecart, true),
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >
@@ -2150,8 +2170,8 @@ const TableauFournisseur = () => {
                                     fontSize: "0.85rem",
                                     fontWeight: "bold",
                                     color: isPayeComplet 
-                                      ? "rgba(46, 125, 50, 1)" // Vert foncé si payé complet
-                                      : "rgba(27, 120, 188, 1)", // Bleu par défaut
+                                      ? "rgba(46, 125, 50, 1)"
+                                      : colorForAmount(totalFournisseur.totalAPayer),
                                   }}
                                 >
                                   {formatNumber(totalFournisseur.totalAPayer)} €
