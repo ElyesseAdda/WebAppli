@@ -84,6 +84,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         children: [
           { label: "Liste Fournisseurs", to: "/ListeFournisseurs" },
           { label: "Sous traitant", to: "/ListeSousTraitants" },
+          { label: "Comparateur", to: "/ComparateurFournisseurs" },
         ],
       },
       {

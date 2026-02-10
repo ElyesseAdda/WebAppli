@@ -1,0 +1,35 @@
+// Palette et couleurs partagées pour le comparateur
+export const PALETTE = {
+  primary: "#6366f1",
+  primaryLight: "#818cf8",
+  primaryDark: "#4f46e5",
+  surface: "#ffffff",
+  surfaceHover: "#f8fafc",
+  border: "#e2e8f0",
+  borderLight: "#f1f5f9",
+  text: "#1e293b",
+  textSecondary: "#64748b",
+  textMuted: "#94a3b8",
+  success: "#10b981",
+  successLight: "#d1fae5",
+  successDark: "#059669",
+  warning: "#f59e0b",
+  warningLight: "#fef3c7",
+  danger: "#ef4444",
+  dangerLight: "#fee2e2",
+  gradientStart: "#6366f1",
+  gradientEnd: "#8b5cf6",
+};
+
+export const FOURNISSEUR_COLORS = [
+  "#6366f1",
+  "#ec4899",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#06b6d4",
+  "#f43f5e",
+  "#14b8a6",
+  "#e879f9",
+  "#fb923c",
+];

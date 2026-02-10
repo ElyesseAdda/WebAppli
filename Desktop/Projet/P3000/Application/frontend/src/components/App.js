@@ -44,6 +44,7 @@ import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
 import ListeFournisseurs from "./ListeFournisseurs";
 import ListeSousTraitants from "./ListeSousTraitants";
+import ComparateurFournisseur from "./ComparateurFournisseur/ComparateurFournisseur";
 import Login from "./Login";
 import LoginMobile from "./LoginMobile";
 import ModificationDevis from "./ModificationDevis";
@@ -423,6 +424,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeSousTraitants />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ComparateurFournisseurs"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ComparateurFournisseur />
                 </Layout>
               </ProtectedRoute>
             }
