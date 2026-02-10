@@ -6718,6 +6718,47 @@ def get_chantier_avenants(request, chantier_id):
             },
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_avenant_numero(request, avenant_id):
+    """Met à jour le numéro/libellé d'un avenant (chantier). Le numéro doit rester unique par chantier."""
+    try:
+        avenant = get_object_or_404(Avenant, id=avenant_id)
+        new_numero = request.data.get('numero')
+        if new_numero is None:
+            return Response(
+                {'success': False, 'error': 'Le champ "numero" est requis.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        new_numero = str(new_numero).strip()
+        if not new_numero:
+            return Response(
+                {'success': False, 'error': 'Le numéro ne peut pas être vide.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if len(new_numero) > 50:
+            return Response(
+                {'success': False, 'error': 'Le numéro ne peut pas dépasser 50 caractères.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        # Unicité (chantier, numero)
+        if Avenant.objects.filter(chantier_id=avenant.chantier_id, numero=new_numero).exclude(id=avenant_id).exists():
+            return Response(
+                {'success': False, 'error': f'Un avenant avec le numéro "{new_numero}" existe déjà pour ce chantier.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        avenant.numero = new_numero
+        avenant.save()
+        return Response({'success': True, 'avenant': AvenantSerializer(avenant).data})
+    except Exception as e:
+        return Response(
+            {'success': False, 'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
 @api_view(['GET'])
 def get_next_ts_number(request, chantier_id):
     """Récupère le prochain numéro de TS disponible pour un chantier"""
@@ -6739,9 +6780,16 @@ def create_facture_ts(request):
         # Si on doit créer un nouvel avenant
         avenant_id = request.data.get('avenant_id')
         if request.data.get('create_new_avenant'):
-            last_avenant = Avenant.objects.filter(chantier_id=chantier_id).order_by('-numero').first()
-            new_avenant_number = (last_avenant.numero + 1) if last_avenant else 1
-            
+            # Prochain numéro : max des numéros numériques existants + 1, ou "1"
+            existing = Avenant.objects.filter(chantier_id=chantier_id).values_list('numero', flat=True)
+            next_num = 1
+            for n in existing:
+                try:
+                    next_num = max(next_num, int(n) + 1)
+                except (ValueError, TypeError):
+                    pass
+            new_avenant_number = str(next_num)
+
             avenant = Avenant.objects.create(
                 chantier_id=chantier_id,
                 numero=new_avenant_number
@@ -8405,9 +8453,9 @@ def preview_situation(request, situation_id):
                 montant_avancement_avenant = Decimal('0')
                 nb_lignes_avenant = 0
 
-            # Utiliser les données stockées en base de données
+            # Utiliser numero_complet (numéro devis - désignation) pour éviter la duplication dans le template
             current_avenant_lines.append({
-                'devis_numero': facture_ts.devis.numero,
+                'devis_numero': facture_ts.numero_complet,
                 'designation': facture_ts.designation,
                 'montant_ht': ligne_avenant.montant_ht,
                 'pourcentage_actuel': ligne_avenant.pourcentage_actuel,

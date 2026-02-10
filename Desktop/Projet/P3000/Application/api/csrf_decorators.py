@@ -125,6 +125,7 @@ CSRF_EXEMPT_PATTERNS = [
     r'^/api/parametres/taux-fixe/$',
     r'^/api/update-taux-fixe/$',
     r'^/api/avenant_chantier/.*/avenants/$',
+    r'^/api/avenants/.*/update-numero/$',
     r'^/api/next_ts_number_chantier/.*/next-ts-number/$',
     r'^/api/create-facture-ts/$',
     r'^/api/create-facture-cie/$',

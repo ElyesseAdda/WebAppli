@@ -497,7 +497,7 @@ def preview_situation_v2(request, situation_id):
                 nb_lignes_avenant = 0
             
             current_avenant_lines.append({
-                'devis_numero': facture_ts.devis.numero,
+                'devis_numero': facture_ts.numero_complet,
                 'designation': facture_ts.designation,
                 'montant_ht': ligne_avenant.montant_ht,
                 'pourcentage_actuel': ligne_avenant.pourcentage_actuel,

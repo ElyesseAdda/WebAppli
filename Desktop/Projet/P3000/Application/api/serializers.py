@@ -1576,7 +1576,7 @@ class SituationLigneUpdateSerializer(serializers.ModelSerializer):
 
 class FactureTSListSerializer(serializers.ModelSerializer):
     devis_numero = serializers.CharField(source='numero_complet', read_only=True)
-    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
+    avenant_numero = serializers.CharField(source='avenant.numero', read_only=True)
     
     class Meta:
         model = FactureTS

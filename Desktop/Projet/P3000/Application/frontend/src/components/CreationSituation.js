@@ -297,7 +297,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
-            <TableCell>Avenant n°{avenant.numero}</TableCell>
+            <TableCell>{avenant.numero}</TableCell>
             <TableCell align="center"></TableCell>
             <TableCell align="center"></TableCell>
             <TableCell align="right">{avenant.montant_total} €</TableCell>

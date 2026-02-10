@@ -60,6 +60,9 @@ const ChantierListeAvenants = ({
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedAvenant, setSelectedAvenant] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [avenantToEditNumero, setAvenantToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
   const [pendingSave, setPendingSave] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
@@ -227,6 +230,60 @@ const ChantierListeAvenants = ({
     setAnchorEl(null);
   };
 
+  const handleEditNumeroClick = () => {
+    if (selectedAvenant) {
+      setAvenantToEditNumero(selectedAvenant);
+      setNewNumeroValue(String(selectedAvenant.avenant_numero ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setAvenantToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!avenantToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro ou un libellé.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      const response = await axios.patch(
+        `/api/avenants/${avenantToEditNumero.avenant_id}/update-numero/`,
+        { numero: value }
+      );
+      if (response.data.success) {
+        await fetchAvenants();
+        handleEditNumeroClose();
+        setSnackbar({
+          open: true,
+          message: `Avenant mis à jour : ${value}`,
+          severity: "success",
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: response.data.error || "Erreur lors de la mise à jour.",
+          severity: "error",
+        });
+      }
+    } catch (error) {
+      const msg =
+        error.response?.data?.error ||
+        "Erreur lors de la mise à jour du numéro d'avenant.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
+  };
+
   const handleGeneratePDF = async (item) => {
     try {
       // Afficher le message de téléchargement en cours
@@ -298,7 +355,7 @@ const ChantierListeAvenants = ({
 
   // Obtenir les numéros d'avenants uniques pour le filtre
   const avenantNumeros = [...new Set(avenants.map((a) => a.numero))].sort(
-    (a, b) => a - b
+    (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })
   );
 
   return (
@@ -382,7 +439,7 @@ const ChantierListeAvenants = ({
                     <MenuItem value="Tous">Tous</MenuItem>
                     {avenantNumeros.map((numero) => (
                       <MenuItem key={numero} value={numero.toString()}>
-                        Avenant n°{numero}
+                        {numero}
                       </MenuItem>
                     ))}
                   </StyledSelect>
@@ -422,7 +479,6 @@ const ChantierListeAvenants = ({
                       sx={{ cursor: "pointer", fontWeight: 700 }}
                     >
                       {item.devis_numero}
-                      {item.designation && ` - ${item.designation}`}
                     </DevisNumber>
                     <CenteredTableCell>
                       {new Date(item.date_creation).toLocaleDateString()}
@@ -433,7 +489,7 @@ const ChantierListeAvenants = ({
                       {formatNumber(item.montant_ht)} €
                     </CenteredTableCell>
                     <CenteredTableCell>
-                      Avenant n°{item.avenant_numero}
+                      {item.avenant_numero}
                     </CenteredTableCell>
                     <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                       <div
@@ -520,6 +576,9 @@ const ChantierListeAvenants = ({
         >
           Télécharger le PDF
         </MenuItem>
+        <MenuItem onClick={handleEditNumeroClick}>
+          Modifier le numéro d'avenant
+        </MenuItem>
         <MenuItem
           onClick={handleDeleteClick}
           sx={{
@@ -571,6 +630,43 @@ const ChantierListeAvenants = ({
             sx={{ borderRadius: 2 }}
           >
             Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro d'avenant</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro ou libellé"
+            type="text"
+            placeholder="ex: 3, 3 bis, A..."
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 50 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.23)" },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined" sx={{ borderRadius: 2 }}>
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained" sx={{ borderRadius: 2 }}>
+            Enregistrer
           </Button>
         </DialogActions>
       </Dialog>

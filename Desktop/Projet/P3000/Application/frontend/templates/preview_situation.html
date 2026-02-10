@@ -814,7 +814,7 @@
                      {% for avenant in lignes_avenant %}
            <tr class="sous-partie">
              <td colspan="7">
-                 <span class="sous-partie-text">Avenant N°{{ avenant.numero }}</span>
+                 <span class="sous-partie-text">{{ avenant.numero }}</span>
                  <span style="float: right">
                      <span class="centaine"style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|format_montant_espace }}</span>
                      <span class="centaine"style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(5px);">{{ avenant.pourcentage_avenant|floatformat:2 }} % </span>

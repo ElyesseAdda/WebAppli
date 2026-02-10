@@ -729,7 +729,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
               </IconButton>
             </TableCell>
             <TableCell sx={{ width: "300px", padding: "8px" }}>
-              Avenant n°{avenant.numero}
+              {avenant.numero}
             </TableCell>
             <TableCell
               sx={{ width: "100px", padding: "8px" }}
@@ -772,7 +772,6 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                         <TableCell sx={{ width: "300px", padding: "8px" }}>
                           {ts.devis_numero ||
                             `TS n°${String(ts.numero_ts).padStart(3, "0")}`}
-                          {ts.designation}
                         </TableCell>
                         <TableCell
                           sx={{ width: "100px", padding: "8px" }}

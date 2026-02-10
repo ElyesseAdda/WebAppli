@@ -2353,7 +2353,7 @@ class Parametres(models.Model):
 
 class Avenant(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='avenants')
-    numero = models.IntegerField()  # Numéro séquentiel de l'avenant pour ce chantier
+    numero = models.CharField(max_length=50)  # Numéro ou libellé de l'avenant (ex: "3", "3 bis")
     date_creation = models.DateTimeField(auto_now_add=True)
     montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
