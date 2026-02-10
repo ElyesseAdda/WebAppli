@@ -15,10 +15,17 @@ const PartieSearch = ({
   const [options, setOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Charger les options au montage du composant
+  // Charger (ou recharger) les options quand la source change.
+  // ✅ Important: au refresh, `availableParties` est rempli async dans le parent.
+  // Le 1er appel peut tomber sur `/api/parties/search/` (limité à 50),
+  // puis quand `availableParties` est prêt, `searchParties` change de référence
+  // et on recharge automatiquement la liste complète.
   useEffect(() => {
-    loadInitialOptions();
-  }, []);
+    if (typeof searchParties === 'function') {
+      loadInitialOptions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParties]);
 
   // ✅ Recharger les options quand selectedParties change (ex: après suppression d'une partie)
   useEffect(() => {

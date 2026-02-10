@@ -152,7 +152,7 @@ const SousPartieSearch = ({
       option.label.toLowerCase().includes(inputValue.toLowerCase()) ||
       inputValue.toLowerCase().includes(option.label.toLowerCase())
     );
-  }, [inputValue, options, selectedSousParties, fuse]);
+  }, [inputValue, options, selectedSousParties, fuse, partieId]);
 
   // Options avec possibilité de créer
   const optionsWithCreate = useMemo(() => {
@@ -172,7 +172,7 @@ const SousPartieSearch = ({
   }, [filteredOptions, inputValue]);
 
   // Gérer la sélection ou création
-  const handleChange = (selectedOption) => {
+  const handleChange = async (selectedOption) => {
     if (!selectedOption) return;
 
     // ✅ Si c'est "Lignes directes", vérifier si elle existe déjà ou doit être créée
@@ -191,11 +191,33 @@ const SousPartieSearch = ({
         // ✅ Réinitialiser l'input après sélection
         setInputValue('');
       } else {
-        // C'est une nouvelle "Lignes directes" à créer
+        // C'est une nouvelle "Lignes directes" à créer (ou options pas encore chargées).
+        // ✅ Anti-race : vérifier d'abord si "Lignes directes" existe déjà en base.
+        try {
+          const res = await axios.get('/api/sous-parties/search/', {
+            params: { partie: partieId, q: DIRECT_LINES_DESCRIPTION }
+          });
+
+          if (Array.isArray(res.data)) {
+            const existing = res.data.find(opt => {
+              const desc = opt?.data?.description || opt?.label || '';
+              return desc.trim() === DIRECT_LINES_DESCRIPTION;
+            });
+
+            if (existing?.data && onSousPartieSelect) {
+              onSousPartieSelect(existing.data);
+              setInputValue('');
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore: on tente ensuite la création
+        }
+
+        // Sinon, créer réellement
         if (onSousPartieCreate) {
           onSousPartieCreate(partieId, DIRECT_LINES_DESCRIPTION);
         }
-        // ✅ Réinitialiser l'input après création
         setInputValue('');
       }
       return;
