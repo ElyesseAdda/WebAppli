@@ -9,63 +9,89 @@
  */
 
 // Couleurs principales du client
+// ffff00 = logo uniquement, ne plus utiliser dans l'app
+// 001514 = prédominante (texte, primaire)
+// 46acc2 = chargement, barres de progression, états "en attente"
+// fcfcfc = texte sur fond noir
+// f15152 = erreur
 export const COLORS = {
-  // Primaire
-  primary: '#40798C',
-  primaryDark: '#2D5563',
-  primaryLight: '#6A9FB5',
-  primaryRgb: '64, 121, 140',
-  
+  // Primaire (couleur prédominante, texte)
+  primary: '#001514',
+  primaryDark: '#000d0c',
+  primaryLight: '#002a28',
+  primaryRgb: '0, 21, 20',
+
+  // Progression / chargement (barres, états en attente)
+  progress: '#46acc2',
+  progressDark: '#3a8fa5',
+  progressLight: '#6bbdd4',
+  progressRgb: '70, 172, 194',
+
+  // Texte sur fond noir
+  textOnDark: '#fcfcfc',
+  textOnDarkRgb: '252, 252, 252',
+
   // Secondaire
   secondary: '#CAC4CE',
   secondaryDark: '#B5AEB9',
   secondaryLight: '#DDD9DF',
   secondaryRgb: '202, 196, 206',
-  
+
   // Accent
-  accent: '#E53D00',
-  accentDark: '#CC3600',
-  accentLight: '#FF5722',
-  accentRgb: '229, 61, 0',
-  
+  accent: '#46acc2',
+  accentDark: '#3a8fa5',
+  accentLight: '#6bbdd4',
+  accentRgb: '70, 172, 194',
+
   // Sémantiques
   success: '#4CAF50',
   successDark: '#2e7d32',
   successLight: '#81c784',
   successRgb: '76, 175, 80',
-  
-  error: '#d32f2f',
-  errorDark: '#c62828',
-  errorLight: '#ef5350',
-  errorRgb: '211, 47, 47',
-  
-  warning: '#FF9800',
-  warningDark: '#ef6c00',
-  warningLight: '#ffb74d',
-  warningRgb: '255, 152, 0',
-  
-  info: '#2196F3',
-  infoDark: '#1976d2',
-  infoLight: '#64b5f6',
-  infoRgb: '33, 150, 243',
-  
-  // Neutres
-  text: '#333333',
-  textMuted: '#666666',
-  textLight: '#999999',
-  
+
+  error: '#f15152',
+  errorDark: '#d94546',
+  errorLight: '#f37374',
+  errorRgb: '241, 81, 82',
+
+  warning: '#46acc2',
+  warningDark: '#3a8fa5',
+  warningLight: '#6bbdd4',
+  warningRgb: '70, 172, 194',
+
+  info: '#46acc2',
+  infoDark: '#3a8fa5',
+  infoLight: '#6bbdd4',
+  infoRgb: '70, 172, 194',
+
+  // Neutres (texte = prédominant #001514)
+  text: '#001514',
+  textMuted: '#333333',
+  textLight: '#666666',
+
   border: '#dee2e6',
   borderLight: '#e5e7eb',
-  borderDark: '#ccc',
-  
+  borderDark: '#001514',
+
   background: '#ffffff',
   backgroundAlt: '#f8f9fa',
   backgroundHover: '#f3f4f6',
   backgroundDark: '#e9ecef',
-  
+
   // Blanc et noir
   white: '#ffffff',
   black: '#000000',
+
+  // Boutons d'action (couleurs d'origine conservées)
+  actionButtonInfo: '#1976d2',
+  actionButtonInfoHover: '#1565c0',
+  actionButtonSuccess: '#2e7d32',
+  actionButtonSuccessHover: '#1b5e20',
+  actionButtonWarning: '#FF9800',
+  actionButtonWarningHover: '#ef6c00',
+  actionButtonDark: '#333333',
+  actionButtonAccent: '#E53D00',
+  actionButtonAccentHover: '#CC3600',
 };
 
 // Couleurs pour les graphiques (charts)

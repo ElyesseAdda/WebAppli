@@ -13,6 +13,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { COLORS } from "../constants/colors";
 import "./../../static/css/app.css";
+import "../styles/tableStyles.css";
 import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";

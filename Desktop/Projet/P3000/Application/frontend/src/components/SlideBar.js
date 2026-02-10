@@ -98,12 +98,15 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         icon: MdFolderShared,
         to: "/ChantiersDrivePaths",
       },
-      // Distributeurs en bas de la sidebar
+      // Autre logiciel - liens vers P3000 et Distributeurs
       {
-        key: "distributeurs",
-        label: "Distributeurs",
+        key: "autre_logiciel",
+        label: "Autre logiciel",
         icon: MdBusiness,
-        to: "/distributeurs",
+        children: [
+          { label: "P3000", href: "https://myp3000app.com/", external: true },
+          { label: "Distributeurs", href: "https://myp3000app.com/distributeurs", external: true },
+        ],
       },
     ],
     []
@@ -246,6 +249,23 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
                                 </li>
                               ))}
                             </ul>
+                          </li>
+                        );
+                      }
+                      if (child.external && child.href) {
+                        return (
+                          <li key={`${item.key}-${child.href}`}>
+                            <a
+                              href={child.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                window.open(child.href, "_blank", "noopener,noreferrer");
+                              }}
+                            >
+                              {child.label}
+                            </a>
                           </li>
                         );
                       }

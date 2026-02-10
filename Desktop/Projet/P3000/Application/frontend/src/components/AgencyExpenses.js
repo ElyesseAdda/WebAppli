@@ -15,7 +15,6 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -23,7 +22,16 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaEdit, FaTrash } from "react-icons/fa";
-import { FilterCell, StyledTextField } from "../styles/tableStyles";
+import { COLORS } from "../constants/colors";
+
+// Styles pour les champs de filtre : fond blanc, texte primary
+const filterFieldSx = {
+  backgroundColor: "white",
+  "& .MuiInputBase-root": { backgroundColor: "white" },
+  "& .MuiInputBase-input": { color: COLORS.primary },
+  "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.primary },
+  "& .MuiSvgIcon-root": { color: COLORS.primary },
+};
 
 const AgencyExpenses = () => {
   const [expenses, setExpenses] = useState([]);
@@ -376,7 +384,20 @@ const AgencyExpenses = () => {
         <Typography sx={{ fontWeight: "bold", color: "white" }} variant="h5">
           Dépenses de l'Agence (Système Mensuel)
         </Typography>
-        <Button variant="contained" onClick={() => setOpenDialog(true)}>
+        <Button
+          variant="outlined"
+          onClick={() => setOpenDialog(true)}
+          sx={{
+            backgroundColor: "white",
+            color: COLORS.primary,
+            borderColor: COLORS.primary,
+            "&:hover": {
+              backgroundColor: COLORS.primaryLight,
+              color: "white",
+              borderColor: COLORS.primaryLight,
+            },
+          }}
+        >
           Ajouter une dépense
         </Button>
       </Box>
@@ -427,30 +448,30 @@ const AgencyExpenses = () => {
       </Box>
 
       <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <FilterCell>
-                <StyledTextField
+        <Table className="agency-expenses-table">
+          <TableBody>
+            {/* Ligne de filtres - hors TableHead pour fond blanc et texte primary */}
+            <TableRow sx={{ backgroundColor: "white", "& td": { backgroundColor: "white", padding: "8px" } }}>
+              <TableCell>
+                <TextField
                   size="small"
                   fullWidth
                   value={filters.description}
                   onChange={handleFilterChange("description")}
                   placeholder="Description..."
+                  variant="outlined"
+                  sx={filterFieldSx}
                 />
-              </FilterCell>
-              <FilterCell>
-                <StyledTextField
+              </TableCell>
+              <TableCell>
+                <TextField
                   select
                   size="small"
                   fullWidth
                   value={filters.category}
                   onChange={handleFilterChange("category")}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      textAlign: "center",
-                    },
-                  }}
+                  variant="outlined"
+                  sx={{ ...filterFieldSx, "& .MuiInputBase-input": { textAlign: "center" } }}
                 >
                   <MenuItem sx={{ textAlign: "center" }} value="Tous">
                     Tous
@@ -464,27 +485,22 @@ const AgencyExpenses = () => {
                       {cat.charAt(0).toUpperCase() + cat.slice(1)}
                     </MenuItem>
                   ))}
-                </StyledTextField>
-              </FilterCell>
-              <FilterCell>
-                <StyledTextField
+                </TextField>
+              </TableCell>
+              <TableCell>
+                <TextField
                   type="number"
                   size="small"
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      textAlign: "center",
-                    },
-                  }}
                   fullWidth
                   value={filters.amount}
                   onChange={handleFilterChange("amount")}
                   placeholder="Montant..."
+                  variant="outlined"
+                  sx={{ ...filterFieldSx, "& .MuiInputBase-input": { textAlign: "center" } }}
                 />
-              </FilterCell>
-              <FilterCell />
+              </TableCell>
+              <TableCell />
             </TableRow>
-          </TableHead>
-          <TableBody>
             {expenses.map((expense, index) => (
               <TableRow
                 key={expense.id}

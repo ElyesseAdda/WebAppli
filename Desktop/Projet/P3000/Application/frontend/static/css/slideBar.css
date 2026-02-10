@@ -219,6 +219,7 @@ html {
   transition: background 0.2s ease, color 0.2s ease;
   width: 100%;
   box-sizing: border-box;
+  cursor: pointer;
 }
 
 /* Indicateur gauche (petit rectangle horizontal arrondi) */
@@ -230,6 +231,7 @@ html {
   border-radius: 9999px;
   flex-shrink: 0;
   transition: background 0.2s ease, height 0.2s ease;
+  pointer-events: none; /* permet le clic et hover sur le lien */
 }
 
 .slide-bar .submenu li a.active::before {

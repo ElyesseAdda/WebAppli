@@ -404,7 +404,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           })}`}
         >
           <Box
-            sx={{ width: `${pourcentages.non_envoye}%`, background: COLORS.warning }}
+            sx={{ width: `${pourcentages.non_envoye}%`, background: COLORS.progress }}
           />
         </Tooltip>
       )}
@@ -417,7 +417,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           )}`}
         >
           <Box
-            sx={{ width: `${pourcentages.en_attente}%`, background: COLORS.infoDark }}
+            sx={{ width: `${pourcentages.en_attente}%`, background: COLORS.progress }}
           />
         </Tooltip>
       )}
@@ -503,13 +503,13 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
   const getCategorieColor = (categorie) => {
     switch (categorie) {
       case "non_envoye":
-        return COLORS.warning; // orange
+        return COLORS.progress; // non envoyé
       case "en_attente":
-        return COLORS.infoDark; // bleu
+        return COLORS.progress; // en attente
       case "retard":
-        return COLORS.error; // rouge
+        return COLORS.error; // retard
       case "paye":
-        return COLORS.successDark; // vert
+        return COLORS.successDark; // payé
       default:
         return "inherit";
     }
@@ -1133,10 +1133,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           onClick={() => setOpenSousTraitance(true)}
           disabled={!canPerformAction(chantierData?.statut, "canManageSousTraitance")}
           sx={{
-            backgroundColor: COLORS.infoDark,
+            backgroundColor: COLORS.actionButtonInfo,
+            color: COLORS.textOnDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: COLORS.infoDark,
+              backgroundColor: COLORS.actionButtonInfoHover,
+              color: COLORS.textOnDark,
               boxShadow: 5,
             },
             "&:disabled": {
@@ -1161,10 +1163,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           onClick={() => setOpenSituationModal(true)}
           disabled={!canPerformAction(chantierData?.statut, "canCreateSituation")}
           sx={{
-            backgroundColor: COLORS.successDark,
+            backgroundColor: COLORS.actionButtonSuccess,
+            color: COLORS.textOnDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: COLORS.successDark,
+              backgroundColor: COLORS.actionButtonSuccessHover,
+              color: COLORS.textOnDark,
               boxShadow: 5,
             },
             "&:disabled": {
@@ -1193,11 +1197,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           }}
           disabled={!canPerformAction(chantierData?.statut, "canCreateDevis")}
           sx={{
-            backgroundColor: COLORS.warning,
-            color: "white",
+            backgroundColor: COLORS.actionButtonWarning,
+            color: COLORS.textOnDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: COLORS.warningDark,
+              backgroundColor: COLORS.actionButtonWarningHover,
+              color: COLORS.textOnDark,
               boxShadow: 5,
             },
             "&:disabled": {
@@ -1225,11 +1230,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             );
           }}
           sx={{
-            backgroundColor: COLORS.text,
-            color: "white",
+            backgroundColor: COLORS.actionButtonDark,
+            color: COLORS.textOnDark,
             boxShadow: 3,
             "&:hover": {
               backgroundColor: COLORS.black,
+              color: COLORS.textOnDark,
               boxShadow: 5,
             },
           }}
@@ -1243,11 +1249,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             window.open(`/TableauFacturation`, "_blank");
           }}
           sx={{
-            backgroundColor: COLORS.accent,
-            color: "white",
+            backgroundColor: COLORS.actionButtonAccent,
+            color: COLORS.textOnDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: COLORS.accentDark,
+              backgroundColor: COLORS.actionButtonAccentHover,
+              color: COLORS.textOnDark,
               boxShadow: 5,
             },
           }}
@@ -1259,11 +1266,12 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           startIcon={<FaCloud />}
           onClick={handleOpenDrive}
           sx={{
-            backgroundColor: COLORS.info,
-            color: "white",
+            backgroundColor: COLORS.actionButtonInfo,
+            color: COLORS.textOnDark,
             boxShadow: 3,
             "&:hover": {
-              backgroundColor: COLORS.infoDark,
+              backgroundColor: COLORS.actionButtonInfoHover,
+              color: COLORS.textOnDark,
               boxShadow: 5,
             },
           }}
@@ -1885,7 +1893,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       sx={{
                         width: 16,
                         height: 16,
-                        bgcolor: COLORS.warning,
+                        bgcolor: COLORS.progress,
                         borderRadius: "50%",
                       }}
                     />{" "}
@@ -1896,7 +1904,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                       sx={{
                         width: 16,
                         height: 16,
-                        bgcolor: COLORS.infoDark,
+                        bgcolor: COLORS.progress,
                         borderRadius: "50%",
                       }}
                     />{" "}
@@ -2158,7 +2166,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
         <DialogTitle>Modifier les informations du chantier</DialogTitle>
         <DialogContent>
           <Box sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: COLORS.infoDark }}>
+            <Typography variant="h6" sx={{ mb: 2, color: COLORS.primary }}>
               Informations du chantier
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2200,7 +2208,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
               </Grid>
             </Grid>
 
-            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.primary, mb: 2 }}>
               Informations de la maîtrise d'ouvrage
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2266,7 +2274,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             </Grid>
 
             {/* Section Contact Société */}
-            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.primary, mb: 2 }}>
 Maitre d'ouvrage
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2344,7 +2352,7 @@ Maitre d'ouvrage
             </Grid>
 
             {/* Section Assistance à la maîtrise d'ouvrage */}
-            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.primary, mb: 2 }}>
               Assistance à la maîtrise d'ouvrage
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2421,7 +2429,7 @@ Maitre d'ouvrage
             </Grid>
 
             {/* Section Maitre d'oeuvre */}
-            <Typography variant="h6" sx={{ color: COLORS.infoDark, mb: 2 }}>
+            <Typography variant="h6" sx={{ color: COLORS.primary, mb: 2 }}>
               Maitre d'oeuvre
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2497,7 +2505,7 @@ Maitre d'ouvrage
               </Grid>
             </Grid>
 
-            <Typography variant="h6" sx={{ mb: 2, color: COLORS.infoDark }}>
+            <Typography variant="h6" sx={{ mb: 2, color: COLORS.primary }}>
               Adresse du chantier
             </Typography>
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2555,7 +2563,7 @@ Maitre d'ouvrage
             </Grid>
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-              <Typography variant="h6" sx={{ color: COLORS.infoDark }}>
+              <Typography variant="h6" sx={{ color: COLORS.primary }}>
                 Contact Devis
               </Typography>
               {societeId && (

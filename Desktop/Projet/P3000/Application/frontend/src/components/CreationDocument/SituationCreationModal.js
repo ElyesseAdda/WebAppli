@@ -445,11 +445,12 @@ const SousPartieTable = ({
           <TableRow
             sx={{
               backgroundColor: COLORS.primaryLight,
-              "& td": { padding: "8px" },
+              color: "white",
+              "& td": { padding: "8px", color: "white" },
             }}
           >
             <TableCell sx={{ width: "50px", padding: "8px" }}>
-              <IconButton size="small" onClick={() => setOpen(!open)}>
+              <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: "white" }}>
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
@@ -721,11 +722,12 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
           <TableRow
             sx={{
               backgroundColor: COLORS.primaryLight,
-              "& td": { padding: "8px" },
+              color: "white",
+              "& td": { padding: "8px", color: "white" },
             }}
           >
             <TableCell sx={{ width: "50px", padding: "8px" }}>
-              <IconButton size="small" onClick={() => setOpen(!open)}>
+              <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: "white" }}>
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
@@ -967,8 +969,8 @@ const SituationCreationModal = ({
   const [totalAvancement, setTotalAvancement] = useState(0);
   const [avenants, setAvenants] = useState([]);
   const [montantTotalAvenants, setMontantTotalAvenants] = useState(0);
-  const [tauxProrata, setTauxProrata] = useState(2.5);
-  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(5.0);
+  const [tauxProrata, setTauxProrata] = useState(0); // Elekable: 0 par défaut
+  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(0); // Elekable: 0 par défaut
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
@@ -1726,8 +1728,8 @@ const SituationCreationModal = ({
             }
 
             // Pré-remplir les champs avec les données existantes
-            setTauxProrata(currentSituation.taux_prorata || 2.5);
-            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie || 5.0);
+            setTauxProrata(currentSituation.taux_prorata ?? 0); // Elekable: 0 par défaut
+            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie ?? 0); // Elekable: 0 par défaut
             setRetenueCIE(currentSituation.retenue_cie || 0);
             setTypeRetenueCIE(currentSituation.type_retenue_cie || 'deduction');
             
@@ -2071,8 +2073,8 @@ const SituationCreationModal = ({
 
   // Fonction pour réinitialiser les données
   const resetSituationData = () => {
-    setTauxProrata(2.5); // Valeur par défaut
-    setTauxRetenueGarantie(5.0); // Valeur par défaut
+    setTauxProrata(0); // Elekable: 0 par défaut
+    setTauxRetenueGarantie(0); // Elekable: 0 par défaut
     setLastSituation(null);
     setLignesSupplementaires([]);
     setRetenueCIE(0);

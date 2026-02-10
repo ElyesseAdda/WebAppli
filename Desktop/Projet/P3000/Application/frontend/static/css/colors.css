@@ -10,10 +10,10 @@
   /* ===========================
      Couleurs principales du client
      =========================== */
-  --color-primary: #40798C;
-  --color-primary-dark: #2D5563;
-  --color-primary-light: #6A9FB5;
-  --color-primary-rgb: 64, 121, 140;
+  --color-primary: #001514;
+  --color-primary-dark: #000d0c;
+  --color-primary-light: #002a28;
+  --color-primary-rgb: 0, 21, 20;
   
   --color-secondary: #CAC4CE;
   --color-secondary-dark: #B5AEB9;
@@ -33,27 +33,33 @@
   --color-success-light: #81c784;
   --color-success-rgb: 76, 175, 80;
   
-  --color-error: #d32f2f;
-  --color-error-dark: #c62828;
-  --color-error-light: #ef5350;
-  --color-error-rgb: 211, 47, 47;
+  --color-progress: #46acc2;
+  --color-progress-dark: #3a8fa5;
+  --color-progress-light: #6bbdd4;
+  --color-progress-rgb: 70, 172, 194;
+
+  --color-error: #f15152;
+  --color-error-dark: #d94546;
+  --color-error-light: #f37374;
+  --color-error-rgb: 241, 81, 82;
   
-  --color-warning: #FF9800;
-  --color-warning-dark: #ef6c00;
-  --color-warning-light: #ffb74d;
-  --color-warning-rgb: 255, 152, 0;
+  --color-warning: #46acc2;
+  --color-warning-dark: #3a8fa5;
+  --color-warning-light: #6bbdd4;
+  --color-warning-rgb: 70, 172, 194;
   
-  --color-info: #2196F3;
-  --color-info-dark: #1976d2;
-  --color-info-light: #64b5f6;
-  --color-info-rgb: 33, 150, 243;
+  --color-info: #46acc2;
+  --color-info-dark: #3a8fa5;
+  --color-info-light: #6bbdd4;
+  --color-info-rgb: 70, 172, 194;
 
   /* ===========================
      Couleurs neutres
      =========================== */
-  --color-text: #333333;
-  --color-text-muted: #666666;
-  --color-text-light: #999999;
+  --color-text: #001514;
+  --color-text-muted: #333333;
+  --color-text-light: #666666;
+  --color-text-on-dark: #fcfcfc;
   
   --color-border: #dee2e6;
   --color-border-light: #e5e7eb;

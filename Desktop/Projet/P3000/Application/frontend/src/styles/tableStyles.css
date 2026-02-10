@@ -6,6 +6,44 @@
   min-width: 650px;
 }
 
+/* En-têtes de tableaux : couleur prédominante #001514 */
+.MuiTableHead-root .MuiTableRow-root .MuiTableCell-root {
+  background-color: var(--color-primary) !important;
+  color: var(--color-text-on-dark) !important;
+  font-weight: 600;
+}
+
+/* Filtres AgencyExpenses : fond blanc, texte primary */
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child,
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child .MuiTableCell-root {
+  background-color: white !important;
+  color: var(--color-primary) !important;
+}
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child .MuiInputBase-root {
+  background-color: white !important;
+}
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child .MuiInputBase-input,
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child .MuiInputBase-input::placeholder,
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child .MuiSvgIcon-root {
+  color: var(--color-primary) !important;
+}
+.agency-expenses-table .MuiTableBody-root .MuiTableRow-root:first-child .MuiOutlinedInput-notchedOutline {
+  border-color: var(--color-primary) !important;
+}
+
+.MuiTableHead-root .MuiTableSortLabel-root {
+  color: var(--color-text-on-dark) !important;
+}
+
+.MuiTableHead-root .MuiTableSortLabel-root:hover {
+  color: var(--color-text-on-dark) !important;
+  opacity: 0.9;
+}
+
+.MuiTableHead-root .MuiTableSortLabel-root.Mui-active {
+  color: var(--color-text-on-dark) !important;
+}
+
 .MuiTableRow-root:nth-of-type(even) {
   background-color: var(--color-background-dark);
 }

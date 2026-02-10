@@ -1559,9 +1559,10 @@ const PlanningHebdoAgent = ({
                 onClick={closeChantierModal}
                 sx={{
                   backgroundColor: COLORS.borderDark,
-                  color: "black",
+                  color: "white",
                   "&:hover": {
                     backgroundColor: "#999",
+                    color: "white",
                   },
                 }}
               >

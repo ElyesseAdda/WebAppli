@@ -26,6 +26,7 @@ import {
   calculateRetard,
   calculerEcartMois,
 } from "../utils/calculations";
+import { COLORS } from "../../../../constants/colors";
 
 const commonBodyCellStyle = {
   padding: "6px 8px",
@@ -152,7 +153,8 @@ const TableauFacturationTable = ({
                 <TableRow
                   key={`sous-total-${item.mois}`}
                   sx={{
-                    backgroundColor: "rgba(27, 120, 188, 1)",
+                    backgroundColor: COLORS.primary,
+                    color: "white",
                     fontWeight: "bold",
                     "& td": {
                       fontWeight: "bold",

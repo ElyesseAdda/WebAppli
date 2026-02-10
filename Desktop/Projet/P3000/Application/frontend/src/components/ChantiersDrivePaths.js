@@ -291,10 +291,10 @@ const ChantiersDrivePaths = () => {
 
   return (
     <Box p={3}>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ color: "white" }}>
         Chemins de Drive par Chantier
       </Typography>
-      <Typography variant="body2" color="text.secondary" paragraph>
+      <Typography variant="body2" paragraph sx={{ color: "white" }}>
         Cette page liste tous les chantiers avec leurs chemins de drive correspondants dans AWS S3.
       </Typography>
 

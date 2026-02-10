@@ -5,6 +5,7 @@ import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
 import ChantierListeAvenants from "./ChantierListeAvenants";
 import ChantierListeSituation from "./ChantierListeSituation";
+import { COLORS } from "../../constants/colors";
 
 const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   // Centralisation des états pour chaque sous-liste et filtres
@@ -172,20 +173,20 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
             onChange={handleTabChange}
             variant="fullWidth"
             textColor="inherit"
-            TabIndicatorProps={{ style: { background: "#1976d2" } }}
+            TabIndicatorProps={{ style: { background: COLORS.primary } }}
             sx={{
-              color: "black",
+              color: COLORS.text,
               gap: "32px",
               "& .MuiTab-root": {
-                color: "black",
+                color: COLORS.textMuted,
                 minWidth: 120,
                 fontWeight: 500,
                 fontSize: "1.1rem",
                 textTransform: "none",
-              },
-              "& .Mui-selected": {
-                color: "primary.main",
-                fontWeight: 700,
+                "&.Mui-selected": {
+                  color: COLORS.primary,
+                  fontWeight: 700,
+                },
               },
               "& .MuiTabs-flexContainer": {
                 gap: "32px",

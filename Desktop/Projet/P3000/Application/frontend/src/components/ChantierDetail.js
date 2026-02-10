@@ -21,6 +21,7 @@ import ChantierCommandesTab from "./chantier/ChantierCommandesTab";
 import ChantierDocumentsTab from "./chantier/ChantierDocumentsTab";
 import ChantierInfoTab from "./chantier/ChantierInfoTab";
 import ChantierRecapFinancierTab from "./chantier/ChantierRecapFinancierTab";
+import { COLORS } from "../constants/colors";
 
 // Déplace TabPanel en dehors du composant ChantierDetail
 const TabPanel = ({ children, value, index }) => (
@@ -479,6 +480,7 @@ const ChantierDetail = () => {
                 onChange={handleTabChange}
                 aria-label="chantier tabs"
                 variant="fullWidth"
+                TabIndicatorProps={{ style: { background: COLORS.primary } }}
                 sx={{
                   flex: 1,
                   "& .MuiTab-root": {
@@ -486,10 +488,10 @@ const ChantierDetail = () => {
                     fontSize: "1.1rem",
                     fontWeight: 500,
                     minWidth: 120,
-                    color: "text.primary",
+                    color: COLORS.textMuted,
                     fontFamily: "Roboto, Arial, sans-serif",
                     "&.Mui-selected": {
-                      color: "primary.main",
+                      color: COLORS.primary,
                       fontWeight: 700,
                     },
                   },

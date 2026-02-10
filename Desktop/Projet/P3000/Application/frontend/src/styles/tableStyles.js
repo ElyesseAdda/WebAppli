@@ -5,7 +5,6 @@ import {
   TableContainer,
   TextField,
 } from "@mui/material";
-import { blue } from "@mui/material/colors";
 import { styled } from "@mui/material/styles";
 
 // Styles communs
@@ -26,30 +25,32 @@ export const commonStyles = {
   },
 
   filterCell: {
-    backgroundColor: "rgba(27, 120, 188, 1)",
+    backgroundColor: "#001514",
+    color: "#fcfcfc",
     "& .MuiTableSortLabel-root": {
-      color: "white",
+      color: "#fcfcfc",
     },
   },
 
   alignedCell: {
-    backgroundColor: "rgba(27, 120, 188, 1)",
+    backgroundColor: "#001514",
+    color: "#fcfcfc",
     "& .MuiTableSortLabel-root": {
       width: "100%",
       justifyContent: "center",
-      color: "white",
+      color: "#fcfcfc",
     },
   },
 
   baseTextField: {
     "& .MuiInputBase-input": {
-      color: "white",
+      color: "#fcfcfc",
     },
     "& .MuiInputLabel-root": {
-      color: "white",
+      color: "#fcfcfc",
     },
     "& .MuiInput-underline:before": {
-      borderBottomColor: "white",
+      borderBottomColor: "#fcfcfc",
     },
   },
 
@@ -79,11 +80,11 @@ export const commonStyles = {
   },
 
   devisNumber: {
-    color: "rgba(27, 120, 188, 1)",
+    color: "#001514",
     fontWeight: 700,
     fontFamily: "Merriweather, serif",
     "&:hover": {
-      color: blue[700],
+      color: "#002a28",
       textDecoration: "underline",
     },
   },
@@ -98,13 +99,13 @@ export const commonStyles = {
   },
 
   select: {
-    color: "white",
+    color: "#fcfcfc",
     marginTop: "3px",
     "&:before": {
-      borderBottomColor: "white",
+      borderBottomColor: "#fcfcfc",
     },
     "& .MuiSelect-icon": {
-      color: "white",
+      color: "#fcfcfc",
     },
   },
 
