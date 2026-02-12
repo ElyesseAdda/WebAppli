@@ -426,7 +426,9 @@ const RecapCategoryDetails = ({
     setSaveError(null);
     setSaveSuccess(false);
     try {
-      const payload = fournisseurs
+      // N'envoyer que les fournisseurs visibles (filtrés) pour éviter de créer des lignes à 0 pour tous les fournisseurs
+      const fournisseursAEnvoyer = visibleFournisseurs === null ? fournisseurs : fournisseurs.filter((f) => visibleFournisseurs.has(f));
+      const payload = fournisseursAEnvoyer
         .filter((f) => paiements[f] !== undefined && paiements[f] !== '' && paiements[f] !== null && !isNaN(Number(paiements[f])))
         .map((f) => ({
           fournisseur: f,

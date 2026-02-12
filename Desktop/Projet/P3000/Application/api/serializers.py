@@ -2152,6 +2152,7 @@ class FactureSuiviSousTraitantSerializer(serializers.ModelSerializer):
         model = FactureSuiviSousTraitant
         fields = [
             'id',
+            'suivi_paiement',
             'numero_facture',
             'montant_facture_ht',
             'payee',

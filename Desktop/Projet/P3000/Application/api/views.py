@@ -11273,10 +11273,22 @@ def _get_tableau_fournisseur_data(chantier_id=None):
     from decimal import Decimal
     
     # Récupérer tous les paiements matériel
+    # Exclure les entrées vides (montant=0, montant_a_payer=0, pas de factures, pas de dates)
+    # pour éviter d'afficher des lignes inutiles créées automatiquement
+    from django.db.models import Q, Count
     if chantier_id:
         paiements = PaiementFournisseurMateriel.objects.filter(chantier_id=chantier_id)
     else:
         paiements = PaiementFournisseurMateriel.objects.all()
+    
+    # Filtrer les entrées vides : montant=0, montant_a_payer=0 (ou null), pas de factures, pas de dates
+    paiements = paiements.annotate(nb_factures=Count('factures')).exclude(
+        Q(montant=0) & 
+        (Q(montant_a_payer=0) | Q(montant_a_payer__isnull=True)) &
+        Q(nb_factures=0) &
+        Q(date_paiement__isnull=True) &
+        Q(date_envoi__isnull=True)
+    )
     
     # Structure pour stocker les données : {mois_annee: {fournisseur: {chantier_id: {a_payer, paye, ecart, chantier_name, factures, date_paiement, date_envoi, date_paiement_prevue, ecart_paiement_reel, date_modification, historique_modifications}}}}
     data = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {

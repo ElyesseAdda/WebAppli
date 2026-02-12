@@ -1089,6 +1089,9 @@ const TableauFournisseur = () => {
       });
     }
 
+    // Ne pas afficher les lignes avec montant à payer = 0
+    filteredData = filteredData.filter((item) => (item.a_payer ?? 0) !== 0);
+
     // Organiser : {mois: {fournisseur: [{chantier_id, chantier_name, a_payer, paye, ecart}]}}
     const organized = {};
     
