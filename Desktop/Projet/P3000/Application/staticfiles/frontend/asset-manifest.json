@@ -1,13 +1,15 @@
 {
   "files": {
-    "main.css": "/static/frontend/main.e499a98fc8b8a6c134a3.css",
-    "main.js": "/static/frontend/main.489c12f8ace143242109.js",
-    "src/img/logo.png": "/static/frontend/src/img/logo.png"
+    "main.css": "/static/frontend/main.2c0164496682dd73dcfe.css",
+    "main.js": "/static/frontend/main.7bc2d9fe3fcad544bd51.js",
+    "src/img/logo.png": "/static/frontend/src/img/logo.png",
+    "src/img/MJR SERVICES logo.jpg": "/static/frontend/src/img/MJR SERVICES logo.jpg",
+    "src/img/apple-touch-icon.png": "/static/frontend/src/img/apple-touch-icon.png"
   },
   "entrypoints": {
     "main": [
-      "main.e499a98fc8b8a6c134a3.css",
-      "main.489c12f8ace143242109.js"
+      "main.2c0164496682dd73dcfe.css",
+      "main.7bc2d9fe3fcad544bd51.js"
     ]
   }
 }

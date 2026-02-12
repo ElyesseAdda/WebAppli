@@ -9,7 +9,7 @@ table {
 }
 
 table thead tr {
-  background-color: rgba(27, 120, 188, 1);
+  background-color: var(--color-primary);
   color: #ffffff;
   text-align: left;
   font-weight: bold;
@@ -22,7 +22,7 @@ table td {
 }
 
 table tbody tr {
-  border-bottom: 1px solid #dddddd;
+  border-bottom: 1px solid var(--color-border);
   font-family: "Roboto slab", sans-serif;
 }
 
@@ -35,11 +35,11 @@ td {
 }
 
 .EnCours {
-  color: green;
+  color: var(--color-success);
 }
 
 .ListContainer {
-  background-color: #ffffff;
+  background-color: var(--color-background);
   scroll-behavior: smooth;
   width: 100%;
   max-width: 1400px;
@@ -54,7 +54,7 @@ td {
   top: 20%;
   left: 80%;
   transform: translate(-50%, -50%);
-  background-color: rgba(27, 120, 188, 1);
+  background-color: var(--color-primary);
   color: rgb(255, 255, 255);
   border: none;
   font-size: medium;
@@ -69,18 +69,18 @@ li {
 
 a {
   position: relative;
-  color: rgba(27, 120, 188, 1);
+  color: var(--color-primary);
   text-decoration: none;
   font-size: large;
   font-weight: bold;
 }
 
 .En.Cours {
-  color: rgba(27, 120, 188, 1);
+  color: var(--color-primary);
 }
 
 .En.Attente.Signature {
-  color: rgb(255, 123, 0);
+  color: var(--color-warning);
 }
 
 .Terminer {

@@ -1,6 +1,6 @@
 {
   "name": "MJR Distributeurs",
-  "short_name": "Distributeurs",
+  "short_name": "MJR Distributeurs",
   "description": "Application de gestion des distributeurs MJR Services",
   "start_url": "/distributeurs",
   "scope": "/",
