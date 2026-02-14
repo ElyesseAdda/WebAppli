@@ -11836,6 +11836,60 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         sous_traitant_nom = suivi.sous_traitant
         chantier_id_val = suivi.chantier_id if suivi.chantier else 0
         
+        # ✅ FIX : Si le suivi a chantier_id=null (chantier_id_val=0) et que le sous-traitant
+        # a déjà des entrées agent_journalier, fusionner les données du suivi dans ces entrées
+        # au lieu de créer une entrée fantôme avec a_payer=0 qui écraserait les vraies données
+        if chantier_id_val == 0 and key in data and sous_traitant_nom in data[key]:
+            agent_chantier_ids = [
+                cid for cid, entry in data[key][sous_traitant_nom].items()
+                if entry.get('source_type') == 'agent_journalier'
+            ]
+            if agent_chantier_ids:
+                # Ce suivi correspond à un agent journalier - fusionner dans les entrées existantes
+                first_cid = agent_chantier_ids[0]
+                
+                # Appliquer le montant payé uniquement sur la première entrée
+                # (le frontend fait la somme des paye individuels pour le total)
+                if suivi.montant_paye_ht is not None:
+                    data[key][sous_traitant_nom][first_cid]['paye'] = Decimal(str(suivi.montant_paye_ht))
+                
+                # Appliquer les dates et suivi_paiement_id sur toutes les entrées agent
+                for cid in agent_chantier_ids:
+                    if suivi.date_paiement_reel:
+                        data[key][sous_traitant_nom][cid]['date_paiement'] = suivi.date_paiement_reel.isoformat()
+                    if suivi.date_envoi_facture:
+                        data[key][sous_traitant_nom][cid]['date_envoi'] = suivi.date_envoi_facture.isoformat()
+                    if suivi.date_paiement_prevue:
+                        data[key][sous_traitant_nom][cid]['date_paiement_prevue'] = suivi.date_paiement_prevue.isoformat()
+                    if suivi.delai_paiement:
+                        data[key][sous_traitant_nom][cid]['delai_paiement'] = suivi.delai_paiement
+                    data[key][sous_traitant_nom][cid]['suivi_paiement_id'] = suivi.id
+                    
+                    ecart_jours = suivi.ecart_paiement_jours
+                    if ecart_jours is not None:
+                        data[key][sous_traitant_nom][cid]['ecart_paiement_reel'] = ecart_jours
+                
+                # Appliquer les factures du suivi sur la première entrée
+                factures_suivi = []
+                for f in suivi.factures_suivi.all():
+                    factures_suivi.append({
+                        'id': f'suivi_{f.id}',
+                        'numero_facture': f.numero_facture,
+                        'montant_facture': float(f.montant_facture_ht),
+                        'payee': f.payee,
+                        'date_paiement_facture': f.date_paiement_facture.isoformat() if f.date_paiement_facture else None
+                    })
+                
+                existing_factures = data[key][sous_traitant_nom][first_cid].get('factures', [])
+                existing_numeros = {f.get('numero_facture') for f in existing_factures if f.get('numero_facture')}
+                for facture_suivi in factures_suivi:
+                    if facture_suivi['numero_facture'] not in existing_numeros:
+                        existing_factures.append(facture_suivi)
+                        existing_numeros.add(facture_suivi['numero_facture'])
+                data[key][sous_traitant_nom][first_cid]['factures'] = existing_factures
+                
+                continue  # Ne PAS créer d'entrée fantôme, passer au suivi suivant
+        
         # Si cette entrée n'existe pas encore dans data, la créer
         if key not in data or sous_traitant_nom not in data[key] or chantier_id_val not in data[key][sous_traitant_nom]:
             # Créer une nouvelle entrée si elle n'existe pas (cas où le suivi est créé avant les autres sources)

@@ -264,9 +264,9 @@ const StockProductDialog = ({
         )}
 
         {tabValue === 1 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
             {/* Recherche Open Food Facts */}
-            <Box>
+            <Box sx={{ minWidth: 0 }}>
               <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 800, color: "text.secondary" }}>
                 Rechercher une image (Open Food Facts)
               </Typography>
@@ -292,17 +292,23 @@ const StockProductDialog = ({
                 </Button>
               </Box>
 
-              {/* Résultats de recherche - Horizontal scroll sur mobile */}
+              {/* Résultats de recherche - Horizontal scroll (mobile + desktop) */}
               {searchResults.length > 0 && (
                 <Box 
                   sx={{ 
                     mt: 2, 
                     display: "flex", 
                     gap: 1.5, 
-                    overflowX: "auto", 
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    maxWidth: "100%",
+                    minWidth: 0,
                     pb: 1,
                     px: 0.5,
-                    "&::-webkit-scrollbar": { display: "none" }
+                    WebkitOverflowScrolling: "touch",
+                    "&::-webkit-scrollbar": { height: 8 },
+                    "&::-webkit-scrollbar-track": { bgcolor: "grey.200", borderRadius: 4 },
+                    "&::-webkit-scrollbar-thumb": { bgcolor: "grey.400", borderRadius: 4 }
                   }}
                 >
                   {searchResults.map((p, index) => (

@@ -47,19 +47,24 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const draft = JSON.parse(saved);
+        const normalizedItems = (draft.items || []).map((it) => ({
+          ...it,
+          quantite: it.quantite ?? "",
+          prix_total: it.prix_total !== undefined && it.prix_total !== "" ? it.prix_total : (it.prix_unitaire && it.quantite ? String(parseFloat(it.prix_unitaire) * parseInt(it.quantite, 10) || "") : ""),
+          unite: it.unite || "pièce",
+          creer_produit: it.creer_produit !== false,
+        }));
         return {
           lieuAchat: draft.lieuAchat || "",
           dateAchat: draft.dateAchat || getLocalDatetimeString(),
-          items: draft.items && draft.items.length > 0 
-            ? draft.items 
-            : [{
-                produit_id: null,
-                nom_produit: "",
-                quantite: "",
-                prix_unitaire: "",
-        unite: "pièce",
-        creer_produit: true, // Toujours mettre à jour le stock
-              }],
+          items: normalizedItems.length > 0 ? normalizedItems : [{
+            produit_id: null,
+            nom_produit: "",
+            quantite: "",
+            prix_total: "",
+            unite: "pièce",
+            creer_produit: true,
+          }],
         };
       }
     } catch (e) {
@@ -72,9 +77,9 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
         produit_id: null,
         nom_produit: "",
         quantite: "",
-        prix_unitaire: "",
-        unite: "pièce", // Toujours "pièce" par défaut
-        creer_produit: true, // Toujours mettre à jour le stock
+        prix_total: "",
+        unite: "pièce",
+        creer_produit: true,
       }],
     };
   };
@@ -86,9 +91,9 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
       produit_id: null,
       nom_produit: "",
       quantite: "",
-      prix_unitaire: "",
-        unite: "pièce",
-        creer_produit: true, // Toujours mettre à jour le stock
+      prix_total: "",
+      unite: "pièce",
+      creer_produit: true,
     },
   ]);
   const [expandedItems, setExpandedItems] = useState({}); // { index: true/false }
@@ -136,9 +141,9 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
         produit_id: null,
         nom_produit: "",
         quantite: "",
-        prix_unitaire: "",
-        unite: "pièce", // Toujours "pièce"
-        creer_produit: true, // Toujours mettre à jour le stock
+        prix_total: "",
+        unite: "pièce",
+        creer_produit: true,
       },
     ]);
   };
@@ -178,38 +183,48 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
 
   const calculateTotal = () => {
     return items.reduce((total, item) => {
-      const quantite = parseFloat(item.quantite) || 0;
-      const prix = parseFloat(item.prix_unitaire) || 0;
-      return total + quantite * prix;
+      const prixTotal = parseFloat(item.prix_total) || 0;
+      return total + prixTotal;
     }, 0);
   };
 
+  /** Prix unitaire calculé à partir du prix total et de la quantité */
+  const getPrixUnitaire = (item) => {
+    const q = parseInt(item.quantite, 10) || 0;
+    const pt = parseFloat(item.prix_total) || 0;
+    if (q <= 0) return null;
+    return pt / q;
+  };
+
   const handleSave = () => {
-    // Validation
     const validItems = items.filter(
       (item) =>
-        item.nom_produit && item.nom_produit.trim() && // Nom du produit requis
-        item.quantite &&
-        item.prix_unitaire
+        item.nom_produit && item.nom_produit.trim() &&
+        item.quantite && parseInt(item.quantite, 10) > 0 &&
+        item.prix_total !== "" && item.prix_total !== undefined && !isNaN(parseFloat(item.prix_total))
     );
 
     if (validItems.length === 0) {
-      alert("Veuillez ajouter au moins un produit");
+      alert("Veuillez ajouter au moins un produit avec quantité et prix total");
       return;
     }
 
     const purchaseData = {
       lieu_achat: lieuAchat.trim() || "Non renseigné",
       date_achat: dateAchat,
-      items: validItems.map((item) => ({
-        produit_id: item.produit_id || null,
-        nom_produit: item.nom_produit.trim() || null,
-        quantite: parseInt(item.quantite),
-        prix_unitaire: parseFloat(item.prix_unitaire),
-        unite: "pièce", // Toujours "pièce"
-        // Toujours mettre à jour le stock (c'est le but de la section achat)
-        creer_produit: true,
-      })),
+      items: validItems.map((item) => {
+        const q = parseInt(item.quantite, 10);
+        const pt = parseFloat(item.prix_total);
+        const prixUnitaire = q > 0 ? pt / q : 0;
+        return {
+          produit_id: item.produit_id || null,
+          nom_produit: item.nom_produit.trim() || null,
+          quantite: q,
+          prix_unitaire: prixUnitaire,
+          unite: "pièce",
+          creer_produit: true,
+        };
+      }),
     };
 
     onSave(purchaseData);
@@ -226,9 +241,9 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
           produit_id: null,
           nom_produit: "",
           quantite: "",
-          prix_unitaire: "",
-          unite: "pièce", // Toujours "pièce"
-                creer_produit: true, // Toujours mettre à jour le stock
+          prix_total: "",
+          unite: "pièce",
+          creer_produit: true,
         },
       ]);
       setExpandedItems({});
@@ -375,9 +390,14 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
                         <Typography variant="subtitle2" sx={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2 }}>
                           {item.nom_produit || (product ? product.nom : "Nouveau produit")}
                         </Typography>
-                        {item.quantite && item.prix_unitaire && (
+                        {item.quantite && item.prix_total !== "" && !isNaN(parseFloat(item.prix_total)) && (
                           <Typography variant="caption" sx={{ fontWeight: 700, color: "primary.main" }}>
-                            {item.quantite} {item.unite} × {item.prix_unitaire}€ = {(parseFloat(item.quantite) * parseFloat(item.prix_unitaire)).toFixed(2)}€
+                            {item.quantite} {item.unite} — total {(parseFloat(item.prix_total)).toFixed(2)}€
+                            {parseInt(item.quantite, 10) > 0 && (
+                              <Typography component="span" variant="caption" sx={{ color: "text.secondary", ml: 0.5 }}>
+                                ({(parseFloat(item.prix_total) / parseInt(item.quantite, 10)).toFixed(2)} €/u)
+                              </Typography>
+                            )}
                           </Typography>
                         )}
                       </Box>
@@ -494,20 +514,33 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
 
                         <Box sx={{ display: "flex", gap: 1.5 }}>
                           <TextField
-                            label="Quantité *"
+                            label="Nombre d'unités *"
                             type="number"
+                            min={1}
                             value={item.quantite}
                             onChange={(e) => handleItemChange(index, "quantite", e.target.value)}
                             size="small"
                             sx={{ flex: 1 }}
+                            inputProps={{ min: 1, step: 1 }}
                           />
                           <TextField
-                            label="Prix unit. *"
+                            label="Prix total (€) *"
                             type="number"
-                            value={item.prix_unitaire}
-                            onChange={(e) => handleItemChange(index, "prix_unitaire", e.target.value)}
+                            value={item.prix_total}
+                            onChange={(e) => handleItemChange(index, "prix_total", e.target.value)}
                             size="small"
                             sx={{ flex: 1 }}
+                            inputProps={{ min: 0, step: 0.01 }}
+                            InputProps={{
+                              endAdornment: (() => {
+                                const pu = getPrixUnitaire(item);
+                                return pu != null ? (
+                                  <Typography variant="caption" sx={{ color: "text.secondary", mr: 1 }}>
+                                    = {Number(pu).toFixed(2)} €/u
+                                  </Typography>
+                                ) : null;
+                              })(),
+                            }}
                           />
                         </Box>
                       </Box>

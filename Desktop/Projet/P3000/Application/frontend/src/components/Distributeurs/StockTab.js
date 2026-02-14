@@ -60,10 +60,13 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   const [purchaseSearchTerm, setPurchaseSearchTerm] = useState("");
   const [openLotEditDialog, setOpenLotEditDialog] = useState(false);
   const [productForLots, setProductForLots] = useState(null);
+  const [lots, setLots] = useState([]);
+  const [loadingLots, setLoadingLots] = useState(false);
 
   useEffect(() => {
     fetchProducts();
     fetchPurchases();
+    fetchLots();
   }, []);
 
   const fetchProducts = async (forceRefresh = false) => {
@@ -94,6 +97,23 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
       setPurchases(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Erreur chargement achats:", error);
+    }
+  };
+
+  const fetchLots = async (forceRefresh = false) => {
+    setLoadingLots(true);
+    try {
+      const url = forceRefresh
+        ? `/api/stock-lots/?only_available=true&_t=${Date.now()}`
+        : "/api/stock-lots/?only_available=true";
+      const response = await axios.get(url);
+      const data = response.data.results || response.data;
+      setLots(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Erreur chargement lots:", error);
+      setLots([]);
+    } finally {
+      setLoadingLots(false);
     }
   };
 
@@ -130,6 +150,15 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     const key = product.nom.trim().toLowerCase();
     return bestPriceByProduct[key] || null;
   };
+
+  // Montant total du stock à partir des StockLot : chaque lot contribue quantite_restante × prix_achat_unitaire
+  const stockValueTotal = React.useMemo(() => {
+    return lots.reduce((acc, lot) => {
+      const qte = parseInt(lot.quantite_restante, 10) || 0;
+      const prix = parseFloat(lot.prix_achat_unitaire) || 0;
+      return acc + qte * prix;
+    }, 0);
+  }, [lots]);
 
   const filteredProducts = products.filter((product) => {
     const search = searchTerm.toLowerCase();
@@ -185,6 +214,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
 
       handleCloseQuantityDialog();
       fetchProducts();
+      fetchLots();
     } catch (error) {
       console.error("Erreur modification stock:", error);
       alert(
@@ -208,6 +238,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     if (productData === null) {
       // Produit supprimé
       fetchProducts();
+      fetchLots();
       return;
     }
 
@@ -221,6 +252,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
       }
       handleCloseProductDialog();
       fetchProducts();
+      fetchLots();
     } catch (error) {
       console.error("Erreur sauvegarde produit:", error);
       if (error.response?.data) {
@@ -263,11 +295,22 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               Stock Central
             </Typography>
             <IconButton 
-              onClick={() => fetchProducts()}
+              onClick={() => { fetchProducts(); fetchLots(); }}
               sx={{ bgcolor: "action.hover", borderRadius: "12px" }}
             >
               <MdInventory size={22} color="#666" />
             </IconButton>
+          </Box>
+
+          {/* Valeur du stock (StockLot) */}
+          <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            {loadingLots ? (
+              <Typography variant="body2" color="text.secondary">Chargement…</Typography>
+            ) : (
+              <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                Valeur du stock : <Typography component="span" sx={{ color: "primary.main", fontWeight: 800 }}>{Number(stockValueTotal).toFixed(2)} €</Typography>
+              </Typography>
+            )}
           </Box>
 
           {/* Recherche */}
@@ -299,7 +342,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
 
       {/* Barre de recherche pour desktop */}
       {isDesktop && (
-        <Box sx={{ display: "flex", gap: 2, mb: 3, alignItems: "center" }}>
+        <Box sx={{ display: "flex", gap: 2, mb: 3, alignItems: "center", flexWrap: "wrap" }}>
           <TextField
             placeholder="Rechercher un produit..."
             value={searchTerm}
@@ -324,8 +367,15 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               ),
             }}
           />
+          {loadingLots ? (
+            <Typography variant="body2" color="text.secondary">Valeur…</Typography>
+          ) : (
+            <Typography variant="body1" sx={{ fontWeight: 700 }}>
+              Valeur du stock : <Typography component="span" sx={{ color: "primary.main", fontWeight: 800 }}>{Number(stockValueTotal).toFixed(2)} €</Typography>
+            </Typography>
+          )}
           <IconButton 
-            onClick={() => fetchProducts()}
+            onClick={() => { fetchProducts(); fetchLots(); }}
             sx={{ bgcolor: "background.paper", borderRadius: "12px", border: "1px solid", borderColor: "divider" }}
           >
             <MdInventory size={22} color="#666" />
@@ -1063,7 +1113,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
           setProductForLots(null);
         }}
         product={productForLots}
-        onSaved={() => fetchProducts(true)}
+        onSaved={() => { fetchProducts(true); fetchLots(true); }}
       />
 
       {/* Dialog pour créer un achat */}

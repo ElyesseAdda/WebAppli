@@ -306,7 +306,10 @@ const TableauSousTraitant = () => {
   const handleSaveDatePaiement = async (montantPaye, datePaiement) => {
     if (currentPaiement) {
       const { mois, sous_traitant, chantierId } = currentPaiement;
-      const key = `${mois}_${sous_traitant}_${chantierId}`;
+      // ✅ FIX : Utiliser la bonne clé pour les agents journaliers (_AGENT_JOURNALIER au lieu de _0)
+      const key = chantierId === 0 || chantierId === null
+        ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+        : `${mois}_${sous_traitant}_${chantierId}`;
       
       // ✅ TOUTES les lignes (y compris AgencyExpenseMonth et agents journaliers) utilisent le système de suivi
       setEditedValuesPaye((prev) => ({
@@ -1687,12 +1690,25 @@ const TableauSousTraitant = () => {
     });
     
     // Ajouter les autres sous-traitants (non regroupés)
+    // ✅ FIX : Ne pas écraser les entrées agent journalier déjà présentes
     Object.keys(autresSousTraitants).forEach((mois) => {
       if (!organized[mois]) {
         organized[mois] = {};
       }
       Object.keys(autresSousTraitants[mois]).forEach((sous_traitant) => {
-        organized[mois][sous_traitant] = autresSousTraitants[mois][sous_traitant];
+        if (!organized[mois][sous_traitant]) {
+          // Pas encore d'entrée pour ce sous-traitant, on l'ajoute
+          organized[mois][sous_traitant] = autresSousTraitants[mois][sous_traitant];
+        } else {
+          // Une entrée existe déjà (agent journalier). Ne pas écraser.
+          const existingItems = organized[mois][sous_traitant];
+          const isExistingAgentJournalier = existingItems.some(item => item.isAgentJournalier);
+          if (!isExistingAgentJournalier) {
+            // Si l'existant n'est pas un agent journalier, fusionner
+            organized[mois][sous_traitant] = [...existingItems, ...autresSousTraitants[mois][sous_traitant]];
+          }
+          // Si c'est un agent journalier, on ignore l'entrée fantôme (a_payer=0, source_type=null)
+        }
       });
     });
 
