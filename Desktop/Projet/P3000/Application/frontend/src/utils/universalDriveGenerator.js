@@ -152,9 +152,19 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération de la facture ${data.numero} vers le Drive...`,
   },
-  // Autres types à ajouter plus tard :
-  // 'situation': { ... },
-  // 'rapport': { ... }
+
+  certificat_paiement: {
+    apiEndpoint: "/generate-certificat-paiement-pdf-drive/",
+    previewUrl: (data) => `/api/preview-certificat-paiement/${data.contratId}/`,
+    requiredFields: [
+      "contratId",
+      "chantierId",
+    ],
+    displayName: "Certificat de Paiement",
+    getDisplayName: (data) => `Certificat de paiement n°${data.numeroCertificat || ''}`,
+    getLoadingMessage: (data) =>
+      `Génération du certificat de paiement ${data.sousTraitantName || ''} vers le Drive...`,
+  },
 };
 
 /**
@@ -344,7 +354,17 @@ const buildApiParams = (documentType, data) => {
         year: data.year,
       });
 
-    // Autres types à ajouter ici
+    case "certificat_paiement":
+      return addCustomParams({
+        contrat_id: data.contratId,
+        chantier_id: data.chantierId,
+        chantier_name: data.chantierName,
+        societe_name: data.societeName,
+        sous_traitant_name: data.sousTraitantName,
+        numero_certificat: data.numeroCertificat,
+        facture_id: data.factureId,
+      });
+
     default:
       return addCustomParams(data || {});
   }
@@ -530,7 +550,11 @@ const buildFileName = (documentType, data) => {
       fileName = `RapportComptable_${monthName}_${String(data.year).slice(-2)}.pdf`;
       break;
 
-    // Autres types à ajouter ici
+    case "certificat_paiement":
+      const certName = `Certificat_Paiement_${data.numeroCertificat || '1'}_${data.sousTraitantName || 'SousTraitant'}_${data.chantierName || 'Chantier'}`;
+      fileName = `${certName}.pdf`;
+      break;
+
     default:
       fileName = `${documentType}_${data.id || Date.now()}.pdf`;
   }
@@ -593,7 +617,12 @@ const buildFilePath = (documentType, data, fileName) => {
     case "rapport_agents":
       return `Agents/Document_Generaux/Rapport_mensuel/${data.year}/${fileName}`;
 
-    // Autres types à ajouter ici
+    case "certificat_paiement":
+      const societeCertSlug = normalizeFilename(data.societeName);
+      const chantierCertSlug = normalizeFilename(data.chantierName);
+      const entrepriseCertSlug = normalizeFilename(data.sousTraitantName);
+      return `Chantiers/${societeCertSlug}/${chantierCertSlug}/SOUS_TRAITANT/${entrepriseCertSlug}/${fileName}`;
+
     default:
       return `Documents/${documentType}/${fileName}`;
   }
@@ -681,7 +710,17 @@ const getDocumentSpecificData = (documentType, data) => {
         year: data.year,
       };
 
-    // Autres types à ajouter ici
+    case "certificat_paiement":
+      return {
+        contratId: data.contratId,
+        chantierId: data.chantierId,
+        chantierName: data.chantierName,
+        societeName: data.societeName,
+        sousTraitantName: data.sousTraitantName,
+        numeroCertificat: data.numeroCertificat,
+        factureId: data.factureId,
+      };
+
     default:
       return {};
   }

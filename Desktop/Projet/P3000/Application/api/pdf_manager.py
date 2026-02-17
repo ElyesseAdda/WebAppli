@@ -76,7 +76,8 @@ class PDFManager:
             'avenant': 'Avenant',
             'rapport_chantier': 'Documents_Execution',
             'contrat_sous_traitance': 'SOUS_TRAITANT',
-            'avenant_sous_traitance': 'SOUS_TRAITANT'
+            'avenant_sous_traitance': 'SOUS_TRAITANT',
+            'certificat_paiement': 'SOUS_TRAITANT'
         }
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:
@@ -187,6 +188,16 @@ class PDFManager:
             # print(f"🔍 DEBUG generate_pdf_filename - Avenant ST: '{filename}'")
             return filename
         
+        elif document_type == 'certificat_paiement':
+            # Format: Certificat_Paiement_N°{numero}_{SousTraitant}_{Chantier}.pdf
+            numero_certificat = kwargs.get('numero_certificat', '1')
+            sous_traitant_name = kwargs.get('sous_traitant_name', 'SousTraitant')
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            sous_traitant_slug = normalize_filename(sous_traitant_name)
+            chantier_slug = normalize_filename(chantier_name)
+            filename = f"Certificat_Paiement_{numero_certificat}_{sous_traitant_slug}_{chantier_slug}.pdf"
+            return filename
+        
         elif document_type == 'situation':
             # Utiliser le numero_situation depuis la DB (sans timestamp ni ID)
             numero_situation = kwargs.get('numero_situation', 'situation')
@@ -276,7 +287,7 @@ class PDFManager:
                     if document_type == 'bon_commande' and 'fournisseur_name' in kwargs:
                         fournisseur_slug = normalize_drive_segment(kwargs['fournisseur_name'])
                         return f"Chantiers/{base_path}/{subfolder}/{fournisseur_slug}"
-                    elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance'] and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
+                    elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance', 'certificat_paiement'] and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
                         sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
                         sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
                         return f"Chantiers/{base_path}/SOUS_TRAITANT/{sous_traitant_slug}"
@@ -319,7 +330,7 @@ class PDFManager:
                 
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
-        elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance', 'contrat', 'contrats']:
+        elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance', 'certificat_paiement', 'contrat', 'contrats']:
             # Pour les contrats et avenants de sous-traitance
             # Chemin: Chantiers/{Societe}/{Chantier}/SOUS_TRAITANT/{Entreprise}/
             # Protection: gérer aussi les cas où document_type est 'contrat' ou 'contrats' (ancien code)

@@ -9973,6 +9973,223 @@ def preview_avenant(request, avenant_id):
     except AvenantSousTraitance.DoesNotExist:
         return JsonResponse({'error': 'Avenant non trouvé'}, status=404)
 
+
+def preview_certificat_paiement(request, contrat_id):
+    """
+    Preview HTML du certificat de paiement sous-traitant.
+    Paramètres GET optionnels :
+      - facture_id : ID de la facture du mois courant
+      - numero_certificat : numéro à afficher sur le certificat
+      - montant_preview : montant HT de la facture à prévisualiser (avant création)
+      - mois_preview : mois de la facture à prévisualiser
+      - annee_preview : année de la facture à prévisualiser
+    """
+    import calendar
+    from datetime import date as date_type
+
+    try:
+        contrat = ContratSousTraitance.objects.select_related(
+            'chantier', 'sous_traitant'
+        ).prefetch_related('avenants').get(id=contrat_id)
+
+        chantier = contrat.chantier
+        sous_traitant = contrat.sous_traitant
+
+        # Charger toutes les factures pour ce couple chantier/sous-traitant
+        toutes_factures = FactureSousTraitant.objects.filter(
+            chantier=chantier,
+            sous_traitant=sous_traitant
+        ).prefetch_related('paiements').order_by('annee', 'mois', 'numero_facture')
+
+        # Mode preview : montant saisi dans le modal, facture pas encore en base
+        montant_preview = request.GET.get('montant_preview')
+        mois_preview = request.GET.get('mois_preview')
+        annee_preview = request.GET.get('annee_preview')
+        is_preview_mode = montant_preview is not None
+
+        # Déterminer la facture du mois (si spécifiée)
+        facture_id = request.GET.get('facture_id')
+        numero_certificat = request.GET.get('numero_certificat', '')
+
+        facture_du_mois = None
+        if facture_id:
+            try:
+                facture_du_mois = FactureSousTraitant.objects.prefetch_related('paiements').get(id=facture_id)
+            except FactureSousTraitant.DoesNotExist:
+                pass
+
+        # Si pas de facture spécifiée et pas en mode preview, prendre la dernière
+        if not facture_du_mois and not is_preview_mode and toutes_factures.exists():
+            facture_du_mois = toutes_factures.last()
+
+        # --- Déterminer le mois/année du certificat ---
+        if is_preview_mode and mois_preview and annee_preview:
+            mois_facture = int(mois_preview)
+            annee_facture = int(annee_preview)
+        elif facture_du_mois:
+            mois_facture = facture_du_mois.mois
+            annee_facture = facture_du_mois.annee
+        else:
+            mois_facture = date_type.today().month
+            annee_facture = date_type.today().year
+
+        # Date limite = dernier jour du mois de la facture
+        dernier_jour = calendar.monthrange(annee_facture, mois_facture)[1]
+        date_limite = date_type(annee_facture, mois_facture, dernier_jour)
+
+        # --- (a) Filtrer les avenants par date de création <= fin du mois ---
+        avenants = contrat.avenants.filter(
+            date_creation__lte=date_limite
+        ).order_by('numero')
+
+        # --- Calculs financiers du marché ---
+        montant_marche_ht = float(contrat.montant_operation or 0)
+        total_avenants = sum(float(av.montant or 0) for av in avenants)
+        total_marche_avenants = montant_marche_ht + total_avenants
+
+        # --- (c) Calcul des acomptes basé sur les factures strictement précédentes ---
+        def calcul_acompte_facture(facture):
+            """Retourne le montant d'acompte pour une facture (montant payé si écart avec facturé)."""
+            montant_facture_val = float(facture.montant_facture_ht or 0)
+            total_paye = sum(float(p.montant_paye or 0) for p in facture.paiements.all())
+            ecart = montant_facture_val - total_paye
+            if abs(ecart) > 0.01 and total_paye > 0:
+                return total_paye
+            return 0
+
+        # Séparer les factures : précédentes vs mois courant
+        factures_precedentes = [
+            f for f in toutes_factures
+            if (f.annee, f.mois) < (annee_facture, mois_facture)
+        ]
+
+        # Situation précédente = somme des factures strictement avant le mois courant
+        prev_travaux = sum(float(f.montant_facture_ht or 0) for f in factures_precedentes)
+        prev_retenues = sum(float(f.montant_retenue or 0) for f in factures_precedentes)
+        prev_acomptes = sum(calcul_acompte_facture(f) for f in factures_precedentes)
+
+        if is_preview_mode:
+            mois_travaux = float(montant_preview or 0)
+            mois_retenues = 0
+            mois_acomptes = 0
+        elif facture_du_mois:
+            mois_travaux = float(facture_du_mois.montant_facture_ht or 0)
+            mois_retenues = float(facture_du_mois.montant_retenue or 0)
+            mois_acomptes = calcul_acompte_facture(facture_du_mois)
+        else:
+            mois_travaux = 0
+            mois_retenues = 0
+            mois_acomptes = 0
+
+        # Situation cumulée = précédent + mois
+        cumul_travaux = prev_travaux + mois_travaux
+        cumul_retenues = prev_retenues + mois_retenues
+        cumul_acomptes = prev_acomptes + mois_acomptes
+
+        # Net à payer = travaux - retenues - acomptes déjà versés
+        cumul_net = cumul_travaux - cumul_retenues - cumul_acomptes
+        cumul_total = cumul_travaux
+
+        mois_net = mois_travaux - mois_retenues - mois_acomptes
+        mois_total = mois_travaux
+
+        prev_net = prev_travaux - prev_retenues - prev_acomptes
+        prev_total = prev_travaux
+
+        # Pourcentage d'avancement
+        pourcentage_avancement = round((cumul_travaux / total_marche_avenants * 100), 2) if total_marche_avenants > 0 else 0
+
+        # Reste à facturer
+        reste_a_facturer = total_marche_avenants - cumul_travaux
+
+        # Numéro du certificat
+        if not numero_certificat:
+            if is_preview_mode:
+                numero_certificat = str(toutes_factures.count() + 1)
+            else:
+                numero_certificat = str(toutes_factures.count())
+
+        # --- (b) Récupérer la situation chantier correspondante au mois ---
+        situation_chantier = Situation.objects.filter(
+            chantier=chantier,
+            mois=mois_facture,
+            annee=annee_facture
+        ).first()
+
+        situation_chantier_data = None
+        if situation_chantier:
+            situation_chantier_data = {
+                'numero_situation': situation_chantier.numero_situation,
+                'montant_ht_mois': float(situation_chantier.montant_ht_mois or 0),
+                'montant_total_cumul_ht': float(situation_chantier.montant_total_cumul_ht or 0),
+                'montant_apres_retenues': float(situation_chantier.montant_apres_retenues or 0),
+                'montant_precedent': float(situation_chantier.montant_precedent or 0),
+                'pourcentage_avancement': float(situation_chantier.pourcentage_avancement or 0),
+                'retenue_garantie': float(situation_chantier.retenue_garantie or 0),
+                'montant_prorata': float(situation_chantier.montant_prorata or 0),
+                'statut': situation_chantier.statut,
+            }
+
+        # Info mois/année de la situation
+        mois_noms = {
+            1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
+            5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
+            9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
+        }
+        mois_situation = mois_noms.get(mois_facture, '')
+        annee_situation = str(annee_facture)
+        date_fin_situation = f"{dernier_jour:02d}/{mois_facture:02d}/{annee_facture}"
+
+        # Date du certificat
+        date_certificat = date_type.today().strftime('%d/%m/%Y')
+
+        context = {
+            'sous_traitant': sous_traitant,
+            'chantier': chantier,
+            'contrat': contrat,
+            'avenants': avenants,
+            'numero_certificat': numero_certificat,
+            'date_certificat': date_certificat,
+            'montant_marche_ht': montant_marche_ht,
+            'total_avenants': total_avenants,
+            'total_marche_avenants': total_marche_avenants,
+            'pourcentage_avancement': pourcentage_avancement,
+            'mois_situation': mois_situation,
+            'annee_situation': annee_situation,
+            'date_fin_situation': date_fin_situation,
+            'situation_cumulee': {
+                'travaux': cumul_travaux,
+                'acompte': cumul_acomptes,
+                'retenues': cumul_retenues,
+                'net': cumul_net,
+                'total': cumul_total,
+            },
+            'situation_precedente': {
+                'travaux': prev_travaux,
+                'acompte': prev_acomptes,
+                'retenues': prev_retenues,
+                'net': prev_net,
+                'total': prev_total,
+            },
+            'situation_mois': {
+                'travaux': mois_travaux,
+                'acompte': mois_acomptes,
+                'retenues': mois_retenues,
+                'net': mois_net,
+                'total': mois_total,
+            },
+            'reste_a_facturer': reste_a_facturer,
+            'situation_chantier': situation_chantier_data,
+        }
+
+        return render(request, 'certificat_paiement.html', context)
+
+    except ContratSousTraitance.DoesNotExist:
+        return HttpResponse("Contrat de sous-traitance non trouvé", status=404)
+    except Exception as e:
+        return HttpResponse(f"Erreur lors de la génération du certificat: {str(e)}", status=500)
+
+
 @api_view(['GET'])
 def get_taux_facturation_data(request, chantier_id):
     """

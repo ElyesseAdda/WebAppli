@@ -1,14 +1,18 @@
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadIcon from "@mui/icons-material/Download";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PaymentIcon from "@mui/icons-material/Payment";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
   Table,
@@ -23,6 +27,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const DateEnvoiModal = ({ open, onClose, paiement, onSubmit }) => {
   const [dateEnvoi, setDateEnvoi] = useState("");
@@ -313,13 +318,16 @@ const AjouterPaiementModal = ({
   );
 };
 
+
 const FactureModal = ({
   open,
   onClose,
   onSubmit,
   chantierId,
   sousTraitantId,
-  factures = [], // Ajouter les factures existantes pour calculer le prochain numéro
+  factures = [],
+  contrat = null,
+  chantierNom = "",
 }) => {
   const [mois, setMois] = useState(new Date().getMonth() + 1);
   const [annee, setAnnee] = useState(new Date().getFullYear());
@@ -329,6 +337,7 @@ const FactureModal = ({
     new Date().toISOString().split("T")[0]
   );
   const [delaiPaiement, setDelaiPaiement] = useState(45);
+  const [creerCertificat, setCreerCertificat] = useState(false);
 
   // Calculer le prochain numéro de facture et réinitialiser la date
   useEffect(() => {
@@ -352,16 +361,18 @@ const FactureModal = ({
     onSubmit({
       mois,
       annee,
-      numeroFacture: numeroFacture || "1", // Auto-généré côté backend si vide
+      numeroFacture: numeroFacture || "1",
       montantFacture,
       dateReception,
       delaiPaiement,
+      creerCertificat,
     });
     onClose();
     // Reset form
     setNumeroFacture("");
     setMontantFacture("");
     setDateReception("");
+    setCreerCertificat(false);
   };
 
   const moisOptions = [
@@ -451,6 +462,43 @@ const FactureModal = ({
             <option value={45}>45 jours</option>
             <option value={60}>60 jours</option>
           </TextField>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={creerCertificat}
+                onChange={(e) => setCreerCertificat(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Créer certificat de paiement"
+            sx={{ mt: 2 }}
+          />
+
+          {/* Bouton preview certificat (ouvre dans un nouvel onglet) */}
+          {creerCertificat && contrat && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<OpenInNewIcon />}
+              sx={{ mt: 1, ml: 0.5 }}
+              onClick={() => {
+                const params = new URLSearchParams();
+                params.set("montant_preview", montantFacture || "0");
+                params.set("mois_preview", String(mois));
+                params.set("annee_preview", String(annee));
+                params.set(
+                  "numero_certificat",
+                  String(factures.length + 1)
+                );
+                const url = `/api/preview-certificat-paiement/${contrat.id}/?${params.toString()}`;
+                window.open(url, "_blank");
+              }}
+              disabled={!montantFacture}
+            >
+              Aperçu du certificat
+            </Button>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
@@ -460,7 +508,7 @@ const FactureModal = ({
           variant="contained"
           disabled={!montantFacture || !dateReception}
         >
-          Créer la facture
+          {creerCertificat ? "Créer la facture + Certificat" : "Créer la facture"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -802,6 +850,29 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
 
       const res = await axios.post(`/api/factures-sous-traitant/`, payload);
       setFactures((prev) => [...prev, res.data]);
+
+      // Si la checkbox "Créer certificat de paiement" est cochée
+      if (data.creerCertificat && contratsFiltres.length > 0) {
+        const contrat = contratsFiltres[0];
+        const sousTraitantName = contrat.sous_traitant_details?.entreprise || '';
+        const chantierName = contrat.chantier_details?.chantier_name || chantierNom || '';
+        const societeName = contrat.chantier_details?.societe_name || contrat.societe_name || 'PEINTURE 3000';
+        const numeroCertificat = String(factures.length + 1);
+
+        try {
+          await generatePDFDrive('certificat_paiement', {
+            contratId: contrat.id,
+            chantierId: chantierId,
+            chantierName: chantierName,
+            societeName: societeName,
+            sousTraitantName: sousTraitantName,
+            numeroCertificat: numeroCertificat,
+            factureId: res.data.id,
+          });
+        } catch (pdfError) {
+          console.error("Erreur lors de la génération du certificat:", pdfError);
+        }
+      }
     } catch (error) {
       alert("Erreur lors de la création de la facture.");
       if (error.response) {
@@ -1059,6 +1130,18 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   // Le montant restant doit tenir compte des retenues
   // Montant restant = Montant du marché - Montant payé - Total des retenues
   const montantRestantCalcul = montantTotalMarche - montantTotalPaye - totalRetenues;
+
+  // Calculer le numéro de certificat chronologique pour chaque facture
+  // (tri ascendant : la plus ancienne = CP n°1)
+  const facturesChronologiques = [...factures].sort((a, b) => {
+    if (a.annee !== b.annee) return a.annee - b.annee;
+    if (a.mois !== b.mois) return a.mois - b.mois;
+    return parseInt(a.numero_facture) - parseInt(b.numero_facture);
+  });
+  const numeroCertificatMap = {};
+  facturesChronologiques.forEach((f, idx) => {
+    numeroCertificatMap[f.id] = idx + 1;
+  });
 
   // Créer les lignes à afficher dans le tableau (factures + paiements)
   const lignesTableau = [];
@@ -1360,6 +1443,27 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                     <Box
                       sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
                     >
+                      {ligne.isFirstForFacture && contratsFiltres.length > 0 && (
+                        <Tooltip title={`Certificat de paiement n°${numeroCertificatMap[ligne.facture.id] || ""}`}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              const params = new URLSearchParams();
+                              params.set("facture_id", String(ligne.facture.id));
+                              params.set(
+                                "numero_certificat",
+                                String(numeroCertificatMap[ligne.facture.id] || 1)
+                              );
+                              const url = `/api/preview-certificat-paiement/${contratsFiltres[0].id}/?${params.toString()}`;
+                              window.open(url, "_blank");
+                            }}
+                          >
+                            <DownloadIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+
                       {ligne.isFirstForFacture && (
                         <Tooltip title="Supprimer la facture">
                           <IconButton
@@ -1575,6 +1679,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
         factures={factures}
+        contrat={contratsFiltres.length > 0 ? contratsFiltres[0] : null}
+        chantierNom={chantierNom}
       />
       <PaiementFactureModal
         open={openPaiementModal}

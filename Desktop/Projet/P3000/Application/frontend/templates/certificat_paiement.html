@@ -1,0 +1,471 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Certificat de paiement n°{{ numero_certificat }} | Webapplication P3000</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+      body {
+        font-family: Arial, Helvetica, "Roboto", sans-serif;
+        font-size: 0.9rem;
+        margin: 0;
+        padding: 15px;
+        width: 210mm;
+        overflow-x: hidden;
+      }
+      @page {
+        size: A4;
+        width: 210mm;
+        height: 297mm;
+        margin: 10mm;
+      }
+
+      /* En-tête société – même style que preview_situation_v2 */
+      .p3000-container {
+        padding-top: 0;
+        padding-bottom: 20px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: 1fr;
+        grid-column-gap: 0;
+        grid-row-gap: 0;
+      }
+      .logo-container {
+        grid-area: 1 / 1 / 2 / 2;
+        width: 300px;
+      }
+      .logo {
+        width: 220px;
+        height: 160px;
+      }
+      .P3000-info {
+        grid-area: 1 / 2 / 2 / 3;
+        color: rgba(27, 120, 188, 1);
+        text-align: right;
+        font-weight: 600;
+      }
+      .P3000-info p {
+        font-size: 0.9rem;
+        font-style: italic;
+        line-height: 10px;
+        font-weight: 500;
+      }
+      .P3000-info h2 {
+        letter-spacing: -1px;
+        text-decoration: none;
+        font-style: normal;
+        font-size: 26px;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      /* Bloc sous-traitant et chantier – même style que client-container situation */
+      .client-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: 2fr;
+        grid-column-gap: 150px;
+        grid-row-gap: 0;
+        margin-bottom: -30px;
+      }
+      .client-container h3 {
+        text-decoration: underline 1.5px black;
+        text-underline-offset: 2px;
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+      .client-container h4 {
+        font-size: 0.9rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .client-container p {
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin: 2px 0;
+        line-height: 1.2;
+      }
+      .client-info {
+        line-height: 8px;
+        grid-area: 1 / 1 / 2 / 2;
+      }
+      .client-info h3 {
+        margin-bottom: 0;
+      }
+      .client-info h4 {
+        margin-top: 12px;
+      }
+      .contact-info {
+        line-height: 7px;
+        grid-area: 1 / 2 / 2 / 3;
+        padding-left: 50px;
+      }
+      .contact-info h3 {
+        margin-bottom: 8px;
+      }
+      .contact-info h4 {
+        margin-top: 14px;
+      }
+      .client-info,
+      .contact-info {
+        margin-bottom: 10px;
+      }
+
+      /* Date – même style que preview_situation_v2 */
+      .date {
+        font-size: 0.9rem;
+        text-align: left;
+        margin-top: 30px;
+        margin-bottom: 15px;
+        font-weight: 500;
+      }
+
+      /* Titre certificat – double bordure, tout en noir */
+      .certificat-title {
+        text-align: center;
+        margin-bottom: 10px;
+        border: solid 1.5px black;
+      }
+      .certificat-title h1 {
+        font-size: 1.3rem;
+        color: black;
+        border: solid 1.5px black;
+        display: inline-block;
+        
+        margin: 1px;
+        text-decoration: none;
+        width: 99%;
+      }
+      .certificat-subtitle {
+        text-align: center;
+        font-size: 0.9rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+      }
+
+      /* Section marché */
+      .marche-section {
+        margin-bottom: 20px;
+      }
+      .marche-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+      }
+      .marche-table td {
+        padding: 4px 8px;
+        vertical-align: middle;
+      }
+      .marche-table .label {
+        font-weight: 700;
+        width: 70%;
+        text-align: right;
+      }
+      .marche-table .montant {
+        text-align: right;
+        width: 140px;
+        min-width: 140px;
+        max-width: 140px;
+        font-weight: 600;
+        border: 1px solid black;
+        box-sizing: border-box;
+      }
+      .marche-table .total-row td {
+        
+        font-weight: 700;
+        font-size: 0.85rem;
+        padding-top: 8px;
+      }
+      .marche-table .total-row .montant {
+        background-color: #ffff00;
+        color: #dc3545;
+        padding: 5px 8px;
+        
+        border: 1px solid black;
+      }
+
+      /* Section situation travaux */
+      .situation-section {
+        margin-bottom: 20px;
+      }
+      .situation-header {
+        width: 100%;
+        box-sizing: border-box;
+        background-color: white;
+        color: black;
+       
+        padding: 8px 12px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .situation-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 3px solid black;
+        width: 100%;
+      }
+      .situation-header-left {
+        flex: 0 1 auto;
+        padding: 5px 10px
+      }
+      .situation-header-right {
+        flex: 0 0 auto;
+      }
+      .situation-header .avancement {
+        font-size: 0.8rem;
+      }
+      .situation-header .avancement-pct {
+        color: red;
+        padding-left: 50px;
+      }
+
+      /* Tableau situation */
+      .situation-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        border: 2px solid black;
+      }
+      .situation-table th {
+        border: 2px solid black;
+        padding: 6px 8px;
+        text-align: center;
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+      .situation-table td {
+        border: 2px solid black;
+        padding: 5px 8px;
+        text-align: center;
+        font-size: 0.8rem;
+      }
+      .situation-table td:first-child {
+        text-align: left;
+        font-weight: 600;
+      }
+      .situation-table tr.total-row td {
+        font-weight: 700;
+        border-top: 2px solid black;
+      }
+      .situation-table tr.net-row td {
+        font-weight: 700;
+        font-size: 0.85rem;
+      }
+      .situation-table tr.net-row td.net-mois-cell {
+        background-color: rgb(44 146 221);
+        color: white;
+      }
+      .situation-table tr.reste-row td {
+        font-weight: 600;
+      }
+
+      /* Signatures */
+      .signatures {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 50px;
+        padding-top: 20px;
+      }
+      .signature-box {
+        width: 45%;
+        text-align: center;
+      }
+      .signature-box .label {
+      font-weight: 500;
+      font-size: 0.85rem;
+      border: 2px solid black;
+      padding-top: 10px;
+      border-radius: 20px;
+      padding-bottom: 150px;
+}
+
+      /* Pied de page */
+      .footer-info {
+        margin-top: 30px;
+        border-top: 2px solid rgba(27, 120, 188, 1);
+        padding-top: 8px;
+        font-size: 0.7rem;
+        text-align: center;
+        color: #555;
+      }
+      .footer-info p {
+        margin: 2px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- En-tête société – même structure que preview_situation_v2, sans logo Qualibat -->
+    <div class="p3000-container">
+      <div class="logo-container">
+        <img class="logo" src="{% static 'logo.png' %}" alt="Logo" />
+      </div>
+      <div class="P3000-info">
+        <h2>SARL PEINTURE 3000</h2>
+        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
+        <p>13014 - Marseille</p>
+        <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
+        <p>N°Siren: 532 875 317 RCS Marseille</p>
+        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
+      </div>
+    </div>
+
+    <!-- Blocs sous-traitant et chantier – même style que client/contact situation -->
+    <div class="client-container">
+      <div class="client-info">
+        <h3>Sous-traitant :</h3>
+        <h4>{{ sous_traitant.entreprise }}</h4>
+        <p>{{ sous_traitant.representant }}</p>
+        {% if sous_traitant.phone_Number %}<p>Tél : <span class="phone-format">{{ sous_traitant.phone_Number }}</span></p>{% endif %}
+        <p>{{ sous_traitant.adresse }}</p>
+        <p>{{ sous_traitant.code_postal }} - {{ sous_traitant.ville }}</p>
+      </div>
+      <div class="contact-info">
+        <h3>Chantier :</h3>
+        <h4>{{ chantier.chantier_name }}</h4>
+        {% if chantier.rue %}<p>{{ chantier.rue }}</p>{% endif %}
+        {% if chantier.ville %}<p>{{ chantier.ville }}</p>{% endif %}
+      </div>
+    </div>
+
+    <!-- Date -->
+    <div class="date">
+      <p>A Marseille, le {{ date_certificat }}</p>
+    </div>
+
+    <!-- Titre -->
+    <div class="certificat-title">
+      <h1>Certificat de paiement n°{{ numero_certificat }}</h1>
+    </div>
+    
+
+    <!-- Section Montant du marché (dynamique : uniquement les éléments existants) -->
+    <div class="marche-section">
+      <table class="marche-table">
+        <tr>
+          <td class="label">MONTANT HT MARCHÉ :</td>
+          <td class="montant montanta">{{ montant_marche_ht }} €</td>
+        </tr>
+        {% for avenant in avenants %}
+        <tr>
+          <td class="label">AVENANT N°{{ avenant.numero|stringformat:"02d" }}{% if avenant.objet %} – {{ avenant.objet }}{% endif %} :</td>
+          <td class="montant montanta">{{ avenant.montant }} €</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td class="label">{% if avenants %}TOTAL MONTANT MARCHÉ + AVENANTS HT :{% else %}MONTANT TOTAL MARCHÉ HT :{% endif %}</td>
+          <td class="montant montanta">{{ total_marche_avenants }} €</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Section Situation Travaux -->
+    <div class="situation-section">
+      <div class="situation-header">
+        <div class="situation-header-row">
+          <span class="situation-header-left">SITUATION TRAVAUX N°{{ numero_certificat }} - {{ mois_situation }} {{ annee_situation }}</span>
+          <span class="situation-header-right">AU {{ date_fin_situation }}</span>
+        </div>
+        <span class="avancement">Pourcentage d'avancement : <span class="avancement-pct">{{ pourcentage_avancement }}%</span></span>
+      </div>
+      <table class="situation-table">
+        <thead>
+          <tr>
+            <th style="width:40%"></th>
+            <th style="width:20%">SITUATION CUMULÉE</th>
+            <th style="width:20%">SITUATION PRÉCÉDENTE</th>
+            <th style="width:20%">SITUATION DU MOIS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>TRAVAUX MARCHÉ HT</td>
+            <td class="montanta">{% if situation_cumulee.travaux == "-" %}-{% else %}{{ situation_cumulee.travaux }} €{% endif %}</td>
+            <td class="montanta">{% if situation_precedente.travaux == "-" %}-{% else %}{{ situation_precedente.travaux }} €{% endif %}</td>
+            <td class="montanta">{% if situation_mois.travaux == "-" %}-{% else %}{{ situation_mois.travaux }} €{% endif %}</td>
+          </tr>
+          <tr>
+            <td>ACOMPTE</td>
+            <td class="montanta">{% if situation_cumulee.acompte and situation_cumulee.acompte != 0 %}{{ situation_cumulee.acompte }} €{% else %}-{% endif %}</td>
+            <td class="montanta">{% if situation_precedente.acompte and situation_precedente.acompte != 0 %}{{ situation_precedente.acompte }} €{% else %}-{% endif %}</td>
+            <td class="montanta">{% if situation_mois.acompte and situation_mois.acompte != 0 %}{{ situation_mois.acompte }} €{% else %}-{% endif %}</td>
+          </tr>
+          <tr>
+            <td>RETENUES</td>
+            <td class="montanta">{% if situation_cumulee.retenues == "-" %}-{% else %}{{ situation_cumulee.retenues }} €{% endif %}</td>
+            <td class="montanta">{% if situation_precedente.retenues == "-" %}-{% else %}{{ situation_precedente.retenues }} €{% endif %}</td>
+            <td class="montanta">{% if situation_mois.retenues == "-" %}-{% else %}{{ situation_mois.retenues }} €{% endif %}</td>
+          </tr>
+          <tr class="net-row">
+            <td>NET A PAYER EN EUROS</td>
+            <td class="montanta">{% if situation_cumulee.net == "-" %}-{% else %}{{ situation_cumulee.net }} €{% endif %}</td>
+            <td class="montanta">{% if situation_precedente.net == "-" %}-{% else %}{{ situation_precedente.net }} €{% endif %}</td>
+            <td class="montanta net-mois-cell">{% if situation_mois.net == "-" %}-{% else %}{{ situation_mois.net }} €{% endif %}</td>
+          </tr>
+          <tr class="total-row">
+            <td>TOTAL</td>
+            <td class="montanta">{% if situation_cumulee.total == "-" %}-{% else %}{{ situation_cumulee.total }} €{% endif %}</td>
+            <td class="montanta">{% if situation_precedente.total == "-" %}-{% else %}{{ situation_precedente.total }} €{% endif %}</td>
+            <td class="montanta">{% if situation_mois.total == "-" %}-{% else %}{{ situation_mois.total }} €{% endif %}</td>
+          </tr>
+          <tr class="reste-row">
+            <td>RESTE A FACTURER</td>
+            <td class="montanta">{% if reste_a_facturer == "-" %}-{% else %}{{ reste_a_facturer }} €{% endif %}</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="signature-box">
+        <div class="label">Signature PEINTURE 3000</div>
+      </div>
+      <div class="signature-box">
+        <div class="label">Signature SOUS-TRAITANT</div>
+      </div>
+    </div>
+
+  
+
+    <script>
+    function formatNumber(number) {
+      let parts = Number(number).toFixed(2).split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      return parts.join(',');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Formater les montants
+      const elements = document.querySelectorAll('.montanta');
+      elements.forEach(element => {
+        const text = element.textContent;
+        const number = parseFloat(text.replace(/[^0-9.,-]+/g, '').replace(',', '.'));
+        if (!isNaN(number)) {
+          element.textContent = formatNumber(number) + ' €';
+        }
+      });
+
+      // Formater les numéros de téléphone
+      const phoneElements = document.querySelectorAll('.phone-format');
+      phoneElements.forEach(el => {
+        const phone = el.textContent.trim();
+        if (phone.length === 10) {
+          el.textContent = phone.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+        } else if (phone.length === 9) {
+          const withZero = '0' + phone;
+          el.textContent = withZero.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1.$2.$3.$4.$5');
+        }
+      });
+    });
+    </script>
+  </body>
+</html>
