@@ -341,6 +341,8 @@ const FactureModal = ({
   );
   const [delaiPaiement, setDelaiPaiement] = useState(45);
   const [creerCertificat, setCreerCertificat] = useState(false);
+  const [fichierFacture, setFichierFacture] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
 
   // Calculer le prochain numéro de facture et réinitialiser la date
   useEffect(() => {
@@ -369,6 +371,7 @@ const FactureModal = ({
       dateReception,
       delaiPaiement,
       creerCertificat,
+      fichierFacture,
     });
     onClose();
     // Reset form
@@ -376,6 +379,7 @@ const FactureModal = ({
     setMontantFacture("");
     setDateReception("");
     setCreerCertificat(false);
+    setFichierFacture(null);
   };
 
   const moisOptions = [
@@ -502,6 +506,59 @@ const FactureModal = ({
               Aperçu du certificat
             </Button>
           )}
+
+          {/* Zone de drag & drop pour joindre la facture */}
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              border: "2px dashed",
+              borderColor: dragActive ? "primary.main" : fichierFacture ? "success.main" : "grey.400",
+              borderRadius: 2,
+              backgroundColor: dragActive ? "action.hover" : fichierFacture ? "success.50" : "grey.50",
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              "&:hover": { borderColor: "primary.main", backgroundColor: "action.hover" },
+            }}
+            onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              const file = e.dataTransfer.files[0];
+              if (file) setFichierFacture(file);
+            }}
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
+              input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) setFichierFacture(file);
+              };
+              input.click();
+            }}
+          >
+            {fichierFacture ? (
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+                  {fichierFacture.name}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); setFichierFacture(null); }}
+                  sx={{ color: "error.main" }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Glissez-déposez la facture ici ou cliquez pour parcourir
+              </Typography>
+            )}
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -854,6 +911,55 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
 
       const res = await axios.post(`/api/factures-sous-traitant/`, payload);
       setFactures((prev) => [...prev, res.data]);
+
+      // Upload du fichier facture dans le drive si fourni
+      if (data.fichierFacture && contratsFiltres.length > 0) {
+        const contrat = contratsFiltres[0];
+        const sousTraitantName = contrat.sous_traitant_details?.entreprise || 'SousTraitant';
+        try {
+          // Récupérer le drive_path du chantier
+          const chantierRes = await axios.get(`/api/chantier/${chantierId}/`);
+          const chantierData = chantierRes.data;
+
+          let basePath = '';
+          if (chantierData.drive_path) {
+            basePath = chantierData.drive_path.replace(/^Chantiers\//, '').replace(/\/$/, '');
+            basePath = `Chantiers/${basePath}`;
+          } else {
+            const societeNom = chantierData.societe?.nom_societe || 'Societe';
+            const societeSlug = normalizeFilename(societeNom);
+            const chantierSlug = normalizeFilename(chantierData.chantier_name || chantierNom || 'Chantier');
+            basePath = `Chantiers/${societeSlug}/${chantierSlug}`;
+          }
+
+          const stSlug = normalizeFilename(sousTraitantName);
+          const uploadPath = `${basePath}/SOUS_TRAITANT/${stSlug}/Facture`;
+          const fileName = normalizeFilename(data.fichierFacture.name);
+
+          // Obtenir l'URL d'upload présignée
+          const uploadUrlRes = await axios.post('/api/drive-v2/upload-url/', {
+            file_path: uploadPath,
+            file_name: fileName,
+            content_type: data.fichierFacture.type || 'application/octet-stream',
+          }, {
+            withCredentials: true,
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          const { upload_url, fields } = uploadUrlRes.data;
+
+          // Upload vers S3
+          const formData = new FormData();
+          Object.keys(fields).forEach((key) => formData.append(key, fields[key]));
+          formData.append('file', data.fichierFacture);
+
+          await axios.post(upload_url, formData, { withCredentials: false });
+          setSnackbar({ open: true, message: `Facture "${data.fichierFacture.name}" uploadée dans le Drive`, severity: "success" });
+        } catch (uploadError) {
+          console.error("Erreur upload facture dans le Drive:", uploadError);
+          setSnackbar({ open: true, message: "Erreur lors de l'upload de la facture dans le Drive", severity: "error" });
+        }
+      }
 
       // Si la checkbox "Créer certificat de paiement" est cochée
       if (data.creerCertificat && contratsFiltres.length > 0) {
