@@ -1725,7 +1725,7 @@ const SituationCreationModal = ({
 
             // Pré-remplir les champs avec les données existantes
             setTauxProrata(currentSituation.taux_prorata || 2.5);
-            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie || 5.0);
+            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie !== null && currentSituation.taux_retenue_garantie !== undefined ? currentSituation.taux_retenue_garantie : 5.0);
             setRetenueCIE(currentSituation.retenue_cie || 0);
             setTypeRetenueCIE(currentSituation.type_retenue_cie || 'deduction');
             
