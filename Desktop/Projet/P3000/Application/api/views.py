@@ -9993,6 +9993,10 @@ def preview_certificat_paiement(request, contrat_id):
         chantier = contrat.chantier
         sous_traitant = contrat.sous_traitant
 
+        # Récupérer le devis chantier pour la nature des travaux
+        devis_chantier = Devis.objects.filter(chantier=chantier, devis_chantier=True).first()
+        nature_travaux = devis_chantier.nature_travaux if devis_chantier else ''
+
         # Charger toutes les factures pour ce couple chantier/sous-traitant
         toutes_factures = FactureSousTraitant.objects.filter(
             chantier=chantier,
@@ -10169,6 +10173,7 @@ def preview_certificat_paiement(request, contrat_id):
             'chantier': chantier,
             'contrat': contrat,
             'avenants': avenants,
+            'nature_travaux': nature_travaux,
             'numero_certificat': numero_certificat,
             'date_certificat': date_certificat,
             'montant_marche_ht': montant_marche_ht,

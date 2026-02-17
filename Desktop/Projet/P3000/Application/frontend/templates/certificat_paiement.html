@@ -330,6 +330,7 @@
       <div class="contact-info">
         <h3>Chantier :</h3>
         <h4>{{ chantier.chantier_name }}</h4>
+        {% if nature_travaux %}<p>{{ nature_travaux }}</p>{% endif %}
         {% if chantier.rue %}<p>{{ chantier.rue }}</p>{% endif %}
         {% if chantier.ville %}<p>{{ chantier.ville }}</p>{% endif %}
       </div>
