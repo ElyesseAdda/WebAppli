@@ -923,6 +923,8 @@ def generate_certificat_paiement_pdf_drive(request):
         sous_traitant_name = request.GET.get('sous_traitant_name', 'Sous-traitant')
         numero_certificat = request.GET.get('numero_certificat', '1')
         facture_id = request.GET.get('facture_id', '')
+        mois = request.GET.get('mois', '')
+        annee = request.GET.get('annee', '')
         force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
         custom_filename = request.GET.get('custom_filename', '')
 
@@ -945,12 +947,26 @@ def generate_certificat_paiement_pdf_drive(request):
         if preview_params:
             preview_url += '?' + '&'.join(preview_params)
 
+        # Si mois/annee non fournis, essayer de les récupérer depuis la facture
+        if facture_id and (not mois or not annee):
+            try:
+                from .models import FactureSousTraitant
+                facture_obj = FactureSousTraitant.objects.get(id=facture_id)
+                if not mois:
+                    mois = str(facture_obj.mois)
+                if not annee:
+                    annee = str(facture_obj.annee)
+            except Exception:
+                pass
+
         # Préparer les kwargs pour le PDF manager
         pdf_kwargs = {
             'chantier_id': chantier_id,
             'chantier_name': chantier_name,
             'sous_traitant_name': sous_traitant_name,
             'numero_certificat': numero_certificat,
+            'mois': mois or '01',
+            'annee': annee or '2026',
         }
         if custom_filename:
             pdf_kwargs['custom_filename'] = custom_filename
@@ -978,6 +994,8 @@ def generate_certificat_paiement_pdf_drive(request):
                 'societe_name': societe_name,
                 'sous_traitant_name': sous_traitant_name,
                 'numero_certificat': numero_certificat,
+                'mois': mois,
+                'annee': annee,
             }, status=409)
 
         if success:

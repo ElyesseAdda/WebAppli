@@ -363,6 +363,8 @@ const buildApiParams = (documentType, data) => {
         sous_traitant_name: data.sousTraitantName,
         numero_certificat: data.numeroCertificat,
         facture_id: data.factureId,
+        mois: data.mois,
+        annee: data.annee,
       });
 
     default:
@@ -410,6 +412,11 @@ const handleConflict = (documentType, data, responseData, callbacks) => {
     ...(responseData.numero && { numero: responseData.numero }),
     ...(responseData.appel_offres_id && { appelOffresId: responseData.appel_offres_id }),
     ...(responseData.appel_offres_name && { appelOffresName: responseData.appel_offres_name }),
+    ...(responseData.contrat_id && { contratId: responseData.contrat_id }),
+    ...(responseData.sous_traitant_name && { sousTraitantName: responseData.sous_traitant_name }),
+    ...(responseData.numero_certificat && { numeroCertificat: responseData.numero_certificat }),
+    ...(responseData.mois && { mois: responseData.mois }),
+    ...(responseData.annee && { annee: responseData.annee }),
   };
 
   // Émettre l'événement pour ouvrir le modal de conflit
@@ -436,7 +443,12 @@ const handleConflictFromError = (documentType, data, error, callbacks) => {
     ...(errorResponse.month !== undefined && { month: errorResponse.month }),
     ...(errorResponse.year !== undefined && { year: errorResponse.year }),
     ...(errorResponse.week !== undefined && { week: errorResponse.week }),
+    ...(errorResponse.mois !== undefined && { mois: errorResponse.mois }),
+    ...(errorResponse.annee !== undefined && { annee: errorResponse.annee }),
     ...(errorResponse.societe_name && { societeName: errorResponse.societe_name }),
+    ...(errorResponse.sous_traitant_name && { sousTraitantName: errorResponse.sous_traitant_name }),
+    ...(errorResponse.numero_certificat && { numeroCertificat: errorResponse.numero_certificat }),
+    ...(errorResponse.contrat_id && { contratId: errorResponse.contrat_id }),
   };
 
   // Utiliser les données du backend si disponibles, sinon construire
@@ -550,10 +562,14 @@ const buildFileName = (documentType, data) => {
       fileName = `RapportComptable_${monthName}_${String(data.year).slice(-2)}.pdf`;
       break;
 
-    case "certificat_paiement":
-      const certName = `Certificat_Paiement_${data.numeroCertificat || '1'}_${data.sousTraitantName || 'SousTraitant'}_${data.chantierName || 'Chantier'}`;
-      fileName = `${certName}.pdf`;
-      break;
+    case "certificat_paiement": {
+      const numCert = String(data.numeroCertificat || '1').padStart(2, '0');
+      const moisCert = String(data.mois || '01').padStart(2, '0');
+      const anneeCert = String(data.annee || '2026').slice(-2);
+      const stName = normalizeFilename(data.sousTraitantName || 'SousTraitant');
+      const chName = normalizeFilename(data.chantierName || 'Chantier');
+      return `Certificat de paiement n°${numCert} - ${stName} - ${chName} ${moisCert}-${anneeCert}.pdf`;
+    }
 
     default:
       fileName = `${documentType}_${data.id || Date.now()}.pdf`;
@@ -621,7 +637,7 @@ const buildFilePath = (documentType, data, fileName) => {
       const societeCertSlug = normalizeFilename(data.societeName);
       const chantierCertSlug = normalizeFilename(data.chantierName);
       const entrepriseCertSlug = normalizeFilename(data.sousTraitantName);
-      return `Chantiers/${societeCertSlug}/${chantierCertSlug}/SOUS_TRAITANT/${entrepriseCertSlug}/${fileName}`;
+      return `Chantiers/${societeCertSlug}/${chantierCertSlug}/SOUS_TRAITANT/${entrepriseCertSlug}/Certificat_de_paiement/${fileName}`;
 
     default:
       return `Documents/${documentType}/${fileName}`;
@@ -719,6 +735,8 @@ const getDocumentSpecificData = (documentType, data) => {
         sousTraitantName: data.sousTraitantName,
         numeroCertificat: data.numeroCertificat,
         factureId: data.factureId,
+        mois: data.mois,
+        annee: data.annee,
       };
 
     default:

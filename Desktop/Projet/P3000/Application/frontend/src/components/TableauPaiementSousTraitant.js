@@ -29,6 +29,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { normalizeFilename } from "./DriveV2/services/pathNormalizationService";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const DateEnvoiModal = ({ open, onClose, paiement, onSubmit }) => {
@@ -871,6 +872,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
             sousTraitantName: sousTraitantName,
             numeroCertificat: numeroCertificat,
             factureId: res.data.id,
+            mois: data.mois,
+            annee: data.annee,
           });
         } catch (pdfError) {
           console.error("Erreur lors de la génération du certificat:", pdfError);
@@ -1454,8 +1457,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                             onClick={async () => {
                               const contrat = contratsFiltres[0];
                               const numCP = String(numeroCertificatMap[ligne.facture.id] || 1).padStart(2, "0");
-                              const sousTraitantNom = contrat.sous_traitant_details?.entreprise || "Sous-traitant";
-                              const chantierName = contrat.chantier_details?.chantier_name || chantierNom || "Chantier";
+                              const sousTraitantNom = normalizeFilename(contrat.sous_traitant_details?.entreprise || "Sous-traitant");
+                              const chantierName = normalizeFilename(contrat.chantier_details?.chantier_name || chantierNom || "Chantier");
                               const moisStr = String(ligne.facture.mois).padStart(2, "0");
                               const anneeStr = String(ligne.facture.annee).slice(-2);
                               const fileName = `Certificat de paiement n°${numCP} - ${sousTraitantNom} - ${chantierName} ${moisStr}-${anneeStr}.pdf`;
