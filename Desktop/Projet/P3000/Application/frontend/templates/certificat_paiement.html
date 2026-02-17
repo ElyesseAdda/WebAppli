@@ -217,6 +217,7 @@
       }
       .situation-header-right {
         flex: 0 0 auto;
+        padding-right: 10px;
       }
       .situation-header .avancement {
         font-size: 0.8rem;
@@ -398,21 +399,21 @@
           </tr>
           <tr>
             <td>RETENUES</td>
-            <td class="montanta">{% if situation_cumulee.retenues == "-" %}-{% else %}{{ situation_cumulee.retenues }} €{% endif %}</td>
-            <td class="montanta">{% if situation_precedente.retenues == "-" %}-{% else %}{{ situation_precedente.retenues }} €{% endif %}</td>
-            <td class="montanta">{% if situation_mois.retenues == "-" %}-{% else %}{{ situation_mois.retenues }} €{% endif %}</td>
+            <td class="montanta">{% if situation_cumulee.retenues and situation_cumulee.retenues != 0 %}{{ situation_cumulee.retenues }} €{% else %}-{% endif %}</td>
+            <td class="montanta">{% if situation_precedente.retenues and situation_precedente.retenues != 0 %}{{ situation_precedente.retenues }} €{% else %}-{% endif %}</td>
+            <td class="montanta">{% if situation_mois.retenues and situation_mois.retenues != 0 %}{{ situation_mois.retenues }} €{% else %}-{% endif %}</td>
           </tr>
           <tr class="net-row">
             <td>NET A PAYER EN EUROS</td>
             <td class="montanta">{% if situation_cumulee.net == "-" %}-{% else %}{{ situation_cumulee.net }} €{% endif %}</td>
-            <td class="montanta">{% if situation_precedente.net == "-" %}-{% else %}{{ situation_precedente.net }} €{% endif %}</td>
+            <td class="montanta">-</td>
             <td class="montanta net-mois-cell">{% if situation_mois.net == "-" %}-{% else %}{{ situation_mois.net }} €{% endif %}</td>
           </tr>
           <tr class="total-row">
             <td>TOTAL</td>
             <td class="montanta">{% if situation_cumulee.total == "-" %}-{% else %}{{ situation_cumulee.total }} €{% endif %}</td>
-            <td class="montanta">{% if situation_precedente.total == "-" %}-{% else %}{{ situation_precedente.total }} €{% endif %}</td>
-            <td class="montanta">{% if situation_mois.total == "-" %}-{% else %}{{ situation_mois.total }} €{% endif %}</td>
+            <td class="montanta">-</td>
+            <td class="montanta">-</td>
           </tr>
           <tr class="reste-row">
             <td>RESTE A FACTURER</td>

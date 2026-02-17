@@ -13,8 +13,10 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  Alert,
   IconButton,
   Paper,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
@@ -800,6 +802,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   const [openRetenueModal, setOpenRetenueModal] = useState(false);
   const [selectedFactureRetenue, setSelectedFactureRetenue] = useState(null);
   const [montantRestant, setMontantRestant] = useState(0);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
   // Chargement contrats et factures (Promise.all)
   useEffect(() => {
@@ -1444,19 +1447,53 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                       sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
                     >
                       {ligne.isFirstForFacture && contratsFiltres.length > 0 && (
-                        <Tooltip title={`Certificat de paiement n°${numeroCertificatMap[ligne.facture.id] || ""}`}>
+                        <Tooltip title={`Télécharger certificat de paiement n°${numeroCertificatMap[ligne.facture.id] || ""}`}>
                           <IconButton
                             size="small"
                             color="primary"
-                            onClick={() => {
+                            onClick={async () => {
+                              const contrat = contratsFiltres[0];
+                              const numCP = String(numeroCertificatMap[ligne.facture.id] || 1).padStart(2, "0");
+                              const sousTraitantNom = contrat.sous_traitant_details?.entreprise || "Sous-traitant";
+                              const chantierName = contrat.chantier_details?.chantier_name || chantierNom || "Chantier";
+                              const moisStr = String(ligne.facture.mois).padStart(2, "0");
+                              const anneeStr = String(ligne.facture.annee).slice(-2);
+                              const fileName = `Certificat de paiement n°${numCP} - ${sousTraitantNom} - ${chantierName} ${moisStr}-${anneeStr}.pdf`;
+
                               const params = new URLSearchParams();
                               params.set("facture_id", String(ligne.facture.id));
-                              params.set(
-                                "numero_certificat",
-                                String(numeroCertificatMap[ligne.facture.id] || 1)
-                              );
-                              const url = `/api/preview-certificat-paiement/${contratsFiltres[0].id}/?${params.toString()}`;
-                              window.open(url, "_blank");
+                              params.set("numero_certificat", numCP);
+                              const previewUrl = `/api/preview-certificat-paiement/${contrat.id}/?${params.toString()}`;
+
+                              setSnackbar({ open: true, message: "Téléchargement en cours...", severity: "info" });
+                              try {
+                                const response = await axios.post(
+                                  "/api/generate-pdf-from-preview/",
+                                  { preview_url: previewUrl, filename: fileName },
+                                  {
+                                    responseType: "blob",
+                                    headers: { "Content-Type": "application/json" },
+                                  }
+                                );
+
+                                if (response.headers["content-type"] === "application/pdf") {
+                                  const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+                                  const pdfUrl = window.URL.createObjectURL(pdfBlob);
+                                  const link = document.createElement("a");
+                                  link.href = pdfUrl;
+                                  link.download = fileName;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(pdfUrl);
+                                  setSnackbar({ open: true, message: "Téléchargement terminé avec succès", severity: "success" });
+                                } else {
+                                  setSnackbar({ open: true, message: "Erreur : le fichier reçu n'est pas un PDF", severity: "error" });
+                                }
+                              } catch (err) {
+                                console.error("Erreur téléchargement CP:", err);
+                                setSnackbar({ open: true, message: "Erreur lors du téléchargement du certificat", severity: "error" });
+                              }
                             }}
                           >
                             <DownloadIcon fontSize="small" />
@@ -1694,6 +1731,21 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         facture={selectedFactureRetenue}
         onSubmit={handleMettreAJourRetenue}
       />
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={snackbar.severity === "info" ? null : 3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

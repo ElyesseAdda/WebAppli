@@ -785,19 +785,17 @@ def generate_pdf_from_preview(request):
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
         preview_url_param = data.get('preview_url')
+        custom_filename = data.get('filename')
 
-        if not devis_id:
-            return JsonResponse({'error': 'ID du devis manquant'}, status=400)
+        if not devis_id and not preview_url_param:
+            return JsonResponse({'error': 'ID du devis ou preview_url manquant'}, status=400)
 
-        # Utiliser le preview_url fourni, sinon construire l'URL par défaut pour les devis
         if preview_url_param:
-            # Si c'est une URL relative, la convertir en URL absolue
             if preview_url_param.startswith('/'):
                 preview_url = request.build_absolute_uri(preview_url_param)
             else:
                 preview_url = preview_url_param
         else:
-            # URL de la page de prévisualisation pour un devis sauvegardé (par défaut)
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
         # Chemin vers le script Puppeteer
@@ -820,7 +818,8 @@ def generate_pdf_from_preview(request):
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
                 response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+            download_filename = custom_filename or f'devis_{devis_id}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{download_filename}"'
             return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
@@ -1578,19 +1577,17 @@ def generate_pdf_from_preview(request):
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
         preview_url_param = data.get('preview_url')
+        custom_filename = data.get('filename')
 
-        if not devis_id:
-            return JsonResponse({'error': 'ID du devis manquant'}, status=400)
+        if not devis_id and not preview_url_param:
+            return JsonResponse({'error': 'ID du devis ou preview_url manquant'}, status=400)
 
-        # Utiliser le preview_url fourni, sinon construire l'URL par défaut pour les devis
         if preview_url_param:
-            # Si c'est une URL relative, la convertir en URL absolue
             if preview_url_param.startswith('/'):
                 preview_url = request.build_absolute_uri(preview_url_param)
             else:
                 preview_url = preview_url_param
         else:
-            # URL de la page de prévisualisation pour un devis sauvegardé (par défaut)
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
         # Chemin vers le script Puppeteer
@@ -1613,7 +1610,8 @@ def generate_pdf_from_preview(request):
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
                 response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="devis_{devis_id}.pdf"'
+            download_filename = custom_filename or f'devis_{devis_id}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{download_filename}"'
             return response
         else:
             error_msg = 'Le fichier PDF n\'a pas été généré.'
@@ -10047,7 +10045,7 @@ def preview_certificat_paiement(request, contrat_id):
         total_avenants = sum(float(av.montant or 0) for av in avenants)
         total_marche_avenants = montant_marche_ht + total_avenants
 
-        # --- (c) Calcul des acomptes basé sur les factures strictement précédentes ---
+        # --- TRAVAUX, RETENUES, ACOMPTES : tout basé sur les factures sous-traitant ---
         def calcul_acompte_facture(facture):
             """Retourne le montant d'acompte pour une facture (montant payé si écart avec facturé)."""
             montant_facture_val = float(facture.montant_facture_ht or 0)
@@ -10057,17 +10055,22 @@ def preview_certificat_paiement(request, contrat_id):
                 return total_paye
             return 0
 
-        # Séparer les factures : précédentes vs mois courant
+        # Séparer les factures : précédentes, mois précédent, mois courant
         factures_precedentes = [
             f for f in toutes_factures
             if (f.annee, f.mois) < (annee_facture, mois_facture)
         ]
 
-        # Situation précédente = somme des factures strictement avant le mois courant
-        prev_travaux = sum(float(f.montant_facture_ht or 0) for f in factures_precedentes)
-        prev_retenues = sum(float(f.montant_retenue or 0) for f in factures_precedentes)
-        prev_acomptes = sum(calcul_acompte_facture(f) for f in factures_precedentes)
+        # Trouver la facture du mois juste avant le mois courant
+        # (pour la colonne "situation précédente" = montant facturé du mois précédent)
+        factures_prec_triees = sorted(
+            factures_precedentes,
+            key=lambda f: (f.annee, f.mois),
+            reverse=True
+        )
+        facture_mois_precedent = factures_prec_triees[0] if factures_prec_triees else None
 
+        # --- Situation du mois = montant facturé du mois en cours ---
         if is_preview_mode:
             mois_travaux = float(montant_preview or 0)
             mois_retenues = 0
@@ -10081,35 +10084,39 @@ def preview_certificat_paiement(request, contrat_id):
             mois_retenues = 0
             mois_acomptes = 0
 
-        # Situation cumulée = précédent + mois
-        cumul_travaux = prev_travaux + mois_travaux
-        cumul_retenues = prev_retenues + mois_retenues
-        cumul_acomptes = prev_acomptes + mois_acomptes
+        # --- Situation cumulée = cumul des montants facturés - retenues, précédant le mois ---
+        cumul_travaux = sum(
+            float(f.montant_facture_ht or 0) - float(f.montant_retenue or 0)
+            for f in factures_precedentes
+        )
+        cumul_retenues = 0  # Retenues déjà déduites des travaux, afficher "-"
+        cumul_acomptes = sum(calcul_acompte_facture(f) for f in factures_precedentes)
 
-        # Net à payer = travaux - retenues - acomptes déjà versés
-        cumul_net = cumul_travaux - cumul_retenues - cumul_acomptes
-        cumul_total = cumul_travaux
+        # --- Situation précédente = montant facturé - retenue du mois précédent ---
+        if facture_mois_precedent:
+            prev_travaux = float(facture_mois_precedent.montant_facture_ht or 0) - float(facture_mois_precedent.montant_retenue or 0)
+            prev_retenues = 0
+            prev_acomptes = calcul_acompte_facture(facture_mois_precedent)
+        else:
+            prev_travaux = 0
+            prev_retenues = 0
+            prev_acomptes = 0
 
-        mois_net = mois_travaux - mois_retenues - mois_acomptes
+        # Situation du mois : travaux = montant - retenue
+        mois_travaux = mois_travaux - mois_retenues
+
+        # Net du mois = travaux (déjà net de retenue) - acomptes
+        mois_net = mois_travaux - mois_acomptes
         mois_total = mois_travaux
 
-        prev_net = prev_travaux - prev_retenues - prev_acomptes
+        # Net cumulé = cumul travaux (net de retenues) - acomptes + net du mois
+        cumul_net = cumul_travaux - cumul_acomptes
+        cumul_total = cumul_net + mois_net
+
+        prev_net = prev_travaux - prev_acomptes
         prev_total = prev_travaux
 
-        # Pourcentage d'avancement
-        pourcentage_avancement = round((cumul_travaux / total_marche_avenants * 100), 2) if total_marche_avenants > 0 else 0
-
-        # Reste à facturer
-        reste_a_facturer = total_marche_avenants - cumul_travaux
-
-        # Numéro du certificat
-        if not numero_certificat:
-            if is_preview_mode:
-                numero_certificat = str(toutes_factures.count() + 1)
-            else:
-                numero_certificat = str(toutes_factures.count())
-
-        # --- (b) Récupérer la situation chantier correspondante au mois ---
+        # --- Situation chantier (informative, pour référence) ---
         situation_chantier = Situation.objects.filter(
             chantier=chantier,
             mois=mois_facture,
@@ -10129,6 +10136,20 @@ def preview_certificat_paiement(request, contrat_id):
                 'montant_prorata': float(situation_chantier.montant_prorata or 0),
                 'statut': situation_chantier.statut,
             }
+
+        # Pourcentage d'avancement (cumul précédent + mois en cours)
+        total_facture = cumul_travaux + mois_travaux
+        pourcentage_avancement = round((total_facture / total_marche_avenants * 100), 2) if total_marche_avenants > 0 else 0
+
+        # Reste à facturer (marché - tout ce qui a été facturé)
+        reste_a_facturer = total_marche_avenants - total_facture
+
+        # Numéro du certificat
+        if not numero_certificat:
+            if is_preview_mode:
+                numero_certificat = str(toutes_factures.count() + 1)
+            else:
+                numero_certificat = str(toutes_factures.count())
 
         # Info mois/année de la situation
         mois_noms = {
