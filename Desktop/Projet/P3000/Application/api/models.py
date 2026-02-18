@@ -669,7 +669,7 @@ class Event(models.Model):
 
 class Stock(models.Model):
     code_produit = models.CharField(max_length=50, default='')
-    designation = models.CharField(max_length=50)
+    designation = models.CharField(max_length=255)
     fournisseur = models.ForeignKey(
         'Fournisseur',
         on_delete=models.CASCADE,

@@ -2648,6 +2648,9 @@ class DistributeurMouvementViewSet(viewsets.ModelViewSet):
 
 
 class DistributeurCellViewSet(viewsets.ModelViewSet):
+    """Cellules du plan distributeur. Ne pas supprimer (DELETE) : ça supprimerait en cascade
+    les ventes et lignes de réappro, donc le recap/bénéfices. Utiliser PATCH pour vider la case
+    (stock_product=null, image_url=null, image_s3_key=null) afin de préserver l'historique."""
     serializer_class = DistributeurCellSerializer
     permission_classes = [AllowAny]
 
@@ -2657,6 +2660,15 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
         if distributeur_id:
             queryset = queryset.filter(distributeur_id=distributeur_id)
         return queryset.order_by('row_index', 'col_index')
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {
+                'error': 'La suppression d\'une case supprimerait l\'historique des ventes et du recap. '
+                         'Utilisez "Vider la case" dans l\'interface (PATCH avec stock_product=null) pour libérer l\'emplacement tout en conservant les bénéfices passés.'
+            },
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
 
 
 class DistributeurVenteViewSet(viewsets.ModelViewSet):

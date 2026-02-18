@@ -261,7 +261,8 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
                 {Array.from({ length: colsInRow }).map((_, colIndex) => {
                   const cellKey = `${rowIndex}_${colIndex}`;
                   const cell = cells[cellKey];
-                  const hasContent = cell && (cell.nom_produit || cell.image_display_url || cell.image_url);
+                  // Case "avec contenu" seulement si un produit stock est lié (sinon = case vidée, on affiche "Vide")
+                  const hasContent = cell && cell.stock_product != null && (cell.nom_produit || cell.image_display_url || cell.image_url);
                   
                   return (
                     <Box
@@ -320,8 +321,8 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
                         </Typography>
                       </Box>
                       
-                      {/* Contenu de la cellule */}
-                      {cell?.image_display_url || cell?.image_url ? (
+                      {/* Contenu de la cellule : afficher produit seulement si stock_product lié (case vidée = "Vide") */}
+                      {cell && cell.stock_product != null && (cell?.image_display_url || cell?.image_url) ? (
                         <img
                           src={cell.image_display_url || cell.image_url}
                           alt={cell.nom_produit || ""}
@@ -336,7 +337,7 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
                             e.target.style.display = "none";
                           }}
                         />
-                      ) : cell?.nom_produit ? (
+                      ) : cell && cell.stock_product != null && cell?.nom_produit ? (
                         <Typography
                           variant="caption"
                           sx={{

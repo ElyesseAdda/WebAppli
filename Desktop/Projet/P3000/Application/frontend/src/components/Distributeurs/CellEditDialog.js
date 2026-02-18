@@ -89,11 +89,22 @@ const CellEditDialog = ({
 
   const handleDelete = () => {
     if (cell && cell.id) {
-      // Supprimer la cellule
-      axios.delete(`/api/distributeur-cells/${cell.id}/`).then(() => {
-        onSave(null); // Indiquer que la cellule a été supprimée
-        onClose();
-      });
+      // Vider la case (sans supprimer l'enregistrement) pour préserver l'historique
+      // des ventes et du recap (bénéfices, CA). On enlève seulement le lien produit et l'image.
+      axios
+        .patch(`/api/distributeur-cells/${cell.id}/`, {
+          stock_product: null,
+          image_url: null,
+          image_s3_key: null,
+        })
+        .then(() => {
+          onSave(null); // Rafraîchir la grille
+          onClose();
+        })
+        .catch((err) => {
+          console.error("Erreur en vidant la case:", err);
+          if (err.response?.data) alert(`Erreur: ${JSON.stringify(err.response.data)}`);
+        });
     }
   };
 
@@ -242,7 +253,7 @@ const CellEditDialog = ({
           disabled={!cell || !cell.id}
           sx={{ borderRadius: "12px" }}
         >
-          Supprimer
+          Vider la case
         </Button>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button onClick={onClose} sx={{ borderRadius: "12px" }}>
