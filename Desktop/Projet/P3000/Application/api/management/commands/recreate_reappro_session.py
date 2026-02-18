@@ -53,13 +53,18 @@ class Command(BaseCommand):
             help="Afficher ce qui serait créé sans rien écrire en base",
         )
 
-    def _find_cell(self, cells, nom_produit):
+    def _find_cell(self, cells, nom_produit, used_cell_ids):
+        """Cherche une cellule par nom exact puis partiel, en excluant celles déjà utilisées."""
         nom_lower = nom_produit.strip().lower()
         for c in cells:
+            if c.pk in used_cell_ids:
+                continue
             cell_nom = (c.nom_produit or "").strip().lower()
             if cell_nom == nom_lower:
                 return c
         for c in cells:
+            if c.pk in used_cell_ids:
+                continue
             cell_nom = (c.nom_produit or "").strip().lower()
             if cell_nom and nom_lower and (nom_lower in cell_nom or cell_nom in nom_lower):
                 return c
@@ -82,13 +87,15 @@ class Command(BaseCommand):
         lignes_a_creer = []
         hidden_cells_needed = []
         hidden_col_counter = 0
+        used_cell_ids = set()
 
         for p in PRODUITS:
-            cell = self._find_cell(cells, p["nom"])
+            cell = self._find_cell(cells, p["nom"], used_cell_ids)
             if cell:
+                used_cell_ids.add(cell.pk)
                 self.stdout.write(
                     f"  MATCH  {p['nom']:<50} -> Cell L{cell.row_index}C{cell.col_index} "
-                    f"(id={cell.pk})"
+                    f"(id={cell.pk}, nom={cell.nom_produit!r})"
                 )
                 lignes_a_creer.append({"produit": p, "cell": cell, "hidden": False})
             else:
