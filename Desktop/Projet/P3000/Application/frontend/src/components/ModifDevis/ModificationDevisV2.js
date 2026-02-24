@@ -17,6 +17,8 @@ import DevisRecap from '../Devis/DevisRecap';
 import TableauOption from '../Devis/TableauOption';
 import DevisCostPieChart from '../Devis/DevisCostPieChart';
 import ContactSocieteModal from '../ContactSocieteModal';
+import SelectSocieteModal from '../SelectSocieteModal';
+import SocieteInfoModal from '../SocieteInfoModal';
 
 // Hooks personnalisés
 import { useDevisLoader } from './hooks/useDevisLoader';
@@ -120,11 +122,17 @@ const ModificationDevisV2 = () => {
   const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
   const [isPieChartVisible, setIsPieChartVisible] = useState(true);
 
-  // ✅ États pour la gestion des contacts de société
+  // États pour la gestion des contacts de société
   const [contactsSociete, setContactsSociete] = useState([]);
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
+
+  // États pour la sélection de société alternative (affichage devis uniquement)
+  const [societeDevisId, setSocieteDevisId] = useState(null);
+  const [availableSocietes, setAvailableSocietes] = useState([]);
+  const [showSelectSocieteDevisModal, setShowSelectSocieteDevisModal] = useState(false);
+  const [showCreateSocieteDevisModal, setShowCreateSocieteDevisModal] = useState(false);
 
   // États pour la sélection de chantier (barre de recherche + liste)
   const [chantiers, setChantiers] = useState([]);
@@ -478,7 +486,6 @@ const ModificationDevisV2 = () => {
       }));
   }, [enrichedDevisItems]);
 
-  // ✅ Fonction pour charger les contacts de la société
   const fetchContactsSociete = useCallback(async (societeId) => {
     if (!societeId) {
       setContactsSociete([]);
@@ -496,6 +503,44 @@ const ModificationDevisV2 = () => {
       setCurrentSocieteId(societeId);
     }
   }, []);
+
+  const fetchAvailableSocietes = useCallback(async (forClientId) => {
+    const cid = forClientId || clientId;
+    if (!cid) {
+      setAvailableSocietes([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/societe/?client=${cid}`);
+      setAvailableSocietes(response.data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des sociétés:', error);
+      setAvailableSocietes([]);
+    }
+  }, [clientId]);
+
+  const handleCreateSocieteDevis = useCallback(async (societeData) => {
+    try {
+      if (!clientId) {
+        alert('Impossible de créer la société : aucun client associé.');
+        return;
+      }
+      const response = await axios.post('/api/societe/', {
+        ...societeData,
+        client_name: clientId
+      });
+      if (response.data?.id) {
+        setSocieteDevisId(response.data.id);
+        fetchContactsSociete(response.data.id);
+        setSelectedContactId(null);
+        await fetchAvailableSocietes();
+      }
+      setShowCreateSocieteDevisModal(false);
+    } catch (error) {
+      console.error('Erreur lors de la création de la société:', error);
+      alert('Erreur lors de la création de la société.');
+    }
+  }, [clientId, fetchContactsSociete, fetchAvailableSocietes]);
 
   // Changer le chantier (fetch détails et mettre à jour client/societe/chantier)
   const handleChantierChange = useCallback(async (chantierId) => {
@@ -535,6 +580,7 @@ const ModificationDevisV2 = () => {
                 phone_Number: String(clientData.phone_Number || '')
               });
               setClientId(clientId);
+              fetchAvailableSocietes(clientId);
             }
           }
         } else if (typeof chantierData.societe === 'number') {
@@ -563,6 +609,7 @@ const ModificationDevisV2 = () => {
                 phone_Number: String(clientData.phone_Number || '')
               });
               setClientId(clientId);
+              fetchAvailableSocietes(clientId);
             }
           }
         }
@@ -572,7 +619,7 @@ const ModificationDevisV2 = () => {
     } catch (error) {
       console.error('Erreur lors du chargement du chantier:', error);
     }
-  }, [fetchContactsSociete]);
+  }, [fetchContactsSociete, fetchAvailableSocietes]);
 
   // Initialiser les données quand le devis est chargé
   useEffect(() => {
@@ -582,23 +629,30 @@ const ModificationDevisV2 = () => {
         numero: loadedDevisData.numero || '',
         date_creation: loadedDevisData.date_creation?.split('T')[0] || new Date().toISOString().split('T')[0],
         nature_travaux: loadedDevisData.nature_travaux || '',
-        // ✅ Utiliser ?? au lieu de || pour permettre tva_rate = 0
         tva_rate: loadedDevisData.tva_rate ?? 20,
         price_ht: loadedDevisData.price_ht ?? 0,
         price_ttc: loadedDevisData.price_ttc ?? 0,
-        contact_societe: loadedDevisData.contact_societe || null
+        contact_societe: loadedDevisData.contact_societe || null,
+        societe_devis: loadedDevisData.societe_devis || null
       });
       setSelectedChantierId(loadedDevisData.chantier);
       setDevisType(loadedDevisData.devis_chantier ? 'chantier' : 'normal');
       
-      // ✅ Initialiser le contact sélectionné si présent
       if (loadedDevisData.contact_societe) {
-        // Gérer le cas où contact_societe peut être un ID (nombre) ou un objet avec un id
         const contactId = typeof loadedDevisData.contact_societe === 'object' 
           ? loadedDevisData.contact_societe.id 
           : loadedDevisData.contact_societe;
         if (contactId) {
           setSelectedContactId(contactId);
+        }
+      }
+      
+      if (loadedDevisData.societe_devis) {
+        const sdId = typeof loadedDevisData.societe_devis === 'object'
+          ? loadedDevisData.societe_devis.id
+          : loadedDevisData.societe_devis;
+        if (sdId) {
+          setSocieteDevisId(sdId);
         }
       }
     }
@@ -622,19 +676,20 @@ const ModificationDevisV2 = () => {
   useEffect(() => {
     if (societeData) {
       setSociete({
+        id: societeData.id || null,
         nom_societe: societeData.nom_societe || '',
         rue_societe: societeData.rue_societe || '',
         codepostal_societe: societeData.codepostal_societe || '',
         ville_societe: societeData.ville_societe || ''
       });
       
-      // ✅ Charger les contacts de la société
       const societeIdValue = societeData.id || null;
       if (societeIdValue) {
         fetchContactsSociete(societeIdValue);
       }
+      fetchAvailableSocietes();
     }
-  }, [societeData, fetchContactsSociete]);
+  }, [societeData, fetchContactsSociete, fetchAvailableSocietes]);
 
   useEffect(() => {
     if (chantierData) {
@@ -861,7 +916,8 @@ const ModificationDevisV2 = () => {
         ...devisData,
         price_ht: totalHt,
         price_ttc: totalTtc,
-        contact_societe: selectedContactId || null // ✅ Ajouter le contact sélectionné
+        contact_societe: selectedContactId || null,
+        societe_devis: societeDevisId || null
       },
       selectedChantierId,
       clientId,
@@ -989,7 +1045,8 @@ const ModificationDevisV2 = () => {
           ...devisData,
           price_ht: totalHt,
           price_ttc: totalTtc,
-          contact_societe: selectedContactId || null
+          contact_societe: selectedContactId || null,
+          societe_devis: societeDevisId || null
         },
         selectedChantierId,
         clientIds: clientId ? [clientId] : []
@@ -1182,6 +1239,22 @@ const ModificationDevisV2 = () => {
               onContactSelect={setSelectedContactId}
               onOpenContactModal={() => setShowContactModal(true)}
               societeId={currentSocieteId}
+              availableSocietes={availableSocietes}
+              selectedSocieteDevisId={societeDevisId}
+              onSocieteDevisSelect={(id) => {
+                setSocieteDevisId(id);
+                if (id) {
+                  fetchContactsSociete(id);
+                  setSelectedContactId(null);
+                } else {
+                  const fallbackSocieteId = currentSocieteId || societe?.id;
+                  if (fallbackSocieteId) {
+                    fetchContactsSociete(fallbackSocieteId);
+                  }
+                  setSelectedContactId(null);
+                }
+              }}
+              onOpenSelectSocieteModal={() => setShowSelectSocieteDevisModal(true)}
             />
           </div>
 
@@ -1566,6 +1639,30 @@ const ModificationDevisV2 = () => {
           onContactChange={() => fetchContactsSociete(currentSocieteId)}
         />
       )}
+
+      <SelectSocieteModal
+        open={showSelectSocieteDevisModal}
+        onClose={() => setShowSelectSocieteDevisModal(false)}
+        filteredSocietes={availableSocietes}
+        onSocieteSelect={(societeId) => {
+          setSocieteDevisId(societeId);
+          setShowSelectSocieteDevisModal(false);
+          if (societeId) {
+            fetchContactsSociete(societeId);
+            setSelectedContactId(null);
+          }
+        }}
+        onCreateNew={() => {
+          setShowSelectSocieteDevisModal(false);
+          setShowCreateSocieteDevisModal(true);
+        }}
+      />
+
+      <SocieteInfoModal
+        open={showCreateSocieteDevisModal}
+        onClose={() => setShowCreateSocieteDevisModal(false)}
+        onSubmit={handleCreateSocieteDevis}
+      />
     </div>
   );
 };

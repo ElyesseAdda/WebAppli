@@ -275,9 +275,16 @@ class ChantierViewSet(viewsets.ModelViewSet):
 
 
 class SocieteViewSet(viewsets.ModelViewSet):
-    queryset = Societe.objects.all()
+    queryset = Societe.objects.all().order_by('nom_societe')
     serializer_class = SocieteSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = Societe.objects.all().order_by('nom_societe')
+        client_id = self.request.query_params.get('client')
+        if client_id:
+            queryset = queryset.filter(client_name_id=client_id)
+        return queryset
 
 class FactureTSViewSet(viewsets.ModelViewSet):
     queryset = FactureTS.objects.all()
@@ -381,19 +388,18 @@ class FactureViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]  # Permettre l'accès à tous les utilisateurs
     
     def create(self, request, *args, **kwargs):
-        # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
         data = request.data.copy()
-        if 'contact_societe' not in data or not data.get('contact_societe'):
-            devis_id = data.get('devis')
-            if devis_id:
-                try:
-                    devis = Devis.objects.get(id=devis_id)
-                    if devis.contact_societe:
-                        data['contact_societe'] = devis.contact_societe.id
-                except Devis.DoesNotExist:
-                    pass
+        devis_id = data.get('devis')
+        if devis_id:
+            try:
+                devis = Devis.objects.get(id=devis_id)
+                if not data.get('contact_societe') and devis.contact_societe:
+                    data['contact_societe'] = devis.contact_societe.id
+                if not data.get('societe_devis') and devis.societe_devis:
+                    data['societe_devis'] = devis.societe_devis.id
+            except Devis.DoesNotExist:
+                pass
         
-        # Créer une nouvelle requête avec les données modifiées
         request._full_data = data
         response = super().create(request, *args, **kwargs)
         if response.status_code == 201:
@@ -1196,9 +1202,16 @@ from datetime import datetime, timedelta
 
 
 class SocieteViewSet(viewsets.ModelViewSet):
-    queryset = Societe.objects.all()
+    queryset = Societe.objects.all().order_by('nom_societe')
     serializer_class = SocieteSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = Societe.objects.all().order_by('nom_societe')
+        client_id = self.request.query_params.get('client')
+        if client_id:
+            queryset = queryset.filter(client_name_id=client_id)
+        return queryset
 
 class FactureTSViewSet(viewsets.ModelViewSet):
     queryset = FactureTS.objects.all()
@@ -4116,6 +4129,10 @@ def create_devis(request):
                 if 'contact_societe' in request.data and request.data['contact_societe']:
                     devis_data['contact_societe_id'] = request.data['contact_societe']
                 
+                # Ajouter societe_devis si fourni
+                if 'societe_devis' in request.data and request.data['societe_devis']:
+                    devis_data['societe_devis_id'] = request.data['societe_devis']
+                
                 # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
                 # Si non fournie, le modèle utilisera default=timezone.now
                 if 'date_creation' in request.data and request.data['date_creation']:
@@ -4195,6 +4212,10 @@ def create_devis(request):
                 # ✅ Ajouter contact_societe si fourni
                 if 'contact_societe' in request.data and request.data['contact_societe']:
                     devis_data['contact_societe_id'] = request.data['contact_societe']
+                
+                # Ajouter societe_devis si fourni
+                if 'societe_devis' in request.data and request.data['societe_devis']:
+                    devis_data['societe_devis_id'] = request.data['societe_devis']
                 
                 # ✅ Ajouter date_creation si fournie (pour permettre une date personnalisée)
                 # Si non fournie, le modèle utilisera default=timezone.now
@@ -4846,6 +4867,9 @@ def create_facture(request):
         if devis.contact_societe:
             facture_data['contact_societe'] = devis.contact_societe
         
+        if devis.societe_devis:
+            facture_data['societe_devis'] = devis.societe_devis
+        
         # Créer la facture
         facture = Facture.objects.create(**facture_data)
 
@@ -4870,19 +4894,19 @@ def preview_facture(request, facture_id):
     selon le système utilisé par le devis (ancien ou nouveau)
     """
     try:
-        # ✅ Charger contact_societe avec select_related pour optimiser la requête
         facture = Facture.objects.select_related(
             'devis',
             'devis__chantier',
             'devis__chantier__societe',
             'devis__chantier__societe__client_name',
             'contact_societe',
-            'devis__contact_societe'
+            'devis__contact_societe',
+            'societe_devis',
+            'devis__societe_devis'
         ).get(id=facture_id)
         
         devis = facture.devis
         
-        # ✅ Récupérer le contact_societe (priorité à celui de la facture, sinon celui du devis)
         contact_societe = facture.contact_societe if hasattr(facture, 'contact_societe') and facture.contact_societe else (devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None)
         
         # Détecter si le devis utilise le nouveau système
@@ -4896,6 +4920,11 @@ def preview_facture(request, facture_id):
         chantier = devis.chantier
         societe = chantier.societe
         client = societe.client_name
+
+        if facture.societe_devis:
+            societe = facture.societe_devis
+        elif devis.societe_devis:
+            societe = devis.societe_devis
 
         # Initialiser les totaux
         total_ht = Decimal('0')
@@ -5114,24 +5143,28 @@ def preview_facture_v2(request, facture_id):
     try:
         from .Devis_views import build_inline_style
         
-        # ✅ Charger contact_societe avec select_related pour optimiser la requête
         facture = Facture.objects.select_related(
             'devis',
             'devis__chantier',
             'devis__chantier__societe',
             'devis__chantier__societe__client_name',
             'contact_societe',
-            'devis__contact_societe'
+            'devis__contact_societe',
+            'societe_devis',
+            'devis__societe_devis'
         ).get(id=facture_id)
         
         devis = facture.devis
         chantier = devis.chantier
         societe = chantier.societe if chantier else None
         
-        # ✅ Récupérer le contact_societe (priorité à celui de la facture, sinon celui du devis)
+        if facture.societe_devis:
+            societe = facture.societe_devis
+        elif devis.societe_devis:
+            societe = devis.societe_devis
+        
         contact_societe = facture.contact_societe if hasattr(facture, 'contact_societe') and facture.contact_societe else (devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None)
         
-        # Priorité au client directement associé au devis, sinon utiliser celui de la société
         clients_devis = list(devis.client.all())
         if clients_devis:
             client = clients_devis[0]
@@ -6905,6 +6938,9 @@ def create_facture_cie(request):
         if devis.contact_societe:
             facture_cie_data['contact_societe'] = devis.contact_societe
         
+        if devis.societe_devis:
+            facture_cie_data['societe_devis'] = devis.societe_devis
+        
         # Créer la facture CIE
         facture_cie = Facture.objects.create(**facture_cie_data)
 
@@ -6952,6 +6988,8 @@ class SituationViewSet(viewsets.ModelViewSet):
                         devis = Devis.objects.get(id=devis_id)
                         if devis.contact_societe:
                             data['contact_societe'] = devis.contact_societe.id
+                        if devis.societe_devis and ('societe_devis' not in data or not data.get('societe_devis')):
+                            data['societe_devis'] = devis.societe_devis.id
                     except Devis.DoesNotExist:
                         pass
             
@@ -7183,6 +7221,8 @@ def create_situation(request):
                     devis = Devis.objects.get(id=devis_id)
                     if devis.contact_societe:
                         data['contact_societe'] = devis.contact_societe.id
+                    if devis.societe_devis and not data.get('societe_devis'):
+                        data['societe_devis'] = devis.societe_devis.id
                 except Devis.DoesNotExist:
                     pass
 

@@ -160,7 +160,7 @@ class DevisSerializer(serializers.ModelSerializer):
             'chantier', 'appel_offres', 'chantier_name', 'client_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
-            'contact_societe'
+            'contact_societe', 'societe_devis'
         ]
         read_only_fields = ['client']  # ✅ Retirer date_creation pour permettre sa modification
 
@@ -1127,7 +1127,7 @@ class FactureSerializer(serializers.ModelSerializer):
             'date_echeance', 'date_paiement', 'date_envoi', 'delai_paiement', 
             'mode_paiement', 'devis', 'price_ht', 'price_ttc', 'chantier', 
             'chantier_name', 'devis_numero', 'type_facture', 'designation',
-            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'contact_societe'
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'contact_societe', 'societe_devis'
         ]
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 
@@ -1522,11 +1522,12 @@ class SituationCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
-            # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
-            if 'contact_societe' not in validated_data or validated_data.get('contact_societe') is None:
-                devis = validated_data.get('devis')
-                if devis and hasattr(devis, 'contact_societe') and devis.contact_societe:
+            devis = validated_data.get('devis')
+            if devis:
+                if ('contact_societe' not in validated_data or validated_data.get('contact_societe') is None) and devis.contact_societe:
                     validated_data['contact_societe'] = devis.contact_societe
+                if ('societe_devis' not in validated_data or validated_data.get('societe_devis') is None) and devis.societe_devis:
+                    validated_data['societe_devis'] = devis.societe_devis
             return super().create(validated_data)
         except Exception as e:
             print(f"Erreur lors de la création: {str(e)}")

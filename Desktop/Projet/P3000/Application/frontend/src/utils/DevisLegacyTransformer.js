@@ -558,8 +558,8 @@ export const transformToLegacyFormat = ({
     description: devisData.description || '',
     status: devisData.status || 'En attente',  // ✅ Conserver le status existant lors d'une modification
     devis_chantier: devis_chantier,
-    // ✅ Contact de la société (optionnel)
     contact_societe: devisData.contact_societe || null,
+    societe_devis: devisData.societe_devis || null,
     
     // Lignes de détail
     lignes: lignes,

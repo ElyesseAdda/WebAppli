@@ -1257,6 +1257,9 @@ class Devis(models.Model):
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='devis', verbose_name="Contact société")
     
+    # Société alternative pour l'affichage du devis (optionnel, remplace la société du chantier)
+    societe_devis = models.ForeignKey('Societe', on_delete=models.SET_NULL, null=True, blank=True, related_name='devis_affichage', verbose_name="Société pour affichage devis")
+    
     # NOUVEAUX CHAMPS pour le système de lignes spéciales amélioré
     lignes_speciales_v2 = models.JSONField(default=dict, blank=True, null=True, verbose_name="Lignes spéciales v2")
     version_systeme_lignes = models.IntegerField(default=1, choices=[(1, 'Ancien'), (2, 'Nouveau')], verbose_name="Version système lignes spéciales")
@@ -1625,6 +1628,9 @@ class Facture(models.Model):
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='factures', verbose_name="Contact société")
     
+    # Société alternative pour l'affichage de la facture
+    societe_devis = models.ForeignKey('Societe', on_delete=models.SET_NULL, null=True, blank=True, related_name='factures_affichage', verbose_name="Société pour affichage facture")
+    
     # NOUVEAUX CHAMPS pour les coûts estimés
     cout_estime_main_oeuvre = models.DecimalField(
         max_digits=10, 
@@ -1748,6 +1754,9 @@ class Situation(models.Model):
     
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='situations', verbose_name="Contact société")
+    
+    # Société alternative pour l'affichage de la situation
+    societe_devis = models.ForeignKey('Societe', on_delete=models.SET_NULL, null=True, blank=True, related_name='situations_affichage', verbose_name="Société pour affichage situation")
     
     # Montants calculés
     montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)

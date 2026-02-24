@@ -244,6 +244,12 @@ const DevisAvance = () => {
   const [showContactModal, setShowContactModal] = useState(false);
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
 
+  // États pour la sélection de société alternative (affichage devis uniquement)
+  const [societeDevisId, setSocieteDevisId] = useState(null);
+  const [availableSocietes, setAvailableSocietes] = useState([]);
+  const [showSelectSocieteDevisModal, setShowSelectSocieteDevisModal] = useState(false);
+  const [showCreateSocieteDevisModal, setShowCreateSocieteDevisModal] = useState(false);
+
   // États pour la gestion du devis
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
   const [devisType, setDevisType] = useState("normal"); // 'normal' ou 'chantier'
@@ -294,6 +300,7 @@ const DevisAvance = () => {
     selectedContactId: null,
     currentSocieteId: null,
     selectedSocieteId: null,
+    societeDevisId: null,
     customDrivePath: null,
     chantierDrivePath: null,
     clientId: null
@@ -506,6 +513,47 @@ const DevisAvance = () => {
     }
   };
 
+  // Charger les sociétés du même client (pour le sélecteur société devis)
+  const fetchAvailableSocietes = async (forClientId) => {
+    const cid = forClientId || clientId;
+    if (!cid) {
+      setAvailableSocietes([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/societe/?client=${cid}`);
+      setAvailableSocietes(response.data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des sociétés:', error);
+      setAvailableSocietes([]);
+    }
+  };
+
+  // Créer une nouvelle société en DB et la sélectionner pour l'affichage devis
+  const handleCreateSocieteDevis = async (societeData) => {
+    try {
+      const clientIdForSociete = clientId || (await getClientIdFromChantier(selectedChantierId));
+      if (!clientIdForSociete) {
+        alert('Impossible de créer la société : aucun client associé.');
+        return;
+      }
+      const response = await axios.post('/api/societe/', {
+        ...societeData,
+        client_name: clientIdForSociete
+      });
+      if (response.data?.id) {
+        setSocieteDevisId(response.data.id);
+        fetchContactsSociete(response.data.id);
+        setSelectedContactId(null);
+        await fetchAvailableSocietes();
+      }
+      setShowCreateSocieteDevisModal(false);
+    } catch (error) {
+      console.error('Erreur lors de la création de la société:', error);
+      alert('Erreur lors de la création de la société.');
+    }
+  };
+
   // Gérer la sélection d'un chantier
   const handleChantierSelection = async (chantierId) => {
     setSelectedChantierId(chantierId);
@@ -582,6 +630,7 @@ const DevisAvance = () => {
           // Si societe est un objet avec les détails (via serializer)
           if (typeof chantierData.societe === 'object' && chantierData.societe.id) {
             setSociete({
+              id: chantierData.societe.id,
               nom_societe: chantierData.societe.nom_societe || '',
               rue_societe: chantierData.societe.rue_societe || '',
               codepostal_societe: chantierData.societe.codepostal_societe || '',
@@ -589,14 +638,18 @@ const DevisAvance = () => {
             });
             // Charger les contacts de la société
             await fetchContactsSociete(chantierData.societe.id);
+            // Réinitialiser la société devis alternative
+            setSocieteDevisId(null);
             
             // Récupérer les informations du client
             if (chantierData.societe.client_name) {
               const clientId = typeof chantierData.societe.client_name === 'object' 
                 ? chantierData.societe.client_name.id 
                 : chantierData.societe.client_name;
-              
               if (clientId) {
+                // Charger les sociétés du même client pour le sélecteur devis
+                fetchAvailableSocietes(clientId);
+
                 const clientResponse = await axios.get(`/api/client/${clientId}/`);
                 const clientData = clientResponse.data;
                 
@@ -619,6 +672,7 @@ const DevisAvance = () => {
             const societeData = societeResponse.data;
             
             setSociete({
+              id: chantierData.societe,
               nom_societe: societeData.nom_societe || '',
               rue_societe: societeData.rue_societe || '',
               codepostal_societe: societeData.codepostal_societe || '',
@@ -626,6 +680,8 @@ const DevisAvance = () => {
             });
             // Charger les contacts de la société
             await fetchContactsSociete(chantierData.societe);
+            // Réinitialiser la société devis alternative
+            setSocieteDevisId(null);
             
             if (societeData.client_name) {
               const clientId = typeof societeData.client_name === 'object' 
@@ -633,6 +689,9 @@ const DevisAvance = () => {
                 : societeData.client_name;
               
               if (clientId) {
+                // Charger les sociétés du même client pour le sélecteur devis
+                fetchAvailableSocietes(clientId);
+
                 const clientResponse = await axios.get(`/api/client/${clientId}/`);
                 const clientData = clientResponse.data;
                 
@@ -1806,6 +1865,10 @@ const DevisAvance = () => {
         setSelectedSocieteId(draft.selectedSocieteId ?? null);
       }
       
+      if (typeof draft.societeDevisId !== 'undefined') {
+        setSocieteDevisId(draft.societeDevisId ?? null);
+      }
+      
       // ✅ Restaurer les chemins du drive
       if (typeof draft.customDrivePath !== 'undefined') {
         setCustomDrivePath(draft.customDrivePath ?? null);
@@ -1866,15 +1929,13 @@ const DevisAvance = () => {
         pendingLineForBase,
         isSelectingBase,
         recurringLineDraft,
-        // ✅ Ajouter les contacts de société
         contactsSociete,
         selectedContactId,
         currentSocieteId,
         selectedSocieteId,
-        // ✅ Ajouter les chemins du drive
+        societeDevisId,
         customDrivePath,
         chantierDrivePath,
-        // ✅ Ajouter l'ID du client
         clientId
       };
       
@@ -1907,15 +1968,13 @@ const DevisAvance = () => {
     pendingLineForBase,
     isSelectingBase,
     recurringLineDraft,
-    // ✅ Ajouter les dépendances pour les contacts
     contactsSociete,
     selectedContactId,
     currentSocieteId,
     selectedSocieteId,
-    // ✅ Ajouter les dépendances pour les chemins du drive
+    societeDevisId,
     customDrivePath,
     chantierDrivePath,
-    // ✅ Ajouter la dépendance pour l'ID du client
     clientId
   ]);
   
@@ -1927,18 +1986,20 @@ const DevisAvance = () => {
     };
   }, []);
   
-  // ✅ Recharger les contacts après restauration si une société est disponible
+  // Recharger les contacts et sociétés après restauration si une société est disponible
   useEffect(() => {
     if (!isDraftHydrated) {
       return;
     }
     
-    // Si on a une société restaurée (via selectedSocieteId ou currentSocieteId ou pendingChantierData)
     const societeIdToUse = currentSocieteId || selectedSocieteId || pendingChantierData?.societe?.id;
     
     if (societeIdToUse && (!contactsSociete || contactsSociete.length === 0)) {
-      // Recharger les contacts si on a une société mais pas de contacts chargés
       fetchContactsSociete(societeIdToUse);
+    }
+    
+    if (societeIdToUse && availableSocietes.length === 0) {
+      fetchAvailableSocietes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDraftHydrated, currentSocieteId, selectedSocieteId, pendingChantierData?.societe?.id]);
@@ -1967,6 +2028,7 @@ const DevisAvance = () => {
       selectedContactId,
       currentSocieteId,
       selectedSocieteId,
+      societeDevisId,
       customDrivePath,
       chantierDrivePath,
       clientId
@@ -1993,6 +2055,7 @@ const DevisAvance = () => {
     selectedContactId,
     currentSocieteId,
     selectedSocieteId,
+    societeDevisId,
     customDrivePath,
     chantierDrivePath,
     clientId
@@ -2031,6 +2094,7 @@ const DevisAvance = () => {
             selectedContactId: latest.selectedContactId,
             currentSocieteId: latest.currentSocieteId,
             selectedSocieteId: latest.selectedSocieteId,
+            societeDevisId: latest.societeDevisId,
             customDrivePath: latest.customDrivePath,
             chantierDrivePath: latest.chantierDrivePath,
             clientId: latest.clientId
@@ -3071,7 +3135,8 @@ const DevisAvance = () => {
           ...devisData,
           price_ht: total_ht,
           price_ttc: montant_ttc,
-          contact_societe: selectedContactId || null, // Ajouter le contact sélectionné
+          contact_societe: selectedContactId || null,
+          societe_devis: societeDevisId || null,
         },
         selectedChantierId: finalChantierId,
         clientIds: finalClientId ? [finalClientId] : [],
@@ -3502,6 +3567,22 @@ const DevisAvance = () => {
               contacts={contactsSociete}
               selectedContactId={selectedContactId}
               societeId={currentSocieteId || selectedSocieteId || (pendingChantierData.societe?.id)}
+              availableSocietes={availableSocietes}
+              selectedSocieteDevisId={societeDevisId}
+              onSocieteDevisSelect={(id) => {
+                setSocieteDevisId(id);
+                if (id) {
+                  fetchContactsSociete(id);
+                  setSelectedContactId(null);
+                } else {
+                  const fallbackSocieteId = currentSocieteId || selectedSocieteId || societe?.id || pendingChantierData?.societe?.id;
+                  if (fallbackSocieteId) {
+                    fetchContactsSociete(fallbackSocieteId);
+                  }
+                  setSelectedContactId(null);
+                }
+              }}
+              onOpenSelectSocieteModal={() => setShowSelectSocieteDevisModal(true)}
               onContactSelect={(contactId) => {
                 setSelectedContactId(contactId || null);
               }}
@@ -3510,7 +3591,6 @@ const DevisAvance = () => {
               }}
               onClientChange={(updatedClient) => {
                 setClient(updatedClient);
-                // Mettre à jour pendingChantierData avec tous les champs (incluant civilite et poste)
                 setPendingChantierData((prev) => ({
                   ...prev,
                   client: {
@@ -3525,7 +3605,6 @@ const DevisAvance = () => {
               }}
               onSocieteChange={(updatedSociete) => {
                 setSociete(updatedSociete);
-                // Mettre à jour pendingChantierData
                 setPendingChantierData((prev) => ({
                   ...prev,
                   societe: {
@@ -3884,7 +3963,8 @@ const DevisAvance = () => {
                         ...devisData,
                         price_ht: total_ht,
                         price_ttc: montant_ttc,
-                        contact_societe: selectedContactId || null, // Ajouter le contact sélectionné
+                        contact_societe: selectedContactId || null,
+                        societe_devis: societeDevisId || null,
                       },
                       selectedChantierId,
                       clientIds: finalClientId ? [finalClientId] : []
@@ -4036,18 +4116,41 @@ const DevisAvance = () => {
         open={showSelectSocieteModal}
         onClose={() => {
           setShowSelectSocieteModal(false);
-          setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
-          // ✅ Ne pas réinitialiser le processus si l'utilisateur a déjà commencé
-          // Le devisType doit être conservé
+          setSelectedClientSocietes(null);
         }}
         onSocieteSelect={handleSocieteSelect}
         filteredSocietes={selectedClientSocietes}
         onCreateNew={() => {
-          // ✅ Permettre de créer une nouvelle société même si plusieurs existent déjà
           setShowSelectSocieteModal(false);
-          setShowClientInfoModal(false); // ✅ Fermer aussi le modal client
+          setShowClientInfoModal(false);
           setShowSocieteInfoModal(true);
         }}
+      />
+
+      {/* Modal de sélection de société pour affichage devis */}
+      <SelectSocieteModal
+        open={showSelectSocieteDevisModal}
+        onClose={() => setShowSelectSocieteDevisModal(false)}
+        filteredSocietes={availableSocietes}
+        onSocieteSelect={(societeId) => {
+          setSocieteDevisId(societeId);
+          setShowSelectSocieteDevisModal(false);
+          if (societeId) {
+            fetchContactsSociete(societeId);
+            setSelectedContactId(null);
+          }
+        }}
+        onCreateNew={() => {
+          setShowSelectSocieteDevisModal(false);
+          setShowCreateSocieteDevisModal(true);
+        }}
+      />
+
+      {/* Modal de création de société pour affichage devis */}
+      <SocieteInfoModal
+        open={showCreateSocieteDevisModal}
+        onClose={() => setShowCreateSocieteDevisModal(false)}
+        onSubmit={handleCreateSocieteDevis}
       />
 
       {/* Modal de création de chantier */}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { TextField, Select, MenuItem, FormControl, InputLabel, Button } from '@mui/material';
-import { MdAdd } from 'react-icons/md';
+import { MdAdd, MdSwapHoriz } from 'react-icons/md';
 
 const ClientInfo = ({ 
   client, 
@@ -13,8 +13,16 @@ const ClientInfo = ({
   selectedContactId = null,
   onContactSelect = null,
   onOpenContactModal = null,
-  societeId = null
+  societeId = null,
+  availableSocietes = [],
+  selectedSocieteDevisId = null,
+  onSocieteDevisSelect = null,
+  onOpenSelectSocieteModal = null
 }) => {
+  const displaySociete = selectedSocieteDevisId
+    ? availableSocietes.find(s => s.id === selectedSocieteDevisId) || societe
+    : societe;
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
       {/* Informations société */}
@@ -24,26 +32,67 @@ const ClientInfo = ({
         borderRadius: '6px',
         padding: '20px'
       }}>
-        <h3 style={{
-          color: '#1976d2',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          margin: '0 0 15px 0',
-          paddingBottom: '8px',
-          borderBottom: '1px solid #e9ecef'
-        }}>
-          🏢 Société
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h3 style={{
+            color: '#1976d2',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            margin: 0,
+            paddingBottom: '8px',
+            borderBottom: '1px solid #e9ecef',
+            flex: 1
+          }}>
+            🏢 Société
+          </h3>
+          {onOpenSelectSocieteModal && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<MdSwapHoriz />}
+              onClick={() => onOpenSelectSocieteModal()}
+              sx={{ ml: 2, minWidth: 'auto', fontSize: '12px', padding: '4px 8px' }}
+            >
+              Changer société
+            </Button>
+          )}
+        </div>
+
+        {availableSocietes.length > 0 && onSocieteDevisSelect && (
+          <div style={{ marginBottom: '15px' }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Société pour le devis</InputLabel>
+              <Select
+                value={selectedSocieteDevisId || ''}
+                onChange={(e) => onSocieteDevisSelect(e.target.value || null)}
+                label="Société pour le devis"
+              >
+                <MenuItem value="">
+                  <em>Société du chantier (par défaut)</em>
+                </MenuItem>
+                {availableSocietes
+                  .filter(s => s.id !== societe?.id)
+                  .sort((a, b) => (a.nom_societe || '').localeCompare(b.nom_societe || ''))
+                  .map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.nom_societe}
+                      {s.ville_societe ? ` - ${s.ville_societe}` : ''}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          </div>
+        )}
+
         <div style={{ marginBottom: '12px' }}>
           <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
             Nom de la société
           </label>
-          {isEditable ? (
+          {isEditable && !selectedSocieteDevisId ? (
             <TextField
               fullWidth
               size="small"
-              value={societe.nom_societe || ''}
-              onChange={(e) => onSocieteChange && onSocieteChange({ ...societe, nom_societe: e.target.value })}
+              value={displaySociete.nom_societe || ''}
+              onChange={(e) => onSocieteChange && onSocieteChange({ ...displaySociete, nom_societe: e.target.value })}
               variant="outlined"
             />
           ) : (
@@ -55,7 +104,7 @@ const ClientInfo = ({
               fontSize: '14px',
               color: '#495057'
             }}>
-              {societe.nom_societe || ''}
+              {displaySociete.nom_societe || ''}
             </div>
           )}
         </div>
@@ -63,12 +112,12 @@ const ClientInfo = ({
           <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
             Adresse
           </label>
-          {isEditable ? (
+          {isEditable && !selectedSocieteDevisId ? (
             <TextField
               fullWidth
               size="small"
-              value={societe.rue_societe || ''}
-              onChange={(e) => onSocieteChange && onSocieteChange({ ...societe, rue_societe: e.target.value })}
+              value={displaySociete.rue_societe || ''}
+              onChange={(e) => onSocieteChange && onSocieteChange({ ...displaySociete, rue_societe: e.target.value })}
               variant="outlined"
             />
           ) : (
@@ -80,7 +129,7 @@ const ClientInfo = ({
               fontSize: '14px',
               color: '#495057'
             }}>
-              {societe.rue_societe || ''}
+              {displaySociete.rue_societe || ''}
             </div>
           )}
         </div>
@@ -88,12 +137,12 @@ const ClientInfo = ({
           <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
             Code postal
           </label>
-          {isEditable ? (
+          {isEditable && !selectedSocieteDevisId ? (
             <TextField
               fullWidth
               size="small"
-              value={societe.codepostal_societe || ''}
-              onChange={(e) => onSocieteChange && onSocieteChange({ ...societe, codepostal_societe: e.target.value })}
+              value={displaySociete.codepostal_societe || ''}
+              onChange={(e) => onSocieteChange && onSocieteChange({ ...displaySociete, codepostal_societe: e.target.value })}
               variant="outlined"
             />
           ) : (
@@ -105,7 +154,7 @@ const ClientInfo = ({
               fontSize: '14px',
               color: '#495057'
             }}>
-              {societe.codepostal_societe || ''}
+              {displaySociete.codepostal_societe || ''}
             </div>
           )}
         </div>
@@ -113,12 +162,12 @@ const ClientInfo = ({
           <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
             Ville
           </label>
-          {isEditable ? (
+          {isEditable && !selectedSocieteDevisId ? (
             <TextField
               fullWidth
               size="small"
-              value={societe.ville_societe || ''}
-              onChange={(e) => onSocieteChange && onSocieteChange({ ...societe, ville_societe: e.target.value })}
+              value={displaySociete.ville_societe || ''}
+              onChange={(e) => onSocieteChange && onSocieteChange({ ...displaySociete, ville_societe: e.target.value })}
               variant="outlined"
             />
           ) : (
@@ -130,7 +179,7 @@ const ClientInfo = ({
               fontSize: '14px',
               color: '#495057'
             }}>
-              {societe.ville_societe || ''}
+              {displaySociete.ville_societe || ''}
             </div>
           )}
         </div>
@@ -195,7 +244,6 @@ const ClientInfo = ({
         )}
         
         {(() => {
-          // Déterminer quel contact afficher : contact sélectionné ou client par défaut
           const selectedContact = selectedContactId ? contacts.find(c => c.id === selectedContactId) : null;
           const displayContact = selectedContact || {
             civilite: client.civilite || '',
