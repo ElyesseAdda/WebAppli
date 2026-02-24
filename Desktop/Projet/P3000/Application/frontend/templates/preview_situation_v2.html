@@ -408,9 +408,16 @@
         text-decoration: underline 2px black;
       }
 
+      /* Bloc récap : ne jamais couper à l'impression, afficher sur la page suivante si besoin */
+      .recap-block-print {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        margin-top: 20px;
+      }
+
       .recap-table {
         width: 100%;
-        margin-top: 20px;
+        margin-top: 0;
         border: 2px solid black;
       }
 
@@ -1046,7 +1053,8 @@
       </div>
     </div>
 
-    <!-- Totaux HT, TVA et TTC -->
+    <!-- Totaux HT, TVA et TTC (bloc non coupé à l'impression) -->
+    <div class="recap-block-print">
     <table class="recap-table">
       <tr>
         <th colspan="2">RÉCAPITULATIF</th>
@@ -1160,6 +1168,7 @@
         </td>
       </tr>
     </table>
+    </div>
     <div class="footer">
       <span>Signature suivie de la mention "BON POUR ACCORD"</span>
       <div class="taux-info" style="margin-top: 10px; font-size: 0.8rem;">
