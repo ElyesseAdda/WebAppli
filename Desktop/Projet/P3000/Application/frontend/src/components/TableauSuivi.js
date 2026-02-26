@@ -450,8 +450,16 @@ const TableauSuivi = () => {
     // Fonction helper pour extraire le numéro de situation
     const extractSituationNumber = (numeroSituation) => {
       if (!numeroSituation) return "-";
-      const match = numeroSituation.match(/n°(\d+)/);
-      return match ? parseInt(match[1]) : numeroSituation;
+      const valeur = String(numeroSituation);
+
+      // Priorite au motif explicite "Situation n°XX" pour eviter
+      // de capter le n° de la facture (ex: "Facture n°11.2026 - Situation n°07").
+      const situationMatch = valeur.match(/situation\s*n[°º]?\s*(\d+)/i);
+      if (situationMatch) return parseInt(situationMatch[1], 10);
+
+      // Fallback pour les anciens formats qui ne contiennent qu'un seul "n°XX".
+      const fallbackMatch = valeur.match(/n[°º]?\s*(\d+)/i);
+      return fallbackMatch ? parseInt(fallbackMatch[1], 10) : numeroSituation;
     };
 
     // Trier les situations par numéro
