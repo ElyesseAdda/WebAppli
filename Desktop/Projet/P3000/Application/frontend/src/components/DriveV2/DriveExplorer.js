@@ -2,7 +2,7 @@
  * Drive Explorer - Affichage du contenu du drive
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 /**
  * Convertit un nom de fichier/dossier normalisé (avec underscores) en nom d'affichage (avec espaces)
@@ -52,6 +52,7 @@ import {
   Snackbar,
   CircularProgress,
   Backdrop,
+  TableSortLabel,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -211,6 +212,10 @@ const DriveExplorer = ({
   const [downloadingFolder, setDownloadingFolder] = useState(null);
   const [isMovingItems, setIsMovingItems] = useState(false);
   const [moveTargetLabel, setMoveTargetLabel] = useState('');
+  const [sortConfig, setSortConfig] = useState({
+    key: 'name',
+    direction: 'asc',
+  });
   const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
 
@@ -225,6 +230,64 @@ const DriveExplorer = ({
   useEffect(() => {
     setSelectedFiles(new Set());
   }, [currentPath]);
+
+  // Tri sur clic des en-têtes (Nom, Date)
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === 'asc' ? 'desc' : 'asc',
+        };
+      }
+
+      // Par défaut, Nom = asc (A->Z), Date = desc (récent -> ancien)
+      return {
+        key,
+        direction: key === 'date' ? 'desc' : 'asc',
+      };
+    });
+  }, []);
+
+  const getTimestamp = (item) => {
+    const rawDate = item?.last_modified || item?.modified_at || item?.updated_at || item?.created_at;
+    if (!rawDate) return 0;
+    const timestamp = new Date(rawDate).getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  };
+
+  const compareBySort = useCallback((a, b) => {
+    const directionFactor = sortConfig.direction === 'asc' ? 1 : -1;
+
+    if (sortConfig.key === 'date') {
+      const dateDiff = getTimestamp(a) - getTimestamp(b);
+      if (dateDiff !== 0) {
+        return dateDiff * directionFactor;
+      }
+    } else if (sortConfig.key === 'size') {
+      const sizeA = a?.type === 'folder' ? -1 : (a?.size || 0);
+      const sizeB = b?.type === 'folder' ? -1 : (b?.size || 0);
+      const sizeDiff = sizeA - sizeB;
+      if (sizeDiff !== 0) {
+        return sizeDiff * directionFactor;
+      }
+    } else {
+      const nameA = displayFilename(a?.name || '').toLowerCase();
+      const nameB = displayFilename(b?.name || '').toLowerCase();
+      const nameDiff = nameA.localeCompare(nameB, 'fr', { sensitivity: 'base' });
+      if (nameDiff !== 0) {
+        return nameDiff * directionFactor;
+      }
+    }
+
+    // Fallback stable : nom alphabétique
+    const fallbackA = displayFilename(a?.name || '').toLowerCase();
+    const fallbackB = displayFilename(b?.name || '').toLowerCase();
+    return fallbackA.localeCompare(fallbackB, 'fr', { sensitivity: 'base' });
+  }, [sortConfig]);
+
+  const sortedFolders = useMemo(() => [...folders].sort(compareBySort), [folders, compareBySort]);
+  const sortedFiles = useMemo(() => [...files].sort(compareBySort), [files, compareBySort]);
 
   // Gérer les touches clavier (Escape pour désélectionner, Ctrl+C pour copier)
   useEffect(() => {
@@ -1720,7 +1783,15 @@ const DriveExplorer = ({
       {/* En-tête */}
       <ListHeader elevation={0}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}>
-          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Nom</Typography>
+          <TableSortLabel
+            active={sortConfig.key === 'name'}
+            direction={sortConfig.key === 'name' ? sortConfig.direction : 'asc'}
+            onClick={() => handleSort('name')}
+          >
+            <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 700 }}>
+              Nom
+            </Typography>
+          </TableSortLabel>
           {selectedFiles.size > 0 && (
             <Chip 
               label={`${selectedFiles.size} sélectionné${selectedFiles.size > 1 ? 's' : ''}`}
@@ -1730,15 +1801,31 @@ const DriveExplorer = ({
             />
           )}
         </Box>
-        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Taille</Typography>
-        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Date</Typography>
+        <TableSortLabel
+          active={sortConfig.key === 'size'}
+          direction={sortConfig.key === 'size' ? sortConfig.direction : 'asc'}
+          onClick={() => handleSort('size')}
+        >
+          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+            Taille
+          </Typography>
+        </TableSortLabel>
+        <TableSortLabel
+          active={sortConfig.key === 'date'}
+          direction={sortConfig.key === 'date' ? sortConfig.direction : 'desc'}
+          onClick={() => handleSort('date')}
+        >
+          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+            Date
+          </Typography>
+        </TableSortLabel>
         <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Actions</Typography>
       </ListHeader>
 
       {/* Liste */}
       <List sx={{ p: 0, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
         {/* Dossiers */}
-        {folders.map((folder) => {
+        {sortedFolders.map((folder) => {
           const folderItem = { ...folder, type: 'folder' };
           const isSelected = selectedFiles.has(folder.path);
           const isDragOverFolder = dragOverFolder === folder.path;
@@ -1873,7 +1960,7 @@ const DriveExplorer = ({
         })}
 
         {/* Fichiers */}
-        {files.map((file) => {
+        {sortedFiles.map((file) => {
           const fileItem = { ...file, type: 'file' };
           const isSelected = selectedFiles.has(file.path);
           const isDragging = draggedItems?.some(item => item.path === file.path) || false;
