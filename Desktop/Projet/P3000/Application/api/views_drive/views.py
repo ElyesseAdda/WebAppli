@@ -13,7 +13,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
 import requests
-from .manager import DriveManager
+from .manager import DriveManager, normalize_filename
 from .onlyoffice import OnlyOfficeManager
 from ..utils import encode_filename_for_content_disposition
 import io
@@ -525,7 +525,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
             # 7. Gestion propre du nom de fichier pour le téléchargement (gère les accents)
             # IMPORTANT : Utiliser 'attachment' au lieu de 'inline' pour OnlyOffice
             # OnlyOffice a besoin de 'attachment' pour traiter le fichier comme un téléchargement physique
-            filename = final_key.split('/')[-1]
+            filename = normalize_filename(final_key.split('/')[-1])
             response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'attachment')
             response['Content-Length'] = s3_meta['ContentLength']
             response['Accept-Ranges'] = 'bytes'
@@ -618,7 +618,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
             # Le fichier dans S3 est stocké avec le nom original (peut être NFD ou NFC)
             # On normalisera seulement lors de la recherche dans S3 (dans proxy_file)
             file_path_for_token = file_path  # Garder le chemin original pour le token
-            file_name_normalized = unicodedata.normalize('NFC', file_name)  # Normaliser seulement le nom pour l'affichage
+            file_name_normalized = normalize_filename(unicodedata.normalize('NFC', file_name))
             
             # Générer un token temporaire pour OnlyOffice (valide 24h)
             # IMPORTANT : Utiliser le file_path ORIGINAL (non normalisé) dans le token
@@ -873,7 +873,7 @@ def proxy_file_view(request):
         
         # Ajouter les headers
         response['Content-Length'] = s3_response['ContentLength']
-        filename = file_path.split("/")[-1]
+        filename = normalize_filename(file_path.split("/")[-1])
         # IMPORTANT : Utiliser 'attachment' au lieu de 'inline' pour OnlyOffice
         # OnlyOffice a besoin de 'attachment' pour traiter le fichier comme un téléchargement physique
         response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'attachment')
