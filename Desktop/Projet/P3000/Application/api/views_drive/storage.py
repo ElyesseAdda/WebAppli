@@ -3,6 +3,7 @@ Storage Manager - Abstraction pour S3 avec les mêmes credentials
 """
 
 import os
+import json
 import boto3
 from typing import Optional, Dict, List, BinaryIO
 from datetime import datetime, timedelta
@@ -69,7 +70,7 @@ class StorageManager:
         max_keys: int = 1000
     ) -> Dict:
         """
-        Liste les objets dans S3
+        Liste les objets dans S3, enrichis avec les métadonnées modified_by.
         
         Args:
             prefix: Préfixe pour filtrer
@@ -107,11 +108,13 @@ class StorageManager:
                     # Ignorer les marqueurs de dossier (.keep, trailing /)
                     if obj['Key'].endswith('/') or obj['Key'].endswith('/.keep'):
                         continue
+                    # Ignorer le .metadata.json
+                    if obj['Key'].endswith('/.metadata.json'):
+                        continue
                     
-                    if obj['Key'] != prefix:  # Ne pas inclure le dossier lui-même
+                    if obj['Key'] != prefix:
                         file_name = obj['Key'].split('/')[-1]
                         
-                        # Déterminer le type de contenu
                         content_type = get_content_type(file_name)
                         
                         files.append({
@@ -122,6 +125,19 @@ class StorageManager:
                             'type': 'file',
                             'content_type': content_type
                         })
+            
+            # Enrichir avec les métadonnées modified_by
+            metadata = self.get_folder_metadata(prefix)
+            items_meta = metadata.get("items", {})
+            for folder in folders:
+                folder_key = folder['name'] + '/'
+                meta = items_meta.get(folder_key, {})
+                folder['modified_by'] = meta.get('modified_by', None)
+                folder['modified_at'] = meta.get('modified_at', None)
+            for file_item in files:
+                meta = items_meta.get(file_item['name'], {})
+                file_item['modified_by'] = meta.get('modified_by', None)
+                file_item['modified_at'] = meta.get('modified_at', None)
             
             return {
                 'folders': folders,
@@ -470,6 +486,10 @@ class StorageManager:
                     if len(folders) >= max_results:
                         break
                     
+                    # Ignorer les fichiers .metadata.json
+                    if key.endswith('/.metadata.json'):
+                        continue
+                    
                     # Traiter les marqueurs de dossier (.keep)
                     if key.endswith('/.keep'):
                         folder_path = key[:-6]  # Enlever '/.keep'
@@ -616,3 +636,92 @@ class StorageManager:
             
         except Exception as e:
             raise Exception(f"Erreur lors du téléchargement du fichier {key}: {str(e)}")
+
+    def _metadata_key(self, folder_path: str) -> str:
+        """Retourne la clé S3 du fichier .metadata.json pour un dossier donné."""
+        if folder_path and not folder_path.endswith('/'):
+            folder_path += '/'
+        return f"{folder_path}.metadata.json"
+
+    def get_folder_metadata(self, folder_path: str) -> Dict:
+        """
+        Lit le .metadata.json d'un dossier.
+
+        Returns:
+            Dict {"items": { "nom": {"modified_by": ..., "modified_at": ...}, ... }}
+            ou {"items": {}} si le fichier n'existe pas.
+        """
+        key = self._metadata_key(folder_path)
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=key
+            )
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except self.s3_client.exceptions.NoSuchKey:
+            return {"items": {}}
+        except Exception:
+            return {"items": {}}
+
+    def update_folder_metadata(
+        self,
+        folder_path: str,
+        item_name: str,
+        modified_by: str,
+        modified_at: Optional[str] = None
+    ) -> bool:
+        """
+        Met à jour l'entrée d'un item dans le .metadata.json du dossier (read-modify-write).
+
+        Args:
+            folder_path: Chemin du dossier parent
+            item_name: Nom de l'item (fichier ou sous-dossier avec / final)
+            modified_by: Nom de l'utilisateur
+            modified_at: Date ISO (auto-générée si None)
+        """
+        try:
+            metadata = self.get_folder_metadata(folder_path)
+            if modified_at is None:
+                modified_at = datetime.utcnow().isoformat() + 'Z'
+            metadata.setdefault("items", {})[item_name] = {
+                "modified_by": modified_by,
+                "modified_at": modified_at
+            }
+            key = self._metadata_key(folder_path)
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(metadata).encode('utf-8'),
+                ContentType='application/json'
+            )
+            return True
+        except Exception:
+            return False
+
+    def remove_folder_metadata_entry(self, folder_path: str, item_name: str) -> bool:
+        """Supprime une entrée du .metadata.json d'un dossier."""
+        try:
+            metadata = self.get_folder_metadata(folder_path)
+            items = metadata.get("items", {})
+            if item_name in items:
+                del items[item_name]
+                metadata["items"] = items
+                key = self._metadata_key(folder_path)
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Body=json.dumps(metadata).encode('utf-8'),
+                    ContentType='application/json'
+                )
+            return True
+        except Exception:
+            return False
+
+    def delete_folder_metadata_file(self, folder_path: str) -> bool:
+        """Supprime le fichier .metadata.json d'un dossier entier."""
+        try:
+            key = self._metadata_key(folder_path)
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
+            return True
+        except Exception:
+            return False

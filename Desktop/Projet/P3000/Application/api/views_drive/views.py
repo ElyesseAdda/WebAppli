@@ -28,6 +28,19 @@ class DriveV2ViewSet(viewsets.ViewSet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.drive_manager = DriveManager()
+
+    def _get_modified_by(self, request):
+        """Retourne les initiales (Prénom Nom -> P.N.) de l'utilisateur."""
+        user = request.user
+        first = (user.first_name or '').strip()
+        last = (user.last_name or '').strip()
+        if first and last:
+            return f"{first[0].upper()}.{last[0].upper()}"
+        if first:
+            return f"{first[0].upper()}"
+        if last:
+            return f"{last[0].upper()}"
+        return user.username
     
     @action(detail=False, methods=['get'], url_path='list-content')
     def list_content(self, request):
@@ -68,7 +81,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.create_folder(parent_path, folder_name)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.create_folder(parent_path, folder_name, modified_by=modified_by)
             return Response(result, status=status.HTTP_201_CREATED)
             
         except ValueError as e:
@@ -112,7 +126,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.delete_item(item_path, is_folder)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.delete_item(item_path, is_folder, modified_by=modified_by)
             return Response(result, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -239,10 +254,12 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            modified_by = self._get_modified_by(request)
             result = self.drive_manager.get_upload_url(
                 file_path,
                 file_name,
-                content_type
+                content_type,
+                modified_by=modified_by
             )
             
             return Response(result, status=status.HTTP_200_OK)
@@ -307,7 +324,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.move_item(source_path, dest_path)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.move_item(source_path, dest_path, modified_by=modified_by)
             return Response(result, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -335,7 +353,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.rename_item(old_path, new_name)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.rename_item(old_path, new_name, modified_by=modified_by)
             return Response(result, status=status.HTTP_200_OK)
             
         except ValueError as e:

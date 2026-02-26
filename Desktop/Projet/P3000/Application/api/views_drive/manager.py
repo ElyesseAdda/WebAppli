@@ -217,7 +217,8 @@ class DriveManager:
     def create_folder(
         self,
         parent_path: str,
-        folder_name: str
+        folder_name: str,
+        modified_by: Optional[str] = None
     ) -> Dict:
         """
         Crée un nouveau dossier
@@ -225,28 +226,28 @@ class DriveManager:
         Args:
             parent_path: Chemin du dossier parent
             folder_name: Nom du nouveau dossier
+            modified_by: Nom de l'utilisateur qui crée le dossier
             
         Returns:
             Dict avec le chemin du dossier créé
         """
         try:
-            # Valider le nom du dossier
             if not folder_name or not folder_name.strip():
                 raise ValueError("Le nom du dossier ne peut pas être vide")
             
-            # Normaliser les chemins
             parent_path = self.normalize_path(parent_path)
-            # Normaliser le nom du dossier (remplacer espaces par underscores)
             folder_name_normalized = normalize_filename(folder_name.strip())
-            folder_name_display = folder_name.strip()  # Garder le nom original pour l'affichage
+            folder_name_display = folder_name.strip()
             
-            # Construire le chemin complet avec le nom normalisé
             folder_path = f"{parent_path}{folder_name_normalized}/"
             
-            # Créer le dossier
             success = self.storage.create_folder(folder_path)
             
             if success:
+                if modified_by:
+                    self.storage.update_folder_metadata(
+                        parent_path, folder_name_normalized + '/', modified_by
+                    )
                 return {
                     'success': True,
                     'folder_path': folder_path,
@@ -262,7 +263,8 @@ class DriveManager:
     def delete_item(
         self,
         item_path: str,
-        is_folder: bool = False
+        is_folder: bool = False,
+        modified_by: Optional[str] = None
     ) -> Dict:
         """
         Supprime un fichier ou un dossier
@@ -270,6 +272,7 @@ class DriveManager:
         Args:
             item_path: Chemin de l'élément
             is_folder: True si c'est un dossier
+            modified_by: Nom de l'utilisateur qui supprime
             
         Returns:
             Dict avec le résultat
@@ -280,7 +283,6 @@ class DriveManager:
                 from django.core.cache import cache
                 from .onlyoffice import OnlyOfficeManager
                 
-                # Essayer de récupérer la date de modification avant suppression
                 last_modified = None
                 try:
                     metadata = self.storage.get_object_metadata(item_path)
@@ -289,35 +291,42 @@ class DriveManager:
                 except:
                     pass
                 
-                # Générer la clé avec et sans date de modification pour être sûr d'invalider
                 try:
-                    # Clé avec date de modification si disponible
                     if last_modified:
                         document_key, _ = OnlyOfficeManager.generate_clean_key(item_path, last_modified)
                         cache.delete(f"onlyoffice_key_{document_key}")
                     
-                    # Aussi invalider avec la clé sans date (pour les anciens fichiers)
                     document_key_old, _ = OnlyOfficeManager.generate_clean_key(item_path, None)
                     cache.delete(f"onlyoffice_key_{document_key_old}")
                 except:
-                    # Si on ne peut pas invalider le cache, continuer quand même
                     pass
 
-            # Si l'élément est déjà dans Historique, on effectue une suppression définitive.
+            # Déterminer le dossier parent et le nom de l'item pour le metadata
+            parent_path = ''
+            item_name = item_path
+            clean = item_path.rstrip('/')
+            if '/' in clean:
+                parent_path = clean.rsplit('/', 1)[0] + '/'
+                item_name = clean.rsplit('/', 1)[1]
+            if is_folder:
+                item_name += '/'
+
             if item_path.startswith('Historique/'):
                 if is_folder:
                     success = self.storage.delete_folder(item_path)
+                    self.storage.delete_folder_metadata_file(item_path)
                 else:
                     success = self.storage.delete_object(item_path)
                 operation_message = 'Élément supprimé définitivement depuis Historique'
                 result_path = item_path
             else:
-                # Politique globale : toute suppression passe d'abord par Historique.
                 success, archived_path = self._archive_item_to_historique(item_path, is_folder)
                 operation_message = 'Élément déplacé vers Historique avec succès'
                 result_path = archived_path
             
             if success:
+                # Supprimer l'entrée du .metadata.json du dossier parent
+                self.storage.remove_folder_metadata_entry(parent_path, item_name)
                 return {
                     'success': True,
                     'message': operation_message,
@@ -422,7 +431,8 @@ class DriveManager:
         self,
         file_path: str,
         file_name: str,
-        content_type: str = 'application/octet-stream'
+        content_type: str = 'application/octet-stream',
+        modified_by: Optional[str] = None
     ) -> Dict:
         """
         Génère une URL d'upload pour un fichier
@@ -431,25 +441,25 @@ class DriveManager:
             file_path: Chemin du dossier de destination
             file_name: Nom du fichier
             content_type: Type MIME du fichier
+            modified_by: Nom de l'utilisateur qui uploade
             
         Returns:
             Dict avec URL et fields
         """
         try:
-            # Normaliser le chemin
             file_path = self.normalize_path(file_path)
-            
-            # Normaliser le nom du fichier (remplacer espaces par underscores)
             file_name_normalized = normalize_filename(file_name)
-            
-            # Construire la clé complète avec le nom normalisé
             full_key = f"{file_path}{file_name_normalized}"
             
-            # Générer l'URL d'upload
             upload_data = self.storage.get_presigned_upload_url(
                 key=full_key,
                 content_type=content_type
             )
+            
+            if modified_by:
+                self.storage.update_folder_metadata(
+                    file_path, file_name_normalized, modified_by
+                )
             
             return {
                 'upload_url': upload_data['url'],
@@ -496,7 +506,8 @@ class DriveManager:
     def move_item(
         self,
         source_path: str,
-        dest_path: str
+        dest_path: str,
+        modified_by: Optional[str] = None
     ) -> Dict:
         """
         Déplace un fichier ou dossier
@@ -504,17 +515,47 @@ class DriveManager:
         Args:
             source_path: Chemin source
             dest_path: Chemin destination (peut contenir le nom du fichier)
+            modified_by: Nom de l'utilisateur qui déplace
             
         Returns:
             Dict avec le résultat
         """
         try:
-            # Normaliser le chemin de destination (normaliser les segments du chemin)
             dest_path_normalized = normalize_path_segments(dest_path)
+            
+            # Déterminer le dossier parent source et le nom de l'item
+            is_folder = source_path.endswith('/')
+            clean_source = source_path.rstrip('/')
+            if '/' in clean_source:
+                old_parent = clean_source.rsplit('/', 1)[0] + '/'
+                old_item_name = clean_source.rsplit('/', 1)[1]
+            else:
+                old_parent = ''
+                old_item_name = clean_source
+            if is_folder:
+                old_item_name += '/'
             
             success = self.storage.move_object(source_path, dest_path_normalized)
             
             if success:
+                # Supprimer l'entrée du .metadata.json source
+                self.storage.remove_folder_metadata_entry(old_parent, old_item_name)
+                
+                # Ajouter l'entrée dans le .metadata.json destination
+                if modified_by:
+                    clean_dest = dest_path_normalized.rstrip('/')
+                    if '/' in clean_dest:
+                        new_parent = clean_dest.rsplit('/', 1)[0] + '/'
+                        new_item_name = clean_dest.rsplit('/', 1)[1]
+                    else:
+                        new_parent = ''
+                        new_item_name = clean_dest
+                    if is_folder:
+                        new_item_name += '/'
+                    self.storage.update_folder_metadata(
+                        new_parent, new_item_name, modified_by
+                    )
+                
                 return {
                     'success': True,
                     'message': 'Élément déplacé avec succès',
@@ -529,7 +570,8 @@ class DriveManager:
     def rename_item(
         self,
         old_path: str,
-        new_name: str
+        new_name: str,
+        modified_by: Optional[str] = None
     ) -> Dict:
         """
         Renomme un fichier ou dossier
@@ -537,69 +579,66 @@ class DriveManager:
         Args:
             old_path: Ancien chemin
             new_name: Nouveau nom
+            modified_by: Nom de l'utilisateur qui renomme
             
         Returns:
             Dict avec le résultat
         """
         try:
-            # Normaliser le nouveau nom (remplacer espaces par underscores)
             new_name_normalized = normalize_filename(new_name)
-            
-            # Extraire le chemin parent
             is_folder = old_path.endswith('/')
             
-            # Déterminer le chemin parent et le nouveau chemin
             if '/' in old_path:
-                # Le fichier/dossier est dans un sous-dossier
                 if is_folder:
-                    # Pour un dossier, enlever le dernier '/' puis extraire le parent
                     path_without_slash = old_path.rstrip('/')
                     parent_path = path_without_slash.rsplit('/', 1)[0] + '/' if '/' in path_without_slash else ''
+                    old_item_name = path_without_slash.rsplit('/', 1)[1] + '/'
                     new_path = f"{parent_path}{new_name_normalized}/"
                 else:
-                    # Pour un fichier
                     parent_path = old_path.rsplit('/', 1)[0] + '/' if '/' in old_path else ''
+                    old_item_name = old_path.rsplit('/', 1)[1]
                     new_path = f"{parent_path}{new_name_normalized}"
             else:
-                # Le fichier/dossier est à la racine
                 parent_path = ''
+                old_item_name = old_path + ('/' if is_folder else '')
                 if is_folder:
                     new_path = f"{new_name_normalized}/"
                 else:
                     new_path = new_name_normalized
             
-            # Vérifier si la destination existe déjà (conflit)
             if is_folder:
-                # Pour un dossier, vérifier si le dossier existe déjà
                 folder_content = self.get_folder_content(parent_path)
                 existing_folders = [f['path'] for f in folder_content.get('folders', [])]
                 if new_path in existing_folders and new_path != old_path:
                     raise ValueError(f"Un dossier avec le nom '{new_name}' existe déjà")
             else:
-                # Pour un fichier, vérifier si le fichier existe déjà
                 folder_content = self.get_folder_content(parent_path)
                 existing_files = [f['path'] for f in folder_content.get('files', [])]
                 if new_path in existing_files and new_path != old_path:
                     raise ValueError(f"Un fichier avec le nom '{new_name}' existe déjà")
             
-            # Déplacer l'élément
             success = self.storage.move_object(old_path, new_path)
             
             if success:
+                # Mettre à jour le .metadata.json : supprimer l'ancien nom, ajouter le nouveau
+                self.storage.remove_folder_metadata_entry(parent_path, old_item_name)
+                new_meta_name = new_name_normalized + ('/' if is_folder else '')
+                user = modified_by or ''
+                if user:
+                    self.storage.update_folder_metadata(parent_path, new_meta_name, user)
+                
                 return {
                     'success': True,
                     'message': 'Élément renommé avec succès',
                     'new_path': new_path
                 }
             else:
-                # Vérifier si le fichier source existe
                 source_metadata = self.storage.get_object_metadata(old_path)
                 if not source_metadata:
                     raise Exception(f"Le fichier ou dossier source '{old_path}' n'existe pas")
                 raise Exception("Échec du renommage")
             
         except ValueError as e:
-            # Erreur de conflit de nom
             raise
         except Exception as e:
             raise
@@ -712,15 +751,13 @@ class DriveManager:
                 for obj in page['Contents']:
                     key = obj['Key']
                     
-                    # Ignorer les marqueurs de dossier (.keep, trailing /)
-                    if key.endswith('/') or key.endswith('/.keep'):
+                    # Ignorer les marqueurs de dossier (.keep, trailing /) et les metadata
+                    if key.endswith('/') or key.endswith('/.keep') or key.endswith('/.metadata.json'):
                         continue
                     
-                    # Ignorer le dossier lui-même si c'est un marqueur
                     if key == folder_path:
                         continue
                     
-                    # Ajouter le fichier à la liste
                     file_name = key.split('/')[-1]
                     all_files.append({
                         'path': key,

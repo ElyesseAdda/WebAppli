@@ -490,6 +490,31 @@ class OnlyOfficeManager:
                     )
                     
                     if success:
+                        try:
+                            from django.contrib.auth.models import User as AuthUser
+                            users = request_data.get('users', [])
+                            user_label = 'OnlyOffice'
+                            if users:
+                                try:
+                                    u = AuthUser.objects.get(pk=int(users[0]))
+                                    first = (u.first_name or '').strip()
+                                    last = (u.last_name or '').strip()
+                                    if first and last:
+                                        user_label = f"{first[0].upper()}.{last[0].upper()}"
+                                    elif first:
+                                        user_label = f"{first[0].upper()}"
+                                    elif last:
+                                        user_label = f"{last[0].upper()}"
+                                    else:
+                                        user_label = u.username
+                                except (AuthUser.DoesNotExist, ValueError):
+                                    user_label = str(users[0])
+                            parts = file_path.rstrip('/').rsplit('/', 1)
+                            folder = (parts[0] + '/') if len(parts) == 2 else ''
+                            fname = parts[-1]
+                            storage_manager.update_folder_metadata(folder, fname, user_label)
+                        except Exception:
+                            pass
                         return (True, {'error': 0}, status.HTTP_200_OK)
                     else:
                         return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)
