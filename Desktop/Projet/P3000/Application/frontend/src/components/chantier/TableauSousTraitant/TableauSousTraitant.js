@@ -456,12 +456,22 @@ const TableauSousTraitant = () => {
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
     
     setCurrentEnvoi({
       mois,
       sous_traitant,
       chantierId,
-      dateEnvoi: currentData?.date_envoi || null
+      dateEnvoi: resolvedCurrentData?.date_envoi || null
     });
     setDateEnvoiModalOpen(true);
   };
@@ -482,15 +492,25 @@ const TableauSousTraitant = () => {
           d.sous_traitant === sous_traitant && 
           d.chantier_id === chantierId
         );
+        const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+        const resolvedCurrentData = currentData || (
+          isAgentJournalierRow
+            ? data.find(d =>
+                d.mois === mois &&
+                d.sous_traitant === sous_traitant &&
+                d.source_type === 'agent_journalier'
+              )
+            : null
+        );
         
         // Si c'est une ligne AgencyExpenseMonth, utiliser l'API spécifique
-        if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
-          await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
+        if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
+          await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
             date_reception_facture: dateEnvoi  // ✅ Utiliser le bon champ
           });
           
           // ✅ Calcul de la date de paiement prévue (date_envoi + delai_paiement jours)
-          const delai = currentData.delai_paiement || 45;
+          const delai = resolvedCurrentData.delai_paiement || 45;
           let datePaiementPrevue = null;
           let ecartPaiementReel = null;
           
@@ -501,8 +521,8 @@ const TableauSousTraitant = () => {
             datePaiementPrevue = datePrevue.toISOString().split('T')[0];
             
             // Calculer l'écart si date de paiement réel existe
-            if (currentData.date_paiement) {
-              const datePaiementObj = new Date(currentData.date_paiement);
+            if (resolvedCurrentData.date_paiement) {
+              const datePaiementObj = new Date(resolvedCurrentData.date_paiement);
               const diffTime = datePaiementObj - datePrevue;
               ecartPaiementReel = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             }
@@ -542,11 +562,16 @@ const TableauSousTraitant = () => {
           
           setData((prevData) => {
             return prevData.map((item) => {
-              if (
+              const isSameAgentGroup =
+                isAgentJournalierRow &&
                 item.mois === mois &&
                 item.sous_traitant === sous_traitant &&
-                item.chantier_id === chantierId
-              ) {
+                item.source_type === 'agent_journalier';
+              const isExactRow =
+                item.mois === mois &&
+                item.sous_traitant === sous_traitant &&
+                item.chantier_id === chantierId;
+              if (isExactRow || isSameAgentGroup) {
                 return {
                   ...item,
                   date_envoi: suiviData.date_envoi_facture,
@@ -645,29 +670,29 @@ const TableauSousTraitant = () => {
               date_paiement_facture: f.date_paiement_facture || null
             })));
         
-        // Préparer le payload
-        const payload = [{
+        // Préparer le payload pour le suivi
+        const payload = {
           sous_traitant: sous_traitant,
           mois: moisNum,
           annee: anneeComplete,
-          montant_facture_ht: montantAPayer,
+          chantier_id: ligne.chantier_id || null,
           montant_paye_ht: montantAPayer,
-          date_paiement: dateDuJour,
+          date_paiement_reel: dateDuJour,
           date_envoi_facture: ligne.date_envoi || null,
           delai_paiement: ligne.delai_paiement || 45,
-        }];
+        };
 
-        // Appel API direct (sans debounce)
+        // Appel API via le bon endpoint suivi
         const response = await axios.post(
-          `/api/chantier/${ligne.chantier_id}/paiements-sous-traitant/`,
+          `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
           payload
         );
 
         // Mettre à jour les données locales
-        if (response.data && response.data.length > 0) {
-          const updatedPaiement = response.data[0];
-          const annee2digits = anneeComplete.toString().slice(-2);
-          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digits}`;
+        if (response.data) {
+          const updatedPaiement = response.data;
+          const annee2digitsKey = anneeComplete.toString().slice(-2);
+          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digitsKey}`;
           
           const dataIndex = updatedData.findIndex(item => 
             item.mois === moisKey &&
@@ -679,12 +704,12 @@ const TableauSousTraitant = () => {
             updatedData[dataIndex] = {
               ...updatedData[dataIndex],
               paye: parseFloat(updatedPaiement.montant_paye_ht) || 0,
-              a_payer: parseFloat(updatedPaiement.montant_facture_ht) || updatedData[dataIndex].a_payer,
-              ecart: (parseFloat(updatedPaiement.montant_facture_ht) || updatedData[dataIndex].a_payer) - (parseFloat(updatedPaiement.montant_paye_ht) || 0),
-              date_paiement: updatedPaiement.date_paiement_reel || updatedData[dataIndex].date_paiement || null,
+              ecart: (updatedData[dataIndex].a_payer || 0) - (parseFloat(updatedPaiement.montant_paye_ht) || 0),
+              date_paiement: updatedPaiement.date_paiement_reel || dateDuJour,
               date_envoi: updatedPaiement.date_envoi_facture !== undefined ? updatedPaiement.date_envoi_facture : updatedData[dataIndex].date_envoi,
               date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : updatedData[dataIndex].date_paiement_prevue,
               ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : updatedData[dataIndex].ecart_paiement_reel,
+              suivi_paiement_id: updatedPaiement.id,
             };
           }
         }
@@ -1087,20 +1112,31 @@ const TableauSousTraitant = () => {
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
     
     // ✅ Utiliser TOUJOURS le même format de clé que dans organizeData
     // Pour les agents journaliers avec isAgentJournalier, la clé spéciale est utilisée dans l'affichage
-    const key = currentData?.isAgentJournalier 
+    const key = isAgentJournalierRow
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
+    const isAgentJournalierType = resolvedCurrentData?.source_type === 'agent_journalier' || isAgentJournalierRow;
     
     // ✅ Pour AgencyExpenseMonth, utiliser currentData.factures
     // Pour les autres, utiliser editedFactures
     let currentFactures;
-    if (currentData?.source_type === 'agency_expense') {
-      currentFactures = currentData.factures || [];
+    if (resolvedCurrentData?.source_type === 'agency_expense') {
+      currentFactures = resolvedCurrentData.factures || [];
     } else {
-      currentFactures = editedFactures[key] || currentData?.factures || [];
+      currentFactures = editedFactures[key] || resolvedCurrentData?.factures || [];
     }
     
     const facture = currentFactures[factureIndex];
@@ -1108,18 +1144,24 @@ const TableauSousTraitant = () => {
     if (!facture) {
       return;
     }
+    
+    const montantPayeActuelRef = parseFloat(
+      editedValuesPaye[key] !== undefined
+        ? editedValuesPaye[key]
+        : (resolvedCurrentData?.paye || 0)
+    ) || 0;
 
     // Vérifier si c'est une ligne AgencyExpenseMonth
-    if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
+    if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
       try {
         setSaving(true);
         
         const montantFacture = parseFloat(facture.montant_facture) || 0;
-        const montantPayeActuel = parseFloat(currentData?.paye) || 0;
+        const montantPayeActuel = montantPayeActuelRef;
         const nouveauMontantPaye = montantPayeActuel + montantFacture;
         
         // Mettre à jour les factures dans AgencyExpenseMonth
-        const currentFacturesAgency = currentData.factures || [];
+        const currentFacturesAgency = resolvedCurrentData.factures || [];
         const updatedFactures = currentFacturesAgency.map((f, idx) => {
           if (idx === factureIndex) {
             return {
@@ -1141,7 +1183,7 @@ const TableauSousTraitant = () => {
           : datePaiementFacture;
         
         // ✅ Sauvegarder les factures dans AgencyExpenseMonth (sans modifier amount)
-        await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
+        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
           factures: updatedFactures
         });
         
@@ -1206,11 +1248,11 @@ const TableauSousTraitant = () => {
         
         // Optionnel : mettre à jour aussi le montant payé total
         const montantFacture = parseFloat(facture.montant_facture) || 0;
-        const montantPayeActuel = parseFloat(currentData?.paye) || 0;
+        const montantPayeActuel = montantPayeActuelRef;
         const nouveauMontantPaye = montantPayeActuel + montantFacture;
         
-        // Calculer la liste des factures mises à jour pour déterminer la date la plus récente
-        const updatedFacturesList = (currentData?.factures || []).map((f, idx) => {
+        // Utiliser la liste courante (agrégée pour agents journaliers) pour conserver l'index cliqué
+        const updatedFacturesList = (currentFactures || []).map((f, idx) => {
           if (idx === factureIndex) {
             return {
               ...f,
@@ -1246,10 +1288,17 @@ const TableauSousTraitant = () => {
         // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
         setData((prevData) => {
           return prevData.map((item) => {
-            if (
+            const isSameAgentGroup =
+              isAgentJournalierType &&
               item.mois === mois &&
               item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
+              item.source_type === 'agent_journalier';
+            const isExactRow =
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId;
+            if (
+              isExactRow || isSameAgentGroup
             ) {
               return {
                 ...item,
@@ -1284,7 +1333,7 @@ const TableauSousTraitant = () => {
       } finally {
         setSaving(false);
       }
-    } else if (currentData?.source_type === 'facture_sous_traitant' && facture.id && !isNaN(Number(facture.id))) {
+    } else if (resolvedCurrentData?.source_type === 'facture_sous_traitant' && facture.id && !isNaN(Number(facture.id))) {
       // ✅ NOUVEAU : Factures de sous-traitants réels (FactureSousTraitant)
       // Créer un PaiementFactureSousTraitant dans la base de données
       try {
@@ -1301,7 +1350,7 @@ const TableauSousTraitant = () => {
         });
         
         // Calculer le nouveau montant payé total
-        const montantPayeActuel = parseFloat(currentData?.paye || 0);
+        const montantPayeActuel = montantPayeActuelRef;
         const nouveauMontantPaye = montantPayeActuel + montantFacture;
         
         // Mettre à jour les factures localement
@@ -1315,10 +1364,17 @@ const TableauSousTraitant = () => {
         // ✅ Mise à jour dynamique de data
         setData((prevData) => {
           return prevData.map((item) => {
-            if (
+            const isSameAgentGroup =
+              isAgentJournalierType &&
               item.mois === mois &&
               item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
+              item.source_type === 'agent_journalier';
+            const isExactRow =
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId;
+            if (
+              isExactRow || isSameAgentGroup
             ) {
               return {
                 ...item,
@@ -1353,12 +1409,11 @@ const TableauSousTraitant = () => {
       // Ancienne méthode pour les factures non-suivi (rétrocompatibilité)
       const montantFacture = parseFloat(facture.montant_facture) || 0;
       const isAgentJournalier = chantierId === 0 || chantierId === null;
-      const keyPaye = key;
       
       const montantPayeActuel = parseFloat(
-        editedValuesPaye[keyPaye] !== undefined 
-          ? editedValuesPaye[keyPaye] 
-          : (currentData?.paye || 0)
+        editedValuesPaye[key] !== undefined 
+          ? editedValuesPaye[key] 
+          : (resolvedCurrentData?.paye || 0)
       ) || 0;
       
       const nouveauMontantPaye = montantPayeActuel + montantFacture;
@@ -1370,6 +1425,15 @@ const TableauSousTraitant = () => {
         date_paiement_facture: datePaiementFacture
       };
 
+      // Calculer la date de paiement la plus récente parmi toutes les factures payées
+      const datesPaiementFactures = updatedFactures
+        .filter(f => f.payee && f.date_paiement_facture)
+        .map(f => new Date(f.date_paiement_facture));
+      
+      const datePaiementReelGlobale = datesPaiementFactures.length > 0
+        ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
+        : datePaiementFacture;
+
       setEditedFactures((prev) => ({
         ...prev,
         [key]: updatedFactures,
@@ -1380,8 +1444,34 @@ const TableauSousTraitant = () => {
         [key]: nouveauMontantPaye,
       }));
 
+      // Mise à jour immédiate de data pour refléter le changement dans l'UI
+      setData((prevData) => {
+        return prevData.map((item) => {
+          const isSameAgentGroup =
+            isAgentJournalierType &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const isExactRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === chantierId;
+          if (
+            isExactRow || isSameAgentGroup
+          ) {
+            return {
+              ...item,
+              factures: updatedFactures,
+              paye: nouveauMontantPaye,
+              date_paiement: datePaiementReelGlobale
+            };
+          }
+          return item;
+        });
+      });
+
       if (!isAgentJournalier) {
-        savePaiement(mois, sous_traitant, chantierId, nouveauMontantPaye, updatedFactures, currentData?.date_paiement || null, currentData?.date_envoi || null);
+        savePaiement(mois, sous_traitant, chantierId, nouveauMontantPaye, updatedFactures, datePaiementReelGlobale, resolvedCurrentData?.date_envoi || null);
       }
     }
     
@@ -1398,15 +1488,26 @@ const TableauSousTraitant = () => {
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
+    const isAgentJournalierType = resolvedCurrentData?.source_type === 'agent_journalier' || isAgentJournalierRow;
     
     // Si c'est une ligne AgencyExpenseMonth, supprimer via l'API
-    if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
+    if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
       try {
         setSaving(true);
-        const currentFactures = currentData.factures || [];
+        const currentFactures = resolvedCurrentData.factures || [];
         const updatedFactures = currentFactures.filter((_, idx) => idx !== factureIndex);
         
-        await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
+        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
           factures: updatedFactures
         });
         
@@ -1444,7 +1545,7 @@ const TableauSousTraitant = () => {
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
     
-    const factures = editedFactures[key] || currentData?.factures || [];
+    const factures = editedFactures[key] || resolvedCurrentData?.factures || [];
     const factureToDelete = factures[factureIndex];
     
     if (!factureToDelete) return;
@@ -1459,10 +1560,17 @@ const TableauSousTraitant = () => {
         // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
         setData((prevData) => {
           return prevData.map((item) => {
-            if (
+            const isSameAgentGroup =
+              isAgentJournalierType &&
               item.mois === mois &&
               item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
+              item.source_type === 'agent_journalier';
+            const isExactRow =
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId;
+            if (
+              isExactRow || isSameAgentGroup
             ) {
               const updatedFactures = (item.factures || []).filter((_, idx) => idx !== factureIndex);
               return {
@@ -1493,16 +1601,39 @@ const TableauSousTraitant = () => {
       }
     } else {
       // Ancienne méthode pour les factures non-suivi (rétrocompatibilité)
-      const isAgentJournalier = chantierId === 0 || chantierId === null;
+      const isAgentJournalier = isAgentJournalierType;
       
       setEditedFactures((prev) => {
-        const currentFactures = prev[key] || [];
+        const currentFactures = prev[key] || factures || [];
         const newFactures = currentFactures.filter((_, idx) => idx !== factureIndex);
         // Sauvegarder après suppression (sauf pour les agents journaliers)
         if (!isAgentJournalier) {
           savePaiement(mois, sous_traitant, chantierId, editedValuesPaye[key] || 0, newFactures);
         }
         return { ...prev, [key]: newFactures };
+      });
+
+      // Mise à jour dynamique de data pour refléter la suppression sans rechargement
+      setData((prevData) => {
+        return prevData.map((item) => {
+          const isSameAgentGroup =
+            isAgentJournalierType &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const isExactRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === chantierId;
+          if (isExactRow || isSameAgentGroup) {
+            const newFactures = (item.factures || []).filter((_, idx) => idx !== factureIndex);
+            return {
+              ...item,
+              factures: newFactures
+            };
+          }
+          return item;
+        });
       });
     }
   };
@@ -2689,17 +2820,6 @@ const TableauSousTraitant = () => {
                             )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            {item.isAgentJournalier ? (
-                              <Typography
-                                sx={{
-                                  fontSize: "0.75rem",
-                                  color: "text.secondary",
-                                  fontStyle: "italic",
-                                }}
-                              >
-                                -
-                              </Typography>
-                            ) : (
                               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "center" }}>
                                 {/* ✅ Ne pas afficher la date principale si des factures sont payées */}
                                 {(() => {
@@ -2782,11 +2902,12 @@ const TableauSousTraitant = () => {
                                         const isDifferentFromMain = !item.date_paiement || datePaiement !== item.date_paiement;
                                         const isAgencyExpense = item.source_type === 'agency_expense';
                                         const isFactureSousTraitant = item.source_type === 'facture_sous_traitant';
-                                        // Toujours afficher pour AgencyExpense et FactureSousTraitant
-                                        if (!isAgencyExpense && !isFactureSousTraitant && !isDifferentFromMain) return null;
+                                        const isAgentJournalierType = item.source_type === 'agent_journalier' || item.isAgentJournalier;
+                                        // Toujours afficher pour AgencyExpense, FactureSousTraitant et AgentJournalier
+                                        if (!isAgencyExpense && !isFactureSousTraitant && !isAgentJournalierType && !isDifferentFromMain) return null;
                                         
-                                        // ✅ Pour AgencyExpenseMonth et FactureSousTraitant, mettre en évidence la facture avec la date la plus récente
-                                        const isLatestDate = (item.source_type === 'agency_expense' || item.source_type === 'facture_sous_traitant') && datePaiement === item.date_paiement;
+                                        // ✅ Mettre en évidence la facture avec la date la plus récente selon le type
+                                        const isLatestDate = (item.source_type === 'agency_expense' || item.source_type === 'facture_sous_traitant' || isAgentJournalierType) && datePaiement === item.date_paiement;
                                         
                                         return (
                                           <Box
@@ -2825,7 +2946,6 @@ const TableauSousTraitant = () => {
                                   </Box>
                                 ) : null}
                             </Box>
-                            )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             {item.ecart_paiement_reel !== null && item.ecart_paiement_reel !== undefined ? (
