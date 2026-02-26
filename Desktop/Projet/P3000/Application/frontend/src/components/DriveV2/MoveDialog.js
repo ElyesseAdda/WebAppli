@@ -24,6 +24,7 @@ import {
   TextField,
   InputAdornment,
   Divider,
+  Backdrop,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -70,6 +71,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
   
   // Cache pour les dossiers visités (améliore les performances)
   const [folderCache, setFolderCache] = useState(new Map());
@@ -274,6 +276,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
     }
 
     setLoading(true);
+    setIsTransferring(true);
     setError(null);
 
     try {
@@ -317,11 +320,21 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
       setError(err.message || 'Erreur lors du déplacement');
     } finally {
       setLoading(false);
+      setIsTransferring(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={() => {
+        if (!isTransferring) {
+          onClose();
+        }
+      }}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h6">
@@ -509,6 +522,25 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
           {loading ? <CircularProgress size={20} /> : 'Déplacer'}
         </Button>
       </DialogActions>
+
+      <Backdrop
+        open={isTransferring}
+        sx={(theme) => ({
+          color: '#fff',
+          zIndex: theme.zIndex.modal + 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        })}
+      >
+        <CircularProgress color="inherit" />
+        <Typography variant="body1" fontWeight={600}>
+          Transfert en cours...
+        </Typography>
+        <Typography variant="body2">
+          Déplacement de {itemsToMove.length} élément{itemsToMove.length > 1 ? 's' : ''} en cours
+        </Typography>
+      </Backdrop>
     </Dialog>
   );
 };

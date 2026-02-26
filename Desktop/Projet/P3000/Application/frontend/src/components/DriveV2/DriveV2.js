@@ -19,6 +19,7 @@ import {
   Alert,
   Snackbar,
   Tooltip,
+  Backdrop,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -120,6 +121,8 @@ const DriveV2 = () => {
   const [pasteIndicatorVisible, setPasteIndicatorVisible] = useState(false);
   const [pasteProgressModalOpen, setPasteProgressModalOpen] = useState(false);
   const [pasteProgressData, setPasteProgressData] = useState(null);
+  const [isBreadcrumbMoving, setIsBreadcrumbMoving] = useState(false);
+  const [breadcrumbMoveTarget, setBreadcrumbMoveTarget] = useState('');
   const cancelPasteRef = useRef(false);
 
   // Historique de navigation : retour / avant (max 50 entrées)
@@ -512,6 +515,12 @@ const DriveV2 = () => {
 
     // Déplacer chaque élément
     try {
+      const targetLabel = targetPath
+        ? displayFilename(targetPath.split('/').filter(Boolean).slice(-1)[0] || '')
+        : 'Racine';
+      setBreadcrumbMoveTarget(targetLabel);
+      setIsBreadcrumbMoving(true);
+
       const movePromises = draggedItemsFromExplorer.map(async (item) => {
         const fileName = item.name;
         const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
@@ -552,6 +561,9 @@ const DriveV2 = () => {
         severity: 'error',
       });
       setDraggedItemsFromExplorer(null);
+    } finally {
+      setIsBreadcrumbMoving(false);
+      setBreadcrumbMoveTarget('');
     }
   }, [draggedItemsFromExplorer, refreshContent]);
 
@@ -975,6 +987,26 @@ const DriveV2 = () => {
         progressData={pasteProgressData}
         onCancel={pasteProgressData?.phase === 'upload' ? handleCancelUpload : handleCancelPaste}
       />
+
+      {/* Modal de chargement pour les déplacements via breadcrumb */}
+      <Backdrop
+        open={isBreadcrumbMoving}
+        sx={(theme) => ({
+          color: '#fff',
+          zIndex: theme.zIndex.modal + 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        })}
+      >
+        <CircularProgress color="inherit" />
+        <Typography variant="body1" fontWeight={600}>
+          Déplacement en cours...
+        </Typography>
+        <Typography variant="body2">
+          {`Vers "${breadcrumbMoveTarget || 'destination'}"`}
+        </Typography>
+      </Backdrop>
     </DriveContainer>
   );
 };

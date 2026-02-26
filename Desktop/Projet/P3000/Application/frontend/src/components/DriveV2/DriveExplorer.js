@@ -51,6 +51,7 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
+  Backdrop,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -208,6 +209,8 @@ const DriveExplorer = ({
   const [mouseDownPos, setMouseDownPos] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [downloadingFolder, setDownloadingFolder] = useState(null);
+  const [isMovingItems, setIsMovingItems] = useState(false);
+  const [moveTargetLabel, setMoveTargetLabel] = useState('');
   const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
 
@@ -601,6 +604,8 @@ const DriveExplorer = ({
 
     // Déplacer chaque élément
     try {
+      setMoveTargetLabel(displayFilename(targetFolder.name));
+      setIsMovingItems(true);
       const movePromises = draggedItems.map(async (item) => {
         const fileName = item.name;
         const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
@@ -639,6 +644,9 @@ const DriveExplorer = ({
     } catch (error) {
       alert(`Erreur lors du déplacement: ${error.message}`);
       setDraggedItems(null);
+    } finally {
+      setIsMovingItems(false);
+      setMoveTargetLabel('');
     }
   }, [draggedItems, onRefresh]);
 
@@ -2222,6 +2230,26 @@ const DriveExplorer = ({
           </Typography>
         </Alert>
       </Snackbar>
+
+      {/* Modal de chargement pendant le déplacement d'éléments */}
+      <Backdrop
+        open={isMovingItems}
+        sx={(theme) => ({
+          color: '#fff',
+          zIndex: theme.zIndex.modal + 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        })}
+      >
+        <CircularProgress color="inherit" />
+        <Typography variant="body1" fontWeight={600}>
+          Déplacement en cours...
+        </Typography>
+        <Typography variant="body2">
+          {moveTargetLabel ? `Vers "${moveTargetLabel}"` : 'Veuillez patienter'}
+        </Typography>
+      </Backdrop>
     </ExplorerContainer>
   );
 };
