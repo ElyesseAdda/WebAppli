@@ -92,8 +92,19 @@ class DriveV2ViewSet(viewsets.ViewSet):
             - is_folder: True si c'est un dossier (optionnel)
         """
         try:
-            item_path = request.data.get('item_path')
-            is_folder = request.data.get('is_folder', False)
+            # Accepter les paramètres dans le body (JSON) ET en query params
+            # pour supporter les appels axios.delete(..., { params: ... }).
+            item_path = request.data.get('item_path') or request.query_params.get('item_path')
+
+            raw_is_folder = request.data.get('is_folder', None)
+            if raw_is_folder is None:
+                raw_is_folder = request.query_params.get('is_folder', None)
+
+            if raw_is_folder is None:
+                item_type = request.data.get('item_type') or request.query_params.get('item_type')
+                is_folder = str(item_type).lower() == 'folder'
+            else:
+                is_folder = str(raw_is_folder).lower() in ('true', '1', 'yes', 'on')
             
             if not item_path:
                 return Response(

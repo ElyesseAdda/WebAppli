@@ -79,6 +79,28 @@ class PDFManager:
             'avenant_sous_traitance': 'SOUS_TRAITANT',
             'certificat_paiement': 'SOUS_TRAITANT'
         }
+
+    def _build_historique_destination_path(self, source_path: str) -> str:
+        """
+        Construit un chemin d'archive uniforme dans Historique.
+
+        Format unifié:
+        Historique/{base_name}__{source_hint}__YYYYMMDD_HHMMSS{extension}
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        clean_path = source_path.strip('/')
+
+        file_name = clean_path.split('/')[-1] if clean_path else 'document.pdf'
+        dot_index = file_name.rfind('.')
+        if dot_index > 0:
+            base_name = file_name[:dot_index]
+            extension = file_name[dot_index:]
+        else:
+            base_name = file_name
+            extension = ''
+
+        source_hint = clean_path.replace('/', '__') if clean_path else 'racine'
+        return f"Historique/{base_name}__{source_hint}__{timestamp}{extension}"
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:
         """
@@ -527,10 +549,8 @@ class PDFManager:
                         historique_path = "Historique"
                         create_s3_folder_recursive(historique_path)
                         
-                        # Déplacer l'ancien fichier vers l'historique avec timestamp
-                        old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
-                        old_s3_path = f"{historique_path}/{old_filename}"
+                        # Déplacer l'ancien fichier vers l'historique (format unifié)
+                        old_s3_path = self._build_historique_destination_path(s3_file_path)
                         
                         # print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
                         self.move_file_in_s3(s3_file_path, old_s3_path)
@@ -811,10 +831,8 @@ class PDFManager:
                 historique_path = "Historique"
                 create_s3_folder_recursive(historique_path)
                 
-                # Déplacer l'ancien fichier vers l'historique avec timestamp
-                old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
-                old_s3_path = f"{historique_path}/{old_filename}"
+                # Déplacer l'ancien fichier vers l'historique (format unifié)
+                old_s3_path = self._build_historique_destination_path(s3_file_path)
                 
                 # print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
                 self.move_file_in_s3(s3_file_path, old_s3_path)
@@ -869,20 +887,36 @@ class PDFManager:
                         key = obj['Key']
                         
                         # Vérifier si c'est un fichier d'historique
-                        if '/Historique/' in key and key.endswith('.pdf'):
+                        if key.startswith('Historique/') and key.endswith('.pdf'):
                             # Extraire la date du nom de fichier
                             try:
-                                # Format: Ancien_nom_YYYYMMDD_HHMMSS.pdf
+                                # Formats supportés:
+                                # - Nouveau: nom__source__YYYYMMDD_HHMMSS.pdf
+                                # - Ancien:  Ancien_nom_YYYYMMDD_HHMMSS.pdf
                                 filename = key.split('/')[-1]
-                                if filename.startswith('Ancien_') and '_' in filename:
-                                    date_part = filename.split('_')[-2]  # YYYYMMDD
-                                    file_date = datetime.strptime(date_part, '%Y%m%d')
-                                    
-                                    if file_date < cutoff_date:
-                                        # Supprimer le fichier ancien
-                                        s3_client.delete_object(Bucket=bucket_name, Key=key)
-                                        deleted_count += 1
-                                        print(f"🗑️ Fichier historique supprimé: {key}")
+                                file_date = None
+
+                                # Nouveau format: capturer le timestamp final.
+                                match_new = re.search(r'__(\d{8})_(\d{6})(?:\.[^.]+)?$', filename)
+                                if match_new:
+                                    file_date = datetime.strptime(
+                                        f"{match_new.group(1)}_{match_new.group(2)}",
+                                        '%Y%m%d_%H%M%S'
+                                    )
+                                else:
+                                    # Ancien format (compat rétro): Ancien_*_YYYYMMDD_HHMMSS.pdf
+                                    match_old = re.search(r'_(\d{8})_(\d{6})(?:\.[^.]+)?$', filename)
+                                    if match_old:
+                                        file_date = datetime.strptime(
+                                            f"{match_old.group(1)}_{match_old.group(2)}",
+                                            '%Y%m%d_%H%M%S'
+                                        )
+
+                                if file_date and file_date < cutoff_date:
+                                    # Supprimer le fichier ancien
+                                    s3_client.delete_object(Bucket=bucket_name, Key=key)
+                                    deleted_count += 1
+                                    print(f"🗑️ Fichier historique supprimé: {key}")
                             except:
                                 # Si on ne peut pas parser la date, ignorer
                                 continue

@@ -7,6 +7,7 @@ from .storage import StorageManager
 import re
 import zipfile
 import io
+from datetime import datetime
 from ..utils import encode_filename_for_content_disposition
 
 
@@ -97,6 +98,64 @@ class DriveManager:
     def __init__(self):
         """Initialise le gestionnaire avec le storage manager"""
         self.storage = StorageManager()
+
+    def _build_historique_destination_path(self, item_path: str, is_folder: bool) -> str:
+        """
+        Construit un chemin de destination unique dans Historique.
+
+        Args:
+            item_path: Chemin source de l'élément
+            is_folder: True si c'est un dossier
+
+        Returns:
+            Chemin destination dans Historique
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        clean_path = item_path.strip('/')
+
+        if is_folder:
+            folder_name = clean_path.split('/')[-1] if clean_path else "Dossier"
+            # Conserver une trace de l'origine dans le nom pour éviter les collisions.
+            source_hint = clean_path.replace('/', '__') if clean_path else "racine"
+            return f"Historique/{folder_name}__{source_hint}__{timestamp}/"
+
+        file_name = clean_path.split('/')[-1] if clean_path else "document"
+        dot_index = file_name.rfind('.')
+        if dot_index > 0:
+            base_name = file_name[:dot_index]
+            extension = file_name[dot_index:]
+        else:
+            base_name = file_name
+            extension = ''
+
+        source_hint = clean_path.replace('/', '__') if clean_path else "racine"
+        return f"Historique/{base_name}__{source_hint}__{timestamp}{extension}"
+
+    def _archive_item_to_historique(self, item_path: str, is_folder: bool) -> Tuple[bool, str]:
+        """
+        Archive un fichier/dossier dans Historique via un déplacement.
+
+        Args:
+            item_path: Chemin source
+            is_folder: True si c'est un dossier
+
+        Returns:
+            Tuple (succès, chemin_destination)
+        """
+        # Si l'élément est déjà dans Historique, ne pas réarchiver.
+        if item_path.startswith('Historique/'):
+            return False, ""
+
+        # S'assurer que le dossier Historique existe.
+        self.storage.create_folder('Historique/')
+
+        source_path = item_path
+        if is_folder and not source_path.endswith('/'):
+            source_path += '/'
+
+        destination_path = self._build_historique_destination_path(source_path, is_folder)
+        success = self.storage.move_object(source_path, destination_path)
+        return success, destination_path
     
     def normalize_path(self, path: str) -> str:
         """
@@ -243,19 +302,29 @@ class DriveManager:
                 except:
                     # Si on ne peut pas invalider le cache, continuer quand même
                     pass
-            
-            if is_folder:
-                success = self.storage.delete_folder(item_path)
+
+            # Si l'élément est déjà dans Historique, on effectue une suppression définitive.
+            if item_path.startswith('Historique/'):
+                if is_folder:
+                    success = self.storage.delete_folder(item_path)
+                else:
+                    success = self.storage.delete_object(item_path)
+                operation_message = 'Élément supprimé définitivement depuis Historique'
+                result_path = item_path
             else:
-                success = self.storage.delete_object(item_path)
+                # Politique globale : toute suppression passe d'abord par Historique.
+                success, archived_path = self._archive_item_to_historique(item_path, is_folder)
+                operation_message = 'Élément déplacé vers Historique avec succès'
+                result_path = archived_path
             
             if success:
                 return {
                     'success': True,
-                    'message': 'Élément supprimé avec succès'
+                    'message': operation_message,
+                    'archived_path': result_path
                 }
             else:
-                raise Exception("Échec de la suppression")
+                raise Exception("Échec de l'archivage dans Historique")
             
         except Exception as e:
             raise
