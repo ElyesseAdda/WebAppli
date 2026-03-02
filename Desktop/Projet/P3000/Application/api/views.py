@@ -10113,22 +10113,44 @@ def preview_certificat_paiement(request, contrat_id):
                 return total_paye
             return 0
 
-        # Séparer les factures : précédentes, mois précédent, mois courant
-        factures_precedentes = [
-            f for f in toutes_factures
-            if (f.annee, f.mois) < (annee_facture, mois_facture)
+        # Ordre des factures : annee, mois, id (pour départager plusieurs factures du même mois)
+        liste_factures = list(toutes_factures)
+
+        # Factures strictement avant la facture courante (mois précédents + autres factures du même mois avant celle-ci)
+        # → La situation cumulée du CP n°05 doit inclure la facture du CP n°04 (même mois).
+        if facture_du_mois:
+            factures_avant_cette_facture = [
+                f for f in liste_factures
+                if (f.annee, f.mois, f.id) < (annee_facture, mois_facture, facture_du_mois.id)
+            ]
+        else:
+            # Preview : pas de facture en base, tout ce qui existe avant = précédentes + factures du mois déjà en base
+            factures_precedentes_only = [f for f in liste_factures if (f.annee, f.mois) < (annee_facture, mois_facture)]
+            factures_du_mois_courant = [f for f in liste_factures if (f.annee, f.mois) == (annee_facture, mois_facture)]
+            factures_avant_cette_facture = factures_precedentes_only + factures_du_mois_courant
+
+        # Mois précédent (pour "situation précédente" = total du mois précédent)
+        if mois_facture == 1:
+            annee_mois_precedent = annee_facture - 1
+            mois_precedent = 12
+        else:
+            annee_mois_precedent = annee_facture
+            mois_precedent = mois_facture - 1
+
+        factures_du_mois_precedent = [
+            f for f in liste_factures
+            if (f.annee, f.mois) == (annee_mois_precedent, mois_precedent)
         ]
 
-        # Trouver la facture du mois juste avant le mois courant
-        # (pour la colonne "situation précédente" = montant facturé du mois précédent)
-        factures_prec_triees = sorted(
-            factures_precedentes,
-            key=lambda f: (f.annee, f.mois),
-            reverse=True
+        # --- Situation cumulée = tout ce qui est AVANT cette facture (mois précédents + autres factures du même mois) ---
+        cumul_travaux = sum(
+            float(f.montant_facture_ht or 0) - float(f.montant_retenue or 0)
+            for f in factures_avant_cette_facture
         )
-        facture_mois_precedent = factures_prec_triees[0] if factures_prec_triees else None
+        cumul_retenues = 0
+        cumul_acomptes = sum(calcul_acompte_facture(f) for f in factures_avant_cette_facture)
 
-        # --- Situation du mois = montant facturé du mois en cours ---
+        # --- Situation du mois = uniquement la facture courante (celle du certificat) ---
         if is_preview_mode:
             mois_travaux = float(montant_preview or 0)
             mois_retenues = 0
@@ -10142,23 +10164,13 @@ def preview_certificat_paiement(request, contrat_id):
             mois_retenues = 0
             mois_acomptes = 0
 
-        # --- Situation cumulée = cumul des montants facturés - retenues, précédant le mois ---
-        cumul_travaux = sum(
+        # --- Situation précédente = somme de TOUTES les factures du mois précédent ---
+        prev_travaux = sum(
             float(f.montant_facture_ht or 0) - float(f.montant_retenue or 0)
-            for f in factures_precedentes
+            for f in factures_du_mois_precedent
         )
-        cumul_retenues = 0  # Retenues déjà déduites des travaux, afficher "-"
-        cumul_acomptes = sum(calcul_acompte_facture(f) for f in factures_precedentes)
-
-        # --- Situation précédente = montant facturé - retenue du mois précédent ---
-        if facture_mois_precedent:
-            prev_travaux = float(facture_mois_precedent.montant_facture_ht or 0) - float(facture_mois_precedent.montant_retenue or 0)
-            prev_retenues = 0
-            prev_acomptes = calcul_acompte_facture(facture_mois_precedent)
-        else:
-            prev_travaux = 0
-            prev_retenues = 0
-            prev_acomptes = 0
+        prev_retenues = 0
+        prev_acomptes = sum(calcul_acompte_facture(f) for f in factures_du_mois_precedent)
 
         # Situation du mois : travaux = montant - retenue
         mois_travaux = mois_travaux - mois_retenues
