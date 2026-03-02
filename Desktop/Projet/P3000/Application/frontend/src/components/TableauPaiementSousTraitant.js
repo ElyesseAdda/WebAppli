@@ -1,6 +1,7 @@
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
+import EditIcon from "@mui/icons-material/Edit";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PaymentIcon from "@mui/icons-material/Payment";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
@@ -237,6 +238,142 @@ const RetenueModal = ({ open, onClose, facture, onSubmit }) => {
           disabled={montantRetenue === ""}
         >
           Enregistrer la retenue
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const ModifierFactureModal = ({ open, onClose, facture, onSubmit }) => {
+  const [mois, setMois] = useState(1);
+  const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [numeroFacture, setNumeroFacture] = useState("");
+  const [montantFacture, setMontantFacture] = useState("");
+  const [montantRetenue, setMontantRetenue] = useState("");
+  const [dateReception, setDateReception] = useState("");
+  const [delaiPaiement, setDelaiPaiement] = useState(45);
+
+  useEffect(() => {
+    if (facture) {
+      setMois(facture.mois);
+      setAnnee(facture.annee);
+      setNumeroFacture(facture.numero_facture || "");
+      setMontantFacture(facture.montant_facture_ht ?? "");
+      setMontantRetenue(facture.montant_retenue ?? "");
+      setDateReception(facture.date_reception ? facture.date_reception.split("T")[0] : "");
+      setDelaiPaiement(facture.delai_paiement ?? 45);
+    }
+  }, [facture, open]);
+
+  const handleSubmit = () => {
+    onSubmit(facture.id, {
+      mois,
+      annee,
+      numero_facture: numeroFacture || "1",
+      montant_facture_ht: parseFloat(montantFacture) || 0,
+      montant_retenue: parseFloat(montantRetenue) || 0,
+      date_reception: dateReception,
+      delai_paiement: delaiPaiement,
+    });
+    onClose();
+  };
+
+  const moisOptions = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+  ];
+
+  if (!facture) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Modifier la facture</DialogTitle>
+      <DialogContent>
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <TextField
+              select
+              label="Mois"
+              value={mois}
+              onChange={(e) => setMois(parseInt(e.target.value))}
+              SelectProps={{ native: true }}
+              sx={{ flex: 1 }}
+            >
+              {moisOptions.map((nom, index) => (
+                <option key={index + 1} value={index + 1}>{nom}</option>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              label="Année"
+              value={annee}
+              onChange={(e) => setAnnee(parseInt(e.target.value))}
+              sx={{ flex: 1 }}
+              inputProps={{ min: 2020, max: 2030 }}
+            />
+          </Box>
+
+          <TextField
+            label="Numéro de facture"
+            value={numeroFacture}
+            onChange={(e) => setNumeroFacture(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            type="number"
+            label="Montant facturé HT"
+            value={montantFacture}
+            onChange={(e) => setMontantFacture(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            inputProps={{ step: "0.01", min: "0" }}
+          />
+
+          <TextField
+            type="number"
+            label="Montant retenue (€)"
+            value={montantRetenue}
+            onChange={(e) => setMontantRetenue(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            inputProps={{ step: "0.01", min: "0" }}
+          />
+
+          <TextField
+            type="date"
+            label="Date de réception"
+            value={dateReception}
+            onChange={(e) => setDateReception(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            InputLabelProps={{ shrink: true }}
+          />
+
+          <TextField
+            select
+            label="Délai de paiement"
+            value={delaiPaiement}
+            onChange={(e) => setDelaiPaiement(parseInt(e.target.value))}
+            fullWidth
+            SelectProps={{ native: true }}
+          >
+            <option value={45}>45 jours</option>
+            <option value={60}>60 jours</option>
+          </TextField>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={!montantFacture || !dateReception}
+        >
+          Enregistrer
         </Button>
       </DialogActions>
     </Dialog>
@@ -859,6 +996,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     useState(false);
   const [openRetenueModal, setOpenRetenueModal] = useState(false);
   const [selectedFactureRetenue, setSelectedFactureRetenue] = useState(null);
+  const [openModifierFactureModal, setOpenModifierFactureModal] = useState(false);
+  const [factureToEdit, setFactureToEdit] = useState(null);
   const [montantRestant, setMontantRestant] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
@@ -1021,6 +1160,35 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
       if (error.response) {
         console.error("Erreur backend:", error.response.data);
       }
+    }
+  };
+
+  // Handler modification facture (PATCH)
+  const handleModifierFacture = async (factureId, data) => {
+    try {
+      const payload = {
+        mois: data.mois,
+        annee: data.annee,
+        numero_facture: data.numero_facture,
+        montant_facture_ht: data.montant_facture_ht,
+        montant_retenue: data.montant_retenue ?? 0,
+        date_reception: data.date_reception,
+        delai_paiement: data.delai_paiement,
+      };
+      const res = await axios.patch(`/api/factures-sous-traitant/${factureId}/`, payload);
+      setFactures((prev) =>
+        prev.map((f) => (f.id === factureId ? { ...f, ...res.data } : f))
+      );
+      setOpenModifierFactureModal(false);
+      setFactureToEdit(null);
+      setSnackbar({ open: true, message: "Facture mise à jour", severity: "success" });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.detail || "Erreur lors de la modification de la facture",
+        severity: "error",
+      });
+      if (error.response) console.error("Erreur backend:", error.response.data);
     }
   };
 
@@ -1555,6 +1723,20 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                     <Box
                       sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
                     >
+                      {ligne.isFirstForFacture && (
+                        <Tooltip title="Modifier la facture">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              setFactureToEdit(ligne.facture);
+                              setOpenModifierFactureModal(true);
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       {ligne.isFirstForFacture && contratsFiltres.length > 0 && (
                         <Tooltip title={`Télécharger certificat de paiement n°${numeroCertificatMap[ligne.facture.id] || ""}`}>
                           <IconButton
@@ -1839,6 +2021,15 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         onClose={() => setOpenRetenueModal(false)}
         facture={selectedFactureRetenue}
         onSubmit={handleMettreAJourRetenue}
+      />
+      <ModifierFactureModal
+        open={openModifierFactureModal}
+        onClose={() => {
+          setOpenModifierFactureModal(false);
+          setFactureToEdit(null);
+        }}
+        facture={factureToEdit}
+        onSubmit={handleModifierFacture}
       />
       <Snackbar
         open={snackbar.open}
