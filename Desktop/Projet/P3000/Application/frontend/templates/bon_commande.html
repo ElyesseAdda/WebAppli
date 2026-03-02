@@ -283,8 +283,8 @@
         <h3>Émetteur:</h3>
         {% if agent %}
         <p>Mr {{ agent.name }} {{ agent.surname }}</p>
-        <p>Mail: {{ agent.email }}</p>
-        <p>Tél: {{ agent.phone_Number|format_phone }}</p>
+        {% if agent.email %}<p>Mail: {{ agent.email }}</p>{% endif %}
+        {% if agent.phone_Number %}<p>Tél: {{ agent.phone_Number|format_phone }}</p>{% endif %}
         {% else %}
         <p>Émetteur non spécifié</p>
         {% endif %}

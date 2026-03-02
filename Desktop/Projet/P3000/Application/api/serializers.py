@@ -668,6 +668,10 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = '__all__'
+        extra_kwargs = {
+            'client_mail': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'phone_Number': {'required': False, 'allow_null': True},
+        }
 
 class MonthlyHoursSerializer(serializers.ModelSerializer):
     class Meta:

@@ -62,8 +62,7 @@ const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialDat
   };
 
   const handleSubmit = () => {
-    // Validation du numéro de téléphone
-    if (isNaN(parseInt(formData.phone_Number))) {
+    if (formData.phone_Number && isNaN(parseInt(formData.phone_Number))) {
       alert("Le numéro de téléphone doit être un nombre");
       return;
     }
@@ -132,7 +131,6 @@ const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialDat
           type="email"
           value={formData.client_mail}
           onChange={handleChange}
-          required
         />
         <TextField
           fullWidth
@@ -169,7 +167,6 @@ const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialDat
             inputMode: "numeric",
             pattern: "[0-9]*",
           }}
-          required
         />
         <TextField
           fullWidth

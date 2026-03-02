@@ -5692,7 +5692,9 @@ def check_client(request):
     surname = request.query_params.get('surname')
     
     try:
-        # Rechercher un client qui correspond exactement à l'email ET au surname
+        if not email:
+            return Response({'client': None})
+        
         client = Client.objects.filter(
             client_mail=email,
             surname=surname

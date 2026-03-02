@@ -1324,6 +1324,19 @@ def rename_local_item(old_path, new_name):
         print(f"Erreur lors du renommage local: {e}")
         return False, None
 
+def get_user_initials(user) -> str:
+    """Retourne les initiales (PN) d'un utilisateur Django, ou son username."""
+    first = (user.first_name or '').strip()
+    last = (user.last_name or '').strip()
+    if first and last:
+        return f"{first[0].upper()}{last[0].upper()}"
+    if first:
+        return first[0].upper()
+    if last:
+        return last[0].upper()
+    return user.username
+
+
 def _update_drive_metadata_after_upload(s3_file_path: str, modified_by: str = "Application"):
     """Met à jour le .metadata.json du dossier parent après un upload backend."""
     try:

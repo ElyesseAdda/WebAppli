@@ -30,16 +30,16 @@ class DriveV2ViewSet(viewsets.ViewSet):
         self.drive_manager = DriveManager()
 
     def _get_modified_by(self, request):
-        """Retourne les initiales (Prénom Nom -> P.N.) de l'utilisateur."""
+        """Retourne les initiales (Prénom Nom -> PN) de l'utilisateur."""
         user = request.user
         first = (user.first_name or '').strip()
         last = (user.last_name or '').strip()
         if first and last:
-            return f"{first[0].upper()}.{last[0].upper()}"
+            return f"{first[0].upper()}{last[0].upper()}"
         if first:
-            return f"{first[0].upper()}"
+            return first[0].upper()
         if last:
-            return f"{last[0].upper()}"
+            return last[0].upper()
         return user.username
     
     @action(detail=False, methods=['get'], url_path='list-content')

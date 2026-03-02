@@ -1835,8 +1835,8 @@ const ModificationDevis = () => {
   };
 
   const handleClientInfoSubmit = async (clientData) => {
-    if (!clientData.name || !clientData.surname || !clientData.phone_Number) {
-      alert("Tous les champs sont obligatoires");
+    if (!clientData.name || !clientData.surname) {
+      alert("Le nom et le prénom sont obligatoires");
       return;
     }
     if (!clientData) {
@@ -1849,7 +1849,7 @@ const ModificationDevis = () => {
         client: {
           name: clientData.name || "",
           surname: clientData.surname || "",
-          phone_Number: parseInt(clientData.phone_Number) || 0,
+          phone_Number: clientData.phone_Number ? parseInt(clientData.phone_Number) : 0,
           client_mail: clientData.client_mail || "",
         },
       }));

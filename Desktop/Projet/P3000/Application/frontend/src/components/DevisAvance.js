@@ -780,8 +780,8 @@ const DevisAvance = () => {
   // Handlers pour le flux de création de nouveau chantier
 
   const handleClientInfoSubmit = async (clientData) => {
-    if (!clientData.name || !clientData.surname || !clientData.phone_Number) {
-      alert("Tous les champs sont obligatoires");
+    if (!clientData.name || !clientData.surname) {
+      alert("Le nom et le prénom sont obligatoires");
       return;
     }
     if (!clientData) {
@@ -791,7 +791,7 @@ const DevisAvance = () => {
       const updatedClient = {
         name: clientData.name || "",
         surname: clientData.surname || "",
-        phone_Number: parseInt(clientData.phone_Number) || 0,
+        phone_Number: clientData.phone_Number ? parseInt(clientData.phone_Number) : 0,
         client_mail: clientData.client_mail || "",
         civilite: clientData.civilite || "",
         poste: clientData.poste || "",

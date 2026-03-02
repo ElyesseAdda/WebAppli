@@ -8,7 +8,7 @@ from rest_framework import status
 from django.http import JsonResponse
 from .models import Devis, Chantier, Societe, AppelOffres
 from .pdf_manager import PDFManager
-from .utils import custom_slugify
+from .utils import custom_slugify, get_user_initials
 import logging
 
 logger = logging.getLogger(__name__)
@@ -127,11 +127,13 @@ def regenerate_devis_pdf(request, devis_id):
             
             # Générer le PDF avec le PDF Manager
             logger.info("🚀 Début de la génération du nouveau PDF...")
+            _modified_by = get_user_initials(request.user) if hasattr(request, 'user') and request.user and request.user.is_authenticated else "Application"
             success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
                 document_type='devis_marche',
                 preview_url=preview_url,
                 societe_name=societe_name,
-                force_replace=True,  # Toujours remplacer pour les modifications
+                force_replace=True,
+                modified_by=_modified_by,
                 devis_id=devis.id,
                 chantier_id=chantier_id,
                 chantier_name=chantier_name,
@@ -220,11 +222,13 @@ def regenerate_devis_pdf(request, devis_id):
             
             # Générer le PDF avec le PDF Manager
             logger.info("🚀 Début de la génération du nouveau PDF...")
+            _modified_by = get_user_initials(request.user) if hasattr(request, 'user') and request.user and request.user.is_authenticated else "Application"
             success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
                 document_type='devis_travaux',
                 preview_url=preview_url,
                 societe_name=societe_name,
-                force_replace=True,  # Toujours remplacer pour les modifications
+                force_replace=True,
+                modified_by=_modified_by,
                 devis_id=devis.id,
                 chantier_id=chantier_id,
                 chantier_name=chantier_name,

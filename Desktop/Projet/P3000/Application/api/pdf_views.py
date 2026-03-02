@@ -12,6 +12,14 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .pdf_manager import pdf_manager
+from .utils import get_user_initials
+
+
+def _get_modified_by(request):
+    """Retourne les initiales de l'utilisateur ou 'Application' si non authentifié."""
+    if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+        return get_user_initials(request.user)
+    return "Application"
 
 
 @api_view(['GET'])
@@ -61,6 +69,7 @@ def planning_hebdo_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -134,6 +143,7 @@ def generate_monthly_agents_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -250,6 +260,7 @@ def generate_devis_travaux_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -370,6 +381,7 @@ def generate_devis_marche_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -497,6 +509,7 @@ def replace_file_after_confirmation(request):
             document_type=document_type,
             preview_url=preview_url,
             societe_name=societe_name,
+            modified_by=_get_modified_by(request),
             **kwargs
         )
         
@@ -727,6 +740,7 @@ def generate_devis_marche_auto(request):
             document_type='devis_marche',
             preview_url=preview_url,
             societe_name=societe_name,
+            modified_by=_get_modified_by(request),
             appel_offres_id=appel_offres_id,
             appel_offres_name=appel_offres_name
         )
@@ -810,10 +824,11 @@ def generate_contrat_sous_traitance_pdf_drive(request):
             document_type='contrat_sous_traitance',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=request.GET.get('force_replace', 'false').lower() == 'true',
+            modified_by=_get_modified_by(request),
             chantier_id=chantier_id,
             chantier_name=chantier_name,
-            sous_traitant_name=sous_traitant_name,
-            force_replace=request.GET.get('force_replace', 'false').lower() == 'true'
+            sous_traitant_name=sous_traitant_name
         )
         
         if success:
@@ -874,11 +889,12 @@ def generate_avenant_sous_traitance_pdf_drive(request):
             document_type='avenant_sous_traitance',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=request.GET.get('force_replace', 'false').lower() == 'true',
+            modified_by=_get_modified_by(request),
             chantier_id=chantier_id,
             chantier_name=chantier_name,
             sous_traitant_name=sous_traitant_name,
-            avenant_numero=numero_avenant,
-            force_replace=request.GET.get('force_replace', 'false').lower() == 'true'
+            avenant_numero=numero_avenant
         )
         
         if success:
@@ -977,6 +993,7 @@ def generate_certificat_paiement_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
 
@@ -1067,6 +1084,7 @@ def generate_situation_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -1168,6 +1186,7 @@ def generate_bon_commande_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -1256,6 +1275,7 @@ def generate_facture_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             facture_id=facture_id,
             chantier_id=chantier_id,
             chantier_name=chantier_name,

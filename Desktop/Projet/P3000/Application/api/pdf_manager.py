@@ -465,6 +465,7 @@ class PDFManager:
                              preview_url: str, 
                              societe_name: str,
                              force_replace: bool = False,
+                             modified_by: str = "Application",
                              **kwargs) -> Tuple[bool, str, str, bool]:
         """
         Génère un PDF et le stocke dans AWS S3 avec gestion des conflits
@@ -566,7 +567,7 @@ class PDFManager:
             
             # 7. Uploader le nouveau PDF dans S3 (seulement si pas de conflit)
             # print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
-            success = upload_file_to_s3_robust(temp_pdf_path, s3_file_path)
+            success = upload_file_to_s3_robust(temp_pdf_path, s3_file_path, modified_by=modified_by)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", "", False
             
@@ -762,7 +763,7 @@ class PDFManager:
             # print(f"❌ Erreur lors du déplacement du fichier: {str(e)}")
             return False
 
-    def replace_file_with_confirmation(self, document_type: str, preview_url: str, societe_name: str, **kwargs) -> Tuple[bool, str, str]:
+    def replace_file_with_confirmation(self, document_type: str, preview_url: str, societe_name: str, modified_by: str = "Application", **kwargs) -> Tuple[bool, str, str]:
         """
         Remplace un fichier existant après confirmation de l'utilisateur
         
@@ -839,7 +840,7 @@ class PDFManager:
             
             # 7. Uploader le nouveau PDF dans S3
             # print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
-            success = upload_file_to_s3(temp_pdf_path, s3_file_path)
+            success = upload_file_to_s3(temp_pdf_path, s3_file_path, modified_by=modified_by)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", ""
             

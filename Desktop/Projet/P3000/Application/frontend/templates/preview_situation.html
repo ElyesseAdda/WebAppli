@@ -623,10 +623,12 @@
          <h3>Contact:</h3>
          <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.prenom }} {{ client.nom }} </p>
         {% if client.poste %}<p>{{ client.poste }}</p>{% endif %}
-         <p class="client-mail">Mail: {{ client.client_mail }}</p>
+         {% if client.client_mail %}<p class="client-mail">Mail: {{ client.client_mail }}</p>{% endif %}
+          {% if client.phone_Number %}
           <p>
-            Tél: <span id="phone-number">{% if client.phone_Number %}{{ client.phone_Number }}{% endif %}</span>
+            Tél: <span id="phone-number">{{ client.phone_Number }}</span>
           </p>
+          {% endif %}
        </div>
     </div>
 

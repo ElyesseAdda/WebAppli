@@ -58,33 +58,35 @@ const NewChantierModal = ({ open, onClose, onSuccess }) => {
 
   const handleClientInfoSubmit = async () => {
     try {
-      const clientResponse = await axios.get("/api/client/", {
-        params: { client_mail: clientData.client_mail.trim() },
-      });
-
       let clientInfo = {
         civilite: clientData.civilite || "",
         name: clientData.name,
         surname: clientData.surname,
-        client_mail: clientData.client_mail,
-        phone_Number: parseInt(clientData.phone_Number),
+        client_mail: clientData.client_mail || "",
+        phone_Number: clientData.phone_Number ? parseInt(clientData.phone_Number) : null,
       };
 
-      if (
-        clientResponse.data.length > 0 &&
-        clientResponse.data[0].client_mail === clientData.client_mail.trim()
-      ) {
-        const existingClient = clientResponse.data[0];
-        clientInfo = {
-          civilite: existingClient.civilite || "",
-          name: existingClient.name,
-          surname: existingClient.surname,
-          client_mail: existingClient.client_mail,
-          phone_Number: existingClient.phone_Number,
-        };
-        alert(
-          "Ce client existe déjà, nous allons utiliser ses informations existantes."
-        );
+      if (clientData.client_mail && clientData.client_mail.trim()) {
+        const clientResponse = await axios.get("/api/client/", {
+          params: { client_mail: clientData.client_mail.trim() },
+        });
+
+        if (
+          clientResponse.data.length > 0 &&
+          clientResponse.data[0].client_mail === clientData.client_mail.trim()
+        ) {
+          const existingClient = clientResponse.data[0];
+          clientInfo = {
+            civilite: existingClient.civilite || "",
+            name: existingClient.name,
+            surname: existingClient.surname,
+            client_mail: existingClient.client_mail || "",
+            phone_Number: existingClient.phone_Number,
+          };
+          alert(
+            "Ce client existe déjà, nous allons utiliser ses informations existantes."
+          );
+        }
       }
 
       setPendingData((prev) => ({ ...prev, client: clientInfo }));

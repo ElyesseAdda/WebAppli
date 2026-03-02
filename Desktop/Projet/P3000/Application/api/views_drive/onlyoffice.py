@@ -500,11 +500,11 @@ class OnlyOfficeManager:
                                     first = (u.first_name or '').strip()
                                     last = (u.last_name or '').strip()
                                     if first and last:
-                                        user_label = f"{first[0].upper()}.{last[0].upper()}"
+                                        user_label = f"{first[0].upper()}{last[0].upper()}"
                                     elif first:
-                                        user_label = f"{first[0].upper()}"
+                                        user_label = first[0].upper()
                                     elif last:
-                                        user_label = f"{last[0].upper()}"
+                                        user_label = last[0].upper()
                                     else:
                                         user_label = u.username
                                 except (AuthUser.DoesNotExist, ValueError):
