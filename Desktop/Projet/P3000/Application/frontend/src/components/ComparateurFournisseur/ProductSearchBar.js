@@ -20,6 +20,7 @@ const ProductSearchBar = ({
   products,     // liste complete des produits du fournisseur
   loading,
   selectedProduct,
+  quantity = 1,
   onProductSelect,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -118,8 +119,9 @@ const ProductSearchBar = ({
         <Box
           sx={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
-            gap: 1,
+            gap: 0.8,
             px: 0.5,
           }}
         >
@@ -132,21 +134,28 @@ const ProductSearchBar = ({
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            {selectedProduct.prix_unitaire?.toFixed(2)} €
+            {selectedProduct.prix_unitaire != null
+              ? `${Number(selectedProduct.prix_unitaire).toFixed(2)} €`
+              : "—"}
+            {selectedProduct.unite ? ` / ${selectedProduct.unite}` : ""}
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              color: PALETTE.textMuted,
-              fontSize: "0.7rem",
-              px: 0.6,
-              py: 0.1,
-              borderRadius: 1,
-              backgroundColor: "#f1f5f9",
-            }}
-          >
-            {selectedProduct.unite || "—"}
-          </Typography>
+          {quantity > 1 && selectedProduct.prix_unitaire != null && (
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                color: PALETTE.text,
+                fontSize: "0.8rem",
+                fontVariantNumeric: "tabular-nums",
+                px: 0.6,
+                py: 0.2,
+                borderRadius: 1,
+                backgroundColor: alpha(fournisseurColor, 0.12),
+              }}
+            >
+              Total : {(Number(selectedProduct.prix_unitaire) * quantity).toFixed(2)} €
+            </Typography>
+          )}
         </Box>
       </Box>
     );

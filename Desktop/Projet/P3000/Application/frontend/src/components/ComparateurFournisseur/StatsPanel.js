@@ -88,7 +88,7 @@ const StatCard = ({ icon: Icon, label, value, sublabel, color, delay }) => (
 );
 
 // === Barre fournisseur ===
-const FournisseurBar = ({ name, count, total, color, delay }) => {
+const FournisseurBar = ({ name, count, total, totalPrice, color, delay }) => {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
     <Grow in timeout={500 + delay * 120}>
@@ -122,12 +122,27 @@ const FournisseurBar = ({ name, count, total, color, delay }) => {
               {name}
             </Typography>
           </Box>
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: 700, color, fontSize: "0.85rem" }}
-          >
-            {count}
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5 }}>
+            {totalPrice != null && totalPrice > 0 && (
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  color: PALETTE.text,
+                  fontSize: "0.9rem",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {Number(totalPrice).toFixed(2)} €
+              </Typography>
+            )}
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, color, fontSize: "0.85rem" }}
+            >
+              {count} / {total}
+            </Typography>
+          </Box>
         </Box>
         <LinearProgress
           variant="determinate"
@@ -145,6 +160,19 @@ const FournisseurBar = ({ name, count, total, color, delay }) => {
             },
           }}
         />
+        {totalPrice != null && totalPrice > 0 && (
+          <Typography
+            variant="caption"
+            sx={{
+              display: "block",
+              mt: 0.5,
+              color: PALETTE.textMuted,
+              fontSize: "0.7rem",
+            }}
+          >
+            Prix total pour ce fournisseur
+          </Typography>
+        )}
       </Box>
     </Grow>
   );
@@ -162,19 +190,27 @@ const StatsPanel = ({
     let completedRows = 0;
     let totalEcart = 0;
     let bestCountByFournisseur = {};
+    let totalPriceByFournisseur = {};
 
     selectedNames.forEach((name) => {
       bestCountByFournisseur[name] = 0;
+      totalPriceByFournisseur[name] = 0;
     });
 
     comparaisonRows.forEach((row) => {
+      const qty = Math.max(1, Number(row.quantity) || 1);
       // Verifier que au moins 2 fournisseurs ont un produit selectionne
       const filledEntries = selectedNames
         .filter((name) => row.products[name] != null)
         .map((name) => ({
           name,
-          prix: row.products[name].prix_unitaire,
+          prix: (row.products[name].prix_unitaire || 0) * qty,
         }));
+
+      // Prix total par fournisseur (toutes les lignes où il a un produit)
+      filledEntries.forEach(({ name, prix }) => {
+        totalPriceByFournisseur[name] += prix;
+      });
 
       if (filledEntries.length >= 2) {
         completedRows++;
@@ -183,7 +219,7 @@ const StatsPanel = ({
         const maxPrice = Math.max(...prices);
         totalEcart += maxPrice - minPrice;
 
-        // Qui a le meilleur prix ?
+        // Qui a le meilleur prix total (pour cette quantité) ?
         const bestEntry = filledEntries.reduce((best, entry) =>
           entry.prix < best.prix ? entry : best
         );
@@ -196,6 +232,7 @@ const StatsPanel = ({
       completedRows,
       totalEcart,
       bestCountByFournisseur,
+      totalPriceByFournisseur,
     };
   }, [comparaisonRows, selectedFournisseurs]);
 
@@ -267,6 +304,7 @@ const StatsPanel = ({
                   name={name}
                   count={count}
                   total={stats.completedRows}
+                  totalPrice={stats.totalPriceByFournisseur?.[name]}
                   color={fournisseurColors[name]}
                   delay={i}
                 />

@@ -27,7 +27,7 @@ const ComparateurFournisseur = () => {
   const [productsByFournisseur, setProductsByFournisseur] = useState({});
   const [loadingFournisseurs, setLoadingFournisseurs] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState({});
-  // Lignes de comparaison : [{ id, products: { [fournisseurName]: product | null } }]
+  // Lignes de comparaison : [{ id, products: { [fournisseurName]: product | null }, quantity: number }]
   const [comparaisonRows, setComparaisonRows] = useState([]);
 
   // === Charger la liste des fournisseurs ===
@@ -124,8 +124,18 @@ const ComparateurFournisseur = () => {
   const addRow = useCallback(() => {
     setComparaisonRows((prev) => [
       ...prev,
-      { id: generateRowId(), products: {} },
+      { id: generateRowId(), products: {}, quantity: 1 },
     ]);
+  }, []);
+
+  // === Modifier la quantité d'une ligne ===
+  const handleQuantityChange = useCallback((rowId, quantity) => {
+    const q = Math.max(1, Math.min(99999, Number(quantity) || 1));
+    setComparaisonRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId ? { ...row, quantity: q } : row
+      )
+    );
   }, []);
 
   // === Supprimer une ligne ===
@@ -323,6 +333,29 @@ const ComparateurFournisseur = () => {
                   N°
                 </Typography>
               </Box>
+              {/* Colonne quantite */}
+              <Box
+                sx={{
+                  width: 72,
+                  minWidth: 72,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRight: `1px solid ${PALETTE.borderLight}`,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: PALETTE.textMuted,
+                    fontSize: "0.65rem",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Qté
+                </Typography>
+              </Box>
               {/* Noms des fournisseurs */}
               <Box sx={{ flex: 1, display: "flex", gap: 0 }}>
                 {selectedFournisseurs.map((f, idx) => {
@@ -418,6 +451,7 @@ const ComparateurFournisseur = () => {
                   key={row.id}
                   rowIndex={idx}
                   rowData={row}
+                  quantity={row.quantity ?? 1}
                   selectedFournisseurs={selectedFournisseurs}
                   productsByFournisseur={productsByFournisseur}
                   loadingProducts={loadingProducts}
@@ -425,6 +459,7 @@ const ComparateurFournisseur = () => {
                   onProductSelect={(fournisseurName, product) =>
                     handleProductSelect(row.id, fournisseurName, product)
                   }
+                  onQuantityChange={(q) => handleQuantityChange(row.id, q)}
                   onRemoveRow={() => removeRow(row.id)}
                 />
               ))}

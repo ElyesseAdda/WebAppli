@@ -6,6 +6,7 @@ import {
   Tooltip,
   alpha,
   Grow,
+  TextField,
 } from "@mui/material";
 import { MdDelete } from "react-icons/md";
 import ProductSearchBar from "./ProductSearchBar";
@@ -14,33 +15,36 @@ import { PALETTE } from "./theme";
 const ComparaisonRow = ({
   rowIndex,
   rowData, // { id, products: { [fournisseurName]: product | null } }
+  quantity = 1,
   selectedFournisseurs,
   productsByFournisseur,
   loadingProducts,
   fournisseurColors,
   onProductSelect,
+  onQuantityChange,
   onRemoveRow,
 }) => {
-  // Calculer le meilleur et pire prix de la ligne
+  // Calculer le meilleur et pire prix total (prix_unitaire * quantité) de la ligne
   const priceAnalysis = useMemo(() => {
     const entries = Object.entries(rowData.products).filter(
       ([, product]) => product != null
     );
     if (entries.length < 2) return { best: null, worst: null, ecart: null };
 
+    const qty = Math.max(1, Number(quantity) || 1);
     let bestName = null;
     let bestPrice = Infinity;
     let worstName = null;
     let worstPrice = -Infinity;
 
     entries.forEach(([name, product]) => {
-      const prix = product.prix_unitaire;
-      if (prix < bestPrice) {
-        bestPrice = prix;
+      const prixTotal = (product.prix_unitaire || 0) * qty;
+      if (prixTotal < bestPrice) {
+        bestPrice = prixTotal;
         bestName = name;
       }
-      if (prix > worstPrice) {
-        worstPrice = prix;
+      if (prixTotal > worstPrice) {
+        worstPrice = prixTotal;
         worstName = name;
       }
     });
@@ -52,7 +56,7 @@ const ComparaisonRow = ({
       bestPrice,
       worstPrice,
     };
-  }, [rowData.products]);
+  }, [rowData.products, quantity]);
 
   // Combien de produits sont selectionnes dans cette ligne
   const selectedCount = Object.values(rowData.products).filter(
@@ -121,6 +125,46 @@ const ComparaisonRow = ({
           </Tooltip>
         </Box>
 
+        {/* Quantite */}
+        <Box
+          sx={{
+            width: 72,
+            minWidth: 72,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRight: `1px solid ${PALETTE.borderLight}`,
+            backgroundColor: "#fafbfc",
+            px: 0.5,
+          }}
+        >
+          <TextField
+            type="number"
+            size="small"
+            value={quantity}
+            onChange={(e) => onQuantityChange?.(Number(e.target.value) || 1)}
+            inputProps={{
+              min: 1,
+              max: 99999,
+              step: 1,
+              style: {
+                textAlign: "center",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                padding: "6px 4px",
+              },
+            }}
+            sx={{
+              width: 56,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                backgroundColor: "#fff",
+                "& fieldset": { borderColor: PALETTE.borderLight },
+              },
+            }}
+          />
+        </Box>
+
         {/* Colonnes fournisseurs */}
         <Box
           sx={{
@@ -164,6 +208,7 @@ const ComparaisonRow = ({
                   products={productsByFournisseur[f.name] || []}
                   loading={loadingProducts[f.name] || false}
                   selectedProduct={product}
+                  quantity={quantity}
                   onProductSelect={(p) => onProductSelect(f.name, p)}
                 />
                 {/* Badge meilleur / pire */}
