@@ -1811,53 +1811,39 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
             sx={{
               borderRadius: "10px",
               backgroundColor: "white",
-              height: "100%",
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
-              mt: 3,
               boxShadow: 4,
+              paddingTop: "12px !important",
             }}
           >
             <CardContent sx={{ pt: 0.5, pb: 0.5 }}>
-              <Box
+              <Typography
+                variant="subtitle1"
                 sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  fontWeight: 700,
+                  fontFamily: "Roboto Slab, serif",
                   mb: 2,
                 }}
               >
-                <Typography
-                  variant="subtitle1"
-                  sx={{
-                    fontWeight: 700,
-                    fontFamily: "Roboto Slab, serif",
-                  }}
-                >
-                  Taux de facturation :
-                </Typography>
-                <Box sx={{ textAlign: "right" }}>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontWeight: 700,
-                      color: "#1976d2",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                    }}
-                  >
-                    Total facturé :{" "}
-                    {formatMontant(tauxFacturationData?.montant_total)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 700,
-                      color: "#6e6e6e",
-                      fontFamily: "Roboto, Arial, sans-serif",
-                    }}
-                  >
-                    Marché : {formatMontant(chantierData?.montant_ht)}
+                Taux de facturation :
+              </Typography>
+              {/* Total facturé + Marché : libellé + montant à droite, dans la même div */}
+              <Box sx={{ mb: 2, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5 }}>
+                
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Marché</Typography>
+                  <Typography variant="body2" sx={{ color: "primary.main", fontWeight: 600 }}>{formatMontant(chantierData?.montant_ht)}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Avenants + Factures</Typography>
+                  <Typography variant="body2" sx={{ color: "primary.main", fontWeight: 600 }}>{formatMontant((tauxFacturationData?.montant_factures ?? 0) + (tauxFacturationData?.montant_avenants ?? 0))}</Typography>
+                </Box>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>Total</Typography>
+                  <Typography variant="body2" sx={{ color: "primary.main", fontWeight: 600 }}>
+                    {formatMontant((chantierData?.montant_ht ?? 0) + (tauxFacturationData?.montant_factures ?? 0) + (tauxFacturationData?.montant_avenants ?? 0))}
                   </Typography>
                 </Box>
               </Box>

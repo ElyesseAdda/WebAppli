@@ -1,10 +1,38 @@
 """
-Synchronisation des montants des appels d'offres à partir du devis de chantier.
+Synchronisation des montants des appels d'offres et des chantiers à partir du devis de chantier.
 Utilisé par la commande de gestion, l'API et le signal Devis.
 """
 from django.db import transaction
 
-from .models import AppelOffres, Devis
+from .models import AppelOffres, Chantier, Devis
+
+
+def sync_chantier_montants_from_devis(devis):
+    """
+    Met à jour montant_ht et montant_ttc du chantier à partir du devis de marché
+    (devis avec devis_chantier=True) lorsqu'il est modifié.
+
+    Returns:
+        bool: True si au moins un montant a été mis à jour, False sinon.
+    """
+    if not getattr(devis, 'devis_chantier', False) or not getattr(devis, 'chantier_id', None):
+        return False
+    try:
+        chantier = Chantier.objects.get(id=devis.chantier_id)
+    except Chantier.DoesNotExist:
+        return False
+    if devis.price_ht is None and devis.price_ttc is None:
+        return False
+    updated = False
+    if devis.price_ht is not None and chantier.montant_ht != float(devis.price_ht):
+        chantier.montant_ht = float(devis.price_ht)
+        updated = True
+    if devis.price_ttc is not None and chantier.montant_ttc != float(devis.price_ttc):
+        chantier.montant_ttc = float(devis.price_ttc)
+        updated = True
+    if updated:
+        chantier.save(update_fields=['montant_ht', 'montant_ttc'])
+    return updated
 
 
 def sync_single_appel_offres_from_devis(appel_offres):

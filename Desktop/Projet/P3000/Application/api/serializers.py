@@ -520,6 +520,17 @@ class ChantierSerializer(serializers.ModelSerializer):
         cout_reel = float(obj.cout_materiel or 0)
         return cout_estime - cout_reel
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Au chargement, privilégier les montants du devis de marché s'il existe (devis déjà modifiés pris en compte)
+        devis_marche = Devis.objects.filter(chantier=instance, devis_chantier=True).first()
+        if devis_marche is not None:
+            if devis_marche.price_ht is not None:
+                data['montant_ht'] = float(devis_marche.price_ht)
+            if devis_marche.price_ttc is not None:
+                data['montant_ttc'] = float(devis_marche.price_ttc)
+        return data
+
 
 
 

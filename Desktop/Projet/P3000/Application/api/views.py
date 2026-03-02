@@ -5621,14 +5621,22 @@ def get_chantier_details(request, chantier_id):
     """
     try:
         chantier = get_object_or_404(Chantier, id=chantier_id)
-        
+        # Montants marché : au chargement, prendre ceux du devis de marché s'il existe (devis déjà modifiés pris en compte)
+        montant_ht = chantier.montant_ht
+        montant_ttc = chantier.montant_ttc
+        devis_marche = Devis.objects.filter(chantier=chantier, devis_chantier=True).first()
+        if devis_marche is not None:
+            if devis_marche.price_ht is not None:
+                montant_ht = float(devis_marche.price_ht)
+            if devis_marche.price_ttc is not None:
+                montant_ttc = float(devis_marche.price_ttc)
         # Récupérer les informations détaillées
         details = {
             'id': chantier.id,
             'nom': chantier.chantier_name,
             'statut': chantier.state_chantier,
-            'montant_ht': chantier.montant_ht,
-            'montant_ttc': chantier.montant_ttc,
+            'montant_ht': montant_ht,
+            'montant_ttc': montant_ttc,
             'dates': {
                 'debut': chantier.date_debut,
                 'fin': chantier.date_fin
@@ -10344,8 +10352,20 @@ def get_taux_facturation_data(request, chantier_id):
             'paye': (montant_paye / montant_total * 100) if montant_total > 0 else 0,
         }
 
+        # Montants des factures classiques du chantier (hors CIE)
+        factures_chantier = Facture.objects.filter(chantier=chantier, type_facture='classique')
+        montant_factures = factures_chantier.aggregate(total=Sum('price_ttc'))['total'] or 0
+        montant_factures = float(montant_factures)
+
+        # Montants des avenants (FactureTS du chantier)
+        factures_ts = FactureTS.objects.filter(chantier=chantier)
+        montant_avenants = factures_ts.aggregate(total=Sum('montant_ttc'))['total'] or 0
+        montant_avenants = float(montant_avenants)
+
         return Response({
             'montant_total': montant_total,
+            'montant_factures': montant_factures,
+            'montant_avenants': montant_avenants,
             'montants': {
                 'non_envoye': montant_non_envoye,
                 'en_attente': montant_en_attente,
