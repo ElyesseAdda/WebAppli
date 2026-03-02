@@ -4598,16 +4598,18 @@ def is_new_system_devis(devis):
 @permission_classes([AllowAny])
 def preview_saved_devis(request, devis_id):
     """
-    Vue de prévisualisation qui redirige automatiquement vers la bonne version
-    selon le système utilisé par le devis (ancien ou nouveau)
+    Vue de prévisualisation qui redirige toujours vers la V2.
+    La V2 gère à la fois l'ancien et le nouveau système (fallback sur les lignes si parties_metadata vide),
+    ce qui évite les cas où les devis de l'ancien système ne s'affichaient pas.
     """
+    get_object_or_404(Devis, id=devis_id)
+    return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
+
+
+def _preview_saved_devis_legacy(request, devis_id):
+    """Ancienne logique conservée uniquement en secours (non utilisée par l'URL)."""
     try:
         devis = get_object_or_404(Devis, id=devis_id)
-        
-        # Détecter si le devis utilise le nouveau système
-        if is_new_system_devis(devis):
-            # Rediriger vers preview_saved_devis_v2 pour le nouveau système
-            return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
         
         # Sinon, continuer avec l'ancien système (code existant)
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
@@ -4792,8 +4794,6 @@ def preview_saved_devis(request, devis_id):
         # Calculer TVA et TTC
         tva = total_ht * (Decimal(str(devis.tva_rate)) / Decimal('100'))
         montant_ttc = total_ht + tva
-
-        situation_title_label = build_situation_title_label(situation.numero_situation)
 
         context = {
             'devis': devis,
