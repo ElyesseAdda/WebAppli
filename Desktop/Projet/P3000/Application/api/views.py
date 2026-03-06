@@ -7372,7 +7372,7 @@ def update_situation(request, pk):
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
-                     'pourcentage_avancement', 'taux_prorata', 'statut']:
+                     'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'statut']:
             if field in data:
                 setattr(situation, field, data[field])
         situation.save()
@@ -7493,8 +7493,8 @@ def update_situation(request, pk):
         situation.montant_ht_mois = montant_ht_mois
         
         # Recalculer les montants dérivés basés sur montant_ht_mois
-        # Retenue de garantie (5%)
-        situation.retenue_garantie = (montant_ht_mois * Decimal('5')) / Decimal('100')
+        taux_rg = Decimal(str(situation.taux_retenue_garantie or '0'))
+        situation.retenue_garantie = (montant_ht_mois * taux_rg) / Decimal('100')
         
         # Prorata (basé sur taux_prorata)
         taux_prorata_decimal = Decimal(str(situation.taux_prorata or '0'))
@@ -7593,8 +7593,8 @@ def update_situation(request, pk):
             situation_suivante.montant_ht_mois = montant_ht_mois_suivante
             
             # Recalculer les montants dérivés pour chaque situation suivante
-            # Retenue de garantie (5%)
-            situation_suivante.retenue_garantie = (montant_ht_mois_suivante * Decimal('5')) / Decimal('100')
+            taux_rg_suivante = Decimal(str(situation_suivante.taux_retenue_garantie or '0'))
+            situation_suivante.retenue_garantie = (montant_ht_mois_suivante * taux_rg_suivante) / Decimal('100')
             
             # Prorata (basé sur taux_prorata)
             taux_prorata_suivante_decimal = Decimal(str(situation_suivante.taux_prorata or '0'))
@@ -8018,7 +8018,8 @@ class SituationLigneSupplementaireViewSet(viewsets.ModelViewSet):
             else:
                 situation.pourcentage_avancement = Decimal('0')
             
-            situation.retenue_garantie = montant_total_mois * Decimal('0.05')
+            taux_rg = Decimal(str(situation.taux_retenue_garantie or '0'))
+            situation.retenue_garantie = montant_total_mois * (taux_rg / Decimal('100'))
             situation.montant_prorata = montant_total_mois * (taux_prorata / Decimal('100'))
             
             Situation.objects.filter(id=situation.id).update(

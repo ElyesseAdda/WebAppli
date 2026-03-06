@@ -1851,6 +1851,12 @@ const SituationCreationModal = ({
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
 
+              // Propager les taux depuis la situation précédente
+              setTauxProrata(situationPrecedente.taux_prorata ?? 2.5);
+              setTauxRetenueGarantie(situationPrecedente.taux_retenue_garantie ?? 5.0);
+              setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
+              setTypeRetenueCIE(situationPrecedente.type_retenue_cie ?? 'deduction');
+
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
                 ...partie,
@@ -1990,7 +1996,8 @@ const SituationCreationModal = ({
     isNewSituation = false,
     mergedLignes = null
   ) => {
-    setTauxProrata(situation.taux_prorata);
+    setTauxProrata(situation.taux_prorata ?? 2.5);
+    setTauxRetenueGarantie(situation.taux_retenue_garantie ?? 5.0);
     setLastSituation(situation);
 
     // Mettre à jour les pourcentages de la structure

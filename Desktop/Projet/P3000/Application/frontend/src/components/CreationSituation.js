@@ -490,6 +490,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
+  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(5.0);
   const [retenueCIE, setRetenueCIE] = useState(0);
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
@@ -597,6 +598,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
             // Pré-remplir les champs avec les données existantes
             setTauxProrata(currentSituation.taux_prorata);
+            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie !== null && currentSituation.taux_retenue_garantie !== undefined ? currentSituation.taux_retenue_garantie : 5.0);
             setRetenueCIE(currentSituation.retenue_cie);
 
             // Mettre à jour la structure avec les pourcentages existants
@@ -671,6 +673,11 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
 
+              // Propager les taux depuis la situation précédente
+              setTauxProrata(situationPrecedente.taux_prorata ?? 2.5);
+              setTauxRetenueGarantie(situationPrecedente.taux_retenue_garantie ?? 5.0);
+              setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
+
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
                 ...partie,
@@ -688,7 +695,6 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
                       pourcentage_actuel: lignePrecedente
                         ? parseFloat(lignePrecedente.pourcentage_actuel)
                         : 0,
-                      // Ne pas copier le montant_ht_mois
                     };
                   }),
                 })),
@@ -778,7 +784,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     isNewSituation = false,
     mergedLignes = null
   ) => {
-    setTauxProrata(situation.taux_prorata);
+    setTauxProrata(situation.taux_prorata ?? 2.5);
+    setTauxRetenueGarantie(situation.taux_retenue_garantie ?? 5.0);
     setLastSituation(situation);
 
     // Mettre à jour les pourcentages de la structure
@@ -854,7 +861,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
   // Fonction pour réinitialiser les données
   const resetSituationData = () => {
-    setTauxProrata(2.5); // Valeur par défaut
+    setTauxProrata(2.5);
+    setTauxRetenueGarantie(5.0);
     setLastSituation(null);
     setLignesSupplementaires([]);
     setRetenueCIE(0);
@@ -1015,7 +1023,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     });
 
     const cumulPrecedent = calculerCumulPrecedent();
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     const montantApresRetenues =
       montantHtMois -
@@ -1044,7 +1052,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     calculateMontants();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires]);
 
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
@@ -1150,7 +1158,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
         montant_ht_mois: formatNumber(calculerMontantHTMois()),
         cumul_precedent: formatNumber(calculerCumulPrecedent()),
         montant_total_cumul_ht: formatNumber(calculerMontantTotalCumul()),
-        retenue_garantie: formatNumber(calculerMontantHTMois() * 0.05),
+        retenue_garantie: formatNumber(calculerMontantHTMois() * (tauxRetenueGarantie / 100)),
+        taux_retenue_garantie: formatNumber(tauxRetenueGarantie),
         montant_prorata: formatNumber(
           calculerMontantHTMois() * (tauxProrata / 100)
         ),
@@ -1233,8 +1242,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const calculerTotalNet = () => {
     const montantHtMois = calculerMontantHTMois();
 
-    // Retenue de garantie (5%)
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
 
     // Compte prorata (calculé sur le montant HT du mois)
     const compteProrata = montantHtMois * (tauxProrata / 100);
@@ -1266,7 +1274,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     const montantHtMois = calculerMontantHTMois();
     const montantTotalTravaux = totalHT + montantTotalAvenants;
 
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     let montantApresRetenues =
       montantHtMois -
@@ -1304,7 +1312,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     updateCalculs();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires]);
 
   const renderCalculs = () => {
     if (!calculatedValues) return null;
@@ -1517,10 +1525,21 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
               {/* Retenue de garantie */}
               <TableRow>
-                <TableCell>Retenue de garantie (5% HT du mois)</TableCell>
+                <TableCell>
+                  Retenue de garantie (
+                  <TextField
+                    type="number"
+                    value={tauxRetenueGarantie}
+                    onChange={(e) => setTauxRetenueGarantie(parseFloat(e.target.value) || 0)}
+                    inputProps={{ step: "0.1", min: "0", max: "100" }}
+                    size="small"
+                    sx={{ width: 70, mx: 0.5 }}
+                  />
+                  % HT du mois)
+                </TableCell>
                 <TableCell align="right" sx={{ color: "error.main" }}>
                   -
-                  {(calculerMontantHTMois() * 0.05)
+                  {(calculerMontantHTMois() * (tauxRetenueGarantie / 100))
                     .toFixed(2)
                     .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
                   €
