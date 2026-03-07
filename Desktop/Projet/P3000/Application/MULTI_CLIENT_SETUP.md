@@ -8,6 +8,7 @@ Ce document décrit l'architecture multi-clients de P3000 et les procédures pou
 Git Branches:
 ├── main                    → Client P3000 (production existante)
 ├── client/elekable         → Client Elekable
+├── client/mjrservice       → Client MJRSERVICE
 ├── client/<nouveau>        → Futurs clients
 └── client/template         → Template pour nouveaux clients
 
@@ -15,7 +16,8 @@ VPS Structure:
 /var/www/
 ├── p3000/                  → P3000 (port 8000) - INCHANGÉ
 ├── elekable/               → Elekable (port 8001)
-└── <nouveau-client>/       → Futurs clients (ports 8002, 8003, etc.)
+├── mjrservice/             → MJRSERVICE (port 8002)
+└── <nouveau-client>/       → Futurs clients (ports 8003, etc.)
 
 Infrastructure partagée:
 ├── PostgreSQL              → Une DB par client (p3000db, p3000db_elekable, etc.)
@@ -26,10 +28,11 @@ Infrastructure partagée:
 
 ## Clients Configurés
 
-| Client | Branche | Domaine | Port | DB | Bucket S3 | Redis |
-|--------|---------|---------|------|----|-----------| ------|
-| P3000 | `main` | myp3000app.com | 8000 | p3000db | agency-drive-prod | 0 |
-| Elekable | `client/elekable` | elekable.fr | 8001 | p3000db_elekable | elekable | 1 |
+| Client | Branche | Domaine | Port | DB | Bucket S3 | Région | Redis |
+|--------|---------|---------|------|----|-----------|--------|-------|
+| P3000 | `main` | myp3000app.com | 8000 | p3000db | agency-drive-prod | — | 0 |
+| Elekable | `client/elekable` | elekable.fr | 8001 | p3000db_elekable | elekable | — | 1 |
+| MJRSERVICE | `client/mjrservice` | mjrserviceapp.com | 8002 | p3000db_mjrservice | mjrservices | eu-north-1 (Stockholm) | 2 |
 
 ## Workflow Git
 
@@ -88,7 +91,80 @@ ssh production "./deploy_production.sh"  # P3000
 ssh production "./deploy/deploy-client.sh elekable"
 ```
 
-## Ajouter un Nouveau Client
+## Installation MJRSERVICE (partir de zéro)
+
+À faire quand la branche `client/mjrservice` doit être **entièrement remplacée** par une copie propre de `main` (DNS et AWS déjà en place).
+
+### En local
+
+1. **Rester sur `main`, commiter les fichiers MJRSERVICE puis pousser :**
+   ```bash
+   git checkout main
+   git add deploy/cors-mjrservice.json MULTI_CLIENT_SETUP.md
+   git commit -m "docs: config MJRSERVICE (mjrserviceapp.com, bucket mjrservices, eu-north-1)"
+   git push origin main
+   ```
+
+2. **Supprimer l’ancienne branche locale et distante :**
+   ```bash
+   git branch -D client/mjrservice
+   git push origin --delete client/mjrservice
+   ```
+
+3. **Créer une nouvelle branche propre à partir de `main` et la pousser :**
+   ```bash
+   git checkout -b client/mjrservice
+   git push -u origin client/mjrservice
+   ```
+
+### Sur le serveur (VPS)
+
+1. **Se connecter au serveur :**
+   ```bash
+   ssh production
+   ```
+
+2. **Si une ancienne installation mjrservice existe, la supprimer (optionnel) :**
+   ```bash
+   sudo systemctl stop mjrservice 2>/dev/null || true
+   sudo systemctl disable mjrservice 2>/dev/null || true
+   sudo rm -f /etc/systemd/system/mjrservice.service
+   sudo rm -f /etc/nginx/sites-enabled/mjrservice.conf
+   sudo rm -f /etc/nginx/sites-available/mjrservice.conf
+   sudo nginx -t && sudo systemctl reload nginx
+   # Supprimer le répertoire (le script proposera de re-cloner si vous ne le faites pas)
+   sudo rm -rf /var/www/mjrservice
+   ```
+
+3. **Lancer l’installation du client :**
+   ```bash
+   cd /var/www/p3000/Desktop/Projet/P3000/Application
+   ./deploy/setup-new-client.sh mjrservice mjrserviceapp.com 8002 2
+   ```
+   Quand le script demande « Voulez-vous le supprimer et re-cloner ? », répondre **y** si le dossier existe encore.
+
+4. **À l’étape « Configuration du fichier .env », éditer le .env avec les valeurs MJRSERVICE :**
+   ```bash
+   nano /var/www/mjrservice/Desktop/Projet/P3000/Application/.env
+   ```
+   À renseigner (en plus de SECRET_KEY, DATABASE_URL, etc.) :
+   - `AWS_STORAGE_BUCKET_NAME=mjrservices`
+   - `AWS_S3_REGION_NAME=eu-north-1`
+   - `ALLOWED_HOSTS=mjrserviceapp.com,www.mjrserviceapp.com`
+   - `REDIS_URL=redis://localhost:6379/2`
+   - Même base : `DATABASE_URL=postgresql://p3000user:MOT_DE_PASSE@localhost:5432/p3000db_mjrservice`
+
+5. **Après avoir sauvegardé le .env, poursuivre le script** (Entrée quand il demande d’appuyer).
+
+6. **Vérification :**
+   ```bash
+   systemctl status mjrservice
+   curl -I https://mjrserviceapp.com
+   ```
+
+---
+
+## Ajouter un Nouveau Client (général)
 
 ### Prérequis
 
@@ -111,17 +187,18 @@ git push -u origin client/nouveau-client
 
 ### Étape 2 : Créer le bucket S3
 
-1. Créer le bucket dans AWS Console (région eu-north-1)
+1. Créer le bucket dans AWS Console (région choisie, ex. eu-north-1 pour MJRSERVICE)
 2. Appliquer la bucket policy (même que les autres clients)
 3. Configurer CORS :
 
 ```bash
-# Copier et adapter le fichier CORS
+# Pour MJRSERVICE (bucket mjrservices, région eu-north-1) :
+aws s3api put-bucket-cors --bucket mjrservices --cors-configuration file://deploy/cors-mjrservice.json
+
+# Pour un autre client : copier et adapter le fichier CORS
 cp deploy/cors-elekable.json deploy/cors-nouveau-client.json
 # Modifier les AllowedOrigins
 nano deploy/cors-nouveau-client.json
-
-# Appliquer via AWS CLI
 aws s3api put-bucket-cors --bucket nouveau-client --cors-configuration file://deploy/cors-nouveau-client.json
 ```
 
