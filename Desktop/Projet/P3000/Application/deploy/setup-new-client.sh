@@ -45,7 +45,7 @@ if [ -d "$APP_DIR/.git" ]; then
         GIT_REPO="git@github.com:${BASH_REMATCH[1]}${BASH_REMATCH[2]:-.git}"
     fi
 else
-    GIT_REPO="git@github.com:VOTRE_REPO.git"  # Fallback si pas dans un clone git
+    GIT_REPO="git@github.com:ElyesseAdda/WebAppli.git"  # Fallback si pas dans un clone git
 fi
 
 # Couleurs
