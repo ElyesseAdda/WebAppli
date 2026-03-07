@@ -40,6 +40,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ -d "$APP_DIR/.git" ]; then
     GIT_REPO="$(cd "$APP_DIR" && git remote get-url origin)"
+    # Forcer l'URL SSH pour GitHub (la clé SSH du serveur fonctionne, pas le HTTPS en non-interactif)
+    if [[ "$GIT_REPO" =~ ^https://github\.com/(.+)(\.git)?$ ]]; then
+        GIT_REPO="git@github.com:${BASH_REMATCH[1]}${BASH_REMATCH[2]:-.git}"
+    fi
 else
     GIT_REPO="git@github.com:VOTRE_REPO.git"  # Fallback si pas dans un clone git
 fi
