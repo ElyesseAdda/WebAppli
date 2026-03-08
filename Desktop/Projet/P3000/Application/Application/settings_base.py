@@ -35,6 +35,8 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 default_hosts = 'myp3000app.com,www.myp3000app.com,72.60.90.127,localhost,127.0.0.1,host.docker.internal'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', default_hosts).split(',')
 
+CLIENT_PUBLIC_DOMAIN = os.getenv('CLIENT_PUBLIC_DOMAIN', 'myp3000app.com')
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',

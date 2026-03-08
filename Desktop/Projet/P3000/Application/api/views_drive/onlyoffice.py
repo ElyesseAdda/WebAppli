@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.response import Response
 import jwt
 import time
+import os
 import requests
 import re
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
@@ -40,23 +41,20 @@ class OnlyOfficeManager:
         
         parsed = urlparse(url)
         is_production = not settings.DEBUG
+        public_domain = getattr(settings, 'CLIENT_PUBLIC_DOMAIN', None) or os.environ.get('CLIENT_PUBLIC_DOMAIN', 'myp3000app.com')
         
         if is_production:
-            # En production : utiliser TOUJOURS le domaine public HTTPS
-            # OnlyOffice (Docker) accède via Internet, donc il doit utiliser le domaine public
             if parsed.hostname in ('127.0.0.1', 'localhost'):
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                return f"https://myp3000app.com{parsed.path}{query_string}"
+                return f"https://{public_domain}{parsed.path}{query_string}"
             
-            # Si l'URL utilise déjà le domaine public, s'assurer qu'elle est en HTTPS
-            if parsed.hostname in ('myp3000app.com', 'www.myp3000app.com', '72.60.90.127'):
+            allowed_hosts = getattr(settings, 'ALLOWED_HOSTS', [])
+            if parsed.hostname in allowed_hosts or parsed.hostname in (public_domain, f'www.{public_domain}', '72.60.90.127'):
                 if parsed.scheme != 'https':
                     query_string = f"?{parsed.query}" if parsed.query else ""
                     return f"https://{parsed.hostname}{parsed.path}{query_string}"
                 return url
         else:
-            # En développement : utiliser host.docker.internal pour Docker Desktop
-            # Cela permet à OnlyOffice (dans Docker) d'accéder à Django sur la machine hôte
             if parsed.hostname in ('127.0.0.1', 'localhost'):
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 return f"http://host.docker.internal:8000{parsed.path}{query_string}"
@@ -67,17 +65,7 @@ class OnlyOfficeManager:
     def normalize_callback_url(url: str) -> str:
         """
         Normalise l'URL de callback pour qu'elle soit accessible depuis le conteneur Docker.
-        
-        IMPORTANT : En production, OnlyOffice (Docker) doit accéder au callback Django via localhost
-        car ils sont sur le même serveur. Le callback est interne au serveur.
-        
-        En développement local (Docker Desktop Windows/Mac) : utilise host.docker.internal
-        
-        Args:
-            url: URL de callback originale
-            
-        Returns:
-            URL normalisée pour Docker
+        Utilise CLIENT_PUBLIC_DOMAIN pour supporter le multi-client.
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -85,49 +73,41 @@ class OnlyOfficeManager:
         parsed = urlparse(url)
         is_production = not settings.DEBUG
         original_url = url
+        public_domain = getattr(settings, 'CLIENT_PUBLIC_DOMAIN', None) or os.environ.get('CLIENT_PUBLIC_DOMAIN', 'myp3000app.com')
         
-        # Si l'URL contient 127.0.0.1 ou localhost
         if parsed.hostname in ('127.0.0.1', 'localhost'):
             if is_production:
-                # En production : utiliser le domaine public HTTPS
-                # Docker (réseau bridge) ne peut pas accéder à localhost de l'hôte
-                # On passe par Nginx/Internet pour atteindre Django
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                normalized = f"https://myp3000app.com{parsed.path}{query_string}"
+                normalized = f"https://{public_domain}{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (PROD): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
             else:
-                # En développement : utiliser host.docker.internal (Docker Desktop)
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 normalized = f"http://host.docker.internal:8000{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (DEV): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
         
-        # Si l'URL utilise un domaine/IP externe en production
-        # OnlyOffice et Django sont sur le même serveur, donc utiliser localhost
         if is_production and parsed.hostname:
-            onlyoffice_url = settings.ONLYOFFICE_SERVER_URL
+            allowed_hosts = getattr(settings, 'ALLOWED_HOSTS', [])
+            onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', '')
             onlyoffice_parsed = urlparse(onlyoffice_url)
             
-            # Liste des hostnames qui indiquent qu'on est sur le même serveur
             same_server_hostnames = [
                 onlyoffice_parsed.hostname,
-                'myp3000app.com',
-                'www.myp3000app.com',
+                public_domain,
+                f'www.{public_domain}',
                 '72.60.90.127',
                 '127.0.0.1',
                 'localhost'
             ]
             
             if (parsed.hostname in same_server_hostnames or 
-                parsed.hostname in (settings.ALLOWED_HOSTS if hasattr(settings, 'ALLOWED_HOSTS') else [])):
-                # Utiliser le domaine public HTTPS car Docker ne peut pas accéder à localhost
+                parsed.hostname in allowed_hosts):
                 query_string = f"?{parsed.query}" if parsed.query else ""
-                normalized = f"https://myp3000app.com{parsed.path}{query_string}"
+                normalized = f"https://{public_domain}{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (PROD same server): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
         
-        # Si l'URL utilise déjà un domaine/IP externe différent, la retourner telle quelle
         logger.info(f"[OnlyOffice] Callback URL non modifiée: {url[:100]}...")
         return url
     
