@@ -1,0 +1,95 @@
+"""
+Commande Django pour créer les utilisateurs MJR Service (Adel, Amine, Salima, Rania).
+À exécuter sur l'instance MJR Service : python manage.py create_mjrservice_users
+"""
+from django.core.management.base import BaseCommand
+from django.contrib.auth.models import User
+
+
+class Command(BaseCommand):
+    help = 'Crée les utilisateurs MJR Service (Adel, Amine, Salima, Rania)'
+
+    def handle(self, *args, **options):
+        users_data = [
+            {
+                'username': 'amajri',
+                'password': 'K9#mP2$vL8@nQ4',
+                'first_name': 'Adel',
+                'last_name': 'Majri',
+                'email': 'amajri@mjrservices.fr',
+                'is_staff': False,
+                'is_superuser': False,
+            },
+            {
+                'username': 'abelaoued',
+                'password': 'R7#tN5$wX2@kM9',
+                'first_name': 'Amine',
+                'last_name': 'Belaoued',
+                'email': 'abelaoued@mjrservices.fr',
+                'is_staff': False,
+                'is_superuser': False,
+            },
+            {
+                'username': 'saitatmane',
+                'password': 'H4#jF8$qZ6@bP3',
+                'first_name': 'Salima',
+                'last_name': 'Aitatmane',
+                'email': 'saitatmane@mjrservices.fr',
+                'is_staff': False,
+                'is_superuser': False,
+            },
+            {
+                'username': 'rkefi',
+                'password': 'GZ$F8l5keQfl3nQ',
+                'first_name': 'Rania',
+                'last_name': 'Kefi',
+                'email': 'rkefi@mjrservices.fr',
+                'is_staff': False,
+                'is_superuser': False,
+            },
+        ]
+
+        created_users = []
+
+        for user_data in users_data:
+            username = user_data['username']
+
+            if User.objects.filter(username=username).exists():
+                self.stdout.write(
+                    self.style.WARNING(f"L'utilisateur '{username}' existe déjà")
+                )
+                continue
+
+            try:
+                User.objects.create_user(
+                    username=username,
+                    password=user_data['password'],
+                    email=user_data['email'],
+                    first_name=user_data['first_name'],
+                    last_name=user_data['last_name'],
+                    is_staff=user_data['is_staff'],
+                    is_superuser=user_data['is_superuser'],
+                )
+                created_users.append({
+                    'username': username,
+                    'password': user_data['password'],
+                    'name': f"{user_data['first_name']} {user_data['last_name']}",
+                })
+                self.stdout.write(
+                    self.style.SUCCESS(f"Utilisateur '{username}' créé avec succès")
+                )
+            except Exception as e:
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"Erreur lors de la création de '{username}': {str(e)}"
+                    )
+                )
+
+        if created_users:
+            self.stdout.write("\n" + "=" * 50)
+            self.stdout.write("UTILISATEURS MJR SERVICE CRÉÉS")
+            self.stdout.write("=" * 50)
+            for u in created_users:
+                self.stdout.write(f"  {u['name']} — login: {u['username']}")
+
+        self.stdout.write(self.style.SUCCESS("\nCommande terminée."))

@@ -22,17 +22,25 @@ VPS Structure:
 Infrastructure partagée:
 ├── PostgreSQL              → Une DB par client (p3000db, p3000db_elekable, etc.)
 ├── Redis                   → Une DB par client (0, 1, 2, etc.)
-├── OnlyOffice Docker       → Partagé (port 8080)
+├── OnlyOffice Docker       → Partagé (port 8080), un sous-domaine Nginx par client
+│   ├── office.elekable.fr           → CSP frame-ancestors pour elekable.fr + myp3000app.com
+│   └── office.mjrserviceapp.com     → CSP frame-ancestors pour mjrserviceapp.com
 └── Nginx                   → Virtual hosts par domaine
+
+Variables .env critiques pour le multi-client:
+├── CLIENT_PUBLIC_DOMAIN    → Domaine public du client (utilisé par les callbacks OnlyOffice)
+├── ALLOWED_HOSTS           → Domaines autorisés par Django
+├── ONLYOFFICE_SERVER_URL   → https://office.<domaine-client>
+└── CSRF_TRUSTED_ORIGINS    → https://<domaine-client>
 ```
 
 ## Clients Configurés
 
-| Client | Branche | Domaine | Port | DB | Bucket S3 | Région | Redis |
-|--------|---------|---------|------|----|-----------|--------|-------|
-| P3000 | `main` | myp3000app.com | 8000 | p3000db | agency-drive-prod | — | 0 |
-| Elekable | `client/elekable` | elekable.fr | 8001 | p3000db_elekable | elekable | — | 1 |
-| MJRSERVICE | `client/mjrservice` | mjrserviceapp.com | 8002 | p3000db_mjrservice | mjrservices | eu-north-1 (Stockholm) | 2 |
+| Client | Branche | Domaine | OnlyOffice | Port | DB | Bucket S3 | Région | Redis |
+|--------|---------|---------|------------|------|----|-----------|--------|-------|
+| P3000 | `main` | myp3000app.com | office.elekable.fr | 8000 | p3000db | agency-drive-prod | — | 0 |
+| Elekable | `client/elekable` | elekable.fr | office.elekable.fr | 8001 | p3000db_elekable | elekable | — | 1 |
+| MJRSERVICE | `client/mjrservice` | mjrserviceapp.com | office.mjrserviceapp.com | 8002 | p3000db_mjrservice | mjrservices | eu-north-1 (Stockholm) | 2 |
 
 ## Workflow Git
 
@@ -168,49 +176,42 @@ ssh production "./deploy/deploy-client.sh elekable"
 
 ### Prérequis
 
-1. Nom du client et domaine définis
-2. DNS configuré vers le VPS
+1. Nom du client (ex. `acmecorp`) et domaine (ex. `acmecorp.com`) définis
+2. DNS configuré vers le VPS :
+   - `acmecorp.com` → IP du VPS
+   - `www.acmecorp.com` → IP du VPS
+   - `office.acmecorp.com` → IP du VPS (pour OnlyOffice)
 3. Bucket S3 créé avec CORS configuré
+4. Déterminer le prochain port libre et le prochain numéro Redis libre (voir tableau « Clients Configurés »)
 
 ### Étape 1 : Créer la branche Git
 
 ```bash
-# Depuis main (ou client/template)
 git checkout main
-git checkout -b client/nouveau-client
-
-# Personnaliser si nécessaire
-# ... modifications spécifiques ...
-
-git push -u origin client/nouveau-client
+git pull origin main
+git checkout -b client/acmecorp
+git push -u origin client/acmecorp
 ```
 
 ### Étape 2 : Créer le bucket S3
 
-1. Créer le bucket dans AWS Console (région choisie, ex. eu-north-1 pour MJRSERVICE)
+1. Créer le bucket dans AWS Console (région choisie, ex. eu-north-1)
 2. Appliquer la bucket policy (même que les autres clients)
 3. Configurer CORS :
 
 ```bash
-# Pour MJRSERVICE (bucket mjrservices, région eu-north-1) :
-aws s3api put-bucket-cors --bucket mjrservices --cors-configuration file://deploy/cors-mjrservice.json
-
-# Pour un autre client : copier et adapter le fichier CORS
-cp deploy/cors-elekable.json deploy/cors-nouveau-client.json
-# Modifier les AllowedOrigins
-nano deploy/cors-nouveau-client.json
-aws s3api put-bucket-cors --bucket nouveau-client --cors-configuration file://deploy/cors-nouveau-client.json
+cp deploy/cors-elekable.json deploy/cors-acmecorp.json
+nano deploy/cors-acmecorp.json
+# Modifier AllowedOrigins : https://acmecorp.com, https://www.acmecorp.com
+aws s3api put-bucket-cors --bucket acmecorp --cors-configuration file://deploy/cors-acmecorp.json
 ```
 
 ### Étape 3 : Installation sur le VPS
 
 ```bash
-# Se connecter au VPS
 ssh production
-
-# Exécuter le script d'installation
 cd /var/www/p3000/Desktop/Projet/P3000/Application
-./deploy/setup-new-client.sh nouveau-client nouveau-client.com 8002 2
+./deploy/setup-new-client.sh acmecorp acmecorp.com <PORT> <REDIS_DB>
 ```
 
 Le script va :
@@ -222,17 +223,161 @@ Le script va :
 6. Configurer Nginx avec SSL (certbot)
 7. Configurer et démarrer le service Systemd
 
-### Étape 4 : Vérification
+### Étape 4 : Configurer le .env de PRODUCTION
+
+**ATTENTION** : Le `.env` copié depuis Git est celui de développement local. Il faut **impérativement** le remplacer par un `.env` de production. Ne pas le faire causera une erreur 400 (Bad Request).
 
 ```bash
-# Vérifier le service
-systemctl status nouveau-client
+# Générer une SECRET_KEY
+python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 
-# Vérifier les logs
-journalctl -u nouveau-client -f
+nano /var/www/acmecorp/Desktop/Projet/P3000/Application/.env
+```
 
-# Tester l'accès
-curl -I https://nouveau-client.com
+Contenu du `.env` de production (adapter les valeurs) :
+
+```ini
+# IDENTIFICATION
+CLIENT_NAME=acmecorp
+CLIENT_DOMAIN=acmecorp.com
+
+# DJANGO
+DEBUG=False
+SECRET_KEY=<CLÉ_GÉNÉRÉE>
+ALLOWED_HOSTS=acmecorp.com,www.acmecorp.com
+
+# BASE DE DONNÉES
+DATABASE_URL=postgresql://p3000user:<MOT_DE_PASSE>@localhost:5432/p3000db_acmecorp
+
+# AWS S3
+AWS_ACCESS_KEY_ID=<CLÉ_AWS>
+AWS_SECRET_ACCESS_KEY=<SECRET_AWS>
+AWS_STORAGE_BUCKET_NAME=acmecorp
+AWS_S3_REGION_NAME=eu-north-1
+AWS_S3_CUSTOM_DOMAIN=acmecorp.s3.eu-north-1.amazonaws.com
+
+# SÉCURITÉ
+CSRF_TRUSTED_ORIGINS=https://acmecorp.com,https://www.acmecorp.com
+CORS_ALLOWED_ORIGINS=https://acmecorp.com,https://www.acmecorp.com
+CSRF_COOKIE_SECURE=True
+SESSION_COOKIE_SECURE=True
+
+# REDIS
+REDIS_URL=redis://localhost:6379/<REDIS_DB>
+
+# LOGS
+LOG_LEVEL=INFO
+LOG_FILE=/var/log/acmecorp/django.log
+
+# ONLYOFFICE — CLIENT_PUBLIC_DOMAIN est OBLIGATOIRE pour les callbacks
+CLIENT_PUBLIC_DOMAIN=acmecorp.com
+ONLYOFFICE_SERVER_URL=https://office.acmecorp.com
+ONLYOFFICE_JWT_SECRET=<MÊME_SECRET_QUE_LES_AUTRES>
+ONLYOFFICE_JWT_ENABLED=true
+```
+
+Variables critiques à ne pas oublier :
+
+| Variable | Pourquoi |
+|----------|----------|
+| `ALLOWED_HOSTS` | Sans le bon domaine → erreur 400 Bad Request |
+| `CLIENT_PUBLIC_DOMAIN` | Sans cette variable → OnlyOffice envoie les callbacks au mauvais client (myp3000app.com) et les modifications ne sont pas sauvegardées |
+| `DATABASE_URL` | Doit pointer vers `p3000db_acmecorp`, pas `p3000db_local` |
+| `ONLYOFFICE_SERVER_URL` | Doit pointer vers `office.acmecorp.com` |
+
+### Étape 5 : Configurer OnlyOffice pour le nouveau client
+
+Chaque client a besoin d'un sous-domaine OnlyOffice dédié (`office.<domaine>`) avec son propre certificat SSL et une directive CSP `frame-ancestors` autorisant le domaine du client.
+
+**A) Créer la config Nginx pour `office.acmecorp.com` :**
+
+```bash
+nano /etc/nginx/sites-available/office.acmecorp.com
+```
+
+Contenu (version HTTP initiale, Certbot ajoutera le SSL) :
+
+```nginx
+server {
+    listen 80;
+    server_name office.acmecorp.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_buffering off;
+        proxy_redirect off;
+        proxy_hide_header X-Frame-Options;
+        add_header Content-Security-Policy "frame-ancestors https://acmecorp.com https://www.acmecorp.com http://localhost:* 'self';" always;
+        client_max_body_size 100M;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+        proxy_read_timeout 300;
+    }
+}
+```
+
+**B) Activer et obtenir le certificat SSL :**
+
+```bash
+ln -s /etc/nginx/sites-available/office.acmecorp.com /etc/nginx/sites-enabled/
+nginx -t
+systemctl reload nginx
+certbot --nginx -d office.acmecorp.com
+systemctl reload nginx
+```
+
+**C) Vérifier :**
+
+```bash
+curl -I https://office.acmecorp.com
+# Doit retourner 302 avec le header Content-Security-Policy contenant acmecorp.com
+```
+
+### Étape 6 : Finaliser le déploiement
+
+```bash
+cd /var/www/acmecorp/Desktop/Projet/P3000/Application
+source /var/www/acmecorp/venv/bin/activate
+
+# Installer les dépendances Python
+pip install -r requirements.txt
+
+# Builder le frontend
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Migrations et fichiers statiques
+export DJANGO_SETTINGS_MODULE=Application.settings_production
+python manage.py migrate
+python manage.py collectstatic --noinput
+
+# Redémarrer le service
+systemctl restart acmecorp
+```
+
+### Étape 7 : Vérification complète
+
+```bash
+# Service Django
+systemctl status acmecorp
+curl -I https://acmecorp.com
+
+# OnlyOffice
+curl -I https://office.acmecorp.com
+
+# Logs (si erreur)
+journalctl -u acmecorp -n 50 --no-pager
+tail -f /var/log/acmecorp/django.log
 ```
 
 ## Fichiers de Configuration
@@ -254,7 +399,7 @@ Chaque client a ses propres fichiers sur le VPS :
 ```
 /var/www/<client>/
 ├── Desktop/Projet/P3000/Application/
-│   ├── .env                    # Configuration spécifique
+│   ├── .env                    # Configuration PRODUCTION (pas le .env local !)
 │   └── staticfiles/            # Fichiers statiques
 ├── venv/                       # Environnement Python
 └── ...
@@ -264,7 +409,8 @@ Chaque client a ses propres fichiers sur le VPS :
 └── .env.backup.*               # Historique des backups
 
 /etc/nginx/sites-available/
-└── <client>.conf               # Configuration Nginx
+├── <client>.conf               # Configuration Nginx du site
+└── office.<domaine-client>     # Configuration Nginx OnlyOffice (CSP, proxy)
 
 /etc/systemd/system/
 └── <client>.service            # Service Systemd
@@ -330,56 +476,118 @@ tail -f /var/log/elekable/django.log
 
 ## Troubleshooting
 
+### Erreur 400 Bad Request
+
+Cause la plus fréquente : le `.env` sur le serveur est celui de **développement local** au lieu du `.env` de production.
+
+```bash
+# Vérifier les ALLOWED_HOSTS configurés
+cd /var/www/<client>/Desktop/Projet/P3000/Application
+source /var/www/<client>/venv/bin/activate
+export DJANGO_SETTINGS_MODULE=Application.settings_production
+python -c "from django.conf import settings; print('ALLOWED_HOSTS:', settings.ALLOWED_HOSTS)"
+
+# Si la sortie affiche localhost au lieu du domaine du client → le .env est mauvais
+# Comparer avec le template de référence
+cat deploy/env-<client>.example
+```
+
 ### Le service ne démarre pas
 
 ```bash
-# Vérifier les logs
-journalctl -u elekable -n 50
+journalctl -u <client> -n 50
 
 # Vérifier la syntaxe du fichier .env
-cat /var/www/elekable/Desktop/Projet/P3000/Application/.env
+cat /var/www/<client>/Desktop/Projet/P3000/Application/.env
 
 # Tester manuellement
-cd /var/www/elekable/Desktop/Projet/P3000/Application
-source /var/www/elekable/venv/bin/activate
+cd /var/www/<client>/Desktop/Projet/P3000/Application
+source /var/www/<client>/venv/bin/activate
 python manage.py check
+
+# Module manquant (ex. "No module named redis")
+pip install -r requirements.txt
+systemctl restart <client>
 ```
 
 ### Erreur 502 Bad Gateway
 
 ```bash
-# Vérifier que Gunicorn écoute sur le bon port
-ss -tlnp | grep 8001
-
-# Vérifier la config Nginx
+ss -tlnp | grep <PORT>
 nginx -t
-cat /etc/nginx/sites-available/elekable.conf | grep proxy_pass
+cat /etc/nginx/sites-available/<client>.conf | grep proxy_pass
+```
+
+### Le build frontend échoue sur le serveur (mais marche en local)
+
+**Cause** : différence de sensibilité à la casse entre Windows (insensible) et Linux (sensible).
+Un import `import "./fichier.css"` qui fonctionne sur Windows échouera sur Linux si le vrai fichier s'appelle `Fichier.css`.
+
+```bash
+# Lire l'erreur webpack pour identifier le fichier
+cd /var/www/<client>/Desktop/Projet/P3000/Application/frontend
+npm run build 2>&1 | grep "Module not found"
+
+# Comparer la casse de l'import avec le fichier réel
+ls -la static/css/
 ```
 
 ### Problème de fichiers statiques
 
 ```bash
-# Vérifier les permissions
-ls -la /var/www/elekable/Desktop/Projet/P3000/Application/staticfiles/
+ls -la /var/www/<client>/Desktop/Projet/P3000/Application/staticfiles/
 
-# Recréer les fichiers statiques
-cd /var/www/elekable/Desktop/Projet/P3000/Application
-source /var/www/elekable/venv/bin/activate
+cd /var/www/<client>/Desktop/Projet/P3000/Application
+source /var/www/<client>/venv/bin/activate
 python manage.py collectstatic --clear --noinput
 sudo chown -R www-data:www-data staticfiles/
 ```
 
 ### OnlyOffice ne fonctionne pas
 
-OnlyOffice est partagé entre tous les clients. Vérifier :
-
 ```bash
-# Le conteneur Docker
+# Vérifier le conteneur Docker
 docker ps | grep onlyoffice
 
-# Les callbacks utilisent le bon domaine
-# Vérifier dans les logs du client
-grep -i onlyoffice /var/log/gunicorn/elekable_error.log
+# Vérifier la config Nginx du sous-domaine OnlyOffice
+cat /etc/nginx/sites-available/office.<domaine-client>
+# Le header Content-Security-Policy doit contenir le domaine du client dans frame-ancestors
+
+# Tester la connectivité
+curl -I https://office.<domaine-client>
+```
+
+### OnlyOffice ne sauvegarde pas les modifications (version téléchargée ≠ version éditée)
+
+**Cause** : les callbacks OnlyOffice sont envoyés au mauvais client. Cela arrive quand `CLIENT_PUBLIC_DOMAIN` n'est pas défini dans le `.env`.
+
+```bash
+# Vérifier la variable
+grep CLIENT_PUBLIC_DOMAIN /var/www/<client>/Desktop/Projet/P3000/Application/.env
+# Doit afficher : CLIENT_PUBLIC_DOMAIN=<domaine-du-client>
+
+# Vérifier ce que Django utilise réellement
+cd /var/www/<client>/Desktop/Projet/P3000/Application
+source /var/www/<client>/venv/bin/activate
+export DJANGO_SETTINGS_MODULE=Application.settings_production
+python -c "from django.conf import settings; print('CLIENT_PUBLIC_DOMAIN:', settings.CLIENT_PUBLIC_DOMAIN)"
+# Doit afficher le domaine du client, PAS myp3000app.com
+
+# Après correction, redémarrer
+systemctl restart <client>
+```
+
+### OnlyOffice : iframe refusée (erreur CSP)
+
+```bash
+# Vérifier le header Content-Security-Policy retourné par OnlyOffice
+curl -I https://office.<domaine-client> 2>&1 | grep -i content-security
+
+# Le frame-ancestors doit contenir le domaine du client
+# Corriger dans la config Nginx :
+nano /etc/nginx/sites-available/office.<domaine-client>
+# Ajouter le domaine dans frame-ancestors
+nginx -t && systemctl reload nginx
 ```
 
 ## Maintenance
@@ -400,7 +608,7 @@ grep -i onlyoffice /var/log/gunicorn/elekable_error.log
 
 ```bash
 # Script de backup pour tous les clients
-for db in p3000db p3000db_elekable; do
+for db in p3000db p3000db_elekable p3000db_mjrservice; do
     pg_dump $db > /var/backups/postgres/${db}_$(date +%Y%m%d).sql
 done
 ```
