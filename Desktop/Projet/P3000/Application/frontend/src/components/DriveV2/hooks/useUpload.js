@@ -14,6 +14,46 @@ import {
 
 const API_BASE_URL = '/api/drive-v2';
 
+export const checkFileExists = async (fileName, filePath) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/list-content/`,
+      {
+        params: { folder_path: filePath },
+        withCredentials: true,
+      }
+    );
+    
+    const files = response.data.files || [];
+    const normalizedFileName = normalizeFilename(fileName);
+    
+    return files.some(f => f.name === normalizedFileName);
+  } catch (error) {
+    console.error('Erreur lors de la vérification du fichier:', error);
+    return false;
+  }
+};
+
+export const findAvailableFileName = async (originalFileName, filePath) => {
+  const lastDotIndex = originalFileName.lastIndexOf('.');
+  const hasExtension = lastDotIndex > 0;
+  const baseName = hasExtension ? originalFileName.substring(0, lastDotIndex) : originalFileName;
+  const extension = hasExtension ? originalFileName.substring(lastDotIndex) : '';
+  
+  for (let i = 1; i <= 1000; i++) {
+    const candidateName = `${baseName}_(${i})${extension}`;
+    const normalizedCandidateName = normalizeFilename(candidateName);
+    const exists = await checkFileExists(normalizedCandidateName, filePath);
+    
+    if (!exists) {
+      return candidateName;
+    }
+  }
+  
+  const timestamp = Date.now();
+  return `${baseName}_(${timestamp})${extension}`;
+};
+
 export const useUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({});
@@ -21,7 +61,6 @@ export const useUpload = () => {
   const cancelRef = useRef(false);
   const abortControllerRef = useRef(null);
 
-  // Utilitaire pour récupérer le token CSRF
   const getCookie = (name) => {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -35,63 +74,6 @@ export const useUpload = () => {
       }
     }
     return cookieValue;
-  };
-
-  // SUPPRIMÉ: extractRootFolderName et calculateFilePath
-  // Ces fonctions sont maintenant dans pathNormalizationService.js
-  // et sont importées en haut du fichier
-
-  // Vérifier si un fichier existe déjà
-  const checkFileExists = async (fileName, filePath) => {
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/list-content/`,
-        {
-          params: { folder_path: filePath },
-          withCredentials: true,
-        }
-      );
-      
-      const files = response.data.files || [];
-      // Normaliser le nom du fichier avec le service centralisé
-      const normalizedFileName = normalizeFilename(fileName);
-      
-      return files.some(f => {
-        // Les noms dans le backend sont déjà normalisés
-        // Comparer directement
-        return f.name === normalizedFileName;
-      });
-    } catch (error) {
-      // En cas d'erreur, considérer que le fichier n'existe pas pour ne pas bloquer l'upload
-      console.error('Erreur lors de la vérification du fichier:', error);
-      return false;
-    }
-  };
-
-  // Trouver un nom de fichier disponible en ajoutant un numéro
-  const findAvailableFileName = async (originalFileName, filePath) => {
-    // Extraire le nom et l'extension
-    const lastDotIndex = originalFileName.lastIndexOf('.');
-    const hasExtension = lastDotIndex > 0;
-    const baseName = hasExtension ? originalFileName.substring(0, lastDotIndex) : originalFileName;
-    const extension = hasExtension ? originalFileName.substring(lastDotIndex) : '';
-    
-    // Essayer avec des numéros incrémentaux entre parenthèses
-    for (let i = 1; i <= 1000; i++) {
-      const candidateName = `${baseName}_(${i})${extension}`;
-      // Normaliser le nom candidat avec le service centralisé
-      const normalizedCandidateName = normalizeFilename(candidateName);
-      const exists = await checkFileExists(normalizedCandidateName, filePath);
-      
-      if (!exists) {
-        // Retourner le nom original (sera normalisé plus tard)
-        return candidateName;
-      }
-    }
-    
-    // Si on n'a pas trouvé, retourner avec un timestamp
-    const timestamp = Date.now();
-    return `${baseName}_(${timestamp})${extension}`;
   };
 
   // Upload d'un fichier
