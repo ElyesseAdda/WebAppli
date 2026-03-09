@@ -1,6 +1,7 @@
 """
 Commande Django pour créer les utilisateurs MJR Service (Adel, Amine, Salima, Rania).
 À exécuter sur l'instance MJR Service : python manage.py create_mjrservice_users
+Pour réinitialiser les mots de passe des utilisateurs existants : python manage.py create_mjrservice_users --update-passwords
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
@@ -9,7 +10,15 @@ from django.contrib.auth.models import User
 class Command(BaseCommand):
     help = 'Crée les utilisateurs MJR Service (Adel, Amine, Salima, Rania)'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--update-passwords',
+            action='store_true',
+            help='Met à jour les mots de passe (et noms/email) des utilisateurs existants pour qu\'ils correspondent à la liste.',
+        )
+
     def handle(self, *args, **options):
+        update_passwords = options['update_passwords']
         users_data = [
             {
                 'username': 'amajri',
@@ -54,13 +63,31 @@ class Command(BaseCommand):
         for user_data in users_data:
             username = user_data['username']
 
-            if User.objects.filter(username=username).exists():
-                self.stdout.write(
-                    self.style.WARNING(f"L'utilisateur '{username}' existe déjà")
-                )
-                continue
-
             try:
+                user = User.objects.filter(username=username).first()
+                if user:
+                    if update_passwords:
+                        user.set_password(user_data['password'])
+                        user.first_name = user_data['first_name']
+                        user.last_name = user_data['last_name']
+                        user.email = user_data['email']
+                        user.is_staff = user_data['is_staff']
+                        user.is_superuser = user_data['is_superuser']
+                        user.save()
+                        created_users.append({
+                            'username': username,
+                            'password': user_data['password'],
+                            'name': f"{user_data['first_name']} {user_data['last_name']}",
+                        })
+                        self.stdout.write(
+                            self.style.SUCCESS(f"Mot de passe et profil de '{username}' mis à jour")
+                        )
+                    else:
+                        self.stdout.write(
+                            self.style.WARNING(f"L'utilisateur '{username}' existe déjà (utilisez --update-passwords pour réinitialiser le mot de passe)")
+                        )
+                    continue
+
                 User.objects.create_user(
                     username=username,
                     password=user_data['password'],
@@ -81,13 +108,14 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stdout.write(
                     self.style.ERROR(
-                        f"Erreur lors de la création de '{username}': {str(e)}"
+                        f"Erreur lors de la création/mise à jour de '{username}': {str(e)}"
                     )
                 )
 
         if created_users:
             self.stdout.write("\n" + "=" * 50)
-            self.stdout.write("UTILISATEURS MJR SERVICE CRÉÉS")
+            title = "MOTS DE PASSE MJR SERVICE RÉINITIALISÉS" if update_passwords else "UTILISATEURS MJR SERVICE CRÉÉS"
+            self.stdout.write(title)
             self.stdout.write("=" * 50)
             for u in created_users:
                 self.stdout.write(f"  {u['name']} — login: {u['username']}")
