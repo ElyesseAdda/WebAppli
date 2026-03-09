@@ -2,29 +2,44 @@ const path = require("path");
 const fs = require("fs");
 const puppeteer = require("puppeteer");
 
+function findChromiumPath() {
+  const candidates = [
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/snap/bin/chromium",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return undefined;
+}
+
 async function generatePDF() {
   const args = process.argv.slice(2);
-  const previewUrl = args[0]; // L'URL de prévisualisation du devis
-  const pdfPath = args[1] || path.resolve(__dirname, "devis.pdf"); // Par défaut devis.pdf
+  const previewUrl = args[0];
+  const pdfPath = args[1] || path.resolve(__dirname, "devis.pdf");
+  const isLinux = process.platform === "linux";
+  const chromiumPath = isLinux ? findChromiumPath() : undefined;
 
-  // Détecter l'environnement : production (Linux) ou local (Windows/autre)
-  const isProduction = process.platform === "linux" && fs.existsSync("/usr/bin/chromium-browser");
-  const chromiumPath = isProduction ? "/usr/bin/chromium-browser" : undefined;
+  console.log(`[generate_pdf] Platform: ${process.platform}`);
+  console.log(`[generate_pdf] Preview URL: ${previewUrl}`);
+  console.log(`[generate_pdf] Output path: ${pdfPath}`);
+  console.log(`[generate_pdf] Chromium path: ${chromiumPath || "bundled (puppeteer)"}`);
 
-  // Configuration des arguments selon l'environnement
   const launchArgs = [
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1920,1080",
-        "--font-render-hinting=none",
-        "--disable-font-subpixel-positioning",
-        "--disable-features=FontAccess",
-        "--enable-font-antialiasing",
-        "--force-device-scale-factor=1",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--window-size=1920,1080",
+    "--font-render-hinting=none",
+    "--disable-font-subpixel-positioning",
+    "--disable-features=FontAccess",
+    "--enable-font-antialiasing",
+    "--force-device-scale-factor=1",
   ];
 
-  // Ajouter --no-sandbox uniquement en production (nécessaire pour Gunicorn)
-  if (isProduction) {
+  if (isLinux) {
     launchArgs.push("--no-sandbox", "--disable-setuid-sandbox");
   }
 
@@ -33,24 +48,26 @@ async function generatePDF() {
     args: launchArgs,
   };
 
-  // Ajouter executablePath uniquement en production
   if (chromiumPath) {
     browserConfig.executablePath = chromiumPath;
   }
 
+  console.log(`[generate_pdf] Launch args: ${launchArgs.join(" ")}`);
+  console.log(`[generate_pdf] executablePath: ${browserConfig.executablePath || "auto-detect"}`);
+
   try {
     const browser = await puppeteer.launch(browserConfig);
+    console.log(`[generate_pdf] Browser launched successfully`);
 
     const page = await browser.newPage();
 
     try {
       await page.setViewport({
         width: 794,
-        height: 1123, // A4 height in pixels
+        height: 1123,
         deviceScaleFactor: 1,
       });
 
-      // Injecter les polices système pour assurer la compatibilité
       await page.evaluateOnNewDocument(() => {
         const style = document.createElement('style');
         style.textContent = `
@@ -62,7 +79,6 @@ async function generatePDF() {
         document.head.appendChild(style);
       });
 
-      // Ajouter les cookies de session si disponibles
       const cookies = process.env.SESSION_COOKIES;
       if (cookies) {
         try {
@@ -73,6 +89,7 @@ async function generatePDF() {
         }
       }
 
+      console.log(`[generate_pdf] Navigating to: ${previewUrl}`);
       const response = await page.goto(previewUrl, {
         waitUntil: ["load", "networkidle0"],
         timeout: 60000,
@@ -81,11 +98,9 @@ async function generatePDF() {
       if (!response.ok()) {
         throw new Error(`Page load failed with status: ${response.status()}`);
       }
+      console.log(`[generate_pdf] Page loaded with status: ${response.status()}`);
 
-      // Attendre que le contenu soit complètement chargé
       await page.waitForSelector("body", { timeout: 10000 });
-
-      // Attendre que tous les éléments soient chargés pour les PDFs multi-pages
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       await page.pdf({
@@ -99,27 +114,38 @@ async function generatePDF() {
           bottom: "20px",
           left: "20px",
         },
-        preferCSSPageSize: false, // IMPORTANT: Désactiver pour les PDFs multi-pages
+        preferCSSPageSize: false,
         scale: 1,
         displayHeaderFooter: false,
-        pageRanges: "", // Inclure toutes les pages
+        pageRanges: "",
       });
 
+      console.log(`[generate_pdf] PDF generated successfully: ${pdfPath}`);
       await browser.close();
-      process.exit(0); // Sortie réussie
+      process.exit(0);
     } catch (pageError) {
-      console.error("Erreur lors du traitement de la page:", pageError);
-      await page.screenshot({ path: "error-screenshot.png" });
+      console.error("[generate_pdf] Erreur page:", pageError.message);
+      try {
+        await page.screenshot({ path: "/tmp/puppeteer-error-screenshot.png" });
+      } catch (_) {}
+      await browser.close();
       throw pageError;
     }
   } catch (err) {
-    console.error("Erreur détaillée:", err);
-    console.error("Stack trace:", err.stack);
-    process.exit(1); // Sortie avec une erreur
+    console.error("[generate_pdf] Erreur:", err.message);
+    console.error("[generate_pdf] Stack:", err.stack);
+
+    if (err.message && err.message.includes("Could not find")) {
+      console.error("[generate_pdf] CHROMIUM NON TROUVE. Installer: sudo apt-get install -y chromium-browser");
+      console.error("[generate_pdf] Ou: sudo apt-get install -y chromium");
+      console.error("[generate_pdf] Cache Puppeteer actuel: " + (process.env.PUPPETEER_CACHE_DIR || "~/.cache/puppeteer"));
+    }
+
+    process.exit(1);
   }
 }
 
 generatePDF().catch((err) => {
-  console.error("Erreur non gérée:", err);
+  console.error("[generate_pdf] Erreur non geree:", err.message);
   process.exit(1);
 });

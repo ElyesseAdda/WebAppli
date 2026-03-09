@@ -125,13 +125,38 @@ update_dependencies() {
     log_success "Dépendances Python mises à jour"
 }
 
+# Installation de Chromium et dépendances pour Puppeteer
+install_chromium() {
+    log "🌐 Vérification de Chromium pour la génération PDF..."
+    
+    if command -v chromium-browser &> /dev/null; then
+        log_success "chromium-browser déjà installé: $(chromium-browser --version 2>/dev/null || echo 'ok')"
+    elif command -v chromium &> /dev/null; then
+        log_success "chromium déjà installé: $(chromium --version 2>/dev/null || echo 'ok')"
+    else
+        log "🔧 Installation de Chromium et ses dépendances..."
+        apt-get update -qq
+        apt-get install -y --no-install-recommends \
+            chromium-browser || apt-get install -y --no-install-recommends chromium
+        
+        apt-get install -y --no-install-recommends \
+            fonts-liberation fonts-noto-color-emoji \
+            libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
+            libgbm1 libgtk-3-0 libnspr4 libnss3 libxcomposite1 \
+            libxdamage1 libxrandr2 xdg-utils libu2f-udev \
+            libvulkan1 libxkbcommon0 libxss1 libasound2 2>/dev/null || true
+        
+        log_success "Chromium installé"
+    fi
+}
+
 # Build du frontend
 build_frontend() {
     log "🎨 Build du frontend..."
     
     cd "$PROJECT_DIR/Desktop/Projet/P3000/Application/frontend"
     
-    npm install
+    PUPPETEER_SKIP_DOWNLOAD=true npm install
     npm run build
     
     log_success "Frontend buildé"
@@ -203,6 +228,7 @@ main() {
     deploy_code
     restore_env
     update_dependencies
+    install_chromium
     build_frontend
     manage_django
     restart_services

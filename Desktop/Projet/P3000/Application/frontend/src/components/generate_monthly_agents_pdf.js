@@ -1,40 +1,72 @@
 const path = require("path");
+const fs = require("fs");
 const puppeteer = require("puppeteer");
+
+function findChromiumPath() {
+  const candidates = [
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/snap/bin/chromium",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return undefined;
+}
 
 async function generateMonthlyAgentsPDF() {
   const args = process.argv.slice(2);
-  const previewUrl = args[0]; // L'URL de prévisualisation du rapport
+  const previewUrl = args[0];
   const pdfPath =
     args[1] || path.resolve(__dirname, "monthly_agents_report.pdf");
+  const isLinux = process.platform === "linux";
+  const chromiumPath = isLinux ? findChromiumPath() : undefined;
 
-  console.log("URL de prévisualisation:", previewUrl);
+  console.log(`[monthly_agents_pdf] Platform: ${process.platform}`);
+  console.log(`[monthly_agents_pdf] Preview URL: ${previewUrl}`);
+  console.log(`[monthly_agents_pdf] Output path: ${pdfPath}`);
+  console.log(`[monthly_agents_pdf] Chromium path: ${chromiumPath || "bundled (puppeteer)"}`);
+
+  const launchArgs = [
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--window-size=1920,1080",
+    "--font-render-hinting=none",
+    "--disable-font-subpixel-positioning",
+    "--disable-features=FontAccess",
+    "--enable-font-antialiasing",
+    "--force-device-scale-factor=1",
+  ];
+
+  if (isLinux) {
+    launchArgs.push("--no-sandbox", "--disable-setuid-sandbox");
+  }
+
+  const browserConfig = {
+    headless: true,
+    args: launchArgs,
+  };
+
+  if (chromiumPath) {
+    browserConfig.executablePath = chromiumPath;
+  }
 
   try {
-    const browser = await puppeteer.launch({
-      executablePath: "/usr/bin/chromium-browser", // chemin exact de Chromium
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1920,1080",
-      ],
-    });
-    console.log("Navigateur lancé");
+    const browser = await puppeteer.launch(browserConfig);
+    console.log("[monthly_agents_pdf] Browser launched");
 
     const page = await browser.newPage();
-    console.log("Nouvelle page ouverte");
 
     try {
       await page.setViewport({
         width: 794,
-        height: 1123, // A4 height in pixels
+        height: 1123,
         deviceScaleFactor: 1,
       });
-      console.log("Viewport configuré");
 
-      console.log("Tentative de chargement de la page:", previewUrl);
+      console.log(`[monthly_agents_pdf] Navigating to: ${previewUrl}`);
       const response = await page.goto(previewUrl, {
         waitUntil: ["load", "networkidle0"],
         timeout: 60000,
@@ -43,17 +75,10 @@ async function generateMonthlyAgentsPDF() {
       if (!response.ok()) {
         throw new Error(`Page load failed with status: ${response.status()}`);
       }
-      console.log("Page chargée avec succès");
+      console.log(`[monthly_agents_pdf] Page loaded: ${response.status()}`);
 
-      // Attendre que le contenu soit complètement chargé
       await page.waitForSelector("body", { timeout: 10000 });
-      console.log("Contenu de la page détecté");
-
-      // Attendre que tous les éléments soient chargés pour les PDFs multi-pages
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      console.log("Attente terminée - prêt pour la génération PDF");
-
-      console.log("Début de la génération du PDF vers:", pdfPath);
 
       await page.pdf({
         path: pdfPath,
@@ -66,53 +91,43 @@ async function generateMonthlyAgentsPDF() {
           bottom: "20px",
           left: "20px",
         },
-        preferCSSPageSize: false, // IMPORTANT: Désactiver pour les PDFs multi-pages
+        preferCSSPageSize: false,
         scale: 1,
         displayHeaderFooter: false,
-        pageRanges: "", // Inclure toutes les pages
+        pageRanges: "",
       });
 
-      console.log("PDF généré avec succès");
-
-      // Vérifier la taille du PDF généré
-      const fs = require("fs");
       if (fs.existsSync(pdfPath)) {
         const stats = fs.statSync(pdfPath);
-        console.log(
-          `📊 Taille du PDF généré: ${stats.size} octets (${(
-            stats.size /
-            (1024 * 1024)
-          ).toFixed(2)} MB)`
-        );
-
-        // Vérifier que le PDF n'est pas vide ou trop petit
+        console.log(`[monthly_agents_pdf] PDF size: ${stats.size} bytes`);
         if (stats.size < 1000) {
-          console.log(
-            "⚠️ ATTENTION: PDF très petit, possible problème de génération"
-          );
-        } else {
-          console.log("✅ PDF semble correctement généré");
+          console.log("[monthly_agents_pdf] WARNING: PDF very small");
         }
-      } else {
-        console.log("❌ Le PDF n'existe pas !");
       }
 
       await browser.close();
-      console.log("Navigateur fermé");
       process.exit(0);
     } catch (pageError) {
-      console.error("Erreur lors du traitement de la page:", pageError);
-      await page.screenshot({ path: "error-screenshot.png" });
+      console.error("[monthly_agents_pdf] Page error:", pageError.message);
+      try {
+        await page.screenshot({ path: "/tmp/puppeteer-agents-error.png" });
+      } catch (_) {}
+      await browser.close();
       throw pageError;
     }
   } catch (err) {
-    console.error("Erreur détaillée:", err);
-    console.error("Stack trace:", err.stack);
+    console.error("[monthly_agents_pdf] Error:", err.message);
+    console.error("[monthly_agents_pdf] Stack:", err.stack);
+
+    if (err.message && err.message.includes("Could not find")) {
+      console.error("[monthly_agents_pdf] CHROMIUM NOT FOUND. Install: sudo apt-get install -y chromium-browser");
+    }
+
     process.exit(1);
   }
 }
 
 generateMonthlyAgentsPDF().catch((err) => {
-  console.error("Erreur non gérée:", err);
+  console.error("[monthly_agents_pdf] Unhandled:", err.message);
   process.exit(1);
 });
