@@ -106,7 +106,7 @@ def main():
             'username': 'rkefi',
             'first_name': 'Rkefi',
             'last_name': 'User',
-            'password': None  # Sera généré automatiquement
+            'password': 'GZ$F8l5keQfl3nQ'  # Sera généré automatiquement
         }
     ]
     

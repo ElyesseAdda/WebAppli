@@ -68,6 +68,11 @@ class Command(BaseCommand):
         if verify_only:
             self.stdout.write("Vérification des identifiants (comme à la connexion)...")
             for user_data in users_data:
+                user = User.objects.filter(username=user_data['username']).first()
+                if user and not user.is_active:
+                    self.stdout.write(
+                        self.style.WARNING(f"  {user_data['username']}: compte inactif (is_active=False) → connexion refusée")
+                    )
                 u = authenticate(
                     username=user_data['username'],
                     password=user_data['password'],
@@ -78,7 +83,7 @@ class Command(BaseCommand):
                     )
                 else:
                     self.stdout.write(
-                        self.style.ERROR(f"  {user_data['username']}: ÉCHEC (mdp ne correspond pas)")
+                        self.style.ERROR(f"  {user_data['username']}: ÉCHEC (mdp ne correspond pas ou compte inactif)")
                     )
             return
 
@@ -97,6 +102,7 @@ class Command(BaseCommand):
                         user.email = user_data['email']
                         user.is_staff = user_data['is_staff']
                         user.is_superuser = user_data['is_superuser']
+                        user.is_active = True  # requis pour pouvoir se connecter
                         user.save()
                         created_users.append({
                             'username': username,
@@ -120,6 +126,7 @@ class Command(BaseCommand):
                     last_name=user_data['last_name'],
                     is_staff=user_data['is_staff'],
                     is_superuser=user_data['is_superuser'],
+                    is_active=True,
                 )
                 created_users.append({
                     'username': username,
