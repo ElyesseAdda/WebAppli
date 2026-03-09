@@ -4,6 +4,7 @@ Commande Django pour créer les utilisateurs MJR Service (Adel, Amine, Salima, R
 Pour réinitialiser les mots de passe des utilisateurs existants : python manage.py create_mjrservice_users --update-passwords
 """
 from django.core.management.base import BaseCommand
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 
 
@@ -16,9 +17,15 @@ class Command(BaseCommand):
             action='store_true',
             help='Met à jour les mots de passe (et noms/email) des utilisateurs existants pour qu\'ils correspondent à la liste.',
         )
+        parser.add_argument(
+            '--verify',
+            action='store_true',
+            help='Vérifie que les identifiants en base permettent bien de se connecter (authenticate).',
+        )
 
     def handle(self, *args, **options):
         update_passwords = options['update_passwords']
+        verify_only = options['verify']
         users_data = [
             {
                 'username': 'amajri',
@@ -57,6 +64,23 @@ class Command(BaseCommand):
                 'is_superuser': False,
             },
         ]
+
+        if verify_only:
+            self.stdout.write("Vérification des identifiants (comme à la connexion)...")
+            for user_data in users_data:
+                u = authenticate(
+                    username=user_data['username'],
+                    password=user_data['password'],
+                )
+                if u:
+                    self.stdout.write(
+                        self.style.SUCCESS(f"  {user_data['username']}: OK")
+                    )
+                else:
+                    self.stdout.write(
+                        self.style.ERROR(f"  {user_data['username']}: ÉCHEC (mdp ne correspond pas)")
+                    )
+            return
 
         created_users = []
 
