@@ -1,17 +1,33 @@
 const path = require("path");
 const fs = require("fs");
+const { execSync } = require("child_process");
 const puppeteer = require("puppeteer");
+
+function isSnapBinary(binPath) {
+  try {
+    const output = execSync(`${binPath} --version 2>&1`, { encoding: "utf-8", timeout: 5000 });
+    return output.toLowerCase().includes("snap");
+  } catch {
+    return false;
+  }
+}
 
 function findChromiumPath() {
   const candidates = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/snap/bin/chromium",
+    "/opt/google/chrome/google-chrome",
   ];
   for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
+    if (fs.existsSync(p)) {
+      if (isSnapBinary(p)) {
+        console.log(`[generate_pdf] ${p} is snap — skipped (incompatible with www-data)`);
+        continue;
+      }
+      return p;
+    }
   }
   return undefined;
 }
@@ -53,7 +69,7 @@ async function generatePDF() {
   }
 
   console.log(`[generate_pdf] Launch args: ${launchArgs.join(" ")}`);
-  console.log(`[generate_pdf] executablePath: ${browserConfig.executablePath || "auto-detect"}`);
+  console.log(`[generate_pdf] executablePath: ${browserConfig.executablePath || "auto-detect (puppeteer bundled)"}`);
 
   try {
     const browser = await puppeteer.launch(browserConfig);
@@ -135,10 +151,13 @@ async function generatePDF() {
     console.error("[generate_pdf] Erreur:", err.message);
     console.error("[generate_pdf] Stack:", err.stack);
 
-    if (err.message && err.message.includes("Could not find")) {
-      console.error("[generate_pdf] CHROMIUM NON TROUVE. Installer: sudo apt-get install -y chromium-browser");
-      console.error("[generate_pdf] Ou: sudo apt-get install -y chromium");
-      console.error("[generate_pdf] Cache Puppeteer actuel: " + (process.env.PUPPETEER_CACHE_DIR || "~/.cache/puppeteer"));
+    if (err.message && (err.message.includes("Could not find") || err.message.includes("Failed to launch"))) {
+      console.error("=== DIAGNOSTIC ===");
+      console.error("Chromium non utilisable. Solutions :");
+      console.error("1. Installer Google Chrome: wget -q -O /tmp/gc.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt install -y /tmp/gc.deb");
+      console.error("2. Ou configurer le cache Puppeteer: sudo mkdir -p /opt/puppeteer-cache && sudo chown www-data:www-data /opt/puppeteer-cache && PUPPETEER_CACHE_DIR=/opt/puppeteer-cache npx puppeteer browsers install chromium");
+      console.error("Cache Puppeteer actuel: " + (process.env.PUPPETEER_CACHE_DIR || "~/.cache/puppeteer"));
+      console.error("==================");
     }
 
     process.exit(1);

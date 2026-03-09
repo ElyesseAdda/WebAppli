@@ -1,17 +1,33 @@
 const path = require("path");
 const fs = require("fs");
+const { execSync } = require("child_process");
 const puppeteer = require("puppeteer");
+
+function isSnapBinary(binPath) {
+  try {
+    const output = execSync(`${binPath} --version 2>&1`, { encoding: "utf-8", timeout: 5000 });
+    return output.toLowerCase().includes("snap");
+  } catch {
+    return false;
+  }
+}
 
 function findChromiumPath() {
   const candidates = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/snap/bin/chromium",
+    "/opt/google/chrome/google-chrome",
   ];
   for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
+    if (fs.existsSync(p)) {
+      if (isSnapBinary(p)) {
+        console.log(`[monthly_agents_pdf] ${p} is snap — skipped`);
+        continue;
+      }
+      return p;
+    }
   }
   return undefined;
 }
@@ -100,9 +116,6 @@ async function generateMonthlyAgentsPDF() {
       if (fs.existsSync(pdfPath)) {
         const stats = fs.statSync(pdfPath);
         console.log(`[monthly_agents_pdf] PDF size: ${stats.size} bytes`);
-        if (stats.size < 1000) {
-          console.log("[monthly_agents_pdf] WARNING: PDF very small");
-        }
       }
 
       await browser.close();
@@ -119,8 +132,10 @@ async function generateMonthlyAgentsPDF() {
     console.error("[monthly_agents_pdf] Error:", err.message);
     console.error("[monthly_agents_pdf] Stack:", err.stack);
 
-    if (err.message && err.message.includes("Could not find")) {
-      console.error("[monthly_agents_pdf] CHROMIUM NOT FOUND. Install: sudo apt-get install -y chromium-browser");
+    if (err.message && (err.message.includes("Could not find") || err.message.includes("Failed to launch"))) {
+      console.error("=== DIAGNOSTIC ===");
+      console.error("Installer Google Chrome: wget -q -O /tmp/gc.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt install -y /tmp/gc.deb");
+      console.error("==================");
     }
 
     process.exit(1);

@@ -125,28 +125,42 @@ update_dependencies() {
     log_success "Dépendances Python mises à jour"
 }
 
-# Installation de Chromium et dépendances pour Puppeteer
+# Installation de Google Chrome (non-snap) pour Puppeteer
 install_chromium() {
-    log "🌐 Vérification de Chromium pour la génération PDF..."
+    log "🌐 Vérification du navigateur pour la génération PDF..."
     
-    if command -v chromium-browser &> /dev/null; then
-        log_success "chromium-browser déjà installé: $(chromium-browser --version 2>/dev/null || echo 'ok')"
-    elif command -v chromium &> /dev/null; then
-        log_success "chromium déjà installé: $(chromium --version 2>/dev/null || echo 'ok')"
+    # Vérifier si Google Chrome est installé (non-snap, compatible www-data)
+    if command -v google-chrome-stable &> /dev/null; then
+        log_success "Google Chrome déjà installé: $(google-chrome-stable --version 2>/dev/null)"
+        return
+    fi
+    
+    # Vérifier si un chromium non-snap est disponible
+    for bin in chromium-browser chromium; do
+        if command -v "$bin" &> /dev/null; then
+            if ! "$bin" --version 2>&1 | grep -qi "snap"; then
+                log_success "$bin (non-snap) déjà installé"
+                return
+            else
+                log_warning "$bin est installé via snap (incompatible avec www-data/Gunicorn)"
+            fi
+        fi
+    done
+    
+    # Installer Google Chrome .deb (pas snap, fonctionne avec www-data)
+    log "🔧 Installation de Google Chrome (compatible Gunicorn/www-data)..."
+    wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    apt-get install -y /tmp/google-chrome.deb || true
+    rm -f /tmp/google-chrome.deb
+    
+    # Installer les dépendances de polices
+    apt-get install -y --no-install-recommends \
+        fonts-liberation fonts-noto-color-emoji 2>/dev/null || true
+    
+    if command -v google-chrome-stable &> /dev/null; then
+        log_success "Google Chrome installé: $(google-chrome-stable --version 2>/dev/null)"
     else
-        log "🔧 Installation de Chromium et ses dépendances..."
-        apt-get update -qq
-        apt-get install -y --no-install-recommends \
-            chromium-browser || apt-get install -y --no-install-recommends chromium
-        
-        apt-get install -y --no-install-recommends \
-            fonts-liberation fonts-noto-color-emoji \
-            libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
-            libgbm1 libgtk-3-0 libnspr4 libnss3 libxcomposite1 \
-            libxdamage1 libxrandr2 xdg-utils libu2f-udev \
-            libvulkan1 libxkbcommon0 libxss1 libasound2 2>/dev/null || true
-        
-        log_success "Chromium installé"
+        log_error "Échec de l'installation de Google Chrome"
     fi
 }
 
