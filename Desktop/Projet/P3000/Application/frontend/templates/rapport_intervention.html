@@ -28,18 +28,22 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 3px solid #1976d2;
-            padding-bottom: 12px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .report-title {
+            text-align: center;
+            font-size: 24pt;
+            font-weight: 700;
+            color: #000;
+            text-decoration: underline;
             margin-bottom: 20px;
+            padding: 8px 0;
         }
 
         .header-left {
             flex-shrink: 0;
-        }
-
-        .header-center {
-            flex: 1;
-            text-align: center;
         }
 
         .header-right {
@@ -47,23 +51,20 @@
         }
 
         .header-logo {
-            max-height: 65px;
-            max-width: 160px;
+            max-height: 190px;
+            max-width: 480px;
             object-fit: contain;
         }
 
         .header-logo-client {
-            max-height: 65px;
-            max-width: 160px;
+            max-height: 190px;
+            max-width: 480px;
             object-fit: contain;
         }
 
-        .header-title {
-            font-size: 18pt;
-            font-weight: 700;
-            color: #1976d2;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+        .header-placeholder {
+            display: inline-block;
+            min-width: 480px;
         }
 
         .info-grid {
@@ -87,7 +88,7 @@
         .info-block h3 {
             font-size: 10pt;
             font-weight: 700;
-            color: #1976d2;
+            color: #000;
             text-transform: uppercase;
             margin-bottom: 8px;
             border-bottom: 1px solid #e0e0e0;
@@ -116,7 +117,7 @@
         }
 
         .prestation-header {
-            background: #1976d2;
+            background: #000;
             color: white;
             padding: 8px 14px;
             border-radius: 6px 6px 0 0;
@@ -176,7 +177,7 @@
 
         .photos-section h4 {
             font-size: 10pt;
-            color: #1976d2;
+            color: #000;
             margin-bottom: 6px;
             border-bottom: 1px solid #e0e0e0;
             padding-bottom: 3px;
@@ -254,13 +255,15 @@
 
         .signature-section {
             margin-top: 30px;
+            margin-bottom: 20px;
             page-break-inside: avoid;
             text-align: right;
+            page-break-after: always;
         }
 
         .signature-section h3 {
             font-size: 10pt;
-            color: #1976d2;
+            color: #000;
             margin-bottom: 8px;
         }
 
@@ -286,15 +289,16 @@
         <div class="header-left">
             <img src="{% static 'frontend/src/img/logo.png' %}" alt="Elekable" class="header-logo" />
         </div>
-        <div class="header-center">
-            <div class="header-title">Rapport d'intervention</div>
-        </div>
         <div class="header-right">
             {% if logo_url %}
                 <img src="{{ logo_url }}" alt="Client" class="header-logo-client" />
+            {% else %}
+                <span class="header-placeholder"></span>
             {% endif %}
         </div>
     </div>
+
+    <h1 class="report-title">{% if rapport.titre %}{{ rapport.titre }}{% else %}Rapport d'intervention{% endif %}</h1>
 
     <div class="info-grid">
         <div class="info-block">
@@ -320,10 +324,22 @@
 
         <div class="info-block">
             <h3>Residence</h3>
+            {% if rapport.nom_residence %}
+            <div class="info-row">
+                <span class="info-label">Nom :</span>
+                <span class="info-value">{{ rapport.nom_residence }}</span>
+            </div>
+            {% endif %}
             <div class="info-row">
                 <span class="info-label">Adresse :</span>
                 <span class="info-value">{{ rapport.adresse_residence }}</span>
             </div>
+            {% if rapport.logements_visites %}
+            <div class="info-row">
+                <span class="info-label">Logements visités :</span>
+                <span class="info-value" style="white-space: pre-wrap;">{{ rapport.logements_visites }}</span>
+            </div>
+            {% endif %}
         </div>
 
         <div class="info-block">
@@ -364,10 +380,17 @@
         {% endif %}
     </div>
 
+    {% if signature_url %}
+    <div class="signature-section">
+        <h3>Signature</h3>
+        <img src="{{ signature_url }}" alt="Signature" />
+    </div>
+    {% endif %}
+
     {% for item in prestations_data %}
     <div class="prestation-section">
         <div class="prestation-header">
-            Prestation {{ forloop.counter }} - {{ item.prestation.localisation }}
+           {{ forloop.counter }} - {{ item.prestation.localisation }}
         </div>
         <div class="prestation-body">
             <div class="prestation-field">
@@ -380,12 +403,6 @@
                 <div class="prestation-field-value">{{ item.prestation.solution }}</div>
             </div>
 
-            {% if item.prestation.commentaire %}
-            <div class="prestation-field">
-                <div class="prestation-field-label">Commentaire</div>
-                <div class="prestation-field-value">{{ item.prestation.commentaire }}</div>
-            </div>
-            {% endif %}
 
             <div class="prestation-field-inline">
                 <span class="prestation-field-label">Prestation possible :</span>
@@ -455,15 +472,5 @@
     </div>
     {% endfor %}
 
-    {% if signature_url %}
-    <div class="signature-section">
-        <h3>Signature</h3>
-        <img src="{{ signature_url }}" alt="Signature" />
-    </div>
-    {% endif %}
-
-    <div class="footer">
-        Rapport genere le {{ rapport.updated_at|date:"d/m/Y H:i" }}
-    </div>
 </body>
 </html>

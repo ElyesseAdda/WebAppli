@@ -43,7 +43,9 @@ class RapportIntervention(models.Model):
         related_name='rapports_intervention'
     )
 
+    nom_residence = models.CharField(max_length=255, blank=True, default='', verbose_name="Nom de la résidence")
     adresse_residence = models.CharField(max_length=500, verbose_name="Adresse résidence")
+    logements_visites = models.TextField(blank=True, default='', verbose_name="Logements visités")
 
     locataire_nom = models.CharField(max_length=100, blank=True, default='')
     locataire_prenom = models.CharField(max_length=100, blank=True, default='')

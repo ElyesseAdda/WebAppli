@@ -43,7 +43,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     resultat: "",
     client_societe: "",
     chantier: "",
+    nom_residence: "",
     adresse_residence: "",
+    logements_visites: "",
     locataire_nom: "",
     locataire_prenom: "",
     locataire_telephone: "",
@@ -99,7 +101,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         resultat: data.resultat || "",
         client_societe: data.client_societe || "",
         chantier: data.chantier || "",
+        nom_residence: data.nom_residence || "",
         adresse_residence: data.adresse_residence || "",
+        logements_visites: data.logements_visites || "",
         locataire_nom: data.locataire_nom || "",
         locataire_prenom: data.locataire_prenom || "",
         locataire_telephone: data.locataire_telephone || "",
@@ -459,12 +463,31 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: COLORS.textOnDark }}>Residence & Locataire</Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
           <TextField
-            label="Adresse residence *"
+            label="Nom de la résidence"
+            value={formData.nom_residence}
+            onChange={(e) => handleFieldChange("nom_residence", e.target.value)}
+            fullWidth
+            size="small"
+            disabled={isDisabled}
+          />
+          <TextField
+            label="Adresse résidence *"
             value={formData.adresse_residence}
             onChange={(e) => handleFieldChange("adresse_residence", e.target.value)}
             fullWidth
             size="small"
             disabled={isDisabled}
+          />
+          <TextField
+            label="Logements "
+            value={formData.logements_visites}
+            onChange={(e) => handleFieldChange("logements_visites", e.target.value)}
+            fullWidth
+            multiline
+            minRows={2}
+            size="small"
+            disabled={isDisabled}
+            placeholder="Logements ou endroits visités..."
             sx={{ gridColumn: { md: "1 / -1" } }}
           />
           <TextField
