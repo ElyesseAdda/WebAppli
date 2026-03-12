@@ -194,7 +194,6 @@ const RapportsPage = () => {
                       <TableCell sx={{ fontWeight: 700 }}>Logement</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Prestations</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
                       <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
                     </TableRow>
@@ -202,15 +201,12 @@ const RapportsPage = () => {
                   <TableBody>
                     {group.rapports.map((rapport) => (
                       <TableRow key={rapport.id} hover sx={{ cursor: "pointer" }}
-                        onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
+                        onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
                       >
                         <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
                         <TableCell sx={{ fontWeight: 500 }}>{rapport.logement || "-"}</TableCell>
                         <TableCell>{rapport.titre_nom || "-"}</TableCell>
                         <TableCell>{rapport.technicien || "-"}</TableCell>
-                        <TableCell>
-                          <Chip label={rapport.nb_prestations || 0} size="small" variant="outlined" />
-                        </TableCell>
                         <TableCell>
                           <Chip
                             label={STATUT_LABELS[rapport.statut] || rapport.statut}
@@ -222,7 +218,7 @@ const RapportsPage = () => {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <IconButton size="small" color="primary"
-                            onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/RapportIntervention/${rapport.id}`); }}
                           >
                             <MdEdit />
                           </IconButton>

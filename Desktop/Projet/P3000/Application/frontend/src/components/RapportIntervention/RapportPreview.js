@@ -47,7 +47,7 @@ const RapportPreview = ({ rapport }) => {
 
         <InfoBlock title="Intervention">
           <InfoRow label="Date" value={rapport.date ? new Date(rapport.date).toLocaleDateString("fr-FR") : "-"} />
-          <InfoRow label="Technicien" value={rapport.technicien_nom || "-"} />
+          <InfoRow label="Technicien" value={rapport.technicien_nom || rapport.technicien || "-"} />
         </InfoBlock>
 
         <InfoBlock title="Residence">

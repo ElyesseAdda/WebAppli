@@ -368,14 +368,11 @@ def preview_rapport_intervention(request, rapport_id):
     elif rapport.chantier and rapport.chantier.societe:
         societe_nom = rapport.chantier.societe.nom_societe
 
-    from django.template.loader import render_to_string
-    html = render_to_string('rapport_intervention.html', {
+    from django.shortcuts import render
+    return render(request, 'rapport_intervention.html', {
         'rapport': rapport,
         'logo_url': logo_url,
         'societe_nom': societe_nom,
         'signature_url': signature_url,
         'prestations_data': prestations_data,
     })
-
-    from django.http import HttpResponse
-    return HttpResponse(html, content_type='text/html')

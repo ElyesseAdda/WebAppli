@@ -62,6 +62,7 @@ import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
 import RapportsPage from "./RapportIntervention/RapportsPage";
 import RapportForm from "./RapportIntervention/RapportForm";
+import RapportPreviewPage from "./RapportIntervention/RapportPreviewPage";
 import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
 
 // Créer un thème par défaut avec les couleurs centralisées
@@ -640,6 +641,16 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <RapportForm />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/RapportIntervention/:id/preview"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportPreviewPage />
                 </Layout>
               </ProtectedRoute>
             }
