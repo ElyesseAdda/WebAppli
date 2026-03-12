@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Box, Button, TextField, Typography, Paper, MenuItem, Select,
   FormControl, InputLabel, Autocomplete, Chip, Alert, Snackbar,
@@ -43,9 +43,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     resultat: "",
     client_societe: "",
     chantier: "",
-    nom_residence: "",
-    adresse_residence: "",
-    logements_visites: "",
+    residence: null,
+    residence_nom: "",
+    residence_adresse: "",
+    logement: "",
     locataire_nom: "",
     locataire_prenom: "",
     locataire_telephone: "",
@@ -60,6 +61,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   const [techniciensSuggestions, setTechniciensSuggestions] = useState([]);
   const [societes, setSocietes] = useState([]);
   const [chantiers, setChantiers] = useState([]);
+  const [residences, setResidences] = useState([]);
+  const [selectedResidence, setSelectedResidence] = useState(null);
+  const [pendingPhotos, setPendingPhotos] = useState({});
+  const signaturePadRef = useRef(null);
   const [newTitreDialog, setNewTitreDialog] = useState(false);
   const [newTitreName, setNewTitreName] = useState("");
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
@@ -71,11 +76,12 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
 
   const loadReferences = useCallback(async () => {
     try {
-      const [titresRes, rapportsRes, societesRes, chantiersRes] = await Promise.all([
+      const [titresRes, rapportsRes, societesRes, chantiersRes, residencesRes] = await Promise.all([
         fetchTitres(),
         axios.get("/api/rapports-intervention/"),
         axios.get("/api/societe/"),
         axios.get("/api/chantier/"),
+        axios.get("/api/residences/"),
       ]);
       setTitres(titresRes || []);
       const rapportsList = rapportsRes.data?.results || rapportsRes.data || [];
@@ -83,6 +89,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
       setTechniciensSuggestions(uniqueTechniciens);
       setSocietes(societesRes.data?.results || societesRes.data || []);
       setChantiers(chantiersRes.data?.results || chantiersRes.data || []);
+      setResidences(residencesRes.data?.results || residencesRes.data || []);
     } catch (err) {
       console.error("Erreur chargement references:", err);
     }
@@ -101,9 +108,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         resultat: data.resultat || "",
         client_societe: data.client_societe || "",
         chantier: data.chantier || "",
-        nom_residence: data.nom_residence || "",
-        adresse_residence: data.adresse_residence || "",
-        logements_visites: data.logements_visites || "",
+        residence: data.residence || null,
+        residence_nom: data.residence_nom || "",
+        residence_adresse: data.residence_adresse || "",
+        logement: data.logement || "",
         locataire_nom: data.locataire_nom || "",
         locataire_prenom: data.locataire_prenom || "",
         locataire_telephone: data.locataire_telephone || "",
@@ -114,6 +122,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           ? data.prestations
           : [{ ...EMPTY_PRESTATION }],
       });
+      if (data.residence_data) {
+        setSelectedResidence(data.residence_data);
+      }
     } catch (err) {
       showSnackbar("Erreur lors du chargement du rapport", "error");
     }
@@ -131,11 +142,70 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleResidenceChange = (_, value) => {
+    if (value && typeof value === "object" && value.id) {
+      setSelectedResidence(value);
+      const dr = value.dernier_rapport;
+      setFormData((prev) => ({
+        ...prev,
+        residence: value.id,
+        residence_nom: value.nom,
+        residence_adresse: value.adresse || "",
+        client_societe: dr?.client_societe || value.client_societe || prev.client_societe,
+        chantier: dr?.chantier || value.chantier || prev.chantier,
+        technicien: dr?.technicien || prev.technicien,
+      }));
+    } else {
+      const newName = typeof value === "string" ? value : value?.inputValue || "";
+      setSelectedResidence(null);
+      setFormData((prev) => ({
+        ...prev,
+        residence: null,
+        residence_nom: newName,
+        residence_adresse: "",
+      }));
+    }
+  };
+
+  const handleResidenceInputChange = (_, value) => {
+    if (!selectedResidence) {
+      setFormData((prev) => ({ ...prev, residence_nom: value }));
+    }
+  };
+
   const handlePrestationChange = (index, updatedPrestation) => {
     setFormData((prev) => {
       const newPrestations = [...prev.prestations];
       newPrestations[index] = updatedPrestation;
       return { ...prev, prestations: newPrestations };
+    });
+  };
+
+  const handleAddPendingPhoto = (prestationIndex, file, typePhoto) => {
+    const previewUrl = URL.createObjectURL(file);
+    setPendingPhotos((prev) => {
+      const current = prev[prestationIndex] || [];
+      return {
+        ...prev,
+        [prestationIndex]: [...current, {
+          file,
+          type_photo: typePhoto,
+          _previewUrl: previewUrl,
+          filename: file.name,
+          date_photo: new Date().toISOString().split("T")[0],
+        }],
+      };
+    });
+  };
+
+  const handleRemovePendingPhoto = (prestationIndex, photoIndex) => {
+    setPendingPhotos((prev) => {
+      const current = [...(prev[prestationIndex] || [])];
+      if (current[photoIndex]?._previewUrl) {
+        URL.revokeObjectURL(current[photoIndex]._previewUrl);
+      }
+      current.splice(photoIndex, 1);
+      return { ...prev, [prestationIndex]: current };
     });
   };
 
@@ -153,9 +223,41 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     }));
   };
 
+  const uploadPendingPhotos = async (savedResult) => {
+    const prestations = savedResult.prestations || [];
+    const hasPending = Object.values(pendingPhotos).some((arr) => arr?.length > 0);
+    if (!hasPending || !prestations.length) return;
+
+    for (const [indexStr, photos] of Object.entries(pendingPhotos)) {
+      const idx = parseInt(indexStr, 10);
+      const prestation = prestations[idx];
+      if (!prestation?.id || !photos?.length) continue;
+
+      for (const pending of photos) {
+        try {
+          await uploadPhoto(prestation.id, pending.file, pending.type_photo);
+        } catch (err) {
+          console.error("Erreur upload photo en attente:", err);
+        }
+      }
+    }
+    setPendingPhotos({});
+  };
+
+  const uploadPendingSignature = async (savedRapportId) => {
+    const signatureData = signaturePadRef.current?.getSignatureDataUrl?.();
+    if (!signatureData) return;
+    try {
+      await uploadSignature(savedRapportId, signatureData);
+      signaturePadRef.current?.clear?.();
+    } catch (err) {
+      console.error("Erreur upload signature:", err);
+    }
+  };
+
   const handleSave = async (newStatut) => {
-    if (!formData.titre || !formData.technicien || !formData.objet_recherche || !formData.adresse_residence) {
-      showSnackbar("Veuillez remplir les champs obligatoires (titre, technicien, objet, adresse)", "error");
+    if (!formData.titre || !formData.technicien || !formData.objet_recherche) {
+      showSnackbar("Veuillez remplir les champs obligatoires (titre, technicien, objet)", "error");
       return;
     }
     setSaving(true);
@@ -178,14 +280,24 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         result = await createRapport(dataToSend);
       }
 
-      setRapportData(result);
+      const savedId = result?.id || rapportId;
+
+      if (result?.prestations) {
+        await uploadPendingPhotos(result);
+      } else {
+        const fullResult = await fetchRapport(savedId);
+        await uploadPendingPhotos(fullResult);
+      }
+
+      await uploadPendingSignature(savedId);
+
       showSnackbar(isEdit ? "Rapport mis a jour" : "Rapport cree avec succes");
 
-      if (!isEdit && result?.id) {
-        navigate(`/RapportIntervention/${result.id}`, { replace: true });
-      } else {
-        await loadRapport();
+      if (!isEdit && savedId) {
+        navigate(`/RapportIntervention/${savedId}`, { replace: true });
       }
+      await loadRapport();
+      loadReferences();
     } catch (err) {
       showSnackbar("Erreur lors de la sauvegarde", "error");
     } finally {
@@ -200,7 +312,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     }
     setSaving(true);
     try {
-      const result = await validerRapport(rapportId);
+      await validerRapport(rapportId);
       showSnackbar("Rapport valide et PDF genere");
       await loadRapport();
     } catch (err) {
@@ -254,20 +366,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     }
   };
 
-  const handleSaveSignature = async (dataUrl) => {
-    if (!rapportId) {
-      showSnackbar("Sauvegardez d'abord le rapport", "error");
-      return;
-    }
-    try {
-      await uploadSignature(rapportId, dataUrl);
-      showSnackbar("Signature enregistree");
-      await loadRapport();
-    } catch (err) {
-      showSnackbar("Erreur enregistrement signature", "error");
-    }
-  };
-
   const handleCreateTitre = async () => {
     if (!newTitreName.trim()) return;
     try {
@@ -283,6 +381,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   };
 
   const isDisabled = rapportData?.statut === "valide";
+  const isNewResidence = !selectedResidence && !!formData.residence_nom;
 
   return (
     <Box sx={{ p: { xs: 1, md: 3 }, maxWidth: 1000, mx: "auto" }}>
@@ -348,7 +447,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: COLORS.textOnDark }}>Informations generales</Typography>
 
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-          {/* Type rapport */}
           <FormControl fullWidth size="small">
             <InputLabel>Type de rapport</InputLabel>
             <Select
@@ -362,7 +460,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             </Select>
           </FormControl>
 
-          {/* Titre */}
           <Box sx={{ display: "flex", gap: 1 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Titre *</InputLabel>
@@ -388,7 +485,79 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             </Button>
           </Box>
 
-          {/* Date */}
+          <Autocomplete
+            freeSolo
+            options={residences}
+            getOptionLabel={(opt) => {
+              if (typeof opt === "string") return opt;
+              return opt?.nom || "";
+            }}
+            value={selectedResidence || formData.residence_nom || ""}
+            onChange={handleResidenceChange}
+            onInputChange={handleResidenceInputChange}
+            filterOptions={(options, params) => {
+              const filtered = options.filter((o) =>
+                o.nom.toLowerCase().includes(params.inputValue.toLowerCase())
+              );
+              if (params.inputValue && !filtered.some((o) => o.nom.toLowerCase() === params.inputValue.toLowerCase())) {
+                filtered.push({ inputValue: params.inputValue, nom: `Creer "${params.inputValue}"` });
+              }
+              return filtered;
+            }}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id || option.inputValue || option.nom}>
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: option.inputValue ? 600 : 400 }}>
+                    {option.nom}
+                  </Typography>
+                  {option.adresse && (
+                    <Typography variant="caption" color="text.secondary">{option.adresse}</Typography>
+                  )}
+                  {(option.client_societe_nom || option.dernier_rapport?.client_societe_nom) && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      Client: {option.dernier_rapport?.client_societe_nom || option.client_societe_nom}
+                    </Typography>
+                  )}
+                  {option.dernier_rapport?.technicien && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      Technicien: {option.dernier_rapport.technicien}
+                    </Typography>
+                  )}
+                </Box>
+              </li>
+            )}
+            renderInput={(params) => <TextField {...params} label="Residence *" size="small" />}
+            disabled={isDisabled}
+            isOptionEqualToValue={(opt, val) => {
+              if (typeof val === "string") return opt?.nom === val;
+              return opt?.id === val?.id;
+            }}
+            sx={{ gridColumn: { md: "1 / -1" } }}
+          />
+
+          {selectedResidence && (
+            <Alert severity="info" sx={{ gridColumn: { md: "1 / -1" } }}>
+              Residence existante : <strong>{selectedResidence.nom}</strong>
+              {selectedResidence.adresse && ` - ${selectedResidence.adresse}`}
+              {(selectedResidence.dernier_rapport?.client_societe_nom || selectedResidence.client_societe_nom) &&
+                ` (Client: ${selectedResidence.dernier_rapport?.client_societe_nom || selectedResidence.client_societe_nom})`}
+              {selectedResidence.dernier_rapport?.technicien &&
+                ` | Technicien: ${selectedResidence.dernier_rapport.technicien}`}
+            </Alert>
+          )}
+
+          {isNewResidence && (
+            <TextField
+              label="Adresse de la nouvelle residence"
+              value={formData.residence_adresse}
+              onChange={(e) => handleFieldChange("residence_adresse", e.target.value)}
+              fullWidth
+              size="small"
+              disabled={isDisabled}
+              sx={{ gridColumn: { md: "1 / -1" } }}
+            />
+          )}
+
           <TextField
             label="Date *"
             type="date"
@@ -400,7 +569,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             disabled={isDisabled}
           />
 
-          {/* Technicien */}
           <Autocomplete
             freeSolo
             options={techniciensSuggestions}
@@ -411,7 +579,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             disabled={isDisabled}
           />
 
-          {/* Client / Societe */}
           <Autocomplete
             options={societes}
             getOptionLabel={(opt) => opt?.nom_societe || ""}
@@ -421,7 +588,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             disabled={isDisabled}
           />
 
-          {/* Chantier */}
           <Autocomplete
             options={chantiers}
             getOptionLabel={(opt) => opt?.chantier_name || ""}
@@ -458,38 +624,21 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         />
       </Paper>
 
-      {/* Residence & Locataire */}
+      {/* Logement & Locataire */}
       <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: COLORS.textOnDark }}>Residence & Locataire</Typography>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: COLORS.textOnDark }}>Logement & Locataire</Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
           <TextField
-            label="Nom de la résidence"
-            value={formData.nom_residence}
-            onChange={(e) => handleFieldChange("nom_residence", e.target.value)}
+            label="Logement"
+            value={formData.logement}
+            onChange={(e) => handleFieldChange("logement", e.target.value)}
             fullWidth
             size="small"
             disabled={isDisabled}
-          />
-          <TextField
-            label="Adresse résidence *"
-            value={formData.adresse_residence}
-            onChange={(e) => handleFieldChange("adresse_residence", e.target.value)}
-            fullWidth
-            size="small"
-            disabled={isDisabled}
-          />
-          <TextField
-            label="Logements "
-            value={formData.logements_visites}
-            onChange={(e) => handleFieldChange("logements_visites", e.target.value)}
-            fullWidth
-            multiline
-            minRows={2}
-            size="small"
-            disabled={isDisabled}
-            placeholder="Logements ou endroits visités..."
+            placeholder="Ex: Apt 12, Cave 3, RDC..."
             sx={{ gridColumn: { md: "1 / -1" } }}
           />
+
           <TextField
             label="Nom locataire"
             value={formData.locataire_nom}
@@ -546,8 +695,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             onUploadPhoto={handleUploadPhoto}
             onDeletePhoto={handleDeletePhoto}
             onUpdatePhoto={handleUpdatePhoto}
+            onAddPendingPhoto={handleAddPendingPhoto}
+            onRemovePendingPhoto={handleRemovePendingPhoto}
             disabled={isDisabled}
             isSaved={!!prestation.id}
+            pendingPhotos={pendingPhotos[index] || []}
           />
         ))}
       </Paper>
@@ -555,15 +707,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
       {/* Signature */}
       <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
         <SignaturePad
-          onSave={handleSaveSignature}
+          ref={signaturePadRef}
           existingSignatureUrl={rapportData?.signature_url}
-          disabled={isDisabled || !rapportId}
+          disabled={isDisabled}
         />
-        {!rapportId && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-            Sauvegardez le rapport pour pouvoir ajouter la signature.
-          </Typography>
-        )}
       </Paper>
 
       {/* Dialog nouveau titre */}

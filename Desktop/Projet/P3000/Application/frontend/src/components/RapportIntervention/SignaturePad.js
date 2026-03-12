@@ -1,8 +1,8 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { Box, Button, Typography } from "@mui/material";
-import { MdDelete, MdCheck } from "react-icons/md";
+import { MdDelete } from "react-icons/md";
 
-const SignaturePad = ({ onSave, existingSignatureUrl, disabled }) => {
+const SignaturePad = forwardRef(({ existingSignatureUrl, disabled }, ref) => {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -20,6 +20,15 @@ const SignaturePad = ({ onSave, existingSignatureUrl, disabled }) => {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    getSignatureDataUrl: () => {
+      if (!hasSignature) return null;
+      return canvasRef.current?.toDataURL("image/png") || null;
+    },
+    hasSignature: () => hasSignature,
+    clear: () => clearCanvas(),
+  }));
 
   const getPos = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -66,13 +75,6 @@ const SignaturePad = ({ onSave, existingSignatureUrl, disabled }) => {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
-  };
-
-  const handleSave = () => {
-    if (!hasSignature) return;
-    const canvas = canvasRef.current;
-    const dataUrl = canvas.toDataURL("image/png");
-    onSave(dataUrl);
   };
 
   return (
@@ -123,18 +125,16 @@ const SignaturePad = ({ onSave, existingSignatureUrl, disabled }) => {
         >
           Effacer
         </Button>
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<MdCheck />}
-          onClick={handleSave}
-          disabled={disabled || !hasSignature}
-        >
-          Enregistrer la signature
-        </Button>
+        {hasSignature && (
+          <Typography variant="caption" color="success.main" sx={{ alignSelf: "center" }}>
+            Signature prete - elle sera enregistree a la sauvegarde
+          </Typography>
+        )}
       </Box>
     </Box>
   );
-};
+});
+
+SignaturePad.displayName = "SignaturePad";
 
 export default SignaturePad;

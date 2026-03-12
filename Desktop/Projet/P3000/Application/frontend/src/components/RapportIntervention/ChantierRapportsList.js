@@ -109,7 +109,7 @@ const ChantierRapportsList = ({ chantierData }) => {
               <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Adresse</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Residence</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
               <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
             </TableRow>
@@ -135,7 +135,7 @@ const ChantierRapportsList = ({ chantierData }) => {
                   <TableCell sx={{ fontWeight: 500 }}>{rapport.titre_nom || "-"}</TableCell>
                   <TableCell>{rapport.technicien || "-"}</TableCell>
                   <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {rapport.adresse_residence || "-"}
+                    {rapport.residence_nom || "-"}
                   </TableCell>
                   <TableCell>
                     <Chip

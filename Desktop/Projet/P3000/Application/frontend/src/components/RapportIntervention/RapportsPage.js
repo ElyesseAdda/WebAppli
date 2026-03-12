@@ -1,12 +1,14 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Box, Button, Typography, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Chip, IconButton, TextField,
-  MenuItem, Select, FormControl, InputLabel, Snackbar, Alert,
+  Snackbar, Alert, Autocomplete, Collapse,
 } from "@mui/material";
 import {
-  MdAdd, MdEdit, MdDelete, MdPictureAsPdf, MdDescription, MdVisibility,
+  MdAdd, MdEdit, MdDelete, MdDescription,
+  MdExpandMore, MdExpandLess,
 } from "react-icons/md";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { COLORS } from "../../constants/colors";
 import { useRapports } from "../../hooks/useRapports";
@@ -27,13 +29,20 @@ const RapportsPage = () => {
   const navigate = useNavigate();
   const { rapports, fetchRapports, deleteRapport, loading } = useRapports();
   const [filters, setFilters] = useState({
-    statut: "",
     technicien: "",
     client_societe: "",
-    date_debut: "",
-    date_fin: "",
+    residence: "",
+    date_creation: "",
   });
+  const [residences, setResidences] = useState([]);
+  const [expandedResidences, setExpandedResidences] = useState({});
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+
+  useEffect(() => {
+    axios.get("/api/residences/").then((res) => {
+      setResidences(res.data?.results || res.data || []);
+    }).catch(() => {});
+  }, []);
 
   const loadRapports = useCallback(() => {
     const cleanFilters = {};
@@ -61,9 +70,44 @@ const RapportsPage = () => {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
+  const toggleResidence = (key) => {
+    setExpandedResidences((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const groupedRapports = useMemo(() => {
+    const groups = {};
+    rapports.forEach((r) => {
+      const key = r.residence_nom || "Sans residence";
+      if (!groups[key]) {
+        groups[key] = {
+          residence_nom: r.residence_nom || "Sans residence",
+          residence_adresse: r.residence_adresse || "",
+          client_societe_nom: r.client_societe_nom || "",
+          rapports: [],
+        };
+      }
+      groups[key].rapports.push(r);
+    });
+    Object.values(groups).forEach((g) => {
+      g.rapports.sort((a, b) => (a.logement || "").localeCompare(b.logement || ""));
+    });
+    return Object.values(groups).sort((a, b) => a.residence_nom.localeCompare(b.residence_nom));
+  }, [rapports]);
+
+  useEffect(() => {
+    const initial = {};
+    groupedRapports.forEach((g) => {
+      if (expandedResidences[g.residence_nom] === undefined) {
+        initial[g.residence_nom] = true;
+      }
+    });
+    if (Object.keys(initial).length > 0) {
+      setExpandedResidences((prev) => ({ ...prev, ...initial }));
+    }
+  }, [groupedRapports]);
+
   return (
     <Box sx={{ p: 3 }}>
-      {/* Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, flexWrap: "wrap", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <MdDescription size={32} color={COLORS.accent || "#46acc2"} />
@@ -84,113 +128,117 @@ const RapportsPage = () => {
       {/* Filtres */}
       <Paper elevation={0} sx={{ p: 2, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
         <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Statut</InputLabel>
-            <Select
-              value={filters.statut}
-              label="Statut"
-              onChange={(e) => handleFilterChange("statut", e.target.value)}
-            >
-              <MenuItem value="">Tous</MenuItem>
-              <MenuItem value="brouillon">Brouillon</MenuItem>
-              <MenuItem value="en_cours">En cours</MenuItem>
-              <MenuItem value="valide">Valide</MenuItem>
-            </Select>
-          </FormControl>
+          <Autocomplete
+            options={residences}
+            getOptionLabel={(opt) => opt?.nom || ""}
+            value={residences.find((r) => r.id === filters.residence) || null}
+            onChange={(_, val) => handleFilterChange("residence", val?.id || "")}
+            renderInput={(params) => <TextField {...params} label="Residence" size="small" />}
+            sx={{ minWidth: 200 }}
+          />
 
           <TextField
-            label="Date debut"
+            label="Date de création du rapport"
             type="date"
             size="small"
-            value={filters.date_debut}
-            onChange={(e) => handleFilterChange("date_debut", e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            label="Date fin"
-            type="date"
-            size="small"
-            value={filters.date_fin}
-            onChange={(e) => handleFilterChange("date_fin", e.target.value)}
+            value={filters.date_creation}
+            onChange={(e) => handleFilterChange("date_creation", e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
         </Box>
       </Paper>
 
-      {/* Tableau */}
-      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: "1px solid #e0e0e0" }}>
-        <Table>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Client</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Chantier</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Adresse</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Prestations</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
-              <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rapports.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} sx={{ textAlign: "center", py: 4 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    {loading ? "Chargement..." : "Aucun rapport d'intervention"}
+      {/* Tableau groupe par residence */}
+      {rapports.length === 0 ? (
+        <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
+          <Typography variant="body1" color="text.secondary">
+            {loading ? "Chargement..." : "Aucun rapport d'intervention"}
+          </Typography>
+        </Paper>
+      ) : (
+        groupedRapports.map((group) => (
+          <Paper key={group.residence_nom} elevation={0} sx={{ mb: 2, borderRadius: 2, border: "1px solid #e0e0e0", overflow: "hidden" }}>
+            <Box
+              onClick={() => toggleResidence(group.residence_nom)}
+              sx={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                px: 2, py: 1.5, cursor: "pointer",
+                backgroundColor: "#f5f5f5", "&:hover": { backgroundColor: "#eeeeee" },
+              }}
+            >
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  {group.residence_nom}
+                  <Chip label={`${group.rapports.length} rapport(s)`} size="small" sx={{ ml: 1 }} />
+                </Typography>
+                {group.residence_adresse && (
+                  <Typography variant="caption" color="text.secondary">{group.residence_adresse}</Typography>
+                )}
+                {group.client_societe_nom && (
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                    Client: {group.client_societe_nom}
                   </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              rapports.map((rapport) => (
-                <TableRow key={rapport.id} hover sx={{ cursor: "pointer" }}
-                  onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
-                >
-                  <TableCell>
-                    {new Date(rapport.date).toLocaleDateString("fr-FR")}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 500 }}>{rapport.titre_nom || "-"}</TableCell>
-                  <TableCell>{rapport.technicien || "-"}</TableCell>
-                  <TableCell>{rapport.client_societe_nom || "-"}</TableCell>
-                  <TableCell>{rapport.chantier_nom || "-"}</TableCell>
-                  <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {rapport.adresse_residence || "-"}
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={rapport.nb_prestations || 0} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={STATUT_LABELS[rapport.statut] || rapport.statut}
-                      size="small"
-                      color={STATUT_COLORS[rapport.statut] || "default"}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
-                    >
-                      <MdEdit />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(rapport.id)}
-                    >
-                      <MdDelete />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                )}
+              </Box>
+              <IconButton size="small">
+                {expandedResidences[group.residence_nom] ? <MdExpandLess /> : <MdExpandMore />}
+              </IconButton>
+            </Box>
+
+            <Collapse in={expandedResidences[group.residence_nom] !== false}>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Logement</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Prestations</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
+                      <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {group.rapports.map((rapport) => (
+                      <TableRow key={rapport.id} hover sx={{ cursor: "pointer" }}
+                        onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
+                      >
+                        <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
+                        <TableCell sx={{ fontWeight: 500 }}>{rapport.logement || "-"}</TableCell>
+                        <TableCell>{rapport.titre_nom || "-"}</TableCell>
+                        <TableCell>{rapport.technicien || "-"}</TableCell>
+                        <TableCell>
+                          <Chip label={rapport.nb_prestations || 0} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={STATUT_LABELS[rapport.statut] || rapport.statut}
+                            size="small"
+                            color={STATUT_COLORS[rapport.statut] || "default"}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <IconButton size="small" color="primary"
+                            onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
+                          >
+                            <MdEdit />
+                          </IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleDelete(rapport.id)}>
+                            <MdDelete />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Collapse>
+          </Paper>
+        ))
+      )}
 
       <Snackbar
         open={snackbar.open}

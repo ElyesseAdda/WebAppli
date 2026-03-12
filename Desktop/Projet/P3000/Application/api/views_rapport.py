@@ -7,9 +7,10 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from .models_rapport import TitreRapport, RapportIntervention, PrestationRapport, PhotoRapport
+from .models_rapport import TitreRapport, Residence, RapportIntervention, PrestationRapport, PhotoRapport
 from .serializers_rapport import (
     TitreRapportSerializer,
+    ResidenceSerializer,
     RapportInterventionSerializer,
     RapportInterventionListSerializer,
     RapportInterventionCreateSerializer,
@@ -25,21 +26,35 @@ class TitreRapportViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
 
+class ResidenceViewSet(viewsets.ModelViewSet):
+    serializer_class = ResidenceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Residence.objects.select_related('client_societe', 'chantier')
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(nom__icontains=search)
+        client_societe = self.request.query_params.get('client_societe')
+        if client_societe:
+            qs = qs.filter(client_societe_id=client_societe)
+        chantier = self.request.query_params.get('chantier')
+        if chantier:
+            qs = qs.filter(chantier_id=chantier)
+        return qs
+
+
 class RapportInterventionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = RapportIntervention.objects.select_related(
-            'titre', 'client_societe', 'chantier', 'created_by'
+            'titre', 'client_societe', 'chantier', 'residence', 'created_by'
         ).prefetch_related('prestations__photos')
 
         chantier_id = self.request.query_params.get('chantier')
         if chantier_id:
             qs = qs.filter(chantier_id=chantier_id)
-
-        statut = self.request.query_params.get('statut')
-        if statut:
-            qs = qs.filter(statut=statut)
 
         technicien = self.request.query_params.get('technicien')
         if technicien:
@@ -49,17 +64,17 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if client_societe_id:
             qs = qs.filter(client_societe_id=client_societe_id)
 
+        residence_id = self.request.query_params.get('residence')
+        if residence_id:
+            qs = qs.filter(residence_id=residence_id)
+
         type_rapport = self.request.query_params.get('type_rapport')
         if type_rapport:
             qs = qs.filter(type_rapport=type_rapport)
 
-        date_debut = self.request.query_params.get('date_debut')
-        if date_debut:
-            qs = qs.filter(date__gte=date_debut)
-
-        date_fin = self.request.query_params.get('date_fin')
-        if date_fin:
-            qs = qs.filter(date__lte=date_fin)
+        date_creation = self.request.query_params.get('date_creation')
+        if date_creation:
+            qs = qs.filter(created_at__date=date_creation)
 
         return qs
 
@@ -303,7 +318,7 @@ def preview_rapport_intervention(request, rapport_id):
     """Vue de previsualisation HTML pour la generation PDF via Puppeteer."""
     try:
         rapport = RapportIntervention.objects.select_related(
-            'titre', 'client_societe', 'chantier', 'chantier__societe'
+            'titre', 'client_societe', 'chantier', 'chantier__societe', 'residence'
         ).prefetch_related('prestations__photos').get(id=rapport_id)
     except RapportIntervention.DoesNotExist:
         return JsonResponse({'error': 'Rapport introuvable'}, status=404)

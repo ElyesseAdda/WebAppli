@@ -17,6 +17,29 @@ class TitreRapport(models.Model):
         return self.nom
 
 
+class Residence(models.Model):
+    nom = models.CharField(max_length=255, verbose_name="Nom de la résidence")
+    adresse = models.CharField(max_length=500, blank=True, default='', verbose_name="Adresse")
+    client_societe = models.ForeignKey(
+        'Societe', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='residences', verbose_name="Client / Bailleur"
+    )
+    chantier = models.ForeignKey(
+        'Chantier', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='residences'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nom']
+        verbose_name = "Résidence"
+        verbose_name_plural = "Résidences"
+
+    def __str__(self):
+        return self.nom
+
+
 class RapportIntervention(models.Model):
     TYPE_CHOICES = [
         ('intervention', "Rapport d'intervention"),
@@ -43,9 +66,11 @@ class RapportIntervention(models.Model):
         related_name='rapports_intervention'
     )
 
-    nom_residence = models.CharField(max_length=255, blank=True, default='', verbose_name="Nom de la résidence")
-    adresse_residence = models.CharField(max_length=500, verbose_name="Adresse résidence")
-    logements_visites = models.TextField(blank=True, default='', verbose_name="Logements visités")
+    residence = models.ForeignKey(
+        Residence, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rapports', verbose_name="Résidence"
+    )
+    logement = models.CharField(max_length=255, blank=True, default='', verbose_name="Logement")
 
     locataire_nom = models.CharField(max_length=100, blank=True, default='')
     locataire_prenom = models.CharField(max_length=100, blank=True, default='')

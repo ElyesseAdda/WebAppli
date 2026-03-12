@@ -267,6 +267,13 @@
             margin-bottom: 8px;
         }
 
+        .signature-quitus {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 12px;
+        }
+
         .signature-section img {
             max-width: 250px;
             max-height: 120px;
@@ -324,20 +331,22 @@
 
         <div class="info-block">
             <h3>Residence</h3>
-            {% if rapport.nom_residence %}
+            {% if rapport.residence %}
             <div class="info-row">
                 <span class="info-label">Nom :</span>
-                <span class="info-value">{{ rapport.nom_residence }}</span>
+                <span class="info-value"><strong>{{ rapport.residence.nom }}</strong></span>
             </div>
-            {% endif %}
+            {% if rapport.residence.adresse %}
             <div class="info-row">
                 <span class="info-label">Adresse :</span>
-                <span class="info-value">{{ rapport.adresse_residence }}</span>
+                <span class="info-value"><strong>{{ rapport.residence.adresse }}</strong></span>
             </div>
-            {% if rapport.logements_visites %}
+            {% endif %}
+            {% endif %}
+            {% if rapport.logement %}
             <div class="info-row">
-                <span class="info-label">Logements visités :</span>
-                <span class="info-value" style="white-space: pre-wrap;">{{ rapport.logements_visites }}</span>
+                <span class="info-label">Logement :</span>
+                <span class="info-value">{{ rapport.logement }}</span>
             </div>
             {% endif %}
         </div>
@@ -383,6 +392,7 @@
     {% if signature_url %}
     <div class="signature-section">
         <h3>Signature</h3>
+        <p class="signature-quitus">Bon pour quitus</p>
         <img src="{{ signature_url }}" alt="Signature" />
     </div>
     {% endif %}

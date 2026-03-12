@@ -14,8 +14,11 @@ const PrestationSection = ({
   onUploadPhoto,
   onDeletePhoto,
   onUpdatePhoto,
+  onAddPendingPhoto,
+  onRemovePendingPhoto,
   disabled,
   isSaved,
+  pendingPhotos,
 }) => {
   const handleFieldChange = (field, value) => {
     onChange(index, { ...prestation, [field]: value });
@@ -131,17 +134,15 @@ const PrestationSection = ({
         </Typography>
         <PhotoManager
           photos={prestation.photos || []}
+          pendingPhotos={pendingPhotos || []}
           prestationId={isSaved ? prestation.id : null}
           onUpload={onUploadPhoto}
           onDelete={onDeletePhoto}
           onUpdatePhoto={onUpdatePhoto}
-          disabled={disabled || !isSaved}
+          onAddPendingPhoto={(file, type) => onAddPendingPhoto?.(index, file, type)}
+          onRemovePendingPhoto={(photoIdx) => onRemovePendingPhoto?.(index, photoIdx)}
+          disabled={disabled}
         />
-        {!isSaved && (
-          <Typography variant="caption" color="text.secondary">
-            Sauvegardez le rapport pour pouvoir ajouter des photos.
-          </Typography>
-        )}
       </Box>
     </Paper>
   );
