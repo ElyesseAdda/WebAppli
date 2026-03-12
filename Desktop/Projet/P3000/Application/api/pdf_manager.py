@@ -76,7 +76,8 @@ class PDFManager:
             'avenant': 'Avenant',
             'rapport_chantier': 'Documents_Execution',
             'contrat_sous_traitance': 'SOUS_TRAITANT',
-            'avenant_sous_traitance': 'SOUS_TRAITANT'
+            'avenant_sous_traitance': 'SOUS_TRAITANT',
+            'rapport_intervention': 'RAPPORT_INTERVENTION'
         }
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:

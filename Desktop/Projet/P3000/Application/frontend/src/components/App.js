@@ -59,6 +59,9 @@ import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
+import RapportsPage from "./RapportIntervention/RapportsPage";
+import RapportForm from "./RapportIntervention/RapportForm";
+import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
 
 // Créer un thème par défaut avec les couleurs centralisées
 const theme = createTheme({
@@ -604,6 +607,46 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <TestDragSimple />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Rapports d'intervention */}
+          <Route
+            path="/RapportsIntervention"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/RapportIntervention/nouveau"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportForm />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/RapportIntervention/:id"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportForm />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rapports-mobile"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <RapportMobileLayout />
               </ProtectedRoute>
             }
           />

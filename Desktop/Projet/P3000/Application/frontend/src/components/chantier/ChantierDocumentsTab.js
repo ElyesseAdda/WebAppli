@@ -5,6 +5,7 @@ import ChantierListeDevis from "./ChantierListeDevis";
 import ChantierListeFactures from "./ChantierListeFactures";
 import ChantierListeAvenants from "./ChantierListeAvenants";
 import ChantierListeSituation from "./ChantierListeSituation";
+import ChantierRapportsList from "../RapportIntervention/ChantierRapportsList";
 import { COLORS } from "../../constants/colors";
 
 const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
@@ -197,6 +198,7 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
             <Tab label="Devis" />
             <Tab label="Factures" />
             <Tab label="Avenants" />
+            <Tab label="Rapports" />
           </Tabs>
         </AppBar>
       </Box>
@@ -256,6 +258,9 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
               setIsLoaded={setIsLoadedAvenants}
               onSaveFilters={saveFiltersAvenants}
             />
+          )}
+          {selectedTab === 4 && (
+            <ChantierRapportsList chantierData={chantierData} />
           )}
         </Paper>
       </Box>

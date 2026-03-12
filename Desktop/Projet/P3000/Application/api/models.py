@@ -53,6 +53,7 @@ class Societe(models.Model):
     codepostal_societe = models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
    #Change client_name to nom_contact
     client_name = models.ForeignKey(Client, on_delete=models.CASCADE)  # Association avec Client
+    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo")
     
     def __str__(self):
         return self.nom_societe
@@ -3556,3 +3557,6 @@ def create_default_emetteurs(sender, **kwargs):
                 print(f"✅ {created_count} émetteur(s) créé(s) automatiquement")
         except Exception as e:
             print(f"❌ Erreur lors de la création des émetteurs : {e}")
+
+
+from .models_rapport import TitreRapport, RapportIntervention, PrestationRapport, PhotoRapport

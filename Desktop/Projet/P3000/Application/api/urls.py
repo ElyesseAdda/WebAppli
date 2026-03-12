@@ -567,3 +567,9 @@ urlpatterns += [
     # Configuration entreprise (multi-client)
     path('entreprise-config/', get_entreprise_config, name='get_entreprise_config'),
 ]
+
+# --- URLs POUR LES RAPPORTS D'INTERVENTION ---
+from django.urls import include as include_urls
+urlpatterns += [
+    path('', include_urls('api.urls_rapport')),
+]
