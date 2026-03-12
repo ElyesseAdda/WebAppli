@@ -303,7 +303,7 @@ def preview_rapport_intervention(request, rapport_id):
     """Vue de previsualisation HTML pour la generation PDF via Puppeteer."""
     try:
         rapport = RapportIntervention.objects.select_related(
-            'titre', 'client_societe', 'chantier'
+            'titre', 'client_societe', 'chantier', 'chantier__societe'
         ).prefetch_related('prestations__photos').get(id=rapport_id)
     except RapportIntervention.DoesNotExist:
         return JsonResponse({'error': 'Rapport introuvable'}, status=404)
@@ -311,9 +311,14 @@ def preview_rapport_intervention(request, rapport_id):
     from .utils import generate_presigned_url_for_display
 
     logo_url = ""
+    logo_s3_key = None
     if rapport.client_societe and rapport.client_societe.logo_s3_key:
+        logo_s3_key = rapport.client_societe.logo_s3_key
+    elif rapport.chantier and rapport.chantier.societe and rapport.chantier.societe.logo_s3_key:
+        logo_s3_key = rapport.chantier.societe.logo_s3_key
+    if logo_s3_key:
         try:
-            logo_url = generate_presigned_url_for_display(rapport.client_societe.logo_s3_key)
+            logo_url = generate_presigned_url_for_display(logo_s3_key)
         except Exception:
             pass
 
@@ -342,10 +347,17 @@ def preview_rapport_intervention(request, rapport_id):
             'photos_by_type': photos_by_type,
         })
 
+    societe_nom = ""
+    if rapport.client_societe:
+        societe_nom = rapport.client_societe.nom_societe
+    elif rapport.chantier and rapport.chantier.societe:
+        societe_nom = rapport.chantier.societe.nom_societe
+
     from django.template.loader import render_to_string
     html = render_to_string('rapport_intervention.html', {
         'rapport': rapport,
         'logo_url': logo_url,
+        'societe_nom': societe_nom,
         'signature_url': signature_url,
         'prestations_data': prestations_data,
     })

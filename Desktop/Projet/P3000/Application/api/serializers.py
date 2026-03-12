@@ -492,10 +492,20 @@ class ContactSocieteSerializer(serializers.ModelSerializer):
     
 class SocieteSerializer(serializers.ModelSerializer):
     contacts = ContactSocieteSerializer(many=True, read_only=True)
-    
+    logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Societe
         fields = '__all__'
+
+    def get_logo_url(self, obj):
+        if obj.logo_s3_key:
+            try:
+                from .utils import generate_presigned_url_for_display
+                return generate_presigned_url_for_display(obj.logo_s3_key, expires_in=3600)
+            except Exception:
+                return None
+        return None
 
 class ChantierSerializer(serializers.ModelSerializer):
     marge_fourniture = serializers.SerializerMethodField()

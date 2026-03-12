@@ -44,6 +44,7 @@ import ListeChantier from "./ListeChantier";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
+import ListeClient from "./ListeClient";
 import ListeFournisseurs from "./ListeFournisseurs";
 import ListeSousTraitants from "./ListeSousTraitants";
 import Login from "./Login";
@@ -430,6 +431,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeSituation />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ListeClient"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeClient />
                 </Layout>
               </ProtectedRoute>
             }
