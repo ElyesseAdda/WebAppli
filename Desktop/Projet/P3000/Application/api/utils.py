@@ -579,6 +579,15 @@ def delete_s3_folder(folder_path):
         return False
 
 
+# Fichiers système à masquer dans le drive (non affichés à l'utilisateur)
+HIDDEN_DRIVE_FILES = ('.metadata.json', '.DS_Store')
+
+
+def _is_hidden_drive_file(file_name: str) -> bool:
+    """Retourne True si le fichier doit être masqué dans l'interface drive."""
+    return file_name in HIDDEN_DRIVE_FILES
+
+
 # Nouvelles fonctions pour le drive complet
 def list_s3_folder_content(folder_path=""):
     """
@@ -626,6 +635,8 @@ def list_s3_folder_content(folder_path=""):
                     continue
                 if not obj['Key'].endswith('/') and obj['Key'] != folder_path:
                     file_name = obj['Key'].split('/')[-1]
+                    if _is_hidden_drive_file(file_name):
+                        continue
                     files.append({
                         'name': file_name,
                         'path': obj['Key'],
@@ -670,6 +681,8 @@ def list_local_folder_content(folder_path=""):
         full_path = os.path.join(LOCAL_STORAGE_PATH, folder_path)
         if os.path.exists(full_path):
             for item in os.listdir(full_path):
+                if _is_hidden_drive_file(item):
+                    continue
                 item_path = os.path.join(full_path, item)
                 if os.path.isfile(item_path) and item != '.keep':
                     files.append({
@@ -803,7 +816,7 @@ def search_s3_files(search_term, folder_path=""):
                             'path': obj['Key'],
                             'type': 'folder'
                         })
-                    else:
+                    elif not _is_hidden_drive_file(file_name):
                         files.append({
                             'name': file_name,
                             'path': obj['Key'],
@@ -845,6 +858,8 @@ def search_local_files(search_term, folder_path=""):
         if os.path.exists(full_path):
             for root, dirs, filenames in os.walk(full_path):
                 for filename in filenames:
+                    if _is_hidden_drive_file(filename):
+                        continue
                     if search_term.lower() in filename.lower():
                         file_path = os.path.join(root, filename)
                         relative_path = os.path.relpath(file_path, LOCAL_STORAGE_PATH)

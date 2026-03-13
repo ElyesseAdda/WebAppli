@@ -110,10 +110,13 @@ class StorageManager:
                     
                     if obj['Key'] != prefix:  # Ne pas inclure le dossier lui-même
                         file_name = obj['Key'].split('/')[-1]
-                        
+                        # Masquer les fichiers système (.metadata.json, .DS_Store)
+                        if file_name in ('.metadata.json', '.DS_Store'):
+                            continue
+
                         # Déterminer le type de contenu
                         content_type = get_content_type(file_name)
-                        
+
                         files.append({
                             'name': file_name,
                             'path': obj['Key'],
@@ -509,6 +512,8 @@ class StorageManager:
                         # Traiter le fichier lui-même (si on cherche aussi les fichiers)
                         file_name = path_parts[-1]
                         if file_name and search_lower in file_name.lower():
+                            if file_name in ('.metadata.json', '.DS_Store'):
+                                continue
                             content_type = get_content_type(file_name)
                             files.append({
                                 'name': file_name,
