@@ -180,6 +180,8 @@ CSRF_EXEMPT_PATTERNS = [
     r'^/api/download-pdf-from-s3/$',
     r'^/api/download-file-from-drive/$',
     r'^/api/list-pdfs-in-drive/$',
+    r'^/api/generate-rapport-intervention-pdf/$',
+    r'^/api/generate-rapport-intervention-pdf-drive/$',
 ]
 
 def is_csrf_exempt_url(path):

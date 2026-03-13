@@ -8,11 +8,14 @@ import {
   MdAdd, MdEdit, MdDelete, MdDescription,
   MdExpandMore, MdExpandLess,
 } from "react-icons/md";
+import { AiFillFilePdf } from "react-icons/ai";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { COLORS } from "../../constants/colors";
 import { useRapports } from "../../hooks/useRapports";
 import StatusChangeModal from "../StatusChangeModal";
+import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
+import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const STATUT_LABELS = {
   a_faire: "A faire",
@@ -102,6 +105,58 @@ const RapportsPage = () => {
       loadRapports();
     } catch {
       setSnackbar({ open: true, message: "Erreur lors de la mise à jour du statut", severity: "error" });
+    }
+  };
+
+  const handleGeneratePDF = async (rapport) => {
+    try {
+      setSnackbar({ open: true, message: "Téléchargement en cours...", severity: "info" });
+      const response = await axios.post(
+        "/api/generate-rapport-intervention-pdf/",
+        { rapport_id: rapport.id },
+        { responseType: "blob", headers: { "Content-Type": "application/json" } }
+      );
+      if (response.headers["content-type"] === "application/pdf") {
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        const cd = response.headers["content-disposition"];
+        let filename = `rapport_intervention_${rapport.id}.pdf`;
+        if (cd) {
+          const match = cd.match(/filename=["']?([^"';]+)["']?/i) || cd.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+          if (match) {
+            try {
+              filename = decodeURIComponent(match[1].trim().replace(/^["']|["']$/g, ""));
+            } catch {
+              filename = match[1].trim().replace(/^["']|["']$/g, "");
+            }
+          }
+        }
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+        setSnackbar({ open: true, message: "Téléchargement terminé avec succès", severity: "success" });
+      } else {
+        const reader = new FileReader();
+        reader.onload = function () {
+          try {
+            const err = JSON.parse(reader.result);
+            setSnackbar({ open: true, message: `Erreur: ${err.error || "Erreur inconnue"}`, severity: "error" });
+          } catch {
+            setSnackbar({ open: true, message: "Erreur lors du téléchargement", severity: "error" });
+          }
+        };
+        reader.readAsText(response.data);
+      }
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.error || "Erreur lors de la génération du PDF.",
+        severity: "error",
+      });
     }
   };
 
@@ -257,6 +312,21 @@ const RapportsPage = () => {
                         <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <IconButton
+                            size="small"
+                            onClick={() => handleGeneratePDF(rapport)}
+                            sx={{ color: "success.main", "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" } }}
+                            title="Télécharger le PDF"
+                          >
+                            <AiFillFilePdf style={{ fontSize: "20px" }} />
+                          </IconButton>
+                          <RegeneratePDFIconButton
+                            documentType={DOCUMENT_TYPES.RAPPORT_INTERVENTION}
+                            documentData={rapport}
+                            size="small"
+                            color="primary"
+                            tooltipPlacement="top"
+                          />
                           <IconButton size="small" color="primary"
                             onClick={(e) => { e.stopPropagation(); navigate(`/RapportIntervention/${rapport.id}`); }}
                           >

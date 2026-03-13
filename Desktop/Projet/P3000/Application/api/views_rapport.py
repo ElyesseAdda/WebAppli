@@ -1,7 +1,11 @@
+import json
+import os
+import subprocess
+import tempfile
 import uuid
 import base64
 import traceback
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -398,3 +402,88 @@ def preview_rapport_intervention(request, rapport_id):
         'signature_url': signature_url,
         'prestations_data': prestations_data,
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_rapport_intervention_pdf(request):
+    """Génère le PDF du rapport d'intervention et le renvoie en téléchargement (navigateur)."""
+    temp_pdf_path = None
+    try:
+        data = json.loads(request.body)
+        rapport_id = data.get('rapport_id')
+        if not rapport_id:
+            return JsonResponse({'error': 'ID du rapport manquant'}, status=400)
+
+        preview_url = request.build_absolute_uri(f"/api/preview-rapport-intervention/{rapport_id}/")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
+
+        if not os.path.exists(node_script_path):
+            return JsonResponse({'error': f'Script Node.js introuvable: {node_script_path}'}, status=500)
+
+        node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
+        node_path = 'node'
+        for np in node_paths:
+            try:
+                subprocess.run([np, '--version'], check=True, capture_output=True, text=True)
+                node_path = np
+                break
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+
+        temp_pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+        temp_pdf_path = temp_pdf.name
+        temp_pdf.close()
+
+        command = [node_path, node_script_path, preview_url, temp_pdf_path]
+        subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
+
+        if not os.path.exists(temp_pdf_path):
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+
+        rapport = RapportIntervention.objects.select_related('residence').get(pk=rapport_id)
+        residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+        logement = (rapport.logement or "").strip() or "Sans logement"
+        safe = lambda s: "".join(c for c in s if c.isalnum() or c in " -_(),.'").strip() or "N-A"
+        residence_nom = safe(residence_nom)
+        logement = safe(logement)
+        filename = f"Rapport ({residence_nom}) {logement}.pdf"
+
+        with open(temp_pdf_path, 'rb') as pdf_file:
+            response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Données JSON invalides'}, status=400)
+    except subprocess.CalledProcessError as e:
+        return JsonResponse({'error': f'Erreur génération PDF: {e.stderr or str(e)}'}, status=500)
+    except subprocess.TimeoutExpired:
+        return JsonResponse({'error': 'Timeout lors de la génération du PDF (60 s)'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    finally:
+        if temp_pdf_path and os.path.exists(temp_pdf_path):
+            try:
+                os.unlink(temp_pdf_path)
+            except OSError:
+                pass
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def generate_rapport_intervention_pdf_drive(request):
+    """Régénère le PDF du rapport d'intervention et le stocke dans le Drive (S3)."""
+    rapport_id = request.query_params.get('rapport_id')
+    if not rapport_id:
+        return JsonResponse({'error': 'rapport_id requis'}, status=400)
+    try:
+        rapport = RapportIntervention.objects.get(pk=rapport_id)
+    except RapportIntervention.DoesNotExist:
+        return JsonResponse({'error': 'Rapport introuvable'}, status=404)
+    pdf_result = _generate_rapport_pdf(rapport, request)
+    if pdf_result.get('success'):
+        rapport.pdf_s3_key = pdf_result.get('s3_file_path', '')
+        rapport.save()
+    status_code = 200 if pdf_result.get('success') else 400
+    return JsonResponse(pdf_result, status=status_code)

@@ -5,6 +5,8 @@ from .views_rapport import (
     ResidenceViewSet,
     RapportInterventionViewSet,
     preview_rapport_intervention,
+    generate_rapport_intervention_pdf,
+    generate_rapport_intervention_pdf_drive,
 )
 
 router = DefaultRouter()
@@ -15,4 +17,6 @@ router.register(r'residences', ResidenceViewSet, basename='residences')
 urlpatterns = [
     path('', include(router.urls)),
     path('preview-rapport-intervention/<int:rapport_id>/', preview_rapport_intervention, name='preview-rapport-intervention'),
+    path('generate-rapport-intervention-pdf/', generate_rapport_intervention_pdf, name='generate-rapport-intervention-pdf'),
+    path('generate-rapport-intervention-pdf-drive/', generate_rapport_intervention_pdf_drive, name='generate-rapport-intervention-pdf-drive'),
 ]
