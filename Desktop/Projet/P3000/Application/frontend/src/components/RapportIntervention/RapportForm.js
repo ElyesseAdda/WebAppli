@@ -52,7 +52,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     locataire_telephone: "",
     locataire_email: "",
     type_rapport: "intervention",
-    statut: "brouillon",
+    statut: "a_faire",
     prestations: [{ ...EMPTY_PRESTATION }],
   });
 
@@ -117,7 +117,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         locataire_telephone: data.locataire_telephone || "",
         locataire_email: data.locataire_email || "",
         type_rapport: data.type_rapport || "intervention",
-        statut: data.statut || "brouillon",
+        statut: data.statut || "a_faire",
         prestations: data.prestations?.length
           ? data.prestations
           : [{ ...EMPTY_PRESTATION }],
@@ -313,7 +313,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     setSaving(true);
     try {
       await validerRapport(rapportId);
-      showSnackbar("Rapport valide et PDF genere");
+      showSnackbar("Rapport terminé et PDF généré");
       await loadRapport();
     } catch (err) {
       showSnackbar("Erreur lors de la validation", "error");
@@ -380,7 +380,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     }
   };
 
-  const isDisabled = rapportData?.statut === "valide";
+  const isDisabled = rapportData?.statut === "termine";
   const isNewResidence = !selectedResidence && !!formData.residence_nom;
 
   return (
@@ -399,9 +399,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           </Typography>
           {rapportData?.statut && (
             <Chip
-              label={rapportData.statut === "valide" ? "Valide" : rapportData.statut === "en_cours" ? "En cours" : "Brouillon"}
+              label={rapportData.statut === "termine" ? "Terminé" : rapportData.statut === "en_cours" ? "En cours" : "A faire"}
               size="small"
-              color={rapportData.statut === "valide" ? "success" : rapportData.statut === "en_cours" ? "warning" : "default"}
+              color={rapportData.statut === "termine" ? "success" : rapportData.statut === "en_cours" ? "warning" : "default"}
             />
           )}
         </Box>

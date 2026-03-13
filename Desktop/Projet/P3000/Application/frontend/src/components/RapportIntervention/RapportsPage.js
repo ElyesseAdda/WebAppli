@@ -12,22 +12,40 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { COLORS } from "../../constants/colors";
 import { useRapports } from "../../hooks/useRapports";
-
-const STATUT_COLORS = {
-  brouillon: "default",
-  en_cours: "warning",
-  valide: "success",
-};
+import StatusChangeModal from "../StatusChangeModal";
 
 const STATUT_LABELS = {
-  brouillon: "Brouillon",
+  a_faire: "A faire",
   en_cours: "En cours",
-  valide: "Valide",
+  termine: "Terminé",
 };
+
+const getStatusStyles = (statut) => ({
+  display: "inline-block",
+  px: 1.5,
+  py: 0.5,
+  borderRadius: 1,
+  backgroundColor:
+    statut === "termine"
+      ? "success.light"
+      : statut === "en_cours"
+      ? "warning.light"
+      : "grey.200",
+  color:
+    statut === "termine"
+      ? "success.dark"
+      : statut === "en_cours"
+      ? "warning.dark"
+      : "grey.700",
+  fontWeight: 500,
+  textTransform: "capitalize",
+  cursor: "pointer",
+  "&:hover": { opacity: 0.9 },
+});
 
 const RapportsPage = () => {
   const navigate = useNavigate();
-  const { rapports, fetchRapports, deleteRapport, loading } = useRapports();
+  const { rapports, fetchRapports, deleteRapport, patchRapport, loading } = useRapports();
   const [filters, setFilters] = useState({
     technicien: "",
     client_societe: "",
@@ -37,6 +55,8 @@ const RapportsPage = () => {
   const [residences, setResidences] = useState([]);
   const [expandedResidences, setExpandedResidences] = useState({});
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [rapportToUpdate, setRapportToUpdate] = useState(null);
 
   useEffect(() => {
     axios.get("/api/residences/").then((res) => {
@@ -63,6 +83,25 @@ const RapportsPage = () => {
       setSnackbar({ open: true, message: "Rapport supprime", severity: "success" });
     } catch {
       setSnackbar({ open: true, message: "Erreur lors de la suppression", severity: "error" });
+    }
+  };
+
+  const handleStatusClick = (e, rapport) => {
+    e.stopPropagation();
+    setRapportToUpdate(rapport);
+    setShowStatusModal(true);
+  };
+
+  const handleStatusUpdate = async (newStatut) => {
+    if (!rapportToUpdate) return;
+    try {
+      await patchRapport(rapportToUpdate.id, { statut: newStatut });
+      setSnackbar({ open: true, message: "Statut mis à jour", severity: "success" });
+      setShowStatusModal(false);
+      setRapportToUpdate(null);
+      loadRapports();
+    } catch {
+      setSnackbar({ open: true, message: "Erreur lors de la mise à jour du statut", severity: "error" });
     }
   };
 
@@ -207,12 +246,13 @@ const RapportsPage = () => {
                         <TableCell sx={{ fontWeight: 500 }}>{rapport.logement || "-"}</TableCell>
                         <TableCell>{rapport.titre_nom || "-"}</TableCell>
                         <TableCell>{rapport.technicien || "-"}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={STATUT_LABELS[rapport.statut] || rapport.statut}
-                            size="small"
-                            color={STATUT_COLORS[rapport.statut] || "default"}
-                          />
+                        <TableCell
+                          onClick={(e) => handleStatusClick(e, rapport)}
+                          sx={{ cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }}
+                        >
+                          <Typography variant="body2" sx={getStatusStyles(rapport.statut || "a_faire")}>
+                            {STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
+                          </Typography>
                         </TableCell>
                         <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
                           onClick={(e) => e.stopPropagation()}
@@ -235,6 +275,18 @@ const RapportsPage = () => {
           </Paper>
         ))
       )}
+
+      <StatusChangeModal
+        open={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setRapportToUpdate(null);
+        }}
+        currentStatus={rapportToUpdate?.statut}
+        onStatusChange={handleStatusUpdate}
+        type="rapport"
+        title="Modifier le statut du rapport"
+      />
 
       <Snackbar
         open={snackbar.open}

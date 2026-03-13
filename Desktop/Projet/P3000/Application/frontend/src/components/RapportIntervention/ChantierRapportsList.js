@@ -1,34 +1,54 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Box, Button, Typography, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, Chip, IconButton,
+  TableContainer, TableHead, TableRow, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Autocomplete, TextField, Snackbar, Alert,
 } from "@mui/material";
-import { MdAdd, MdEdit, MdDelete, MdLink, MdPictureAsPdf } from "react-icons/md";
+import { MdAdd, MdEdit, MdDelete, MdLink } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { COLORS } from "../../constants/colors";
 import { useRapports } from "../../hooks/useRapports";
-
-const STATUT_COLORS = {
-  brouillon: "default",
-  en_cours: "warning",
-  valide: "success",
-};
+import StatusChangeModal from "../StatusChangeModal";
 
 const STATUT_LABELS = {
-  brouillon: "Brouillon",
+  a_faire: "A faire",
   en_cours: "En cours",
-  valide: "Valide",
+  termine: "Terminé",
 };
+
+const getStatusStyles = (statut) => ({
+  display: "inline-block",
+  px: 1.5,
+  py: 0.5,
+  borderRadius: 1,
+  backgroundColor:
+    statut === "termine"
+      ? "success.light"
+      : statut === "en_cours"
+      ? "warning.light"
+      : "grey.200",
+  color:
+    statut === "termine"
+      ? "success.dark"
+      : statut === "en_cours"
+      ? "warning.dark"
+      : "grey.700",
+  fontWeight: 500,
+  textTransform: "capitalize",
+  cursor: "pointer",
+  "&:hover": { opacity: 0.9 },
+});
 
 const ChantierRapportsList = ({ chantierData }) => {
   const navigate = useNavigate();
-  const { rapports, fetchRapports, lierChantier, deleteRapport, loading } = useRapports();
+  const { rapports, fetchRapports, lierChantier, deleteRapport, patchRapport, loading } = useRapports();
   const [linkDialog, setLinkDialog] = useState(false);
   const [allRapports, setAllRapports] = useState([]);
   const [selectedRapport, setSelectedRapport] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [rapportToUpdate, setRapportToUpdate] = useState(null);
 
   const loadRapports = useCallback(async () => {
     if (!chantierData?.id) return;
@@ -72,6 +92,25 @@ const ChantierRapportsList = ({ chantierData }) => {
       loadRapports();
     } catch {
       setSnackbar({ open: true, message: "Erreur lors de la suppression", severity: "error" });
+    }
+  };
+
+  const handleStatusClick = (e, rapport) => {
+    e.stopPropagation();
+    setRapportToUpdate(rapport);
+    setShowStatusModal(true);
+  };
+
+  const handleStatusUpdate = async (newStatut) => {
+    if (!rapportToUpdate) return;
+    try {
+      await patchRapport(rapportToUpdate.id, { statut: newStatut });
+      setSnackbar({ open: true, message: "Statut mis à jour", severity: "success" });
+      setShowStatusModal(false);
+      setRapportToUpdate(null);
+      loadRapports();
+    } catch {
+      setSnackbar({ open: true, message: "Erreur lors de la mise à jour du statut", severity: "error" });
     }
   };
 
@@ -129,7 +168,7 @@ const ChantierRapportsList = ({ chantierData }) => {
                   key={rapport.id}
                   hover
                   sx={{ cursor: "pointer" }}
-                  onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}
+                  onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
                 >
                   <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
                   <TableCell sx={{ fontWeight: 500 }}>{rapport.titre_nom || "-"}</TableCell>
@@ -137,12 +176,13 @@ const ChantierRapportsList = ({ chantierData }) => {
                   <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {rapport.residence_nom || "-"}
                   </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={STATUT_LABELS[rapport.statut] || rapport.statut}
-                      size="small"
-                      color={STATUT_COLORS[rapport.statut] || "default"}
-                    />
+                  <TableCell
+                    onClick={(e) => handleStatusClick(e, rapport)}
+                    sx={{ cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }}
+                  >
+                    <Typography variant="body2" sx={getStatusStyles(rapport.statut || "a_faire")}>
+                      {STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
+                    </Typography>
                   </TableCell>
                   <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <IconButton size="small" color="primary" onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}>
@@ -182,6 +222,18 @@ const ChantierRapportsList = ({ chantierData }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <StatusChangeModal
+        open={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setRapportToUpdate(null);
+        }}
+        currentStatus={rapportToUpdate?.statut}
+        onStatusChange={handleStatusUpdate}
+        type="rapport"
+        title="Modifier le statut du rapport"
+      />
 
       <Snackbar
         open={snackbar.open}

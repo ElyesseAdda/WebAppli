@@ -46,9 +46,9 @@ class RapportIntervention(models.Model):
         ('vigik_plus', 'Vigik+'),
     ]
     STATUT_CHOICES = [
-        ('brouillon', 'Brouillon'),
+        ('a_faire', 'A faire'),
         ('en_cours', 'En cours'),
-        ('valide', 'Validé'),
+        ('termine', 'Terminé'),
     ]
 
     titre = models.ForeignKey(TitreRapport, on_delete=models.PROTECT, related_name='rapports')
@@ -80,7 +80,7 @@ class RapportIntervention(models.Model):
     signature_s3_key = models.CharField(max_length=500, blank=True, default='')
 
     type_rapport = models.CharField(max_length=20, choices=TYPE_CHOICES, default='intervention')
-    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='a_faire')
     pdf_s3_key = models.CharField(max_length=500, blank=True, default='')
 
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='rapports_crees')

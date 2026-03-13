@@ -239,7 +239,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
         rapport = self.get_object()
-        rapport.statut = 'valide'
+        rapport.statut = 'termine'
         rapport.save()
 
         pdf_result = _generate_rapport_pdf(rapport, request)
