@@ -47,15 +47,27 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
+/* Noms des agents : bleu pour être visible sur fond noir et fond blanc */
+.fc-datagrid-cell-frame,
+.fc-datagrid-cell,
+.fc-agent-name,
+.fc-resource-agent-name-wrapper,
+.fc-datagrid-cell-frame .fc-agent-name,
+.fc-datagrid-cell .fc-agent-name,
+.fc-datagrid-cell-frame span,
+.fc-datagrid-cell span {
+  color: #2196f3 !important;
+  font-weight: 600 !important;
+}
+
 .fc-datagrid-cell-frame {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  color: white !important;
-  font-weight: 600 !important;
   font-size: 14px !important;
   padding: 12px 15px !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
   transition: all 0.3s ease;
 }
+
 
 .fc-datagrid-cell-frame:hover {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;

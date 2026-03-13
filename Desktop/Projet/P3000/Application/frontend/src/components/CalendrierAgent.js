@@ -591,12 +591,13 @@ const CalendrierAgent = ({ agents }) => {
         height="auto"
         resourceLabelContent={(arg) => (
           <div
+            className="fc-resource-agent-name-wrapper"
             style={{ position: "relative", width: "100%", height: "100%" }}
             onClick={() =>
               handleResourceClick(arg.resource.id, arg.resource.title)
             }
           >
-            <span>{arg.resource.title}</span>
+            <span className="fc-agent-name">{arg.resource.title}</span>
             <div
               style={{
                 position: "absolute",
