@@ -264,10 +264,15 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
 
 
 def _generate_rapport_pdf(rapport, request):
-    """Genere le PDF du rapport via Puppeteer et le stocke dans S3."""
+    """Genere le PDF du rapport via Puppeteer et le stocke dans S3.
+    - Si le rapport est lie a un chantier : Chemin du chantier / dossier RAPPORT
+    - Sinon : Racine du drive / dossier RAPPORT D'INTERVENTION
+    - A la regeneration : remplace le document existant (force_replace)
+    """
     try:
         from .pdf_manager import PDFManager
         from .utils import create_s3_folder_recursive
+        from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
 
         pdf_manager = PDFManager()
         preview_url = request.build_absolute_uri(
@@ -276,19 +281,26 @@ def _generate_rapport_pdf(rapport, request):
 
         societe_name = rapport.client_societe.nom_societe if rapport.client_societe else "Sans_Societe"
 
+        # Chemin : chantier lie -> Chantiers/{path}/RAPPORT ; sinon -> RAPPORT D'INTERVENTION (racine)
         custom_path = ""
         if rapport.chantier:
             base_path = rapport.chantier.get_drive_path()
             if base_path:
-                custom_path = f"Chantiers/{base_path.strip('/')}/RAPPORT_INTERVENTION"
+                custom_path = f"Chantiers/{base_path.strip('/')}/RAPPORT"
 
         if not custom_path:
-            custom_path = f"RAPPORT_INTERVENTION/{societe_name}"
+            custom_path = "RAPPORT D'INTERVENTION"
 
         create_s3_folder_recursive(custom_path)
 
-        filename = f"Rapport_{rapport.titre}_{rapport.date.strftime('%Y%m%d')}_{rapport.id}.pdf"
-        s3_file_path = f"{custom_path}/{filename}"
+        # Nom du fichier : Rapport (nom residence) logement
+        residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+        logement = (rapport.logement or "").strip() or "Sans logement"
+        # Nettoyage pour fichiers : retirer caracteres interdits
+        safe = lambda s: "".join(c for c in s if c.isalnum() or c in " -_(),.'").strip() or "N-A"
+        residence_nom = safe(residence_nom)
+        logement = safe(logement)
+        filename = f"Rapport ({residence_nom}) {logement}.pdf"
 
         success, message, s3_path, conflict = pdf_manager.generate_andStore_pdf(
             document_type='rapport_intervention',
@@ -300,6 +312,16 @@ def _generate_rapport_pdf(rapport, request):
         )
 
         if success:
+            # Supprimer l'ancien fichier si le chemin a change (ex: chantier ajoute/modifie)
+            old_key = getattr(rapport, 'pdf_s3_key', None) or ""
+            if old_key and old_key != s3_path and is_s3_available():
+                try:
+                    s3_client = get_s3_client()
+                    bucket = get_s3_bucket_name()
+                    s3_client.delete_object(Bucket=bucket, Key=old_key)
+                except Exception:
+                    pass
+
             return {
                 'success': True,
                 'message': 'PDF genere avec succes',
