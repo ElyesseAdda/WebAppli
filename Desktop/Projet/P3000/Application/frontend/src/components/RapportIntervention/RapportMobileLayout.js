@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Box, BottomNavigation, BottomNavigationAction, Paper, Typography, AppBar, Toolbar, IconButton } from "@mui/material";
 import { MdList, MdAdd, MdDescription, MdLogout } from "react-icons/md";
-import RapportsPage from "./RapportsPage";
+import RapportsPageMobile from "./RapportsPageMobile";
+import RapportDetailMobile from "./RapportDetailMobile";
 import RapportForm from "./RapportForm";
 import { useAuth } from "../../hooks/useAuth";
 import { COLORS } from "../../constants/colors";
@@ -21,6 +22,7 @@ const RapportMobileLayout = () => {
   const handleEditRapport = (id) => {
     setSelectedRapportId(id);
     setCurrentView("form");
+    setNavValue(1);
   };
 
   const handleBackToList = () => {
@@ -29,12 +31,25 @@ const RapportMobileLayout = () => {
     setNavValue(0);
   };
 
+  const handleSelectRapport = (id) => {
+    setSelectedRapportId(id);
+    setCurrentView("detail");
+  };
+
+  const handleBackFromDetail = () => {
+    setCurrentView("list");
+    setSelectedRapportId(null);
+    setNavValue(0);
+  };
+
   const handleNavChange = (event, newValue) => {
     setNavValue(newValue);
     if (newValue === 0) {
-      handleBackToList();
+      setCurrentView("list");
+      setSelectedRapportId(null);
     } else if (newValue === 1) {
-      handleCreateNew();
+      setSelectedRapportId(null);
+      setCurrentView("form");
     }
   };
 
@@ -47,7 +62,21 @@ const RapportMobileLayout = () => {
         />
       );
     }
-    return <RapportsPage />;
+    if (currentView === "detail" && selectedRapportId) {
+      return (
+        <RapportDetailMobile
+          rapportId={selectedRapportId}
+          onBack={handleBackFromDetail}
+          onEdit={handleEditRapport}
+        />
+      );
+    }
+    return (
+      <RapportsPageMobile
+        onSelectRapport={handleSelectRapport}
+        onEditRapport={handleEditRapport}
+      />
+    );
   };
 
   return (

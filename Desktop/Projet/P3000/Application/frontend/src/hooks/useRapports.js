@@ -18,8 +18,13 @@ export const useRapports = () => {
         }
       });
       const response = await axios.get(`/api/rapports-intervention/?${params.toString()}`);
-      setRapports(response.data);
-      return response.data;
+      const list = Array.isArray(response.data?.results)
+        ? response.data.results
+        : Array.isArray(response.data)
+          ? response.data
+          : [];
+      setRapports(list);
+      return list;
     } catch (err) {
       setError(err.response?.data?.detail || "Erreur lors du chargement des rapports");
       throw err;

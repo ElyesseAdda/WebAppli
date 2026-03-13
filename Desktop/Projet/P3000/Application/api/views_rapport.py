@@ -72,6 +72,10 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if residence_id:
             qs = qs.filter(residence_id=residence_id)
 
+        logement = self.request.query_params.get('logement')
+        if logement:
+            qs = qs.filter(logement__icontains=logement)
+
         type_rapport = self.request.query_params.get('type_rapport')
         if type_rapport:
             qs = qs.filter(type_rapport=type_rapport)

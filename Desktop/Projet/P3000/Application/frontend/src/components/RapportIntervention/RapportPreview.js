@@ -17,7 +17,7 @@ const RapportPreview = ({ rapport }) => {
       sx={{
         maxWidth: 800,
         mx: "auto",
-        p: 4,
+        p: { xs: 2, sm: 4 },
         border: "1px solid #e0e0e0",
         borderRadius: 2,
         backgroundColor: "#fff",
@@ -40,7 +40,7 @@ const RapportPreview = ({ rapport }) => {
       </Box>
 
       {/* Infos generales */}
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mb: 3 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, mb: 3 }}>
         <InfoBlock title="Client / Bailleur">
           <Typography sx={{ fontWeight: 600 }}>{rapport.client_societe_nom || "-"}</Typography>
         </InfoBlock>
