@@ -597,7 +597,7 @@ const CalendrierAgent = ({ agents }) => {
               position: "relative",
               width: "100%",
               height: "100%",
-              color: "#2196f3",
+              color: "#ffffff",
             }}
             onClick={() =>
               handleResourceClick(arg.resource.id, arg.resource.title)
@@ -605,7 +605,7 @@ const CalendrierAgent = ({ agents }) => {
           >
             <span
               className="fc-agent-name"
-              style={{ color: "#2196f3", fontWeight: 600 }}
+              style={{ color: "#ffffff", fontWeight: 600 }}
             >
               {arg.resource.title}
             </span>
