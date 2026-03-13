@@ -1,8 +1,8 @@
 {
-  "name": "MJR Distributeurs",
-  "short_name": "MJR Distributeurs",
-  "description": "Application de gestion des distributeurs MJR Services",
-  "start_url": "/distributeurs",
+  "name": "Application Rapport Elekable",
+  "short_name": "Rapports Elekable",
+  "description": "Application rapports d'intervention Elekable",
+  "start_url": "/rapports-mobile",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

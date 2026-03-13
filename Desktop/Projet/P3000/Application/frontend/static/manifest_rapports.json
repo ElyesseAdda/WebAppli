@@ -1,7 +1,7 @@
 {
-  "name": "Rapports d'intervention",
-  "short_name": "Rapports",
-  "description": "Application de gestion des rapports d'intervention",
+  "name": "Application Rapport Elekable",
+  "short_name": "Rapports Elekable",
+  "description": "Application rapports d'intervention Elekable",
   "start_url": "/rapports-mobile",
   "scope": "/",
   "display": "standalone",
