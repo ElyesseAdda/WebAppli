@@ -297,10 +297,9 @@ def _generate_rapport_pdf(rapport, request):
 
         create_s3_folder_recursive(custom_path)
 
-        # Nom du fichier : Rapport (nom residence) logement
+        # Nom du fichier (Drive) : Rapport (résidence) logement
         residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
         logement = (rapport.logement or "").strip() or "Sans logement"
-        # Nettoyage pour fichiers : retirer caracteres interdits
         safe = lambda s: "".join(c for c in s if c.isalnum() or c in " -_(),.'").strip() or "N-A"
         residence_nom = safe(residence_nom)
         logement = safe(logement)
@@ -442,6 +441,7 @@ def generate_rapport_intervention_pdf(request):
         if not os.path.exists(temp_pdf_path):
             return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
 
+        # Même format que le Drive : Rapport (résidence) logement.pdf
         rapport = RapportIntervention.objects.select_related('residence').get(pk=rapport_id)
         residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
         logement = (rapport.logement or "").strip() or "Sans logement"
@@ -478,7 +478,7 @@ def generate_rapport_intervention_pdf_drive(request):
     if not rapport_id:
         return JsonResponse({'error': 'rapport_id requis'}, status=400)
     try:
-        rapport = RapportIntervention.objects.get(pk=rapport_id)
+        rapport = RapportIntervention.objects.select_related('chantier', 'residence', 'client_societe').get(pk=rapport_id)
     except RapportIntervention.DoesNotExist:
         return JsonResponse({'error': 'Rapport introuvable'}, status=404)
     pdf_result = _generate_rapport_pdf(rapport, request)
