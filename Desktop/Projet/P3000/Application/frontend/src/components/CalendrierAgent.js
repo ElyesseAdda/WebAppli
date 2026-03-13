@@ -14,7 +14,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Importer la locale française
 import React, { useEffect, useState } from "react";
-import "./../../static/css/calendrierAgent.css";
+import "./../../static/css/CalendrierAgent.css";
 
 // Configurer dayjs pour utiliser la locale française
 dayjs.locale("fr");
@@ -589,15 +589,26 @@ const CalendrierAgent = ({ agents }) => {
         eventClick={handleEventClick}
         resourceAreaWidth="300px"
         height="auto"
+        resourceLabelClassNames="fc-resource-label-agent"
         resourceLabelContent={(arg) => (
           <div
             className="fc-resource-agent-name-wrapper"
-            style={{ position: "relative", width: "100%", height: "100%" }}
+            style={{
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              color: "#2196f3",
+            }}
             onClick={() =>
               handleResourceClick(arg.resource.id, arg.resource.title)
             }
           >
-            <span className="fc-agent-name">{arg.resource.title}</span>
+            <span
+              className="fc-agent-name"
+              style={{ color: "#2196f3", fontWeight: 600 }}
+            >
+              {arg.resource.title}
+            </span>
             <div
               style={{
                 position: "absolute",

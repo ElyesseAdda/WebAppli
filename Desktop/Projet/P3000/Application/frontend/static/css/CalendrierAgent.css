@@ -48,16 +48,33 @@
 }
 
 /* Noms des agents : bleu pour être visible sur fond noir et fond blanc */
+.fc-datagrid .fc-datagrid-cell-frame,
+.fc-datagrid .fc-datagrid-cell,
+.fc-datagrid .fc-agent-name,
+.fc-datagrid .fc-resource-agent-name-wrapper,
+.fc-datagrid .fc-datagrid-cell-frame .fc-agent-name,
+.fc-datagrid .fc-datagrid-cell .fc-agent-name,
+.fc-datagrid .fc-datagrid-cell-frame span,
+.fc-datagrid .fc-datagrid-cell span,
 .fc-datagrid-cell-frame,
 .fc-datagrid-cell,
 .fc-agent-name,
-.fc-resource-agent-name-wrapper,
-.fc-datagrid-cell-frame .fc-agent-name,
-.fc-datagrid-cell .fc-agent-name,
-.fc-datagrid-cell-frame span,
-.fc-datagrid-cell span {
+.fc-resource-agent-name-wrapper {
   color: #2196f3 !important;
   font-weight: 600 !important;
+}
+/* Forcer le bleu sur tout le contenu de la colonne ressources */
+.fc .fc-datagrid-body .fc-datagrid-cell .fc-datagrid-cell-cushion,
+.fc .fc-resource-timeline .fc-datagrid-cell-cushion,
+.fc-datagrid-cell-cushion {
+  color: #2196f3 !important;
+}
+
+/* Wrapper du label agent (resourceLabelClassNames) + tout enfant */
+.fc-resource-label-agent,
+.fc-resource-label-agent *,
+.fc-datagrid-body .fc-datagrid-cell * {
+  color: #2196f3 !important;
 }
 
 .fc-datagrid-cell-frame {
