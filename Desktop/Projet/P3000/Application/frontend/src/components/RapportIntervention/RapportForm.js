@@ -69,6 +69,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   const [newTitreName, setNewTitreName] = useState("");
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [saving, setSaving] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
@@ -324,7 +325,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
 
   const handleGeneratePdf = async () => {
     if (!rapportId) return;
-    setSaving(true);
+    setPdfGenerating(true);
+    setSnackbar({ open: true, message: "Generation du PDF en cours...", severity: "info" });
     try {
       await genererPdf(rapportId);
       showSnackbar("PDF genere avec succes");
@@ -332,7 +334,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     } catch (err) {
       showSnackbar("Erreur lors de la generation du PDF", "error");
     } finally {
-      setSaving(false);
+      setPdfGenerating(false);
     }
   };
 
@@ -390,7 +392,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           <Button
             startIcon={<MdArrowBack />}
             onClick={onBack || (() => navigate("/RapportsIntervention"))}
-            sx={{ color: COLORS.textMuted }}
+            sx={{ color: COLORS.textOnDark || "#fff" }}
           >
             Retour
           </Button>
@@ -431,12 +433,12 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           {isEdit && (
             <Button
               variant="contained"
-              startIcon={<MdPictureAsPdf />}
+              startIcon={pdfGenerating ? <CircularProgress size={18} color="inherit" /> : <MdPictureAsPdf />}
               onClick={handleGeneratePdf}
-              disabled={saving}
+              disabled={saving || pdfGenerating}
               sx={{ backgroundColor: "#e65100", color: "#fff", "&:hover": { backgroundColor: "#bf360c" } }}
             >
-              Generer PDF
+              {pdfGenerating ? "Generation..." : "Generer PDF"}
             </Button>
           )}
         </Box>

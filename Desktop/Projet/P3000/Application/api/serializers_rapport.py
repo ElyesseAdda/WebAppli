@@ -100,6 +100,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
     residence_adresse = serializers.SerializerMethodField()
     signature_url = serializers.SerializerMethodField()
     pdf_url = serializers.SerializerMethodField()
+    pdf_drive_url = serializers.SerializerMethodField()
 
     class Meta:
         model = RapportIntervention
@@ -111,7 +112,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
             'created_by', 'created_at', 'updated_at',
             'prestations', 'residence_data', 'residence_nom', 'residence_adresse',
             'client_societe_nom', 'client_societe_logo_url', 'chantier_nom',
-            'signature_url', 'pdf_url',
+            'signature_url', 'pdf_url', 'pdf_drive_url',
         ]
         read_only_fields = ['created_by', 'created_at', 'updated_at', 'signature_s3_key', 'pdf_s3_key']
 
@@ -160,6 +161,11 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
                 return generate_presigned_url('get_object', obj.pdf_s3_key, expires_in=3600)
             except Exception:
                 return None
+        return None
+
+    def get_pdf_drive_url(self, obj):
+        if obj.pdf_s3_key:
+            return f"/drive-v2?path={obj.pdf_s3_key}&focus=file"
         return None
 
 
