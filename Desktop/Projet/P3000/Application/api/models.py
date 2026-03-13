@@ -3511,6 +3511,7 @@ class EntrepriseConfig(models.Model):
     representant_fonction = models.CharField(max_length=100, blank=True, default='', verbose_name="Fonction du représentant")
     nom_application = models.CharField(max_length=100, default='Webapplication P3000', verbose_name="Nom de l'application")
     domaine_public = models.CharField(max_length=200, blank=True, default='', verbose_name="Domaine public", help_text="Ex: myp3000app.com")
+    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo (login mobile)")
 
     class Meta:
         verbose_name = "Configuration entreprise"

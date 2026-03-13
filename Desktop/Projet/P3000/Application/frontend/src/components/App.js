@@ -168,7 +168,7 @@ function App() {
             path="/login"
             element={
               isAuthenticated ? (
-                <Navigate to={isMobile ? "/distributeurs" : "/"} replace />
+                <Navigate to={isMobile ? "/rapports-mobile" : "/"} replace />
               ) : isMobile ? (
                 // Version mobile : LoginMobile (PWA)
                 <LoginMobile onLoginSuccess={handleLoginSuccess} />

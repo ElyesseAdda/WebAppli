@@ -2203,6 +2203,8 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
 
 class EntrepriseConfigSerializer(serializers.ModelSerializer):
     """Serializer pour la configuration entreprise (lecture seule pour le frontend)."""
+    logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = EntrepriseConfig
         fields = [
@@ -2212,5 +2214,22 @@ class EntrepriseConfigSerializer(serializers.ModelSerializer):
             'email', 'telephone',
             'representant_nom', 'representant_fonction',
             'nom_application', 'domaine_public',
+            'logo_url',
         ]
-        read_only_fields = fields
+        read_only_fields = [
+            'nom', 'forme_juridique', 'capital',
+            'adresse', 'code_postal', 'ville',
+            'rcs', 'siret', 'tva_intra',
+            'email', 'telephone',
+            'representant_nom', 'representant_fonction',
+            'nom_application', 'domaine_public',
+        ]
+
+    def get_logo_url(self, obj):
+        if obj and getattr(obj, 'logo_s3_key', None):
+            try:
+                from .utils import generate_presigned_url_for_display
+                return generate_presigned_url_for_display(obj.logo_s3_key, expires_in=3600)
+            except Exception:
+                return None
+        return None

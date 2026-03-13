@@ -15255,11 +15255,11 @@ def distributeur_available_months(request, distributeur_id):
 # ============================================================================
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_entreprise_config(request):
     """
     Retourne la configuration de l'entreprise utilisatrice de l'application.
-    Utilisé par le frontend React pour afficher le nom de l'app, les liens, etc.
+    Utilisé par le frontend React (login mobile, titre, etc.). Public pour afficher logo/nom sur la page de connexion.
     """
     from .models import EntrepriseConfig
     from .serializers import EntrepriseConfigSerializer
