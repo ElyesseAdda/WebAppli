@@ -7,7 +7,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import {
-  MdSave, MdAdd, MdCheckCircle, MdPictureAsPdf, MdArrowBack,
+  MdSave, MdAdd, MdPictureAsPdf, MdArrowBack,
 } from "react-icons/md";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
@@ -35,7 +35,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
 
   const {
     fetchRapport, createRapport, updateRapport, uploadPhoto, updatePhoto,
-    deletePhoto, uploadSignature, genererPdf, validerRapport,
+    deletePhoto, uploadSignature, genererPdf,
     fetchTitres, createTitre, loading,
   } = useRapports();
 
@@ -260,16 +260,26 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     }
   };
 
-  const handleSave = async (newStatut) => {
+  const handleSave = async () => {
     if (!formData.titre || !formData.technicien || !formData.objet_recherche) {
       showSnackbar("Veuillez remplir les champs obligatoires (titre, technicien, objet)", "error");
       return;
     }
+    const hasPrestation = formData.prestations.some(
+      (p) =>
+        (p.localisation || "").trim() ||
+        (p.probleme || "").trim() ||
+        (p.solution || "").trim()
+    );
+    const computedStatut = hasPrestation ? "en_cours" : "a_faire";
+    const statutToSend =
+      isEdit && rapportData?.statut === "termine" ? "termine" : computedStatut;
+
     setSaving(true);
     try {
       const dataToSend = {
         ...formData,
-        statut: newStatut || formData.statut,
+        statut: statutToSend,
         prestations: formData.prestations.map((p, i) => ({
           ...p,
           id: p.id || undefined,
@@ -305,23 +315,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
       loadReferences();
     } catch (err) {
       showSnackbar("Erreur lors de la sauvegarde", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleValidate = async () => {
-    if (!rapportId) {
-      showSnackbar("Sauvegardez d'abord le rapport", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      await validerRapport(rapportId);
-      showSnackbar("Rapport terminé et PDF généré");
-      await loadRapport();
-    } catch (err) {
-      showSnackbar("Erreur lors de la validation", "error");
     } finally {
       setSaving(false);
     }
@@ -424,7 +417,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               startIcon={<MdArrowBack />}
               onClick={onBack || (() => navigate("/RapportsIntervention"))}
               sx={{
-                color: COLORS.primary,
+                color: { xs: "#000", md: "#fff" },
                 minHeight: isMobile ? 48 : 36,
                 fontWeight: 600,
               }}
@@ -440,7 +433,14 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               />
             )}
           </Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: COLORS.primary, fontSize: { xs: "1.25rem", md: "1.5rem" } }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              color: { xs: "#000", md: "#fff" },
+              fontSize: { xs: "1.25rem", md: "1.5rem" },
+            }}
+          >
             {isEdit ? "Modifier le rapport" : "Nouveau rapport d'intervention"}
           </Typography>
         </Box>
@@ -449,22 +449,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             <Button
               variant="contained"
               startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
-              onClick={() => handleSave(formData.statut)}
+              onClick={() => handleSave()}
               disabled={saving}
               sx={{ backgroundColor: COLORS.infoDark || "#1976d2" }}
             >
               Sauvegarder
-            </Button>
-          )}
-          {isEdit && !isDisabled && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<MdCheckCircle />}
-              onClick={handleValidate}
-              disabled={saving}
-            >
-              Valider
             </Button>
           )}
           {isEdit && (

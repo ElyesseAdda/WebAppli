@@ -99,7 +99,29 @@ const RapportsPage = () => {
     if (!rapportToUpdate) return;
     try {
       await patchRapport(rapportToUpdate.id, { statut: newStatut });
-      setSnackbar({ open: true, message: "Statut mis à jour", severity: "success" });
+      if (newStatut === "termine") {
+        setSnackbar({ open: true, message: "Téléversement vers le Drive en cours...", severity: "info" });
+        try {
+          await axios.get(
+            `/api/generate-rapport-intervention-pdf-drive/?rapport_id=${rapportToUpdate.id}`
+          );
+          setSnackbar({
+            open: true,
+            message: "Statut mis à jour et rapport téléversé dans le Drive",
+            severity: "success",
+          });
+        } catch (driveErr) {
+          setSnackbar({
+            open: true,
+            message:
+              driveErr.response?.data?.error ||
+              "Statut mis à jour mais erreur lors du téléversement Drive",
+            severity: "warning",
+          });
+        }
+      } else {
+        setSnackbar({ open: true, message: "Statut mis à jour", severity: "success" });
+      }
       setShowStatusModal(false);
       setRapportToUpdate(null);
       loadRapports();

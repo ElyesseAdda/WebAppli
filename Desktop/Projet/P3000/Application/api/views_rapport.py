@@ -274,7 +274,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
 def _generate_rapport_pdf(rapport, request):
     """Genere le PDF du rapport via Puppeteer et le stocke dans S3.
     - Si le rapport est lie a un chantier : Chemin du chantier / dossier RAPPORT
-    - Sinon : Racine du drive / dossier RAPPORT D'INTERVENTION
+    - Sinon : Racine du drive / dossier RAPPORT D'INTERVENTIONS
     - A la regeneration : remplace le document existant (force_replace)
     """
     try:
@@ -289,7 +289,7 @@ def _generate_rapport_pdf(rapport, request):
 
         societe_name = rapport.client_societe.nom_societe if rapport.client_societe else "Sans_Societe"
 
-        # Chemin : chantier lie -> Chantiers/{path}/RAPPORT ; sinon -> RAPPORT D'INTERVENTION (racine)
+        # Chemin : chantier lie -> Chantiers/{path}/RAPPORT ; sinon -> RAPPORT D'INTERVENTIONS (racine)
         custom_path = ""
         if rapport.chantier:
             base_path = rapport.chantier.get_drive_path()
@@ -297,7 +297,7 @@ def _generate_rapport_pdf(rapport, request):
                 custom_path = f"Chantiers/{base_path.strip('/')}/RAPPORT"
 
         if not custom_path:
-            custom_path = "RAPPORT D'INTERVENTION"
+            custom_path = "RAPPORT D'INTERVENTIONS"
 
         create_s3_folder_recursive(custom_path)
 
