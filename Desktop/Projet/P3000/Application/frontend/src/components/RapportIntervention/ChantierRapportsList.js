@@ -272,7 +272,7 @@ const ChantierRapportsList = ({ chantierData }) => {
                       <AiFillFilePdf style={{ fontSize: "20px" }} />
                     </IconButton>
                     <RegeneratePDFIconButton
-                      documentType={DOCUMENT_TYPES.RAPPORT_INTERVENTION}
+                      documentType={rapport.type_rapport === "vigik_plus" ? DOCUMENT_TYPES.RAPPORT_VIGIK_PLUS : DOCUMENT_TYPES.RAPPORT_INTERVENTION}
                       documentData={{ ...rapport, chantier: chantierData }}
                       size="small"
                       color="primary"

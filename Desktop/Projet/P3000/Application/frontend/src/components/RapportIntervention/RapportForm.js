@@ -5,9 +5,10 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
   useTheme,
   useMediaQuery,
+  IconButton,
 } from "@mui/material";
 import {
-  MdSave, MdAdd, MdPictureAsPdf, MdArrowBack,
+  MdSave, MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete,
 } from "react-icons/md";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
@@ -50,6 +51,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     residence: null,
     residence_nom: "",
     residence_adresse: "",
+    adresse_vigik: "",
     logement: "",
     locataire_nom: "",
     locataire_prenom: "",
@@ -58,6 +60,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     type_rapport: "intervention",
     statut: "a_faire",
     prestations: [{ ...EMPTY_PRESTATION }],
+    numero_batiment: "",
+    type_installation: "",
+    presence_platine: null,
+    presence_platine_portail: null,
   });
 
   const [rapportData, setRapportData] = useState(null);
@@ -68,6 +74,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   const [residences, setResidences] = useState([]);
   const [selectedResidence, setSelectedResidence] = useState(null);
   const [pendingPhotos, setPendingPhotos] = useState({});
+  const [pendingPhotoPlatine, setPendingPhotoPlatine] = useState(null);
+  const [pendingPhotoPlatinePortail, setPendingPhotoPlatinePortail] = useState(null);
+  const photoPlatineInputRef = useRef(null);
+  const photoPlatinePortailInputRef = useRef(null);
   const signaturePadRef = useRef(null);
   const [newTitreDialog, setNewTitreDialog] = useState(false);
   const [newTitreName, setNewTitreName] = useState("");
@@ -116,6 +126,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         residence: data.residence || null,
         residence_nom: data.residence_nom || "",
         residence_adresse: data.residence_adresse || "",
+        adresse_vigik: data.adresse_vigik ?? "",
         logement: data.logement || "",
         locataire_nom: data.locataire_nom || "",
         locataire_prenom: data.locataire_prenom || "",
@@ -126,6 +137,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
         prestations: data.prestations?.length
           ? data.prestations
           : [{ ...EMPTY_PRESTATION }],
+        numero_batiment: data.numero_batiment ?? "",
+        type_installation: data.type_installation ?? "",
+        presence_platine: data.presence_platine ?? null,
+        presence_platine_portail: data.presence_platine_portail ?? null,
       });
       if (data.residence_data) {
         setSelectedResidence(data.residence_data);
@@ -260,12 +275,34 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
     }
   };
 
+  const isVigikPlus = formData.type_rapport === "vigik_plus";
+
   const handleSave = async () => {
-    if (!formData.titre || !formData.technicien || !formData.objet_recherche) {
-      showSnackbar("Veuillez remplir les champs obligatoires (titre, technicien, objet)", "error");
+    if (!isVigikPlus && (!formData.titre || !formData.technicien)) {
+      showSnackbar("Veuillez remplir les champs obligatoires (titre, technicien)", "error");
       return;
     }
-    const hasPrestation = formData.prestations.some(
+    if (!isVigikPlus && !formData.objet_recherche) {
+      showSnackbar("Veuillez remplir l'objet de la recherche", "error");
+      return;
+    }
+    if (isVigikPlus) {
+      const hasResidence = formData.residence || (formData.residence_nom || "").trim();
+      if (!hasResidence) {
+        showSnackbar("Veuillez selectionner ou creer une residence", "error");
+        return;
+      }
+      if (!(formData.adresse_vigik || "").trim()) {
+        showSnackbar("Veuillez remplir l'adresse du rapport", "error");
+        return;
+      }
+      const hasPhotoPlatine = pendingPhotoPlatine || rapportData?.photo_platine_s3_key;
+      if (!hasPhotoPlatine) {
+        showSnackbar("Veuillez joindre une photo sous la question Presence de platine (obligatoire)", "error");
+        return;
+      }
+    }
+    const hasPrestation = !isVigikPlus && formData.prestations.some(
       (p) =>
         (p.localisation || "").trim() ||
         (p.probleme || "").trim() ||
@@ -277,15 +314,23 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
 
     setSaving(true);
     try {
+      const vigikTitre = isVigikPlus && !formData.titre ? (titres.find((t) => t.nom === "Rapport Vigik+") || titres[0])?.id : formData.titre;
       const dataToSend = {
         ...formData,
+        titre: isVigikPlus ? (vigikTitre || formData.titre) : formData.titre,
         statut: statutToSend,
-        prestations: formData.prestations.map((p, i) => ({
-          ...p,
-          id: p.id || undefined,
-          ordre: i,
-          photos: undefined,
-        })),
+        numero_batiment: formData.numero_batiment ?? "",
+        type_installation: formData.type_installation ?? "",
+        presence_platine: formData.presence_platine,
+        presence_platine_portail: formData.presence_platine_portail,
+        prestations: isVigikPlus
+          ? []
+          : formData.prestations.map((p, i) => ({
+              ...p,
+              id: p.id || undefined,
+              ordre: i,
+              photos: undefined,
+            })),
       };
 
       let result;
@@ -297,14 +342,35 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
 
       const savedId = result?.id || rapportId;
 
-      if (result?.prestations) {
+      if (!isVigikPlus && result?.prestations) {
         await uploadPendingPhotos(result);
-      } else {
+      } else if (!isVigikPlus) {
         const fullResult = await fetchRapport(savedId);
         await uploadPendingPhotos(fullResult);
       }
 
-      await uploadPendingSignature(savedId);
+      if (isVigikPlus && pendingPhotoPlatine?.file) {
+        const fd = new FormData();
+        fd.append("rapport_id", savedId);
+        fd.append("photo", pendingPhotoPlatine.file);
+        await axios.post("/api/rapports-intervention/upload_photo_platine/", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
+        setPendingPhotoPlatine(null);
+      }
+      if (isVigikPlus && pendingPhotoPlatinePortail?.file) {
+        const fd = new FormData();
+        fd.append("rapport_id", savedId);
+        fd.append("photo", pendingPhotoPlatinePortail.file);
+        await axios.post("/api/rapports-intervention/upload_photo_platine_portail/", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
+        setPendingPhotoPlatinePortail(null);
+      }
+
+      if (!isVigikPlus) await uploadPendingSignature(savedId);
 
       showSnackbar(isEdit ? "Rapport mis a jour" : "Rapport cree avec succes");
 
@@ -441,7 +507,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               fontSize: { xs: "1.25rem", md: "1.5rem" },
             }}
           >
-            {isEdit ? "Modifier le rapport" : "Nouveau rapport d'intervention"}
+            {isEdit ? "Modifier le rapport" : isVigikPlus ? "Nouveau rapport Vigik+" : "Nouveau rapport d'intervention"}
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", "& .MuiButton-root": { minHeight: isMobile ? 48 : 36 } }}>
@@ -494,10 +560,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               disabled={isDisabled}
             >
               <MenuItem value="intervention">Rapport d'intervention</MenuItem>
-              <MenuItem value="vigik_plus" disabled>Vigik+ (bientot)</MenuItem>
+              <MenuItem value="vigik_plus">Vigik+</MenuItem>
             </Select>
           </FormControl>
 
+          {!isVigikPlus && (
           <Box sx={{ display: "flex", gap: 1 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Titre *</InputLabel>
@@ -522,6 +589,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               <MdAdd />
             </Button>
           </Box>
+          )}
 
           <Autocomplete
             freeSolo
@@ -584,7 +652,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             </Alert>
           )}
 
-          {isNewResidence && (
+          {isNewResidence && !isVigikPlus && (
             <TextField
               label="Adresse de la nouvelle residence"
               value={formData.residence_adresse}
@@ -617,6 +685,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             disabled={isDisabled}
           />
 
+          {!isVigikPlus && (
           <Autocomplete
             options={societes}
             getOptionLabel={(opt) => opt?.nom_societe || ""}
@@ -625,6 +694,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             renderInput={(params) => <TextField {...params} label="Client / Bailleur" size="small" />}
             disabled={isDisabled}
           />
+          )}
 
           <Autocomplete
             options={chantiers}
@@ -634,8 +704,291 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             renderInput={(params) => <TextField {...params} label="Chantier (optionnel)" size="small" />}
             disabled={isDisabled}
           />
+
+          {isVigikPlus && (
+            <>
+              <TextField
+                label="Adresse *"
+                value={formData.adresse_vigik}
+                onChange={(e) => handleFieldChange("adresse_vigik", e.target.value)}
+                fullWidth
+                size="small"
+                disabled={isDisabled}
+                placeholder="Adresse propre au rapport Vigik+ (distincte de la residence)"
+                sx={{ gridColumn: { md: "1 / -1" } }}
+              />
+              <TextField
+                label="Numero du batiment *"
+                value={formData.numero_batiment}
+                onChange={(e) => handleFieldChange("numero_batiment", e.target.value)}
+                fullWidth
+                size="small"
+                disabled={isDisabled}
+              />
+              <TextField
+                label="Type d'installation"
+                value={formData.type_installation}
+                onChange={(e) => handleFieldChange("type_installation", e.target.value)}
+                fullWidth
+                size="small"
+                disabled={isDisabled}
+              />
+              {/* Question 1 : Présence de platine */}
+              <Typography variant="subtitle2" sx={{ gridColumn: { md: "1 / -1" }, fontWeight: 600, mb: 0.5 }}>
+                Presence de platine :
+              </Typography>
+              <Box sx={{ gridColumn: { md: "1 / -1" }, display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Button
+                  variant={formData.presence_platine === true ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => handleFieldChange("presence_platine", true)}
+                  disabled={isDisabled}
+                >
+                  Oui
+                </Button>
+                <Button
+                  variant={formData.presence_platine === false ? "contained" : "outlined"}
+                  size="small"
+                  color={formData.presence_platine === false ? "error" : "primary"}
+                  onClick={() => handleFieldChange("presence_platine", false)}
+                  disabled={isDisabled}
+                >
+                  Non
+                </Button>
+              </Box>
+              <Box sx={{ gridColumn: { md: "1 / -1" } }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Joindre une photo (obligatoire)
+                </Typography>
+                <input
+                  ref={photoPlatineInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const previewUrl = URL.createObjectURL(file);
+                      setPendingPhotoPlatine({ file, name: file.name, previewUrl });
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                {pendingPhotoPlatine ? (
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                    <Box
+                      sx={{
+                        width: 140,
+                        borderRadius: 1,
+                        overflow: "hidden",
+                        border: "2px solid #1976d240",
+                        position: "relative",
+                      }}
+                    >
+                      <Box sx={{ width: "100%", height: 100, position: "relative" }}>
+                        <img
+                          src={pendingPhotoPlatine.previewUrl}
+                          alt={pendingPhotoPlatine.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                        {!isDisabled && (
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
+                              setPendingPhotoPlatine(null);
+                            }}
+                            sx={{
+                              position: "absolute", top: 2, right: 2,
+                              backgroundColor: "rgba(255,255,255,0.85)",
+                              "&:hover": { backgroundColor: "#ffebee" },
+                              padding: "2px",
+                            }}
+                          >
+                            <MdDelete size={16} color="#c62828" />
+                          </IconButton>
+                        )}
+                      </Box>
+                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {pendingPhotoPlatine.name}
+                      </Typography>
+                    </Box>
+                    {!isDisabled && (
+                      <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                        Remplacer
+                      </Button>
+                    )}
+                  </Box>
+                ) : rapportData?.photo_platine_url ? (
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                    <Box
+                      sx={{
+                        width: 140,
+                        borderRadius: 1,
+                        overflow: "hidden",
+                        border: "2px solid #2e7d3240",
+                        position: "relative",
+                      }}
+                    >
+                      <Box sx={{ width: "100%", height: 100 }}>
+                        <img
+                          src={rapportData.photo_platine_url}
+                          alt="Photo platine"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, color: "success.main" }}>
+                        Photo jointe
+                      </Typography>
+                    </Box>
+                    {!isDisabled && (
+                      <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                        Remplacer
+                      </Button>
+                    )}
+                  </Box>
+                ) : (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => photoPlatineInputRef.current?.click()}
+                    disabled={isDisabled}
+                  >
+                    Choisir une photo
+                  </Button>
+                )}
+              </Box>
+              {/* Question 2 : Présence de platine au niveau du portail */}
+              <Typography variant="subtitle2" sx={{ gridColumn: { md: "1 / -1" }, fontWeight: 600, mb: 0.5, mt: 2 }}>
+                Presence de platine au niveau du portail :
+              </Typography>
+              <Box sx={{ gridColumn: { md: "1 / -1" }, display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Button
+                  variant={formData.presence_platine_portail === true ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => handleFieldChange("presence_platine_portail", true)}
+                  disabled={isDisabled}
+                >
+                  Oui
+                </Button>
+                <Button
+                  variant={formData.presence_platine_portail === false ? "contained" : "outlined"}
+                  size="small"
+                  color={formData.presence_platine_portail === false ? "error" : "primary"}
+                  onClick={() => handleFieldChange("presence_platine_portail", false)}
+                  disabled={isDisabled}
+                >
+                  Non
+                </Button>
+              </Box>
+              <Box sx={{ gridColumn: { md: "1 / -1" } }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Joindre une photo (obligatoire)
+                </Typography>
+                <input
+                  ref={photoPlatinePortailInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const previewUrl = URL.createObjectURL(file);
+                      setPendingPhotoPlatinePortail({ file, name: file.name, previewUrl });
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                {pendingPhotoPlatinePortail ? (
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                    <Box
+                      sx={{
+                        width: 140,
+                        borderRadius: 1,
+                        overflow: "hidden",
+                        border: "2px solid #1976d240",
+                        position: "relative",
+                      }}
+                    >
+                      <Box sx={{ width: "100%", height: 100, position: "relative" }}>
+                        <img
+                          src={pendingPhotoPlatinePortail.previewUrl}
+                          alt={pendingPhotoPlatinePortail.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                        {!isDisabled && (
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
+                              setPendingPhotoPlatinePortail(null);
+                            }}
+                            sx={{
+                              position: "absolute", top: 2, right: 2,
+                              backgroundColor: "rgba(255,255,255,0.85)",
+                              "&:hover": { backgroundColor: "#ffebee" },
+                              padding: "2px",
+                            }}
+                          >
+                            <MdDelete size={16} color="#c62828" />
+                          </IconButton>
+                        )}
+                      </Box>
+                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {pendingPhotoPlatinePortail.name}
+                      </Typography>
+                    </Box>
+                    {!isDisabled && (
+                      <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                        Remplacer
+                      </Button>
+                    )}
+                  </Box>
+                ) : rapportData?.photo_platine_portail_url ? (
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                    <Box
+                      sx={{
+                        width: 140,
+                        borderRadius: 1,
+                        overflow: "hidden",
+                        border: "2px solid #2e7d3240",
+                        position: "relative",
+                      }}
+                    >
+                      <Box sx={{ width: "100%", height: 100 }}>
+                        <img
+                          src={rapportData.photo_platine_portail_url}
+                          alt="Photo platine portail"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, color: "success.main" }}>
+                        Photo jointe
+                      </Typography>
+                    </Box>
+                    {!isDisabled && (
+                      <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                        Remplacer
+                      </Button>
+                    )}
+                  </Box>
+                ) : (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => photoPlatinePortailInputRef.current?.click()}
+                    disabled={isDisabled}
+                  >
+                    Choisir une photo
+                  </Button>
+                )}
+              </Box>
+            </>
+          )}
         </Box>
 
+        {!isVigikPlus && (
+          <>
         <TextField
           label="Objet de la recherche *"
           placeholder="Dire pourquoi tu viens sur site..."
@@ -660,9 +1013,12 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           sx={{ mt: fieldGap }}
           disabled={isDisabled}
         />
+          </>
+        )}
       </Paper>
 
-      {/* Logement & Locataire */}
+      {/* Logement & Locataire (masque pour Vigik+) */}
+      {!isVigikPlus && (
       <Paper
         elevation={0}
         sx={{
@@ -721,8 +1077,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           />
         </Box>
       </Paper>
+      )}
 
-      {/* Prestations */}
+      {/* Prestations (masque pour Vigik+) */}
+      {!isVigikPlus && (
       <Paper
         elevation={0}
         sx={{
@@ -767,8 +1125,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           </Button>
         )}
       </Paper>
+      )}
 
-      {/* Signature */}
+      {/* Signature (masquée pour Vigik+) */}
+      {!isVigikPlus && (
       <Paper
         elevation={0}
         sx={{
@@ -784,6 +1144,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           disabled={isDisabled}
         />
       </Paper>
+      )}
 
       {/* Dialog nouveau titre */}
       <Dialog open={newTitreDialog} onClose={() => setNewTitreDialog(false)} maxWidth="xs" fullWidth>

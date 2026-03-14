@@ -233,6 +233,9 @@ class PDFManager:
             custom_path = kwargs['custom_path'].strip()
             # Nettoyer le chemin (supprimer les slashes en début/fin)
             custom_path = custom_path.strip('/')
+            # Vigik+ : le chemin est déjà complet (RAPPORT D'INTERVENTION/VIGIK+/<residence>), ne pas ajouter de sous-dossier
+            if kwargs.get('custom_path_is_full'):
+                return custom_path
             # Déterminer le sous-dossier selon le type de document et le contexte
             # Pour les appels d'offres avec devis_marche, utiliser DEVIS/DEVIS_MARCHE
             if document_type == 'devis_marche' and ('appel_offres_id' in kwargs or 'appel_offres_name' in kwargs):

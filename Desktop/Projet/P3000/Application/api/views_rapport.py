@@ -244,6 +244,92 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         photo.delete()
         return Response({'success': True}, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['post'])
+    def upload_photo_platine(self, request):
+        """Upload de la photo platine pour un rapport Vigik+."""
+        rapport_id = request.data.get('rapport_id')
+        file = request.FILES.get('photo')
+        if not rapport_id or not file:
+            return Response(
+                {'error': 'rapport_id et photo requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            rapport = RapportIntervention.objects.get(id=rapport_id)
+        except RapportIntervention.DoesNotExist:
+            return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            ext = file.name.split('.')[-1] if '.' in file.name else 'jpg'
+            s3_key = f"rapports_intervention/vigik_platine/rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            if rapport.photo_platine_s3_key and is_s3_available():
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=rapport.photo_platine_s3_key)
+                except Exception:
+                    pass
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file.read(),
+                ContentType=file.content_type or 'image/jpeg'
+            )
+            rapport.photo_platine_s3_key = s3_key
+            rapport.save()
+            return Response({
+                'success': True,
+                's3_key': s3_key,
+                'photo_platine_url': generate_presigned_url_for_display(s3_key),
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def upload_photo_platine_portail(self, request):
+        """Upload de la photo platine portail pour un rapport Vigik+ (2e question)."""
+        rapport_id = request.data.get('rapport_id')
+        file = request.FILES.get('photo')
+        if not rapport_id or not file:
+            return Response(
+                {'error': 'rapport_id et photo requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            rapport = RapportIntervention.objects.get(id=rapport_id)
+        except RapportIntervention.DoesNotExist:
+            return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            ext = file.name.split('.')[-1] if '.' in file.name else 'jpg'
+            s3_key = f"rapports_intervention/vigik_platine_portail/rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            if getattr(rapport, 'photo_platine_portail_s3_key', None) and is_s3_available():
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=rapport.photo_platine_portail_s3_key)
+                except Exception:
+                    pass
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file.read(),
+                ContentType=file.content_type or 'image/jpeg'
+            )
+            rapport.photo_platine_portail_s3_key = s3_key
+            rapport.save()
+            return Response({
+                'success': True,
+                's3_key': s3_key,
+                'photo_platine_portail_url': generate_presigned_url_for_display(s3_key),
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
         rapport = self.get_object()
@@ -288,34 +374,49 @@ def _generate_rapport_pdf(rapport, request):
         )
 
         societe_name = rapport.client_societe.nom_societe if rapport.client_societe else "Sans_Societe"
+        safe = lambda s: "".join(c for c in (s or "") if c.isalnum() or c in " -_(),.'").strip() or "N-A"
 
-        # Chemin : chantier lie -> Chantiers/{path}/RAPPORT ; sinon -> RAPPORT D'INTERVENTIONS (racine)
-        custom_path = ""
-        if rapport.chantier:
-            base_path = rapport.chantier.get_drive_path()
-            if base_path:
-                custom_path = f"Chantiers/{base_path.strip('/')}/RAPPORT"
+        if rapport.type_rapport == 'vigik_plus':
+            # Vigik+ : adresse propre au rapport (adresse_vigik), pas celle de la résidence
+            residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+            adresse = (getattr(rapport, 'adresse_vigik', None) or "").strip()
+            if not adresse and rapport.residence and rapport.residence.adresse:
+                adresse = rapport.residence.adresse.strip()
+            numero_batiment = (getattr(rapport, 'numero_batiment', None) or "").strip()
+            custom_path = f"RAPPORT D'INTERVENTION/VIGIK+/{safe(residence_nom)}"
+            custom_filename = f"Vigik+ {safe(adresse)} {safe(numero_batiment)}.pdf"
+        else:
+            # Chemin : chantier lie -> Chantiers/{path}/RAPPORT ; sinon -> RAPPORT D'INTERVENTIONS (racine)
+            custom_path = ""
+            if rapport.chantier:
+                base_path = rapport.chantier.get_drive_path()
+                if base_path:
+                    custom_path = f"Chantiers/{base_path.strip('/')}/RAPPORT"
 
-        if not custom_path:
-            custom_path = "RAPPORT D'INTERVENTIONS"
+            if not custom_path:
+                custom_path = "RAPPORT D'INTERVENTIONS"
+
+            residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+            logement = (rapport.logement or "").strip() or "Sans logement"
+            residence_nom = safe(residence_nom)
+            logement = safe(logement)
+            custom_filename = f"Rapport ({residence_nom}) {logement}.pdf"
 
         create_s3_folder_recursive(custom_path)
+        filename = custom_filename
 
-        # Nom du fichier (Drive) : Rapport (résidence) logement
-        residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
-        logement = (rapport.logement or "").strip() or "Sans logement"
-        safe = lambda s: "".join(c for c in s if c.isalnum() or c in " -_(),.'").strip() or "N-A"
-        residence_nom = safe(residence_nom)
-        logement = safe(logement)
-        filename = f"Rapport ({residence_nom}) {logement}.pdf"
-
+        pdf_kwargs = {
+            'custom_path': custom_path,
+            'custom_filename': filename,
+        }
+        if rapport.type_rapport == 'vigik_plus':
+            pdf_kwargs['custom_path_is_full'] = True  # pas de sous-dossier RAPPORT_INTERVENTION
         success, message, s3_path, conflict = pdf_manager.generate_andStore_pdf(
             document_type='rapport_intervention',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=True,
-            custom_path=custom_path,
-            custom_filename=filename,
+            **pdf_kwargs,
         )
 
         if success:
@@ -397,7 +498,30 @@ def preview_rapport_intervention(request, rapport_id):
     elif rapport.chantier and rapport.chantier.societe:
         societe_nom = rapport.chantier.societe.nom_societe
 
+    photo_platine_url = ""
+    photo_platine_portail_url = ""
+    if rapport.type_rapport == 'vigik_plus':
+        if rapport.photo_platine_s3_key:
+            try:
+                photo_platine_url = generate_presigned_url_for_display(rapport.photo_platine_s3_key)
+            except Exception:
+                pass
+        if getattr(rapport, 'photo_platine_portail_s3_key', None):
+            try:
+                photo_platine_portail_url = generate_presigned_url_for_display(rapport.photo_platine_portail_s3_key)
+            except Exception:
+                pass
+
     from django.shortcuts import render
+    if rapport.type_rapport == 'vigik_plus':
+        return render(request, 'rapport_vigik_plus.html', {
+            'rapport': rapport,
+            'logo_url': logo_url,
+            'societe_nom': societe_nom,
+            'signature_url': signature_url,
+            'photo_platine_url': photo_platine_url,
+            'photo_platine_portail_url': photo_platine_portail_url,
+        })
     return render(request, 'rapport_intervention.html', {
         'rapport': rapport,
         'logo_url': logo_url,
