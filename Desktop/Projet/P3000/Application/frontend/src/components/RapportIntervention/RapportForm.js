@@ -732,31 +732,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           border: `1px solid ${COLORS.border || "#e0e0e0"}`,
         }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: { xs: 2.5, md: 2 },
-            flexWrap: "wrap",
-            gap: 1.5,
-          }}
-        >
-          <Typography variant="h6" sx={{ fontWeight: 600, color: COLORS.primary }}>
-            Prestations
-          </Typography>
-          {!isDisabled && (
-            <Button
-              variant="outlined"
-              startIcon={<MdAdd />}
-              onClick={handleAddPrestation}
-              size="small"
-              sx={{ minHeight: isMobile ? 48 : 36 }}
-            >
-              Ajouter une prestation
-            </Button>
-          )}
-        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 600, color: COLORS.primary, mb: { xs: 2.5, md: 2 } }}>
+          Prestations
+        </Typography>
 
         {formData.prestations.map((prestation, index) => (
           <PrestationSection
@@ -776,6 +754,18 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             isMobile={isMobile}
           />
         ))}
+
+        {!isDisabled && (
+          <Button
+            variant="outlined"
+            startIcon={<MdAdd />}
+            onClick={handleAddPrestation}
+            size="small"
+            sx={{ minHeight: isMobile ? 48 : 36, mt: 2 }}
+          >
+            Ajouter une prestation
+          </Button>
+        )}
       </Paper>
 
       {/* Signature */}

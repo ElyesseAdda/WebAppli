@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import {
-  Box, TextField, Typography, IconButton, Switch, FormControlLabel, Paper, Divider,
+  Box, TextField, Typography, IconButton, Switch, FormControlLabel, Paper, Divider, Collapse,
 } from "@mui/material";
 import { MdDelete, MdDragHandle } from "react-icons/md";
 import PhotoManager from "./PhotoManager";
@@ -21,6 +21,8 @@ const PrestationSection = ({
   pendingPhotos,
   isMobile,
 }) => {
+  const [expanded, setExpanded] = useState(true);
+
   const handleFieldChange = (field, value) => {
     onChange(index, { ...prestation, [field]: value });
   };
@@ -39,6 +41,7 @@ const PrestationSection = ({
       }}
     >
       <Box
+        onClick={() => setExpanded((prev) => !prev)}
         sx={{
           display: "flex",
           alignItems: "center",
@@ -46,19 +49,24 @@ const PrestationSection = ({
           backgroundColor: COLORS.backgroundAlt || "#f5f5f5",
           px: { xs: 2, md: 2 },
           py: isMobile ? 1.5 : 1,
+          cursor: "pointer",
+          "&:hover": { backgroundColor: COLORS.borderLight || "#eee" },
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <MdDragHandle size={20} color="#999" />
           <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: isMobile ? "1rem" : undefined }}>
-            Prestation {index + 1}
+            {(prestation.localisation || "").trim() || `Prestation ${index + 1}`}
           </Typography>
         </Box>
         {!disabled && (
           <IconButton
             size="small"
             color="error"
-            onClick={() => onRemove(index)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(index);
+            }}
             sx={isMobile ? { minWidth: 48, minHeight: 48 } : {}}
           >
             <MdDelete />
@@ -66,6 +74,7 @@ const PrestationSection = ({
         )}
       </Box>
 
+      <Collapse in={expanded}>
       <Box sx={{ p: isMobile ? 2.5 : 2, display: "flex", flexDirection: "column", gap: fieldGap }}>
         <TextField
           label="Localisation *"
@@ -84,7 +93,8 @@ const PrestationSection = ({
           onChange={(e) => handleFieldChange("probleme", e.target.value)}
           fullWidth
           multiline
-          rows={rowsMultiline}
+          minRows={2}
+          maxRows={20}
           size="small"
           disabled={disabled}
         />
@@ -96,7 +106,8 @@ const PrestationSection = ({
           onChange={(e) => handleFieldChange("solution", e.target.value)}
           fullWidth
           multiline
-          rows={rowsMultiline}
+          minRows={2}
+          maxRows={20}
           size="small"
           disabled={disabled}
         />
@@ -154,6 +165,7 @@ const PrestationSection = ({
           disabled={disabled}
         />
       </Box>
+      </Collapse>
     </Paper>
   );
 };
