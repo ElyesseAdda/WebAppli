@@ -47,15 +47,44 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
+/* Noms des agents : blanc pour être visible sur fond sombre */
+.fc-datagrid .fc-datagrid-cell-frame,
+.fc-datagrid .fc-datagrid-cell,
+.fc-datagrid .fc-agent-name,
+.fc-datagrid .fc-resource-agent-name-wrapper,
+.fc-datagrid .fc-datagrid-cell-frame .fc-agent-name,
+.fc-datagrid .fc-datagrid-cell .fc-agent-name,
+.fc-datagrid .fc-datagrid-cell-frame span,
+.fc-datagrid .fc-datagrid-cell span,
+.fc-datagrid-cell-frame,
+.fc-datagrid-cell,
+.fc-agent-name,
+.fc-resource-agent-name-wrapper {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+/* Forcer le blanc sur tout le contenu de la colonne ressources */
+.fc .fc-datagrid-body .fc-datagrid-cell .fc-datagrid-cell-cushion,
+.fc .fc-resource-timeline .fc-datagrid-cell-cushion,
+.fc-datagrid-cell-cushion {
+  color: #ffffff !important;
+}
+
+/* Wrapper du label agent (resourceLabelClassNames) + tout enfant */
+.fc-resource-label-agent,
+.fc-resource-label-agent *,
+.fc-datagrid-body .fc-datagrid-cell * {
+  color: #ffffff !important;
+}
+
 .fc-datagrid-cell-frame {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  color: white !important;
-  font-weight: 600 !important;
   font-size: 14px !important;
   padding: 12px 15px !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
   transition: all 0.3s ease;
 }
+
 
 .fc-datagrid-cell-frame:hover {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
