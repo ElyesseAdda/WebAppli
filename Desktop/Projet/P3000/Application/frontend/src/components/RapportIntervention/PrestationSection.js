@@ -19,10 +19,14 @@ const PrestationSection = ({
   disabled,
   isSaved,
   pendingPhotos,
+  isMobile,
 }) => {
   const handleFieldChange = (field, value) => {
     onChange(index, { ...prestation, [field]: value });
   };
+
+  const fieldGap = isMobile ? 2.5 : 2;
+  const rowsMultiline = isMobile ? 3 : 2;
 
   return (
     <Paper
@@ -30,7 +34,7 @@ const PrestationSection = ({
       sx={{
         border: `1px solid ${COLORS.border || "#e0e0e0"}`,
         borderRadius: 2,
-        mb: 2,
+        mb: isMobile ? 3 : 2,
         overflow: "hidden",
       }}
     >
@@ -39,25 +43,30 @@ const PrestationSection = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          backgroundColor: "#f5f5f5",
-          px: 2,
-          py: 1,
+          backgroundColor: COLORS.backgroundAlt || "#f5f5f5",
+          px: { xs: 2, md: 2 },
+          py: isMobile ? 1.5 : 1,
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <MdDragHandle size={20} color="#999" />
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: isMobile ? "1rem" : undefined }}>
             Prestation {index + 1}
           </Typography>
         </Box>
         {!disabled && (
-          <IconButton size="small" color="error" onClick={() => onRemove(index)}>
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => onRemove(index)}
+            sx={isMobile ? { minWidth: 48, minHeight: 48 } : {}}
+          >
             <MdDelete />
           </IconButton>
         )}
       </Box>
 
-      <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ p: isMobile ? 2.5 : 2, display: "flex", flexDirection: "column", gap: fieldGap }}>
         <TextField
           label="Localisation *"
           placeholder="Ex: Bat A03, hall d'entree bat 2..."
@@ -75,7 +84,7 @@ const PrestationSection = ({
           onChange={(e) => handleFieldChange("probleme", e.target.value)}
           fullWidth
           multiline
-          rows={2}
+          rows={rowsMultiline}
           size="small"
           disabled={disabled}
         />
@@ -87,7 +96,7 @@ const PrestationSection = ({
           onChange={(e) => handleFieldChange("solution", e.target.value)}
           fullWidth
           multiline
-          rows={2}
+          rows={rowsMultiline}
           size="small"
           disabled={disabled}
         />
@@ -99,7 +108,7 @@ const PrestationSection = ({
           onChange={(e) => handleFieldChange("commentaire", e.target.value)}
           fullWidth
           multiline
-          rows={2}
+          rows={rowsMultiline}
           size="small"
           disabled={disabled}
         />
@@ -113,6 +122,7 @@ const PrestationSection = ({
             />
           }
           label="Prestation possible"
+          sx={isMobile ? { mt: 0.5, mb: 0.5 } : {}}
         />
 
         <TextField
@@ -122,14 +132,14 @@ const PrestationSection = ({
           onChange={(e) => handleFieldChange("prestation_realisee", e.target.value)}
           fullWidth
           multiline
-          rows={2}
+          rows={rowsMultiline}
           size="small"
           disabled={disabled}
         />
 
-        <Divider sx={{ my: 1 }} />
+        <Divider sx={{ my: isMobile ? 1.5 : 1 }} />
 
-        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: isMobile ? "0.9375rem" : undefined }}>
           Photos
         </Typography>
         <PhotoManager

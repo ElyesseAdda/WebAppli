@@ -3,6 +3,8 @@ import {
   Box, Button, TextField, Typography, Paper, MenuItem, Select,
   FormControl, InputLabel, Autocomplete, Chip, Alert, Snackbar,
   Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   MdSave, MdAdd, MdCheckCircle, MdPictureAsPdf, MdArrowBack,
@@ -28,6 +30,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   const rapportId = propRapportId || paramId;
   const isEdit = !!rapportId;
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const {
     fetchRapport, createRapport, updateRapport, uploadPhoto, updatePhoto,
@@ -385,29 +389,62 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   const isDisabled = rapportData?.statut === "termine";
   const isNewResidence = !selectedResidence && !!formData.residence_nom;
 
+  const sectionSpacing = isMobile ? 4 : 3;
+  const fieldGap = isMobile ? 3 : 2;
+  const inputMinHeight = isMobile ? 48 : undefined;
+
   return (
-    <Box sx={{ p: { xs: 1, md: 3 }, maxWidth: 1000, mx: "auto" }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, flexWrap: "wrap", gap: 1 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Button
-            startIcon={<MdArrowBack />}
-            onClick={onBack || (() => navigate("/RapportsIntervention"))}
-            sx={{ color: COLORS.textOnDark || "#fff" }}
-          >
-            Retour
-          </Button>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: COLORS.textOnDark }}>
+    <Box
+      sx={{
+        p: { xs: 2, sm: 3, md: 3 },
+        pb: { xs: "max(env(safe-area-inset-bottom), 24px)", md: 3 },
+        maxWidth: 1000,
+        mx: "auto",
+        "& .MuiOutlinedInput-root": {
+          minHeight: inputMinHeight,
+          borderRadius: 1,
+          fontSize: isMobile ? "1rem" : undefined,
+        },
+        "& .MuiInputLabel-outlined": isMobile ? { fontSize: "1rem" } : {},
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          justifyContent: "space-between",
+          alignItems: { xs: "stretch", md: "center" },
+          mb: sectionSpacing,
+          gap: 2,
+        }}
+      >
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            <Button
+              startIcon={<MdArrowBack />}
+              onClick={onBack || (() => navigate("/RapportsIntervention"))}
+              sx={{
+                color: COLORS.primary,
+                minHeight: isMobile ? 48 : 36,
+                fontWeight: 600,
+              }}
+            >
+              Retour
+            </Button>
+            {rapportData?.statut && (
+              <Chip
+                label={rapportData.statut === "termine" ? "Terminé" : rapportData.statut === "en_cours" ? "En cours" : "A faire"}
+                size="small"
+                color={rapportData.statut === "termine" ? "success" : rapportData.statut === "en_cours" ? "warning" : "default"}
+                sx={isMobile ? { borderRadius: 1, minHeight: 32, px: 1.5 } : {}}
+              />
+            )}
+          </Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: COLORS.primary, fontSize: { xs: "1.25rem", md: "1.5rem" } }}>
             {isEdit ? "Modifier le rapport" : "Nouveau rapport d'intervention"}
           </Typography>
-          {rapportData?.statut && (
-            <Chip
-              label={rapportData.statut === "termine" ? "Terminé" : rapportData.statut === "en_cours" ? "En cours" : "A faire"}
-              size="small"
-              color={rapportData.statut === "termine" ? "success" : rapportData.statut === "en_cours" ? "warning" : "default"}
-            />
-          )}
         </Box>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", "& .MuiButton-root": { minHeight: isMobile ? 48 : 36 } }}>
           {!isDisabled && (
             <Button
               variant="contained"
@@ -445,10 +482,20 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
       </Box>
 
       {/* Informations generales */}
-      <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: COLORS.textOnDark }}>Informations generales</Typography>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2.5, sm: 3 },
+          mb: sectionSpacing,
+          borderRadius: 2,
+          border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: { xs: 2.5, md: 2 }, fontWeight: 600, color: COLORS.primary }}>
+          Informations generales
+        </Typography>
 
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: fieldGap }}>
           <FormControl fullWidth size="small">
             <InputLabel>Type de rapport</InputLabel>
             <Select
@@ -607,9 +654,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           onChange={(e) => handleFieldChange("objet_recherche", e.target.value)}
           fullWidth
           multiline
-          rows={2}
+          rows={isMobile ? 3 : 2}
           size="small"
-          sx={{ mt: 2 }}
+          sx={{ mt: fieldGap }}
           disabled={isDisabled}
         />
 
@@ -619,17 +666,27 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           onChange={(e) => handleFieldChange("resultat", e.target.value)}
           fullWidth
           multiline
-          rows={2}
+          rows={isMobile ? 3 : 2}
           size="small"
-          sx={{ mt: 2 }}
+          sx={{ mt: fieldGap }}
           disabled={isDisabled}
         />
       </Paper>
 
       {/* Logement & Locataire */}
-      <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: COLORS.textOnDark }}>Logement & Locataire</Typography>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2.5, sm: 3 },
+          mb: sectionSpacing,
+          borderRadius: 2,
+          border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: { xs: 2.5, md: 2 }, fontWeight: 600, color: COLORS.primary }}>
+          Logement & Locataire
+        </Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: fieldGap }}>
           <TextField
             label="Logement"
             value={formData.logement}
@@ -677,11 +734,36 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
       </Paper>
 
       {/* Prestations */}
-      <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: COLORS.textOnDark }}>Prestations</Typography>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2.5, sm: 3 },
+          mb: sectionSpacing,
+          borderRadius: 2,
+          border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: { xs: 2.5, md: 2 },
+            flexWrap: "wrap",
+            gap: 1.5,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 600, color: COLORS.primary }}>
+            Prestations
+          </Typography>
           {!isDisabled && (
-            <Button variant="outlined" startIcon={<MdAdd />} onClick={handleAddPrestation} size="small">
+            <Button
+              variant="outlined"
+              startIcon={<MdAdd />}
+              onClick={handleAddPrestation}
+              size="small"
+              sx={{ minHeight: isMobile ? 48 : 36 }}
+            >
               Ajouter une prestation
             </Button>
           )}
@@ -702,12 +784,21 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             disabled={isDisabled}
             isSaved={!!prestation.id}
             pendingPhotos={pendingPhotos[index] || []}
+            isMobile={isMobile}
           />
         ))}
       </Paper>
 
       {/* Signature */}
-      <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, border: "1px solid #e0e0e0" }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2.5, sm: 3 },
+          mb: sectionSpacing,
+          borderRadius: 2,
+          border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+        }}
+      >
         <SignaturePad
           ref={signaturePadRef}
           existingSignatureUrl={rapportData?.signature_url}
