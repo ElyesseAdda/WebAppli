@@ -21,6 +21,11 @@ const STATUT_LABELS = {
   termine: "Terminé",
 };
 
+const TYPE_RAPPORT_LABELS = {
+  intervention: "Rapport d'intervention",
+  vigik_plus: "Vigik+",
+};
+
 const getStatusStyles = (statut) => ({
   display: "inline-block",
   px: 1.5,
@@ -224,9 +229,11 @@ const ChantierRapportsList = ({ chantierData }) => {
           <TableHead>
             <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
               <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Residence</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Logement/Adresse</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
               <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
             </TableRow>
@@ -234,7 +241,7 @@ const ChantierRapportsList = ({ chantierData }) => {
           <TableBody>
             {rapports.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} sx={{ textAlign: "center", py: 3 }}>
+                <TableCell colSpan={8} sx={{ textAlign: "center", py: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     {loading ? "Chargement..." : "Aucun rapport lie a ce chantier"}
                   </Typography>
@@ -249,10 +256,16 @@ const ChantierRapportsList = ({ chantierData }) => {
                   onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
                 >
                   <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>{TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}</TableCell>
                   <TableCell sx={{ fontWeight: 500 }}>{rapport.titre_nom || "-"}</TableCell>
                   <TableCell>{rapport.technicien || "-"}</TableCell>
                   <TableCell sx={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {rapport.residence_nom || "-"}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 500 }}>
+                    {rapport.type_rapport === "vigik_plus"
+                      ? (rapport.adresse_vigik || "-")
+                      : (rapport.logement || "-")}
                   </TableCell>
                   <TableCell
                     onClick={(e) => handleStatusClick(e, rapport)}

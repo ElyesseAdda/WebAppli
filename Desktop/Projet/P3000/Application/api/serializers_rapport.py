@@ -210,7 +210,7 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'date', 'titre', 'titre_nom', 'technicien',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
-            'residence', 'residence_nom', 'residence_adresse', 'logement',
+            'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
             'type_rapport', 'statut',
             'numero_batiment', 'type_installation',
             'presence_platine', 'presence_platine_portail',

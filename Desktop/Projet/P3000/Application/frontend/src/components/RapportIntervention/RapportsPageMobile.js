@@ -14,6 +14,10 @@ import {
   Alert,
   useMediaQuery,
   useTheme,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import { MdVisibility, MdEdit } from "react-icons/md";
 import { AiFillFilePdf } from "react-icons/ai";
@@ -26,6 +30,11 @@ const STATUT_LABELS = {
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
+};
+
+const TYPE_RAPPORT_LABELS = {
+  intervention: "Rapport d'intervention",
+  vigik_plus: "Vigik+",
 };
 
 const getStatusColor = (statut) => {
@@ -80,6 +89,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
   const [filters, setFilters] = useState({
     residence: "",
     logement: "",
+    type_rapport: "",
   });
   const [logementInput, setLogementInput] = useState("");
   const logementDebounceRef = useRef(null);
@@ -95,8 +105,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     const cleanFilters = {};
     if (filters.residence) cleanFilters.residence = filters.residence;
     if (filters.logement) cleanFilters.logement = filters.logement;
+    if (filters.type_rapport) cleanFilters.type_rapport = filters.type_rapport;
     fetchRapports(cleanFilters);
-  }, [fetchRapports, filters.residence, filters.logement]);
+  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport]);
 
   useEffect(() => {
     loadRapports();
@@ -194,11 +205,11 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: COLORS.primary, fontSize: "1rem" }}>
             Filtrer
           </Typography>
-          {(filters.residence || filters.logement) && (
+          {(filters.residence || filters.logement || filters.type_rapport) && (
             <Button
               size="small"
               onClick={() => {
-                setFilters({ residence: "", logement: "" });
+                setFilters({ residence: "", logement: "", type_rapport: "" });
                 setLogementInput("");
               }}
               sx={{
@@ -269,6 +280,26 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
               "& .MuiInputLabel-outlined": { color: COLORS.textMuted },
             }}
           />
+          <FormControl fullWidth size="small">
+            <InputLabel id="mobile-filter-type-rapport-label">Type de rapport</InputLabel>
+            <Select
+              labelId="mobile-filter-type-rapport-label"
+              label="Type de rapport"
+              value={filters.type_rapport}
+              onChange={(e) => setFilters((prev) => ({ ...prev, type_rapport: e.target.value }))}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  minHeight: 48,
+                  borderRadius: 1,
+                  backgroundColor: COLORS.backgroundAlt,
+                },
+              }}
+            >
+              <MenuItem value="">Tous</MenuItem>
+              <MenuItem value="intervention">{TYPE_RAPPORT_LABELS.intervention}</MenuItem>
+              <MenuItem value="vigik_plus">{TYPE_RAPPORT_LABELS.vigik_plus}</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
       </Paper>
 
@@ -361,6 +392,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                       sx={getStatusChipSx(rapport.statut)}
                     />
                   </Box>
+                  <Box sx={{ fontSize: "0.8125rem", mb: 0.5, color: "text.secondary" }}>
+                    {TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}
+                  </Box>
                   <Box sx={{ fontSize: "0.875rem", mb: 0.5, lineHeight: 1.4 }}>
                     <Typography
                       component="span"
@@ -374,7 +408,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                       variant="body2"
                       sx={{ color: COLORS.accent, fontSize: "inherit" }}
                     >
-                      {rapport.logement || "-"}
+                      {rapport.type_rapport === "vigik_plus"
+                        ? (rapport.adresse_vigik || "-")
+                        : (rapport.logement || "-")}
                     </Typography>
                   </Box>
                   <Box sx={{ fontSize: "0.8125rem", lineHeight: 1.4 }}>

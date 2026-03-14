@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Box, Button, Typography, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Chip, IconButton, TextField,
-  Snackbar, Alert, Autocomplete, Collapse,
+  Snackbar, Alert, Autocomplete, Collapse, FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
 import {
   MdAdd, MdEdit, MdDelete, MdDescription,
@@ -21,6 +21,11 @@ const STATUT_LABELS = {
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
+};
+
+const TYPE_RAPPORT_LABELS = {
+  intervention: "Rapport d'intervention",
+  vigik_plus: "Vigik+",
 };
 
 const getStatusStyles = (statut) => ({
@@ -54,6 +59,7 @@ const RapportsPage = () => {
     client_societe: "",
     residence: "",
     date_creation: "",
+    type_rapport: "",
   });
   const [residences, setResidences] = useState([]);
   const [expandedResidences, setExpandedResidences] = useState({});
@@ -253,6 +259,20 @@ const RapportsPage = () => {
             sx={{ minWidth: 200 }}
           />
 
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel id="filter-type-rapport-label">Type de rapport</InputLabel>
+            <Select
+              labelId="filter-type-rapport-label"
+              label="Type de rapport"
+              value={filters.type_rapport}
+              onChange={(e) => handleFilterChange("type_rapport", e.target.value)}
+            >
+              <MenuItem value="">Tous</MenuItem>
+              <MenuItem value="intervention">{TYPE_RAPPORT_LABELS.intervention}</MenuItem>
+              <MenuItem value="vigik_plus">{TYPE_RAPPORT_LABELS.vigik_plus}</MenuItem>
+            </Select>
+          </FormControl>
+
           <TextField
             label="Date de création du rapport"
             type="date"
@@ -307,7 +327,8 @@ const RapportsPage = () => {
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Logement</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Logement/Adresse</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
@@ -320,7 +341,12 @@ const RapportsPage = () => {
                         onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
                       >
                         <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>{rapport.logement || "-"}</TableCell>
+                        <TableCell>{TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}</TableCell>
+                        <TableCell sx={{ fontWeight: 500 }}>
+                          {rapport.type_rapport === "vigik_plus"
+                            ? (rapport.adresse_vigik || "-")
+                            : (rapport.logement || "-")}
+                        </TableCell>
                         <TableCell>{rapport.titre_nom || "-"}</TableCell>
                         <TableCell>{rapport.technicien || "-"}</TableCell>
                         <TableCell
