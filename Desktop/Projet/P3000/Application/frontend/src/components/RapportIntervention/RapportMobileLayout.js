@@ -59,6 +59,7 @@ const RapportMobileLayout = () => {
         <RapportForm
           rapportId={selectedRapportId}
           onBack={handleBackToList}
+          saveButtonAtBottom
         />
       );
     }

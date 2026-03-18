@@ -26,7 +26,7 @@ const EMPTY_PRESTATION = {
   prestation_realisee: "",
 };
 
-const RapportForm = ({ rapportId: propRapportId, onBack }) => {
+const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom }) => {
   const { id: paramId } = useParams();
   const rapportId = propRapportId || paramId;
   const isEdit = !!rapportId;
@@ -452,6 +452,16 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
   const fieldGap = isMobile ? 3 : 2;
   const inputMinHeight = isMobile ? 48 : undefined;
 
+  /** MenuProps pour Select : liste déroulante scrollable sur mobile */
+  const selectMenuProps = {
+    PaperProps: { sx: { maxHeight: isMobile ? "70vh" : 320 } },
+    MenuListProps: { sx: { maxHeight: isMobile ? "70vh" : 320, overflow: "auto" } },
+  };
+  /** Props liste pour Autocomplete : dropdown scrollable sur mobile */
+  const autocompleteListboxProps = {
+    sx: { maxHeight: isMobile ? "70vh" : 320, overflow: "auto" },
+  };
+
   return (
     <Box
       sx={{
@@ -511,7 +521,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", "& .MuiButton-root": { minHeight: isMobile ? 48 : 36 } }}>
-          {!isDisabled && (
+          {!saveButtonAtBottom && !isDisabled && (
             <Button
               variant="contained"
               startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
@@ -558,6 +568,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               label="Type de rapport"
               onChange={(e) => handleFieldChange("type_rapport", e.target.value)}
               disabled={isDisabled}
+              MenuProps={selectMenuProps}
             >
               <MenuItem value="intervention">Rapport d'intervention</MenuItem>
               <MenuItem value="vigik_plus">Vigik+</MenuItem>
@@ -573,6 +584,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
                 label="Titre *"
                 onChange={(e) => handleFieldChange("titre", e.target.value)}
                 disabled={isDisabled}
+                MenuProps={selectMenuProps}
               >
                 {titres.map((t) => (
                   <MenuItem key={t.id} value={t.id}>{t.nom}</MenuItem>
@@ -638,6 +650,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
               if (typeof val === "string") return opt?.nom === val;
               return opt?.id === val?.id;
             }}
+            ListboxProps={autocompleteListboxProps}
             sx={{ gridColumn: { md: "1 / -1" } }}
           />
 
@@ -683,6 +696,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             onInputChange={(_, val) => handleFieldChange("technicien", val || "")}
             renderInput={(params) => <TextField {...params} label="Technicien *" size="small" />}
             disabled={isDisabled}
+            ListboxProps={autocompleteListboxProps}
           />
 
           {!isVigikPlus && (
@@ -693,6 +707,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             onChange={(_, val) => handleFieldChange("client_societe", val?.id || "")}
             renderInput={(params) => <TextField {...params} label="Client / Bailleur" size="small" />}
             disabled={isDisabled}
+            ListboxProps={autocompleteListboxProps}
           />
           )}
 
@@ -703,6 +718,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
             onChange={(_, val) => handleFieldChange("chantier", val?.id || "")}
             renderInput={(params) => <TextField {...params} label="Chantier (optionnel)" size="small" />}
             disabled={isDisabled}
+            ListboxProps={autocompleteListboxProps}
           />
 
           {isVigikPlus && (
@@ -1144,6 +1160,34 @@ const RapportForm = ({ rapportId: propRapportId, onBack }) => {
           disabled={isDisabled}
         />
       </Paper>
+      )}
+
+      {/* Bouton Sauvegarder en bas du rapport (mobile) */}
+      {saveButtonAtBottom && !isDisabled && (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            mt: 2,
+            borderRadius: 2,
+            border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+          }}
+        >
+          <Button
+            variant="contained"
+            fullWidth
+            startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
+            onClick={() => handleSave()}
+            disabled={saving}
+            sx={{
+              minHeight: 48,
+              backgroundColor: COLORS.infoDark || "#1976d2",
+              fontWeight: 600,
+            }}
+          >
+            {saving ? "Sauvegarde..." : "Sauvegarder"}
+          </Button>
+        </Paper>
       )}
 
       {/* Dialog nouveau titre */}

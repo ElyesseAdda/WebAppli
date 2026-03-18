@@ -142,16 +142,20 @@
             text-align: center;
             margin-top: 4px;
         }
-
+       .logo-img {
+        max-height: 240px;
+        scale: 1.5;
+       }
+       
     </style>
 </head>
 <body>
     <div class="header-vigik">
-        {% if logo_url %}
-            <img src="{{ logo_url }}" alt="Logo" class="logo-img" />
-        {% else %}
+       
+          
+        
             <img src="{% static 'frontend/src/img/logo.png' %}" alt="Logo" class="logo-img" />
-        {% endif %}
+       
         <h1 class="report-title">Rapport système Vigik+</h1>
     </div>
 
