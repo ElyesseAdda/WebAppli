@@ -77,7 +77,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const [pendingPhotoPlatine, setPendingPhotoPlatine] = useState(null);
   const [pendingPhotoPlatinePortail, setPendingPhotoPlatinePortail] = useState(null);
   const photoPlatineInputRef = useRef(null);
+  const photoPlatineCameraInputRef = useRef(null);
   const photoPlatinePortailInputRef = useRef(null);
+  const photoPlatinePortailCameraInputRef = useRef(null);
   const signaturePadRef = useRef(null);
   const [newTitreDialog, setNewTitreDialog] = useState(false);
   const [newTitreName, setNewTitreName] = useState("");
@@ -794,6 +796,21 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     e.target.value = "";
                   }}
                 />
+                <input
+                  ref={photoPlatineCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const previewUrl = URL.createObjectURL(file);
+                      setPendingPhotoPlatine({ file, name: file.name, previewUrl });
+                    }
+                    e.target.value = "";
+                  }}
+                />
                 {pendingPhotoPlatine ? (
                   <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
                     <Box
@@ -834,9 +851,23 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                       </Typography>
                     </Box>
                     {!isDisabled && (
-                      <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
-                        Remplacer
-                      </Button>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        {isMobile && (
+                          <>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatineCameraInputRef.current?.click()}>
+                              Prendre une photo
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                              Galerie
+                            </Button>
+                          </>
+                        )}
+                        {!isMobile && (
+                          <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                            Remplacer
+                          </Button>
+                        )}
+                      </Box>
                     )}
                   </Box>
                 ) : rapportData?.photo_platine_url ? (
@@ -862,20 +893,57 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                       </Typography>
                     </Box>
                     {!isDisabled && (
-                      <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
-                        Remplacer
-                      </Button>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        {isMobile && (
+                          <>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatineCameraInputRef.current?.click()}>
+                              Prendre une photo
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                              Galerie
+                            </Button>
+                          </>
+                        )}
+                        {!isMobile && (
+                          <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                            Remplacer
+                          </Button>
+                        )}
+                      </Box>
                     )}
                   </Box>
                 ) : (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => photoPlatineInputRef.current?.click()}
-                    disabled={isDisabled}
-                  >
-                    Choisir une photo
-                  </Button>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                    {isMobile ? (
+                      <>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => photoPlatineCameraInputRef.current?.click()}
+                          disabled={isDisabled}
+                        >
+                          Prendre une photo
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => photoPlatineInputRef.current?.click()}
+                          disabled={isDisabled}
+                        >
+                          Galerie
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => photoPlatineInputRef.current?.click()}
+                        disabled={isDisabled}
+                      >
+                        Choisir une photo
+                      </Button>
+                    )}
+                  </Box>
                 )}
               </Box>
               {/* Question 2 : Présence de platine au niveau du portail */}
@@ -909,6 +977,21 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                   ref={photoPlatinePortailInputRef}
                   type="file"
                   accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const previewUrl = URL.createObjectURL(file);
+                      setPendingPhotoPlatinePortail({ file, name: file.name, previewUrl });
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <input
+                  ref={photoPlatinePortailCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -959,9 +1042,23 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                       </Typography>
                     </Box>
                     {!isDisabled && (
-                      <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
-                        Remplacer
-                      </Button>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        {isMobile && (
+                          <>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailCameraInputRef.current?.click()}>
+                              Prendre une photo
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                              Galerie
+                            </Button>
+                          </>
+                        )}
+                        {!isMobile && (
+                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                            Remplacer
+                          </Button>
+                        )}
+                      </Box>
                     )}
                   </Box>
                 ) : rapportData?.photo_platine_portail_url ? (
@@ -987,20 +1084,57 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                       </Typography>
                     </Box>
                     {!isDisabled && (
-                      <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
-                        Remplacer
-                      </Button>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        {isMobile && (
+                          <>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailCameraInputRef.current?.click()}>
+                              Prendre une photo
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                              Galerie
+                            </Button>
+                          </>
+                        )}
+                        {!isMobile && (
+                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                            Remplacer
+                          </Button>
+                        )}
+                      </Box>
                     )}
                   </Box>
                 ) : (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => photoPlatinePortailInputRef.current?.click()}
-                    disabled={isDisabled}
-                  >
-                    Choisir une photo
-                  </Button>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                    {isMobile ? (
+                      <>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => photoPlatinePortailCameraInputRef.current?.click()}
+                          disabled={isDisabled}
+                        >
+                          Prendre une photo
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => photoPlatinePortailInputRef.current?.click()}
+                          disabled={isDisabled}
+                        >
+                          Galerie
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => photoPlatinePortailInputRef.current?.click()}
+                        disabled={isDisabled}
+                      >
+                        Choisir une photo
+                      </Button>
+                    )}
+                  </Box>
                 )}
               </Box>
             </>

@@ -163,6 +163,7 @@ const PrestationSection = ({
           onAddPendingPhoto={(file, type) => onAddPendingPhoto?.(index, file, type)}
           onRemovePendingPhoto={(photoIdx) => onRemovePendingPhoto?.(index, photoIdx)}
           disabled={disabled}
+          isMobile={isMobile}
         />
       </Box>
       </Collapse>

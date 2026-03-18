@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useState } from "react";
 import { Box, Button, IconButton, Typography, Chip, TextField, CircularProgress } from "@mui/material";
-import { MdAddAPhoto, MdDelete } from "react-icons/md";
+import { MdAddAPhoto, MdDelete, MdPhotoCamera, MdPhotoLibrary } from "react-icons/md";
 import { COLORS } from "../../constants/colors";
 import { compressImage } from "../../utils/compressImage";
 
@@ -26,8 +26,10 @@ const PhotoManager = ({
   onRemovePendingPhoto,
   disabled,
   prestationId,
+  isMobile = false,
 }) => {
   const fileInputRef = useRef(null);
+  const fileInputCameraRef = useRef(null);
   const currentTypeRef = useRef("avant");
   const [compressing, setCompressing] = useState(false);
 
@@ -54,9 +56,13 @@ const PhotoManager = ({
     e.target.value = "";
   };
 
-  const triggerUpload = (type) => {
+  const triggerUpload = (type, source = "gallery") => {
     currentTypeRef.current = type;
-    fileInputRef.current?.click();
+    if (source === "camera" && fileInputCameraRef.current) {
+      fileInputCameraRef.current.click();
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
   const handleDateChange = (photoId, newDate) => {
@@ -88,6 +94,14 @@ const PhotoManager = ({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
+        onChange={handleFileSelect}
+        style={{ display: "none" }}
+      />
+      <input
+        ref={fileInputCameraRef}
+        type="file"
+        accept="image/*"
         capture="environment"
         multiple
         onChange={handleFileSelect}
@@ -95,26 +109,72 @@ const PhotoManager = ({
       />
 
       <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
-        {Object.entries(TYPE_LABELS).map(([type, label]) => (
-          <Button
-            key={type}
-            size="small"
-            variant="outlined"
-            startIcon={<MdAddAPhoto />}
-            disabled={disabled || compressing}
-            onClick={() => triggerUpload(type)}
-            sx={{
-              borderColor: TYPE_COLORS[type],
-              color: TYPE_COLORS[type],
-              "&:hover": {
+        {Object.entries(TYPE_LABELS).map(([type, label]) =>
+          isMobile ? (
+            <Box key={type} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: TYPE_COLORS[type] }}>
+                {label}
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<MdPhotoCamera />}
+                  disabled={disabled || compressing}
+                  onClick={() => triggerUpload(type, "camera")}
+                  sx={{
+                    borderColor: TYPE_COLORS[type],
+                    color: TYPE_COLORS[type],
+                    minHeight: 44,
+                    "&:hover": {
+                      borderColor: TYPE_COLORS[type],
+                      backgroundColor: `${TYPE_COLORS[type]}10`,
+                    },
+                  }}
+                >
+                  Prendre une photo
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<MdPhotoLibrary />}
+                  disabled={disabled || compressing}
+                  onClick={() => triggerUpload(type, "gallery")}
+                  sx={{
+                    borderColor: TYPE_COLORS[type],
+                    color: TYPE_COLORS[type],
+                    minHeight: 44,
+                    "&:hover": {
+                      borderColor: TYPE_COLORS[type],
+                      backgroundColor: `${TYPE_COLORS[type]}10`,
+                    },
+                  }}
+                >
+                  Galerie
+                </Button>
+              </Box>
+            </Box>
+          ) : (
+            <Button
+              key={type}
+              size="small"
+              variant="outlined"
+              startIcon={<MdAddAPhoto />}
+              disabled={disabled || compressing}
+              onClick={() => triggerUpload(type, "gallery")}
+              sx={{
                 borderColor: TYPE_COLORS[type],
-                backgroundColor: `${TYPE_COLORS[type]}10`,
-              },
-            }}
-          >
-            {label}
-          </Button>
-        ))}
+                color: TYPE_COLORS[type],
+                "&:hover": {
+                  borderColor: TYPE_COLORS[type],
+                  backgroundColor: `${TYPE_COLORS[type]}10`,
+                },
+              }}
+            >
+              {label}
+            </Button>
+          )
+        )}
         {compressing && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <CircularProgress size={16} />
