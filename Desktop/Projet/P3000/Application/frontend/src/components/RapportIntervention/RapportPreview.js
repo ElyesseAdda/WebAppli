@@ -79,6 +79,62 @@ const RapportPreview = ({ rapport }) => {
         </InfoBlock>
       )}
 
+      {/* Section Vigik+ : adresse, batiment, installation, platine + photos */}
+      {rapport.type_rapport === "vigik_plus" && (
+        <Box sx={{ mt: 3 }}>
+          <Box sx={{ backgroundColor: COLORS.infoDark || "#1976d2", color: "#fff", px: 2, py: 1, borderRadius: "6px 6px 0 0", fontWeight: 700 }}>
+            Rapport Vigik+
+          </Box>
+          <Box sx={{ border: "1px solid #e0e0e0", borderTop: "none", borderRadius: "0 0 6px 6px", p: 2 }}>
+            <InfoRow label="Adresse" value={rapport.adresse_vigik || "-"} />
+            <InfoRow label="Numero batiment" value={rapport.numero_batiment || "-"} />
+            {rapport.type_installation && <InfoRow label="Type d'installation" value={rapport.type_installation} />}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: COLORS.infoDark || "#1976d2" }}>
+                Presence de platine
+              </Typography>
+              <Chip
+                label={rapport.presence_platine === true ? "Oui" : rapport.presence_platine === false ? "Non" : "-"}
+                size="small"
+                color={rapport.presence_platine === true ? "success" : rapport.presence_platine === false ? "error" : "default"}
+                variant="outlined"
+                sx={{ mr: 1 }}
+              />
+              {rapport.photo_platine_url && (
+                <Box sx={{ mt: 1 }}>
+                  <img
+                    src={rapport.photo_platine_url}
+                    alt="Photo platine"
+                    style={{ maxWidth: "100%", width: 280, height: 210, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
+                  />
+                </Box>
+              )}
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: COLORS.infoDark || "#1976d2" }}>
+                Presence de platine au niveau du portail
+              </Typography>
+              <Chip
+                label={rapport.presence_platine_portail === true ? "Oui" : rapport.presence_platine_portail === false ? "Non" : "-"}
+                size="small"
+                color={rapport.presence_platine_portail === true ? "success" : rapport.presence_platine_portail === false ? "error" : "default"}
+                variant="outlined"
+                sx={{ mr: 1 }}
+              />
+              {rapport.photo_platine_portail_url && (
+                <Box sx={{ mt: 1 }}>
+                  <img
+                    src={rapport.photo_platine_portail_url}
+                    alt="Photo platine portail"
+                    style={{ maxWidth: "100%", width: 280, height: 210, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
+                  />
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </Box>
+      )}
+
       {/* Prestations */}
       {rapport.prestations?.map((prestation, index) => (
         <Box key={prestation.id || index} sx={{ mt: 3 }}>

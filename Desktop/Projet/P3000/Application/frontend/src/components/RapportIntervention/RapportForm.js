@@ -26,7 +26,7 @@ const EMPTY_PRESTATION = {
   prestation_realisee: "",
 };
 
-const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom }) => {
+const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onReportCreated }) => {
   const { id: paramId } = useParams();
   const rapportId = propRapportId || paramId;
   const isEdit = !!rapportId;
@@ -375,7 +375,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom }) =
       showSnackbar(isEdit ? "Rapport mis a jour" : "Rapport cree avec succes");
 
       if (!isEdit && savedId) {
-        navigate(`/RapportIntervention/${savedId}`, { replace: true });
+        if (onReportCreated) {
+          onReportCreated(savedId);
+        } else {
+          navigate(`/RapportIntervention/${savedId}`, { replace: true });
+        }
       }
       await loadRapport();
       loadReferences();
@@ -899,7 +903,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom }) =
               </Box>
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Joindre une photo (obligatoire)
+                  Joindre une photo
                 </Typography>
                 <input
                   ref={photoPlatinePortailInputRef}

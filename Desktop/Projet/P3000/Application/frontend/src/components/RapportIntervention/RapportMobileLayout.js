@@ -42,6 +42,12 @@ const RapportMobileLayout = () => {
     setNavValue(0);
   };
 
+  const handleReportCreated = (id) => {
+    setSelectedRapportId(id);
+    setCurrentView("detail");
+    setNavValue(0);
+  };
+
   const handleNavChange = (event, newValue) => {
     setNavValue(newValue);
     if (newValue === 0) {
@@ -60,6 +66,7 @@ const RapportMobileLayout = () => {
           rapportId={selectedRapportId}
           onBack={handleBackToList}
           saveButtonAtBottom
+          onReportCreated={handleReportCreated}
         />
       );
     }
@@ -114,10 +121,11 @@ const RapportMobileLayout = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Contenu principal */}
+      {/* Contenu principal - minHeight: 0 pour que le scroll fonctionne en flex */}
       <Box
         sx={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           overflowX: "hidden",
           WebkitOverflowScrolling: "touch",
