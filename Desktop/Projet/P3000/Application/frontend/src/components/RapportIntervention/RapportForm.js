@@ -38,6 +38,23 @@ const formatChantierAddress = (c) => {
   return ligne2;
 };
 
+const todayISO = () => new Date().toISOString().split("T")[0];
+
+/** Dernière date saisie (la plus récente) ; null si aucune liste utile. */
+const latestInterventionISO = (dates) => {
+  if (!dates?.length) return null;
+  const sorted = [...dates].map((s) => String(s).slice(0, 10)).filter(Boolean).sort();
+  return sorted[sorted.length - 1] || null;
+};
+
+const normalizeDatesInterventionFromApi = (data) => {
+  if (Array.isArray(data.dates_intervention) && data.dates_intervention.length) {
+    return data.dates_intervention.map((d) => String(d).slice(0, 10));
+  }
+  if (data.date) return [String(data.date).slice(0, 10)];
+  return [todayISO()];
+};
+
 const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onReportCreated }) => {
   const { id: paramId } = useParams();
   const rapportId = propRapportId || paramId;
@@ -54,7 +71,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
 
   const [formData, setFormData] = useState({
     titre: "",
-    date: new Date().toISOString().split("T")[0],
+    dates_intervention: [todayISO()],
     technicien: "",
     objet_recherche: "",
     resultat: "",
@@ -137,7 +154,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       setRapportData(data);
       setFormData({
         titre: data.titre || "",
-        date: data.date || "",
+        dates_intervention: normalizeDatesInterventionFromApi(data),
         technicien: data.technicien || "",
         objet_recherche: data.objet_recherche || "",
         resultat: data.resultat || "",
@@ -441,14 +458,18 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       ? {
           image_url: pendingPhotoPlatine.previewUrl,
           label: "Photo platine",
-          date_photo: formData.date,
+          date_photo: latestInterventionISO(formData.dates_intervention) || todayISO(),
           pending: true,
         }
       : (rapportData?.photo_platine_url
         ? {
             image_url: rapportData.photo_platine_url,
             label: "Photo platine",
-            date_photo: rapportData?.date || formData.date,
+            date_photo:
+              latestInterventionISO(rapportData?.dates_intervention) ||
+              (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
+              latestInterventionISO(formData.dates_intervention) ||
+              todayISO(),
             pending: false,
           }
         : null),
@@ -456,14 +477,18 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       ? {
           image_url: pendingPhotoPlatinePortail.previewUrl,
           label: "Photo platine portail",
-          date_photo: formData.date,
+          date_photo: latestInterventionISO(formData.dates_intervention) || todayISO(),
           pending: true,
         }
       : (rapportData?.photo_platine_portail_url
         ? {
             image_url: rapportData.photo_platine_portail_url,
             label: "Photo platine portail",
-            date_photo: rapportData?.date || formData.date,
+            date_photo:
+              latestInterventionISO(rapportData?.dates_intervention) ||
+              (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
+              latestInterventionISO(formData.dates_intervention) ||
+              todayISO(),
             pending: false,
           }
         : null),
@@ -540,6 +565,13 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         return;
       }
     }
+    const datesInterventionClean = (formData.dates_intervention || [])
+      .map((s) => String(s).slice(0, 10))
+      .filter(Boolean);
+    if (!datesInterventionClean.length) {
+      showSnackbar("Ajoutez au moins une date d'intervention", "error");
+      return;
+    }
     const hasPrestation = !isVigikPlus && formData.prestations.some(
       (p) =>
         (p.localisation || "").trim() ||
@@ -555,6 +587,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       const vigikTitre = isVigikPlus && !formData.titre ? (titres.find((t) => t.nom === "Rapport Vigik+") || titres[0])?.id : formData.titre;
       const dataToSend = {
         ...formData,
+        dates_intervention: datesInterventionClean,
         titre: isVigikPlus ? (vigikTitre || formData.titre) : formData.titre,
         statut: statutToSend,
         numero_batiment: formData.numero_batiment ?? "",
@@ -981,16 +1014,67 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             />
           )}
 
-          <TextField
-            label="Date *"
-            type="date"
-            value={formData.date}
-            onChange={(e) => handleFieldChange("date", e.target.value)}
-            fullWidth
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            disabled={isDisabled}
-          />
+          <Box sx={{ gridColumn: { md: "1 / -1" } }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: COLORS.primary }}>
+              Dates d&apos;intervention *
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+              Premier passage puis dates supplémentaires (Passage 2, 3…). Au moins une date.
+            </Typography>
+            {(formData.dates_intervention || []).map((d, idx) => (
+              <Box
+                key={`di-${idx}`}
+                sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 1 }}
+              >
+                <TextField
+                  label={idx === 0 ? "Date" : `Passage ${idx + 1}`}
+                  type="date"
+                  value={d || ""}
+                  onChange={(e) => {
+                    const next = [...(formData.dates_intervention || [])];
+                    next[idx] = e.target.value;
+                    setFormData((prev) => ({ ...prev, dates_intervention: next }));
+                  }}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                  disabled={isDisabled}
+                  sx={{ minWidth: 200, flex: { xs: "1 1 100%", sm: "0 1 auto" } }}
+                />
+                {(formData.dates_intervention || []).length > 1 && (
+                  <IconButton
+                    size="small"
+                    aria-label="Supprimer cette date"
+                    onClick={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        dates_intervention: (prev.dates_intervention || []).filter((_, i) => i !== idx),
+                      }));
+                    }}
+                    disabled={isDisabled}
+                    sx={{ color: "error.main" }}
+                  >
+                    <MdDelete />
+                  </IconButton>
+                )}
+              </Box>
+            ))}
+            <Button
+              type="button"
+              size="small"
+              variant="outlined"
+              startIcon={<MdAdd />}
+              onClick={() => {
+                setFormData((prev) => ({
+                  ...prev,
+                  dates_intervention: [...(prev.dates_intervention || []), todayISO()],
+                }));
+              }}
+              disabled={isDisabled}
+              sx={{ mt: 0.5 }}
+            >
+              Ajouter une date
+            </Button>
+          </Box>
 
           <Autocomplete
             freeSolo
@@ -1729,7 +1813,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     }}
                   />
                   <Typography variant="body2" sx={{ color: "#ddd" }}>
-                    Date: {activeVigikPhoto.date_photo || formData.date}
+                    Date: {activeVigikPhoto.date_photo || latestInterventionISO(formData.dates_intervention) || todayISO()}
                   </Typography>
                 </Box>
                 <Typography variant="caption" sx={{ color: "#bbb" }}>

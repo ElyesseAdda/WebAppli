@@ -7,6 +7,64 @@ def _is_vigik_plus(attrs):
     return attrs.get('type_rapport') == 'vigik_plus'
 
 
+def _normalize_dates_intervention_attrs(attrs, instance=None):
+    """Synchronise dates_intervention (liste ordonnée) et date (dernière date = tri / affichage court)."""
+    from datetime import datetime
+    from django.utils import timezone
+
+    has_di = 'dates_intervention' in attrs
+    has_single = 'date' in attrs
+
+    if has_di:
+        dates_intervention = attrs['dates_intervention']
+        if dates_intervention is None:
+            dates_intervention = []
+        if not isinstance(dates_intervention, list):
+            raise serializers.ValidationError(
+                {'dates_intervention': 'Une liste de dates est attendue.'}
+            )
+        cleaned = []
+        for d in dates_intervention:
+            s = str(d).strip()[:10]
+            if not s:
+                continue
+            try:
+                datetime.strptime(s, '%Y-%m-%d')
+            except ValueError:
+                raise serializers.ValidationError(
+                    {'dates_intervention': f'Date invalide : {d}'}
+                )
+            cleaned.append(s)
+        if not cleaned:
+            raise serializers.ValidationError(
+                {'dates_intervention': "Au moins une date d'intervention est requise."}
+            )
+        attrs['dates_intervention'] = cleaned
+        attrs['date'] = max(datetime.strptime(x, '%Y-%m-%d').date() for x in cleaned)
+        return attrs
+
+    if has_single and attrs.get('date') is not None:
+        d = attrs['date']
+        if hasattr(d, 'isoformat'):
+            ds = d.isoformat()[:10]
+            date_val = d
+        else:
+            ds = str(d)[:10]
+            try:
+                date_val = datetime.strptime(ds, '%Y-%m-%d').date()
+            except ValueError:
+                raise serializers.ValidationError({'date': 'Date invalide.'})
+            attrs['date'] = date_val
+        attrs['dates_intervention'] = [ds]
+        return attrs
+
+    if instance is None:
+        today = timezone.now().date()
+        attrs['dates_intervention'] = [today.isoformat()]
+        attrs['date'] = today
+    return attrs
+
+
 class TitreRapportSerializer(serializers.ModelSerializer):
     class Meta:
         model = TitreRapport
@@ -111,7 +169,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RapportIntervention
         fields = [
-            'id', 'titre', 'date', 'technicien', 'objet_recherche', 'resultat',
+            'id', 'titre', 'date', 'dates_intervention', 'technicien', 'objet_recherche', 'resultat',
             'client_societe', 'chantier', 'residence', 'logement',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
             'signature_s3_key', 'type_rapport', 'statut', 'pdf_s3_key',
@@ -208,7 +266,7 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = RapportIntervention
         fields = [
-            'id', 'date', 'titre', 'titre_nom', 'technicien',
+            'id', 'date', 'dates_intervention', 'titre', 'titre_nom', 'technicien',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
             'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
             'type_rapport', 'statut',
@@ -276,7 +334,7 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = RapportIntervention
         fields = [
-            'id', 'titre', 'date', 'technicien', 'objet_recherche', 'resultat',
+            'id', 'titre', 'date', 'dates_intervention', 'technicien', 'objet_recherche', 'resultat',
             'client_societe', 'chantier', 'residence', 'logement',
             'residence_nom', 'residence_adresse', 'adresse_vigik',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
@@ -328,7 +386,8 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
         return validated_data
 
     def validate(self, attrs):
-        """Pour Vigik+, adresse_vigik est obligatoire. Sinon technicien et objet_recherche sont obligatoires."""
+        """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche."""
+        attrs = _normalize_dates_intervention_attrs(attrs, instance=getattr(self, 'instance', None))
         if _is_vigik_plus(attrs):
             if not (attrs.get('adresse_vigik') or '').strip():
                 raise serializers.ValidationError({'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."})

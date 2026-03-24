@@ -17,6 +17,10 @@ class TitreRapport(models.Model):
         return self.nom
 
 
+def default_dates_intervention_list():
+    return []
+
+
 class Residence(models.Model):
     nom = models.CharField(max_length=255, verbose_name="Nom de la résidence")
     adresse = models.CharField(max_length=500, blank=True, default='', verbose_name="Adresse")
@@ -59,6 +63,12 @@ class RapportIntervention(models.Model):
         related_name='rapports',
     )
     date = models.DateField(default=timezone.now)
+    dates_intervention = models.JSONField(
+        default=default_dates_intervention_list,
+        blank=True,
+        verbose_name="Dates d'intervention (passages)",
+        help_text="Liste ordonnée de dates ISO (YYYY-MM-DD) : 1er passage, 2e, etc.",
+    )
     technicien = models.CharField(max_length=255, verbose_name="Technicien")
     objet_recherche = models.TextField(verbose_name="Objet de la recherche")
     resultat = models.TextField(blank=True, default='', verbose_name="Résultat")

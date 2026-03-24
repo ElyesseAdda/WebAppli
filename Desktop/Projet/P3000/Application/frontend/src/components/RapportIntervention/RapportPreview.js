@@ -8,8 +8,36 @@ const TYPE_LABELS = {
   apres: "Apres travaux",
 };
 
+const buildInterventionDateRows = (rapport) => {
+  const raw = rapport.dates_intervention;
+  if (Array.isArray(raw) && raw.length) {
+    return raw.map((ds, i) => {
+      const s = String(ds).slice(0, 10);
+      let value = s;
+      try {
+        value = new Date(`${s}T12:00:00`).toLocaleDateString("fr-FR");
+      } catch {
+        /* keep s */
+      }
+      return { key: `d-${i}`, label: i === 0 ? "Date" : `Passage ${i + 1}`, value };
+    });
+  }
+  if (rapport.date) {
+    return [
+      {
+        key: "d-0",
+        label: "Date",
+        value: new Date(rapport.date).toLocaleDateString("fr-FR"),
+      },
+    ];
+  }
+  return [{ key: "d-0", label: "Date", value: "-" }];
+};
+
 const RapportPreview = ({ rapport }) => {
   if (!rapport) return null;
+
+  const interventionDateRows = buildInterventionDateRows(rapport);
 
   return (
     <Paper
@@ -46,7 +74,9 @@ const RapportPreview = ({ rapport }) => {
         </InfoBlock>
 
         <InfoBlock title="Intervention">
-          <InfoRow label="Date" value={rapport.date ? new Date(rapport.date).toLocaleDateString("fr-FR") : "-"} />
+          {interventionDateRows.map((row) => (
+            <InfoRow key={row.key} label={row.label} value={row.value} />
+          ))}
           <InfoRow label="Technicien" value={rapport.technicien_nom || rapport.technicien || "-"} />
         </InfoBlock>
 

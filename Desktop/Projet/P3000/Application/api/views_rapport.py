@@ -35,6 +35,35 @@ def _societe_pour_rapport(rapport):
     return None
 
 
+def _intervention_date_rows_for_template(rapport):
+    """Lignes Date / Passage 2 / Passage 3 pour les templates PDF (dates formatées jj/mm/aaaa)."""
+    from datetime import datetime
+
+    rows = []
+    raw = getattr(rapport, 'dates_intervention', None) or []
+    if isinstance(raw, list) and raw:
+        for i, ds in enumerate(raw):
+            if not ds:
+                continue
+            s = str(ds).strip()[:10]
+            try:
+                dt = datetime.strptime(s, '%Y-%m-%d').date()
+                formatted = dt.strftime('%d/%m/%Y')
+            except ValueError:
+                formatted = s
+            if i == 0:
+                label = 'Date'
+            else:
+                label = f'Passage {i + 1}'
+            rows.append({'label': label, 'value': formatted})
+    if not rows and getattr(rapport, 'date', None):
+        rows.append({
+            'label': 'Date',
+            'value': rapport.date.strftime('%d/%m/%Y'),
+        })
+    return rows
+
+
 def _format_societe_adresse(societe):
     """Adresse postale depuis le modèle Societe : rue_societe, codepostal_societe, ville_societe."""
     if not societe:
@@ -555,6 +584,7 @@ def preview_rapport_intervention(request, rapport_id):
     societe = _societe_pour_rapport(rapport)
     societe_nom = societe.nom_societe if societe else ""
     societe_adresse = _format_societe_adresse(societe)
+    intervention_date_rows = _intervention_date_rows_for_template(rapport)
 
     photo_platine_url = ""
     photo_platine_portail_url = ""
@@ -580,6 +610,7 @@ def preview_rapport_intervention(request, rapport_id):
             'signature_url': signature_url,
             'photo_platine_url': photo_platine_url,
             'photo_platine_portail_url': photo_platine_portail_url,
+            'intervention_date_rows': intervention_date_rows,
         })
     return render(request, 'rapport_intervention.html', {
         'rapport': rapport,
@@ -588,6 +619,7 @@ def preview_rapport_intervention(request, rapport_id):
         'societe_adresse': societe_adresse,
         'signature_url': signature_url,
         'prestations_data': prestations_data,
+        'intervention_date_rows': intervention_date_rows,
     })
 
 

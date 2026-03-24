@@ -325,10 +325,17 @@
 
         <div class="info-block">
             <h3>Intervention</h3>
+            {% for row in intervention_date_rows %}
+            <div class="info-row">
+                <span class="info-label">{{ row.label }} :</span>
+                <span class="info-value">{{ row.value }}</span>
+            </div>
+            {% empty %}
             <div class="info-row">
                 <span class="info-label">Date :</span>
                 <span class="info-value">{{ rapport.date|date:"d/m/Y" }}</span>
             </div>
+            {% endfor %}
             <div class="info-row">
                 <span class="info-label">Technicien :</span>
                 <span class="info-value">{{ rapport.technicien|default:"-" }}</span>
