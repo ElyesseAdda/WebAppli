@@ -243,6 +243,9 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
         return None
 
     def get_nb_prestations(self, obj):
+        c = getattr(obj, 'prestations_count', None)
+        if c is not None:
+            return c
         return obj.prestations.count()
 
 

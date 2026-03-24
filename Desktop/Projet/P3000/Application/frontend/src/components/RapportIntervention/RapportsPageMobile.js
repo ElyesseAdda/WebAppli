@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Box,
   Typography,
@@ -20,12 +20,17 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  FormControlLabel,
+  Checkbox,
+  Pagination,
+  Stack,
 } from "@mui/material";
 import { MdVisibility, MdEdit, MdArrowDownward, MdArrowUpward } from "react-icons/md";
 import { AiFillFilePdf } from "react-icons/ai";
 import axios from "axios";
+import { alpha } from "@mui/material/styles";
 import { COLORS } from "../../constants/colors";
-import { useRapports } from "../../hooks/useRapports";
+import { useRapports, RAPPORTS_LIST_PAGE_SIZE } from "../../hooks/useRapports";
 import "./rapports-mobile.css";
 
 const STATUT_LABELS = {
@@ -86,7 +91,7 @@ const btnRectSx = (borderColor, bgColor, hoverTextColor) => ({
 const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
-  const { rapports, fetchRapports, loading } = useRapports();
+  const { rapports, rapportsCount, fetchRapports, loading } = useRapports();
   const [residences, setResidences] = useState([]);
   const [filters, setFilters] = useState({
     residence: "",
@@ -96,6 +101,10 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
   const [logementInput, setLogementInput] = useState("");
   const logementDebounceRef = useRef(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [dateSortOrder, setDateSortOrder] = useState("desc");
+  const [showTermines, setShowTermines] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  const skipNextLogementPageResetRef = useRef(true);
 
   useEffect(() => {
     axios.get("/api/residences/").then((res) => {
@@ -108,8 +117,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     if (filters.residence) cleanFilters.residence = filters.residence;
     if (filters.logement) cleanFilters.logement = filters.logement;
     if (filters.type_rapport) cleanFilters.type_rapport = filters.type_rapport;
-    fetchRapports(cleanFilters);
-  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport]);
+    return fetchRapports(cleanFilters, {
+      page: listPage,
+      pageSize: RAPPORTS_LIST_PAGE_SIZE,
+      ordering: dateSortOrder === "desc" ? "-date" : "date",
+      excludeStatutTermine: !showTermines,
+    });
+  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, listPage, dateSortOrder, showTermines]);
 
   useEffect(() => {
     loadRapports();
@@ -125,16 +139,21 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     };
   }, [logementInput]);
 
-  const sortedRapports = useMemo(() => {
-    return [...rapports].sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : 0;
-      const db = b.date ? new Date(b.date).getTime() : 0;
-      if (da !== db) {
-        return dateSortOrder === "desc" ? db - da : da - db;
-      }
-      return dateSortOrder === "desc" ? (b.id || 0) - (a.id || 0) : (a.id || 0) - (b.id || 0);
-    });
-  }, [rapports, dateSortOrder]);
+  useEffect(() => {
+    if (skipNextLogementPageResetRef.current) {
+      skipNextLogementPageResetRef.current = false;
+      return;
+    }
+    setListPage(1);
+  }, [filters.logement]);
+
+  const listPageCount = Math.max(1, Math.ceil(rapportsCount / RAPPORTS_LIST_PAGE_SIZE));
+
+  useEffect(() => {
+    if (!loading && listPage > listPageCount) {
+      setListPage(listPageCount);
+    }
+  }, [loading, listPage, listPageCount]);
 
   const handleGeneratePDF = async (rapport, e) => {
     if (e) e.stopPropagation();
@@ -191,6 +210,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
 
   const handleFilterResidence = (_, value) => {
     setFilters((prev) => ({ ...prev, residence: value?.id || "" }));
+    setListPage(1);
   };
 
   return (
@@ -228,7 +248,10 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
             >
               <IconButton
                 size="small"
-                onClick={() => setDateSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+                onClick={() => {
+                  setDateSortOrder((o) => (o === "desc" ? "asc" : "desc"));
+                  setListPage(1);
+                }}
                 sx={{
                   color: COLORS.textMuted,
                   opacity: 0.75,
@@ -253,6 +276,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                 onClick={() => {
                   setFilters({ residence: "", logement: "", type_rapport: "" });
                   setLogementInput("");
+                  setListPage(1);
                 }}
                 sx={{
                   minHeight: 40,
@@ -329,7 +353,10 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
               labelId="mobile-filter-type-rapport-label"
               label="Type de rapport"
               value={filters.type_rapport}
-              onChange={(e) => setFilters((prev) => ({ ...prev, type_rapport: e.target.value }))}
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, type_rapport: e.target.value }));
+                setListPage(1);
+              }}
               sx={{
                 "& .MuiOutlinedInput-root": {
                   minHeight: 48,
@@ -343,15 +370,93 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
               <MenuItem value="vigik_plus">{TYPE_RAPPORT_LABELS.vigik_plus}</MenuItem>
             </Select>
           </FormControl>
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              pl: 1,
+              pr: 2,
+              py: 1.1,
+              borderRadius: 2.5,
+              border: "1.5px solid",
+              borderColor: showTermines ? COLORS.accent : COLORS.border,
+              bgcolor: showTermines ? alpha(COLORS.accent, 0.1) : alpha(COLORS.primary, 0.03),
+              transition: "border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease",
+              boxShadow: showTermines
+                ? `0 1px 0 ${alpha(COLORS.accent, 0.2)}, 0 4px 16px ${alpha(COLORS.accent, 0.1)}`
+                : `inset 0 1px 0 ${alpha("#fff", 0.9)}`,
+              WebkitTapHighlightColor: "transparent",
+              "@media (hover: hover)": {
+                "&:hover": {
+                  borderColor: COLORS.accent,
+                  bgcolor: showTermines ? alpha(COLORS.accent, 0.14) : alpha(COLORS.accent, 0.06),
+                  boxShadow: `0 2px 12px ${alpha(COLORS.primary, 0.07)}`,
+                },
+              },
+              "&:active": {
+                transform: "scale(0.995)",
+                transition: "transform 0.1s ease",
+              },
+            }}
+          >
+            <FormControlLabel
+              sx={{
+                m: 0,
+                width: "100%",
+                mx: 0,
+                gap: 1.25,
+                alignItems: "center",
+                userSelect: "none",
+                justifyContent: "flex-start",
+              }}
+              control={
+                <Checkbox
+                  disableRipple
+                  checked={showTermines}
+                  onChange={(e) => {
+                    setShowTermines(e.target.checked);
+                    setListPage(1);
+                  }}
+                  sx={{
+                    p: 0.75,
+                    color: COLORS.borderDark,
+                    transition: "color 0.2s ease, transform 0.15s ease",
+                    "& .MuiSvgIcon-root": { fontSize: 24, borderRadius: "7px" },
+                    "&.Mui-checked": {
+                      color: COLORS.accent,
+                      transform: "scale(1.03)",
+                    },
+                    "&:hover": { bgcolor: alpha(COLORS.accent, 0.08) },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    letterSpacing: "0.03em",
+                    fontSize: "0.9375rem",
+                    color: showTermines ? COLORS.primary : COLORS.textMuted,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Afficher terminés
+                </Typography>
+              }
+            />
+          </Box>
         </Box>
       </Paper>
 
-      {/* Liste en cartes — mobile first */}
-      {loading ? (
+      {/* Liste paginée — mobile first */}
+      {loading && rapports.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
           Chargement...
         </Typography>
-      ) : rapports.length === 0 ? (
+      ) : !loading && rapportsCount === 0 ? (
         <Paper
           elevation={0}
           sx={{
@@ -362,10 +467,16 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
           }}
         >
           <Typography variant="body2" color="text.secondary">
-            Aucun rapport
+            Aucun rapport ne correspond à ces critères.
           </Typography>
+          {!showTermines && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, px: 1 }}>
+              Les rapports terminés sont masqués — cochez « Afficher terminés » pour les inclure.
+            </Typography>
+          )}
         </Paper>
       ) : (
+        <>
         <Box
           sx={{
             display: "grid",
@@ -374,7 +485,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
             maxWidth: "100%",
           }}
         >
-          {sortedRapports.map((rapport) => (
+          {rapports.map((rapport) => (
             <Card
               key={rapport.id}
               elevation={0}
@@ -529,6 +640,25 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
             </Card>
           ))}
         </Box>
+        {listPageCount > 1 && (
+          <Stack alignItems="center" sx={{ py: 2, pb: 1 }}>
+            <Pagination
+              count={listPageCount}
+              page={listPage}
+              onChange={(_, p) => setListPage(p)}
+              color="primary"
+              showFirstButton
+              showLastButton
+              size="small"
+              siblingCount={0}
+              boundaryCount={1}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              {rapportsCount} au total — {RAPPORTS_LIST_PAGE_SIZE} par page
+            </Typography>
+          </Stack>
+        )}
+        </>
       )}
 
       <Snackbar

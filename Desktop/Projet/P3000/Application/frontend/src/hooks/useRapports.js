@@ -1,13 +1,31 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 
+/** Taille de page par défaut (alignée sur RapportInterventionPagination côté API). */
+export const RAPPORTS_LIST_PAGE_SIZE = 30;
+
 export const useRapports = () => {
   const [rapports, setRapports] = useState([]);
   const [rapport, setRapport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [rapportsCount, setRapportsCount] = useState(0);
 
-  const fetchRapports = useCallback(async (filters = {}) => {
+  /**
+   * @param {Record<string, string|number>} filters - query habituelle (residence, type_rapport, …)
+   * @param {object} [opts]
+   * @param {number} [opts.page=1]
+   * @param {number} [opts.pageSize] - défaut : taille API si omis
+   * @param {string} [opts.ordering] - ex. "-date" | "date"
+   * @param {boolean} [opts.excludeStatutTermine] - masquer les rapports terminés (filtre serveur)
+   */
+  const fetchRapports = useCallback(async (filters = {}, opts = {}) => {
+    const {
+      page = 1,
+      pageSize,
+      ordering,
+      excludeStatutTermine,
+    } = opts;
     setLoading(true);
     setError(null);
     try {
@@ -17,14 +35,28 @@ export const useRapports = () => {
           params.append(key, value);
         }
       });
+      params.append("page", String(page));
+      if (pageSize != null && pageSize !== "") {
+        params.append("page_size", String(pageSize));
+      }
+      if (ordering) {
+        params.append("ordering", ordering);
+      }
+      if (excludeStatutTermine) {
+        params.append("exclude_statut_termine", "true");
+      }
       const response = await axios.get(`/api/rapports-intervention/?${params.toString()}`);
-      const list = Array.isArray(response.data?.results)
-        ? response.data.results
-        : Array.isArray(response.data)
-          ? response.data
-          : [];
+      const data = response.data;
+      if (data != null && Array.isArray(data.results)) {
+        setRapports(data.results);
+        const total = typeof data.count === "number" ? data.count : data.results.length;
+        setRapportsCount(total);
+        return { results: data.results, count: total };
+      }
+      const list = Array.isArray(data) ? data : [];
       setRapports(list);
-      return list;
+      setRapportsCount(list.length);
+      return { results: list, count: list.length };
     } catch (err) {
       setError(err.response?.data?.detail || "Erreur lors du chargement des rapports");
       throw err;
@@ -216,6 +248,7 @@ export const useRapports = () => {
     rapport,
     loading,
     error,
+    rapportsCount,
     setRapport,
     fetchRapports,
     fetchRapport,

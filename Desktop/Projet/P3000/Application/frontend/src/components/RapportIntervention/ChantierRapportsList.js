@@ -61,7 +61,7 @@ const ChantierRapportsList = ({ chantierData }) => {
 
   const loadRapports = useCallback(async () => {
     if (!chantierData?.id) return;
-    await fetchRapports({ chantier: chantierData.id });
+    await fetchRapports({ chantier: chantierData.id }, { page: 1, pageSize: 200 });
   }, [chantierData?.id, fetchRapports]);
 
   useEffect(() => {
@@ -70,10 +70,11 @@ const ChantierRapportsList = ({ chantierData }) => {
 
   const handleOpenLinkDialog = async () => {
     try {
-      const res = await fetch("/api/rapports-intervention/");
-      const data = await res.json();
-      const unlinked = (Array.isArray(data) ? data : []).filter((r) => !r.chantier);
-      setAllRapports(unlinked);
+      const res = await axios.get("/api/rapports-intervention/", {
+        params: { sans_chantier: "true", page_size: 200 },
+      });
+      const list = res.data?.results ?? [];
+      setAllRapports(Array.isArray(list) ? list : []);
     } catch {
       setAllRapports([]);
     }

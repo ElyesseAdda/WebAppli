@@ -113,7 +113,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     try {
       const [titresRes, rapportsRes, societesRes, chantiersRes, residencesRes] = await Promise.all([
         fetchTitres(),
-        axios.get("/api/rapports-intervention/"),
+        axios.get("/api/rapports-intervention/", { params: { page_size: 200 } }),
         axios.get("/api/societe/"),
         axios.get("/api/chantier/"),
         axios.get("/api/residences/"),

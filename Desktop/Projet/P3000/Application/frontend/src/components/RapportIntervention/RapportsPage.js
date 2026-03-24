@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Box, Button, Typography, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, TextField,
   Snackbar, Alert, Autocomplete, FormControl, InputLabel, Select, MenuItem,
-  Tooltip,
+  Tooltip, FormControlLabel, Checkbox, Pagination, Stack,
 } from "@mui/material";
 import {
   MdAdd, MdEdit, MdDelete, MdDescription, MdArrowDownward, MdArrowUpward,
@@ -11,8 +11,9 @@ import {
 import { AiFillFilePdf } from "react-icons/ai";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { alpha } from "@mui/material/styles";
 import { COLORS } from "../../constants/colors";
-import { useRapports } from "../../hooks/useRapports";
+import { useRapports, RAPPORTS_LIST_PAGE_SIZE } from "../../hooks/useRapports";
 import StatusChangeModal from "../StatusChangeModal";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
@@ -53,7 +54,7 @@ const getStatusStyles = (statut) => ({
 
 const RapportsPage = () => {
   const navigate = useNavigate();
-  const { rapports, fetchRapports, deleteRapport, patchRapport, loading } = useRapports();
+  const { rapports, rapportsCount, fetchRapports, deleteRapport, patchRapport, loading } = useRapports();
   const [filters, setFilters] = useState({
     technicien: "",
     client_societe: "",
@@ -67,6 +68,9 @@ const RapportsPage = () => {
   const [rapportToUpdate, setRapportToUpdate] = useState(null);
   /** Tri par date : desc = plus récent d'abord, asc = plus ancien d'abord */
   const [dateSortOrder, setDateSortOrder] = useState("desc");
+  /** Par défaut : masquer les rapports au statut terminé */
+  const [showTermines, setShowTermines] = useState(false);
+  const [listPage, setListPage] = useState(1);
 
   useEffect(() => {
     axios.get("/api/residences/").then((res) => {
@@ -79,8 +83,13 @@ const RapportsPage = () => {
     Object.entries(filters).forEach(([k, v]) => {
       if (v) cleanFilters[k] = v;
     });
-    fetchRapports(cleanFilters);
-  }, [fetchRapports, filters]);
+    return fetchRapports(cleanFilters, {
+      page: listPage,
+      pageSize: RAPPORTS_LIST_PAGE_SIZE,
+      ordering: dateSortOrder === "desc" ? "-date" : "date",
+      excludeStatutTermine: !showTermines,
+    });
+  }, [fetchRapports, filters, listPage, dateSortOrder, showTermines]);
 
   useEffect(() => {
     loadRapports();
@@ -191,18 +200,16 @@ const RapportsPage = () => {
 
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
+    setListPage(1);
   };
 
-  const sortedRapports = useMemo(() => {
-    return [...rapports].sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : 0;
-      const db = b.date ? new Date(b.date).getTime() : 0;
-      if (da !== db) {
-        return dateSortOrder === "desc" ? db - da : da - db;
-      }
-      return dateSortOrder === "desc" ? (b.id || 0) - (a.id || 0) : (a.id || 0) - (b.id || 0);
-    });
-  }, [rapports, dateSortOrder]);
+  const listPageCount = Math.max(1, Math.ceil(rapportsCount / RAPPORTS_LIST_PAGE_SIZE));
+
+  useEffect(() => {
+    if (!loading && listPage > listPageCount) {
+      setListPage(listPageCount);
+    }
+  }, [loading, listPage, listPageCount]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -267,7 +274,10 @@ const RapportsPage = () => {
           >
             <IconButton
               size="small"
-              onClick={() => setDateSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+              onClick={() => {
+                setDateSortOrder((o) => (o === "desc" ? "asc" : "desc"));
+                setListPage(1);
+              }}
               sx={{
                 alignSelf: "center",
                 color: "text.secondary",
@@ -287,17 +297,93 @@ const RapportsPage = () => {
               )}
             </IconButton>
           </Tooltip>
+
+          <Box
+            sx={{
+              alignSelf: "center",
+              display: "inline-flex",
+              alignItems: "center",
+              pl: 0.75,
+              pr: 2,
+              py: 0.75,
+              borderRadius: 3,
+              border: "1.5px solid",
+              borderColor: showTermines ? COLORS.accent : COLORS.border,
+              bgcolor: showTermines ? alpha(COLORS.accent, 0.1) : alpha(COLORS.primary, 0.03),
+              transition: "border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease",
+              boxShadow: showTermines
+                ? `0 1px 0 ${alpha(COLORS.accent, 0.25)}, 0 4px 14px ${alpha(COLORS.accent, 0.12)}`
+                : `inset 0 1px 0 ${alpha("#fff", 0.8)}`,
+              "&:hover": {
+                borderColor: COLORS.accent,
+                bgcolor: showTermines ? alpha(COLORS.accent, 0.14) : alpha(COLORS.accent, 0.06),
+                boxShadow: `0 2px 12px ${alpha(COLORS.primary, 0.08)}`,
+              },
+            }}
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  disableRipple
+                  checked={showTermines}
+                  onChange={(e) => {
+                    setShowTermines(e.target.checked);
+                    setListPage(1);
+                  }}
+                  sx={{
+                    p: 0.65,
+                    color: COLORS.borderDark,
+                    transition: "color 0.2s ease, transform 0.15s ease",
+                    "& .MuiSvgIcon-root": { fontSize: 22, borderRadius: "6px" },
+                    "&.Mui-checked": {
+                      color: COLORS.accent,
+                      transform: "scale(1.02)",
+                    },
+                    "&:hover": { bgcolor: alpha(COLORS.accent, 0.08) },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    letterSpacing: "0.03em",
+                    fontSize: "0.8125rem",
+                    color: showTermines ? COLORS.primary : COLORS.textMuted,
+                    lineHeight: 1.25,
+                  }}
+                >
+                  Afficher terminés
+                </Typography>
+              }
+              sx={{ m: 0, gap: 0.75, userSelect: "none", alignItems: "center" }}
+            />
+          </Box>
         </Box>
       </Paper>
 
-      {/* Liste unique : tous les rapports, tries par date (plus recent en premier) */}
-      {rapports.length === 0 ? (
+      {/* Liste paginée côté serveur (tri + filtre terminés) */}
+      {loading && rapports.length === 0 ? (
         <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
           <Typography variant="body1" color="text.secondary">
-            {loading ? "Chargement..." : "Aucun rapport d'intervention"}
+            Chargement...
           </Typography>
         </Paper>
+      ) : !loading && rapportsCount === 0 ? (
+        <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
+          <Typography variant="body1" color="text.secondary">
+            Aucun rapport d&apos;intervention ne correspond à ces critères.
+          </Typography>
+          {!showTermines && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, maxWidth: 480, mx: "auto" }}>
+              Les rapports terminés sont masqués par défaut — cochez « Afficher terminés » pour les inclure.
+            </Typography>
+          )}
+        </Paper>
       ) : (
+        <>
         <Paper elevation={0} sx={{ borderRadius: 2, border: "1px solid #e0e0e0", overflow: "hidden" }}>
           <TableContainer sx={{ maxHeight: "calc(100vh - 280px)" }}>
             <Table size="small" stickyHeader>
@@ -315,7 +401,7 @@ const RapportsPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedRapports.map((rapport) => (
+                {rapports.map((rapport) => (
                   <TableRow
                     key={rapport.id}
                     hover
@@ -376,6 +462,25 @@ const RapportsPage = () => {
             </Table>
           </TableContainer>
         </Paper>
+        {listPageCount > 1 && (
+          <Stack alignItems="center" sx={{ py: 2 }}>
+            <Pagination
+              count={listPageCount}
+              page={listPage}
+              onChange={(_, p) => setListPage(p)}
+              color="primary"
+              showFirstButton
+              showLastButton
+              size="small"
+              siblingCount={1}
+              boundaryCount={1}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              {rapportsCount} rapport{rapportsCount > 1 ? "s" : ""} au total — {RAPPORTS_LIST_PAGE_SIZE} par page
+            </Typography>
+          </Stack>
+        )}
+        </>
       )}
 
       <StatusChangeModal

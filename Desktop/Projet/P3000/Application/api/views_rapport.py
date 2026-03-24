@@ -5,8 +5,10 @@ import tempfile
 import uuid
 import base64
 import traceback
+from django.db.models import Count
 from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -50,6 +52,14 @@ def _format_societe_adresse(societe):
     return "\n".join(lines)
 
 
+class RapportInterventionPagination(PageNumberPagination):
+    """Liste paginée : moins de données par requête, chargement plus rapide."""
+
+    page_size = 30
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
 class TitreRapportViewSet(viewsets.ModelViewSet):
     queryset = TitreRapport.objects.all()
     serializer_class = TitreRapportSerializer
@@ -76,11 +86,18 @@ class ResidenceViewSet(viewsets.ModelViewSet):
 
 class RapportInterventionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    pagination_class = RapportInterventionPagination
 
     def get_queryset(self):
         qs = RapportIntervention.objects.select_related(
             'titre', 'client_societe', 'chantier', 'residence', 'created_by'
-        ).prefetch_related('prestations__photos')
+        )
+        action = getattr(self, 'action', None)
+        # Liste : pas de prefetch photos (tres lourd) ; comptage en une requête
+        if action == 'list':
+            qs = qs.annotate(prestations_count=Count('prestations', distinct=True))
+        else:
+            qs = qs.prefetch_related('prestations__photos')
 
         chantier_id = self.request.query_params.get('chantier')
         if chantier_id:
@@ -109,6 +126,23 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         date_creation = self.request.query_params.get('date_creation')
         if date_creation:
             qs = qs.filter(created_at__date=date_creation)
+
+        sans_chantier = self.request.query_params.get('sans_chantier', '').lower()
+        if sans_chantier in ('1', 'true', 'yes'):
+            qs = qs.filter(chantier__isnull=True)
+
+        exclude_term = self.request.query_params.get('exclude_statut_termine', '').lower()
+        if exclude_term in ('1', 'true', 'yes'):
+            qs = qs.exclude(statut='termine')
+
+        if action == 'list':
+            ordering = (self.request.query_params.get('ordering') or '-date').strip()
+            if ordering == 'date':
+                qs = qs.order_by('date', 'id')
+            elif ordering == '-date':
+                qs = qs.order_by('-date', '-id')
+            else:
+                qs = qs.order_by('-date', '-id')
 
         return qs
 
