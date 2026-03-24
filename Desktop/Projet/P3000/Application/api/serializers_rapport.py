@@ -325,13 +325,11 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
         return validated_data
 
     def validate(self, attrs):
-        """Pour Vigik+, adresse_vigik est obligatoire. Sinon titre, technicien et objet_recherche sont obligatoires."""
+        """Pour Vigik+, adresse_vigik est obligatoire. Sinon technicien et objet_recherche sont obligatoires."""
         if _is_vigik_plus(attrs):
             if not (attrs.get('adresse_vigik') or '').strip():
                 raise serializers.ValidationError({'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."})
             return attrs
-        if 'titre' in attrs and not attrs.get('titre'):
-            raise serializers.ValidationError({'titre': 'Ce champ est obligatoire pour un rapport d\'intervention.'})
         if 'technicien' in attrs and not (attrs.get('technicien') or '').strip():
             raise serializers.ValidationError({'technicien': 'Ce champ est obligatoire.'})
         if 'objet_recherche' in attrs and not (attrs.get('objet_recherche') or '').strip():

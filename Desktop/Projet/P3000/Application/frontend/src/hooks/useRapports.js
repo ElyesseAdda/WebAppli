@@ -203,6 +203,14 @@ export const useRapports = () => {
     }
   }, []);
 
+  const deleteTitre = useCallback(async (titreId) => {
+    try {
+      await axios.delete(`/api/titres-rapport/${titreId}/`);
+    } catch (err) {
+      throw err;
+    }
+  }, []);
+
   return {
     rapports,
     rapport,
@@ -224,5 +232,6 @@ export const useRapports = () => {
     lierChantier,
     fetchTitres,
     createTitre,
+    deleteTitre,
   };
 };

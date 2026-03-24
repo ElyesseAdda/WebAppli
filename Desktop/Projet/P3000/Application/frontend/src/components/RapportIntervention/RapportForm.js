@@ -37,7 +37,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const {
     fetchRapport, createRapport, updateRapport, uploadPhoto, updatePhoto,
     deletePhoto, uploadSignature, genererPdf,
-    fetchTitres, createTitre, loading,
+    fetchTitres, createTitre, deleteTitre, loading,
   } = useRapports();
 
   const [formData, setFormData] = useState({
@@ -83,6 +83,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const signaturePadRef = useRef(null);
   const [newTitreDialog, setNewTitreDialog] = useState(false);
   const [newTitreName, setNewTitreName] = useState("");
+  const [deleteTitreDialogOpen, setDeleteTitreDialogOpen] = useState(false);
+  const [titreToDelete, setTitreToDelete] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [saving, setSaving] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
@@ -362,8 +364,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   };
 
   const handleSave = async () => {
-    if (!isVigikPlus && (!formData.titre || !formData.technicien)) {
-      showSnackbar("Veuillez remplir les champs obligatoires (titre, technicien)", "error");
+    if (!isVigikPlus && !formData.technicien) {
+      showSnackbar("Veuillez remplir le champ obligatoire technicien", "error");
       return;
     }
     if (!isVigikPlus && !formData.objet_recherche) {
@@ -533,6 +535,31 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     }
   };
 
+  const handleDeleteSelectedTitre = async () => {
+    const selectedTitreId = formData.titre;
+    if (!selectedTitreId) {
+      showSnackbar("Veuillez selectionner un titre a supprimer", "warning");
+      return;
+    }
+    const selectedTitre = titres.find((t) => t.id === selectedTitreId);
+    setTitreToDelete(selectedTitre || { id: selectedTitreId, nom: "selectionne" });
+    setDeleteTitreDialogOpen(true);
+  };
+
+  const handleConfirmDeleteTitre = async () => {
+    if (!titreToDelete?.id) return;
+    try {
+      await deleteTitre(titreToDelete.id);
+      setTitres((prev) => prev.filter((t) => t.id !== titreToDelete.id));
+      setFormData((prev) => ({ ...prev, titre: "" }));
+      setDeleteTitreDialogOpen(false);
+      setTitreToDelete(null);
+      showSnackbar("Titre supprime");
+    } catch (err) {
+      showSnackbar("Impossible de supprimer ce titre (il est peut-etre deja utilise)", "error");
+    }
+  };
+
   const isDisabled = rapportData?.statut === "termine";
   const isNewResidence = !selectedResidence && !!formData.residence_nom;
 
@@ -666,10 +693,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           {!isVigikPlus && (
           <Box sx={{ display: "flex", gap: 1 }}>
             <FormControl fullWidth size="small">
-              <InputLabel>Titre *</InputLabel>
+              <InputLabel>Titre</InputLabel>
               <Select
                 value={formData.titre}
-                label="Titre *"
+                label="Titre"
                 onChange={(e) => handleFieldChange("titre", e.target.value)}
                 disabled={isDisabled}
                 MenuProps={selectMenuProps}
@@ -685,8 +712,20 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
               onClick={() => setNewTitreDialog(true)}
               disabled={isDisabled}
               sx={{ minWidth: 40, px: 1 }}
+              title="Ajouter un titre"
             >
               <MdAdd />
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              color="error"
+              onClick={handleDeleteSelectedTitre}
+              disabled={isDisabled || !formData.titre}
+              sx={{ minWidth: 40, px: 1 }}
+              title="Supprimer le titre selectionne"
+            >
+              <MdDelete />
             </Button>
           </Box>
           )}
@@ -1430,6 +1469,37 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         <DialogActions>
           <Button onClick={() => setNewTitreDialog(false)}>Annuler</Button>
           <Button variant="contained" onClick={handleCreateTitre}>Creer</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteTitreDialogOpen}
+        onClose={() => {
+          setDeleteTitreDialogOpen(false);
+          setTitreToDelete(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Voulez-vous vraiment supprimer le titre "{titreToDelete?.nom || ""}" ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setDeleteTitreDialogOpen(false);
+              setTitreToDelete(null);
+            }}
+          >
+            Annuler
+          </Button>
+          <Button variant="contained" color="error" onClick={handleConfirmDeleteTitre}>
+            Supprimer
+          </Button>
         </DialogActions>
       </Dialog>
 

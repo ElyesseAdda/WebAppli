@@ -51,7 +51,13 @@ class RapportIntervention(models.Model):
         ('termine', 'Terminé'),
     ]
 
-    titre = models.ForeignKey(TitreRapport, on_delete=models.PROTECT, related_name='rapports')
+    titre = models.ForeignKey(
+        TitreRapport,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rapports',
+    )
     date = models.DateField(default=timezone.now)
     technicien = models.CharField(max_length=255, verbose_name="Technicien")
     objet_recherche = models.TextField(verbose_name="Objet de la recherche")
@@ -102,7 +108,7 @@ class RapportIntervention(models.Model):
         verbose_name_plural = "Rapports d'intervention"
 
     def __str__(self):
-        return f"Rapport {self.titre} - {self.date}"
+        return f"Rapport {self.titre or 'Sans titre'} - {self.date}"
 
 
 class PrestationRapport(models.Model):

@@ -3,7 +3,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <title>Rapport d'intervention{% if rapport.titre %} - {{ rapport.titre }}{% endif %}</title>
+    <title>{% if rapport.titre %}{{ rapport.titre }}{% else %}Rapport{% endif %}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
 
@@ -305,7 +305,7 @@
         </div>
     </div>
 
-    <h1 class="report-title">{% if rapport.titre %}{{ rapport.titre }}{% else %}Rapport d'intervention{% endif %}</h1>
+    <h1 class="report-title">{% if rapport.titre %}{{ rapport.titre }}{% else %}Rapport{% endif %}</h1>
 
     <div class="info-grid">
         <div class="info-block">
