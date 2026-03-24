@@ -53,7 +53,7 @@ const RapportPreview = ({ rapport }) => {
         <InfoBlock title="Residence">
           <InfoRow label="Nom" value={rapport.residence_nom || "-"} />
           <InfoRow label="Adresse" value={rapport.residence_adresse || "-"} />
-          {rapport.logement && <InfoRow label="Logement" value={rapport.logement} />}
+          {rapport.logement && <InfoRow label="Lieu d'intervention" value={rapport.logement} />}
         </InfoBlock>
 
         <InfoBlock title="Locataire">

@@ -1257,7 +1257,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         )}
       </Paper>
 
-      {/* Logement & Locataire (masque pour Vigik+) */}
+      {/* Lieu d'intervention & Locataire (masque pour Vigik+) */}
       {!isVigikPlus && (
       <Paper
         elevation={0}
@@ -1269,11 +1269,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         }}
       >
         <Typography variant="h6" sx={{ mb: { xs: 2.5, md: 2 }, fontWeight: 600, color: COLORS.primary }}>
-          Logement & Locataire
+          Lieu d'intervention & Locataire
         </Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: fieldGap }}>
           <TextField
-            label="Logement"
+            label="Lieu d'intervention"
             value={formData.logement}
             onChange={(e) => handleFieldChange("logement", e.target.value)}
             fullWidth
