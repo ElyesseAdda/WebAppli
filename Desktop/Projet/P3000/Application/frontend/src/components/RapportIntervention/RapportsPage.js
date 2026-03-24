@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Box, Button, Typography, Paper, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, Chip, IconButton, TextField,
-  Snackbar, Alert, Autocomplete, Collapse, FormControl, InputLabel, Select, MenuItem,
+  TableContainer, TableHead, TableRow, IconButton, TextField,
+  Snackbar, Alert, Autocomplete, FormControl, InputLabel, Select, MenuItem,
+  Tooltip,
 } from "@mui/material";
 import {
-  MdAdd, MdEdit, MdDelete, MdDescription,
-  MdExpandMore, MdExpandLess,
+  MdAdd, MdEdit, MdDelete, MdDescription, MdArrowDownward, MdArrowUpward,
 } from "react-icons/md";
 import { AiFillFilePdf } from "react-icons/ai";
 import axios from "axios";
@@ -62,10 +62,11 @@ const RapportsPage = () => {
     type_rapport: "",
   });
   const [residences, setResidences] = useState([]);
-  const [expandedResidences, setExpandedResidences] = useState({});
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [rapportToUpdate, setRapportToUpdate] = useState(null);
+  /** Tri par date : desc = plus récent d'abord, asc = plus ancien d'abord */
+  const [dateSortOrder, setDateSortOrder] = useState("desc");
 
   useEffect(() => {
     axios.get("/api/residences/").then((res) => {
@@ -192,41 +193,16 @@ const RapportsPage = () => {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  const toggleResidence = (key) => {
-    setExpandedResidences((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const groupedRapports = useMemo(() => {
-    const groups = {};
-    rapports.forEach((r) => {
-      const key = r.residence_nom || "Sans residence";
-      if (!groups[key]) {
-        groups[key] = {
-          residence_nom: r.residence_nom || "Sans residence",
-          residence_adresse: r.residence_adresse || "",
-          client_societe_nom: r.client_societe_nom || "",
-          rapports: [],
-        };
+  const sortedRapports = useMemo(() => {
+    return [...rapports].sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      if (da !== db) {
+        return dateSortOrder === "desc" ? db - da : da - db;
       }
-      groups[key].rapports.push(r);
+      return dateSortOrder === "desc" ? (b.id || 0) - (a.id || 0) : (a.id || 0) - (b.id || 0);
     });
-    Object.values(groups).forEach((g) => {
-      g.rapports.sort((a, b) => (a.logement || "").localeCompare(b.logement || ""));
-    });
-    return Object.values(groups).sort((a, b) => a.residence_nom.localeCompare(b.residence_nom));
-  }, [rapports]);
-
-  useEffect(() => {
-    const initial = {};
-    groupedRapports.forEach((g) => {
-      if (expandedResidences[g.residence_nom] === undefined) {
-        initial[g.residence_nom] = true;
-      }
-    });
-    if (Object.keys(initial).length > 0) {
-      setExpandedResidences((prev) => ({ ...prev, ...initial }));
-    }
-  }, [groupedRapports]);
+  }, [rapports, dateSortOrder]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -281,10 +257,40 @@ const RapportsPage = () => {
             onChange={(e) => handleFilterChange("date_creation", e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
+
+          <Tooltip
+            title={
+              dateSortOrder === "desc"
+                ? "Plus récent d'abord — cliquer pour plus ancien d'abord"
+                : "Plus ancien d'abord — cliquer pour plus récent d'abord"
+            }
+          >
+            <IconButton
+              size="small"
+              onClick={() => setDateSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+              sx={{
+                alignSelf: "center",
+                color: "text.secondary",
+                opacity: 0.65,
+                "&:hover": { opacity: 1, backgroundColor: "action.hover" },
+              }}
+              aria-label={
+                dateSortOrder === "desc"
+                  ? "Tri par date : plus récent d'abord"
+                  : "Tri par date : plus ancien d'abord"
+              }
+            >
+              {dateSortOrder === "desc" ? (
+                <MdArrowDownward size={20} />
+              ) : (
+                <MdArrowUpward size={20} />
+              )}
+            </IconButton>
+          </Tooltip>
         </Box>
       </Paper>
 
-      {/* Tableau groupe par residence */}
+      {/* Liste unique : tous les rapports, tries par date (plus recent en premier) */}
       {rapports.length === 0 ? (
         <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
           <Typography variant="body1" color="text.secondary">
@@ -292,106 +298,84 @@ const RapportsPage = () => {
           </Typography>
         </Paper>
       ) : (
-        groupedRapports.map((group) => (
-          <Paper key={group.residence_nom} elevation={0} sx={{ mb: 2, borderRadius: 2, border: "1px solid #e0e0e0", overflow: "hidden" }}>
-            <Box
-              onClick={() => toggleResidence(group.residence_nom)}
-              sx={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                px: 2, py: 1.5, cursor: "pointer",
-                backgroundColor: "#f5f5f5", "&:hover": { backgroundColor: "#eeeeee" },
-              }}
-            >
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  {group.residence_nom}
-                  <Chip label={`${group.rapports.length} rapport(s)`} size="small" sx={{ ml: 1 }} />
-                </Typography>
-                {group.residence_adresse && (
-                  <Typography variant="caption" color="text.secondary">{group.residence_adresse}</Typography>
-                )}
-                {group.client_societe_nom && (
-                  <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                    Client: {group.client_societe_nom}
-                  </Typography>
-                )}
-              </Box>
-              <IconButton size="small">
-                {expandedResidences[group.residence_nom] ? <MdExpandLess /> : <MdExpandMore />}
-              </IconButton>
-            </Box>
-
-            <Collapse in={expandedResidences[group.residence_nom] !== false}>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Logement/Adresse</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
-                      <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {group.rapports.map((rapport) => (
-                      <TableRow key={rapport.id} hover sx={{ cursor: "pointer" }}
-                        onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
+        <Paper elevation={0} sx={{ borderRadius: 2, border: "1px solid #e0e0e0", overflow: "hidden" }}>
+          <TableContainer sx={{ maxHeight: "calc(100vh - 280px)" }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, minWidth: 140 }}>Residence</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Lieu d&apos;intervention / Adresse</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Client</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
+                  <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sortedRapports.map((rapport) => (
+                  <TableRow
+                    key={rapport.id}
+                    hover
+                    sx={{ cursor: "pointer" }}
+                    onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
+                  >
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {rapport.residence_nom || "Sans residence"}
+                    </TableCell>
+                    <TableCell>{rapport.date ? new Date(rapport.date).toLocaleDateString("fr-FR") : "-"}</TableCell>
+                    <TableCell>{TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}</TableCell>
+                    <TableCell sx={{ fontWeight: 500, maxWidth: 220 }}>
+                      {rapport.type_rapport === "vigik_plus"
+                        ? (rapport.adresse_vigik || "-")
+                        : (rapport.logement || "-")}
+                    </TableCell>
+                    <TableCell>{rapport.titre_nom || "-"}</TableCell>
+                    <TableCell>{rapport.technicien || "-"}</TableCell>
+                    <TableCell>{rapport.client_societe_nom || "-"}</TableCell>
+                    <TableCell
+                      onClick={(e) => handleStatusClick(e, rapport)}
+                      sx={{ cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }}
+                    >
+                      <Typography variant="body2" sx={getStatusStyles(rapport.statut || "a_faire")}>
+                        {STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={() => handleGeneratePDF(rapport)}
+                        sx={{ color: "success.main", "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" } }}
+                        title="Télécharger le PDF"
                       >
-                        <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
-                        <TableCell>{TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}</TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>
-                          {rapport.type_rapport === "vigik_plus"
-                            ? (rapport.adresse_vigik || "-")
-                            : (rapport.logement || "-")}
-                        </TableCell>
-                        <TableCell>{rapport.titre_nom || "-"}</TableCell>
-                        <TableCell>{rapport.technicien || "-"}</TableCell>
-                        <TableCell
-                          onClick={(e) => handleStatusClick(e, rapport)}
-                          sx={{ cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }}
-                        >
-                          <Typography variant="body2" sx={getStatusStyles(rapport.statut || "a_faire")}>
-                            {STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <IconButton
-                            size="small"
-                            onClick={() => handleGeneratePDF(rapport)}
-                            sx={{ color: "success.main", "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" } }}
-                            title="Télécharger le PDF"
-                          >
-                            <AiFillFilePdf style={{ fontSize: "20px" }} />
-                          </IconButton>
-                          <RegeneratePDFIconButton
-                            documentType={rapport.type_rapport === "vigik_plus" ? DOCUMENT_TYPES.RAPPORT_VIGIK_PLUS : DOCUMENT_TYPES.RAPPORT_INTERVENTION}
-                            documentData={rapport}
-                            size="small"
-                            color="primary"
-                            tooltipPlacement="top"
-                          />
-                          <IconButton size="small" color="primary"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/RapportIntervention/${rapport.id}`); }}
-                          >
-                            <MdEdit />
-                          </IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleDelete(rapport.id)}>
-                            <MdDelete />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Collapse>
-          </Paper>
-        ))
+                        <AiFillFilePdf style={{ fontSize: "20px" }} />
+                      </IconButton>
+                      <RegeneratePDFIconButton
+                        documentType={rapport.type_rapport === "vigik_plus" ? DOCUMENT_TYPES.RAPPORT_VIGIK_PLUS : DOCUMENT_TYPES.RAPPORT_INTERVENTION}
+                        documentData={rapport}
+                        size="small"
+                        color="primary"
+                        tooltipPlacement="top"
+                      />
+                      <IconButton size="small" color="primary"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/RapportIntervention/${rapport.id}`); }}
+                      >
+                        <MdEdit />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => handleDelete(rapport.id)}>
+                        <MdDelete />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
 
       <StatusChangeModal

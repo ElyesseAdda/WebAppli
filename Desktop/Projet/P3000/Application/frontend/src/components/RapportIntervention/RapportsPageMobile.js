@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -10,6 +10,8 @@ import {
   TextField,
   Autocomplete,
   Button,
+  IconButton,
+  Tooltip,
   Snackbar,
   Alert,
   useMediaQuery,
@@ -19,7 +21,7 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import { MdVisibility, MdEdit } from "react-icons/md";
+import { MdVisibility, MdEdit, MdArrowDownward, MdArrowUpward } from "react-icons/md";
 import { AiFillFilePdf } from "react-icons/ai";
 import axios from "axios";
 import { COLORS } from "../../constants/colors";
@@ -123,6 +125,17 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     };
   }, [logementInput]);
 
+  const sortedRapports = useMemo(() => {
+    return [...rapports].sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      if (da !== db) {
+        return dateSortOrder === "desc" ? db - da : da - db;
+      }
+      return dateSortOrder === "desc" ? (b.id || 0) - (a.id || 0) : (a.id || 0) - (b.id || 0);
+    });
+  }, [rapports, dateSortOrder]);
+
   const handleGeneratePDF = async (rapport, e) => {
     if (e) e.stopPropagation();
     try {
@@ -205,27 +218,57 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: COLORS.primary, fontSize: "1rem" }}>
             Filtrer
           </Typography>
-          {(filters.residence || filters.logement || filters.type_rapport) && (
-            <Button
-              size="small"
-              onClick={() => {
-                setFilters({ residence: "", logement: "", type_rapport: "" });
-                setLogementInput("");
-              }}
-              sx={{
-                minHeight: 40,
-                px: 1.5,
-                borderRadius: 1,
-                fontWeight: 600,
-                fontSize: "0.8125rem",
-                color: COLORS.textMuted,
-                border: `1px solid ${COLORS.border}`,
-                "&:hover": { backgroundColor: COLORS.backgroundAlt, borderColor: COLORS.primary },
-              }}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Tooltip
+              title={
+                dateSortOrder === "desc"
+                  ? "Plus récent d'abord — toucher pour plus ancien d'abord"
+                  : "Plus ancien d'abord — toucher pour plus récent d'abord"
+              }
             >
-              Réinitialiser
-            </Button>
-          )}
+              <IconButton
+                size="small"
+                onClick={() => setDateSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+                sx={{
+                  color: COLORS.textMuted,
+                  opacity: 0.75,
+                  "&:hover": { opacity: 1, backgroundColor: COLORS.backgroundAlt },
+                }}
+                aria-label={
+                  dateSortOrder === "desc"
+                    ? "Tri par date : plus récent d'abord"
+                    : "Tri par date : plus ancien d'abord"
+                }
+              >
+                {dateSortOrder === "desc" ? (
+                  <MdArrowDownward size={22} />
+                ) : (
+                  <MdArrowUpward size={22} />
+                )}
+              </IconButton>
+            </Tooltip>
+            {(filters.residence || filters.logement || filters.type_rapport) && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setFilters({ residence: "", logement: "", type_rapport: "" });
+                  setLogementInput("");
+                }}
+                sx={{
+                  minHeight: 40,
+                  px: 1.5,
+                  borderRadius: 1,
+                  fontWeight: 600,
+                  fontSize: "0.8125rem",
+                  color: COLORS.textMuted,
+                  border: `1px solid ${COLORS.border}`,
+                  "&:hover": { backgroundColor: COLORS.backgroundAlt, borderColor: COLORS.primary },
+                }}
+              >
+                Réinitialiser
+              </Button>
+            )}
+          </Box>
         </Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Autocomplete
@@ -331,7 +374,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
             maxWidth: "100%",
           }}
         >
-          {rapports.map((rapport) => (
+          {sortedRapports.map((rapport) => (
             <Card
               key={rapport.id}
               elevation={0}
@@ -395,13 +438,18 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                   <Box sx={{ fontSize: "0.8125rem", mb: 0.5, color: "text.secondary" }}>
                     {TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}
                   </Box>
+                  {rapport.client_societe_nom && (
+                    <Box sx={{ fontSize: "0.8125rem", mb: 0.5, color: "text.secondary" }}>
+                      Client : {rapport.client_societe_nom}
+                    </Box>
+                  )}
                   <Box sx={{ fontSize: "0.875rem", mb: 0.5, lineHeight: 1.4 }}>
                     <Typography
                       component="span"
                       variant="body2"
                       sx={{ color: COLORS.primary, fontWeight: 600, fontSize: "inherit" }}
                     >
-                      Logement :{" "}
+                      Lieu d&apos;intervention :{" "}
                     </Typography>
                     <Typography
                       component="span"
