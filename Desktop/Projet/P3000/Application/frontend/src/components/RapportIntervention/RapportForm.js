@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Box, Button, TextField, Typography, Paper, MenuItem, Select,
   FormControl, InputLabel, Autocomplete, Chip, Alert, Snackbar,
@@ -24,6 +24,18 @@ const EMPTY_PRESTATION = {
   commentaire: "",
   prestation_possible: true,
   prestation_realisee: "",
+};
+
+/** Adresse chantier : rue, code postal + ville (aligné sur le modèle Chantier). */
+const formatChantierAddress = (c) => {
+  if (!c) return "";
+  const rue = (c.rue || "").trim();
+  const cp = c.code_postal != null && c.code_postal !== "" ? String(c.code_postal).trim() : "";
+  const ville = (c.ville || "").trim();
+  const ligne2 = [cp, ville].filter(Boolean).join(" ").trim();
+  if (rue && ligne2) return `${rue}, ${ligne2}`;
+  if (rue) return rue;
+  return ligne2;
 };
 
 const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onReportCreated }) => {
@@ -151,7 +163,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         presence_platine_portail: data.presence_platine_portail ?? null,
       });
       if (data.residence_data) {
-        setSelectedResidence(data.residence_data);
+        setSelectedResidence({ ...data.residence_data, optionType: "residence" });
+      } else {
+        setSelectedResidence(null);
       }
     } catch (err) {
       showSnackbar("Erreur lors du chargement du rapport", "error");
@@ -170,36 +184,174 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const residenceOptions = useMemo(() => {
+    const fromRes = (residences || []).map((r) => ({
+      ...r,
+      optionType: "residence",
+      key: `res-${r.id}`,
+    }));
+    const fromCh = (chantiers || []).map((c) => ({
+      ...c,
+      optionType: "chantier",
+      nom: c.chantier_name,
+      adresse: formatChantierAddress(c),
+      chantierId: c.id,
+      key: `ch-${c.id}`,
+      client_societe_nom: c.societe && typeof c.societe === "object" ? c.societe.nom_societe : undefined,
+    }));
+    return [...fromRes, ...fromCh];
+  }, [residences, chantiers]);
+
   const handleResidenceChange = (_, value) => {
-    if (value && typeof value === "object" && value.id) {
-      setSelectedResidence(value);
-      const dr = value.dernier_rapport;
-      setFormData((prev) => ({
-        ...prev,
-        residence: value.id,
-        residence_nom: value.nom,
-        residence_adresse: value.adresse || "",
-        client_societe: dr?.client_societe || value.client_societe || prev.client_societe,
-        chantier: dr?.chantier || value.chantier || prev.chantier,
-        technicien: dr?.technicien || prev.technicien,
-      }));
-    } else {
-      const newName = typeof value === "string" ? value : value?.inputValue || "";
+    if (value == null) {
       setSelectedResidence(null);
       setFormData((prev) => ({
         ...prev,
         residence: null,
-        residence_nom: newName,
+        residence_nom: "",
         residence_adresse: "",
+        chantier: "",
       }));
+      return;
     }
+    if (typeof value === "string") {
+      setSelectedResidence(null);
+      setFormData((prev) => ({
+        ...prev,
+        residence: null,
+        residence_nom: value,
+        residence_adresse: "",
+        chantier: "",
+      }));
+      return;
+    }
+    if (value && typeof value === "object" && value.inputValue != null) {
+      const raw = String(value.inputValue || "").trim();
+      setSelectedResidence(null);
+      setFormData((prev) => ({
+        ...prev,
+        residence: null,
+        residence_nom: raw,
+        residence_adresse: "",
+        chantier: "",
+      }));
+      return;
+    }
+    if (value && typeof value === "object" && value.optionType === "chantier") {
+      const c = chantiers.find((ch) => ch.id === value.chantierId) || value;
+      const addr = formatChantierAddress(c);
+      setSelectedResidence({
+        _fromChantier: true,
+        chantierId: value.chantierId,
+        nom: value.nom,
+        adresse: addr,
+        optionType: "chantier",
+      });
+      setFormData((prev) => ({
+        ...prev,
+        residence: null,
+        residence_nom: value.nom,
+        residence_adresse: addr,
+        chantier: value.chantierId,
+        client_societe: c.societe != null
+          ? (typeof c.societe === "object" ? c.societe.id : c.societe)
+          : prev.client_societe,
+        technicien: prev.technicien,
+      }));
+      return;
+    }
+    if (value && typeof value === "object" && (value.optionType === "residence" || value.id) && !value.inputValue) {
+      const res = value.optionType === "residence" ? value : { ...value, optionType: "residence" };
+      setSelectedResidence(res);
+      const dr = res.dernier_rapport;
+      setFormData((prev) => ({
+        ...prev,
+        residence: res.id,
+        residence_nom: res.nom,
+        residence_adresse: res.adresse || "",
+        client_societe: dr?.client_societe || res.client_societe || prev.client_societe,
+        chantier: dr?.chantier || res.chantier || "",
+        technicien: dr?.technicien || prev.technicien,
+      }));
+      return;
+    }
+    const newName = typeof value === "string" ? value : "";
+    setSelectedResidence(null);
+    setFormData((prev) => ({
+      ...prev,
+      residence: null,
+      residence_nom: newName,
+      residence_adresse: "",
+      chantier: "",
+    }));
   };
 
-  const handleResidenceInputChange = (_, value) => {
+  /** Champ Chantier (liste dediee) : garde le meme etat que si le chantier est choisi dans Residence. */
+  const handleChantierFieldChange = (_, val) => {
+    if (!val) {
+      if (selectedResidence?._fromChantier) {
+        setSelectedResidence(null);
+        setFormData((prev) => ({
+          ...prev,
+          chantier: "",
+          residence_nom: "",
+          residence_adresse: "",
+        }));
+      } else {
+        handleFieldChange("chantier", "");
+      }
+      return;
+    }
+    const addr = formatChantierAddress(val);
+    setFormData((prev) => ({
+      ...prev,
+      chantier: val.id,
+      residence_nom: val.chantier_name,
+      residence_adresse: addr,
+      residence: null,
+      client_societe:
+        val.societe != null
+          ? (typeof val.societe === "object" ? val.societe.id : val.societe)
+          : prev.client_societe,
+    }));
+    setSelectedResidence({
+      _fromChantier: true,
+      chantierId: val.id,
+      nom: val.chantier_name,
+      adresse: addr,
+      optionType: "chantier",
+    });
+  };
+
+  const handleResidenceInputChange = (_, value, reason) => {
+    if (reason === "input" && selectedResidence) {
+      setSelectedResidence(null);
+      setFormData((prev) => ({
+        ...prev,
+        residence: null,
+        chantier: selectedResidence?._fromChantier ? "" : prev.chantier,
+        residence_nom: value,
+      }));
+      return;
+    }
     if (!selectedResidence) {
       setFormData((prev) => ({ ...prev, residence_nom: value }));
     }
   };
+
+  useEffect(() => {
+    if (!rapportId || !formData.chantier || formData.residence) return;
+    if (rapportData?.residence_data) return;
+    const c = chantiers.find((ch) => ch.id === formData.chantier);
+    if (!c) return;
+    setSelectedResidence({
+      _fromChantier: true,
+      chantierId: c.id,
+      nom: c.chantier_name,
+      adresse: formatChantierAddress(c),
+      optionType: "chantier",
+    });
+  }, [rapportId, formData.chantier, formData.residence, rapportData?.residence_data, chantiers]);
 
   const handlePrestationChange = (index, updatedPrestation) => {
     setFormData((prev) => {
@@ -732,7 +884,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
 
           <Autocomplete
             freeSolo
-            options={residences}
+            options={residenceOptions}
             getOptionLabel={(opt) => {
               if (typeof opt === "string") return opt;
               return opt?.nom || "";
@@ -741,22 +893,28 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             onChange={handleResidenceChange}
             onInputChange={handleResidenceInputChange}
             filterOptions={(options, params) => {
-              const filtered = options.filter((o) =>
-                o.nom.toLowerCase().includes(params.inputValue.toLowerCase())
-              );
-              if (params.inputValue && !filtered.some((o) => o.nom.toLowerCase() === params.inputValue.toLowerCase())) {
+              const q = (params.inputValue || "").trim().toLowerCase();
+              const filtered = options.filter((o) => {
+                const nom = (o.nom || "").toLowerCase();
+                const adr = (o.adresse || "").toLowerCase();
+                const client = (o.client_societe_nom || o.dernier_rapport?.client_societe_nom || "").toLowerCase();
+                return !q || nom.includes(q) || adr.includes(q) || client.includes(q);
+              });
+              if (params.inputValue && !filtered.some((o) => o.nom && o.nom.toLowerCase() === params.inputValue.toLowerCase())) {
                 filtered.push({ inputValue: params.inputValue, nom: `Creer "${params.inputValue}"` });
               }
               return filtered;
             }}
             renderOption={(props, option) => (
-              <li {...props} key={option.id || option.inputValue || option.nom}>
-                <Box>
+              <li {...props} key={option.key || option.id || option.inputValue || option.nom}>
+                <Box sx={{ py: 0.25 }}>
                   <Typography variant="body2" sx={{ fontWeight: option.inputValue ? 600 : 400 }}>
                     {option.nom}
                   </Typography>
                   {option.adresse && (
-                    <Typography variant="caption" color="text.secondary">{option.adresse}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      {option.adresse}
+                    </Typography>
                   )}
                   {(option.client_societe_nom || option.dernier_rapport?.client_societe_nom) && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
@@ -771,11 +929,21 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 </Box>
               </li>
             )}
-            renderInput={(params) => <TextField {...params} label="Residence *" size="small" />}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Residence *"
+                size="small"
+                helperText="Residences enregistrees et chantiers (nom + adresse du chantier)"
+              />
+            )}
             disabled={isDisabled}
             isOptionEqualToValue={(opt, val) => {
               if (typeof val === "string") return opt?.nom === val;
-              return opt?.id === val?.id;
+              if (val?._fromChantier || val?.optionType === "chantier") {
+                return opt?.optionType === "chantier" && opt?.chantierId === (val?.chantierId ?? val?.id);
+              }
+              return opt?.optionType === "residence" && opt?.id === val?.id;
             }}
             ListboxProps={autocompleteListboxProps}
             sx={{ gridColumn: { md: "1 / -1" } }}
@@ -783,12 +951,21 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
 
           {selectedResidence && (
             <Alert severity="info" sx={{ gridColumn: { md: "1 / -1" } }}>
-              Residence existante : <strong>{selectedResidence.nom}</strong>
-              {selectedResidence.adresse && ` - ${selectedResidence.adresse}`}
-              {(selectedResidence.dernier_rapport?.client_societe_nom || selectedResidence.client_societe_nom) &&
-                ` (Client: ${selectedResidence.dernier_rapport?.client_societe_nom || selectedResidence.client_societe_nom})`}
-              {selectedResidence.dernier_rapport?.technicien &&
-                ` | Technicien: ${selectedResidence.dernier_rapport.technicien}`}
+              {selectedResidence._fromChantier || selectedResidence.optionType === "chantier" ? (
+                <>
+                  Chantier selectionne : <strong>{selectedResidence.nom}</strong>
+                  {selectedResidence.adresse && ` — ${selectedResidence.adresse}`}
+                </>
+              ) : (
+                <>
+                  Residence existante : <strong>{selectedResidence.nom}</strong>
+                  {selectedResidence.adresse && ` - ${selectedResidence.adresse}`}
+                  {(selectedResidence.dernier_rapport?.client_societe_nom || selectedResidence.client_societe_nom) &&
+                    ` (Client: ${selectedResidence.dernier_rapport?.client_societe_nom || selectedResidence.client_societe_nom})`}
+                  {selectedResidence.dernier_rapport?.technicien &&
+                    ` | Technicien: ${selectedResidence.dernier_rapport.technicien}`}
+                </>
+              )}
             </Alert>
           )}
 
@@ -827,6 +1004,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           />
 
           {!isVigikPlus && (
+          <>
           <Autocomplete
             options={societes}
             getOptionLabel={(opt) => opt?.nom_societe || ""}
@@ -836,17 +1014,17 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             disabled={isDisabled}
             ListboxProps={autocompleteListboxProps}
           />
-          )}
-
           <Autocomplete
             options={chantiers}
             getOptionLabel={(opt) => opt?.chantier_name || ""}
             value={chantiers.find((c) => c.id === formData.chantier) || null}
-            onChange={(_, val) => handleFieldChange("chantier", val?.id || "")}
+            onChange={handleChantierFieldChange}
             renderInput={(params) => <TextField {...params} label="Chantier (optionnel)" size="small" />}
             disabled={isDisabled}
             ListboxProps={autocompleteListboxProps}
           />
+          </>
+          )}
 
           {isVigikPlus && (
             <>
