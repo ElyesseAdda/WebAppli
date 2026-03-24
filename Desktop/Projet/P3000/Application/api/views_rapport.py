@@ -24,6 +24,32 @@ from .serializers_rapport import (
 )
 
 
+def _societe_pour_rapport(rapport):
+    """Société client / bailleur : celle du rapport si renseignée, sinon celle du chantier."""
+    if rapport.client_societe_id:
+        return rapport.client_societe
+    if rapport.chantier_id and rapport.chantier.societe_id:
+        return rapport.chantier.societe
+    return None
+
+
+def _format_societe_adresse(societe):
+    """Adresse postale depuis le modèle Societe : rue_societe, codepostal_societe, ville_societe."""
+    if not societe:
+        return ""
+    rue = (getattr(societe, "rue_societe", None) or "").strip()
+    cp = getattr(societe, "codepostal_societe", None)
+    cp_str = str(cp).strip() if cp not in (None, "") else ""
+    ville = (getattr(societe, "ville_societe", None) or "").strip()
+    lines = []
+    if rue:
+        lines.append(rue)
+    ligne2 = " ".join(p for p in (cp_str, ville) if p).strip()
+    if ligne2:
+        lines.append(ligne2)
+    return "\n".join(lines)
+
+
 class TitreRapportViewSet(viewsets.ModelViewSet):
     queryset = TitreRapport.objects.all()
     serializer_class = TitreRapportSerializer
@@ -492,11 +518,9 @@ def preview_rapport_intervention(request, rapport_id):
             'photos_by_type': photos_by_type,
         })
 
-    societe_nom = ""
-    if rapport.client_societe:
-        societe_nom = rapport.client_societe.nom_societe
-    elif rapport.chantier and rapport.chantier.societe:
-        societe_nom = rapport.chantier.societe.nom_societe
+    societe = _societe_pour_rapport(rapport)
+    societe_nom = societe.nom_societe if societe else ""
+    societe_adresse = _format_societe_adresse(societe)
 
     photo_platine_url = ""
     photo_platine_portail_url = ""
@@ -518,6 +542,7 @@ def preview_rapport_intervention(request, rapport_id):
             'rapport': rapport,
             'logo_url': logo_url,
             'societe_nom': societe_nom,
+            'societe_adresse': societe_adresse,
             'signature_url': signature_url,
             'photo_platine_url': photo_platine_url,
             'photo_platine_portail_url': photo_platine_portail_url,
@@ -526,6 +551,7 @@ def preview_rapport_intervention(request, rapport_id):
         'rapport': rapport,
         'logo_url': logo_url,
         'societe_nom': societe_nom,
+        'societe_adresse': societe_adresse,
         'signature_url': signature_url,
         'prestations_data': prestations_data,
     })

@@ -315,6 +315,12 @@
                     {{ societe_nom|default:"-" }}
                 </span>
             </div>
+            {% if societe_adresse %}
+            <div class="info-row">
+                <span class="info-label">Adresse :</span>
+                <span class="info-value" style="white-space: pre-line;">{{ societe_adresse }}</span>
+            </div>
+            {% endif %}
         </div>
 
         <div class="info-block">
