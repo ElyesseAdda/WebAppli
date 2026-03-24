@@ -1,6 +1,14 @@
-import React, { useRef, useMemo, useState } from "react";
-import { Box, Button, IconButton, Typography, Chip, TextField, CircularProgress } from "@mui/material";
-import { MdAddAPhoto, MdDelete, MdPhotoCamera, MdPhotoLibrary } from "react-icons/md";
+import React, { useRef, useMemo, useState, useEffect } from "react";
+import { Box, Button, IconButton, Typography, Chip, TextField, CircularProgress, Dialog } from "@mui/material";
+import {
+  MdAddAPhoto,
+  MdDelete,
+  MdPhotoCamera,
+  MdPhotoLibrary,
+  MdChevronLeft,
+  MdChevronRight,
+  MdClose,
+} from "react-icons/md";
 import { COLORS } from "../../constants/colors";
 import { compressImage } from "../../utils/compressImage";
 
@@ -32,6 +40,10 @@ const PhotoManager = ({
   const fileInputCameraRef = useRef(null);
   const currentTypeRef = useRef("avant");
   const [compressing, setCompressing] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const touchStartXRef = useRef(null);
 
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
@@ -88,7 +100,62 @@ const PhotoManager = ({
     apres: allPhotos.filter((p) => p.type_photo === "apres"),
   };
 
+  const openGallery = (photo) => {
+    const idx = allPhotos.findIndex((p) =>
+      (photo.id && p.id === photo.id) ||
+      (!photo.id && p._pending && photo._pending && p._index === photo._index && p.filename === photo.filename)
+    );
+    setGalleryIndex(idx >= 0 ? idx : 0);
+    setGalleryOpen(true);
+  };
+
+  const closeGallery = () => setGalleryOpen(false);
+
+  const goPrev = () => {
+    if (!allPhotos.length) return;
+    setGalleryIndex((prev) => (prev - 1 + allPhotos.length) % allPhotos.length);
+  };
+
+  const goNext = () => {
+    if (!allPhotos.length) return;
+    setGalleryIndex((prev) => (prev + 1) % allPhotos.length);
+  };
+
+  const activePhoto = allPhotos[galleryIndex] || null;
+  const activeType = activePhoto?.type_photo;
+  const activeDate = activePhoto?.date_photo || new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    if (!galleryOpen) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "ArrowRight") goNext();
+      if (e.key === "Escape") closeGallery();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [galleryOpen, allPhotos.length]);
+
+  useEffect(() => {
+    if (galleryOpen) setZoom(1);
+  }, [galleryOpen, galleryIndex]);
+
+  const handleTouchStart = (e) => {
+    touchStartXRef.current = e.changedTouches?.[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (e) => {
+    const startX = touchStartXRef.current;
+    const endX = e.changedTouches?.[0]?.clientX ?? null;
+    if (startX == null || endX == null) return;
+    const delta = endX - startX;
+    if (Math.abs(delta) < 40) return;
+    if (delta > 0) goPrev();
+    else goNext();
+  };
+
   return (
+    <>
     <Box>
       <input
         ref={fileInputRef}
@@ -224,6 +291,7 @@ const PhotoManager = ({
                       src={photo.image_url}
                       alt={photo.filename || "Photo"}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      onClick={() => openGallery(photo)}
                     />
                     {!disabled && (
                       <IconButton
@@ -272,6 +340,129 @@ const PhotoManager = ({
         </Typography>
       )}
     </Box>
+    <Dialog
+      open={galleryOpen}
+      onClose={closeGallery}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{
+        sx: {
+          backgroundColor: "#111",
+          color: "#fff",
+        },
+      }}
+    >
+      <Box sx={{ position: "relative", p: { xs: 1.5, md: 2 } }}>
+        <IconButton
+          onClick={closeGallery}
+          sx={{ position: "absolute", top: 8, right: 8, color: "#fff", zIndex: 2 }}
+        >
+          <MdClose />
+        </IconButton>
+
+        {activePhoto && (
+          <>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 1,
+                mb: 1.5,
+                pr: 5,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Chip
+                  label={TYPE_LABELS[activeType] || "Photo"}
+                  size="small"
+                  sx={{
+                    backgroundColor: `${TYPE_COLORS[activeType] || "#1976d2"}50`,
+                    color: "#fff",
+                    fontWeight: 600,
+                  }}
+                />
+                {activePhoto._pending && (
+                  <Chip
+                    label="En attente"
+                    size="small"
+                    sx={{ backgroundColor: "#ff9800", color: "#fff", fontWeight: 600 }}
+                  />
+                )}
+                <Typography variant="body2" sx={{ color: "#ddd" }}>
+                  Date: {activeDate}
+                </Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: "#bbb" }}>
+                {galleryIndex + 1} / {allPhotos.length}
+              </Typography>
+            </Box>
+
+            <Box sx={{ position: "relative", display: "flex", justifyContent: "center", alignItems: "center" }}>
+              {allPhotos.length > 1 && (
+                <IconButton
+                  onClick={goPrev}
+                  sx={{
+                    position: "absolute",
+                    left: { xs: 4, md: 8 },
+                    color: "#fff",
+                    backgroundColor: "rgba(0,0,0,0.35)",
+                    "&:hover": { backgroundColor: "rgba(0,0,0,0.5)" },
+                    zIndex: 1,
+                  }}
+                >
+                  <MdChevronLeft size={28} />
+                </IconButton>
+              )}
+
+              <Box
+                component="img"
+                src={activePhoto.image_url}
+                alt={activePhoto.filename || "Photo"}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                sx={{
+                  width: "100%",
+                  maxHeight: "72vh",
+                  objectFit: "contain",
+                  borderRadius: 1,
+                  transform: `scale(${zoom})`,
+                  transition: "transform 0.2s ease",
+                }}
+              />
+
+              {allPhotos.length > 1 && (
+                <IconButton
+                  onClick={goNext}
+                  sx={{
+                    position: "absolute",
+                    right: { xs: 4, md: 8 },
+                    color: "#fff",
+                    backgroundColor: "rgba(0,0,0,0.35)",
+                    "&:hover": { backgroundColor: "rgba(0,0,0,0.5)" },
+                    zIndex: 1,
+                  }}
+                >
+                  <MdChevronRight size={28} />
+                </IconButton>
+              )}
+            </Box>
+            <Box sx={{ mt: 1.5, display: "flex", justifyContent: "center", gap: 1 }}>
+              <Button size="small" variant="outlined" onClick={() => setZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))))}>
+                Zoom -
+              </Button>
+              <Button size="small" variant="outlined" onClick={() => setZoom(1)}>
+                Reset
+              </Button>
+              <Button size="small" variant="outlined" onClick={() => setZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}>
+                Zoom +
+              </Button>
+            </Box>
+          </>
+        )}
+      </Box>
+    </Dialog>
+    </>
   );
 };
 

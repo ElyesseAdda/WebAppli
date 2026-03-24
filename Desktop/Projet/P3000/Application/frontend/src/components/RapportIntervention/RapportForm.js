@@ -8,7 +8,7 @@ import {
   IconButton,
 } from "@mui/material";
 import {
-  MdSave, MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete,
+  MdSave, MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete, MdChevronLeft, MdChevronRight, MdClose,
 } from "react-icons/md";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
@@ -86,6 +86,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [saving, setSaving] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [vigikGalleryOpen, setVigikGalleryOpen] = useState(false);
+  const [vigikGalleryIndex, setVigikGalleryIndex] = useState(0);
+  const [vigikZoom, setVigikZoom] = useState(1);
+  const vigikTouchStartXRef = useRef(null);
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
@@ -278,6 +282,84 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   };
 
   const isVigikPlus = formData.type_rapport === "vigik_plus";
+  const vigikPhotos = [
+    pendingPhotoPlatine
+      ? {
+          image_url: pendingPhotoPlatine.previewUrl,
+          label: "Photo platine",
+          date_photo: formData.date,
+          pending: true,
+        }
+      : (rapportData?.photo_platine_url
+        ? {
+            image_url: rapportData.photo_platine_url,
+            label: "Photo platine",
+            date_photo: rapportData?.date || formData.date,
+            pending: false,
+          }
+        : null),
+    pendingPhotoPlatinePortail
+      ? {
+          image_url: pendingPhotoPlatinePortail.previewUrl,
+          label: "Photo platine portail",
+          date_photo: formData.date,
+          pending: true,
+        }
+      : (rapportData?.photo_platine_portail_url
+        ? {
+            image_url: rapportData.photo_platine_portail_url,
+            label: "Photo platine portail",
+            date_photo: rapportData?.date || formData.date,
+            pending: false,
+          }
+        : null),
+  ].filter(Boolean);
+
+  const openVigikGallery = (label) => {
+    const idx = vigikPhotos.findIndex((p) => p.label === label);
+    setVigikGalleryIndex(idx >= 0 ? idx : 0);
+    setVigikGalleryOpen(true);
+  };
+
+  const closeVigikGallery = () => setVigikGalleryOpen(false);
+  const goVigikPrev = () => {
+    if (!vigikPhotos.length) return;
+    setVigikGalleryIndex((prev) => (prev - 1 + vigikPhotos.length) % vigikPhotos.length);
+  };
+  const goVigikNext = () => {
+    if (!vigikPhotos.length) return;
+    setVigikGalleryIndex((prev) => (prev + 1) % vigikPhotos.length);
+  };
+  const activeVigikPhoto = vigikPhotos[vigikGalleryIndex] || null;
+
+  useEffect(() => {
+    if (!vigikGalleryOpen) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === "ArrowLeft") goVigikPrev();
+      if (e.key === "ArrowRight") goVigikNext();
+      if (e.key === "Escape") closeVigikGallery();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [vigikGalleryOpen, vigikPhotos.length]);
+
+  useEffect(() => {
+    if (vigikGalleryOpen) setVigikZoom(1);
+  }, [vigikGalleryOpen, vigikGalleryIndex]);
+
+  const handleVigikTouchStart = (e) => {
+    vigikTouchStartXRef.current = e.changedTouches?.[0]?.clientX ?? null;
+  };
+
+  const handleVigikTouchEnd = (e) => {
+    const startX = vigikTouchStartXRef.current;
+    const endX = e.changedTouches?.[0]?.clientX ?? null;
+    if (startX == null || endX == null) return;
+    const delta = endX - startX;
+    if (Math.abs(delta) < 40) return;
+    if (delta > 0) goVigikPrev();
+    else goVigikNext();
+  };
 
   const handleSave = async () => {
     if (!isVigikPlus && (!formData.titre || !formData.technicien)) {
@@ -826,7 +908,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                         <img
                           src={pendingPhotoPlatine.previewUrl}
                           alt={pendingPhotoPlatine.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                          onClick={() => openVigikGallery("Photo platine")}
                         />
                         {!isDisabled && (
                           <IconButton
@@ -885,7 +968,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                         <img
                           src={rapportData.photo_platine_url}
                           alt="Photo platine"
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                          onClick={() => openVigikGallery("Photo platine")}
                         />
                       </Box>
                       <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, color: "success.main" }}>
@@ -1017,7 +1101,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                         <img
                           src={pendingPhotoPlatinePortail.previewUrl}
                           alt={pendingPhotoPlatinePortail.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                          onClick={() => openVigikGallery("Photo platine portail")}
                         />
                         {!isDisabled && (
                           <IconButton
@@ -1076,7 +1161,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                         <img
                           src={rapportData.photo_platine_portail_url}
                           alt="Photo platine portail"
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                          onClick={() => openVigikGallery("Photo platine portail")}
                         />
                       </Box>
                       <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, color: "success.main" }}>
@@ -1345,6 +1431,127 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           <Button onClick={() => setNewTitreDialog(false)}>Annuler</Button>
           <Button variant="contained" onClick={handleCreateTitre}>Creer</Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={vigikGalleryOpen}
+        onClose={closeVigikGallery}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: "#111",
+            color: "#fff",
+          },
+        }}
+      >
+        <Box sx={{ position: "relative", p: { xs: 1.5, md: 2 } }}>
+          <IconButton
+            onClick={closeVigikGallery}
+            sx={{ position: "absolute", top: 8, right: 8, color: "#fff", zIndex: 2 }}
+          >
+            <MdClose />
+          </IconButton>
+
+          {activeVigikPhoto && (
+            <>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 1,
+                  mb: 1.5,
+                  pr: 5,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  <Chip
+                    label={activeVigikPhoto.label}
+                    size="small"
+                    sx={{ backgroundColor: "#1976d260", color: "#fff", fontWeight: 600 }}
+                  />
+                  <Chip
+                    label={activeVigikPhoto.pending ? "En cours d'envoi" : "Terminee"}
+                    size="small"
+                    sx={{
+                      backgroundColor: activeVigikPhoto.pending ? "#ed6c02" : "#2e7d32",
+                      color: "#fff",
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ color: "#ddd" }}>
+                    Date: {activeVigikPhoto.date_photo || formData.date}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: "#bbb" }}>
+                  {vigikGalleryIndex + 1} / {vigikPhotos.length}
+                </Typography>
+              </Box>
+
+              <Box sx={{ position: "relative", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                {vigikPhotos.length > 1 && (
+                  <IconButton
+                    onClick={goVigikPrev}
+                    sx={{
+                      position: "absolute",
+                      left: { xs: 4, md: 8 },
+                      color: "#fff",
+                      backgroundColor: "rgba(0,0,0,0.35)",
+                      "&:hover": { backgroundColor: "rgba(0,0,0,0.5)" },
+                      zIndex: 1,
+                    }}
+                  >
+                    <MdChevronLeft size={28} />
+                  </IconButton>
+                )}
+
+                <Box
+                  component="img"
+                  src={activeVigikPhoto.image_url}
+                  alt={activeVigikPhoto.label}
+                  onTouchStart={handleVigikTouchStart}
+                  onTouchEnd={handleVigikTouchEnd}
+                  sx={{
+                    width: "100%",
+                    maxHeight: "72vh",
+                    objectFit: "contain",
+                    borderRadius: 1,
+                    transform: `scale(${vigikZoom})`,
+                    transition: "transform 0.2s ease",
+                  }}
+                />
+
+                {vigikPhotos.length > 1 && (
+                  <IconButton
+                    onClick={goVigikNext}
+                    sx={{
+                      position: "absolute",
+                      right: { xs: 4, md: 8 },
+                      color: "#fff",
+                      backgroundColor: "rgba(0,0,0,0.35)",
+                      "&:hover": { backgroundColor: "rgba(0,0,0,0.5)" },
+                      zIndex: 1,
+                    }}
+                  >
+                    <MdChevronRight size={28} />
+                  </IconButton>
+                )}
+              </Box>
+              <Box sx={{ mt: 1.5, display: "flex", justifyContent: "center", gap: 1 }}>
+                <Button size="small" variant="outlined" onClick={() => setVigikZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))))}>
+                  Zoom -
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => setVigikZoom(1)}>
+                  Reset
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => setVigikZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}>
+                  Zoom +
+                </Button>
+              </Box>
+            </>
+          )}
+        </Box>
       </Dialog>
 
       {/* Snackbar */}
