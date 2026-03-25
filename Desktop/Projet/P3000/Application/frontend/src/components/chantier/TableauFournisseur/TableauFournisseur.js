@@ -1263,6 +1263,7 @@ const TableauFournisseur = () => {
   // Créer la structure de lignes avec récap entre chaque mois
   const buildTableRows = () => {
     const rows = [];
+    let cumulSituation = 0;
 
     moisSorted.forEach((mois, moisIndex) => {
       const fournisseurs = Object.keys(organized[mois]).sort();
@@ -1319,10 +1320,12 @@ const TableauFournisseur = () => {
 
       // Ajouter la ligne de récap après chaque mois
       const totaux = calculerTotauxMois(mois);
+      cumulSituation += totaux.totalAPayer || 0;
       rows.push({
         type: "recap",
         mois: mois,
         totaux: totaux,
+        cumulSituation: cumulSituation,
       });
     });
 
@@ -1535,7 +1538,15 @@ const TableauFournisseur = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography
+                              sx={{
+                                color: "#ffffff",
+                                fontWeight: "bold",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              Facture cumul : {formatNumber(row.cumulSituation || 0)} €
+                            </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography sx={{ color: "#ffffff" }}>-</Typography>
