@@ -170,6 +170,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
         model = RapportIntervention
         fields = [
             'id', 'titre', 'date', 'dates_intervention', 'technicien', 'objet_recherche', 'resultat',
+            'temps_trajet', 'temps_taches',
             'client_societe', 'chantier', 'residence', 'logement',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
             'signature_s3_key', 'type_rapport', 'statut', 'pdf_s3_key',
@@ -267,6 +268,7 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
         model = RapportIntervention
         fields = [
             'id', 'date', 'dates_intervention', 'titre', 'titre_nom', 'technicien',
+            'temps_trajet', 'temps_taches',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
             'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
             'type_rapport', 'statut',
@@ -335,6 +337,7 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
         model = RapportIntervention
         fields = [
             'id', 'titre', 'date', 'dates_intervention', 'technicien', 'objet_recherche', 'resultat',
+            'temps_trajet', 'temps_taches',
             'client_societe', 'chantier', 'residence', 'logement',
             'residence_nom', 'residence_adresse', 'adresse_vigik',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',

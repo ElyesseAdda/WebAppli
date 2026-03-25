@@ -340,6 +340,12 @@
                 <span class="info-label">Technicien :</span>
                 <span class="info-value">{{ rapport.technicien|default:"-" }}</span>
             </div>
+            {% if has_temps_intervention %}
+            <div class="info-row">
+                <span class="info-label">Temps de prestation : </span>
+                <span class="info-value"> {{ temps_prestation_hhmm }} h</span>
+            </div>
+            {% endif %}
         </div>
 
         <div class="info-block">

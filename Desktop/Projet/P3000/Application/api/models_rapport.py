@@ -72,6 +72,8 @@ class RapportIntervention(models.Model):
     technicien = models.CharField(max_length=255, verbose_name="Technicien")
     objet_recherche = models.TextField(verbose_name="Objet de la recherche")
     resultat = models.TextField(blank=True, default='', verbose_name="Résultat")
+    temps_trajet = models.FloatField(default=0, verbose_name="Temps de trajet (heures)")
+    temps_taches = models.FloatField(default=0, verbose_name="Temps de taches (heures)")
 
     client_societe = models.ForeignKey(
         'Societe', on_delete=models.SET_NULL, null=True, blank=True,

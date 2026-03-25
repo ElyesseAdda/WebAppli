@@ -40,6 +40,24 @@ const formatChantierAddress = (c) => {
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
+const floatHoursToTimeInput = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return "";
+  const totalMinutes = Math.max(0, Math.round(num * 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
+const timeInputToFloatHours = (value) => {
+  if (!value || typeof value !== "string" || !value.includes(":")) return 0;
+  const [h, m] = value.split(":");
+  const hours = Number(h);
+  const minutes = Number(m);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
+  return Math.max(0, hours + (minutes / 60));
+};
+
 /** Dernière date saisie (la plus récente) ; null si aucune liste utile. */
 const latestInterventionISO = (dates) => {
   if (!dates?.length) return null;
@@ -75,6 +93,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     technicien: "",
     objet_recherche: "",
     resultat: "",
+    temps_trajet: "",
+    temps_taches: "",
     client_societe: "",
     chantier: "",
     residence: null,
@@ -158,6 +178,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         technicien: data.technicien || "",
         objet_recherche: data.objet_recherche || "",
         resultat: data.resultat || "",
+        temps_trajet: floatHoursToTimeInput(data.temps_trajet),
+        temps_taches: floatHoursToTimeInput(data.temps_taches),
         client_societe: data.client_societe || "",
         chantier: data.chantier || "",
         residence: data.residence || null,
@@ -588,6 +610,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       const dataToSend = {
         ...formData,
         dates_intervention: datesInterventionClean,
+        temps_trajet: timeInputToFloatHours(formData.temps_trajet),
+        temps_taches: timeInputToFloatHours(formData.temps_taches),
         titre: isVigikPlus ? (vigikTitre || formData.titre) : formData.titre,
         statut: statutToSend,
         numero_batiment: formData.numero_batiment ?? "",
@@ -1086,6 +1110,35 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             disabled={isDisabled}
             ListboxProps={autocompleteListboxProps}
           />
+
+          {!isVigikPlus && (
+            <>
+              <TextField
+                label="Temps de trajet"
+                type="time"
+                value={formData.temps_trajet}
+                onChange={(e) => handleFieldChange("temps_trajet", e.target.value || "")}
+                fullWidth
+                size="small"
+                disabled={isDisabled}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ step: 300 }}
+                helperText="Format h:mm"
+              />
+              <TextField
+                label="Temps de taches"
+                type="time"
+                value={formData.temps_taches}
+                onChange={(e) => handleFieldChange("temps_taches", e.target.value || "")}
+                fullWidth
+                size="small"
+                disabled={isDisabled}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ step: 300 }}
+                helperText="Format h:mm"
+              />
+            </>
+          )}
 
           {!isVigikPlus && (
           <>

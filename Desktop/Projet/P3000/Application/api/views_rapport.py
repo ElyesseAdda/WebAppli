@@ -81,6 +81,42 @@ def _format_societe_adresse(societe):
     return "\n".join(lines)
 
 
+def _format_heures_hhmm(value):
+    """Convertit un nombre d'heures (float) en format h:mm."""
+    try:
+        total_minutes = int(round(float(value or 0) * 60))
+    except (TypeError, ValueError):
+        total_minutes = 0
+    if total_minutes < 0:
+        total_minutes = 0
+    heures = total_minutes // 60
+    minutes = total_minutes % 60
+    return f"{heures}:{minutes:02d}"
+
+
+def _build_temps_intervention_for_template(rapport):
+    """Prépare les temps (trajet, tâches, prestation) formatés pour le template PDF."""
+    try:
+        temps_trajet = float(getattr(rapport, 'temps_trajet', 0) or 0)
+    except (TypeError, ValueError):
+        temps_trajet = 0.0
+    try:
+        temps_taches = float(getattr(rapport, 'temps_taches', 0) or 0)
+    except (TypeError, ValueError):
+        temps_taches = 0.0
+
+    temps_trajet = max(0.0, temps_trajet)
+    temps_taches = max(0.0, temps_taches)
+    total = temps_trajet + temps_taches
+
+    return {
+        'has_temps_intervention': total > 0,
+        'temps_trajet_hhmm': _format_heures_hhmm(temps_trajet),
+        'temps_taches_hhmm': _format_heures_hhmm(temps_taches),
+        'temps_prestation_hhmm': _format_heures_hhmm(total),
+    }
+
+
 class RapportInterventionPagination(PageNumberPagination):
     """Liste paginée : moins de données par requête, chargement plus rapide."""
 
@@ -585,6 +621,7 @@ def preview_rapport_intervention(request, rapport_id):
     societe_nom = societe.nom_societe if societe else ""
     societe_adresse = _format_societe_adresse(societe)
     intervention_date_rows = _intervention_date_rows_for_template(rapport)
+    temps_ctx = _build_temps_intervention_for_template(rapport)
 
     photo_platine_url = ""
     photo_platine_portail_url = ""
@@ -620,6 +657,7 @@ def preview_rapport_intervention(request, rapport_id):
         'signature_url': signature_url,
         'prestations_data': prestations_data,
         'intervention_date_rows': intervention_date_rows,
+        **temps_ctx,
     })
 
 
