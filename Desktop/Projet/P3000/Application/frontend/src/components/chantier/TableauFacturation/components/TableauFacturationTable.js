@@ -208,7 +208,7 @@ const TableauFacturationTable = ({
                       Situation cumul :{" "}
                       <span
                         style={{
-                          color: "rgba(27, 120, 188, 1)",
+                          color: "#ffffff",
                           fontSize: "0.85rem",
                           fontWeight: "bold",
                         }}
@@ -662,92 +662,75 @@ const TableauFacturationTable = ({
         <TableFooter>
           <TableRow
             sx={{
-              backgroundColor: "rgba(27, 120, 188, 0.1)",
+              backgroundColor: "#000000",
               fontWeight: "bold",
+              borderTop: "2px solid rgba(255, 255, 255, 0.2)",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
               "& td": {
                 fontWeight: "bold",
-                color: "rgba(27, 120, 188, 1)",
+                color: "white",
               },
             }}
           >
             <TableCell
               sx={{
-                textAlign: "center",
-                color: "black",
-                fontSize: "0.8rem",
+                ...commonBodyCellStyle,
+                fontSize: "0.95rem",
               }}
             >
-              Total Global
+              Récap Annuel
             </TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(totaux.montantHTSituation)}
-            </TableCell>
-            {showCumulColumn && (
-              <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            )}
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(totaux.montantRecuHT)}
-            </TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            
-            <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(totaux.ecartMois)}
-            </TableCell>
-          </TableRow>
-
-          {/* Ligne Reste à payer */}
-          <TableRow
-            sx={{
-              backgroundColor: "rgba(255, 193, 7, 0.1)",
-              fontWeight: "bold",
-              "& td": {
-                fontWeight: "bold",
-                color: "rgba(255, 193, 7, 1)",
-              },
-            }}
-          >
-            <TableCell sx={commonBodyCellStyle}>
-              <Typography
-                sx={{
-                  fontWeight: "bold",
-                  color: "rgba(255, 193, 7, 1)",
-                  fontSize: "0.9rem",
-                }}
-              >
-                Reste à payer
+            <TableCell colSpan={4} sx={commonBodyCellStyle}>
+              <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.75rem" }}>
+                Situation cumul annuel :{" "}
+                <span
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "0.75rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {(parseFloat(totaux.montantHTSituation) || 0).toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} €
+                </span>
               </Typography>
             </TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(
-                totaux.montantHTSituation - totaux.montantRecuHT
-              )}
+              <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.75rem" }}>
+                {(parseFloat(totaux.montantHTSituation) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} €
+              </Typography>
             </TableCell>
             {showCumulColumn && (
               <TableCell sx={commonBodyCellStyle}>-</TableCell>
             )}
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            <TableCell sx={commonBodyCellStyle}>
+              <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.85rem" }}>
+                {(parseFloat(totaux.montantRecuHT) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} €
+              </Typography>
+            </TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            
+            <TableCell colSpan={2} sx={commonBodyCellStyle}>
+              <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
+                {(parseFloat(totaux.ecartMois) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} €
+              </Typography>
+            </TableCell>
           </TableRow>
+
         </TableFooter>
       </Table>
     </TableContainer>

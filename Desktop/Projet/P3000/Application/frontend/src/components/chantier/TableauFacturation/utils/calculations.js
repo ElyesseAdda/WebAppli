@@ -300,8 +300,9 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
     const montantRecuMois = montantRecuSituations + montantRecuFactures;
     const ecartMois = montantRecuMois - sousTotalMois;
     
-    // Ajouter uniquement le sous-total des situations au cumul cumulatif (pas les factures)
-    cumulCumulatif += sousTotalSituations;
+    // Le cumul suit le "Montant HT Situation" du récap mensuel
+    // (mois courant + tous les mois précédents de l'année en cours)
+    cumulCumulatif += sousTotalMois;
 
     itemsAvecSousTotaux.push({
       isSousTotal: true,
