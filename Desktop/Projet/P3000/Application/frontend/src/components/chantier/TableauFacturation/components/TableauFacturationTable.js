@@ -193,10 +193,33 @@ const TableauFacturationTable = ({
                       Sous-total {getMoisName(item.mois)}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell
+                    colSpan={4}
+                    onClick={() => setShowCumulColumn(!showCumulColumn)}
+                    sx={{
+                      ...commonBodyCellStyle,
+                      cursor: "pointer",
+                      "&:hover": {
+                        textDecoration: "underline",
+                      },
+                    }}
+                  >
+                    <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.75rem" }}>
+                      Situation cumul :{" "}
+                      <span
+                        style={{
+                          color: "rgba(27, 120, 188, 1)",
+                          fontSize: "0.85rem",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} €
+                      </span>
+                    </Typography>
+                  </TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>
@@ -208,23 +231,7 @@ const TableauFacturationTable = ({
                     </Typography>
                   </TableCell>
                   {showCumulColumn && (
-                    <TableCell
-                      onClick={() => setShowCumulColumn(!showCumulColumn)}
-                      sx={{
-                        ...commonBodyCellStyle,
-                        cursor: "pointer",
-                        "&:hover": {
-                          textDecoration: "underline",
-                        },
-                      }}
-                    >
-                      <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.85rem" }}>
-                        {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })} €
-                      </Typography>
-                    </TableCell>
+                    <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   )}
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
@@ -237,8 +244,7 @@ const TableauFacturationTable = ({
                     </Typography>
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
-                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
-                  <TableCell sx={commonBodyCellStyle}>
+                  <TableCell colSpan={2} sx={commonBodyCellStyle}>
                     <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
                       {(parseFloat(item.ecartMois) || 0).toLocaleString("fr-FR", {
                         minimumFractionDigits: 2,
