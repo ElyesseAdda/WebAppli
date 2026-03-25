@@ -914,10 +914,33 @@ const DriveExplorer = ({
         return <AudioIcon color="info" />;
       case 'doc':
       case 'docx':
+      case 'docm':
+      case 'dot':
+      case 'dotx':
+      case 'dotm':
       case 'xls':
       case 'xlsx':
+      case 'xlsm':
+      case 'xlt':
+      case 'xltx':
+      case 'xltm':
       case 'ppt':
       case 'pptx':
+      case 'pptm':
+      case 'pot':
+      case 'potx':
+      case 'potm':
+      case 'odt':
+      case 'ods':
+      case 'odp':
+      case 'rtf':
+      case 'csv':
+      case 'fodt':
+      case 'fods':
+      case 'fodp':
+      case 'ott':
+      case 'ots':
+      case 'otp':
         return <DescriptionIcon color="success" />;
       case 'zip':
       case 'rar':
