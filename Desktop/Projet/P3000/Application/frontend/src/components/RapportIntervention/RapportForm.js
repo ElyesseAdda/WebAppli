@@ -607,12 +607,15 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     setSaving(true);
     try {
       const vigikTitre = isVigikPlus && !formData.titre ? (titres.find((t) => t.nom === "Rapport Vigik+") || titres[0])?.id : formData.titre;
+      const normalizeFk = (value) => (value === "" || value === undefined ? null : value);
       const dataToSend = {
         ...formData,
         dates_intervention: datesInterventionClean,
         temps_trajet: timeInputToFloatHours(formData.temps_trajet),
         temps_taches: timeInputToFloatHours(formData.temps_taches),
-        titre: isVigikPlus ? (vigikTitre || formData.titre) : formData.titre,
+        titre: normalizeFk(isVigikPlus ? (vigikTitre || formData.titre) : formData.titre),
+        client_societe: normalizeFk(formData.client_societe),
+        chantier: normalizeFk(formData.chantier),
         statut: statutToSend,
         numero_batiment: formData.numero_batiment ?? "",
         type_installation: formData.type_installation ?? "",
@@ -679,7 +682,19 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       await loadRapport();
       loadReferences();
     } catch (err) {
-      showSnackbar("Erreur lors de la sauvegarde", "error");
+      const apiErr = err?.response?.data;
+      const details =
+        (typeof apiErr === "string" && apiErr) ||
+        apiErr?.detail ||
+        (apiErr && typeof apiErr === "object"
+          ? Object.entries(apiErr)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+              .join(" | ")
+          : "");
+      showSnackbar(
+        details ? `Erreur sauvegarde: ${details}` : "Erreur lors de la sauvegarde",
+        "error"
+      );
     } finally {
       setSaving(false);
     }
