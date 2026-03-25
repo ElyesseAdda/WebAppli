@@ -56,6 +56,10 @@ const TableauFacturationTable = ({
   onNumeroCPChange,
 }) => {
   const [showCumulColumn, setShowCumulColumn] = useState(false);
+
+  const hasNoEcart = (montantAttendu, montantRecu) =>
+    Math.abs((parseFloat(montantRecu) || 0) - (parseFloat(montantAttendu) || 0)) < 0.01;
+
   // Calculer le nombre de lignes par mois (sans les sous-totaux) pour la fusion des cellules
   const calculerLignesParMois = () => {
     const lignesParMois = {};
@@ -123,6 +127,11 @@ const TableauFacturationTable = ({
         height: "calc(100vh - 180px)",
         overflowY: "auto",
         position: "relative",
+        scrollbarWidth: "none",
+        "&::-webkit-scrollbar": {
+          display: "none",
+        },
+        msOverflowStyle: "none",
       }}
     >
       <Table size="small" sx={{ tableLayout: "auto", width: "100%" }}>
@@ -244,6 +253,10 @@ const TableauFacturationTable = ({
               const facture = item;
               // Pour les factures, utiliser date_envoi (ou date_creation en fallback)
               const dateEnvoiFacture = facture.date_envoi || facture.date_creation;
+              const montantHTFacture = parseFloat(facture.price_ht) || 0;
+              const montantRecuFacture =
+                facture.state_facture === "Payée" ? montantHTFacture : 0;
+              const factureSansEcart = hasNoEcart(montantHTFacture, montantRecuFacture);
               const datePaiementPrevue = calculateDatePaiement(
                 dateEnvoiFacture,
                 facture.delai_paiement,
@@ -319,9 +332,7 @@ const TableauFacturationTable = ({
                       sx={{
                         fontWeight: 600,
                         fontSize: "0.8rem",
-                        color: (facture.state_facture === 'Payée' || facture.date_paiement)
-                          ? "rgba(27, 120, 188, 1)"
-                          : "error.main",
+                        color: factureSansEcart ? "rgba(27, 120, 188, 1)" : "error.main",
                       }}
                     >
                       {facture.chantier_name || facture.chantier?.chantier_name || "-"}
@@ -410,6 +421,10 @@ const TableauFacturationTable = ({
             } else {
               // Ligne de situation normale
               const situation = item;
+              const situationSansEcart = hasNoEcart(
+                situation.montant_apres_retenues,
+                situation.montant_reel_ht
+              );
               const cumul = calculerCumulSituationHT(situation);
               const datePaiementPrevue = calculateDatePaiement(
                 situation.date_envoi,
@@ -477,7 +492,7 @@ const TableauFacturationTable = ({
                       sx={{
                         fontWeight: 600,
                         fontSize: "0.8rem",
-                        color: situation.banque
+                        color: situationSansEcart
                           ? "rgba(27, 120, 188, 1)"
                           : "error.main",
                       }}
