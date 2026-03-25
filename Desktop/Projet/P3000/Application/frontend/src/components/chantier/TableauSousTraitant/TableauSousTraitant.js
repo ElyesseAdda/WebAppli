@@ -1664,6 +1664,12 @@ const TableauSousTraitant = () => {
       });
     }
 
+    // Ne pas afficher les lignes avec montant à payer = 0 (inclut "0", "0.00", etc.)
+    filteredData = filteredData.filter((item) => {
+      const aPayer = Number(item.a_payer ?? 0);
+      return !Number.isNaN(aPayer) && aPayer !== 0;
+    });
+
     // Séparer les agents journaliers des autres sous-traitants
     const agentsJournaliers = {};
     const autresSousTraitants = {};
