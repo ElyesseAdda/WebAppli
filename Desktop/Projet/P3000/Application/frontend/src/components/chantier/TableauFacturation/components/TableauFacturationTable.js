@@ -1,5 +1,4 @@
 import {
-  Box,
   Button,
   Paper,
   Table,
@@ -114,9 +113,27 @@ const TableauFacturationTable = ({
   let ligneMoisIndex = 0;
 
   return (
-    <TableContainer component={Paper} sx={{ maxWidth: "100%", overflowX: "auto", width: "100%" }}>
+    <TableContainer
+      component={Paper}
+      sx={{
+        maxWidth: "100%",
+        overflowX: "auto",
+        width: "100%",
+        maxHeight: "calc(100vh - 180px)",
+        height: "calc(100vh - 180px)",
+        overflowY: "auto",
+        position: "relative",
+      }}
+    >
       <Table size="small" sx={{ tableLayout: "auto", width: "100%" }}>
-        <TableHead>
+        <TableHead
+          sx={{
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            backgroundColor: "rgba(27, 120, 188, 1)",
+          }}
+        >
           <TableRow
             sx={{
               backgroundColor: "rgba(27, 120, 188, 1)",
@@ -152,85 +169,73 @@ const TableauFacturationTable = ({
                 <TableRow
                   key={`sous-total-${item.mois}`}
                   sx={{
-                    backgroundColor: "rgba(27, 120, 188, 1)",
+                    backgroundColor: "#000000",
                     fontWeight: "bold",
+                    borderTop: "2px solid rgba(255, 255, 255, 0.2)",
+                    borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
                     "& td": {
                       fontWeight: "bold",
                       color: "white",
                     },
                   }}
                 >
-                  <TableCell
-                    colSpan={showCumulColumn ? 15 : 14}
-                    sx={{
-                      ...commonBodyCellStyle,
-                      padding: "8px 16px",
-                      width: "100%",
-                    }}
-                  >
-                    <Box
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ fontWeight: "bold", color: "white", fontSize: "0.95rem" }}>
+                      Sous-total {getMoisName(item.mois)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.85rem" }}>
+                      {(parseFloat(item.montantHTSituation ?? item.sousTotal) || 0).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} €
+                    </Typography>
+                  </TableCell>
+                  {showCumulColumn && (
+                    <TableCell
+                      onClick={() => setShowCumulColumn(!showCumulColumn)}
                       sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        width: "100%",
-                        position: "relative",
+                        ...commonBodyCellStyle,
+                        cursor: "pointer",
+                        "&:hover": {
+                          textDecoration: "underline",
+                        },
                       }}
                     >
-                      <Box sx={{ flex: 1 }} />
-                      <Typography
-                        sx={{
-                          fontWeight: "bold",
-                          color: "white",
-                          fontSize: "1.1rem",
-                          position: "absolute",
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                        }}
-                      >
-                        Sous-total {getMoisName(item.mois)} :{" "}
-                        <span
-                          style={{
-                            fontSize: "1rem",
-                            fontWeight: "bold",
-                            marginLeft: "5px",
-                          }}
-                        >
-                          {(parseFloat(item.sousTotal) || 0).toLocaleString("fr-FR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })} €
-                        </span>
+                      <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.85rem" }}>
+                        {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} €
                       </Typography>
-                      <Typography
-                        onClick={() => setShowCumulColumn(!showCumulColumn)}
-                        sx={{
-                          fontWeight: "bold",
-                          color: "white",
-                          fontSize: "1rem",
-                          flex: 1,
-                          textAlign: "right",
-                          cursor: "pointer",
-                          "&:hover": {
-                            textDecoration: "underline",
-                          },
-                        }}
-                      >
-                        Situation cumul :{" "}
-                        <span
-                          style={{
-                            fontSize: "1rem",
-                            fontWeight: "bold",
-                            marginLeft: "5px",
-                          }}
-                        >
-                          {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })} €
-                        </span>
-                      </Typography>
-                    </Box>
+                    </TableCell>
+                  )}
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.85rem" }}>
+                      {(parseFloat(item.montantRecuHT) || 0).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} €
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
+                      {(parseFloat(item.ecartMois) || 0).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} €
+                    </Typography>
                   </TableCell>
                 </TableRow>
               );
