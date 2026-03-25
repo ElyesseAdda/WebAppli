@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import {
   MdSave, MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete, MdChevronLeft, MdChevronRight, MdClose,
+  MdCheckCircle, MdErrorOutline,
 } from "react-icons/md";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
@@ -16,6 +17,7 @@ import { COLORS } from "../../constants/colors";
 import { useRapports } from "../../hooks/useRapports";
 import PrestationSection from "./PrestationSection";
 import SignaturePad from "./SignaturePad";
+import elekableLogo from "../../img/logo.png";
 
 const EMPTY_PRESTATION = {
   localisation: "",
@@ -24,6 +26,197 @@ const EMPTY_PRESTATION = {
   commentaire: "",
   prestation_possible: true,
   prestation_realisee: "",
+};
+
+/** Libellés français pour les clés d'erreur API (DRF). */
+const RAPPORT_FIELD_LABELS = {
+  technicien: "Technicien",
+  objet_recherche: "Objet de la recherche",
+  resultat: "Résultat",
+  dates_intervention: "Dates d'intervention",
+  date: "Date",
+  titre: "Titre",
+  client_societe: "Client / Bailleur",
+  chantier: "Chantier",
+  residence: "Résidence",
+  residence_nom: "Nom de la résidence",
+  residence_adresse: "Adresse de la résidence",
+  adresse_vigik: "Adresse du rapport (Vigik+)",
+  logement: "Lieu d'intervention",
+  type_rapport: "Type de rapport",
+  statut: "Statut",
+  prestations: "Prestations",
+  localisation: "Lieu / Localisation",
+  probleme: "Problème constaté",
+  solution: "Solution apportée",
+  commentaire: "Commentaire",
+  prestation_possible: "Prestation possible",
+  prestation_realisee: "Type de prestation réalisée",
+  temps_trajet: "Temps de trajet",
+  temps_taches: "Temps de tâches",
+  numero_batiment: "Numéro du bâtiment",
+  type_installation: "Type d'installation",
+  presence_platine: "Présence de platine",
+  presence_platine_portail: "Présence de platine au portail",
+  locataire_nom: "Nom locataire",
+  locataire_prenom: "Prénom locataire",
+  locataire_telephone: "Téléphone locataire",
+  locataire_email: "Email locataire",
+  non_field_errors: "Formulaire",
+};
+
+const labelForApiKey = (key) => RAPPORT_FIELD_LABELS[key] || key;
+
+/**
+ * Aplatit les erreurs DRF (objets imbriqués, tableaux de messages, prestations).
+ */
+const flattenApiErrors = (data, pathPrefix = "") => {
+  const out = [];
+  if (data == null) return out;
+  if (typeof data === "string") {
+    out.push({ field: pathPrefix || "Erreur", message: data });
+    return out;
+  }
+  if (Array.isArray(data)) {
+    if (data.length === 0) return out;
+    if (typeof data[0] === "string") {
+      data.forEach((msg) => out.push({ field: pathPrefix || "Erreur", message: msg }));
+    } else {
+      data.forEach((item, idx) => {
+        const childPath = pathPrefix
+          ? `${pathPrefix} — ligne ${idx + 1}`
+          : `Ligne ${idx + 1}`;
+        out.push(...flattenApiErrors(item, childPath));
+      });
+    }
+    return out;
+  }
+  if (typeof data === "object") {
+    if (data.detail !== undefined && data.detail !== null) {
+      if (typeof data.detail === "string") {
+        out.push({ field: pathPrefix || "Message", message: data.detail });
+      } else {
+        out.push(...flattenApiErrors(data.detail, pathPrefix || "Message"));
+      }
+    }
+    for (const [k, v] of Object.entries(data)) {
+      if (k === "detail") continue;
+      const label = labelForApiKey(k);
+      const nextPath = pathPrefix ? `${pathPrefix} — ${label}` : label;
+      if (Array.isArray(v)) {
+        if (v.length === 0) continue;
+        if (typeof v[0] === "string") {
+          v.forEach((msg) => out.push({ field: nextPath, message: msg }));
+        } else {
+          v.forEach((item, idx) => {
+            const p = `${nextPath} (prestation ${idx + 1})`;
+            out.push(...flattenApiErrors(item, p));
+          });
+        }
+      } else if (v && typeof v === "object") {
+        out.push(...flattenApiErrors(v, nextPath));
+      } else if (v != null && v !== "") {
+        out.push({ field: nextPath, message: String(v) });
+      }
+    }
+  }
+  return out;
+};
+
+const parseAxiosSaveError = (err) => {
+  const status = err?.response?.status;
+  const data = err?.response?.data;
+  let items = [];
+  if (data !== undefined && data !== null) {
+    items = flattenApiErrors(data);
+  }
+  if (!items.length && err?.message) {
+    items = [{ field: "Erreur", message: err.message }];
+  }
+  if (!items.length) {
+    items = [{ field: "Erreur", message: "Une erreur inattendue s'est produite." }];
+  }
+  let title = "Erreur lors de la sauvegarde";
+  if (!err?.response) {
+    title = "Impossible de joindre le serveur";
+  } else if (status === 400) {
+    title = "Données refusées par le serveur";
+  } else if (status === 403) {
+    title = "Accès refusé";
+  } else if (status === 404) {
+    title = "Ressource introuvable";
+  } else if (status >= 500) {
+    title = "Erreur serveur";
+  }
+  return { title, items };
+};
+
+/** Dernier segment du chemin API (nom lisible du champ). */
+const labelForDisplay = (field) => {
+  const raw = (field || "").trim();
+  if (!raw) return "";
+  const parts = raw.split(" — ").map((p) => p.trim());
+  return parts[parts.length - 1] || raw;
+};
+
+const uniqueFieldLabelsFromItems = (items) => {
+  const seen = new Set();
+  const out = [];
+  for (const it of items) {
+    const raw = (it.field || "").trim();
+    const prestationMatch = raw.match(/prestation\s*(\d+)/i);
+    let d;
+    if (prestationMatch) {
+      const lastPart = labelForDisplay(raw);
+      d = `Prestation ${prestationMatch[1]} : ${lastPart}`;
+    } else {
+      d = labelForDisplay(raw);
+    }
+    if (!d || d === "Erreur" || d === "Message") continue;
+    if (!seen.has(d)) {
+      seen.add(d);
+      out.push(d);
+    }
+  }
+  return out;
+};
+
+const FRIENDLY_API_ERROR_TITLE = {
+  "Erreur lors de la sauvegarde": "Enregistrement impossible",
+  "Impossible de joindre le serveur": "Pas de connexion au serveur",
+  "Données refusées par le serveur": "Informations incomplètes ou incorrectes",
+  "Accès refusé": "Accès refusé",
+  "Ressource introuvable": "Élément introuvable",
+  "Erreur serveur": "Problème temporaire sur le serveur",
+};
+
+const translateCommonMessage = (msg) => {
+  if (!msg || typeof msg !== "string") return "";
+  const t = {
+    "This field is required.": "Ce champ est obligatoire.",
+    "This field may not be null.": "Ce champ est obligatoire.",
+    "This field may not be blank.": "Ce champ ne peut pas être vide.",
+    "Enter a valid email address.": "Adresse e-mail invalide.",
+  };
+  return t[msg] || msg;
+};
+
+const buildSaveErrorFromApi = (err) => {
+  const { title, items } = parseAxiosSaveError(err);
+  const fieldLabels = uniqueFieldLabelsFromItems(items);
+  let fallbackMessage = "";
+  if (fieldLabels.length === 0 && items.length) {
+    const firstMsg = items.map((i) => i.message).find(Boolean);
+    fallbackMessage =
+      translateCommonMessage(firstMsg) ||
+      firstMsg ||
+      "Une erreur s'est produite. Réessayez dans un instant.";
+  }
+  return {
+    title: FRIENDLY_API_ERROR_TITLE[title] || title,
+    fieldLabels,
+    fallbackMessage,
+  };
 };
 
 /** Adresse chantier : rue, code postal + ville (aligné sur le modèle Chantier). */
@@ -135,6 +328,14 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const [deleteTitreDialogOpen, setDeleteTitreDialogOpen] = useState(false);
   const [titreToDelete, setTitreToDelete] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [saveErrorModal, setSaveErrorModal] = useState({
+    open: false,
+    title: "",
+    fieldLabels: [],
+    fallbackMessage: "",
+  });
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successModalContext, setSuccessModalContext] = useState(null);
   const [saving, setSaving] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [vigikGalleryOpen, setVigikGalleryOpen] = useState(false);
@@ -167,10 +368,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     }
   }, [fetchTitres]);
 
-  const loadRapport = useCallback(async () => {
-    if (!rapportId) return;
+  const loadRapport = useCallback(async (explicitId) => {
+    const id = explicitId ?? rapportId;
+    if (!id) return;
     try {
-      const data = await fetchRapport(rapportId);
+      const data = await fetchRapport(id);
       setRapportData(data);
       setFormData({
         titre: data.titre || "",
@@ -562,38 +764,83 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     else goVigikNext();
   };
 
-  const handleSave = async () => {
-    if (!isVigikPlus && !formData.technicien) {
-      showSnackbar("Veuillez remplir le champ obligatoire technicien", "error");
-      return;
+  const validateClientBeforeSave = () => {
+    const items = [];
+    if (!isVigikPlus && !(formData.technicien || "").trim()) {
+      items.push({ field: "Technicien", message: "Ce champ est obligatoire." });
     }
-    if (!isVigikPlus && !formData.objet_recherche) {
-      showSnackbar("Veuillez remplir l'objet de la recherche", "error");
-      return;
+    if (!isVigikPlus && !(formData.objet_recherche || "").trim()) {
+      items.push({ field: "Objet de la recherche", message: "Ce champ est obligatoire." });
     }
     if (isVigikPlus) {
       const hasResidence = formData.residence || (formData.residence_nom || "").trim();
       if (!hasResidence) {
-        showSnackbar("Veuillez selectionner ou creer une residence", "error");
-        return;
+        items.push({ field: "Résidence", message: "Sélectionnez ou créez une résidence." });
       }
       if (!(formData.adresse_vigik || "").trim()) {
-        showSnackbar("Veuillez remplir l'adresse du rapport", "error");
-        return;
+        items.push({ field: "Adresse du rapport (Vigik+)", message: "Ce champ est obligatoire." });
       }
       const hasPhotoPlatine = pendingPhotoPlatine || rapportData?.photo_platine_s3_key;
       if (!hasPhotoPlatine) {
-        showSnackbar("Veuillez joindre une photo sous la question Presence de platine (obligatoire)", "error");
-        return;
+        items.push({
+          field: "Photo — présence de platine",
+          message: "Joignez une photo sous la question « Présence de platine » (obligatoire pour Vigik+).",
+        });
       }
     }
     const datesInterventionClean = (formData.dates_intervention || [])
       .map((s) => String(s).slice(0, 10))
       .filter(Boolean);
     if (!datesInterventionClean.length) {
-      showSnackbar("Ajoutez au moins une date d'intervention", "error");
+      items.push({ field: "Dates d'intervention", message: "Au moins une date est requise." });
+    }
+    return { valid: items.length === 0, items };
+  };
+
+  const handleSaveClick = () => {
+    const { valid, items } = validateClientBeforeSave();
+    if (!valid) {
+      setSaveErrorModal({
+        open: true,
+        title: "Champs à compléter",
+        fieldLabels: uniqueFieldLabelsFromItems(items),
+        fallbackMessage: "",
+      });
       return;
     }
+    executeSave();
+  };
+
+  const handleSuccessContinue = async () => {
+    const ctx = successModalContext;
+    setSuccessModalOpen(false);
+    setSuccessModalContext(null);
+    if (!ctx?.savedId) return;
+
+    if (!ctx.isEdit) {
+      if (onReportCreated) {
+        onReportCreated(ctx.savedId);
+      } else {
+        navigate(`/RapportIntervention/${ctx.savedId}`, { replace: true });
+      }
+    }
+    await loadRapport(ctx.savedId);
+    loadReferences();
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!successModalOpen) return;
+    const timer = setTimeout(() => {
+      handleSuccessContinue();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [successModalOpen]);
+
+  const executeSave = async () => {
+    const datesInterventionClean = (formData.dates_intervention || [])
+      .map((s) => String(s).slice(0, 10))
+      .filter(Boolean);
     const hasPrestation = !isVigikPlus && formData.prestations.some(
       (p) =>
         (p.localisation || "").trim() ||
@@ -670,31 +917,11 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
 
       if (!isVigikPlus) await uploadPendingSignature(savedId);
 
-      showSnackbar(isEdit ? "Rapport mis a jour" : "Rapport cree avec succes");
-
-      if (!isEdit && savedId) {
-        if (onReportCreated) {
-          onReportCreated(savedId);
-        } else {
-          navigate(`/RapportIntervention/${savedId}`, { replace: true });
-        }
-      }
-      await loadRapport();
-      loadReferences();
+      setSuccessModalContext({ isEdit, savedId });
+      setSuccessModalOpen(true);
     } catch (err) {
-      const apiErr = err?.response?.data;
-      const details =
-        (typeof apiErr === "string" && apiErr) ||
-        apiErr?.detail ||
-        (apiErr && typeof apiErr === "object"
-          ? Object.entries(apiErr)
-              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
-              .join(" | ")
-          : "");
-      showSnackbar(
-        details ? `Erreur sauvegarde: ${details}` : "Erreur lors de la sauvegarde",
-        "error"
-      );
+      const payload = buildSaveErrorFromApi(err);
+      setSaveErrorModal({ open: true, ...payload });
     } finally {
       setSaving(false);
     }
@@ -864,7 +1091,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             <Button
               variant="contained"
               startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
-              onClick={() => handleSave()}
+              onClick={handleSaveClick}
               disabled={saving}
               sx={{ backgroundColor: COLORS.infoDark || "#1976d2" }}
             >
@@ -1770,7 +1997,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             variant="contained"
             fullWidth
             startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
-            onClick={() => handleSave()}
+            onClick={handleSaveClick}
             disabled={saving}
             sx={{
               minHeight: 48,
@@ -1831,6 +2058,172 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             Supprimer
           </Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={saveErrorModal.open}
+        onClose={() =>
+          setSaveErrorModal({ open: false, title: "", fieldLabels: [], fallbackMessage: "" })
+        }
+        maxWidth="xs"
+        fullWidth
+        fullScreen={isMobile}
+        PaperProps={{
+          sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" },
+        }}
+      >
+        <Box sx={{ textAlign: "center", pt: 3, px: 3 }}>
+          <Box
+            component="img"
+            src={elekableLogo}
+            alt="Elekable"
+            sx={{ width: 90, height: "auto" }}
+          />
+        </Box>
+        <Box sx={{ textAlign: "center", pt: 2, pb: 1, px: 3 }}>
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              backgroundColor: `rgba(${COLORS.errorRgb}, 0.1)`,
+              mb: 2,
+              "@keyframes rapportErrorShake": {
+                "0%, 100%": { transform: "translateX(0)" },
+                "20%, 60%": { transform: "translateX(-6px)" },
+                "40%, 80%": { transform: "translateX(6px)" },
+              },
+              animation: "rapportErrorShake 0.45s ease-in-out",
+            }}
+          >
+            <MdErrorOutline size={36} color={COLORS.error} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.error, mb: 0.5 }}>
+            {saveErrorModal.title || "Impossible d'enregistrer"}
+          </Typography>
+        </Box>
+        <DialogContent sx={{ pt: 1, pb: 1 }}>
+          {saveErrorModal.fieldLabels?.length > 0 ? (
+            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              {saveErrorModal.fieldLabels.map((label) => (
+                <Typography
+                  component="li"
+                  key={label}
+                  variant="body2"
+                  sx={{ color: COLORS.error, fontWeight: 600, py: 0.3 }}
+                >
+                  {label}
+                </Typography>
+              ))}
+            </Box>
+          ) : null}
+          {saveErrorModal.fallbackMessage ? (
+            <Typography variant="body2" sx={{ mt: 1, textAlign: "center", color: COLORS.textMuted }}>
+              {saveErrorModal.fallbackMessage}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 1 }}>
+          <Button
+            variant="contained"
+            fullWidth
+            size="large"
+            onClick={() =>
+              setSaveErrorModal({ open: false, title: "", fieldLabels: [], fallbackMessage: "" })
+            }
+            sx={{
+              fontWeight: 700,
+              py: 1.25,
+              borderRadius: 2,
+              backgroundColor: COLORS.error,
+              "&:hover": { backgroundColor: COLORS.errorDark },
+            }}
+          >
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={successModalOpen}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            overflow: "hidden",
+          },
+        }}
+      >
+        <Box sx={{ textAlign: "center", pt: 4, pb: 3, px: 3 }}>
+          <Box
+            sx={{
+              "@keyframes rapportLogoFadeIn": {
+                "0%": { opacity: 0, transform: "scale(0.7)" },
+                "100%": { opacity: 1, transform: "scale(1)" },
+              },
+              animation: "rapportLogoFadeIn 0.35s ease-out forwards",
+            }}
+          >
+            <Box
+              component="img"
+              src={elekableLogo}
+              alt="Elekable"
+              sx={{ width: 100, height: "auto", mb: 2 }}
+            />
+          </Box>
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 68,
+              height: 68,
+              borderRadius: "50%",
+              backgroundColor: "#fffde7",
+              border: "3px solid #ffff00",
+              mb: 2,
+              "@keyframes rapportCheckPop": {
+                "0%": { transform: "scale(0)", opacity: 0 },
+                "60%": { transform: "scale(1.15)", opacity: 1 },
+                "100%": { transform: "scale(1)" },
+              },
+              animation: "rapportCheckPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both",
+            }}
+          >
+            <MdCheckCircle size={40} color="#f9a825" />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: COLORS.primary, mb: 0.5 }}>
+            Rapport sauvegardé !
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {successModalContext?.isEdit
+              ? "Vos modifications ont bien été enregistrées."
+              : "Votre rapport a bien été créé."}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            height: 4,
+            backgroundColor: "#fff9c4",
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              height: "100%",
+              backgroundColor: "#f9a825",
+              "@keyframes rapportCountdown": {
+                from: { width: "100%" },
+                to: { width: "0%" },
+              },
+              animation: "rapportCountdown 2s linear forwards",
+            }}
+          />
+        </Box>
       </Dialog>
 
       <Dialog
