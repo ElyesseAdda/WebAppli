@@ -486,6 +486,7 @@ urlpatterns += [
 
 # --- URLs POUR LE DRIVE V2 (NOUVEAU SYSTÈME) ---
 from .views_drive.views import DriveV2ViewSet, proxy_file_view, onlyoffice_callback_view, check_onlyoffice_view
+from .views_drive.admin_views import DriveAdminViewSet
 
 urlpatterns += [
     # Navigation et contenu
@@ -536,6 +537,40 @@ urlpatterns += [
         'post': 'get_onlyoffice_config'
     }), name='drive-v2-onlyoffice-config'),
     path('drive-v2/onlyoffice-callback/', onlyoffice_callback_view, name='drive-v2-onlyoffice-callback'),  # Vue fonction simple
+]
+
+# --- URLs ADMIN POUR LE VERSIONING S3 (récupération de fichiers supprimés) ---
+urlpatterns += [
+    path('drive-admin/versioning-status/', DriveAdminViewSet.as_view({
+        'get': 'versioning_status'
+    }), name='drive-admin-versioning-status'),
+    path('drive-admin/deleted-files/', DriveAdminViewSet.as_view({
+        'get': 'list_deleted_files'
+    }), name='drive-admin-deleted-files'),
+    path('drive-admin/restore-file/', DriveAdminViewSet.as_view({
+        'post': 'restore_file'
+    }), name='drive-admin-restore-file'),
+    path('drive-admin/restore-batch/', DriveAdminViewSet.as_view({
+        'post': 'restore_batch'
+    }), name='drive-admin-restore-batch'),
+    path('drive-admin/restore-folder/', DriveAdminViewSet.as_view({
+        'post': 'restore_folder'
+    }), name='drive-admin-restore-folder'),
+    path('drive-admin/file-versions/', DriveAdminViewSet.as_view({
+        'get': 'file_versions'
+    }), name='drive-admin-file-versions'),
+    path('drive-admin/restore-version/', DriveAdminViewSet.as_view({
+        'post': 'restore_version'
+    }), name='drive-admin-restore-version'),
+    path('drive-admin/download-deleted-file/', DriveAdminViewSet.as_view({
+        'get': 'download_deleted_file'
+    }), name='drive-admin-download-deleted-file'),
+    path('drive-admin/restore-to-drive/', DriveAdminViewSet.as_view({
+        'post': 'restore_to_drive'
+    }), name='drive-admin-restore-to-drive'),
+    path('drive-admin/restore-to-drive-batch/', DriveAdminViewSet.as_view({
+        'post': 'restore_to_drive_batch'
+    }), name='drive-admin-restore-to-drive-batch'),
 ]
 
 # --- URLs POUR LES NOUVELLES VUES PDF AVEC STOCKAGE AWS S3 ---

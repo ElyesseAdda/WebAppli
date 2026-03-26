@@ -32,6 +32,7 @@ import MobileAppLayout from "./Distributeurs/MobileAppLayout";
 import DesktopAppLayout from "./Distributeurs/DesktopAppLayout";
 import Drive from "./Drive";
 import DriveV2 from "./DriveV2/DriveV2";
+import DriveRecovery from "./DriveV2/DriveRecovery";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";
 import OnlyOfficeEditor from "./DriveV2/OnlyOfficeEditor";
 import GestionAppelsOffres from "./GestionAppelsOffres";
@@ -557,6 +558,17 @@ function App() {
                   fileName={new URLSearchParams(window.location.search).get('file_name')}
                   mode="edit"
                 />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-recovery"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <DriveRecovery />
+                </Layout>
               </ProtectedRoute>
             }
           />
