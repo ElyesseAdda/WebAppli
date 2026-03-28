@@ -51,6 +51,7 @@ const AgencyExpensesMonth = () => {
     "Prime",
     "Loyer",
     "Fournitures",
+    "Fournisseur",
     "Équipement",
     "Assurance",
     "Services",

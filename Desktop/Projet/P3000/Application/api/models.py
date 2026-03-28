@@ -2465,6 +2465,14 @@ class AgencyExpenseMonth(models.Model):
     """
     description = models.CharField(max_length=500)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    montant_paye = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=0,
+        help_text="Montant payé (suivi tableau fournisseur, dépenses agence)",
+    )
     category = models.CharField(max_length=50)
     month = models.IntegerField()  # 1-12
     year = models.IntegerField()

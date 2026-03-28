@@ -11632,7 +11632,10 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         'date_paiement_prevue': None,
         'ecart_paiement_reel': None,
         'date_modification': None,
-        'historique_modifications': []
+        'historique_modifications': [],
+        'source_type': None,
+        'agency_expense_id': None,
+        'delai_paiement': 45,
     })))
     
     # Traiter les paiements pour calculer les montants à payer et payés
@@ -11692,6 +11695,63 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         ]
         data[key][paiement.fournisseur][paiement.chantier_id]['historique_modifications'] = historique_list
     
+    # Dépenses agence (catégorie Fournisseur) — même principe que le tableau sous-traitant / Sous-traitant
+    from datetime import datetime as dt_class, timedelta as td_class
+    agency_fournisseur_qs = AgencyExpenseMonth.objects.filter(category='Fournisseur')
+    if chantier_id:
+        agency_fournisseur_qs = agency_fournisseur_qs.filter(chantier_id=chantier_id)
+    agency_fournisseur_qs = agency_fournisseur_qs.select_related('chantier')
+
+    for expense_month in agency_fournisseur_qs:
+        annee_2_digits = str(expense_month.year)[-2:]
+        key = f"{expense_month.month:02d}/{annee_2_digits}"
+        fournisseur_nom = expense_month.description
+        chantier_id_val = 0
+        chantier_name = "Agence"
+        montant_a_payer = Decimal(str(expense_month.amount))
+        montant_paye_dec = (
+            Decimal(str(expense_month.montant_paye))
+            if expense_month.montant_paye is not None
+            else Decimal('0')
+        )
+
+        cell = data[key][fournisseur_nom][chantier_id_val]
+        cell['a_payer'] += montant_a_payer
+        cell['paye'] += montant_paye_dec
+        cell['chantier_name'] = chantier_name
+        cell['source_type'] = 'agency_expense_fournisseur'
+        cell['agency_expense_id'] = expense_month.id
+        delai = expense_month.delai_paiement if getattr(expense_month, 'delai_paiement', None) else 45
+        cell['delai_paiement'] = delai
+
+        if expense_month.factures and isinstance(expense_month.factures, list):
+            factures_norm = []
+            for f in expense_month.factures:
+                if isinstance(f, dict):
+                    factures_norm.append({
+                        'id': f.get('id'),
+                        'numero_facture': f.get('numero_facture', '') or '',
+                        'montant_facture': float(f.get('montant_facture') or 0),
+                        'payee': bool(f.get('payee')),
+                        'date_paiement_facture': f.get('date_paiement_facture'),
+                    })
+            cell['factures'] = factures_norm
+
+        date_reception = (expense_month.date_reception_facture or expense_month.date_paiement)
+        cell['date_envoi'] = date_reception.isoformat() if date_reception else None
+        cell['date_paiement'] = expense_month.date_paiement_reel.isoformat() if expense_month.date_paiement_reel else None
+
+        if cell['date_envoi'] and delai:
+            try:
+                date_reception_obj = dt_class.fromisoformat(cell['date_envoi']).date()
+                date_prevue = date_reception_obj + td_class(days=delai)
+                cell['date_paiement_prevue'] = date_prevue.isoformat()
+                if cell['date_paiement']:
+                    date_reel_obj = dt_class.fromisoformat(cell['date_paiement']).date()
+                    cell['ecart_paiement_reel'] = (date_reel_obj - date_prevue).days
+            except Exception:
+                pass
+
     # Calculer les écarts et préparer la réponse
     result = []
     for mois_key, fournisseurs_data in data.items():
@@ -11715,6 +11775,9 @@ def _get_tableau_fournisseur_data(chantier_id=None):
                     'ecart_paiement_reel': valeurs.get('ecart_paiement_reel'),
                     'date_modification': valeurs.get('date_modification'),
                     'historique_modifications': valeurs.get('historique_modifications', []),
+                    'source_type': valeurs.get('source_type'),
+                    'agency_expense_id': valeurs.get('agency_expense_id'),
+                    'delai_paiement': valeurs.get('delai_paiement', 45),
                 })
     
     return result

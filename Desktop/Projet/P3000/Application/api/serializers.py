@@ -1648,7 +1648,7 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgencyExpenseMonth
         fields = [
-            'id', 'description', 'amount', 'category', 'month', 'year', 
+            'id', 'description', 'amount', 'montant_paye', 'category', 'month', 'year', 
             'date_paiement', 'date_reception_facture', 'date_paiement_reel', 'delai_paiement',
             'date_paiement_prevue', 'factures',
             'sous_traitant', 'sous_traitant_name', 'chantier', 'chantier_name',
