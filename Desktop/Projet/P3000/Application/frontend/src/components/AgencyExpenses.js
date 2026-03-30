@@ -11,6 +11,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -21,7 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
@@ -47,6 +48,9 @@ const AgencyExpenses = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  /** Totaux annuels par catégorie (dépenses saisies + planning agence sur 12 mois) */
+  const [yearlyCategoryTotals, setYearlyCategoryTotals] = useState({});
+  const [yearlyCategoryLoading, setYearlyCategoryLoading] = useState(false);
   const [planningAgence, setPlanningAgence] = useState(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceStart, setRecurrenceStart] = useState("");
@@ -70,11 +74,56 @@ const AgencyExpenses = () => {
   /** Uniquement pour le filtre du tableau (lignes issues du planning, non saisissables à la main) */
   const categoriesWithPlanning = [...categories, "Planning agence"];
 
+  const fetchYearlyCategoryTotals = useCallback(async () => {
+    setYearlyCategoryLoading(true);
+    try {
+      const monthResults = await Promise.all(
+        Array.from({ length: 12 }, (_, monthIndex) => {
+          const m = monthIndex + 1;
+          const monthStr = `${selectedYear}-${String(m).padStart(2, "0")}`;
+          return Promise.all([
+            axios.get(
+              `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}`
+            ),
+            axios
+              .get(
+                `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}&agence=1`
+              )
+              .catch(() => ({ data: {} })),
+          ]);
+        })
+      );
+
+      const merged = {};
+      for (const [expRes, planRes] of monthResults) {
+        const rows = expRes.data?.totals_by_category || [];
+        rows.forEach(({ category, total }) => {
+          const c = category || "Autres";
+          merged[c] = (merged[c] || 0) + (Number(total) || 0);
+        });
+        const planning = Number(planRes.data?.total_montant) || 0;
+        merged["Planning agence"] =
+          (merged["Planning agence"] || 0) + planning;
+      }
+
+      setYearlyCategoryTotals(merged);
+    } catch (e) {
+      console.error("Erreur totaux annuels par catégorie:", e);
+      setYearlyCategoryTotals({});
+    } finally {
+      setYearlyCategoryLoading(false);
+    }
+  }, [selectedYear]);
+
   // Charger les données à chaque changement de mois/année
   useEffect(() => {
     fetchMonthlyExpenses();
     updateYearlyTotal();
   }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    fetchYearlyCategoryTotals();
+  }, [fetchYearlyCategoryTotals]);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +231,7 @@ const AgencyExpenses = () => {
       setOpenDialog(false);
       await fetchMonthlyExpenses();
       await updateYearlyTotal();
+      await fetchYearlyCategoryTotals();
 
       setNewExpense({
         description: "",
@@ -205,6 +255,7 @@ const AgencyExpenses = () => {
       await axios.delete(`/api/agency-expenses-month/${id}/`);
       await fetchMonthlyExpenses();
       await updateYearlyTotal();
+      await fetchYearlyCategoryTotals();
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
       alert("Erreur lors de la suppression de la dépense");
@@ -258,6 +309,7 @@ const AgencyExpenses = () => {
         setOpenDialog(false);
         await fetchMonthlyExpenses();
         await updateYearlyTotal();
+        await fetchYearlyCategoryTotals();
         setIsEditing(false);
         setEditingExpense(null);
       } catch (error) {
@@ -293,6 +345,7 @@ const AgencyExpenses = () => {
       setEditingExpense(null);
       await fetchMonthlyExpenses();
       await updateYearlyTotal();
+      await fetchYearlyCategoryTotals();
     } catch (error) {
       console.error("Erreur lors de l'arrêt de la récurrence:", error);
       alert("Erreur lors de l'arrêt de la récurrence");
@@ -368,6 +421,27 @@ const AgencyExpenses = () => {
     [expenses, planningRowsFiltered]
   );
 
+  /** Catégories avec montant annuel > 0, ordre fixe puis catégories « extra » triées */
+  const yearlyCategoryDisplayRows = useMemo(() => {
+    const rows = [];
+    const seen = new Set();
+    for (const cat of categoriesWithPlanning) {
+      const total = Number(yearlyCategoryTotals[cat]) || 0;
+      if (total > 0) {
+        rows.push({ cat, total });
+        seen.add(cat);
+      }
+    }
+    Object.keys(yearlyCategoryTotals)
+      .filter((k) => !seen.has(k))
+      .sort((a, b) => a.localeCompare(b, "fr"))
+      .forEach((cat) => {
+        const total = Number(yearlyCategoryTotals[cat]) || 0;
+        if (total > 0) rows.push({ cat, total });
+      });
+    return rows;
+  }, [yearlyCategoryTotals]);
+
   const calculateMonthlyTotal = () => {
     return tableRowsCombined.reduce((total, row) => {
       return total + parseFloat(row.amount || 0);
@@ -380,15 +454,24 @@ const AgencyExpenses = () => {
     try {
       const monthlyTotals = await Promise.all(
         Array.from({ length: 12 }, async (_, monthIndex) => {
+          const m = monthIndex + 1;
+          const monthStr = `${selectedYear}-${String(m).padStart(2, "0")}`;
           try {
-            const response = await axios.get(
-              `/api/agency-expenses-month/monthly_summary/?month=${
-                monthIndex + 1
-              }&year=${selectedYear}`
-            );
-            return response.data?.total || 0;
+            const [expRes, planRes] = await Promise.all([
+              axios.get(
+                `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}`
+              ),
+              axios
+                .get(
+                  `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}&agence=1`
+                )
+                .catch(() => ({ data: {} })),
+            ]);
+            const depenses = Number(expRes.data?.total) || 0;
+            const planning = Number(planRes.data?.total_montant) || 0;
+            return depenses + planning;
           } catch (error) {
-            console.error(`Erreur pour le mois ${monthIndex + 1}:`, error);
+            console.error(`Erreur pour le mois ${m}:`, error);
             return 0;
           }
         })
@@ -671,18 +754,210 @@ const AgencyExpenses = () => {
         </Table>
       </TableContainer>
 
-      {/* Résumé annuel */}
-      <Paper sx={{ mt: 3, p: 2 }} elevation={0}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Total annuel ({selectedYear})
-        </Typography>
-        <Typography
-          variant="body1"
-          sx={{ fontWeight: 600, color: "primary.main" }}
+      <Stack spacing={2} sx={{ mt: 2, width: "100%" }}>
+        {/* Total annuel */}
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 2,
+            overflow: "hidden",
+            border: "1px solid",
+            borderColor: "rgba(27, 120, 188, 0.28)",
+            background:
+              "linear-gradient(180deg, rgba(27, 120, 188, 0.1) 0%, #ffffff 50%)",
+          }}
         >
-          {yearlyTotal.toFixed(2)} €
-        </Typography>
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5 },
+              py: 2,
+              display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
+              alignItems: { xs: "flex-start", sm: "center" },
+              justifyContent: "space-between",
+              gap: 2,
+            }}
+          >
+            <Box>
+              <Typography
+                variant="overline"
+                sx={{
+                  letterSpacing: 1,
+                  color: "text.secondary",
+                  fontWeight: 600,
+                  display: "block",
+                }}
+              >
+                Total annuel
+              </Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
+                Dépenses saisies + planning agence (12 mois)
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 1.5,
+                flexWrap: "wrap",
+              }}
+            >
+              <Typography
+                variant="h4"
+                component="span"
+                sx={{
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                  color: "rgba(27, 120, 188, 1)",
+                  lineHeight: 1.15,
+                }}
+              >
+                {yearlyTotal.toFixed(2)} €
+              </Typography>
+              <Box
+                sx={{
+                  px: 1.25,
+                  py: 0.35,
+                  borderRadius: 1,
+                  bgcolor: "rgba(27, 120, 188, 0.14)",
+                  border: "1px solid rgba(27, 120, 188, 0.3)",
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)" }}
+                >
+                  {selectedYear}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Paper>
+
+        {/* Coûts annuels par catégorie (12 mois + planning agence) */}
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 2,
+            overflow: "hidden",
+            border: "1px solid",
+            borderColor: "rgba(27, 120, 188, 0.2)",
+            background:
+              "linear-gradient(145deg, rgba(27, 120, 188, 0.06) 0%, #fff 42%, #fafbfc 100%)",
+            maxWidth: 640,
+          }}
+        >
+        <Box
+          sx={{
+            px: 2.5,
+            py: 1.75,
+            borderBottom: "1px solid rgba(27, 120, 188, 0.12)",
+            background: "rgba(27, 120, 188, 0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <Box>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", letterSpacing: 0.2 }}
+            >
+              Coût annuel par catégorie
+            </Typography>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
+              Synthèse sur les 12 mois (dépenses saisies + planning agence)
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 1,
+              bgcolor: "rgba(27, 120, 188, 0.12)",
+              border: "1px solid rgba(27, 120, 188, 0.25)",
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", letterSpacing: 0.5 }}
+            >
+              {selectedYear}
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ p: 2 }}>
+          {yearlyCategoryLoading ? (
+            <Typography color="text.secondary" sx={{ py: 1 }}>
+              Chargement…
+            </Typography>
+          ) : yearlyCategoryDisplayRows.length === 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ py: 1.5, fontStyle: "italic" }}
+            >
+              Aucune dépense pour cette année (toutes les catégories sont à 0 €).
+            </Typography>
+          ) : (
+            <Stack spacing={0}>
+              {yearlyCategoryDisplayRows.map(({ cat, total }, index) => (
+                <Box
+                  key={cat}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 2,
+                    py: 1.35,
+                    px: 1.5,
+                    borderRadius: 1,
+                    transition: "background-color 0.15s ease",
+                    borderBottom:
+                      index < yearlyCategoryDisplayRows.length - 1
+                        ? "1px solid rgba(0, 0, 0, 0.06)"
+                        : "none",
+                    "&:hover": {
+                      backgroundColor: "rgba(27, 120, 188, 0.06)",
+                    },
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                      color: "text.primary",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      color: "rgba(27, 120, 188, 1)",
+                      whiteSpace: "nowrap",
+                      px: 1.25,
+                      py: 0.5,
+                      borderRadius: 1,
+                      bgcolor: "rgba(27, 120, 188, 0.08)",
+                    }}
+                  >
+                    {total.toFixed(2)} €
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </Box>
       </Paper>
+      </Stack>
 
       {/* Dialog pour ajouter/modifier une dépense */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
