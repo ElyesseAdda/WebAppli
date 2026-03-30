@@ -2430,6 +2430,23 @@ class SituationFactureCIE(models.Model):
     facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
 
+class Agence(models.Model):
+    nom = models.CharField(max_length=200, unique=True)
+    chantier = models.OneToOneField(
+        'Chantier', on_delete=models.SET_NULL,
+        related_name='agence_linked', null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['nom']
+        verbose_name = "Agence"
+        verbose_name_plural = "Agences"
+
+    def __str__(self):
+        return self.nom
+
+
 class AgencyExpense(models.Model):
     EXPENSE_TYPES = [
         ('fixed', 'Mensuel fixe'),
@@ -2445,6 +2462,7 @@ class AgencyExpense(models.Model):
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE, null=True, blank=True)
     sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2493,6 +2511,8 @@ class AgencyExpenseMonth(models.Model):
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
     
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
+    
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
 
@@ -2514,7 +2534,7 @@ class AgencyExpenseMonth(models.Model):
 
     class Meta:
         ordering = ['-year', '-month']
-        unique_together = ('description', 'category', 'month', 'year')
+        unique_together = ('description', 'category', 'month', 'year', 'agence')
         verbose_name = "Dépense Mensuelle Agence"
         verbose_name_plural = "Dépenses Mensuelles Agence"
         indexes = [
@@ -2541,10 +2561,11 @@ class AgencyExpenseAggregate(models.Model):
     month = models.IntegerField()  # 1-12
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     totals_by_category = models.JSONField(default=list, blank=True)
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='expense_aggregates')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('year', 'month')
+        unique_together = ('year', 'month', 'agence')
         ordering = ['year', 'month']
         indexes = [
             models.Index(fields=['year', 'month'])

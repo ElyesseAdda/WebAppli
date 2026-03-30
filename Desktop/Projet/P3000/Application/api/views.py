@@ -36,7 +36,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -49,6 +49,7 @@ from .models import (
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
     SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    Agence,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -278,6 +279,14 @@ class ChantierViewSet(viewsets.ModelViewSet):
         from .ecole_utils import get_or_create_agence_chantier
         chantier = get_or_create_agence_chantier()
         return Response(self.get_serializer(chantier).data)
+
+    @action(detail=False, methods=['get'], url_path='agences_list')
+    def agences_list(self, request):
+        """Retourne tous les chantiers de type agence (pour le planning multi-agence)."""
+        chantiers = Chantier.objects.filter(
+            Q(chantier_type='agence') | Q(chantier_name__iexact='Agence')
+        ).distinct()
+        return Response(self.get_serializer(chantiers, many=True).data)
 
 
 class SocieteViewSet(viewsets.ModelViewSet):
@@ -8965,6 +8974,39 @@ def generate_situation_pdf(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+class AgenceViewSet(viewsets.ModelViewSet):
+    queryset = Agence.objects.all()
+    serializer_class = AgenceSerializer
+    permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        agence = serializer.save()
+        chantier = Chantier.objects.create(
+            chantier_name=agence.nom,
+            is_system_chantier=True,
+            chantier_type='agence',
+            ville='Système',
+            rue='Système',
+            state_chantier='En Cours',
+            description=f'Chantier système pour l\'agence "{agence.nom}"',
+        )
+        agence.chantier = chantier
+        agence.save(update_fields=['chantier'])
+
+    def perform_update(self, serializer):
+        agence = serializer.save()
+        if agence.chantier:
+            agence.chantier.chantier_name = agence.nom
+            agence.chantier.description = f'Chantier système pour l\'agence "{agence.nom}"'
+            agence.chantier.save(update_fields=['chantier_name', 'description'])
+
+    def perform_destroy(self, instance):
+        chantier = instance.chantier
+        instance.delete()
+        if chantier:
+            chantier.delete()
+
+
 class AgencyExpenseViewSet(viewsets.ModelViewSet):
     queryset = AgencyExpense.objects.all()
     serializer_class = AgencyExpenseSerializer
@@ -9125,6 +9167,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 category=template.category,
                 month=m,
                 year=y,
+                agence=template.agence,
                 defaults={
                     'amount': template.amount,
                     'date_paiement': date(y, m, 1),
@@ -9183,10 +9226,11 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 y += 1
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('agence')
         month = self.request.query_params.get('month')
         year = self.request.query_params.get('year')
         category = self.request.query_params.get('category')
+        agence_id = self.request.query_params.get('agence_id')
         
         if month:
             queryset = queryset.filter(month=int(month))
@@ -9194,6 +9238,8 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(year=int(year))
         if category:
             queryset = queryset.filter(category=category)
+        if agence_id:
+            queryset = queryset.filter(agence_id=int(agence_id))
         
         return queryset.order_by('year', 'month', 'description')
 
@@ -9202,6 +9248,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         """Résumé mensuel des dépenses"""
         month = request.query_params.get('month')
         year = request.query_params.get('year')
+        agence_id = request.query_params.get('agence_id')
         
         if not month or not year:
             return Response({"error": "Month and year are required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -9210,6 +9257,8 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             month=int(month),
             year=int(year)
         )
+        if agence_id:
+            expenses = expenses.filter(agence_id=int(agence_id))
         
         total = sum(float(e.amount) for e in expenses)
         totals_by_category = {}
@@ -9242,7 +9291,11 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         return Response({"generated": generated_ids}, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
-        instance = serializer.save()
+        agence_id = self.request.data.get('agence') or self.request.query_params.get('agence_id')
+        extra = {}
+        if agence_id:
+            extra['agence_id'] = int(agence_id)
+        instance = serializer.save(**extra)
         if instance.is_recurring_template:
             self._generate_from_template(instance, horizon_months=60)
         return instance
@@ -11706,14 +11759,14 @@ def _get_tableau_fournisseur_data(chantier_id=None):
     agency_fournisseur_qs = AgencyExpenseMonth.objects.filter(category='Fournisseur')
     if chantier_id:
         agency_fournisseur_qs = agency_fournisseur_qs.filter(chantier_id=chantier_id)
-    agency_fournisseur_qs = agency_fournisseur_qs.select_related('chantier')
+    agency_fournisseur_qs = agency_fournisseur_qs.select_related('chantier', 'agence', 'agence__chantier')
 
     for expense_month in agency_fournisseur_qs:
         annee_2_digits = str(expense_month.year)[-2:]
         key = f"{expense_month.month:02d}/{annee_2_digits}"
         fournisseur_nom = expense_month.description
-        chantier_id_val = 0
-        chantier_name = "Agence"
+        chantier_id_val = expense_month.agence.chantier_id if expense_month.agence and expense_month.agence.chantier_id else 0
+        chantier_name = expense_month.agence.nom if expense_month.agence else "Agence"
         montant_a_payer = Decimal(str(expense_month.amount))
         montant_paye_dec = (
             Decimal(str(expense_month.montant_paye))
@@ -12102,7 +12155,7 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
     else:
         agency_expenses_month = AgencyExpenseMonth.objects.filter(category='Sous-traitant')
     
-    agency_expenses_month = agency_expenses_month.select_related('chantier', 'sous_traitant')
+    agency_expenses_month = agency_expenses_month.select_related('chantier', 'sous_traitant', 'agence', 'agence__chantier')
     
     for expense_month in agency_expenses_month:
         # Format: MM/YY
@@ -12111,8 +12164,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         
         # Utiliser la description comme nom de "sous-traitant" dans le tableau
         sous_traitant_nom = expense_month.description
-        chantier_id_val = 0  # Toujours 0 pour AgencyExpenseMonth (pas de chantier spécifique)
-        chantier_name = "Agence"
+        chantier_id_val = expense_month.agence.chantier_id if expense_month.agence and expense_month.agence.chantier_id else 0
+        chantier_name = expense_month.agence.nom if expense_month.agence else "Agence"
         
         montant = Decimal(str(expense_month.amount))
         
@@ -12756,7 +12809,10 @@ def schedule_monthly_summary(request):
     if agence_only:
         from .ecole_utils import get_agence_chantier_ids
         agence_ids = get_agence_chantier_ids()
-        schedules = schedules.filter(chantier_id__in=agence_ids)
+        if chantier_id_filter and int(chantier_id_filter) in agence_ids:
+            schedules = schedules.filter(chantier_id=int(chantier_id_filter))
+        else:
+            schedules = schedules.filter(chantier_id__in=agence_ids)
     elif chantier_id_filter:
         schedules = schedules.filter(chantier_id=chantier_id_filter)
 

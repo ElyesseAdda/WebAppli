@@ -32,6 +32,7 @@ const ROUTE_TITLES = [
   { path: "/CalendrierAgentContainer", title: "Calendrier agents" },
   { path: "/AgentCardContainer", title: "Agents" },
   { path: "/AgencyExpenses", title: "Frais d'agence" },
+  { path: "/agence/:agenceId/expenses", title: "Frais d'agence" },
   { path: "/ChantiersDrivePaths", title: "Chantiers - Drive" },
   { path: "/drive", title: "Drive" },
   { path: "/drive-v2", title: "Drive V2" },

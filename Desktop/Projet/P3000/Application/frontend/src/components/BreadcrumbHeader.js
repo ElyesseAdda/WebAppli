@@ -21,6 +21,7 @@ const sectionConfigs = [
       "/ChantierDetail",
       "/GestionAppelsOffres",
       "/AgencyExpenses",
+      "/agence",
       "/ChantiersDashboard",
       "/TableauSuivi",
     ],
@@ -117,7 +118,19 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
   const pageLabelEntry = pageLabelByPrefix.find((e) =>
     e.prefix === "/" ? pathname === "/" : pathname.startsWith(e.prefix)
   );
-  const pageLabel = pageLabelEntry?.label || "";
+
+  const [agenceName, setAgenceName] = useState("");
+  const agenceMatch = pathname.match(/^\/agence\/(\d+)\/expenses/);
+  const agenceIdFromUrl = agenceMatch ? agenceMatch[1] : null;
+
+  useEffect(() => {
+    if (!agenceIdFromUrl) { setAgenceName(""); return; }
+    axios.get(`/api/agences/${agenceIdFromUrl}/`).then((res) => {
+      setAgenceName(res.data?.nom || "Agence");
+    }).catch(() => setAgenceName("Agence"));
+  }, [agenceIdFromUrl]);
+
+  const pageLabel = agenceIdFromUrl ? (agenceName || "Agence") : (pageLabelEntry?.label || "");
 
   // Suffix contextuel: pour /ChantierDetail/:id, afficher le nom du chantier si possible
   const [chantierName, setChantierName] = useState("");

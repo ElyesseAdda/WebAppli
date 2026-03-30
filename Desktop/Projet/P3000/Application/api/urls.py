@@ -57,6 +57,7 @@ from .views import (
     preview_situation,
     generate_situation_pdf,
     AgencyExpenseViewSet,
+    AgenceViewSet,
     get_chantier_bons_commande,
     get_chantier_stats,
     SousTraitantViewSet,
@@ -217,6 +218,7 @@ router.register(r'situation-lignes', SituationLigneViewSet, basename='situation-
 router.register(r'situation-lignes-supplementaires', SituationLigneSupplementaireViewSet)
 router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
+router.register(r'agences', AgenceViewSet, basename='agences')
 router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'agency-expenses-month', AgencyExpenseMonthViewSet, basename='agency-expenses-month')
 router.register(r'sous-traitants', SousTraitantViewSet)

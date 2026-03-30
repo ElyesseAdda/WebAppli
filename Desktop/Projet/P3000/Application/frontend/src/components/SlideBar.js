@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
 import {
@@ -9,18 +9,52 @@ import {
   MdAdminPanelSettings,
   MdBusiness,
   MdTableChart,
+  MdAdd,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
 import { MdFolderShared } from "react-icons/md";
 import { MdManageAccounts, MdRestorePage } from "react-icons/md";
 import { NavLink, useLocation } from "react-router-dom";
+import axios from "axios";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
 
 const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [agences, setAgences] = useState([]);
+
+  const fetchAgences = useCallback(() => {
+    axios
+      .get("/api/agences/")
+      .then((res) => setAgences(res.data || []))
+      .catch(() => setAgences([]));
+  }, []);
+
+  useEffect(() => {
+    fetchAgences();
+  }, [fetchAgences]);
+
+  const handleCreateAgence = () => {
+    const nom = prompt("Nom de la nouvelle agence :");
+    if (!nom || !nom.trim()) return;
+    axios
+      .post("/api/agences/", { nom: nom.trim() })
+      .then(() => fetchAgences())
+      .catch((err) => {
+        const msg = err.response?.data?.nom?.[0] || "Erreur lors de la création";
+        alert(msg);
+      });
+  };
+
+  const agenceLinks = useMemo(() => {
+    const links = agences.map((a) => ({
+      label: a.nom,
+      to: `/agence/${a.id}/expenses`,
+    }));
+    return links;
+  }, [agences]);
 
   const menu = useMemo(
     () => [
@@ -32,7 +66,8 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
           { label: "Dashboard", to: "/" },
           { label: "Récap Chantier", to: "/ChantierDetail/1" },
           { label: "Appel d'Offre", to: "/GestionAppelsOffres" },
-          { label: "Agence", to: "/AgencyExpenses" },
+          ...agenceLinks,
+          { addAgence: true, label: "add-agence" },
         ],
       },
       {
@@ -122,12 +157,15 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
         to: "/distributeurs",
       },
     ],
-    [user]
+    [user, agenceLinks]
   );
 
   const isPathActive = (to) => {
     if (!to) return false;
     if (to === "/") return location.pathname === "/";
+    if (to.startsWith("/agence/") && location.pathname.startsWith("/agence/")) {
+      return location.pathname === to;
+    }
     return location.pathname.startsWith(to);
   };
 
@@ -237,6 +275,20 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
                     style={{ display: isExpanded ? "block" : "none" }}
                   >
                     {item.children.map((child) => {
+                      if (child.addAgence) {
+                        return (
+                          <li key={`${item.key}-add-agence`}>
+                            <button
+                              type="button"
+                              className="add-agence-button"
+                              onClick={handleCreateAgence}
+                              title="Créer une nouvelle agence"
+                            >
+                              <MdAdd /> Nouvelle agence
+                            </button>
+                          </li>
+                        );
+                      }
                       if (child.children && child.children.length > 0) {
                         return (
                           <li

@@ -10,7 +10,8 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    Agence
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -1618,17 +1619,28 @@ class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
         model = AgencyExpenseOverride
         fields = ['month', 'year', 'description', 'amount']
 
+class AgenceSerializer(serializers.ModelSerializer):
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+
+    class Meta:
+        model = Agence
+        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at']
+        read_only_fields = ['chantier', 'chantier_name', 'created_at']
+
+
 class AgencyExpenseSerializer(serializers.ModelSerializer):
     current_override = serializers.SerializerMethodField()
     sous_traitant_name = serializers.CharField(source='sous_traitant.entreprise', read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True)
 
     class Meta:
         model = AgencyExpense
         fields = [
             'id', 'description', 'amount', 'type', 'date', 'end_date', 
             'category', 'current_override', 'sous_traitant', 'sous_traitant_name',
-            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours'
+            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours',
+            'agence', 'agence_nom'
         ]
 
     def get_current_override(self, obj):
@@ -1644,6 +1656,7 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
     agent_name = serializers.SerializerMethodField()
     date_paiement_prevue = serializers.SerializerMethodField()
     recurrence_parent = serializers.PrimaryKeyRelatedField(read_only=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True)
 
     class Meta:
         model = AgencyExpenseMonth
@@ -1656,6 +1669,7 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
             'source_expense',
             'is_recurring_template', 'recurrence_start', 'recurrence_end',
             'closed_until', 'recurrence_parent',
+            'agence', 'agence_nom',
             'created_at', 'updated_at'
         ]
     

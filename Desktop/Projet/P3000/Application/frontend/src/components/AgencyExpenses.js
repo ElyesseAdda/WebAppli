@@ -23,10 +23,12 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
 const AgencyExpenses = () => {
+  const { agenceId } = useParams();
   const [expenses, setExpenses] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -55,6 +57,8 @@ const AgencyExpenses = () => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceStart, setRecurrenceStart] = useState("");
   const [recurrenceEnd, setRecurrenceEnd] = useState("");
+  const [agenceName, setAgenceName] = useState("");
+  const [agenceChantierId, setAgenceChantierId] = useState(null);
 
   // Catégories de dépenses
   const categories = [
@@ -74,7 +78,23 @@ const AgencyExpenses = () => {
   /** Uniquement pour le filtre du tableau (lignes issues du planning, non saisissables à la main) */
   const categoriesWithPlanning = [...categories, "Planning agence"];
 
+  const agenceParam = agenceId ? `&agence_id=${agenceId}` : "";
+  const scheduleParam = agenceChantierId
+    ? `&agence=1&chantier_id=${agenceChantierId}`
+    : "&agence=1";
+
+  useEffect(() => {
+    if (!agenceId) return;
+    axios.get(`/api/agences/${agenceId}/`).then((res) => {
+      setAgenceName(res.data.nom || "");
+      setAgenceChantierId(res.data.chantier || null);
+    }).catch(() => { setAgenceName(""); setAgenceChantierId(null); });
+  }, [agenceId]);
+
+  const scheduleReady = !agenceId || !!agenceChantierId;
+
   const fetchYearlyCategoryTotals = useCallback(async () => {
+    if (!scheduleReady) return;
     setYearlyCategoryLoading(true);
     try {
       const monthResults = await Promise.all(
@@ -83,11 +103,11 @@ const AgencyExpenses = () => {
           const monthStr = `${selectedYear}-${String(m).padStart(2, "0")}`;
           return Promise.all([
             axios.get(
-              `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}`
+              `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}${agenceParam}`
             ),
             axios
               .get(
-                `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}&agence=1`
+                `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleParam}`
               )
               .catch(() => ({ data: {} })),
           ]);
@@ -113,25 +133,26 @@ const AgencyExpenses = () => {
     } finally {
       setYearlyCategoryLoading(false);
     }
-  }, [selectedYear]);
+  }, [selectedYear, agenceParam, scheduleParam, scheduleReady]);
 
-  // Charger les données à chaque changement de mois/année
+  // Charger les données à chaque changement de mois/année/agence
   useEffect(() => {
     fetchMonthlyExpenses();
-    updateYearlyTotal();
-  }, [selectedMonth, selectedYear]);
+    if (scheduleReady) updateYearlyTotal();
+  }, [selectedMonth, selectedYear, agenceId, scheduleReady]);
 
   useEffect(() => {
     fetchYearlyCategoryTotals();
   }, [fetchYearlyCategoryTotals]);
 
   useEffect(() => {
+    if (!scheduleReady) { setPlanningAgence(null); return; }
     let cancelled = false;
     const loadPlanningAgence = async () => {
       try {
         const monthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
         const res = await axios.get(
-          `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}&agence=1`
+          `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleParam}`
         );
         if (!cancelled) setPlanningAgence(res.data);
       } catch (e) {
@@ -143,7 +164,7 @@ const AgencyExpenses = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, scheduleParam, scheduleReady]);
 
   const updateYearlyTotal = async () => {
     const total = await calculateYearlyTotal();
@@ -156,7 +177,7 @@ const AgencyExpenses = () => {
       const response = await axios.get(
         `/api/agency-expenses-month/monthly_summary/?month=${
           selectedMonth + 1
-        }&year=${selectedYear}`
+        }&year=${selectedYear}${agenceParam}`
       );
       const fetched = response.data?.expenses || [];
       setOriginalExpenses(fetched);
@@ -214,6 +235,7 @@ const AgencyExpenses = () => {
         is_recurring_template: effectiveIsRecurring,
         recurrence_start: effectiveIsRecurring ? startDateNormalized : null,
         recurrence_end: effectiveIsRecurring && endDateNormalized ? endDateNormalized : null,
+        ...(agenceId ? { agence: parseInt(agenceId, 10) } : {}),
       };
 
       const response = await axios.post("/api/agency-expenses-month/", expenseData);
@@ -459,11 +481,11 @@ const AgencyExpenses = () => {
           try {
             const [expRes, planRes] = await Promise.all([
               axios.get(
-                `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}`
+                `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}${agenceParam}`
               ),
               axios
                 .get(
-                  `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}&agence=1`
+                  `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleParam}`
                 )
                 .catch(() => ({ data: {} })),
             ]);
@@ -549,7 +571,7 @@ const AgencyExpenses = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography sx={{ fontWeight: "bold", color: "white" }} variant="h5">
-          Dépenses de l'Agence (Système Mensuel)
+          Dépenses {agenceName ? `- ${agenceName}` : "de l'Agence"} (Système Mensuel)
         </Typography>
         <Button variant="contained" onClick={() => setOpenDialog(true)}>
           Ajouter une dépense

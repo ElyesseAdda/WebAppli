@@ -12,7 +12,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
 import isoWeek from "dayjs/plugin/isoWeek";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import "./../../static/css/planningHebdo.css";
@@ -81,8 +81,9 @@ const PlanningHebdoAgent = ({
   const [events, setEvents] = useState([]);
   const [selectedCells, setSelectedCells] = useState([]);
   const [lastSelectedCell, setLastSelectedCell] = useState(null);
-  const [chantiers, setChantiers] = useState([]); // Nouvel état pour les chantiers
-  const [agenceChantier, setAgenceChantier] = useState(null); // Chantier système / référence « Agence »
+  const [chantiers, setChantiers] = useState([]);
+  const [agenceChantier, setAgenceChantier] = useState(null);
+  const [agenceChantiers, setAgenceChantiers] = useState([]);
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
   const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
@@ -233,24 +234,28 @@ const PlanningHebdoAgent = ({
     return week1Start.add(week - 1, 'week');
   };
 
-  // Récupérer les chantiers depuis l'API (+ référence Agence pour le planning)
+  // Récupérer les chantiers depuis l'API (+ toutes les agences pour le planning)
   useEffect(() => {
     const fetchChantiers = async () => {
       try {
-        const [response, agenceRes] = await Promise.all([
+        const [response, agencesRes] = await Promise.all([
           axios.get("/api/chantier/"),
-          axios.get("/api/chantier/agence_reference/").catch(() => ({ data: null })),
+          axios.get("/api/chantier/agences_list/").catch(() => ({ data: [] })),
         ]);
-        const agence = agenceRes?.data || null;
-        setAgenceChantier(agence);
+        const agencesListData = agencesRes?.data || [];
+        setAgenceChantiers(agencesListData);
+        setAgenceChantier(agencesListData[0] || null);
+        const agenceIds = new Set(agencesListData.map((a) => a.id));
         const filteredChantiers = response.data.filter(
           (chantier) =>
             chantier.state_chantier !== "Terminé" &&
             chantier.state_chantier !== "En attente"
         );
         const merged = [...filteredChantiers];
-        if (agence && !merged.some((c) => c.id === agence.id)) {
-          merged.unshift(agence);
+        for (const ac of agencesListData) {
+          if (!merged.some((c) => c.id === ac.id)) {
+            merged.unshift(ac);
+          }
         }
         setChantiers(merged);
       } catch (error) {
@@ -823,10 +828,20 @@ const PlanningHebdoAgent = ({
     }
   };
 
-  // Fonction utilitaire pour générer une couleur unique par chantier
+  const agenceIdSet = useMemo(
+    () => new Set(agenceChantiers.map((a) => a.id)),
+    [agenceChantiers]
+  );
+
+  const agencePalette = [
+    "#7b1fa2", "#6a1b9a", "#8e24aa", "#9c27b0", "#ab47bc",
+    "#7c4dff", "#651fff", "#536dfe", "#304ffe",
+  ];
+
   function getColorForChantier(chantierId) {
-    if (agenceChantier && chantierId === agenceChantier.id) {
-      return "#7b1fa2";
+    if (agenceIdSet.has(chantierId)) {
+      const idx = agenceChantiers.findIndex((a) => a.id === chantierId);
+      return agencePalette[idx % agencePalette.length];
     }
     // Palette de couleurs (ajustable)
     const palette = [
@@ -951,8 +966,9 @@ const PlanningHebdoAgent = ({
       if (chantier) {
         return getColorForChantier(chantier.id);
       }
-      if (agenceChantier && chantierName === agenceChantier.chantier_name) {
-        return "#7b1fa2";
+      const matchedAgence = agenceChantiers.find((a) => a.chantier_name === chantierName);
+      if (matchedAgence) {
+        return getColorForChantier(matchedAgence.id);
       }
       return getColorForChantier(chantierName);
     }
@@ -1453,18 +1469,14 @@ const PlanningHebdoAgent = ({
                       (c) =>
                         (c.state_chantier !== "Terminé" &&
                           c.state_chantier !== "En attente") ||
-                        (agenceChantier && c.id === agenceChantier.id)
+                        agenceIdSet.has(c.id)
                     );
                     const sorted = [...chantiersEnCours].sort((a, b) =>
                       (a.chantier_name || "").localeCompare(b.chantier_name || "", "fr")
                     );
-                    const ordered =
-                      agenceChantier && sorted.some((c) => c.id === agenceChantier.id)
-                        ? [
-                            agenceChantier,
-                            ...sorted.filter((c) => c.id !== agenceChantier.id),
-                          ]
-                        : sorted;
+                    const agencesFirst = agenceChantiers.filter((a) => sorted.some((c) => c.id === a.id));
+                    const rest = sorted.filter((c) => !agenceIdSet.has(c.id));
+                    const ordered = [...agencesFirst, ...rest];
                     const filtered = chantierSearchQuery.trim()
                       ? ordered.filter((c) =>
                           (c.chantier_name || "")

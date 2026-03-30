@@ -374,6 +374,16 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/agence/:agenceId/expenses"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AgencyExpenses />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/BonCommandeModif"
