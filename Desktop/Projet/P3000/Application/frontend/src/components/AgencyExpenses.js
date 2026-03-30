@@ -21,7 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
@@ -47,6 +47,7 @@ const AgencyExpenses = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  const [planningAgence, setPlanningAgence] = useState(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceStart, setRecurrenceStart] = useState("");
   const [recurrenceEnd, setRecurrenceEnd] = useState("");
@@ -66,10 +67,33 @@ const AgencyExpenses = () => {
     "Autres",
   ];
 
+  /** Uniquement pour le filtre du tableau (lignes issues du planning, non saisissables à la main) */
+  const categoriesWithPlanning = [...categories, "Planning agence"];
+
   // Charger les données à chaque changement de mois/année
   useEffect(() => {
     fetchMonthlyExpenses();
     updateYearlyTotal();
+  }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPlanningAgence = async () => {
+      try {
+        const monthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+        const res = await axios.get(
+          `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}&agence=1`
+        );
+        if (!cancelled) setPlanningAgence(res.data);
+      } catch (e) {
+        console.error("Erreur chargement heures agence (planning):", e);
+        if (!cancelled) setPlanningAgence(null);
+      }
+    };
+    loadPlanningAgence();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedMonth, selectedYear]);
 
   const updateYearlyTotal = async () => {
@@ -277,9 +301,76 @@ const AgencyExpenses = () => {
     }
   };
 
+  const sumMontantPlanningAgent = (d) =>
+    Number(d.montant_normal || 0) +
+    Number(d.montant_samedi || 0) +
+    Number(d.montant_dimanche || 0) +
+    Number(d.montant_ferie || 0) +
+    Number(d.montant_overtime || 0);
+
+  const sumHeuresPlanningAgent = (d) =>
+    Number(d.heures_normal || 0) +
+    Number(d.heures_samedi || 0) +
+    Number(d.heures_dimanche || 0) +
+    Number(d.heures_ferie || 0) +
+    Number(d.heures_overtime || 0);
+
+  /** Même règle que LaborCostsSummary (Résumé des heures) : journalier → jours (÷8), horaire → h */
+  const formatHeuresCommeResume = (heures, typePaiement) => {
+    const h = Number(heures) || 0;
+    if (typePaiement === "journalier") {
+      const jours = h / 8;
+      return jours === 1 ? "1j" : `${jours}j`;
+    }
+    return `${h.toFixed(2)} h`;
+  };
+
+  const planningRowsVirtual = useMemo(() => {
+    if (!planningAgence?.details?.length) return [];
+    return planningAgence.details.map((row) => ({
+      id: `planning-agence-${row.agent_id}`,
+      description: `${row.agent_nom} — planning agence (${formatHeuresCommeResume(
+        sumHeuresPlanningAgent(row),
+        row.type_paiement
+      )})`,
+      category: "Planning agence",
+      amount: sumMontantPlanningAgent(row),
+      isPlanningRow: true,
+    }));
+  }, [planningAgence]);
+
+  const planningRowsFiltered = useMemo(() => {
+    return planningRowsVirtual.filter((row) => {
+      if (
+        filters.description &&
+        !row.description.toLowerCase().includes(filters.description.toLowerCase())
+      ) {
+        return false;
+      }
+      if (
+        filters.category &&
+        filters.category !== "Tous" &&
+        row.category !== filters.category
+      ) {
+        return false;
+      }
+      if (filters.amount) {
+        const expenseAmount = String(row.amount);
+        const filterAmount = filters.amount;
+        if (!expenseAmount.includes(filterAmount.toString())) return false;
+      }
+      return true;
+    });
+  }, [planningRowsVirtual, filters]);
+
+  const tableRowsCombined = useMemo(
+    () => [...expenses, ...planningRowsFiltered],
+    [expenses, planningRowsFiltered]
+  );
+
   const calculateMonthlyTotal = () => {
-    return expenses.reduce((total, expense) => {
-      return total + parseFloat(expense.amount || 0);
+    return tableRowsCombined.reduce((total, row) => {
+      return total + parseFloat(row.amount || 0);
     }, 0);
   };
 
@@ -456,7 +547,7 @@ const AgencyExpenses = () => {
                   <MenuItem sx={{ textAlign: "center" }} value="Tous">
                     Tous
                   </MenuItem>
-                  {categories.map((cat) => (
+                  {categoriesWithPlanning.map((cat) => (
                     <MenuItem
                       sx={{ textAlign: "center" }}
                       key={cat}
@@ -486,11 +577,16 @@ const AgencyExpenses = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {expenses.map((expense, index) => (
+            {tableRowsCombined.map((row, index) => (
               <TableRow
-                key={expense.id}
+                key={row.id}
                 sx={{
-                  backgroundColor: index % 2 === 0 ? "#ffffff" : "#f5f5f5",
+                  backgroundColor:
+                    row.isPlanningRow
+                      ? "rgba(123, 31, 162, 0.06)"
+                      : index % 2 === 0
+                        ? "#ffffff"
+                        : "#f5f5f5",
                   "&:hover": {
                     backgroundColor: "rgba(27, 120, 188, 0.1)",
                   },
@@ -500,18 +596,31 @@ const AgencyExpenses = () => {
                   sx={{
                     textAlign: "left",
                     fontWeight: "bold",
-                    color: "rgba(27, 120, 188, 1)",
+                    color: row.isPlanningRow ? "#6a1b9a" : "rgba(27, 120, 188, 1)",
                   }}
                 >
-                  {getExpenseDescriptionCourte(expense)}
+                  {row.isPlanningRow
+                    ? row.description
+                    : getExpenseDescriptionCourte(row)}
                 </TableCell>
-                <TableCell align="center">{expense.category}</TableCell>
+                <TableCell align="center">{row.category}</TableCell>
                 <TableCell align="center">
-                  {parseFloat(expense.amount).toFixed(2)} €
+                  {parseFloat(row.amount).toFixed(2)} €
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: "flex", gap: 1 }}>
-                    {expense.category === "Prime" ? (
+                    {row.isPlanningRow ? (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "#666",
+                          fontStyle: "italic",
+                          padding: "8px",
+                        }}
+                      >
+                        Planning hebdo
+                      </Typography>
+                    ) : row.category === "Prime" ? (
                       <Typography
                         variant="caption"
                         sx={{
@@ -527,7 +636,7 @@ const AgencyExpenses = () => {
                         <IconButton
                           size="small"
                           color="primary"
-                          onClick={() => handleEditExpense(expense)}
+                          onClick={() => handleEditExpense(row)}
                           disabled={loading}
                         >
                           <FaEdit />
@@ -535,7 +644,7 @@ const AgencyExpenses = () => {
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => openDeleteConfirm(expense)}
+                          onClick={() => openDeleteConfirm(row)}
                           disabled={loading}
                         >
                           <FaTrash />

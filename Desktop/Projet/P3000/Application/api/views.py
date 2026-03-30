@@ -272,6 +272,12 @@ class ChantierViewSet(viewsets.ModelViewSet):
                 'error': f'Erreur lors de la mise à jour : {str(e)}'
             }, status=500)
 
+    @action(detail=False, methods=['get'], url_path='agence_reference')
+    def agence_reference(self, request):
+        """Chantier utilisé pour les heures « Agence » dans le planning (existant ou système)."""
+        from .ecole_utils import get_or_create_agence_chantier
+        chantier = get_or_create_agence_chantier()
+        return Response(self.get_serializer(chantier).data)
 
 
 class SocieteViewSet(viewsets.ModelViewSet):
@@ -12708,6 +12714,7 @@ def schedule_monthly_summary(request):
     month_str = request.GET.get('month')  # format attendu : 'YYYY-MM'
     agent_id_filter = request.GET.get('agent_id')
     chantier_id_filter = request.GET.get('chantier_id')
+    agence_only = request.GET.get('agence') == '1'
     if not month_str:
         return Response({'error': 'Paramètre month requis (format YYYY-MM)'}, status=400)
     try:
@@ -12746,7 +12753,11 @@ def schedule_monthly_summary(request):
     schedules = Schedule.objects.filter(q_objects).select_related('agent', 'chantier')
     if agent_id_filter:
         schedules = schedules.filter(agent_id=agent_id_filter)
-    if chantier_id_filter:
+    if agence_only:
+        from .ecole_utils import get_agence_chantier_ids
+        agence_ids = get_agence_chantier_ids()
+        schedules = schedules.filter(chantier_id__in=agence_ids)
+    elif chantier_id_filter:
         schedules = schedules.filter(chantier_id=chantier_id_filter)
 
     # Agrégation par agent et chantier
@@ -12886,6 +12897,64 @@ def schedule_monthly_summary(request):
         chantier_map[chantier_id]['total_montant_ferie'] += data['montant_ferie']
         chantier_map[chantier_id]['total_montant_overtime'] += data['montant_overtime']
         chantier_map[chantier_id]['jours_majoration'].extend(data['jours_majoration'])
+
+    if agence_only:
+        from .ecole_utils import get_agence_chantier_ids
+        agence_ids = get_agence_chantier_ids()
+        merged_by_agent = {}
+        for (_agent_id, _chantier_id), data in result.items():
+            aid = data['agent_id']
+            if aid not in merged_by_agent:
+                merged_by_agent[aid] = {
+                    'agent_id': data['agent_id'],
+                    'agent_nom': data['agent_nom'],
+                    'chantier_id': agence_ids[0] if agence_ids else None,
+                    'chantier_nom': data['chantier_nom'],
+                    'type_paiement': data['type_paiement'],
+                    'heures_normal': 0,
+                    'heures_samedi': 0,
+                    'heures_dimanche': 0,
+                    'heures_ferie': 0,
+                    'heures_overtime': 0,
+                    'montant_normal': 0,
+                    'montant_samedi': 0,
+                    'montant_dimanche': 0,
+                    'montant_ferie': 0,
+                    'montant_overtime': 0,
+                    'jours_majoration': [],
+                }
+            m = merged_by_agent[aid]
+            for k in (
+                'heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
+                'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime',
+            ):
+                m[k] += data[k]
+            m['jours_majoration'].extend(data['jours_majoration'])
+
+        details = sorted(merged_by_agent.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        tot_h = (
+            sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
+        )
+        tot_m = (
+            sum(d['montant_normal'] + d['montant_samedi'] + d['montant_dimanche'] + d['montant_ferie'] + d['montant_overtime'] for d in details)
+        )
+        return Response({
+            'chantier_id': agence_ids[0] if agence_ids else None,
+            'chantier_nom': 'Agence (planning)',
+            'details': details,
+            'total_heures_normal': sum(d['heures_normal'] for d in details),
+            'total_heures_samedi': sum(d['heures_samedi'] for d in details),
+            'total_heures_dimanche': sum(d['heures_dimanche'] for d in details),
+            'total_heures_ferie': sum(d['heures_ferie'] for d in details),
+            'total_heures_overtime': sum(d['heures_overtime'] for d in details),
+            'total_heures': tot_h,
+            'total_montant_normal': sum(d['montant_normal'] for d in details),
+            'total_montant_samedi': sum(d['montant_samedi'] for d in details),
+            'total_montant_dimanche': sum(d['montant_dimanche'] for d in details),
+            'total_montant_ferie': sum(d['montant_ferie'] for d in details),
+            'total_montant_overtime': sum(d['montant_overtime'] for d in details),
+            'total_montant': tot_m,
+        }, status=200)
 
     return Response(list(chantier_map.values()), status=200)
 

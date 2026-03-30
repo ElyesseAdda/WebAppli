@@ -82,6 +82,7 @@ const PlanningHebdoAgent = ({
   const [selectedCells, setSelectedCells] = useState([]);
   const [lastSelectedCell, setLastSelectedCell] = useState(null);
   const [chantiers, setChantiers] = useState([]); // Nouvel état pour les chantiers
+  const [agenceChantier, setAgenceChantier] = useState(null); // Chantier système / référence « Agence »
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
   const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
@@ -232,18 +233,26 @@ const PlanningHebdoAgent = ({
     return week1Start.add(week - 1, 'week');
   };
 
-  // Récupérer les chantiers depuis l'API
+  // Récupérer les chantiers depuis l'API (+ référence Agence pour le planning)
   useEffect(() => {
     const fetchChantiers = async () => {
       try {
-        const response = await axios.get("/api/chantier/"); // URL de votre API pour les chantiers
-        // Filtrer les chantiers avec le statut "Terminé" ou "En attente"
+        const [response, agenceRes] = await Promise.all([
+          axios.get("/api/chantier/"),
+          axios.get("/api/chantier/agence_reference/").catch(() => ({ data: null })),
+        ]);
+        const agence = agenceRes?.data || null;
+        setAgenceChantier(agence);
         const filteredChantiers = response.data.filter(
           (chantier) =>
             chantier.state_chantier !== "Terminé" &&
             chantier.state_chantier !== "En attente"
         );
-        setChantiers(filteredChantiers);
+        const merged = [...filteredChantiers];
+        if (agence && !merged.some((c) => c.id === agence.id)) {
+          merged.unshift(agence);
+        }
+        setChantiers(merged);
       } catch (error) {
         console.error("Erreur lors de la récupération des chantiers :", error);
       }
@@ -816,6 +825,9 @@ const PlanningHebdoAgent = ({
 
   // Fonction utilitaire pour générer une couleur unique par chantier
   function getColorForChantier(chantierId) {
+    if (agenceChantier && chantierId === agenceChantier.id) {
+      return "#7b1fa2";
+    }
     // Palette de couleurs (ajustable)
     const palette = [
       "#1b78bc",
@@ -936,7 +948,13 @@ const PlanningHebdoAgent = ({
       }
 
       const chantier = chantiers.find((c) => c.chantier_name === chantierName);
-      return getColorForChantier(chantier ? chantier.id : chantierName);
+      if (chantier) {
+        return getColorForChantier(chantier.id);
+      }
+      if (agenceChantier && chantierName === agenceChantier.chantier_name) {
+        return "#7b1fa2";
+      }
+      return getColorForChantier(chantierName);
     }
 
     return "white";
@@ -1383,7 +1401,7 @@ const PlanningHebdoAgent = ({
       {isChantierModalOpen && (
         <div className="modal">
           <div className="modal-content modal-content-chantier">
-            <h2>Sélectionner un chantier</h2>
+            <h2>Sélectionner un chantier ou l&apos;agence</h2>
             <div
               className="chantier-search-wrapper"
               ref={chantierDropdownRef}
@@ -1433,19 +1451,27 @@ const PlanningHebdoAgent = ({
                   {(() => {
                     const chantiersEnCours = chantiers.filter(
                       (c) =>
-                        c.state_chantier !== "Terminé" &&
-                        c.state_chantier !== "En attente"
+                        (c.state_chantier !== "Terminé" &&
+                          c.state_chantier !== "En attente") ||
+                        (agenceChantier && c.id === agenceChantier.id)
                     );
                     const sorted = [...chantiersEnCours].sort((a, b) =>
                       (a.chantier_name || "").localeCompare(b.chantier_name || "", "fr")
                     );
+                    const ordered =
+                      agenceChantier && sorted.some((c) => c.id === agenceChantier.id)
+                        ? [
+                            agenceChantier,
+                            ...sorted.filter((c) => c.id !== agenceChantier.id),
+                          ]
+                        : sorted;
                     const filtered = chantierSearchQuery.trim()
-                      ? sorted.filter((c) =>
+                      ? ordered.filter((c) =>
                           (c.chantier_name || "")
                             .toLowerCase()
                             .includes(chantierSearchQuery.trim().toLowerCase())
                         )
-                      : sorted;
+                      : ordered;
                     if (filtered.length === 0) {
                       return (
                         <li

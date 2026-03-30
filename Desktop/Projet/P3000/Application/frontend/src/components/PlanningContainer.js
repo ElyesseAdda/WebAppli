@@ -756,15 +756,9 @@ const PlanningContainer = () => {
       )}
 
       <LaborCostsSummary
-        schedule={schedule}
-        selectedAgentId={selectedAgentId}
+        agentId={selectedAgentId ?? undefined}
         isOpen={isLaborCostsSummaryOpen}
         onClose={() => setIsLaborCostsSummaryOpen(false)}
-        tauxHoraire={
-          agents.find((agent) => agent.id === selectedAgentId)?.taux_Horaire ||
-          0
-        }
-        onCostsCalculated={handleCostsCalculated}
       />
 
       {/* Modal pour copier le planning */}
