@@ -59,6 +59,7 @@ import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
+import UsersManagement from "./UsersManagement";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -79,6 +80,16 @@ const theme = createTheme({
 const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+const SuperuserRoute = ({ children, isAuthenticated, user }) => {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!user?.is_superuser) {
+    return <Navigate to="/" replace />;
   }
   return children;
 };
@@ -493,6 +504,17 @@ function App() {
                   <ChantiersDrivePaths />
                 </Layout>
               </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/UsersManagement"
+            element={
+              <SuperuserRoute isAuthenticated={isAuthenticated} user={user}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <UsersManagement />
+                </Layout>
+              </SuperuserRoute>
             }
           />
 

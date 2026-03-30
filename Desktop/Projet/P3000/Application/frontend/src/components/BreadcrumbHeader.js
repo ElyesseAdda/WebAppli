@@ -1,6 +1,6 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness, MdTableChart } from "react-icons/md";
+import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness, MdTableChart, MdAdminPanelSettings } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { useLocation, useParams } from "react-router-dom";
 import "./../../static/css/breadcrumb.css";
@@ -65,6 +65,14 @@ const sectionConfigs = [
     ],
   },
   {
+    key: "admin",
+    label: "Admin",
+    icon: MdAdminPanelSettings,
+    prefixes: [
+      "/UsersManagement",
+    ],
+  },
+  {
     key: "drive",
     label: "Drive",
     icon: SiGoogledrive,
@@ -92,6 +100,7 @@ const pageLabelByPrefix = [
   { prefix: "/ListeFactures", label: "Liste facture" },
   { prefix: "/ListeFournisseurs", label: "Liste Fournisseurs" },
   { prefix: "/ListeSousTraitants", label: "Sous traitant" },
+  { prefix: "/UsersManagement", label: "Gestion utilisateurs" },
   { prefix: "/paiements-sous-traitant", label: "Paiements sous-traitant" },
 ];
 
@@ -213,6 +222,7 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

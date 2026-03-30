@@ -6,17 +6,19 @@ import {
   MdCreateNewFolder,
   MdEventAvailable,
   MdFolderOpen,
+  MdAdminPanelSettings,
   MdBusiness,
   MdTableChart,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
 import { MdFolderShared } from "react-icons/md";
+import { MdManageAccounts } from "react-icons/md";
 import { NavLink, useLocation } from "react-router-dom";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
 
-const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
+const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
 
@@ -87,6 +89,18 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           { label: "Comparateur", to: "/ComparateurFournisseurs" },
         ],
       },
+      ...(user?.is_superuser
+        ? [
+            {
+              key: "admin",
+              label: "Admin",
+              icon: MdAdminPanelSettings,
+              children: [
+                { label: "Utilisateurs", to: "/UsersManagement", icon: MdManageAccounts },
+              ],
+            },
+          ]
+        : []),
       {
         key: "drive_v2",
         label: "Drive",
@@ -107,7 +121,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         to: "/distributeurs",
       },
     ],
-    []
+    [user]
   );
 
   const isPathActive = (to) => {

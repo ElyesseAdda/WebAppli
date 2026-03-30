@@ -172,7 +172,15 @@ from .bon_commande_modification_views import (
 from .search_views import search_in_drive
 
 # Import des vues d'authentification
-from .auth_views import login_view, logout_view, check_auth_view, create_user_view
+from .auth_views import (
+    login_view,
+    logout_view,
+    check_auth_view,
+    create_user_view,
+    list_users_view,
+    toggle_user_active_view,
+    reset_user_password_view,
+)
 
 # Import de la vue de version
 from .views import app_version_view
@@ -235,6 +243,9 @@ auth_urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/check/', check_auth_view, name='check_auth'),
     path('auth/create-user/', create_user_view, name='create_user'),
+    path('auth/users/', list_users_view, name='list_users'),
+    path('auth/users/<int:user_id>/toggle-active/', toggle_user_active_view, name='toggle_user_active'),
+    path('auth/users/<int:user_id>/reset-password/', reset_user_password_view, name='reset_user_password'),
 ]
 
 urlpatterns = [
