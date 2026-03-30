@@ -13,7 +13,7 @@ import {
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
 import { MdFolderShared } from "react-icons/md";
-import { MdManageAccounts } from "react-icons/md";
+import { MdManageAccounts, MdRestorePage } from "react-icons/md";
 import { NavLink, useLocation } from "react-router-dom";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
@@ -97,6 +97,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
               icon: MdAdminPanelSettings,
               children: [
                 { label: "Utilisateurs", to: "/UsersManagement", icon: MdManageAccounts },
+                { label: "Récupération Drive", to: "/drive-recovery", icon: MdRestorePage },
               ],
             },
           ]
