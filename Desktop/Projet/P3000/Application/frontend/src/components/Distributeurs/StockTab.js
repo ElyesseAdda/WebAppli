@@ -68,6 +68,34 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   const [stockFilter, setStockFilter] = useState("all"); // all | low | out
   const [stockSort, setStockSort] = useState("asc"); // asc: faible->fort, desc: fort->faible
 
+  const getFilterChipSx = (active, type = "default") => {
+    const paletteByType = {
+      default: { bg: "primary.50", color: "primary.main", border: "primary.200" },
+      warning: { bg: "warning.50", color: "warning.main", border: "warning.200" },
+      error: { bg: "error.50", color: "error.main", border: "error.200" },
+    };
+    const p = paletteByType[type] || paletteByType.default;
+    return {
+      borderRadius: "12px",
+      fontWeight: 800,
+      height: 34,
+      border: "1px solid",
+      borderColor: active ? p.border : "divider",
+      bgcolor: active ? p.color : "background.paper",
+      color: active ? "common.white" : "text.secondary",
+      transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      boxShadow: active ? "0 4px 12px rgba(0,0,0,0.08)" : "none",
+      "&:hover": {
+        bgcolor: active ? p.color : "grey.50",
+        borderColor: active ? p.border : "grey.300",
+      },
+      "& .MuiChip-label": {
+        px: 1.5,
+        fontSize: "0.72rem",
+      },
+    };
+  };
+
   useEffect(() => {
     fetchProducts();
     fetchPurchases();
@@ -391,24 +419,28 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               clickable
               color={stockFilter === "all" ? "primary" : "default"}
               onClick={() => setStockFilter("all")}
+              sx={getFilterChipSx(stockFilter === "all", "default")}
             />
             <Chip
               label="Stock faible (1-10)"
               clickable
               color={stockFilter === "low" ? "warning" : "default"}
               onClick={() => setStockFilter("low")}
+              sx={getFilterChipSx(stockFilter === "low", "warning")}
             />
             <Chip
               label="Rupture (0)"
               clickable
               color={stockFilter === "out" ? "error" : "default"}
               onClick={() => setStockFilter("out")}
+              sx={getFilterChipSx(stockFilter === "out", "error")}
             />
             <Chip
               label={stockSort === "asc" ? "Tri: faible -> fort" : "Tri: fort -> faible"}
               clickable
               variant="outlined"
               onClick={() => setStockSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+              sx={getFilterChipSx(true, "default")}
             />
           </Box>
         </Box>
@@ -447,24 +479,28 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               clickable
               color={stockFilter === "all" ? "primary" : "default"}
               onClick={() => setStockFilter("all")}
+              sx={getFilterChipSx(stockFilter === "all", "default")}
             />
             <Chip
               label="Stock faible (1-10)"
               clickable
               color={stockFilter === "low" ? "warning" : "default"}
               onClick={() => setStockFilter("low")}
+              sx={getFilterChipSx(stockFilter === "low", "warning")}
             />
             <Chip
               label="Rupture (0)"
               clickable
               color={stockFilter === "out" ? "error" : "default"}
               onClick={() => setStockFilter("out")}
+              sx={getFilterChipSx(stockFilter === "out", "error")}
             />
             <Chip
               label={stockSort === "asc" ? "Tri: faible -> fort" : "Tri: fort -> faible"}
               clickable
               variant="outlined"
               onClick={() => setStockSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+              sx={getFilterChipSx(true, "default")}
             />
           </Box>
           {loadingLots ? (
