@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Box, Button, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Autocomplete, TextField, Snackbar, Alert,
 } from "@mui/material";
-import { MdAdd, MdEdit, MdDelete, MdLink } from "react-icons/md";
+import { MdAdd, MdEdit, MdDelete, MdLink, MdCheck, MdClose, MdThumbUp } from "react-icons/md";
 import { AiFillFilePdf } from "react-icons/ai";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -58,6 +58,11 @@ const ChantierRapportsList = ({ chantierData }) => {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [rapportToUpdate, setRapportToUpdate] = useState(null);
+  const [devisDialogOpen, setDevisDialogOpen] = useState(false);
+  const [rapportForDevis, setRapportForDevis] = useState(null);
+  const [devisOptions, setDevisOptions] = useState([]);
+  const [selectedDevis, setSelectedDevis] = useState(null);
+  const thumbClickTimeoutRef = useRef(null);
 
   const loadRapports = useCallback(async () => {
     if (!chantierData?.id) return;
@@ -198,6 +203,109 @@ const ChantierRapportsList = ({ chantierData }) => {
     }
   };
 
+  const openDevisDialogForRapport = async (rapport) => {
+    try {
+      const params = { page_size: 200 };
+      if (rapport?.chantier) params.chantier = rapport.chantier;
+      const [devisRes, rapportsRes] = await Promise.all([
+        axios.get("/api/devisa/", { params }),
+        axios.get("/api/rapports-intervention/", { params: { page_size: 500 } }),
+      ]);
+      const devisList = devisRes.data?.results || devisRes.data || [];
+      const rapportsList = rapportsRes.data?.results || rapportsRes.data || [];
+      const usedDevisIds = new Set(
+        (Array.isArray(rapportsList) ? rapportsList : [])
+          .filter((r) => r?.id !== rapport?.id)
+          .map((r) => r?.devis_lie)
+          .filter(Boolean)
+      );
+      const filteredDevis = (Array.isArray(devisList) ? devisList : []).filter(
+        (d) => !usedDevisIds.has(d.id) || d.id === rapport?.devis_lie
+      );
+      setDevisOptions(filteredDevis);
+      const currentDevis = filteredDevis.find((d) => d.id === rapport?.devis_lie) || null;
+      setSelectedDevis(currentDevis);
+      setRapportForDevis(rapport);
+      setDevisDialogOpen(true);
+    } catch {
+      setSnackbar({ open: true, message: "Impossible de charger la liste des devis", severity: "error" });
+    }
+  };
+
+  const handleConfirmDevisFait = async () => {
+    if (!rapportForDevis?.id || !selectedDevis?.id) return;
+    try {
+      await patchRapport(rapportForDevis.id, {
+        devis_a_faire: true,
+        devis_fait: true,
+        devis_lie: selectedDevis.id,
+      });
+      setSnackbar({ open: true, message: "Devis lié et rapport marqué comme devis fait", severity: "success" });
+      setDevisDialogOpen(false);
+      setRapportForDevis(null);
+      setSelectedDevis(null);
+      loadRapports();
+    } catch (err) {
+      const msg = err?.response?.data?.devis_lie?.[0] || "Impossible de lier ce devis";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
+  };
+
+  const handleDevisIconClick = async (e, rapport) => {
+    e.stopPropagation();
+    if (rapport.devis_a_faire) {
+      await openDevisDialogForRapport(rapport);
+    }
+  };
+
+  const handleBlueThumbClick = (e, rapport) => {
+    e.stopPropagation();
+    if (thumbClickTimeoutRef.current) {
+      clearTimeout(thumbClickTimeoutRef.current);
+    }
+    thumbClickTimeoutRef.current = setTimeout(() => {
+      if (rapport.devis_lie_preview_url) {
+        window.open(rapport.devis_lie_preview_url, "_blank");
+      } else {
+        setSnackbar({ open: true, message: "Devis marqué fait mais aucun devis lié", severity: "warning" });
+      }
+      thumbClickTimeoutRef.current = null;
+    }, 220);
+  };
+
+  const handleBlueThumbDoubleClick = async (e, rapport) => {
+    e.stopPropagation();
+    if (thumbClickTimeoutRef.current) {
+      clearTimeout(thumbClickTimeoutRef.current);
+      thumbClickTimeoutRef.current = null;
+    }
+    await openDevisDialogForRapport(rapport);
+  };
+
+  const handleResetToDevisAFaire = async () => {
+    if (!rapportForDevis?.id) return;
+    try {
+      await patchRapport(rapportForDevis.id, {
+        devis_a_faire: true,
+        devis_fait: false,
+        devis_lie: null,
+      });
+      setSnackbar({ open: true, message: "Rapport repassé en devis à faire", severity: "success" });
+      setDevisDialogOpen(false);
+      setRapportForDevis(null);
+      setSelectedDevis(null);
+      loadRapports();
+    } catch {
+      setSnackbar({ open: true, message: "Impossible de repasser en devis à faire", severity: "error" });
+    }
+  };
+
+  useEffect(() => () => {
+    if (thumbClickTimeoutRef.current) {
+      clearTimeout(thumbClickTimeoutRef.current);
+    }
+  }, []);
+
   return (
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
@@ -235,6 +343,7 @@ const ChantierRapportsList = ({ chantierData }) => {
               <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Residence</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Logement/Adresse</TableCell>
+              <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Devis à faire</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
               <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
             </TableRow>
@@ -242,7 +351,7 @@ const ChantierRapportsList = ({ chantierData }) => {
           <TableBody>
             {rapports.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} sx={{ textAlign: "center", py: 3 }}>
+                <TableCell colSpan={9} sx={{ textAlign: "center", py: 3 }}>
                   <Typography variant="body2" color="text.secondary">
                     {loading ? "Chargement..." : "Aucun rapport lie a ce chantier"}
                   </Typography>
@@ -267,6 +376,24 @@ const ChantierRapportsList = ({ chantierData }) => {
                     {rapport.type_rapport === "vigik_plus"
                       ? (rapport.adresse_vigik || "-")
                       : (rapport.logement || "-")}
+                  </TableCell>
+                  <TableCell sx={{ textAlign: "center" }}>
+                    {rapport.devis_fait ? (
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleBlueThumbClick(e, rapport)}
+                        onDoubleClick={(e) => handleBlueThumbDoubleClick(e, rapport)}
+                        title={rapport.devis_lie_numero ? `Devis ${rapport.devis_lie_numero} (double-clic pour corriger)` : "Voir le devis lié (double-clic pour corriger)"}
+                      >
+                        <MdThumbUp size={20} color="#1565c0" />
+                      </IconButton>
+                    ) : rapport.devis_a_faire ? (
+                      <IconButton size="small" onClick={(e) => handleDevisIconClick(e, rapport)} title="Cliquer pour lier le devis et marquer fait">
+                        <MdCheck size={20} color="#2e7d32" />
+                      </IconButton>
+                    ) : (
+                      <MdClose size={20} color="#c62828" title="Non" />
+                    )}
                   </TableCell>
                   <TableCell
                     onClick={(e) => handleStatusClick(e, rapport)}
@@ -341,6 +468,31 @@ const ChantierRapportsList = ({ chantierData }) => {
         type="rapport"
         title="Modifier le statut du rapport"
       />
+
+      <Dialog open={devisDialogOpen} onClose={() => setDevisDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Lier un devis (devis fait)</DialogTitle>
+        <DialogContent>
+          <Autocomplete
+            options={devisOptions}
+            value={selectedDevis}
+            onChange={(_, v) => setSelectedDevis(v)}
+            getOptionLabel={(opt) => `${opt?.numero || "Sans numéro"}${opt?.chantier_name ? ` — ${opt.chantier_name}` : ""}`}
+            renderInput={(params) => <TextField {...params} label="Choisir un devis" size="small" sx={{ mt: 1 }} />}
+            isOptionEqualToValue={(a, b) => a?.id === b?.id}
+          />
+        </DialogContent>
+        <DialogActions>
+          {rapportForDevis?.devis_fait && (
+            <Button color="warning" onClick={handleResetToDevisAFaire}>
+              Repasser en devis à faire (V)
+            </Button>
+          )}
+          <Button onClick={() => setDevisDialogOpen(false)}>Annuler</Button>
+          <Button variant="contained" onClick={handleConfirmDevisFait} disabled={!selectedDevis}>
+            Confirmer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}

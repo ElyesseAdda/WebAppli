@@ -99,6 +99,12 @@ class RapportIntervention(models.Model):
 
     type_rapport = models.CharField(max_length=20, choices=TYPE_CHOICES, default='intervention')
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='a_faire')
+    devis_a_faire = models.BooleanField(default=False, verbose_name="Devis à faire")
+    devis_fait = models.BooleanField(default=False, verbose_name="Devis fait")
+    devis_lie = models.ForeignKey(
+        'Devis', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rapports_intervention_lies', verbose_name="Devis lié"
+    )
     pdf_s3_key = models.CharField(max_length=500, blank=True, default='')
 
     # Champs spécifiques Vigik+

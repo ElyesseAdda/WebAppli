@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models_rapport import TitreRapport, Residence, RapportIntervention, PrestationRapport, PhotoRapport
-from .models import Societe, Chantier
+from .models import Societe, Chantier, Devis
 
 
 def _is_vigik_plus(attrs):
@@ -165,6 +165,8 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
     pdf_drive_url = serializers.SerializerMethodField()
     photo_platine_url = serializers.SerializerMethodField()
     photo_platine_portail_url = serializers.SerializerMethodField()
+    devis_lie_numero = serializers.SerializerMethodField()
+    devis_lie_preview_url = serializers.SerializerMethodField()
 
     class Meta:
         model = RapportIntervention
@@ -173,7 +175,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
             'temps_trajet', 'temps_taches',
             'client_societe', 'chantier', 'residence', 'logement',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
-            'signature_s3_key', 'type_rapport', 'statut', 'pdf_s3_key',
+            'signature_s3_key', 'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'pdf_s3_key',
             'adresse_vigik', 'numero_batiment', 'type_installation',
             'presence_platine', 'photo_platine_s3_key',
             'presence_platine_portail', 'photo_platine_portail_s3_key',
@@ -181,6 +183,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
             'prestations', 'residence_data', 'residence_nom', 'residence_adresse',
             'client_societe_nom', 'client_societe_logo_url', 'chantier_nom',
             'signature_url', 'pdf_url', 'pdf_drive_url', 'photo_platine_url', 'photo_platine_portail_url',
+            'devis_lie_numero', 'devis_lie_preview_url',
         ]
         read_only_fields = ['created_by', 'created_at', 'updated_at', 'signature_s3_key', 'pdf_s3_key']
 
@@ -254,6 +257,14 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
                 return None
         return None
 
+    def get_devis_lie_numero(self, obj):
+        return obj.devis_lie.numero if obj.devis_lie else None
+
+    def get_devis_lie_preview_url(self, obj):
+        if not obj.devis_lie_id:
+            return None
+        return f"/api/preview-saved-devis-v2/{obj.devis_lie_id}/"
+
 
 class RapportInterventionListSerializer(serializers.ModelSerializer):
     """Version legere pour les listes."""
@@ -263,6 +274,8 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
     residence_nom = serializers.SerializerMethodField()
     residence_adresse = serializers.SerializerMethodField()
     nb_prestations = serializers.SerializerMethodField()
+    devis_lie_numero = serializers.SerializerMethodField()
+    devis_lie_preview_url = serializers.SerializerMethodField()
 
     class Meta:
         model = RapportIntervention
@@ -271,7 +284,7 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
             'temps_trajet', 'temps_taches',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
             'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
-            'type_rapport', 'statut',
+            'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'devis_lie_numero', 'devis_lie_preview_url',
             'numero_batiment', 'type_installation',
             'presence_platine', 'presence_platine_portail',
             'created_at', 'updated_at', 'nb_prestations',
@@ -308,6 +321,14 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
             return c
         return obj.prestations.count()
 
+    def get_devis_lie_numero(self, obj):
+        return obj.devis_lie.numero if obj.devis_lie else None
+
+    def get_devis_lie_preview_url(self, obj):
+        if not obj.devis_lie_id:
+            return None
+        return f"/api/preview-saved-devis-v2/{obj.devis_lie_id}/"
+
 
 class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     """Serializer pour la creation avec prestations nested."""
@@ -332,6 +353,11 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     residence_nom = serializers.CharField(write_only=True, required=False, allow_blank=True)
     residence_adresse = serializers.CharField(write_only=True, required=False, allow_blank=True)
     adresse_vigik = serializers.CharField(required=False, allow_blank=True)
+    devis_lie = serializers.PrimaryKeyRelatedField(
+        queryset=Devis.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = RapportIntervention
@@ -341,7 +367,7 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             'client_societe', 'chantier', 'residence', 'logement',
             'residence_nom', 'residence_adresse', 'adresse_vigik',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
-            'type_rapport', 'statut', 'prestations',
+            'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'prestations',
             'numero_batiment', 'type_installation',
             'presence_platine', 'presence_platine_portail',
         ]
@@ -391,6 +417,21 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche."""
         attrs = _normalize_dates_intervention_attrs(attrs, instance=getattr(self, 'instance', None))
+        instance = getattr(self, 'instance', None)
+        devis_a_faire = attrs.get('devis_a_faire', getattr(instance, 'devis_a_faire', False) if instance else False)
+        devis_fait = attrs.get('devis_fait', getattr(instance, 'devis_fait', False) if instance else False)
+        devis_lie = attrs.get('devis_lie', getattr(instance, 'devis_lie', None) if instance else None)
+        chantier = attrs.get('chantier', getattr(instance, 'chantier', None) if instance else None)
+
+        if not devis_a_faire:
+            attrs['devis_fait'] = False
+            attrs['devis_lie'] = None
+        else:
+            if devis_fait and not devis_lie:
+                raise serializers.ValidationError({'devis_lie': "Un devis lié est requis quand le devis est marqué fait."})
+            if devis_lie and chantier and devis_lie.chantier_id and devis_lie.chantier_id != chantier.id:
+                raise serializers.ValidationError({'devis_lie': "Le devis lié doit appartenir au même chantier que le rapport."})
+
         if _is_vigik_plus(attrs):
             if not (attrs.get('adresse_vigik') or '').strip():
                 raise serializers.ValidationError({'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."})

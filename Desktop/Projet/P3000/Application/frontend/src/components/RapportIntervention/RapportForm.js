@@ -6,6 +6,8 @@ import {
   useTheme,
   useMediaQuery,
   IconButton,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   MdSave, MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete, MdChevronLeft, MdChevronRight, MdClose,
@@ -58,6 +60,9 @@ const RAPPORT_FIELD_LABELS = {
   type_installation: "Type d'installation",
   presence_platine: "Présence de platine",
   presence_platine_portail: "Présence de platine au portail",
+  devis_a_faire: "Devis à faire",
+  devis_fait: "Devis fait",
+  devis_lie: "Devis lié",
   locataire_nom: "Nom locataire",
   locataire_prenom: "Prénom locataire",
   locataire_telephone: "Téléphone locataire",
@@ -306,6 +311,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     type_installation: "",
     presence_platine: null,
     presence_platine_portail: null,
+    devis_a_faire: false,
+    devis_fait: false,
+    devis_lie: null,
   });
 
   const [rapportData, setRapportData] = useState(null);
@@ -402,6 +410,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         type_installation: data.type_installation ?? "",
         presence_platine: data.presence_platine ?? null,
         presence_platine_portail: data.presence_platine_portail ?? null,
+        devis_a_faire: !!data.devis_a_faire,
+        devis_fait: !!data.devis_fait,
+        devis_lie: data.devis_lie ?? null,
       });
       if (data.residence_data) {
         setSelectedResidence({ ...data.residence_data, optionType: "residence" });
@@ -868,6 +879,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         type_installation: formData.type_installation ?? "",
         presence_platine: formData.presence_platine,
         presence_platine_portail: formData.presence_platine_portail,
+        devis_a_faire: !!formData.devis_a_faire,
+        devis_fait: !!formData.devis_fait,
+        devis_lie: formData.devis_lie || null,
         prestations: isVigikPlus
           ? []
           : formData.prestations.map((p, i) => ({
@@ -1355,6 +1369,35 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
 
           {!isVigikPlus && (
             <>
+              <Box sx={{ gridColumn: { md: "1 / -1" } }}>
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={!!formData.devis_a_faire}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData((prev) => ({
+                          ...prev,
+                          devis_a_faire: checked,
+                          devis_fait: checked ? prev.devis_fait : false,
+                          devis_lie: checked ? prev.devis_lie : null,
+                        }));
+                      }}
+                      disabled={isDisabled}
+                    />
+                  )}
+                  label="Devis à faire"
+                  sx={{
+                    m: 0,
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: 1,
+                    border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+                    minHeight: isMobile ? 48 : 40,
+                    width: "fit-content",
+                  }}
+                />
+              </Box>
               <TextField
                 label="Temps de trajet"
                 type="time"
