@@ -62,6 +62,8 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   const [productForLots, setProductForLots] = useState(null);
   const [lots, setLots] = useState([]);
   const [loadingLots, setLoadingLots] = useState(false);
+  const [stockFilter, setStockFilter] = useState("all"); // all | low | out
+  const [stockSort, setStockSort] = useState("asc"); // asc: faible->fort, desc: fort->faible
 
   useEffect(() => {
     fetchProducts();
@@ -160,13 +162,33 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     }, 0);
   }, [lots]);
 
-  const filteredProducts = products.filter((product) => {
+  const filteredProducts = React.useMemo(() => {
+    const lowStockThreshold = 10;
     const search = searchTerm.toLowerCase();
-    return (
-      (product.nom && product.nom.toLowerCase().includes(search)) ||
-      (product.nom_produit && product.nom_produit.toLowerCase().includes(search))
-    );
-  });
+
+    const searched = products.filter((product) => {
+      return (
+        (product.nom && product.nom.toLowerCase().includes(search)) ||
+        (product.nom_produit && product.nom_produit.toLowerCase().includes(search))
+      );
+    });
+
+    const filteredByStock = searched.filter((product) => {
+      if (stockFilter === "out") return (parseInt(product.quantite, 10) || 0) === 0;
+      if (stockFilter === "low") {
+        const qte = parseInt(product.quantite, 10) || 0;
+        return qte > 0 && qte <= lowStockThreshold;
+      }
+      return true;
+    });
+
+    return [...filteredByStock].sort((a, b) => {
+      const qa = parseInt(a.quantite, 10) || 0;
+      const qb = parseInt(b.quantite, 10) || 0;
+      if (stockSort === "desc") return qb - qa;
+      return qa - qb;
+    });
+  }, [products, searchTerm, stockFilter, stockSort]);
 
   const handleOpenQuantityDialog = (product, type) => {
     setSelectedProduct(product);
@@ -337,6 +359,32 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             },
           }}
         />
+          <Box sx={{ mt: 1.5, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip
+              label="Tous"
+              clickable
+              color={stockFilter === "all" ? "primary" : "default"}
+              onClick={() => setStockFilter("all")}
+            />
+            <Chip
+              label="Stock faible (1-10)"
+              clickable
+              color={stockFilter === "low" ? "warning" : "default"}
+              onClick={() => setStockFilter("low")}
+            />
+            <Chip
+              label="Rupture (0)"
+              clickable
+              color={stockFilter === "out" ? "error" : "default"}
+              onClick={() => setStockFilter("out")}
+            />
+            <Chip
+              label={stockSort === "asc" ? "Tri: faible -> fort" : "Tri: fort -> faible"}
+              clickable
+              variant="outlined"
+              onClick={() => setStockSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+            />
+          </Box>
         </Box>
       )}
 
@@ -367,6 +415,32 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               ),
             }}
           />
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip
+              label="Tous"
+              clickable
+              color={stockFilter === "all" ? "primary" : "default"}
+              onClick={() => setStockFilter("all")}
+            />
+            <Chip
+              label="Stock faible (1-10)"
+              clickable
+              color={stockFilter === "low" ? "warning" : "default"}
+              onClick={() => setStockFilter("low")}
+            />
+            <Chip
+              label="Rupture (0)"
+              clickable
+              color={stockFilter === "out" ? "error" : "default"}
+              onClick={() => setStockFilter("out")}
+            />
+            <Chip
+              label={stockSort === "asc" ? "Tri: faible -> fort" : "Tri: fort -> faible"}
+              clickable
+              variant="outlined"
+              onClick={() => setStockSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+            />
+          </Box>
           {loadingLots ? (
             <Typography variant="body2" color="text.secondary">Valeur…</Typography>
           ) : (
