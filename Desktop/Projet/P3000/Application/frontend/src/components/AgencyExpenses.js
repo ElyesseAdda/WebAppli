@@ -632,7 +632,7 @@ const AgencyExpenses = () => {
                 />
               </FilterCell>
               <FilterCell>
-                <Typography variant="caption" sx={{ color: "#999", px: 1 }}>
+                <Typography variant="caption" sx={{ color: "#fff", px: 1 }}>
                   Commentaire
                 </Typography>
               </FilterCell>
@@ -670,12 +670,15 @@ const AgencyExpenses = () => {
                 <TableCell align="center">
                   {parseFloat(row.amount).toFixed(2)} €
                 </TableCell>
-                <TableCell sx={{ minWidth: 140, maxWidth: 220 }}>
+                <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                   {row.isPlanningRow ? null : (
                     <TextField
                       size="small"
                       variant="standard"
                       fullWidth
+                      multiline
+                      minRows={1}
+                      maxRows={6}
                       placeholder="—"
                       defaultValue={row.commentaire || ""}
                       onBlur={(e) => {
@@ -688,14 +691,13 @@ const AgencyExpenses = () => {
                             .catch(() => {});
                         }
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") e.target.blur();
-                      }}
                       InputProps={{
                         disableUnderline: true,
                         sx: {
                           fontSize: "0.82rem",
                           color: "#555",
+                          lineHeight: 1.4,
+                          alignItems: "flex-start",
                           "&:hover": { borderBottom: "1px solid #ccc" },
                           "&.Mui-focused": { borderBottom: "1px solid #1976d2" },
                         },

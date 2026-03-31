@@ -11812,6 +11812,7 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         cell['chantier_name'] = chantier_name
         cell['source_type'] = 'agency_expense_fournisseur'
         cell['agency_expense_id'] = expense_month.id
+        cell['commentaire'] = expense_month.commentaire or ''
         delai = expense_month.delai_paiement if getattr(expense_month, 'delai_paiement', None) else 45
         cell['delai_paiement'] = delai
 
@@ -11869,6 +11870,7 @@ def _get_tableau_fournisseur_data(chantier_id=None):
                     'source_type': valeurs.get('source_type'),
                     'agency_expense_id': valeurs.get('agency_expense_id'),
                     'delai_paiement': valeurs.get('delai_paiement', 45),
+                    'commentaire': valeurs.get('commentaire', ''),
                 })
     
     return result
@@ -12208,7 +12210,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         # data[key][sous_traitant_nom][chantier_id_val]['paye'] += montant  # SUPPRIMÉ
         data[key][sous_traitant_nom][chantier_id_val]['chantier_name'] = chantier_name
         data[key][sous_traitant_nom][chantier_id_val]['source_type'] = 'agency_expense'
-        data[key][sous_traitant_nom][chantier_id_val]['agency_expense_id'] = expense_month.id  # ID pour modification
+        data[key][sous_traitant_nom][chantier_id_val]['agency_expense_id'] = expense_month.id
+        data[key][sous_traitant_nom][chantier_id_val]['commentaire'] = expense_month.commentaire or ''
         
         # Récupérer les factures depuis AgencyExpenseMonth
         if not data[key][sous_traitant_nom][chantier_id_val]['factures']:
@@ -12509,8 +12512,9 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     'ecart_paiement_reel': valeurs.get('ecart_paiement_reel'),
                     'delai_paiement': valeurs.get('delai_paiement', 45),
                     'source_type': valeurs.get('source_type', 'facture_sous_traitant'),  # Par défaut facture_sous_traitant
-                    'agency_expense_id': valeurs.get('agency_expense_id'),  # ID pour modification des AgencyExpenseMonth
-                    'suivi_paiement_id': valeurs.get('suivi_paiement_id'),  # ID du suivi de paiement pour mise à jour
+                    'agency_expense_id': valeurs.get('agency_expense_id'),
+                    'suivi_paiement_id': valeurs.get('suivi_paiement_id'),
+                    'commentaire': valeurs.get('commentaire', ''),
                 }
                 
                 # Ajouter les champs spécifiques aux agents journaliers

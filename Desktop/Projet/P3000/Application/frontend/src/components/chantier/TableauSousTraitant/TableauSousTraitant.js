@@ -2392,6 +2392,33 @@ const TableauSousTraitant = () => {
                                   </span>
                                 ))}
                               </Typography>
+                            ) : item.commentaire ? (
+                              <Tooltip
+                                title={item.commentaire}
+                                arrow
+                                placement="top"
+                                slotProps={{
+                                  tooltip: {
+                                    sx: {
+                                      maxWidth: 350,
+                                      fontSize: "0.8rem",
+                                      whiteSpace: "pre-line",
+                                    },
+                                  },
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.8rem",
+                                    color: "text.primary",
+                                    cursor: "help",
+                                    borderBottom: "1px dashed rgba(27, 120, 188, 0.4)",
+                                    display: "inline",
+                                  }}
+                                >
+                                  {item.chantier_name}
+                                </Typography>
+                              </Tooltip>
                             ) : (
                               <Typography
                                 sx={{
