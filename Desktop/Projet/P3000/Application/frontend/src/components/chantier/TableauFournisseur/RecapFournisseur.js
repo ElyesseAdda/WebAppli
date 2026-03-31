@@ -11,6 +11,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  LinearProgress,
 } from "@mui/material";
 import { ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import React from "react";
@@ -259,84 +260,152 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                 <Box
                   sx={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    flexDirection: "column",
                     width: "100%",
                     pr: 2,
+                    gap: 0.5,
                   }}
                 >
-                  <Typography
+                  <Box
                     sx={{
-                      fontWeight: "bold",
-                      fontSize: "1rem",
-                      color: isPayeComplet
-                        ? "rgba(46, 125, 50, 1)"
-                        : "rgba(27, 120, 188, 1)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      width: "100%",
                     }}
                   >
-                    {fournisseur}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 3 }}>
-                    <Box sx={{ textAlign: "right" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                       <Typography
                         sx={{
-                          fontSize: "0.75rem",
-                          color: "text.secondary",
-                        }}
-                      >
-                        À payer
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontSize: "0.9rem",
                           fontWeight: "bold",
-                          color: colorForAmount(totaux.totalAPayer),
-                        }}
-                      >
-                        {formatNumber(totaux.totalAPayer)} €
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: "right" }}>
-                      <Typography
-                        sx={{
-                          fontSize: "0.75rem",
-                          color: "text.secondary",
-                        }}
-                      >
-                        Payé
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontSize: "0.9rem",
-                          fontWeight: "bold",
+                          fontSize: "1rem",
                           color: isPayeComplet
                             ? "rgba(46, 125, 50, 1)"
                             : "rgba(27, 120, 188, 1)",
                         }}
                       >
-                        {formatNumber(totaux.totalPaye)} €
+                        {fournisseur}
                       </Typography>
+                      <Box
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          backgroundColor: isPayeComplet
+                            ? "rgba(46, 125, 50, 0.15)"
+                            : "rgba(27, 120, 188, 0.15)",
+                          borderRadius: "12px",
+                          px: 1.2,
+                          py: 0.2,
+                          border: `1px solid ${
+                            isPayeComplet
+                              ? "rgba(46, 125, 50, 0.3)"
+                              : "rgba(27, 120, 188, 0.3)"
+                          }`,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            color: isPayeComplet
+                              ? "rgba(46, 125, 50, 1)"
+                              : "rgba(27, 120, 188, 1)",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {totauxGlobaux.totalAPayer
+                            ? ((totaux.totalAPayer / totauxGlobaux.totalAPayer) * 100).toFixed(1)
+                            : "0.0"}
+                          %
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Box sx={{ textAlign: "right" }}>
-                      <Typography
-                        sx={{
-                          fontSize: "0.75rem",
-                          color: "text.secondary",
-                        }}
-                      >
-                        Écart
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontSize: "0.9rem",
-                          fontWeight: "bold",
-                          color: colorForAmount(totaux.totalEcart, true),
-                        }}
-                      >
-                        {formatNumber(totaux.totalEcart)} €
-                      </Typography>
+                    <Box sx={{ display: "flex", gap: 3 }}>
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography
+                          sx={{
+                            fontSize: "0.75rem",
+                            color: "text.secondary",
+                          }}
+                        >
+                          À payer
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "0.9rem",
+                            fontWeight: "bold",
+                            color: colorForAmount(totaux.totalAPayer),
+                          }}
+                        >
+                          {formatNumber(totaux.totalAPayer)} €
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography
+                          sx={{
+                            fontSize: "0.75rem",
+                            color: "text.secondary",
+                          }}
+                        >
+                          Payé
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "0.9rem",
+                            fontWeight: "bold",
+                            color: isPayeComplet
+                              ? "rgba(46, 125, 50, 1)"
+                              : "rgba(27, 120, 188, 1)",
+                          }}
+                        >
+                          {formatNumber(totaux.totalPaye)} €
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography
+                          sx={{
+                            fontSize: "0.75rem",
+                            color: "text.secondary",
+                          }}
+                        >
+                          Écart
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "0.9rem",
+                            fontWeight: "bold",
+                            color: colorForAmount(totaux.totalEcart, true),
+                          }}
+                        >
+                          {formatNumber(totaux.totalEcart)} €
+                        </Typography>
+                      </Box>
                     </Box>
                   </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={
+                      totaux.totalAPayer
+                        ? Math.min(
+                            (totaux.totalPaye / totaux.totalAPayer) * 100,
+                            100
+                          )
+                        : 0
+                    }
+                    sx={{
+                      height: 4,
+                      borderRadius: 2,
+                      backgroundColor: isPayeComplet
+                        ? "rgba(46, 125, 50, 0.12)"
+                        : "rgba(27, 120, 188, 0.12)",
+                      "& .MuiLinearProgress-bar": {
+                        borderRadius: 2,
+                        backgroundColor: isPayeComplet
+                          ? "rgba(46, 125, 50, 0.7)"
+                          : "rgba(27, 120, 188, 0.7)",
+                      },
+                    }}
+                  />
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
