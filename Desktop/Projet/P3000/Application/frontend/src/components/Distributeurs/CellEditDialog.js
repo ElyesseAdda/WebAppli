@@ -36,6 +36,7 @@ const CellEditDialog = ({
   const [oldRemainingQty, setOldRemainingQty] = useState("");
   const [remainingAction, setRemainingAction] = useState("restock");
   const [feedbackModal, setFeedbackModal] = useState({ open: false, title: "", message: "" });
+  const [openDeleteWarning, setOpenDeleteWarning] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -313,7 +314,7 @@ const CellEditDialog = ({
 
       <DialogActions sx={{ px: 2, pb: 2, justifyContent: "space-between" }}>
         <Button
-          onClick={handleDelete}
+          onClick={() => setOpenDeleteWarning(true)}
           color="error"
           disabled={!cell || !cell.id}
           sx={{ borderRadius: "12px" }}
@@ -333,6 +334,43 @@ const CellEditDialog = ({
             Enregistrer
           </Button>
         </Box>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={openDeleteWarning}
+      onClose={() => setOpenDeleteWarning(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ fontWeight: 800, color: "error.main" }}>
+        Vider la case ?
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Cette action supprimera toutes les informations relatives à ce produit pour ce distributeur.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 700 }}>
+          Cette action est irréversible et ne pourra pas être annulée.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Pour modifier simplement le produit présent dans la case, utilisez la barre de sélection du produit en haut du formulaire.
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 2, pb: 2 }}>
+        <Button onClick={() => setOpenDeleteWarning(false)}>
+          Annuler
+        </Button>
+        <Button
+          variant="contained"
+          color="error"
+          onClick={() => {
+            setOpenDeleteWarning(false);
+            handleDelete();
+          }}
+        >
+          Oui, vider la case
+        </Button>
       </DialogActions>
     </Dialog>
 
