@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
+from .models import Emetteur
+from .serializers import EmetteurSerializer
 import json
 
 @api_view(['POST'])
@@ -304,4 +306,83 @@ def reset_user_password_view(request, user_id):
     return Response({
         'success': True,
         'message': f"Mot de passe réinitialisé pour {target_user.username}"
+    })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def manage_emetteurs_view(request):
+    """
+    Lister / créer des émetteurs (réservé superuser)
+    """
+    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
+        return Response({
+            'error': 'Accès refusé : administrateur requis'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'GET':
+        emetteurs = Emetteur.objects.all().order_by('surname', 'name')
+        serializer = EmetteurSerializer(emetteurs, many=True)
+        return Response({
+            'success': True,
+            'emetteurs': serializer.data
+        })
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return Response({'error': 'Données JSON invalides'}, status=status.HTTP_400_BAD_REQUEST)
+
+    required_fields = ['name', 'surname', 'email', 'phone_Number']
+    missing_fields = [field for field in required_fields if not str(data.get(field, '')).strip()]
+    if missing_fields:
+        return Response(
+            {'error': f"Champs requis manquants : {', '.join(missing_fields)}"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    serializer = EmetteurSerializer(data={
+        'name': str(data.get('name', '')).strip(),
+        'surname': str(data.get('surname', '')).strip(),
+        'email': str(data.get('email', '')).strip(),
+        'phone_Number': str(data.get('phone_Number', '')).strip(),
+        'is_active': True,
+    })
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    emetteur = serializer.save()
+    return Response({
+        'success': True,
+        'message': 'Émetteur créé avec succès',
+        'emetteur': EmetteurSerializer(emetteur).data
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_emetteur_active_view(request, emetteur_id):
+    """
+    Activer / désactiver un émetteur (réservé superuser)
+    """
+    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
+        return Response({
+            'error': 'Accès refusé : administrateur requis'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        emetteur = Emetteur.objects.get(id=emetteur_id)
+    except Emetteur.DoesNotExist:
+        return Response({'error': 'Émetteur introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    emetteur.is_active = not emetteur.is_active
+    emetteur.save(update_fields=['is_active'])
+
+    return Response({
+        'success': True,
+        'message': 'Émetteur activé' if emetteur.is_active else 'Émetteur désactivé',
+        'emetteur': {
+            'id': emetteur.id,
+            'is_active': emetteur.is_active
+        }
     })

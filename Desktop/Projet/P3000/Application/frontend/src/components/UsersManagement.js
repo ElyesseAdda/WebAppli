@@ -30,6 +30,8 @@ import axios from "../utils/axios";
 const UsersManagement = () => {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
+  const [emetteurs, setEmetteurs] = useState([]);
+  const [emetteursLoading, setEmetteursLoading] = useState(true);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
 
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -37,8 +39,16 @@ const UsersManagement = () => {
   const [newPassword, setNewPassword] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [createEmetteurLoading, setCreateEmetteurLoading] = useState(false);
+  const [toggleEmetteurLoading, setToggleEmetteurLoading] = useState(false);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [newEmetteurData, setNewEmetteurData] = useState({
+    name: "",
+    surname: "",
+    email: "",
+    phone_Number: "",
+  });
 
   const generateRandomPassword = (length = 12) => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
@@ -71,8 +81,22 @@ const UsersManagement = () => {
     }
   };
 
+  const loadEmetteurs = async () => {
+    try {
+      setEmetteursLoading(true);
+      const response = await axios.get("/auth/emetteurs/");
+      setEmetteurs(response.data?.emetteurs || []);
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || "Impossible de charger les émetteurs.";
+      setFeedback({ type: "error", message: errorMessage });
+    } finally {
+      setEmetteursLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
+    loadEmetteurs();
   }, []);
 
   const sortedUsers = useMemo(
@@ -184,6 +208,56 @@ const UsersManagement = () => {
     setShowResetPassword(true);
   };
 
+  const handleCreateEmetteurField = (e) => {
+    const { name, value } = e.target;
+    setNewEmetteurData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleCreateEmetteur = async () => {
+    if (!newEmetteurData.name || !newEmetteurData.surname || !newEmetteurData.email || !newEmetteurData.phone_Number) {
+      setFeedback({ type: "error", message: "Tous les champs émetteur sont requis." });
+      return;
+    }
+
+    try {
+      setCreateEmetteurLoading(true);
+      const response = await axios.post("/auth/emetteurs/", newEmetteurData);
+      setFeedback({
+        type: "success",
+        message: response.data?.message || "Émetteur créé avec succès.",
+      });
+      setNewEmetteurData({
+        name: "",
+        surname: "",
+        email: "",
+        phone_Number: "",
+      });
+      await loadEmetteurs();
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || "Erreur lors de la création de l'émetteur.";
+      setFeedback({ type: "error", message: errorMessage });
+    } finally {
+      setCreateEmetteurLoading(false);
+    }
+  };
+
+  const handleToggleEmetteurActive = async (emetteur) => {
+    try {
+      setToggleEmetteurLoading(true);
+      const response = await axios.post(`/auth/emetteurs/${emetteur.id}/toggle-active/`);
+      setFeedback({ type: "success", message: response.data?.message || "Statut émetteur mis à jour." });
+      await loadEmetteurs();
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || "Erreur lors de la mise à jour du statut émetteur.";
+      setFeedback({ type: "error", message: errorMessage });
+    } finally {
+      setToggleEmetteurLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
@@ -270,6 +344,48 @@ const UsersManagement = () => {
         </Box>
       </Paper>
 
+      <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+          Émetteurs des bons de commande
+        </Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" }, gap: 1.5 }}>
+          <TextField
+            label="Prénom"
+            name="name"
+            value={newEmetteurData.name}
+            onChange={handleCreateEmetteurField}
+            required
+          />
+          <TextField
+            label="Nom"
+            name="surname"
+            value={newEmetteurData.surname}
+            onChange={handleCreateEmetteurField}
+            required
+          />
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            value={newEmetteurData.email}
+            onChange={handleCreateEmetteurField}
+            required
+          />
+          <TextField
+            label="Téléphone"
+            name="phone_Number"
+            value={newEmetteurData.phone_Number}
+            onChange={handleCreateEmetteurField}
+            required
+          />
+        </Box>
+        <Box sx={{ mt: 1.5 }}>
+          <Button variant="contained" onClick={handleCreateEmetteur} disabled={createEmetteurLoading}>
+            {createEmetteurLoading ? "Création..." : "Ajouter l'émetteur"}
+          </Button>
+        </Box>
+      </Paper>
+
       {feedback.message && (
         <Alert severity={feedback.type || "info"} sx={{ mb: 2 }} onClose={() => setFeedback({ type: "", message: "" })}>
           {feedback.message}
@@ -347,6 +463,67 @@ const UsersManagement = () => {
           </Table>
         </TableContainer>
       )}
+
+      <Paper elevation={2} sx={{ p: 0, mb: 2, overflow: "hidden" }}>
+        <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Liste des émetteurs
+          </Typography>
+        </Box>
+        {emetteursLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nom complet</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Téléphone</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {emetteurs.map((emetteur) => (
+                  <TableRow key={emetteur.id}>
+                    <TableCell>{`${emetteur.name || ""} ${emetteur.surname || ""}`.trim()}</TableCell>
+                    <TableCell>{emetteur.email || "-"}</TableCell>
+                    <TableCell>{emetteur.phone_Number || "-"}</TableCell>
+                    <TableCell>
+                      {emetteur.is_active ? (
+                        <Chip size="small" color="success" label="Actif" />
+                      ) : (
+                        <Chip size="small" color="default" label="Inactif" />
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color={emetteur.is_active ? "warning" : "success"}
+                        onClick={() => handleToggleEmetteurActive(emetteur)}
+                        disabled={toggleEmetteurLoading}
+                      >
+                        {emetteur.is_active ? "Désactiver" : "Activer"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {emetteurs.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      Aucun émetteur trouvé
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
 
       <Dialog open={passwordDialogOpen} onClose={closeResetPasswordDialog} maxWidth="xs" fullWidth>
         <DialogTitle>Reinitialiser le mot de passe</DialogTitle>
