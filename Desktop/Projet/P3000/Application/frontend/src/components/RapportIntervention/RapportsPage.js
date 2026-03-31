@@ -72,6 +72,8 @@ const RapportsPage = () => {
   const [dateSortOrder, setDateSortOrder] = useState("desc");
   /** Par défaut : masquer les rapports au statut terminé */
   const [showTermines, setShowTermines] = useState(false);
+  /** Afficher uniquement les rapports avec état devis à faire (V) */
+  const [showOnlyDevisAFaireV, setShowOnlyDevisAFaireV] = useState(false);
   const [listPage, setListPage] = useState(1);
   const [devisDialogOpen, setDevisDialogOpen] = useState(false);
   const [rapportForDevis, setRapportForDevis] = useState(null);
@@ -90,13 +92,17 @@ const RapportsPage = () => {
     Object.entries(filters).forEach(([k, v]) => {
       if (v) cleanFilters[k] = v;
     });
+    if (showOnlyDevisAFaireV) {
+      cleanFilters.devis_a_faire = "true";
+      cleanFilters.devis_fait = "false";
+    }
     return fetchRapports(cleanFilters, {
       page: listPage,
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
       ordering: dateSortOrder === "desc" ? "-date" : "date",
       excludeStatutTermine: !showTermines,
     });
-  }, [fetchRapports, filters, listPage, dateSortOrder, showTermines]);
+  }, [fetchRapports, filters, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
   useEffect(() => {
     loadRapports();
@@ -466,6 +472,70 @@ const RapportsPage = () => {
                   }}
                 >
                   Afficher terminés
+                </Typography>
+              }
+              sx={{ m: 0, gap: 0.75, userSelect: "none", alignItems: "center" }}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              alignSelf: "center",
+              display: "inline-flex",
+              alignItems: "center",
+              pl: 0.75,
+              pr: 2,
+              py: 0.75,
+              borderRadius: 3,
+              border: "1.5px solid",
+              borderColor: showOnlyDevisAFaireV ? COLORS.success : COLORS.border,
+              bgcolor: showOnlyDevisAFaireV ? alpha(COLORS.success, 0.1) : alpha(COLORS.primary, 0.03),
+              transition: "border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease",
+              boxShadow: showOnlyDevisAFaireV
+                ? `0 1px 0 ${alpha(COLORS.success, 0.25)}, 0 4px 14px ${alpha(COLORS.success, 0.12)}`
+                : `inset 0 1px 0 ${alpha("#fff", 0.8)}`,
+              "&:hover": {
+                borderColor: COLORS.success,
+                bgcolor: showOnlyDevisAFaireV ? alpha(COLORS.success, 0.14) : alpha(COLORS.success, 0.06),
+                boxShadow: `0 2px 12px ${alpha(COLORS.success, 0.08)}`,
+              },
+            }}
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  disableRipple
+                  checked={showOnlyDevisAFaireV}
+                  onChange={(e) => {
+                    setShowOnlyDevisAFaireV(e.target.checked);
+                    setListPage(1);
+                  }}
+                  sx={{
+                    p: 0.65,
+                    color: COLORS.borderDark,
+                    transition: "color 0.2s ease, transform 0.15s ease",
+                    "& .MuiSvgIcon-root": { fontSize: 22, borderRadius: "6px" },
+                    "&.Mui-checked": {
+                      color: COLORS.success,
+                      transform: "scale(1.02)",
+                    },
+                    "&:hover": { bgcolor: alpha(COLORS.success, 0.08) },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    letterSpacing: "0.03em",
+                    fontSize: "0.8125rem",
+                    color: showOnlyDevisAFaireV ? COLORS.primary : COLORS.textMuted,
+                    lineHeight: 1.25,
+                  }}
+                >
+                  Devis à faire
                 </Typography>
               }
               sx={{ m: 0, gap: 0.75, userSelect: "none", alignItems: "center" }}

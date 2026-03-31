@@ -188,6 +188,16 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if type_rapport:
             qs = qs.filter(type_rapport=type_rapport)
 
+        devis_a_faire = self.request.query_params.get('devis_a_faire')
+        if devis_a_faire is not None and str(devis_a_faire).strip() != '':
+            val = str(devis_a_faire).strip().lower()
+            qs = qs.filter(devis_a_faire=val in ('1', 'true', 'yes'))
+
+        devis_fait = self.request.query_params.get('devis_fait')
+        if devis_fait is not None and str(devis_fait).strip() != '':
+            val = str(devis_fait).strip().lower()
+            qs = qs.filter(devis_fait=val in ('1', 'true', 'yes'))
+
         date_creation = self.request.query_params.get('date_creation')
         if date_creation:
             qs = qs.filter(created_at__date=date_creation)

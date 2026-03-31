@@ -107,6 +107,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [dateSortOrder, setDateSortOrder] = useState("desc");
   const [showTermines, setShowTermines] = useState(false);
+  const [showOnlyDevisAFaireV, setShowOnlyDevisAFaireV] = useState(false);
   const [listPage, setListPage] = useState(1);
   const skipNextLogementPageResetRef = useRef(true);
   const [devisDialogOpen, setDevisDialogOpen] = useState(false);
@@ -126,13 +127,17 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     if (filters.residence) cleanFilters.residence = filters.residence;
     if (filters.logement) cleanFilters.logement = filters.logement;
     if (filters.type_rapport) cleanFilters.type_rapport = filters.type_rapport;
+    if (showOnlyDevisAFaireV) {
+      cleanFilters.devis_a_faire = "true";
+      cleanFilters.devis_fait = "false";
+    }
     return fetchRapports(cleanFilters, {
       page: listPage,
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
       ordering: dateSortOrder === "desc" ? "-date" : "date",
       excludeStatutTermine: !showTermines,
     });
-  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, listPage, dateSortOrder, showTermines]);
+  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
   useEffect(() => {
     loadRapports();
@@ -388,6 +393,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                 onClick={() => {
                   setFilters({ residence: "", logement: "", type_rapport: "" });
                   setLogementInput("");
+                  setShowOnlyDevisAFaireV(false);
                   setListPage(1);
                 }}
                 sx={{
@@ -556,6 +562,73 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                   }}
                 >
                   Afficher terminés
+                </Typography>
+              }
+            />
+          </Box>
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              pl: 1,
+              pr: 2,
+              py: 1.1,
+              borderRadius: 2.5,
+              border: "1.5px solid",
+              borderColor: showOnlyDevisAFaireV ? COLORS.success : COLORS.border,
+              bgcolor: showOnlyDevisAFaireV ? alpha(COLORS.success, 0.1) : alpha(COLORS.primary, 0.03),
+              transition: "border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease",
+              boxShadow: showOnlyDevisAFaireV
+                ? `0 1px 0 ${alpha(COLORS.success, 0.2)}, 0 4px 16px ${alpha(COLORS.success, 0.1)}`
+                : `inset 0 1px 0 ${alpha("#fff", 0.9)}`,
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <FormControlLabel
+              sx={{
+                m: 0,
+                width: "100%",
+                mx: 0,
+                gap: 1.25,
+                alignItems: "center",
+                userSelect: "none",
+                justifyContent: "flex-start",
+              }}
+              control={
+                <Checkbox
+                  disableRipple
+                  checked={showOnlyDevisAFaireV}
+                  onChange={(e) => {
+                    setShowOnlyDevisAFaireV(e.target.checked);
+                    setListPage(1);
+                  }}
+                  sx={{
+                    p: 0.75,
+                    color: COLORS.borderDark,
+                    transition: "color 0.2s ease, transform 0.15s ease",
+                    "& .MuiSvgIcon-root": { fontSize: 24, borderRadius: "7px" },
+                    "&.Mui-checked": {
+                      color: COLORS.success,
+                      transform: "scale(1.03)",
+                    },
+                    "&:hover": { bgcolor: alpha(COLORS.success, 0.08) },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                    letterSpacing: "0.03em",
+                    fontSize: "0.9375rem",
+                    color: showOnlyDevisAFaireV ? COLORS.primary : COLORS.textMuted,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Devis à faire
                 </Typography>
               }
             />
