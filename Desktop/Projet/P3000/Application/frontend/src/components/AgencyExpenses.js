@@ -22,7 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
@@ -59,6 +59,8 @@ const AgencyExpenses = () => {
   const [recurrenceEnd, setRecurrenceEnd] = useState("");
   const [agenceName, setAgenceName] = useState("");
   const [agenceChantierId, setAgenceChantierId] = useState(null);
+  const [yearlyRefresh, setYearlyRefresh] = useState(0);
+  const triggerYearlyRefresh = () => setYearlyRefresh((n) => n + 1);
 
   // Catégories de dépenses
   const categories = [
@@ -82,94 +84,84 @@ const AgencyExpenses = () => {
   const scheduleParam = agenceChantierId
     ? `&agence=1&chantier_id=${agenceChantierId}`
     : "&agence=1";
-
-  useEffect(() => {
-    if (!agenceId) return;
-    axios.get(`/api/agences/${agenceId}/`).then((res) => {
-      setAgenceName(res.data.nom || "");
-      setAgenceChantierId(res.data.chantier || null);
-    }).catch(() => { setAgenceName(""); setAgenceChantierId(null); });
-  }, [agenceId]);
-
   const scheduleReady = !agenceId || !!agenceChantierId;
 
-  const fetchYearlyCategoryTotals = useCallback(async () => {
-    if (!scheduleReady) return;
-    setYearlyCategoryLoading(true);
-    try {
-      const monthResults = await Promise.all(
-        Array.from({ length: 12 }, (_, monthIndex) => {
-          const m = monthIndex + 1;
-          const monthStr = `${selectedYear}-${String(m).padStart(2, "0")}`;
-          return Promise.all([
-            axios.get(
-              `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}${agenceParam}`
-            ),
-            axios
-              .get(
-                `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleParam}`
-              )
-              .catch(() => ({ data: {} })),
-          ]);
-        })
-      );
+  useEffect(() => {
+    if (!agenceId) { setAgenceChantierId(null); return; }
+    let cancelled = false;
+    axios.get(`/api/agences/${agenceId}/`).then((res) => {
+      if (cancelled) return;
+      setAgenceName(res.data.nom || "");
+      setAgenceChantierId(res.data.chantier || null);
+    }).catch(() => { if (!cancelled) { setAgenceName(""); setAgenceChantierId(null); } });
+    return () => { cancelled = true; };
+  }, [agenceId]);
 
-      const merged = {};
-      for (const [expRes, planRes] of monthResults) {
-        const rows = expRes.data?.totals_by_category || [];
-        rows.forEach(({ category, total }) => {
-          const c = category || "Autres";
-          merged[c] = (merged[c] || 0) + (Number(total) || 0);
-        });
-        const planning = Number(planRes.data?.total_montant) || 0;
-        merged["Planning agence"] =
-          (merged["Planning agence"] || 0) + planning;
-      }
-
-      setYearlyCategoryTotals(merged);
-    } catch (e) {
-      console.error("Erreur totaux annuels par catégorie:", e);
-      setYearlyCategoryTotals({});
-    } finally {
-      setYearlyCategoryLoading(false);
-    }
-  }, [selectedYear, agenceParam, scheduleParam, scheduleReady]);
-
-  // Charger les données à chaque changement de mois/année/agence
+  // Chargement des données mensuelles (dépenses du tableau)
   useEffect(() => {
     fetchMonthlyExpenses();
-    if (scheduleReady) updateYearlyTotal();
-  }, [selectedMonth, selectedYear, agenceId, scheduleReady]);
+  }, [selectedMonth, selectedYear, agenceId]);
 
+  // Chargement consolidé : totaux annuels + planning mensuel (2 appels au lieu de ~50)
   useEffect(() => {
-    fetchYearlyCategoryTotals();
-  }, [fetchYearlyCategoryTotals]);
-
-  useEffect(() => {
-    if (!scheduleReady) { setPlanningAgence(null); return; }
+    if (!scheduleReady) return;
     let cancelled = false;
-    const loadPlanningAgence = async () => {
+    const loadYearlyAndPlanning = async () => {
+      setYearlyCategoryLoading(true);
       try {
+        const scheduleYearParam = agenceChantierId
+          ? `&agence=1&chantier_id=${agenceChantierId}`
+          : "&agence=1";
         const monthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
-        const res = await axios.get(
-          `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleParam}`
-        );
-        if (!cancelled) setPlanningAgence(res.data);
+
+        const [expYearRes, schedYearRes, planMonthRes] = await Promise.all([
+          axios.get(
+            `/api/agency-expenses-month/yearly_summary/?year=${selectedYear}${agenceParam}`
+          ),
+          axios.get(
+            `/api/schedule/yearly_summary/?year=${selectedYear}${scheduleYearParam}`
+          ).catch(() => ({ data: { months: [] } })),
+          axios.get(
+            `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleYearParam}`
+          ).catch(() => ({ data: {} })),
+        ]);
+
+        if (cancelled) return;
+
+        const expMonths = expYearRes.data?.months || [];
+        const schedMonths = schedYearRes.data?.months || [];
+
+        const categoryMerged = {};
+        let yearTotal = 0;
+        for (let i = 0; i < 12; i++) {
+          const em = expMonths[i] || { total: 0, totals_by_category: [] };
+          const sm = schedMonths[i] || { total_montant: 0 };
+          yearTotal += (Number(em.total) || 0) + (Number(sm.total_montant) || 0);
+          (em.totals_by_category || []).forEach(({ category, total }) => {
+            const c = category || "Autres";
+            categoryMerged[c] = (categoryMerged[c] || 0) + (Number(total) || 0);
+          });
+          categoryMerged["Planning agence"] =
+            (categoryMerged["Planning agence"] || 0) + (Number(sm.total_montant) || 0);
+        }
+
+        setYearlyCategoryTotals(categoryMerged);
+        setYearlyTotal(yearTotal);
+        setPlanningAgence(planMonthRes.data);
       } catch (e) {
-        console.error("Erreur chargement heures agence (planning):", e);
-        if (!cancelled) setPlanningAgence(null);
+        console.error("Erreur chargement données annuelles/planning:", e);
+        if (!cancelled) {
+          setYearlyCategoryTotals({});
+          setYearlyTotal(0);
+          setPlanningAgence(null);
+        }
+      } finally {
+        if (!cancelled) setYearlyCategoryLoading(false);
       }
     };
-    loadPlanningAgence();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedMonth, selectedYear, scheduleParam, scheduleReady]);
-
-  const updateYearlyTotal = async () => {
-    const total = await calculateYearlyTotal();
-    setYearlyTotal(total);
-  };
+    loadYearlyAndPlanning();
+    return () => { cancelled = true; };
+  }, [selectedMonth, selectedYear, agenceId, agenceChantierId, agenceParam, scheduleReady, yearlyRefresh]);
 
   const fetchMonthlyExpenses = async () => {
     try {
@@ -252,8 +244,7 @@ const AgencyExpenses = () => {
 
       setOpenDialog(false);
       await fetchMonthlyExpenses();
-      await updateYearlyTotal();
-      await fetchYearlyCategoryTotals();
+      triggerYearlyRefresh();
 
       setNewExpense({
         description: "",
@@ -276,8 +267,7 @@ const AgencyExpenses = () => {
       setLoading(true);
       await axios.delete(`/api/agency-expenses-month/${id}/`);
       await fetchMonthlyExpenses();
-      await updateYearlyTotal();
-      await fetchYearlyCategoryTotals();
+      triggerYearlyRefresh();
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
       alert("Erreur lors de la suppression de la dépense");
@@ -330,8 +320,7 @@ const AgencyExpenses = () => {
 
         setOpenDialog(false);
         await fetchMonthlyExpenses();
-        await updateYearlyTotal();
-        await fetchYearlyCategoryTotals();
+        triggerYearlyRefresh();
         setIsEditing(false);
         setEditingExpense(null);
       } catch (error) {
@@ -366,8 +355,7 @@ const AgencyExpenses = () => {
       setIsEditing(false);
       setEditingExpense(null);
       await fetchMonthlyExpenses();
-      await updateYearlyTotal();
-      await fetchYearlyCategoryTotals();
+      triggerYearlyRefresh();
     } catch (error) {
       console.error("Erreur lors de l'arrêt de la récurrence:", error);
       alert("Erreur lors de l'arrêt de la récurrence");
@@ -470,41 +458,6 @@ const AgencyExpenses = () => {
     }, 0);
   };
 
-  const calculateYearlyTotal = async () => {
-    if (!selectedYear) return 0;
-
-    try {
-      const monthlyTotals = await Promise.all(
-        Array.from({ length: 12 }, async (_, monthIndex) => {
-          const m = monthIndex + 1;
-          const monthStr = `${selectedYear}-${String(m).padStart(2, "0")}`;
-          try {
-            const [expRes, planRes] = await Promise.all([
-              axios.get(
-                `/api/agency-expenses-month/monthly_summary/?month=${m}&year=${selectedYear}${agenceParam}`
-              ),
-              axios
-                .get(
-                  `/api/schedule/monthly_summary/?month=${encodeURIComponent(monthStr)}${scheduleParam}`
-                )
-                .catch(() => ({ data: {} })),
-            ]);
-            const depenses = Number(expRes.data?.total) || 0;
-            const planning = Number(planRes.data?.total_montant) || 0;
-            return depenses + planning;
-          } catch (error) {
-            console.error(`Erreur pour le mois ${m}:`, error);
-            return 0;
-          }
-        })
-      );
-
-      return monthlyTotals.reduce((sum, monthTotal) => sum + monthTotal, 0);
-    } catch (error) {
-      console.error("Erreur lors du calcul du total annuel:", error);
-      return 0;
-    }
-  };
 
   const getExpenseCommentaire = (expense) => {
     if (expense.category === "Prime" && expense.description) {
@@ -678,6 +631,11 @@ const AgencyExpenses = () => {
                   placeholder="Montant..."
                 />
               </FilterCell>
+              <FilterCell>
+                <Typography variant="caption" sx={{ color: "#999", px: 1 }}>
+                  Commentaire
+                </Typography>
+              </FilterCell>
               <FilterCell />
             </TableRow>
           </TableHead>
@@ -711,6 +669,39 @@ const AgencyExpenses = () => {
                 <TableCell align="center">{row.category}</TableCell>
                 <TableCell align="center">
                   {parseFloat(row.amount).toFixed(2)} €
+                </TableCell>
+                <TableCell sx={{ minWidth: 140, maxWidth: 220 }}>
+                  {row.isPlanningRow ? null : (
+                    <TextField
+                      size="small"
+                      variant="standard"
+                      fullWidth
+                      placeholder="—"
+                      defaultValue={row.commentaire || ""}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val !== (row.commentaire || "")) {
+                          axios
+                            .patch(`/api/agency-expenses-month/${row.id}/`, {
+                              commentaire: val || null,
+                            })
+                            .catch(() => {});
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.target.blur();
+                      }}
+                      InputProps={{
+                        disableUnderline: true,
+                        sx: {
+                          fontSize: "0.82rem",
+                          color: "#555",
+                          "&:hover": { borderBottom: "1px solid #ccc" },
+                          "&.Mui-focused": { borderBottom: "1px solid #1976d2" },
+                        },
+                      }}
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: "flex", gap: 1 }}>
@@ -770,6 +761,7 @@ const AgencyExpenses = () => {
               >
                 {calculateMonthlyTotal().toFixed(2)} €
               </TableCell>
+              <TableCell />
               <TableCell />
             </TableRow>
           </TableBody>

@@ -2512,6 +2512,7 @@ class AgencyExpenseMonth(models.Model):
     ecole_hours = models.FloatField(null=True, blank=True)
     
     agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
+    commentaire = models.TextField(blank=True, null=True)
     
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')

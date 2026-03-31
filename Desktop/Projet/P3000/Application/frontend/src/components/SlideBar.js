@@ -10,6 +10,7 @@ import {
   MdBusiness,
   MdTableChart,
   MdAdd,
+  MdExpandMore,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
@@ -24,6 +25,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
   const [agences, setAgences] = useState([]);
+  const [agenceExpanded, setAgenceExpanded] = useState(true);
 
   const fetchAgences = useCallback(() => {
     axios
@@ -48,12 +50,14 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
       });
   };
 
-  const agenceLinks = useMemo(() => {
-    const links = agences.map((a) => ({
+  const agenceItems = useMemo(() => {
+    if (!agences.length) return [{ isMainAgence: true, label: "Agence", to: null }];
+    return agences.map((a, idx) => ({
       label: a.nom,
       to: `/agence/${a.id}/expenses`,
+      isMainAgence: idx === 0,
+      isSubAgence: idx > 0,
     }));
-    return links;
   }, [agences]);
 
   const menu = useMemo(
@@ -66,8 +70,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
           { label: "Dashboard", to: "/" },
           { label: "Récap Chantier", to: "/ChantierDetail/1" },
           { label: "Appel d'Offre", to: "/GestionAppelsOffres" },
-          ...agenceLinks,
-          { addAgence: true, label: "add-agence" },
+          ...agenceItems,
         ],
       },
       {
@@ -157,7 +160,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
         to: "/distributeurs",
       },
     ],
-    [user, agenceLinks]
+    [user, agenceItems]
   );
 
   const isPathActive = (to) => {
@@ -275,17 +278,55 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
                     style={{ display: isExpanded ? "block" : "none" }}
                   >
                     {item.children.map((child) => {
-                      if (child.addAgence) {
+                      if (child.isMainAgence) {
+                        const hasSubAgences = agenceItems.some((a) => a.isSubAgence);
                         return (
-                          <li key={`${item.key}-add-agence`}>
+                          <li key={`${item.key}-main-agence`} className="agence-main-row">
+                            {child.to ? (
+                              <NavLink
+                                to={child.to}
+                                className={({ isActive }) =>
+                                  isActive ? "active" : ""
+                                }
+                              >
+                                {child.label}
+                              </NavLink>
+                            ) : (
+                              <span className="agence-main-label">{child.label}</span>
+                            )}
                             <button
                               type="button"
-                              className="add-agence-button"
+                              className="add-agence-btn"
                               onClick={handleCreateAgence}
                               title="Créer une nouvelle agence"
                             >
-                              <MdAdd /> Nouvelle agence
+                              <MdAdd />
                             </button>
+                            {hasSubAgences && (
+                              <button
+                                type="button"
+                                className={`agence-toggle-btn${agenceExpanded ? " expanded" : ""}`}
+                                onClick={() => setAgenceExpanded((v) => !v)}
+                                aria-label="Déplier/replier les agences"
+                              >
+                                <MdExpandMore />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      }
+                      if (child.isSubAgence) {
+                        if (!agenceExpanded) return null;
+                        return (
+                          <li key={`${item.key}-${child.to}`} className="agence-sub-row">
+                            <NavLink
+                              to={child.to}
+                              className={({ isActive }) =>
+                                isActive ? "active" : ""
+                              }
+                            >
+                              {child.label}
+                            </NavLink>
                           </li>
                         );
                       }

@@ -91,6 +91,7 @@ from .views import (
     BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
+    schedule_yearly_summary,
     preview_monthly_agents_report,
     generate_monthly_agents_pdf,
     AppelOffresViewSet,
@@ -401,6 +402,7 @@ urlpatterns = [
 urlpatterns += [
     path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
+    path('schedule/yearly_summary/', schedule_yearly_summary, name='schedule_yearly_summary'),
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
     path('app-version/', app_version_view, name='app-version'),

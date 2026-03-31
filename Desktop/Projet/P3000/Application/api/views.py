@@ -9275,6 +9275,38 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             'total': total
         })
 
+    @action(detail=False, methods=['get'], url_path='yearly_summary')
+    def yearly_summary(self, request):
+        """Totaux par mois et par catégorie pour une année complète — remplace 12 appels monthly_summary."""
+        year = request.query_params.get('year')
+        agence_id = request.query_params.get('agence_id')
+        if not year:
+            return Response({"error": "year is required"}, status=status.HTTP_400_BAD_REQUEST)
+        year = int(year)
+        expenses = self.queryset.filter(year=year)
+        if agence_id:
+            expenses = expenses.filter(agence_id=int(agence_id))
+
+        months = {}
+        for exp in expenses:
+            m = exp.month
+            if m not in months:
+                months[m] = {'total': 0, 'by_category': {}}
+            amt = float(exp.amount)
+            months[m]['total'] += amt
+            cat = exp.category or 'Autres'
+            months[m]['by_category'][cat] = months[m]['by_category'].get(cat, 0) + amt
+
+        result = []
+        for m in range(1, 13):
+            info = months.get(m, {'total': 0, 'by_category': {}})
+            result.append({
+                'month': m,
+                'total': info['total'],
+                'totals_by_category': [{'category': k, 'total': v} for k, v in info['by_category'].items()],
+            })
+        return Response({'year': year, 'months': result, 'yearly_total': sum(d['total'] for d in result)})
+
     @action(detail=True, methods=['post'])
     def recurring_generate(self, request, pk=None):
         """
@@ -13013,6 +13045,135 @@ def schedule_monthly_summary(request):
         }, status=200)
 
     return Response(list(chantier_map.values()), status=200)
+
+
+@api_view(['GET'])
+def schedule_yearly_summary(request):
+    """
+    /api/schedule/yearly_summary/?year=YYYY&agence=1[&chantier_id=...]
+    Renvoie {months: [{month:1, total_montant:..., total_heures:..., details:[...]}, ...]}
+    en un seul appel (remplace 12 appels à monthly_summary).
+    """
+    from calendar import monthrange
+    from datetime import date, timedelta as td, datetime as dt
+
+    year_str = request.GET.get('year')
+    if not year_str:
+        return Response({'error': 'Paramètre year requis'}, status=400)
+    year = int(year_str)
+
+    agence_only = request.GET.get('agence') == '1'
+    chantier_id_filter = request.GET.get('chantier_id')
+
+    first_day = date(year, 1, 1)
+    last_day = date(year, 12, 31)
+    fr_holidays = holidays.country_holidays('FR', years=[year])
+
+    def get_date_from_week(yr, week, day_name):
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        day_index = days_of_week.index(day_name)
+        lundi = dt.strptime(f'{yr}-W{int(week):02d}-1', "%G-W%V-%u")
+        return (lundi + td(days=day_index)).date()
+
+    week_year_pairs = set()
+    d = first_day
+    while d <= last_day:
+        week_year_pairs.add((d.isocalendar()[0], d.isocalendar()[1]))
+        d += td(days=1)
+
+    q_objects = Q()
+    for iso_year, iso_week in week_year_pairs:
+        q_objects |= Q(year=iso_year, week=iso_week)
+
+    schedules = Schedule.objects.filter(q_objects).select_related('agent', 'chantier')
+
+    if agence_only:
+        from .ecole_utils import get_agence_chantier_ids
+        agence_ids = get_agence_chantier_ids()
+        if chantier_id_filter and int(chantier_id_filter) in agence_ids:
+            schedules = schedules.filter(chantier_id=int(chantier_id_filter))
+        else:
+            schedules = schedules.filter(chantier_id__in=agence_ids)
+    elif chantier_id_filter:
+        schedules = schedules.filter(chantier_id=chantier_id_filter)
+
+    monthly_agents = {}  # {month: {agent_id: {...}}}
+    for s in schedules:
+        if not s.chantier:
+            continue
+        try:
+            date_creneau = get_date_from_week(s.year, s.week, s.day)
+        except (ValueError, IndexError):
+            continue
+        if date_creneau.year != year:
+            continue
+        m = date_creneau.month
+        agent_id = s.agent.id
+
+        is_journalier = s.agent.type_paiement == 'journalier'
+        if is_journalier:
+            heures_increment = 4
+            taux_horaire = (s.agent.taux_journalier or 0) / 8
+        else:
+            heures_increment = 1
+            taux_horaire = s.agent.taux_Horaire or 0
+
+        if m not in monthly_agents:
+            monthly_agents[m] = {}
+        if agent_id not in monthly_agents[m]:
+            monthly_agents[m][agent_id] = {
+                'agent_id': agent_id,
+                'agent_nom': f"{s.agent.name} {s.agent.surname}",
+                'type_paiement': s.agent.type_paiement,
+                'heures_normal': 0, 'heures_samedi': 0, 'heures_dimanche': 0,
+                'heures_ferie': 0, 'heures_overtime': 0,
+                'montant_normal': 0, 'montant_samedi': 0, 'montant_dimanche': 0,
+                'montant_ferie': 0, 'montant_overtime': 0,
+            }
+        data = monthly_agents[m][agent_id]
+        has_overtime = s.overtime_hours and s.overtime_hours > 0
+
+        if is_journalier:
+            if not has_overtime:
+                data['heures_normal'] += heures_increment
+                data['montant_normal'] += taux_horaire * heures_increment
+        else:
+            if not has_overtime:
+                if date_creneau in fr_holidays:
+                    data['heures_ferie'] += heures_increment
+                    data['montant_ferie'] += taux_horaire * heures_increment * 1.5
+                elif s.day == "Samedi":
+                    data['heures_samedi'] += heures_increment
+                    data['montant_samedi'] += taux_horaire * heures_increment * 1.25
+                elif s.day == "Dimanche":
+                    data['heures_dimanche'] += heures_increment
+                    data['montant_dimanche'] += taux_horaire * heures_increment * 1.5
+                else:
+                    data['heures_normal'] += heures_increment
+                    data['montant_normal'] += taux_horaire * heures_increment
+
+        if has_overtime:
+            overtime_hours = float(s.overtime_hours)
+            data['heures_overtime'] += overtime_hours
+            data['montant_overtime'] += taux_horaire * overtime_hours * 1.25
+
+    result_months = []
+    for m in range(1, 13):
+        agents = monthly_agents.get(m, {})
+        details = sorted(agents.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        keys = ('heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
+                'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime')
+        tot_h = sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
+        tot_m_val = sum(d['montant_normal'] + d['montant_samedi'] + d['montant_dimanche'] + d['montant_ferie'] + d['montant_overtime'] for d in details)
+        result_months.append({
+            'month': m,
+            'details': details,
+            'total_heures': tot_h,
+            'total_montant': tot_m_val,
+        })
+
+    return Response({'year': year, 'months': result_months})
+
 
 def preview_monthly_agents_report(request):
     """

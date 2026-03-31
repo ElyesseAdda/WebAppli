@@ -318,24 +318,91 @@ body .burger-button {
   }
 }
 
-.add-agence-button {
+/* Agence : ligne principale avec chevron + lien + bouton "+" */
+.slide-bar .agence-main-row {
+  display: flex !important;
+  align-items: center;
+  gap: 0;
+}
+
+.slide-bar .agence-main-row > a,
+.slide-bar .agence-main-row > .agence-main-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Chevron toggle plier/déplier */
+.slide-bar .agence-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  padding: 0;
+  margin-right: 2px;
+  transition: transform 0.2s ease, color 0.2s ease;
+  transform: rotate(-90deg);
+}
+
+.slide-bar .agence-toggle-btn.expanded {
+  transform: rotate(0deg);
+}
+
+.slide-bar .agence-toggle-btn:hover {
+  color: var(--primary);
+  background: var(--sidebar-hover);
+}
+
+.slide-bar .agence-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.slide-bar .agence-main-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
-  padding: 6px 12px;
-  background: none;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  color: rgba(255, 255, 255, 0.6);
-  cursor: pointer;
-  font-size: 0.82rem;
-  transition: all 0.2s;
-  margin-top: 4px;
+  padding: 8px 10px;
+  min-height: 40px;
+  color: #374151;
+  font-weight: 500;
+  border-radius: 8px;
 }
 
-.add-agence-button:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.08);
+.slide-bar .add-agence-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px dashed var(--sidebar-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-right: 4px;
+}
+
+.slide-bar .add-agence-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--sidebar-active-bg);
+}
+
+.slide-bar .add-agence-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Agences supplémentaires : légèrement décalées */
+.slide-bar .agence-sub-row a {
+  padding-left: 26px !important;
 }
