@@ -1055,6 +1055,32 @@ class StockProduct(models.Model):
         return self.nom_produit[:2].upper()
 
 
+class StockProductBestPurchase(models.Model):
+    """Meilleur prix d'achat historique d'un produit (persisté pour pilotage des futurs achats)."""
+    produit = models.OneToOneField(
+        StockProduct,
+        on_delete=models.CASCADE,
+        related_name='best_purchase'
+    )
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    lieu_achat = models.CharField(max_length=150)
+    purchase_item = models.ForeignKey(
+        'StockPurchaseItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='best_purchase_refs'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Meilleur achat produit"
+        verbose_name_plural = "Meilleurs achats produits"
+
+    def __str__(self):
+        return f"{self.produit.nom} -> {self.prix_unitaire}€ ({self.lieu_achat})"
+
+
 class StockPurchase(models.Model):
     """Achat de stock - enregistre un achat avec lieu et date"""
     lieu_achat = models.CharField(max_length=150, help_text="Lieu d'achat (ex: Leclerc, Intermarché)")

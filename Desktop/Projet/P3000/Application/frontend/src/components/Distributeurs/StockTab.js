@@ -179,6 +179,13 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   }, [purchases]);
 
   const getBestPriceForProduct = (product) => {
+    if (product?.best_purchase_price != null && product?.best_purchase_location) {
+      return {
+        prix: product.best_purchase_price,
+        lieu: product.best_purchase_location,
+        nom: product.nom || product.nom_produit || "",
+      };
+    }
     if (!product?.nom) return null;
     const key = product.nom.trim().toLowerCase();
     return bestPriceByProduct[key] || null;

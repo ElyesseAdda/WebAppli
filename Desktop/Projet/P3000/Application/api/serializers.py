@@ -10,7 +10,7 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
     Agence
 )
 from decimal import Decimal, ROUND_HALF_UP
@@ -890,6 +890,8 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
 class StockProductSerializer(serializers.ModelSerializer):
     initiales = serializers.CharField(read_only=True)
     image_display_url = serializers.SerializerMethodField()
+    best_purchase_price = serializers.SerializerMethodField()
+    best_purchase_location = serializers.SerializerMethodField()
 
     class Meta:
         model = StockProduct
@@ -938,6 +940,18 @@ class StockProductSerializer(serializers.ModelSerializer):
             except Exception:
                 return obj.image_url
         return obj.image_url
+
+    def get_best_purchase_price(self, obj):
+        bp = getattr(obj, 'best_purchase', None)
+        if not bp:
+            return None
+        return float(bp.prix_unitaire)
+
+    def get_best_purchase_location(self, obj):
+        bp = getattr(obj, 'best_purchase', None)
+        if not bp:
+            return None
+        return bp.lieu_achat
 
 
 class StockPurchaseItemSerializer(serializers.ModelSerializer):
@@ -997,6 +1011,11 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
             if 'quantite' not in item or 'prix_unitaire' not in item or 'unite' not in item:
                 raise serializers.ValidationError("Chaque item doit avoir quantite, prix_unitaire et unite")
         return value
+
+    @staticmethod
+    def _is_useful_location(value):
+        v = (value or "").strip().lower()
+        return bool(v) and v not in ["non renseigné", "ajustement manuel", "—"]
 
     def create(self, validated_data):
         """Crée l'achat et ses items, et met à jour les stocks"""
@@ -1086,6 +1105,21 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
                 prix_achat_unitaire=prix_unitaire,
                 date_achat=achat.date_achat
             )
+
+            # 8. Mettre à jour le meilleur achat historique persisté (si lieu utile)
+            lieu_achat = (achat.lieu_achat or "").strip()
+            if produit and self._is_useful_location(lieu_achat):
+                current = StockProductBestPurchase.objects.filter(produit=produit).first()
+                candidate_price = Decimal(str(prix_unitaire))
+                if (not current) or (candidate_price < current.prix_unitaire):
+                    StockProductBestPurchase.objects.update_or_create(
+                        produit=produit,
+                        defaults={
+                            'prix_unitaire': candidate_price,
+                            'lieu_achat': lieu_achat,
+                            'purchase_item': item,
+                        }
+                    )
         
         # Mettre à jour le total de l'achat
         achat.total = total

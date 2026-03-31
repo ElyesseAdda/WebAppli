@@ -48,7 +48,7 @@ from .models import (
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
     Agence,
 )
 from .drive_automation import drive_automation
@@ -3283,10 +3283,12 @@ class StockPurchaseViewSet(viewsets.ModelViewSet):
                 .select_related('produit')
                 .prefetch_related('lots')
             )
+            impacted_product_ids = set()
 
             for item in items:
                 if not item.produit_id:
                     continue
+                impacted_product_ids.add(item.produit_id)
 
                 qty_lots_restante = item.lots.aggregate(
                     total=Sum('quantite_restante')
@@ -3304,6 +3306,32 @@ class StockPurchaseViewSet(viewsets.ModelViewSet):
 
             # CASCADE: supprime automatiquement StockPurchaseItem et StockLot liés
             purchase.delete()
+
+            # Recalculer le meilleur achat persisté pour les produits impactés
+            for product_id in impacted_product_ids:
+                candidates = StockPurchaseItem.objects.filter(
+                    produit_id=product_id
+                ).select_related('achat').exclude(
+                    achat__lieu_achat__isnull=True
+                ).exclude(
+                    achat__lieu_achat__exact=''
+                ).exclude(
+                    achat__lieu_achat__iexact='Non renseigné'
+                ).exclude(
+                    achat__lieu_achat__iexact='Ajustement manuel'
+                )
+                best_item = candidates.order_by('prix_unitaire', 'achat__date_achat', 'id').first()
+                if best_item:
+                    StockProductBestPurchase.objects.update_or_create(
+                        produit_id=product_id,
+                        defaults={
+                            'prix_unitaire': best_item.prix_unitaire,
+                            'lieu_achat': best_item.achat.lieu_achat,
+                            'purchase_item': best_item,
+                        }
+                    )
+                else:
+                    StockProductBestPurchase.objects.filter(produit_id=product_id).delete()
 
         return Response(
             {'message': "Historique d'achat supprimé et stock synchronisé"},
