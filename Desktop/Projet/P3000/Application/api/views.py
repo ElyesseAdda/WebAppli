@@ -2698,6 +2698,149 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
 
+    @action(detail=True, methods=['post'], url_path='change-product')
+    def change_product(self, request, pk=None):
+        """
+        Changement de produit d'une case:
+        - calcule les ventes à valider via (dernier niveau réappro - restant saisi),
+        - ajoute cette vente dans la prochaine session de mouvement (en cours, sinon créée),
+        - traite le reliquat (remis en stock via lot d'ajustement, ou perte),
+        - met à jour la case avec le nouveau produit.
+        """
+        cell = self.get_object()
+        old_product = cell.stock_product
+        old_product_id = old_product.id if old_product else None
+        new_product_id = request.data.get('stock_product')
+
+        try:
+            new_product_id = int(new_product_id) if new_product_id is not None else None
+        except (TypeError, ValueError):
+            return Response({'error': 'Nouveau produit invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not old_product_id or not new_product_id or old_product_id == new_product_id:
+            return Response(
+                {'error': "Ce flux s'applique uniquement lors d'un changement réel de produit"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            old_remaining_qty = int(request.data.get('old_remaining_qty', 0))
+        except (TypeError, ValueError):
+            return Response({'error': 'Quantité restante invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if old_remaining_qty < 0:
+            return Response({'error': 'La quantité restante ne peut pas être négative'}, status=status.HTTP_400_BAD_REQUEST)
+
+        remaining_action = (request.data.get('remaining_action') or 'restock').strip().lower()
+        if remaining_action not in ['restock', 'loss']:
+            return Response({'error': "remaining_action doit être 'restock' ou 'loss'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        last_line = DistributeurReapproLigne.objects.filter(
+            cell=cell,
+            session__statut='termine'
+        ).select_related('session').order_by('-session__date_fin', '-id').first()
+        previous_level = int(last_line.quantite) if last_line else 0
+        if old_remaining_qty > previous_level:
+            return Response(
+                {
+                    'error': 'La quantité restante dépasse le dernier niveau connu pour cette case',
+                    'previous_level': previous_level,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        sold_qty = max(previous_level - old_remaining_qty, 0)
+
+        # Nettoyer la payload pour la mise à jour de la case (sans les champs métier du workflow)
+        cell_payload = dict(request.data)
+        cell_payload.pop('old_remaining_qty', None)
+        cell_payload.pop('remaining_action', None)
+
+        with transaction.atomic():
+            # Coût unitaire moyen pour l'ancien produit (lots disponibles puis fallback tous lots)
+            cout_unitaire = Decimal('0')
+            lots_avec_stock = StockLot.objects.filter(produit=old_product, quantite_restante__gt=0)
+            agg = lots_avec_stock.aggregate(
+                total_val=Sum(F('prix_achat_unitaire') * F('quantite_restante')),
+                total_qty=Sum('quantite_restante'),
+            )
+            total_val = agg.get('total_val')
+            total_qty = agg.get('total_qty')
+            if total_qty and total_qty > 0 and total_val is not None:
+                cout_unitaire = total_val / total_qty
+            else:
+                cout_moyen = StockLot.objects.filter(produit=old_product).aggregate(avg=Avg('prix_achat_unitaire'))['avg']
+                if cout_moyen is not None:
+                    cout_unitaire = cout_moyen
+
+            # 1) Ventes validées dans la prochaine session de mouvement
+            if sold_qty > 0:
+                session = DistributeurReapproSession.objects.filter(
+                    distributeur_id=cell.distributeur_id,
+                    statut='en_cours'
+                ).order_by('-date_debut').first()
+                if not session:
+                    session = DistributeurReapproSession.objects.create(
+                        distributeur_id=cell.distributeur_id,
+                        statut='en_cours',
+                        date_debut=timezone.now(),
+                    )
+                ligne = DistributeurReapproLigne.objects.filter(session=session, cell=cell).first()
+                old_prix_vente = cell.prix_vente or 0
+                if ligne:
+                    ligne.quantite = int(ligne.quantite) + sold_qty
+                    ligne.prix_vente = old_prix_vente
+                    ligne.cout_unitaire = cout_unitaire
+                    ligne.save(update_fields=['quantite', 'prix_vente', 'cout_unitaire'])
+                else:
+                    DistributeurReapproLigne.objects.create(
+                        session=session,
+                        cell=cell,
+                        quantite=sold_qty,
+                        prix_vente=old_prix_vente,
+                        cout_unitaire=cout_unitaire,
+                    )
+
+            # 2) Reliquat ancien produit -> retour stock + lot ajustement, ou perte
+            if old_remaining_qty > 0 and remaining_action == 'restock':
+                nom_produit = (old_product.nom or old_product.nom_produit or '').strip() or f'Produit #{old_product.pk}'
+                achat = StockPurchase.objects.create(
+                    lieu_achat='Retour distributeur',
+                    date_achat=timezone.now(),
+                )
+                item = StockPurchaseItem.objects.create(
+                    achat=achat,
+                    produit=old_product,
+                    nom_produit=nom_produit,
+                    quantite=old_remaining_qty,
+                    prix_unitaire=cout_unitaire,
+                    montant_total=Decimal(old_remaining_qty) * cout_unitaire,
+                    unite='pièce',
+                )
+                StockProduct.objects.filter(pk=old_product.pk).update(quantite=F('quantite') + old_remaining_qty)
+                StockLot.objects.create(
+                    produit=old_product,
+                    purchase_item=item,
+                    quantite_restante=old_remaining_qty,
+                    prix_achat_unitaire=cout_unitaire,
+                    date_achat=achat.date_achat,
+                )
+
+            # 3) Mise à jour de la case vers le nouveau produit
+            serializer = self.get_serializer(cell, data=cell_payload, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
+        return Response(
+            {
+                'message': 'Produit de case changé avec prise en compte des ventes/reliquats',
+                'previous_level': previous_level,
+                'sold_qty': sold_qty,
+                'remaining_qty': old_remaining_qty,
+                'remaining_action': remaining_action,
+            },
+            status=status.HTTP_200_OK
+        )
+
 
 class DistributeurVenteViewSet(viewsets.ModelViewSet):
     """Ventes distributeur — chaque vente stocke son prix_vente à l'instant T pour calculs exacts."""

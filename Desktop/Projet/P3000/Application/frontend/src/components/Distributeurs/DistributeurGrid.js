@@ -13,6 +13,8 @@ import {
   TextField,
   Grid as MuiGrid,
   Chip,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   MdEdit,
@@ -29,6 +31,8 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedRowCol, setSelectedRowCol] = useState({ row: null, col: null });
   const [cells, setCells] = useState({}); // { "row_col": cellData }
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [errorModal, setErrorModal] = useState({ open: false, message: "" });
   const [rows, setRows] = useState(distributeur?.grid_rows || 3);
   const [columns, setColumns] = useState(
     distributeur?.grid_columns && 
@@ -74,7 +78,7 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
     setOpenCellEdit(true);
   };
 
-  const handleSaveCell = async (cellData) => {
+  const handleSaveCell = async (cellData, options = {}) => {
     if (!distributeur?.id) return;
     
     try {
@@ -93,7 +97,22 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
         prix_vente: cellData.prix_vente != null && cellData.prix_vente !== "" ? cellData.prix_vente : null,
       };
 
-      if (selectedCell && selectedCell.id) {
+      if (selectedCell && selectedCell.id && options?.changeWorkflow) {
+        const resp = await axios.post(
+          `/api/distributeur-cells/${selectedCell.id}/change-product/`,
+          {
+            ...cleanedData,
+            ...options.changeWorkflow,
+          }
+        );
+        const d = resp?.data || {};
+        const actionLabel = d.remaining_action === "restock" ? "remis en stock" : "considéré en perte";
+        setSnackbar({
+          open: true,
+          severity: "success",
+          message: `Produit changé: vendu ${d.sold_qty ?? 0}u, reliquat ${d.remaining_qty ?? 0}u ${actionLabel}.`,
+        });
+      } else if (selectedCell && selectedCell.id) {
         // Mise à jour
         await axios.put(`/api/distributeur-cells/${selectedCell.id}/`, cleanedData);
       } else {
@@ -103,10 +122,10 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
       await fetchCells();
     } catch (error) {
       console.error("Erreur sauvegarde cellule:", error);
-      if (error.response?.data) {
-        console.error("Détails de l'erreur:", error.response.data);
-        alert(`Erreur: ${JSON.stringify(error.response.data)}`);
-      }
+      const message = error.response?.data
+        ? `Erreur: ${JSON.stringify(error.response.data)}`
+        : "Erreur lors de la sauvegarde de la case.";
+      setErrorModal({ open: true, message });
     }
   };
 
@@ -577,6 +596,42 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
         colIndex={selectedRowCol.col}
         onSave={handleSaveCell}
       />
+
+      <Dialog
+        open={errorModal.open}
+        onClose={() => setErrorModal({ open: false, message: "" })}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: "error.main" }}>Erreur</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">{errorModal.message}</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button
+            variant="contained"
+            onClick={() => setErrorModal({ open: false, message: "" })}
+          >
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4500}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 };
