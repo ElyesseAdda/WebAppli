@@ -34,6 +34,7 @@ import {
   MdExpandLess,
   MdSettings,
   MdChevronRight,
+  MdDelete,
 } from "react-icons/md";
 import StockProductDialog from "./StockProductDialog";
 import CreatePurchaseDialog from "./CreatePurchaseDialog";
@@ -62,6 +63,8 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   const [productForLots, setProductForLots] = useState(null);
   const [lots, setLots] = useState([]);
   const [loadingLots, setLoadingLots] = useState(false);
+  const [openDeletePurchaseDialog, setOpenDeletePurchaseDialog] = useState(false);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
   const [stockFilter, setStockFilter] = useState("all"); // all | low | out
   const [stockSort, setStockSort] = useState("asc"); // asc: faible->fort, desc: fort->faible
 
@@ -281,6 +284,29 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
         alert(`Erreur: ${JSON.stringify(error.response.data)}`);
       }
     }
+  };
+
+  const handleDeletePurchase = async () => {
+    if (!purchaseToDelete?.id) return;
+    try {
+      await axios.delete(`/api/stock-purchases/${purchaseToDelete.id}/`);
+      setOpenDeletePurchaseDialog(false);
+      setPurchaseToDelete(null);
+      fetchProducts(true);
+      fetchPurchases(true);
+      fetchLots(true);
+    } catch (error) {
+      console.error("Erreur suppression achat:", error);
+      alert(
+        error.response?.data?.error ||
+          "Erreur lors de la suppression de l'historique d'achat"
+      );
+    }
+  };
+
+  const handleAskDeletePurchase = (purchase) => {
+    setPurchaseToDelete(purchase);
+    setOpenDeletePurchaseDialog(true);
   };
 
   return (
@@ -891,6 +917,21 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
                           </Box>
                         </Box>
                         <Box sx={{ textAlign: "right", display: "flex", alignItems: "center", gap: 1.5 }}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAskDeletePurchase(p);
+                            }}
+                            sx={{
+                              bgcolor: "error.50",
+                              color: "error.main",
+                              borderRadius: "10px",
+                              "&:hover": { bgcolor: "error.100" },
+                            }}
+                          >
+                            <MdDelete size={18} />
+                          </IconButton>
                           <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "primary.main", lineHeight: 1 }}>
                               {Number(p.total).toFixed(2)} €
@@ -951,6 +992,50 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             )}
           </Box>
         </Box>
+      </Dialog>
+
+      <Dialog
+        open={openDeletePurchaseDialog}
+        onClose={() => {
+          setOpenDeletePurchaseDialog(false);
+          setPurchaseToDelete(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          Supprimer cet historique d'achat ?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Cette action retirera du stock les quantités encore présentes dans les lots liés à cet achat.
+          </Typography>
+          {purchaseToDelete && (
+            <Typography variant="body2" sx={{ mt: 1.5, fontWeight: 700 }}>
+              {purchaseToDelete.lieu_achat || "Lieu inconnu"} • {Number(purchaseToDelete.total || 0).toFixed(2)} €
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => {
+              setOpenDeletePurchaseDialog(false);
+              setPurchaseToDelete(null);
+            }}
+            variant="outlined"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleDeletePurchase}
+            color="error"
+            variant="contained"
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Floating Action Buttons - Modern Stack */}
@@ -1204,12 +1289,14 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             
             fetchProducts(true);
             fetchPurchases(true);
+            return true;
           } catch (error) {
             console.error("Erreur création achat:", error);
             alert(
               error.response?.data?.error ||
                 "Erreur lors de l'enregistrement de l'achat"
             );
+            return false;
           }
         }}
         existingProducts={products}

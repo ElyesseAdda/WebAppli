@@ -3127,6 +3127,46 @@ class StockPurchaseViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(response_serializer.data)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Supprime un historique d'achat et retire du stock uniquement les quantités
+        encore présentes dans les lots liés à cet achat.
+        """
+        purchase = self.get_object()
+
+        with transaction.atomic():
+            items = list(
+                StockPurchaseItem.objects.filter(achat=purchase)
+                .select_related('produit')
+                .prefetch_related('lots')
+            )
+
+            for item in items:
+                if not item.produit_id:
+                    continue
+
+                qty_lots_restante = item.lots.aggregate(
+                    total=Sum('quantite_restante')
+                )['total'] or 0
+
+                if qty_lots_restante <= 0:
+                    continue
+
+                produit = StockProduct.objects.select_for_update().filter(pk=item.produit_id).first()
+                if not produit:
+                    continue
+
+                produit.quantite = max(0, int(produit.quantite or 0) - int(qty_lots_restante))
+                produit.save(update_fields=['quantite', 'updated_at'])
+
+            # CASCADE: supprime automatiquement StockPurchaseItem et StockLot liés
+            purchase.delete()
+
+        return Response(
+            {'message': "Historique d'achat supprimé et stock synchronisé"},
+            status=status.HTTP_200_OK
+        )
+
     @action(detail=False, methods=['get'], url_path='history-by-product')
     def history_by_product(self, request):
         """

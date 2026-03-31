@@ -97,6 +97,7 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
     },
   ]);
   const [expandedItems, setExpandedItems] = useState({}); // { index: true/false }
+  const [isSaving, setIsSaving] = useState(false);
 
   // Charger le brouillon au montage
   useEffect(() => {
@@ -196,7 +197,24 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
     return pt / q;
   };
 
-  const handleSave = () => {
+  const resetPurchaseForm = () => {
+    setLieuAchat("");
+    setDateAchat(getLocalDatetimeString());
+    setItems([
+      {
+        produit_id: null,
+        nom_produit: "",
+        quantite: "",
+        prix_total: "",
+        unite: "pièce",
+        creer_produit: true,
+      },
+    ]);
+    setExpandedItems({});
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const handleSave = async () => {
     const validItems = items.filter(
       (item) =>
         item.nom_produit && item.nom_produit.trim() &&
@@ -227,27 +245,20 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
       }),
     };
 
-    onSave(purchaseData);
-    // Réinitialiser après sauvegarde
-    localStorage.removeItem(STORAGE_KEY);
+    setIsSaving(true);
+    try {
+      const success = await onSave(purchaseData);
+      if (success) {
+        resetPurchaseForm();
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
     if (window.confirm("Voulez-vous vraiment réinitialiser la liste d'achat ?")) {
-      setLieuAchat("");
-      setDateAchat(getLocalDatetimeString());
-      setItems([
-        {
-          produit_id: null,
-          nom_produit: "",
-          quantite: "",
-          prix_total: "",
-          unite: "pièce",
-          creer_produit: true,
-        },
-      ]);
-      setExpandedItems({});
-      localStorage.removeItem(STORAGE_KEY);
+      resetPurchaseForm();
     }
   };
 
@@ -581,7 +592,7 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
             fullWidth
             variant="contained"
             onClick={handleSave}
-            disabled={items.length === 0}
+            disabled={items.length === 0 || isSaving}
             sx={{ 
               borderRadius: "16px", 
               py: 1.5, 
@@ -591,7 +602,7 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
               "&:hover": { bgcolor: "primary.main" }
             }}
           >
-            Enregistrer
+            {isSaving ? "Enregistrement..." : "Enregistrer"}
           </Button>
         </Box>
       </DialogActions>
