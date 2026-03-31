@@ -22,13 +22,16 @@ import {
   DialogContentText,
   DialogActions,
   Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  LinearProgress,
 } from "@mui/material";
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
-// import RecapSousTraitant from "./RecapSousTraitant"; // À créer plus tard
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -2041,6 +2044,63 @@ const TableauSousTraitant = () => {
     [organizedData, organized, moisSorted]
   );
 
+  const recapTotaux = useMemo(() => {
+    let globalAPayer = 0, globalPaye = 0, globalEcart = 0, globalAPayerTTC = 0;
+    const parSousTraitant = {};
+
+    moisSorted.forEach((mois) => {
+      const sousTraitants = organized[mois] || {};
+      Object.keys(sousTraitants).forEach((st) => {
+        if (!parSousTraitant[st]) {
+          parSousTraitant[st] = { totalAPayer: 0, totalPaye: 0, totalEcart: 0, totalAPayerTTC: 0, mois: {} };
+        }
+        const chantiers = sousTraitants[st];
+        chantiers.forEach((item) => {
+          const ap = item.a_payer || 0;
+          const apTTC = item.a_payer_ttc || 0;
+          const p = item.paye || 0;
+          const e = item.ecart || 0;
+          globalAPayer += ap;
+          globalPaye += p;
+          globalEcart += e;
+          globalAPayerTTC += apTTC;
+          parSousTraitant[st].totalAPayer += ap;
+          parSousTraitant[st].totalPaye += p;
+          parSousTraitant[st].totalEcart += e;
+          parSousTraitant[st].totalAPayerTTC += apTTC;
+          if (!parSousTraitant[st].mois[mois]) {
+            parSousTraitant[st].mois[mois] = { totalAPayer: 0, totalPaye: 0, totalEcart: 0, totalAPayerTTC: 0 };
+          }
+          parSousTraitant[st].mois[mois].totalAPayer += ap;
+          parSousTraitant[st].mois[mois].totalPaye += p;
+          parSousTraitant[st].mois[mois].totalEcart += e;
+          parSousTraitant[st].mois[mois].totalAPayerTTC += apTTC;
+        });
+      });
+    });
+
+    return {
+      global: { totalAPayer: globalAPayer, totalPaye: globalPaye, totalEcart: globalEcart, totalAPayerTTC: globalAPayerTTC },
+      parSousTraitant,
+      sorted: Object.keys(parSousTraitant).sort(),
+    };
+  }, [organized, moisSorted]);
+
+  const colorForAmount = (value, isEcart = false) => {
+    const n = Number(value ?? 0);
+    if (isEcart) return n > 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
+  };
+
+  const trierMoisRecap = (moisArray) => {
+    return [...moisArray].sort((a, b) => {
+      const [moisA, anneeA] = a.split("/").map(Number);
+      const [moisB, anneeB] = b.split("/").map(Number);
+      if (anneeA !== anneeB) return anneeA - anneeB;
+      return moisA - moisB;
+    });
+  };
+
   return (
     <Box sx={{ width: "100%", p: 2 }}>
       <Box sx={{ mb: 2 }}>
@@ -3068,15 +3128,269 @@ const TableauSousTraitant = () => {
             </Table>
           </TableContainer>
 
-          {/* Récapitulatif par sous-traitant - À créer plus tard */}
-          {/* {tableRows.length > 0 && (
-            <RecapSousTraitant
-              data={data}
-              selectedAnnee={selectedAnnee}
-              organized={organized}
-              moisSorted={moisSorted}
-            />
-          )} */}
+          {/* Récapitulatif par sous-traitant */}
+          {tableRows.length > 0 && (
+            <Box sx={{ width: "100%", mt: 3 }}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontFamily: "Merriweather, serif",
+                  color: "white",
+                  fontWeight: "bold",
+                  mb: 2,
+                }}
+              >
+                RÉCAPITULATIF ANNÉE {selectedAnnee}
+              </Typography>
+
+              <Paper
+                sx={{
+                  p: 2,
+                  mb: 3,
+                  backgroundColor: "rgba(27, 120, 188, 0.1)",
+                  border: "2px solid rgba(27, 120, 188, 0.3)",
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", mb: 2 }}
+                >
+                  Totaux Globaux
+                </Typography>
+                <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant à payer HT
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalAPayer),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalAPayer)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant à payer TTC
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalAPayerTTC),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalAPayerTTC)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant payé
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}
+                    >
+                      {formatNumber(recapTotaux.global.totalPaye)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Écart
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalEcart, true),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalEcart)} €
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {recapTotaux.sorted.map((st) => {
+                  const totaux = recapTotaux.parSousTraitant[st];
+                  const moisST = trierMoisRecap(Object.keys(totaux.mois));
+                  const isPayeComplet = Math.abs(totaux.totalAPayer - totaux.totalPaye) < 0.01;
+                  const pctCA = recapTotaux.global.totalAPayer
+                    ? ((totaux.totalAPayer / recapTotaux.global.totalAPayer) * 100).toFixed(1)
+                    : "0.0";
+                  const pctPaye = totaux.totalAPayer
+                    ? Math.min((totaux.totalPaye / totaux.totalAPayer) * 100, 100)
+                    : 0;
+
+                  return (
+                    <Accordion
+                      key={st}
+                      sx={{
+                        backgroundColor: "white",
+                        "&:before": { display: "none" },
+                        boxShadow: 2,
+                      }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        sx={{
+                          backgroundColor: isPayeComplet
+                            ? "rgba(46, 125, 50, 0.1)"
+                            : "rgba(27, 120, 188, 0.1)",
+                          "&:hover": {
+                            backgroundColor: isPayeComplet
+                              ? "rgba(46, 125, 50, 0.15)"
+                              : "rgba(27, 120, 188, 0.15)",
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
+                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "1rem",
+                                  color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                }}
+                              >
+                                {st}
+                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  backgroundColor: isPayeComplet
+                                    ? "rgba(46, 125, 50, 0.15)"
+                                    : "rgba(27, 120, 188, 0.15)",
+                                  borderRadius: "12px",
+                                  px: 1.2,
+                                  py: 0.2,
+                                  border: `1px solid ${isPayeComplet ? "rgba(46, 125, 50, 0.3)" : "rgba(27, 120, 188, 0.3)"}`,
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.78rem",
+                                    fontWeight: 700,
+                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  {pctCA}%
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <Box sx={{ display: "flex", gap: 3 }}>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>À payer</Typography>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>
+                                  {formatNumber(totaux.totalAPayer)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Payé</Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.9rem",
+                                    fontWeight: "bold",
+                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                  }}
+                                >
+                                  {formatNumber(totaux.totalPaye)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalEcart, true) }}>
+                                  {formatNumber(totaux.totalEcart)} €
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={pctPaye}
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.12)" : "rgba(27, 120, 188, 0.12)",
+                              "& .MuiLinearProgress-bar": {
+                                borderRadius: 2,
+                                backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.7)" : "rgba(27, 120, 188, 0.7)",
+                              },
+                            }}
+                          />
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <TableContainer component={Paper} variant="outlined">
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.1)" }}>
+                                <TableCell sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Mois</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer HT</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer TTC</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant payé</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Écart</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {moisST.map((mois) => {
+                                const [moisNum, annee2d] = mois.split("/").map(Number);
+                                const moisName = getMoisName(moisNum);
+                                const anneeComplete = annee2d < 50 ? 2000 + annee2d : 1900 + annee2d;
+                                const tm = totaux.mois[mois];
+                                return (
+                                  <TableRow key={mois} hover>
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 500, color: "text.primary" }}>
+                                        {moisName} {anneeComplete}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalAPayer)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalAPayerTTC)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: "rgba(46, 125, 50, 1)", fontWeight: 500 }}>
+                                        {formatNumber(tm.totalPaye)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalEcart, true), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalEcart)} €
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.05)", borderTop: "2px solid rgba(27, 120, 188, 0.3)" }}>
+                                <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)" }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalEcart, true) }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
 
           {/* Modal pour ajouter/modifier une facture */}
           <FactureModal

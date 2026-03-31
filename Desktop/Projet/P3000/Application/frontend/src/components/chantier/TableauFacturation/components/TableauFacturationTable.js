@@ -1,5 +1,10 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
   Button,
+  LinearProgress,
   Paper,
   Table,
   TableBody,
@@ -11,6 +16,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 
 import {
   formatDate,
@@ -43,7 +49,7 @@ const commonCellStyle = {
   minHeight: "60px",
   verticalAlign: "middle",
 };
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 
 const TableauFacturationTable = ({
   situationsAvecSousTotaux,
@@ -59,6 +65,41 @@ const TableauFacturationTable = ({
 
   const hasNoEcart = (montantAttendu, montantRecu) =>
     Math.abs((parseFloat(montantRecu) || 0) - (parseFloat(montantAttendu) || 0)) < 0.01;
+
+  const formatNum = (num) =>
+    Number(num ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const colorForAmount = (value, isEcart = false) => {
+    const n = Number(value ?? 0);
+    if (isEcart) return n > 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
+  };
+
+  const recapParChantier = useMemo(() => {
+    const parChantier = {};
+    situationsAvecSousTotaux.forEach((item) => {
+      if (item.isSousTotal) return;
+      const isFacture = item.price_ht !== undefined;
+      const chantierName = item.chantier_name || item.chantier?.chantier_name || "Inconnu";
+      const montantHT = isFacture
+        ? parseFloat(item.price_ht) || 0
+        : parseFloat(item.montant_apres_retenues) || 0;
+      const montantRecu = isFacture
+        ? (item.state_facture === "Payée" ? montantHT : 0)
+        : parseFloat(item.montant_reel_ht) || 0;
+
+      if (!parChantier[chantierName]) {
+        parChantier[chantierName] = { montantHT: 0, montantRecu: 0, ecart: 0 };
+      }
+      parChantier[chantierName].montantHT += montantHT;
+      parChantier[chantierName].montantRecu += montantRecu;
+      parChantier[chantierName].ecart += montantRecu - montantHT;
+    });
+
+    const totalHT = parseFloat(totaux.montantHTSituation) || 0;
+    const sorted = Object.keys(parChantier).sort((a, b) => parChantier[b].montantHT - parChantier[a].montantHT);
+    return { parChantier, totalHT, sorted };
+  }, [situationsAvecSousTotaux, totaux]);
 
   // Calculer le nombre de lignes par mois (sans les sous-totaux) pour la fusion des cellules
   const calculerLignesParMois = () => {
@@ -117,6 +158,7 @@ const TableauFacturationTable = ({
   let ligneMoisIndex = 0;
 
   return (
+    <>
     <TableContainer
       component={Paper}
       sx={{
@@ -734,6 +776,187 @@ const TableauFacturationTable = ({
         </TableFooter>
       </Table>
     </TableContainer>
+
+    {/* Récapitulatif par chantier */}
+    {recapParChantier.sorted.length > 0 && (
+      <Box sx={{ width: "100%", mt: 3 }}>
+        <Typography
+          variant="h6"
+          sx={{ fontFamily: "Merriweather, serif", color: "white", fontWeight: "bold", mb: 2 }}
+        >
+          RÉCAPITULATIF PAR CHANTIER
+        </Typography>
+
+        <Paper
+          sx={{
+            p: 2,
+            mb: 3,
+            backgroundColor: "rgba(27, 120, 188, 0.1)",
+            border: "2px solid rgba(27, 120, 188, 0.3)",
+          }}
+        >
+          <Typography variant="h6" sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", mb: 2 }}>
+            Totaux Globaux
+          </Typography>
+          <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+            <Box>
+              <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Montant HT facturé</Typography>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.montantHTSituation) }}>
+                {formatNum(totaux.montantHTSituation)} €
+              </Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Montant reçu HT</Typography>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
+                {formatNum(totaux.montantRecuHT)} €
+              </Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Écart</Typography>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.ecartMois, true) }}>
+                {formatNum(totaux.ecartMois)} €
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
+
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {recapParChantier.sorted.map((chantier) => {
+            const ch = recapParChantier.parChantier[chantier];
+            const isPayeComplet = Math.abs(ch.montantHT - ch.montantRecu) < 0.01;
+            const pctCA = recapParChantier.totalHT
+              ? ((ch.montantHT / recapParChantier.totalHT) * 100).toFixed(1)
+              : "0.0";
+            const pctRecu = ch.montantHT
+              ? Math.min((ch.montantRecu / ch.montantHT) * 100, 100)
+              : 0;
+
+            return (
+              <Accordion
+                key={chantier}
+                sx={{ backgroundColor: "white", "&:before": { display: "none" }, boxShadow: 2 }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.1)" : "rgba(27, 120, 188, 0.1)",
+                    "&:hover": {
+                      backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.15)" : "rgba(27, 120, 188, 0.15)",
+                    },
+                  }}
+                >
+                  <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Typography
+                          sx={{
+                            fontWeight: "bold",
+                            fontSize: "1rem",
+                            color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                          }}
+                        >
+                          {chantier}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.15)" : "rgba(27, 120, 188, 0.15)",
+                            borderRadius: "12px",
+                            px: 1.2,
+                            py: 0.2,
+                            border: `1px solid ${isPayeComplet ? "rgba(46, 125, 50, 0.3)" : "rgba(27, 120, 188, 0.3)"}`,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {pctCA}%
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 3 }}>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Facturé HT</Typography>
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.montantHT) }}>
+                            {formatNum(ch.montantHT)} €
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Reçu HT</Typography>
+                          <Typography
+                            sx={{
+                              fontSize: "0.9rem",
+                              fontWeight: "bold",
+                              color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                            }}
+                          >
+                            {formatNum(ch.montantRecu)} €
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.ecart, true) }}>
+                            {formatNum(ch.ecart)} €
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={pctRecu}
+                      sx={{
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.12)" : "rgba(27, 120, 188, 0.12)",
+                        "& .MuiLinearProgress-bar": {
+                          borderRadius: 2,
+                          backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.7)" : "rgba(27, 120, 188, 0.7)",
+                        },
+                      }}
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: "flex", gap: 3, p: 1 }}>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Montant HT facturé</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.montantHT) }}>
+                        {formatNum(ch.montantHT)} €
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Montant reçu HT</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
+                        {formatNum(ch.montantRecu)} €
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Écart</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.ecart, true) }}>
+                        {formatNum(ch.ecart)} €
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>% du CA total</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>
+                        {pctCA}%
+                      </Typography>
+                    </Box>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            );
+          })}
+        </Box>
+      </Box>
+    )}
+    </>
   );
 };
 
