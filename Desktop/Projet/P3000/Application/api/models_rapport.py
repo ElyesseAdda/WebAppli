@@ -107,6 +107,18 @@ class RapportIntervention(models.Model):
     )
     pdf_s3_key = models.CharField(max_length=500, blank=True, default='')
 
+    # Numéro d'affichage annuel (PDF / prévisualisation uniquement ; non exposé à l'API liste/détail)
+    numero_rapport = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Numéro de rapport (séquentiel annuel)",
+    )
+    annee_numero_rapport = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Année du numéro de rapport",
+    )
+
     # Champs spécifiques Vigik+
     adresse_vigik = models.CharField(max_length=500, blank=True, default='', verbose_name="Adresse (rapport Vigik+)")
     numero_batiment = models.CharField(max_length=100, blank=True, default='', verbose_name="Numéro du bâtiment")
@@ -127,6 +139,47 @@ class RapportIntervention(models.Model):
 
     def __str__(self):
         return f"Rapport {self.titre or 'Sans titre'} - {self.date}"
+
+
+class RapportInterventionNumeroCompteur(models.Model):
+    """Compteur par année calendaire pour numéros de rapport (concurrence sûre avec select_for_update)."""
+
+    annee = models.PositiveIntegerField(unique=True)
+    dernier_numero = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Compteur numéro rapport (par année)"
+        verbose_name_plural = "Compteurs numéros rapport (par année)"
+
+    def __str__(self):
+        return f"{self.annee} → {self.dernier_numero}"
+
+
+def assign_numero_rapport_si_absent(rapport):
+    """
+    Attribue un numéro séquentiel pour l'année de rapport.date.
+    Sans effet si déjà renseigné. À appeler après création en base (pk défini).
+    """
+    if rapport.numero_rapport is not None:
+        return
+    if not rapport.pk:
+        return
+    from django.db import transaction
+
+    year = rapport.date.year
+    with transaction.atomic():
+        compteur, _ = RapportInterventionNumeroCompteur.objects.select_for_update().get_or_create(
+            annee=year,
+            defaults={'dernier_numero': 0},
+        )
+        compteur.dernier_numero += 1
+        compteur.save(update_fields=['dernier_numero'])
+        RapportIntervention.objects.filter(pk=rapport.pk).update(
+            numero_rapport=compteur.dernier_numero,
+            annee_numero_rapport=year,
+        )
+    rapport.numero_rapport = compteur.dernier_numero
+    rapport.annee_numero_rapport = year
 
 
 class PrestationRapport(models.Model):

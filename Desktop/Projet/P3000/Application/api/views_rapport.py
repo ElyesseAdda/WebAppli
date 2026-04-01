@@ -13,7 +13,14 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from .models_rapport import TitreRapport, Residence, RapportIntervention, PrestationRapport, PhotoRapport
+from .models_rapport import (
+    TitreRapport,
+    Residence,
+    RapportIntervention,
+    PrestationRapport,
+    PhotoRapport,
+    assign_numero_rapport_si_absent,
+)
 from .serializers_rapport import (
     TitreRapportSerializer,
     ResidenceSerializer,
@@ -230,6 +237,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+        assign_numero_rapport_si_absent(serializer.instance)
 
     @action(detail=True, methods=['post'])
     def lier_chantier(self, request, pk=None):
@@ -587,6 +595,9 @@ def preview_rapport_intervention(request, rapport_id):
         ).prefetch_related('prestations__photos').get(id=rapport_id)
     except RapportIntervention.DoesNotExist:
         return JsonResponse({'error': 'Rapport introuvable'}, status=404)
+
+    assign_numero_rapport_si_absent(rapport)
+    rapport.refresh_from_db(fields=['numero_rapport', 'annee_numero_rapport'])
 
     from .utils import generate_presigned_url_for_display
 

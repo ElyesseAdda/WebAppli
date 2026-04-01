@@ -73,6 +73,16 @@
             padding-bottom: 4px;
         }
 
+        .rapport-ref-outside {
+            grid-column: 1 / -1;
+            text-align: left;
+            font-size: 10pt;
+            font-weight: 600;
+            color: #222;
+            margin: 0 0 2px 0;
+            line-height: 1.2;
+        }
+
         .info-row {
             display: flex;
             margin-bottom: 3px;
@@ -160,6 +170,10 @@
     </div>
 
     <div class="info-grid">
+        {% if rapport.numero_rapport and rapport.annee_numero_rapport %}
+        <div class="rapport-ref-outside">Rapport n°{{ rapport.numero_rapport }} - {{ rapport.annee_numero_rapport }}</div>
+        {% endif %}
+
         <div class="info-block">
             <h3>Intervention</h3>
             {% for row in intervention_date_rows %}

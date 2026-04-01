@@ -95,6 +95,16 @@
             padding-bottom: 4px;
         }
 
+        .rapport-ref-outside {
+            grid-column: 1 / -1;
+            text-align: right;
+            font-size: 9pt;
+            font-weight: 600;
+            color: #222;
+            margin: 0 0 2px 0;
+            line-height: 1.2;
+        }
+
         .info-row {
             display: flex;
             margin-bottom: 3px;
@@ -308,6 +318,10 @@
     <h1 class="report-title">{% if rapport.titre %}{{ rapport.titre }}{% else %}Rapport{% endif %}</h1>
 
     <div class="info-grid">
+        {% if rapport.numero_rapport and rapport.annee_numero_rapport %}
+        <div class="rapport-ref-outside">Rapport n°{{ rapport.numero_rapport }} - {{ rapport.annee_numero_rapport }}</div>
+        {% endif %}
+
         <div class="info-block">
             <h3>Client / Bailleur</h3>
             <div class="info-row">
