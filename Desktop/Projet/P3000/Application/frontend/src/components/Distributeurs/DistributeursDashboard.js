@@ -69,13 +69,29 @@ const defaultDistributeurForm = {
   emplacement: "",
 };
 
-const defaultMouvementForm = {
+const formatLocalDateTimeForInput = (date = new Date()) => {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+};
+
+/** Date comptable / affichage : fin de mouvement si définie, sinon début */
+const getReapproSessionDisplayDate = (session) => {
+  if (!session) return null;
+  const raw = session.date_fin || session.date_debut;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const getDefaultMouvementForm = () => ({
   mouvement_type: "entree",
   quantite: 1,
   prix_unitaire: 0,
-  date_mouvement: new Date().toISOString().slice(0, 16),
+  date_mouvement: formatLocalDateTimeForInput(),
   commentaire: "",
-};
+});
 
 const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurIdConsumed, isDesktop: propIsDesktop }) => {
   const isMobileHook = useIsMobile();
@@ -98,7 +114,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
   const [distributeurForm, setDistributeurForm] = useState(
     defaultDistributeurForm
   );
-  const [mouvementForm, setMouvementForm] = useState(defaultMouvementForm);
+  const [mouvementForm, setMouvementForm] = useState(getDefaultMouvementForm);
   const [showMouvementReappro, setShowMouvementReappro] = useState(false);
   const [reapproSessionId, setReapproSessionId] = useState(null);
   const [reapproSessions, setReapproSessions] = useState([]);
@@ -106,9 +122,12 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
   const [selectedReapproSession, setSelectedReapproSession] = useState(null);
   const [loadingReapproDetail, setLoadingReapproDetail] = useState(false);
   const [editingLigneId, setEditingLigneId] = useState(null);
+  const [editLigneQuantite, setEditLigneQuantite] = useState("");
   const [editLignePrix, setEditLignePrix] = useState("");
   const [editLigneCout, setEditLigneCout] = useState("");
   const [savingLigne, setSavingLigne] = useState(false);
+  const [editReapproDate, setEditReapproDate] = useState("");
+  const [savingReapproDate, setSavingReapproDate] = useState(false);
   const [editingMouvement, setEditingMouvement] = useState(null);
   const [openMouvementEditModal, setOpenMouvementEditModal] = useState(false);
   const [savedReappro, setSavedReappro] = useState(null);
@@ -393,6 +412,13 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
         `/api/distributeur-reappro-sessions/${sessionId}/`
       );
       setSelectedReapproSession(response.data);
+      setEditReapproDate(
+        response.data?.date_fin
+          ? formatLocalDateTimeForInput(new Date(response.data.date_fin))
+          : response.data?.date_debut
+            ? formatLocalDateTimeForInput(new Date(response.data.date_debut))
+            : formatLocalDateTimeForInput()
+      );
     } catch (error) {
       console.error("Erreur chargement détail mouvement:", error);
       showSnackbar("Erreur lors du chargement du détail", "error");
@@ -406,37 +432,31 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
     setOpenReapproDetail(false);
     setSelectedReapproSession(null);
     setEditingLigneId(null);
+    setEditLigneQuantite("");
+    setEditReapproDate("");
   };
 
   const handleSaveLigne = async (ligneId) => {
+    const quantite = parseInt(String(editLigneQuantite), 10);
     const prix = parseFloat(String(editLignePrix).replace(",", "."));
     const cout = editLigneCout === "" || editLigneCout == null ? null : parseFloat(String(editLigneCout).replace(",", "."));
+    if (isNaN(quantite) || quantite <= 0) return;
     if (isNaN(prix) || prix < 0) return;
     if (cout !== null && (isNaN(cout) || cout < 0)) return;
     setSavingLigne(true);
     try {
       await axios.patch(`/api/distributeur-reappro-lignes/${ligneId}/`, {
+        quantite,
         prix_vente: prix,
         cout_unitaire: cout,
       });
       showSnackbar("Ligne mise à jour");
       setEditingLigneId(null);
+      setEditLigneQuantite("");
+      setEditLignePrix("");
+      setEditLigneCout("");
       const sessionId = selectedReapproSession?.id;
-      if (sessionId) {
-        await handleOpenReapproDetail(sessionId);
-      }
-      fetchReapproSessions(selectedId);
-      fetchMeilleurMois(selectedId);
-      if (benefitViewMode === "mois") {
-        fetchResume(selectedId, benefitYear, benefitMonth);
-        fetchResumeProduits(selectedId, benefitYear, benefitMonth);
-      } else if (benefitViewMode === "annuel") {
-        fetchResume(selectedId, benefitYear, null);
-        fetchResumeProduits(selectedId, benefitYear, null);
-      } else {
-        fetchResume(selectedId);
-        fetchResumeProduits(selectedId);
-      }
+      await refreshReapproAndStats(sessionId);
     } catch (error) {
       console.error("Erreur mise à jour ligne:", error);
       showSnackbar(error.response?.data?.detail || error.response?.data?.prix_vente?.[0] || "Erreur lors de la mise à jour", "error");
@@ -445,14 +465,52 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
     }
   };
 
+  const refreshReapproAndStats = async (sessionId) => {
+    if (sessionId) {
+      await handleOpenReapproDetail(sessionId);
+    }
+    fetchReapproSessions(selectedId);
+    fetchMeilleurMois(selectedId);
+    if (benefitViewMode === "mois") {
+      fetchResume(selectedId, benefitYear, benefitMonth);
+      fetchResumeProduits(selectedId, benefitYear, benefitMonth);
+    } else if (benefitViewMode === "annuel") {
+      fetchResume(selectedId, benefitYear, null);
+      fetchResumeProduits(selectedId, benefitYear, null);
+    } else {
+      fetchResume(selectedId);
+      fetchResumeProduits(selectedId);
+    }
+  };
+
+  const handleSaveReapproDate = async () => {
+    const sessionId = selectedReapproSession?.id;
+    if (!sessionId || !editReapproDate) return;
+    setSavingReapproDate(true);
+    try {
+      await axios.patch(`/api/distributeur-reappro-sessions/${sessionId}/`, {
+        date_fin: editReapproDate,
+      });
+      showSnackbar("Date du mouvement mise à jour");
+      await refreshReapproAndStats(sessionId);
+    } catch (error) {
+      console.error("Erreur mise à jour date mouvement:", error);
+      showSnackbar(error.response?.data?.detail || "Erreur lors de la mise à jour de la date", "error");
+    } finally {
+      setSavingReapproDate(false);
+    }
+  };
+
   const handleOpenEditMouvement = (mouvement) => {
     setEditingMouvement(mouvement);
     setMouvementForm({
-      ...defaultMouvementForm,
+      ...getDefaultMouvementForm(),
       mouvement_type: mouvement.mouvement_type,
       quantite: mouvement.quantite,
       prix_unitaire: mouvement.prix_unitaire ?? 0,
-      date_mouvement: mouvement.date_mouvement ? new Date(mouvement.date_mouvement).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+      date_mouvement: mouvement.date_mouvement
+        ? formatLocalDateTimeForInput(new Date(mouvement.date_mouvement))
+        : formatLocalDateTimeForInput(),
       commentaire: mouvement.commentaire || "",
     });
     setOpenMouvementEditModal(true);
@@ -471,7 +529,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
       showSnackbar("Mouvement mis à jour");
       setOpenMouvementEditModal(false);
       setEditingMouvement(null);
-      setMouvementForm(defaultMouvementForm);
+      setMouvementForm(getDefaultMouvementForm());
       fetchMouvements(selectedId);
     } catch (error) {
       console.error("Erreur mise à jour mouvement:", error);
@@ -591,10 +649,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
       };
       await axios.post("/api/distributeur-mouvements/", payload);
       showSnackbar("Mouvement ajouté");
-      setMouvementForm({
-        ...defaultMouvementForm,
-        date_mouvement: new Date().toISOString().slice(0, 16),
-      });
+      setMouvementForm(getDefaultMouvementForm());
       setOpenMouvementModal(false);
       fetchMouvements(selectedId);
       fetchResume(selectedId);
@@ -1562,7 +1617,9 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
             />
           </Box>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {reapproSessions.slice(0, 10).map((s) => (
+            {reapproSessions.slice(0, 10).map((s) => {
+              const sessionCardDate = getReapproSessionDisplayDate(s);
+              return (
               <Card
                 key={s.id}
                 elevation={0}
@@ -1592,12 +1649,14 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-                      {new Date(s.date_debut).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {sessionCardDate
+                        ? sessionCardDate.toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
                       {s.total_unites ?? 0} unités • CA {(s.total_montant ?? 0).toFixed(2)} €
@@ -1613,7 +1672,8 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                   </Box>
                 </Box>
               </Card>
-            ))}
+            );
+            })}
           </Box>
         </Box>
       )}
@@ -1829,7 +1889,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
         onClose={() => {
           setOpenMouvementEditModal(false);
           setEditingMouvement(null);
-          setMouvementForm(defaultMouvementForm);
+          setMouvementForm(getDefaultMouvementForm());
         }}
         maxWidth="sm"
         fullWidth
@@ -1912,7 +1972,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
             onClick={() => {
               setOpenMouvementEditModal(false);
               setEditingMouvement(null);
-              setMouvementForm(defaultMouvementForm);
+              setMouvementForm(getDefaultMouvementForm());
             }}
           >
             Annuler
@@ -1940,7 +2000,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 800, pr: 6 }}>
           <Box component="span">
             {selectedReapproSession ? (
-              <>Détail du mouvement — {new Date(selectedReapproSession.date_debut).toLocaleDateString("fr-FR", {
+              <>Détail du mouvement — {(getReapproSessionDisplayDate(selectedReapproSession) || new Date(selectedReapproSession.date_debut)).toLocaleDateString("fr-FR", {
                 day: "2-digit",
                 month: "long",
                 year: "numeric",
@@ -1963,6 +2023,33 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
             </Box>
           ) : selectedReapproSession && selectedReapproSession.lignes?.length > 0 ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.5,
+                  borderRadius: "14px",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                }}
+              >
+                <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase", fontSize: "0.6rem" }}>
+                  Date du mouvement
+                </Typography>
+                <Box sx={{ mt: 1, display: "flex", gap: 1, alignItems: "center" }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    type="datetime-local"
+                    value={editReapproDate}
+                    onChange={(e) => setEditReapproDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <Button variant="contained" onClick={handleSaveReapproDate} disabled={savingReapproDate || !editReapproDate}>
+                    {savingReapproDate ? "..." : "Maj"}
+                  </Button>
+                </Box>
+              </Paper>
               {selectedReapproSession.lignes.map((ligne) => (
                 <Card
                   key={ligne.id}
@@ -2010,6 +2097,17 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                             <TextField
                               size="small"
                               fullWidth
+                              label="Quantité"
+                              type="number"
+                              value={editLigneQuantite}
+                              onChange={(e) => setEditLigneQuantite(e.target.value)}
+                              inputProps={{ min: 1, step: 1 }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              size="small"
+                              fullWidth
                               label="Prix vente (€)"
                               type="number"
                               value={editLignePrix}
@@ -2017,7 +2115,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                               inputProps={{ min: 0, step: 0.01 }}
                             />
                           </Grid>
-                          <Grid item xs={6}>
+                          <Grid item xs={12}>
                             <TextField
                               size="small"
                               fullWidth
@@ -2031,7 +2129,17 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                           </Grid>
                           <Grid item xs={12}>
                             <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", mt: 1 }}>
-                              <Button size="small" variant="outlined" onClick={() => setEditingLigneId(null)} disabled={savingLigne}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  setEditingLigneId(null);
+                                  setEditLigneQuantite("");
+                                  setEditLignePrix("");
+                                  setEditLigneCout("");
+                                }}
+                                disabled={savingLigne}
+                              >
                                 Annuler
                               </Button>
                               <Button size="small" variant="contained" onClick={() => handleSaveLigne(ligne.id)} disabled={savingLigne}>
@@ -2097,6 +2205,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                                   variant="text"
                                   onClick={() => {
                                     setEditingLigneId(ligne.id);
+                                    setEditLigneQuantite(String(ligne.quantite ?? 1));
                                     setEditLignePrix(String(ligne.prix_vente ?? ""));
                                     setEditLigneCout(ligne.cout_unitaire != null ? String(ligne.cout_unitaire) : "");
                                   }}

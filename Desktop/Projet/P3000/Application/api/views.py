@@ -3010,12 +3010,25 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='terminer')
     def terminer(self, request, pk=None):
         """Termine la session : vérifie le stock, retire les quantités du stock (FIFO), puis marque la session terminée."""
+        from django.utils.dateparse import parse_datetime
         session = self.get_object()
         if session.statut != 'en_cours':
             return Response(
                 {'error': 'Cette session est déjà terminée'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        date_fin_input = request.data.get('date_fin')
+        date_fin_value = timezone.now()
+        if date_fin_input:
+            parsed_date = parse_datetime(str(date_fin_input))
+            if parsed_date is None:
+                return Response(
+                    {'error': 'Format date_fin invalide. Utilisez une date/heure valide.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if timezone.is_naive(parsed_date):
+                parsed_date = timezone.make_aware(parsed_date, timezone.get_current_timezone())
+            date_fin_value = parsed_date
         lignes = list(session.lignes.select_related('cell', 'cell__stock_product').all())
         # Quantité requise par produit (plusieurs lignes peuvent concerner le même produit)
         from collections import defaultdict
@@ -3068,7 +3081,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     restant_a_retirer -= prise
                 StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
             session.statut = 'termine'
-            session.date_fin = timezone.now()
+            session.date_fin = date_fin_value
             session.save()
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
