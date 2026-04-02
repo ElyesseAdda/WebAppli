@@ -2465,7 +2465,7 @@ class Agence(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['nom']
+        ordering = ['id']
         verbose_name = "Agence"
         verbose_name_plural = "Agences"
 
