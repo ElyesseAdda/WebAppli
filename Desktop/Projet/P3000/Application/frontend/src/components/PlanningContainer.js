@@ -756,7 +756,6 @@ const PlanningContainer = () => {
       )}
 
       <LaborCostsSummary
-        agentId={selectedAgentId ?? undefined}
         isOpen={isLaborCostsSummaryOpen}
         onClose={() => setIsLaborCostsSummaryOpen(false)}
       />
