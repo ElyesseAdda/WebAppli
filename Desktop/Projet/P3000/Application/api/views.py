@@ -15927,6 +15927,27 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         date_frais__lte=end_date
     )
     total_frais = sum(float(f.montant or 0) for f in frais)
+
+    # ========== 3.bis RÉCUPÉRER LES PERTES STOCK DU MOIS ==========
+    # Note: StockLoss n'est pas rattaché à un distributeur dans le modèle actuel.
+    # On agrège donc les pertes du mois et on les rattache par nom de produit.
+    pertes_qs = StockLoss.objects.filter(
+        date_perte__date__gte=start_date,
+        date_perte__date__lte=end_date
+    ).select_related('produit')
+    pertes_by_product = defaultdict(lambda: {'quantite': 0, 'montant': 0.0})
+    total_pertes_unites = 0
+    total_pertes_montant = 0.0
+    for perte in pertes_qs:
+        produit_nom = (perte.produit.nom or '').strip() if perte.produit else ''
+        if not produit_nom:
+            continue
+        qte = int(perte.quantite or 0)
+        montant = float(perte.montant_total or 0)
+        pertes_by_product[produit_nom]['quantite'] += qte
+        pertes_by_product[produit_nom]['montant'] += montant
+        total_pertes_unites += qte
+        total_pertes_montant += montant
     
     # ========== 4. CALCULER LES DONNÉES AGRÉGÉES ==========
     
@@ -15993,6 +16014,10 @@ def preview_distributeur_monthly_report(request, distributeur_id):
             produits_detail[cell_name]['ventes'] += ligne.quantite
             produits_detail[cell_name]['ca'] += ca_ligne
             produits_detail[cell_name]['prix_vente'] = float(ligne.prix_vente or 0)
+
+    # Injecter les pertes (par nom produit) dans le détail
+    for produit_nom, perte_data in pertes_by_product.items():
+        produits_detail[produit_nom]['pertes'] += int(perte_data['quantite'] or 0)
     
     # Calculer bénéfice mouvements
     benefice_mouvements = 0
@@ -16033,6 +16058,8 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         'ca_total': round(ca_total, 2),
         'total_produits_vendus': total_produits_vendus,
         'valeur_stock_reappro': round(valeur_stock_reappro, 2),
+        'total_pertes_unites': int(total_pertes_unites),
+        'total_pertes_montant': round(total_pertes_montant, 2),
         'total_frais': round(total_frais, 2),
         'benefice_total': round(benefice_total, 2),
         # Journal des entrées
