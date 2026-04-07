@@ -40,6 +40,10 @@ def compute_champs_manquants(payload):
     if type_rapport == "vigik_plus":
         if not (p.get("adresse_vigik") or "").strip():
             missing.append("adresse_vigik")
+        if p.get("presence_portail") is None:
+            missing.append("presence_portail")
+        if p.get("presence_portail") is True and p.get("presence_platine_portail") is None:
+            missing.append("presence_platine_portail")
         return missing
 
     if not (p.get("technicien") or "").strip():

@@ -126,6 +126,9 @@ class RapportIntervention(models.Model):
     type_installation = models.CharField(max_length=255, blank=True, default='', verbose_name="Type d'installation")
     presence_platine = models.BooleanField(null=True, blank=True, verbose_name="Présence de platine")
     photo_platine_s3_key = models.CharField(max_length=500, blank=True, default='', verbose_name="Photo platine")
+    presence_portail = models.BooleanField(
+        null=True, blank=True, verbose_name="Présence d'un portail (Vigik+)"
+    )
     presence_platine_portail = models.BooleanField(null=True, blank=True, verbose_name="Présence de platine au niveau du portail")
     photo_platine_portail_s3_key = models.CharField(max_length=500, blank=True, default='', verbose_name="Photo platine portail")
 

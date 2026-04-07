@@ -16,6 +16,45 @@ def _is_vigik_plus(attrs):
     return attrs.get('type_rapport') == 'vigik_plus'
 
 
+def _safe_delete_s3_key(key):
+    if not key:
+        return
+    try:
+        from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+        if not is_s3_available():
+            return
+        get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=key)
+    except Exception:
+        pass
+
+
+def _normalize_vigik_portail_answers(validated_data, instance=None):
+    """
+    Vigik+ : pas de portail ou pas de platine Vigik+ au portail -> pas de photo portail.
+    """
+    type_r = validated_data.get('type_rapport')
+    if type_r is None and instance is not None:
+        type_r = instance.type_rapport
+    if type_r != 'vigik_plus':
+        return validated_data
+    pp = validated_data.get('presence_portail')
+    if pp is None and instance is not None:
+        pp = instance.presence_portail
+    if 'presence_platine_portail' in validated_data:
+        ppp = validated_data.get('presence_platine_portail')
+    elif instance is not None:
+        ppp = instance.presence_platine_portail
+    else:
+        ppp = None
+
+    if pp is False:
+        validated_data['presence_platine_portail'] = None
+        validated_data['photo_platine_portail_s3_key'] = ''
+    elif pp is True and ppp is False:
+        validated_data['photo_platine_portail_s3_key'] = ''
+    return validated_data
+
+
 def _normalize_dates_intervention_attrs(attrs, instance=None):
     """Synchronise dates_intervention (liste ordonnée) et date (dernière date = tri / affichage court)."""
     from datetime import datetime
@@ -187,7 +226,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
             'signature_s3_key', 'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'pdf_s3_key',
             'adresse_vigik', 'numero_batiment', 'type_installation',
             'presence_platine', 'photo_platine_s3_key',
-            'presence_platine_portail', 'photo_platine_portail_s3_key',
+            'presence_portail', 'presence_platine_portail', 'photo_platine_portail_s3_key',
             'created_by', 'created_at', 'updated_at',
             'prestations', 'residence_data', 'residence_nom', 'residence_adresse',
             'client_societe_nom', 'client_societe_logo_url', 'chantier_nom',
@@ -295,7 +334,7 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
             'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
             'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'devis_lie_numero', 'devis_lie_preview_url',
             'numero_batiment', 'type_installation',
-            'presence_platine', 'presence_platine_portail',
+            'presence_platine', 'presence_portail', 'presence_platine_portail',
             'created_at', 'updated_at', 'nb_prestations',
         ]
 
@@ -378,7 +417,8 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
             'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'prestations',
             'numero_batiment', 'type_installation',
-            'presence_platine', 'presence_platine_portail',
+            'presence_platine', 'presence_portail', 'presence_platine_portail',
+            'photo_platine_portail_s3_key',
         ]
 
     def _resolve_vigik_defaults(self, validated_data):
@@ -426,6 +466,8 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche.
         Statut brouillon : champs assouplis pour sauvegarde auto sans tout remplir."""
+        attrs.pop('photo_platine_s3_key', None)
+        attrs.pop('photo_platine_portail_s3_key', None)
         attrs = _normalize_dates_intervention_attrs(attrs, instance=getattr(self, 'instance', None))
         instance = getattr(self, 'instance', None)
 
@@ -434,6 +476,7 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             for key in (
                 'statut', 'type_rapport', 'technicien', 'objet_recherche', 'adresse_vigik',
                 'devis_a_faire', 'devis_fait', 'devis_lie', 'chantier',
+                'presence_portail', 'presence_platine', 'presence_platine_portail',
             ):
                 if key not in merged:
                     merged[key] = getattr(instance, key)
@@ -469,6 +512,14 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
         if _is_vigik_plus(merged):
             if not (merged.get('adresse_vigik') or '').strip():
                 raise serializers.ValidationError({'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."})
+            if merged.get('presence_portail') is None:
+                raise serializers.ValidationError({
+                    'presence_portail': "Indiquez si un portail est présent sur le site.",
+                })
+            if merged.get('presence_portail') is True and merged.get('presence_platine_portail') is None:
+                raise serializers.ValidationError({
+                    'presence_platine_portail': "Indiquez si une platine Vigik+ est présente au portail.",
+                })
             return attrs
         if 'technicien' in attrs and not (attrs.get('technicien') or '').strip():
             raise serializers.ValidationError({'technicien': 'Ce champ est obligatoire.'})
@@ -499,6 +550,7 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         prestations_data = validated_data.pop('prestations', [])
         validated_data = self._resolve_vigik_defaults(validated_data)
+        validated_data = _normalize_vigik_portail_answers(validated_data, instance=None)
         validated_data = self._resolve_residence(validated_data)
         rapport = RapportIntervention.objects.create(**validated_data)
         for i, prestation_data in enumerate(prestations_data):
@@ -509,6 +561,9 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         prestations_data = validated_data.pop('prestations', None)
         validated_data = self._resolve_vigik_defaults(validated_data)
+        validated_data = _normalize_vigik_portail_answers(validated_data, instance=instance)
+        if validated_data.get('photo_platine_portail_s3_key') == '' and instance.photo_platine_portail_s3_key:
+            _safe_delete_s3_key(instance.photo_platine_portail_s3_key)
         validated_data = self._resolve_residence(validated_data)
 
         for attr, value in validated_data.items():

@@ -225,7 +225,7 @@
         </div>
 
         <div class="info-block info-block-full">
-            <h3>Présence de platine :</h3>
+            <h3>Présence de platine Vigik+ :</h3>
             <div class="info-row">
                 <span class="info-label">Réponse :</span>
                 <span class="info-value">
@@ -250,8 +250,52 @@
             {% endif %}
         </div>
 
+        {% if rapport.presence_portail is not None %}
         <div class="info-block info-block-full">
-            <h3>Présence de platine au niveau du portail :</h3>
+            <h3>Présence d'un portail</h3>
+            <div class="info-row">
+                <span class="info-label">Réponse :</span>
+                <span class="info-value">
+                    {% if rapport.presence_portail is True %}
+                        <span class="badge badge-oui">Oui</span>
+                    {% elif rapport.presence_portail is False %}
+                        <span class="badge badge-non">Non</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        {% if rapport.presence_portail %}
+        <div class="info-block info-block-full">
+            <h3>Présence de platine Vigik+ au niveau du portail</h3>
+            <div class="info-row">
+                <span class="info-label">Réponse :</span>
+                <span class="info-value">
+                    {% if rapport.presence_platine_portail is True %}
+                        <span class="badge badge-oui">Oui</span>
+                    {% elif rapport.presence_platine_portail is False %}
+                        <span class="badge badge-non">Non</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </span>
+            </div>
+            {% if rapport.presence_platine_portail and photo_platine_portail_url %}
+            <div class="photos-section">
+                <h4>Photo (facultatif)</h4>
+                <div class="photos-grid">
+                    <div class="photo-item">
+                        <img src="{{ photo_platine_portail_url }}" alt="Photo platine portail" />
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="info-block info-block-full">
+            <h3>Présence de platine au niveau du portail (ancien format)</h3>
             <div class="info-row">
                 <span class="info-label">Réponse :</span>
                 <span class="info-value">
@@ -275,6 +319,7 @@
             </div>
             {% endif %}
         </div>
+        {% endif %}
     </div>
 
 </body>

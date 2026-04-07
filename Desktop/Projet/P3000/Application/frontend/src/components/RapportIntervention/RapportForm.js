@@ -77,7 +77,8 @@ const RAPPORT_FIELD_LABELS = {
   numero_batiment: "Numéro du bâtiment",
   type_installation: "Type d'installation",
   presence_platine: "Présence de platine",
-  presence_platine_portail: "Présence de platine au portail",
+  presence_portail: "Présence d'un portail",
+  presence_platine_portail: "Présence de platine Vigik+ au portail",
   devis_a_faire: "Devis à faire",
   devis_fait: "Devis fait",
   devis_lie: "Devis lié",
@@ -320,6 +321,7 @@ const createInitialFormData = () => ({
   numero_batiment: "",
   type_installation: "",
   presence_platine: null,
+  presence_portail: null,
   presence_platine_portail: null,
   devis_a_faire: false,
   devis_fait: false,
@@ -391,6 +393,7 @@ const isDraftPayloadMeaningful = (payload) => {
   if (nonEmptyStr(fd.numero_batiment)) return true;
   if (nonEmptyStr(fd.type_installation)) return true;
   if (fd.presence_platine !== null && fd.presence_platine !== undefined) return true;
+  if (fd.presence_portail !== null && fd.presence_portail !== undefined) return true;
   if (fd.presence_platine_portail !== null && fd.presence_platine_portail !== undefined) return true;
   if (fd.devis_a_faire || fd.devis_fait) return true;
   if (fd.devis_lie) return true;
@@ -468,6 +471,7 @@ const mergeFormDataFromApiPayload = (data) => {
     numero_batiment: data.numero_batiment ?? "",
     type_installation: data.type_installation ?? "",
     presence_platine: data.presence_platine ?? null,
+    presence_portail: data.presence_portail ?? null,
     presence_platine_portail: data.presence_platine_portail ?? null,
     devis_a_faire: !!data.devis_a_faire,
     devis_fait: !!data.devis_fait,
@@ -655,6 +659,7 @@ const RapportForm = ({
         numero_batiment: data.numero_batiment ?? "",
         type_installation: data.type_installation ?? "",
         presence_platine: data.presence_platine ?? null,
+        presence_portail: data.presence_portail ?? null,
         presence_platine_portail: data.presence_platine_portail ?? null,
         devis_a_faire: !!data.devis_a_faire,
         devis_fait: !!data.devis_fait,
@@ -877,6 +882,30 @@ const RapportForm = ({
 
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleVigikPresencePortailChange = (value) => {
+    setFormData((prev) => {
+      const next = { ...prev, presence_portail: value };
+      if (value === false) {
+        next.presence_platine_portail = null;
+      }
+      return next;
+    });
+    if (value === false && pendingPhotoPlatinePortail?.previewUrl) {
+      URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
+      setPendingPhotoPlatinePortail(null);
+    }
+    scheduleDraftPersistence();
+  };
+
+  const handleVigikPlatinePortailChange = (value) => {
+    setFormData((prev) => ({ ...prev, presence_platine_portail: value }));
+    if (value === false && pendingPhotoPlatinePortail?.previewUrl) {
+      URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
+      setPendingPhotoPlatinePortail(null);
+    }
+    scheduleDraftPersistence();
   };
 
   const residenceOptions = useMemo(() => {
@@ -1155,6 +1184,8 @@ const RapportForm = ({
   };
 
   const isVigikPlus = formData.type_rapport === "vigik_plus";
+  const vigikShowPortailPhoto =
+    formData.presence_portail === true && formData.presence_platine_portail === true;
   const vigikPhotos = [
     pendingPhotoPlatine
       ? {
@@ -1175,25 +1206,26 @@ const RapportForm = ({
             pending: false,
           }
         : null),
-    pendingPhotoPlatinePortail
-      ? {
-          image_url: pendingPhotoPlatinePortail.previewUrl,
-          label: "Photo platine portail",
-          date_photo: latestInterventionISO(formData.dates_intervention) || todayISO(),
-          pending: true,
-        }
-      : (rapportData?.photo_platine_portail_url
+    vigikShowPortailPhoto &&
+      (pendingPhotoPlatinePortail
         ? {
-            image_url: rapportData.photo_platine_portail_url,
+            image_url: pendingPhotoPlatinePortail.previewUrl,
             label: "Photo platine portail",
-            date_photo:
-              latestInterventionISO(rapportData?.dates_intervention) ||
-              (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
-              latestInterventionISO(formData.dates_intervention) ||
-              todayISO(),
-            pending: false,
+            date_photo: latestInterventionISO(formData.dates_intervention) || todayISO(),
+            pending: true,
           }
-        : null),
+        : rapportData?.photo_platine_portail_url
+          ? {
+              image_url: rapportData.photo_platine_portail_url,
+              label: "Photo platine portail",
+              date_photo:
+                latestInterventionISO(rapportData?.dates_intervention) ||
+                (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
+                latestInterventionISO(formData.dates_intervention) ||
+                todayISO(),
+              pending: false,
+            }
+          : null),
   ].filter(Boolean);
 
   const openVigikGallery = (label) => {
@@ -1257,6 +1289,17 @@ const RapportForm = ({
       }
       if (!(formData.adresse_vigik || "").trim()) {
         items.push({ field: "Adresse du rapport (Vigik+)", message: "Ce champ est obligatoire." });
+      }
+      if (formData.presence_portail !== true && formData.presence_portail !== false) {
+        items.push({ field: RAPPORT_FIELD_LABELS.presence_portail, message: "Répondez à cette question." });
+      }
+      if (formData.presence_portail === true) {
+        if (formData.presence_platine_portail !== true && formData.presence_platine_portail !== false) {
+          items.push({
+            field: RAPPORT_FIELD_LABELS.presence_platine_portail,
+            message: "Répondez à cette question.",
+          });
+        }
       }
       const hasPhotoPlatine = pendingPhotoPlatine || rapportData?.photo_platine_s3_key;
       if (!hasPhotoPlatine) {
@@ -1334,6 +1377,7 @@ const RapportForm = ({
       numero_batiment: formData.numero_batiment ?? "",
       type_installation: formData.type_installation ?? "",
       presence_platine: formData.presence_platine,
+      presence_portail: formData.presence_portail,
       presence_platine_portail: formData.presence_platine_portail,
       devis_a_faire: !!formData.devis_a_faire,
       devis_fait: !!formData.devis_fait,
@@ -1369,7 +1413,12 @@ const RapportForm = ({
       if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
       setPendingPhotoPlatine(null);
     }
-    if (isVigikPlus && pendingPhotoPlatinePortail?.file) {
+    if (
+      isVigikPlus &&
+      pendingPhotoPlatinePortail?.file &&
+      formData.presence_portail === true &&
+      formData.presence_platine_portail === true
+    ) {
       const fd = new FormData();
       fd.append("rapport_id", savedId);
       fd.append("photo", pendingPhotoPlatinePortail.file);
@@ -1457,7 +1506,10 @@ const RapportForm = ({
       } else if (pPlat?._draftS3Key) {
         photo_platine_s3_key = pPlat._draftS3Key;
       }
-      if (pPort?.file && !pPort._draftS3Key) {
+      const fdVigik = formDataRef.current;
+      const allowPortailPhoto =
+        fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === true;
+      if (allowPortailPhoto && pPort?.file && !pPort._draftS3Key) {
         const fd = new FormData();
         fd.append("photo", pPort.file);
         const { data } = await axios.post(
@@ -1466,7 +1518,7 @@ const RapportForm = ({
           { headers: { "Content-Type": "multipart/form-data" } }
         );
         photo_platine_portail_s3_key = data.s3_key || null;
-      } else if (pPort?._draftS3Key) {
+      } else if (allowPortailPhoto && pPort?._draftS3Key) {
         photo_platine_portail_s3_key = pPort._draftS3Key;
       }
     }
@@ -2484,38 +2536,61 @@ const RapportForm = ({
                   </Box>
                 )}
               </Box>
-              {/* Question 2 : Présence de platine au niveau du portail */}
+              {/* Portail : étape 1 — présence d'un portail */}
               <Typography variant="subtitle2" sx={{ gridColumn: { md: "1 / -1" }, fontWeight: 600, mb: 0.5, mt: 2 }}>
-                Presence de platine au niveau du portail :
+                Présence d&apos;un portail :
               </Typography>
               <Box sx={{ gridColumn: { md: "1 / -1" }, display: "flex", gap: 1, flexWrap: "wrap" }}>
                 <Button
-                  variant={formData.presence_platine_portail === true ? "contained" : "outlined"}
+                  variant={formData.presence_portail === true ? "contained" : "outlined"}
                   size="small"
-                  onClick={() => {
-                    handleFieldChange("presence_platine_portail", true);
-                    scheduleDraftPersistence();
-                  }}
+                  onClick={() => handleVigikPresencePortailChange(true)}
                   disabled={isDisabled}
                 >
                   Oui
                 </Button>
                 <Button
-                  variant={formData.presence_platine_portail === false ? "contained" : "outlined"}
+                  variant={formData.presence_portail === false ? "contained" : "outlined"}
                   size="small"
-                  color={formData.presence_platine_portail === false ? "error" : "primary"}
-                  onClick={() => {
-                    handleFieldChange("presence_platine_portail", false);
-                    scheduleDraftPersistence();
-                  }}
+                  color={formData.presence_portail === false ? "error" : "primary"}
+                  onClick={() => handleVigikPresencePortailChange(false)}
                   disabled={isDisabled}
                 >
                   Non
                 </Button>
               </Box>
+              {/* Étape 2 — platine Vigik+ au portail (si portail oui) */}
+              {formData.presence_portail === true && (
+                <>
+                  <Typography variant="subtitle2" sx={{ gridColumn: { md: "1 / -1" }, fontWeight: 600, mb: 0.5, mt: 2 }}>
+                    Présence de platine Vigik+ au niveau du portail :
+                  </Typography>
+                  <Box sx={{ gridColumn: { md: "1 / -1" }, display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Button
+                      variant={formData.presence_platine_portail === true ? "contained" : "outlined"}
+                      size="small"
+                      onClick={() => handleVigikPlatinePortailChange(true)}
+                      disabled={isDisabled}
+                    >
+                      Oui
+                    </Button>
+                    <Button
+                      variant={formData.presence_platine_portail === false ? "contained" : "outlined"}
+                      size="small"
+                      color={formData.presence_platine_portail === false ? "error" : "primary"}
+                      onClick={() => handleVigikPlatinePortailChange(false)}
+                      disabled={isDisabled}
+                    >
+                      Non
+                    </Button>
+                  </Box>
+                </>
+              )}
+              {/* Photo portail : uniquement si portail + platine oui (facultatif) */}
+              {formData.presence_portail === true && formData.presence_platine_portail === true && (
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Joindre une photo
+                  Joindre une photo (facultatif)
                 </Typography>
                 <input
                   ref={photoPlatinePortailInputRef}
@@ -2686,6 +2761,7 @@ const RapportForm = ({
                   </Box>
                 )}
               </Box>
+              )}
             </>
           )}
         </Box>
