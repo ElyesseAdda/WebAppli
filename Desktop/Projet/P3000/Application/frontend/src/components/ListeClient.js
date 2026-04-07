@@ -4,6 +4,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, Avatar,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Snackbar, Alert, CircularProgress, Slider,
+  FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
 import {
   MdAdd, MdEdit, MdDelete, MdBusiness, MdImage, MdDeleteForever,
@@ -48,7 +49,7 @@ const ListeClient = () => {
     rue_societe: "",
     codepostal_societe: "",
     client_name: "",
-  });
+  }); // client_name = id du Client (FK côté API)
   const [clients, setClients] = useState([]);
   const [uploadingLogo, setUploadingLogo] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
@@ -93,14 +94,39 @@ const ListeClient = () => {
 
   const handleOpenEdit = (societe) => {
     setEditingSociete(societe);
+    const cid = societe.client_name;
     setFormData({
       nom_societe: societe.nom_societe || "",
       ville_societe: societe.ville_societe || "",
       rue_societe: societe.rue_societe || "",
       codepostal_societe: societe.codepostal_societe || "",
-      client_name: societe.client_name || "",
+      client_name: cid != null && cid !== "" ? cid : "",
     });
     setOpenModal(true);
+  };
+
+  const buildSocietePayload = () => {
+    const cp = formData.codepostal_societe.trim();
+    return {
+      nom_societe: formData.nom_societe.trim(),
+      ville_societe: formData.ville_societe.trim(),
+      rue_societe: formData.rue_societe.trim(),
+      codepostal_societe: cp.length === 5 ? cp : null,
+      client_name: formData.client_name,
+    };
+  };
+
+  const formatSaveError = (err) => {
+    const d = err.response?.data;
+    if (!d) return "Erreur lors de la sauvegarde";
+    if (typeof d === "string") return d;
+    if (d.detail) return String(d.detail);
+    const [field, messages] = Object.entries(d)[0] || [];
+    if (field && messages != null) {
+      const m = Array.isArray(messages) ? messages[0] : messages;
+      return `${field}: ${m}`;
+    }
+    return "Erreur lors de la sauvegarde";
   };
 
   const handleSave = async () => {
@@ -108,18 +134,23 @@ const ListeClient = () => {
       showSnackbar("Le nom de la societe est requis", "error");
       return;
     }
+    if (formData.client_name === "" || formData.client_name == null) {
+      showSnackbar("Veuillez selectionner un client", "error");
+      return;
+    }
+    const payload = buildSocietePayload();
     try {
       if (editingSociete) {
-        await axios.put(`/api/societe/${editingSociete.id}/`, formData);
+        await axios.put(`/api/societe/${editingSociete.id}/`, payload);
         showSnackbar("Societe mise a jour");
       } else {
-        await axios.post("/api/societe/", formData);
+        await axios.post("/api/societe/", payload);
         showSnackbar("Societe creee");
       }
       setOpenModal(false);
       fetchSocietes();
     } catch (err) {
-      showSnackbar("Erreur lors de la sauvegarde", "error");
+      showSnackbar(formatSaveError(err), "error");
     }
   };
 
@@ -327,6 +358,30 @@ const ListeClient = () => {
             value={formData.nom_societe}
             onChange={(e) => setFormData((p) => ({ ...p, nom_societe: e.target.value }))}
           />
+          <FormControl fullWidth margin="normal" required>
+            <InputLabel id="societe-client-label">Client *</InputLabel>
+            <Select
+              labelId="societe-client-label"
+              label="Client *"
+              value={formData.client_name === "" ? "" : formData.client_name}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFormData((p) => ({
+                  ...p,
+                  client_name: v === "" ? "" : Number(v),
+                }));
+              }}
+            >
+              <MenuItem value="">
+                <em>Choisir un client</em>
+              </MenuItem>
+              {clients.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name} {c.surname}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             fullWidth margin="normal" label="Ville"
             value={formData.ville_societe}

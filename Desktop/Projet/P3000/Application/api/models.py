@@ -47,9 +47,8 @@ class Client(models.Model):
     
 class Societe(models.Model):
     nom_societe = models.CharField(max_length=100,)
-    ville_societe = models.CharField(max_length=100,)
-    rue_societe = models.CharField(max_length=100,)
-    rue_societe = models.CharField(max_length=100,)
+    ville_societe = models.CharField(max_length=100, blank=True, default="")
+    rue_societe = models.CharField(max_length=100, blank=True, default="")
     codepostal_societe = models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
    #Change client_name to nom_contact
     client_name = models.ForeignKey(Client, on_delete=models.CASCADE)  # Association avec Client
