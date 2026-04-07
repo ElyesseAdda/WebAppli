@@ -17,7 +17,7 @@ import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const STATUT_LABELS = {
   brouillon: "Brouillon",
-  brouillon_serveur: "Brouillon serveur",
+  brouillon_serveur: "Brouillons",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -39,7 +39,7 @@ const getStatusStyles = (statut) => ({
       : statut === "en_cours"
       ? "warning.light"
       : statut === "brouillon_serveur"
-      ? "secondary.light"
+      ? "#e0f2f1"
       : statut === "brouillon"
       ? "info.light"
       : "grey.200",
@@ -49,7 +49,7 @@ const getStatusStyles = (statut) => ({
       : statut === "en_cours"
       ? "warning.dark"
       : statut === "brouillon_serveur"
-      ? "secondary.dark"
+      ? "#00695c"
       : statut === "brouillon"
       ? "info.dark"
       : "grey.700",

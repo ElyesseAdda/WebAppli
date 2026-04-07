@@ -39,7 +39,7 @@ import "./rapports-mobile.css";
 
 const STATUT_LABELS = {
   brouillon: "Brouillon",
-  brouillon_serveur: "Brouillon serveur",
+  brouillon_serveur: "Brouillons",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -73,9 +73,9 @@ const getStatusChipSx = (statut) => {
   if (statut === "brouillon_serveur") {
     return {
       ...base,
-      color: "#6a1b9a",
-      backgroundColor: "#f3e5f5",
-      borderColor: "#8e24aa",
+      color: "#00695c",
+      backgroundColor: "#e0f2f1",
+      borderColor: "#00897b",
     };
   }
   return { ...base, color: COLORS.primary, backgroundColor: COLORS.backgroundAlt, borderColor: COLORS.primary };
