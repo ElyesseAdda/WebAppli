@@ -50,6 +50,7 @@ class RapportIntervention(models.Model):
         ('vigik_plus', 'Vigik+'),
     ]
     STATUT_CHOICES = [
+        ('brouillon', 'Brouillon'),
         ('a_faire', 'A faire'),
         ('en_cours', 'En cours'),
         ('termine', 'Terminé'),

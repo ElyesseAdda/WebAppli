@@ -67,6 +67,7 @@ const RapportMobileLayout = () => {
           onBack={handleBackToList}
           saveButtonAtBottom
           onReportCreated={handleReportCreated}
+          onRapportIdAssigned={(id) => setSelectedRapportId(id)}
         />
       );
     }

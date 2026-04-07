@@ -415,13 +415,24 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
         return validated_data
 
     def validate(self, attrs):
-        """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche."""
+        """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche.
+        Statut brouillon : champs assouplis pour sauvegarde auto sans tout remplir."""
         attrs = _normalize_dates_intervention_attrs(attrs, instance=getattr(self, 'instance', None))
         instance = getattr(self, 'instance', None)
-        devis_a_faire = attrs.get('devis_a_faire', getattr(instance, 'devis_a_faire', False) if instance else False)
-        devis_fait = attrs.get('devis_fait', getattr(instance, 'devis_fait', False) if instance else False)
-        devis_lie = attrs.get('devis_lie', getattr(instance, 'devis_lie', None) if instance else None)
-        chantier = attrs.get('chantier', getattr(instance, 'chantier', None) if instance else None)
+
+        merged = dict(attrs)
+        if instance:
+            for key in (
+                'statut', 'type_rapport', 'technicien', 'objet_recherche', 'adresse_vigik',
+                'devis_a_faire', 'devis_fait', 'devis_lie', 'chantier',
+            ):
+                if key not in merged:
+                    merged[key] = getattr(instance, key)
+
+        devis_a_faire = merged.get('devis_a_faire', False)
+        devis_fait = merged.get('devis_fait', False)
+        devis_lie = merged.get('devis_lie')
+        chantier = merged.get('chantier')
 
         if not devis_a_faire:
             attrs['devis_fait'] = False
@@ -432,8 +443,22 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             if devis_lie and chantier and devis_lie.chantier_id and devis_lie.chantier_id != chantier.id:
                 raise serializers.ValidationError({'devis_lie': "Le devis lié doit appartenir au même chantier que le rapport."})
 
-        if _is_vigik_plus(attrs):
-            if not (attrs.get('adresse_vigik') or '').strip():
+        statut_resolu = merged.get('statut')
+        type_resolu = merged.get('type_rapport')
+
+        if statut_resolu == 'brouillon':
+            attrs = dict(attrs)
+            if type_resolu == 'vigik_plus':
+                pass
+            else:
+                if not (merged.get('technicien') or '').strip():
+                    attrs['technicien'] = '—'
+                if not (merged.get('objet_recherche') or '').strip():
+                    attrs['objet_recherche'] = '—'
+            return attrs
+
+        if _is_vigik_plus(merged):
+            if not (merged.get('adresse_vigik') or '').strip():
                 raise serializers.ValidationError({'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."})
             return attrs
         if 'technicien' in attrs and not (attrs.get('technicien') or '').strip():

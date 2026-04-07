@@ -38,6 +38,7 @@ import { useRapports, RAPPORTS_LIST_PAGE_SIZE } from "../../hooks/useRapports";
 import "./rapports-mobile.css";
 
 const STATUT_LABELS = {
+  brouillon: "Brouillon",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -51,6 +52,7 @@ const TYPE_RAPPORT_LABELS = {
 const getStatusColor = (statut) => {
   if (statut === "termine") return "success";
   if (statut === "en_cours") return "warning";
+  if (statut === "brouillon") return "info";
   return "default";
 };
 
@@ -70,6 +72,9 @@ const getStatusChipSx = (statut) => {
   }
   if (statut === "en_cours") {
     return { ...base, color: COLORS.accentDark, backgroundColor: COLORS.accentLight, borderColor: COLORS.accent };
+  }
+  if (statut === "brouillon") {
+    return { ...base, color: COLORS.infoDark || "#1565c0", backgroundColor: "#e3f2fd", borderColor: COLORS.infoDark || "#1976d2" };
   }
   return { ...base, color: COLORS.primary, backgroundColor: COLORS.backgroundAlt, borderColor: COLORS.primary };
 };

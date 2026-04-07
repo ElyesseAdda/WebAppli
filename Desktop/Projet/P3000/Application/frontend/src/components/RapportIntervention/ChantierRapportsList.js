@@ -16,6 +16,7 @@ import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const STATUT_LABELS = {
+  brouillon: "Brouillon",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -36,12 +37,16 @@ const getStatusStyles = (statut) => ({
       ? "success.light"
       : statut === "en_cours"
       ? "warning.light"
+      : statut === "brouillon"
+      ? "info.light"
       : "grey.200",
   color:
     statut === "termine"
       ? "success.dark"
       : statut === "en_cours"
       ? "warning.dark"
+      : statut === "brouillon"
+      ? "info.dark"
       : "grey.700",
   fontWeight: 500,
   textTransform: "capitalize",

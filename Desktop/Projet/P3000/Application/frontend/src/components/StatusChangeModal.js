@@ -33,6 +33,7 @@ const StatusChangeModal = ({
     }
     if (type === "rapport") {
       return [
+        { value: "brouillon", label: "Brouillon" },
         { value: "a_faire", label: "A faire" },
         { value: "en_cours", label: "En cours" },
         { value: "termine", label: "Terminé" },

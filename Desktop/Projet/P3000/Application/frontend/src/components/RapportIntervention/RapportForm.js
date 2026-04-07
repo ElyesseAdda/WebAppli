@@ -10,7 +10,7 @@ import {
   Checkbox,
 } from "@mui/material";
 import {
-  MdSave, MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete, MdChevronLeft, MdChevronRight, MdClose,
+  MdAdd, MdPictureAsPdf, MdArrowBack, MdDelete, MdChevronLeft, MdChevronRight, MdClose,
   MdCheckCircle, MdErrorOutline,
 } from "react-icons/md";
 import axios from "axios";
@@ -20,6 +20,14 @@ import { useRapports } from "../../hooks/useRapports";
 import PrestationSection from "./PrestationSection";
 import SignaturePad from "./SignaturePad";
 import elekableLogo from "../../img/logo.png";
+import {
+  buildPhotoSnapshot,
+  saveRapportDraftPhotos,
+  clearRapportDraftPhotos,
+  loadRapportDraftPhotos,
+  applyPhotoSnapshotToState,
+  photoSnapshotIsEmpty,
+} from "../../utils/rapportDraftIDB";
 
 const EMPTY_PRESTATION = {
   localisation: "",
@@ -271,7 +279,159 @@ const normalizeDatesInterventionFromApi = (data) => {
   return [todayISO()];
 };
 
-const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onReportCreated }) => {
+const RAPPORT_DRAFT_VERSION = 1;
+const RAPPORT_DRAFT_PREFIX = "rapport-intervention-draft-v1";
+
+const getRapportDraftStorageKey = (rapportId) =>
+  rapportId ? `${RAPPORT_DRAFT_PREFIX}:id:${rapportId}` : `${RAPPORT_DRAFT_PREFIX}:new`;
+
+const createInitialFormData = () => ({
+  titre: "",
+  dates_intervention: [todayISO()],
+  technicien: "",
+  objet_recherche: "",
+  resultat: "",
+  temps_trajet: "",
+  temps_taches: "",
+  client_societe: "",
+  chantier: "",
+  residence: null,
+  residence_nom: "",
+  residence_adresse: "",
+  adresse_vigik: "",
+  logement: "",
+  locataire_nom: "",
+  locataire_prenom: "",
+  locataire_telephone: "",
+  locataire_email: "",
+  type_rapport: "intervention",
+  statut: "brouillon",
+  prestations: [{ ...EMPTY_PRESTATION }],
+  numero_batiment: "",
+  type_installation: "",
+  presence_platine: null,
+  presence_platine_portail: null,
+  devis_a_faire: false,
+  devis_fait: false,
+  devis_lie: null,
+});
+
+const readRapportDraftFromStorage = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data.v !== RAPPORT_DRAFT_VERSION || !data.formData) return null;
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const writeRapportDraftToStorage = (key, formData, selectedResidence, { cachedPhotos = false } = {}) => {
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        v: RAPPORT_DRAFT_VERSION,
+        savedAt: Date.now(),
+        formData,
+        selectedResidence: selectedResidence ?? null,
+        cachedPhotos: !!cachedPhotos,
+      })
+    );
+  } catch (e) {
+    console.warn("Brouillon rapport : enregistrement impossible", e);
+  }
+};
+
+const clearRapportDraftStorageKey = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+};
+
+const nonEmptyStr = (s) => String(s || "").trim().length > 0;
+
+/** Indique si le brouillon contient plus que les valeurs par défaut (évite dialogue / stockage inutile). */
+const isDraftPayloadMeaningful = (payload) => {
+  const fd = payload?.formData;
+  if (!fd) return false;
+  if (nonEmptyStr(fd.technicien)) return true;
+  if (nonEmptyStr(fd.objet_recherche)) return true;
+  if (nonEmptyStr(fd.resultat)) return true;
+  if (nonEmptyStr(fd.residence_nom)) return true;
+  if (nonEmptyStr(fd.adresse_vigik)) return true;
+  if (nonEmptyStr(fd.logement)) return true;
+  if (nonEmptyStr(fd.locataire_nom) || nonEmptyStr(fd.locataire_prenom)) return true;
+  if (nonEmptyStr(fd.locataire_telephone) || nonEmptyStr(fd.locataire_email)) return true;
+  if (fd.titre) return true;
+  if (fd.client_societe) return true;
+  if (fd.chantier) return true;
+  if (fd.residence) return true;
+  if (nonEmptyStr(fd.numero_batiment)) return true;
+  if (nonEmptyStr(fd.type_installation)) return true;
+  if (fd.presence_platine !== null && fd.presence_platine !== undefined) return true;
+  if (fd.presence_platine_portail !== null && fd.presence_platine_portail !== undefined) return true;
+  if (fd.devis_a_faire || fd.devis_fait) return true;
+  if (fd.devis_lie) return true;
+  if (fd.type_rapport && fd.type_rapport !== "intervention") return true;
+  if (fd.statut && fd.statut !== "a_faire" && fd.statut !== "brouillon") return true;
+  const prestations = fd.prestations || [];
+  if (prestations.length > 1) return true;
+  if (prestations[0]) {
+    const p = prestations[0];
+    if (
+      nonEmptyStr(p.localisation) ||
+      nonEmptyStr(p.probleme) ||
+      nonEmptyStr(p.solution) ||
+      nonEmptyStr(p.commentaire)
+    ) {
+      return true;
+    }
+    if (p.prestation_realisee) return true;
+    if (p.prestation_possible === false) return true;
+  }
+  if (nonEmptyStr(fd.temps_trajet) || nonEmptyStr(fd.temps_taches)) return true;
+  const dates = fd.dates_intervention || [];
+  if (dates.length > 1) return true;
+  if (dates.length === 1 && dates[0] && String(dates[0]).slice(0, 10) !== todayISO()) return true;
+  return false;
+};
+
+const mergeFormDataFromDraft = (draft) => {
+  const base = createInitialFormData();
+  const fd = draft?.formData || {};
+  const prestationsIn = Array.isArray(fd.prestations) && fd.prestations.length
+    ? fd.prestations.map((p) => ({ ...EMPTY_PRESTATION, ...p }))
+    : [{ ...EMPTY_PRESTATION }];
+  const datesIn =
+    Array.isArray(fd.dates_intervention) && fd.dates_intervention.length
+      ? fd.dates_intervention.map((d) => String(d).slice(0, 10))
+      : base.dates_intervention;
+  return {
+    ...base,
+    ...fd,
+    dates_intervention: datesIn,
+    prestations: prestationsIn,
+  };
+};
+
+const formatDraftSavedAt = (savedAt) => {
+  if (!savedAt || typeof savedAt !== "number") return "";
+  try {
+    return new Date(savedAt).toLocaleString("fr-FR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  } catch {
+    return "";
+  }
+};
+
+const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onReportCreated, onRapportIdAssigned }) => {
   const { id: paramId } = useParams();
   const rapportId = propRapportId || paramId;
   const isEdit = !!rapportId;
@@ -285,36 +445,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     fetchTitres, createTitre, deleteTitre, loading,
   } = useRapports();
 
-  const [formData, setFormData] = useState({
-    titre: "",
-    dates_intervention: [todayISO()],
-    technicien: "",
-    objet_recherche: "",
-    resultat: "",
-    temps_trajet: "",
-    temps_taches: "",
-    client_societe: "",
-    chantier: "",
-    residence: null,
-    residence_nom: "",
-    residence_adresse: "",
-    adresse_vigik: "",
-    logement: "",
-    locataire_nom: "",
-    locataire_prenom: "",
-    locataire_telephone: "",
-    locataire_email: "",
-    type_rapport: "intervention",
-    statut: "a_faire",
-    prestations: [{ ...EMPTY_PRESTATION }],
-    numero_batiment: "",
-    type_installation: "",
-    presence_platine: null,
-    presence_platine_portail: null,
-    devis_a_faire: false,
-    devis_fait: false,
-    devis_lie: null,
-  });
+  const [formData, setFormData] = useState(createInitialFormData);
 
   const [rapportData, setRapportData] = useState(null);
   const [titres, setTitres] = useState([]);
@@ -350,6 +481,13 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const [vigikGalleryIndex, setVigikGalleryIndex] = useState(0);
   const [vigikZoom, setVigikZoom] = useState(1);
   const vigikTouchStartXRef = useRef(null);
+  const draftPromptForIdRef = useRef(null);
+  const suppressDraftAutosaveRef = useRef(false);
+
+  const [draftSaveEnabled, setDraftSaveEnabled] = useState(false);
+  const [draftDialog, setDraftDialog] = useState({ open: false, payload: null });
+  const [draftRestoreLoading, setDraftRestoreLoading] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
@@ -431,6 +569,94 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   useEffect(() => {
     if (rapportId) loadRapport();
   }, [rapportId, loadRapport]);
+
+  useEffect(() => {
+    draftPromptForIdRef.current = null;
+  }, [rapportId]);
+
+  /** Brouillon local : proposition de restauration (nouveau rapport). */
+  useEffect(() => {
+    if (isEdit) return;
+    const key = getRapportDraftStorageKey(null);
+    const draft = readRapportDraftFromStorage(key);
+    const hasPhotos = !!draft?.cachedPhotos;
+    if (!draft || (!isDraftPayloadMeaningful(draft) && !hasPhotos)) {
+      if (draft) {
+        clearRapportDraftStorageKey(key);
+        clearRapportDraftPhotos(key).catch(() => {});
+      }
+      setDraftSaveEnabled(true);
+      return;
+    }
+    setDraftDialog({ open: true, payload: draft });
+  }, [isEdit]);
+
+  /** Brouillon local : proposition de restauration (modification). */
+  useEffect(() => {
+    if (!isEdit || !rapportId || !rapportData) return;
+    if (draftPromptForIdRef.current === rapportId) return;
+    draftPromptForIdRef.current = rapportId;
+    const key = getRapportDraftStorageKey(rapportId);
+    const draft = readRapportDraftFromStorage(key);
+    const hasPhotos = !!draft?.cachedPhotos;
+    if (!draft || (!isDraftPayloadMeaningful(draft) && !hasPhotos)) {
+      if (draft) {
+        clearRapportDraftStorageKey(key);
+        clearRapportDraftPhotos(key).catch(() => {});
+      }
+      setDraftSaveEnabled(true);
+      return;
+    }
+    setDraftDialog({ open: true, payload: draft });
+  }, [isEdit, rapportId, rapportData]);
+
+  /** Sauvegarde automatique du brouillon (localStorage + IndexedDB pour les photos). */
+  useEffect(() => {
+    if (!draftSaveEnabled) return;
+    if (rapportData?.statut === "termine") return;
+    const key = getRapportDraftStorageKey(isEdit ? rapportId : null);
+    const handle = setTimeout(() => {
+      const hasPendingPhotos =
+        Object.values(pendingPhotos).some((arr) => arr?.length > 0) ||
+        pendingPhotoPlatine ||
+        pendingPhotoPlatinePortail;
+
+      const run = async () => {
+        if (!isDraftPayloadMeaningful({ formData }) && !hasPendingPhotos) {
+          clearRapportDraftStorageKey(key);
+          try {
+            await clearRapportDraftPhotos(key);
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+
+        const snapshot = buildPhotoSnapshot(pendingPhotos, pendingPhotoPlatine, pendingPhotoPlatinePortail);
+        try {
+          await saveRapportDraftPhotos(key, snapshot);
+          writeRapportDraftToStorage(key, formData, selectedResidence, {
+            cachedPhotos: !photoSnapshotIsEmpty(snapshot),
+          });
+        } catch (e) {
+          console.warn("Brouillon photos (IndexedDB) :", e);
+          writeRapportDraftToStorage(key, formData, selectedResidence, { cachedPhotos: false });
+        }
+      };
+      run();
+    }, 650);
+    return () => clearTimeout(handle);
+  }, [
+    formData,
+    selectedResidence,
+    pendingPhotos,
+    pendingPhotoPlatine,
+    pendingPhotoPlatinePortail,
+    draftSaveEnabled,
+    isEdit,
+    rapportId,
+    rapportData?.statut,
+  ]);
 
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -808,7 +1034,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     return { valid: items.length === 0, items };
   };
 
-  const handleSaveClick = () => {
+  const handleValidateClick = () => {
     const { valid, items } = validateClientBeforeSave();
     if (!valid) {
       setSaveErrorModal({
@@ -819,7 +1045,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       });
       return;
     }
-    executeSave();
+    executeValidateRapport();
   };
 
   const handleSuccessContinue = async () => {
@@ -848,98 +1074,158 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     return () => clearTimeout(timer);
   }, [successModalOpen]);
 
-  const executeSave = async () => {
+  /** Construit le payload API ; `statutToSend` ex. brouillon, a_faire, en_cours, termine. */
+  const buildRapportPayload = (statutToSend) => {
     const datesInterventionClean = (formData.dates_intervention || [])
       .map((s) => String(s).slice(0, 10))
       .filter(Boolean);
-    const hasPrestation = !isVigikPlus && formData.prestations.some(
-      (p) =>
-        (p.localisation || "").trim() ||
-        (p.probleme || "").trim() ||
-        (p.solution || "").trim()
-    );
-    const computedStatut = hasPrestation ? "en_cours" : "a_faire";
-    const statutToSend =
-      isEdit && rapportData?.statut === "termine" ? "termine" : computedStatut;
+    const vigikTitre = isVigikPlus && !formData.titre ? (titres.find((t) => t.nom === "Rapport Vigik+") || titres[0])?.id : formData.titre;
+    const normalizeFk = (value) => (value === "" || value === undefined ? null : value);
+    return {
+      ...formData,
+      dates_intervention: datesInterventionClean,
+      temps_trajet: timeInputToFloatHours(formData.temps_trajet),
+      temps_taches: timeInputToFloatHours(formData.temps_taches),
+      titre: normalizeFk(isVigikPlus ? (vigikTitre || formData.titre) : formData.titre),
+      client_societe: normalizeFk(formData.client_societe),
+      chantier: normalizeFk(formData.chantier),
+      statut: statutToSend,
+      numero_batiment: formData.numero_batiment ?? "",
+      type_installation: formData.type_installation ?? "",
+      presence_platine: formData.presence_platine,
+      presence_platine_portail: formData.presence_platine_portail,
+      devis_a_faire: !!formData.devis_a_faire,
+      devis_fait: !!formData.devis_fait,
+      devis_lie: formData.devis_lie || null,
+      prestations: isVigikPlus
+        ? []
+        : formData.prestations.map((p, i) => ({
+            ...p,
+            id: p.id || undefined,
+            ordre: i,
+            photos: undefined,
+          })),
+    };
+  };
 
+  const uploadPhotosAndSignatureAfterSave = async (savedId, result) => {
+    if (!isVigikPlus && result?.prestations) {
+      await uploadPendingPhotos(result);
+    } else if (!isVigikPlus) {
+      const fullResult = await fetchRapport(savedId);
+      await uploadPendingPhotos(fullResult);
+    }
+
+    if (isVigikPlus && pendingPhotoPlatine?.file) {
+      const fd = new FormData();
+      fd.append("rapport_id", savedId);
+      fd.append("photo", pendingPhotoPlatine.file);
+      await axios.post("/api/rapports-intervention/upload_photo_platine/", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
+      setPendingPhotoPlatine(null);
+    }
+    if (isVigikPlus && pendingPhotoPlatinePortail?.file) {
+      const fd = new FormData();
+      fd.append("rapport_id", savedId);
+      fd.append("photo", pendingPhotoPlatinePortail.file);
+      await axios.post("/api/rapports-intervention/upload_photo_platine_portail/", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
+      setPendingPhotoPlatinePortail(null);
+    }
+
+    if (!isVigikPlus) await uploadPendingSignature(savedId);
+  };
+
+  /**
+   * @param {string} statutToSend
+   * @param {{ silent?: boolean, navigateAfterCreate?: boolean }} opts — silent = brouillon auto, pas de modale succès
+   */
+  const persistRapportCore = async (statutToSend, { silent = false, navigateAfterCreate = true } = {}) => {
+    const dataToSend = buildRapportPayload(statutToSend);
+    const hadNoId = !rapportId;
+
+    let result;
+    if (rapportId) {
+      result = await updateRapport(rapportId, dataToSend);
+    } else {
+      result = await createRapport(dataToSend);
+    }
+
+    const savedId = result?.id || rapportId;
+    await uploadPhotosAndSignatureAfterSave(savedId, result);
+
+    if (silent) {
+      if (navigateAfterCreate && hadNoId && savedId) {
+        onRapportIdAssigned?.(savedId);
+        navigate(`/RapportIntervention/${savedId}`, { replace: true });
+      }
+      await loadRapport(savedId);
+      setFormData((prev) => ({ ...prev, statut: statutToSend }));
+      return savedId;
+    }
+
+    setSuccessModalContext({ isEdit: !!rapportId, savedId });
+    setSuccessModalOpen(true);
+    clearRapportDraftStorageKey(getRapportDraftStorageKey(null));
+    clearRapportDraftStorageKey(getRapportDraftStorageKey(savedId));
+    clearRapportDraftPhotos(getRapportDraftStorageKey(null)).catch(() => {});
+    clearRapportDraftPhotos(getRapportDraftStorageKey(savedId)).catch(() => {});
+    return savedId;
+  };
+
+  const executeValidateRapport = async () => {
+    suppressDraftAutosaveRef.current = true;
     setSaving(true);
     try {
-      const vigikTitre = isVigikPlus && !formData.titre ? (titres.find((t) => t.nom === "Rapport Vigik+") || titres[0])?.id : formData.titre;
-      const normalizeFk = (value) => (value === "" || value === undefined ? null : value);
-      const dataToSend = {
-        ...formData,
-        dates_intervention: datesInterventionClean,
-        temps_trajet: timeInputToFloatHours(formData.temps_trajet),
-        temps_taches: timeInputToFloatHours(formData.temps_taches),
-        titre: normalizeFk(isVigikPlus ? (vigikTitre || formData.titre) : formData.titre),
-        client_societe: normalizeFk(formData.client_societe),
-        chantier: normalizeFk(formData.chantier),
-        statut: statutToSend,
-        numero_batiment: formData.numero_batiment ?? "",
-        type_installation: formData.type_installation ?? "",
-        presence_platine: formData.presence_platine,
-        presence_platine_portail: formData.presence_platine_portail,
-        devis_a_faire: !!formData.devis_a_faire,
-        devis_fait: !!formData.devis_fait,
-        devis_lie: formData.devis_lie || null,
-        prestations: isVigikPlus
-          ? []
-          : formData.prestations.map((p, i) => ({
-              ...p,
-              id: p.id || undefined,
-              ordre: i,
-              photos: undefined,
-            })),
-      };
-
-      let result;
-      if (isEdit) {
-        result = await updateRapport(rapportId, dataToSend);
-      } else {
-        result = await createRapport(dataToSend);
-      }
-
-      const savedId = result?.id || rapportId;
-
-      if (!isVigikPlus && result?.prestations) {
-        await uploadPendingPhotos(result);
-      } else if (!isVigikPlus) {
-        const fullResult = await fetchRapport(savedId);
-        await uploadPendingPhotos(fullResult);
-      }
-
-      if (isVigikPlus && pendingPhotoPlatine?.file) {
-        const fd = new FormData();
-        fd.append("rapport_id", savedId);
-        fd.append("photo", pendingPhotoPlatine.file);
-        await axios.post("/api/rapports-intervention/upload_photo_platine/", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
-        setPendingPhotoPlatine(null);
-      }
-      if (isVigikPlus && pendingPhotoPlatinePortail?.file) {
-        const fd = new FormData();
-        fd.append("rapport_id", savedId);
-        fd.append("photo", pendingPhotoPlatinePortail.file);
-        await axios.post("/api/rapports-intervention/upload_photo_platine_portail/", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
-        setPendingPhotoPlatinePortail(null);
-      }
-
-      if (!isVigikPlus) await uploadPendingSignature(savedId);
-
-      setSuccessModalContext({ isEdit, savedId });
-      setSuccessModalOpen(true);
+      await persistRapportCore("termine", { silent: false });
     } catch (err) {
       const payload = buildSaveErrorFromApi(err);
       setSaveErrorModal({ open: true, ...payload });
     } finally {
       setSaving(false);
+      suppressDraftAutosaveRef.current = false;
     }
   };
+
+  const persistRapportCoreRef = useRef(persistRapportCore);
+  persistRapportCoreRef.current = persistRapportCore;
+
+  /** Sauvegarde serveur périodique tant que le rapport n'est pas terminé (brouillon, à faire, en cours). */
+  useEffect(() => {
+    if (!draftSaveEnabled) return;
+    if (rapportData?.statut === "termine") return;
+    if (saving || savingDraft) return;
+
+    const t = setTimeout(async () => {
+      if (suppressDraftAutosaveRef.current) return;
+      const ds = rapportData?.statut ?? formData.statut ?? "brouillon";
+      if (ds === "termine") return;
+      setSavingDraft(true);
+      try {
+        await persistRapportCoreRef.current(ds, { silent: true, navigateAfterCreate: true });
+      } catch (err) {
+        console.warn("Sauvegarde brouillon :", err);
+      } finally {
+        setSavingDraft(false);
+      }
+    }, 2800);
+    return () => clearTimeout(t);
+  }, [
+    formData,
+    selectedResidence,
+    pendingPhotos,
+    pendingPhotoPlatine,
+    pendingPhotoPlatinePortail,
+    rapportData?.statut,
+    rapportId,
+    draftSaveEnabled,
+    saving,
+    savingDraft,
+  ]);
 
   const handleGeneratePdf = async () => {
     if (!rapportId) return;
@@ -1082,9 +1368,25 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             </Button>
             {rapportData?.statut && (
               <Chip
-                label={rapportData.statut === "termine" ? "Terminé" : rapportData.statut === "en_cours" ? "En cours" : "A faire"}
+                label={
+                  rapportData.statut === "termine"
+                    ? "Terminé"
+                    : rapportData.statut === "en_cours"
+                      ? "En cours"
+                      : rapportData.statut === "brouillon"
+                        ? "Brouillon"
+                        : "A faire"
+                }
                 size="small"
-                color={rapportData.statut === "termine" ? "success" : rapportData.statut === "en_cours" ? "warning" : "default"}
+                color={
+                  rapportData.statut === "termine"
+                    ? "success"
+                    : rapportData.statut === "en_cours"
+                      ? "warning"
+                      : rapportData.statut === "brouillon"
+                        ? "info"
+                        : "default"
+                }
                 sx={isMobile ? { borderRadius: 1, minHeight: 32, px: 1.5 } : {}}
               />
             )}
@@ -1104,12 +1406,12 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           {!saveButtonAtBottom && !isDisabled && (
             <Button
               variant="contained"
-              startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
-              onClick={handleSaveClick}
-              disabled={saving}
+              startIcon={saving ? <CircularProgress size={18} /> : <MdCheckCircle />}
+              onClick={handleValidateClick}
+              disabled={saving || savingDraft}
               sx={{ backgroundColor: COLORS.infoDark || "#1976d2" }}
             >
-              Sauvegarder
+              {saving ? "Validation..." : "Valider le rapport"}
             </Button>
           )}
           {isEdit && (
@@ -2025,7 +2327,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       </Paper>
       )}
 
-      {/* Bouton Sauvegarder en bas du rapport (mobile) */}
+      {/* Bouton Valider en bas du rapport (mobile) */}
       {saveButtonAtBottom && !isDisabled && (
         <Paper
           elevation={0}
@@ -2039,19 +2341,89 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           <Button
             variant="contained"
             fullWidth
-            startIcon={saving ? <CircularProgress size={18} /> : <MdSave />}
-            onClick={handleSaveClick}
-            disabled={saving}
+            startIcon={saving ? <CircularProgress size={18} /> : <MdCheckCircle />}
+            onClick={handleValidateClick}
+            disabled={saving || savingDraft}
             sx={{
               minHeight: 48,
               backgroundColor: COLORS.infoDark || "#1976d2",
               fontWeight: 600,
             }}
           >
-            {saving ? "Sauvegarde..." : "Sauvegarder"}
+            {saving ? "Validation..." : "Valider le rapport"}
           </Button>
         </Paper>
       )}
+
+      <Dialog
+        open={draftDialog.open}
+        onClose={() => {
+          const k = getRapportDraftStorageKey(isEdit ? rapportId : null);
+          clearRapportDraftStorageKey(k);
+          clearRapportDraftPhotos(k).catch(() => {});
+          setDraftDialog({ open: false, payload: null });
+          setDraftSaveEnabled(true);
+        }}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle>Brouillon enregistré sur cet appareil</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Un brouillon de ce formulaire a été trouvé
+            {draftDialog.payload?.savedAt ? (
+              <> (sauvegardé le {formatDraftSavedAt(draftDialog.payload.savedAt)})</>
+            ) : null}
+            . Souhaitez-vous le reprendre ?
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            Les photos en attente d&apos;envoi sont conservées sur cet appareil (cache du navigateur). La signature
+            dessinée n&apos;est pas mise en cache.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, flexWrap: "wrap", gap: 1 }}>
+          <Button
+            disabled={draftRestoreLoading}
+            onClick={() => {
+              const k = getRapportDraftStorageKey(isEdit ? rapportId : null);
+              clearRapportDraftStorageKey(k);
+              clearRapportDraftPhotos(k).catch(() => {});
+              setDraftDialog({ open: false, payload: null });
+              setDraftSaveEnabled(true);
+            }}
+          >
+            Ignorer le brouillon
+          </Button>
+          <Button
+            variant="contained"
+            disabled={draftRestoreLoading}
+            startIcon={draftRestoreLoading ? <CircularProgress size={18} color="inherit" /> : null}
+            onClick={async () => {
+              const p = draftDialog.payload;
+              const k = getRapportDraftStorageKey(isEdit ? rapportId : null);
+              setDraftRestoreLoading(true);
+              try {
+                if (p) {
+                  setFormData(mergeFormDataFromDraft(p));
+                  setSelectedResidence(p.selectedResidence ?? null);
+                }
+                const snapshot = await loadRapportDraftPhotos(k);
+                const ph = applyPhotoSnapshotToState(snapshot);
+                setPendingPhotos(ph.pendingPhotos);
+                setPendingPhotoPlatine(ph.pendingPhotoPlatine);
+                setPendingPhotoPlatinePortail(ph.pendingPhotoPlatinePortail);
+                setDraftDialog({ open: false, payload: null });
+                setDraftSaveEnabled(true);
+              } finally {
+                setDraftRestoreLoading(false);
+              }
+            }}
+          >
+            Reprendre le brouillon
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog nouveau titre */}
       <Dialog open={newTitreDialog} onClose={() => setNewTitreDialog(false)} maxWidth="xs" fullWidth>
