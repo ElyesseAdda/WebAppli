@@ -421,24 +421,6 @@ const isDraftPayloadMeaningful = (payload) => {
   return false;
 };
 
-const mergeFormDataFromDraft = (draft) => {
-  const base = createInitialFormData();
-  const fd = draft?.formData || {};
-  const prestationsIn = Array.isArray(fd.prestations) && fd.prestations.length
-    ? fd.prestations.map((p) => ({ ...EMPTY_PRESTATION, ...p }))
-    : [{ ...EMPTY_PRESTATION }];
-  const datesIn =
-    Array.isArray(fd.dates_intervention) && fd.dates_intervention.length
-      ? fd.dates_intervention.map((d) => String(d).slice(0, 10))
-      : base.dates_intervention;
-  return {
-    ...base,
-    ...fd,
-    dates_intervention: datesIn,
-    prestations: prestationsIn,
-  };
-};
-
 /** Hydratation depuis le JSON `payload` d'un RapportInterventionBrouillon (API). */
 const mergeFormDataFromApiPayload = (data) => {
   if (!data || typeof data !== "object") return createInitialFormData();
@@ -477,18 +459,6 @@ const mergeFormDataFromApiPayload = (data) => {
     devis_fait: !!data.devis_fait,
     devis_lie: data.devis_lie ?? null,
   };
-};
-
-const formatDraftSavedAt = (savedAt) => {
-  if (!savedAt || typeof savedAt !== "number") return "";
-  try {
-    return new Date(savedAt).toLocaleString("fr-FR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    });
-  } catch {
-    return "";
-  }
 };
 
 const RapportForm = ({
@@ -559,8 +529,6 @@ const RapportForm = ({
   const suppressDraftAutosaveRef = useRef(false);
 
   const [draftSaveEnabled, setDraftSaveEnabled] = useState(false);
-  const [draftDialog, setDraftDialog] = useState({ open: false, payload: null });
-  const [draftRestoreLoading, setDraftRestoreLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [signatureDraftRestoreUrl, setSignatureDraftRestoreUrl] = useState(null);
   /** Brouillon serveur (nouveau rapport sans id) — promouvoir → RapportIntervention. */
@@ -840,7 +808,7 @@ const RapportForm = ({
     draftPromptForIdRef.current = null;
   }, [rapportId]);
 
-  /** Brouillon local : proposition de restauration (nouveau rapport). */
+  /** Brouillon local : nettoyage si vide ; pas de modal — reprise d’un brouillon via la liste (serveur). */
   useEffect(() => {
     if (isEdit) return;
     if (brouillonLoadId) {
@@ -855,13 +823,11 @@ const RapportForm = ({
         clearRapportDraftStorageKey(key);
         clearRapportDraftPhotos(key).catch(() => {});
       }
-      setDraftSaveEnabled(true);
-      return;
     }
-    setDraftDialog({ open: true, payload: draft });
+    setDraftSaveEnabled(true);
   }, [isEdit, brouillonLoadId]);
 
-  /** Brouillon local : proposition de restauration (modification). */
+  /** Brouillon local (édition) : même logique, pas de modal automatique. */
   useEffect(() => {
     if (!isEdit || !rapportId || !rapportData) return;
     if (draftPromptForIdRef.current === rapportId) return;
@@ -874,10 +840,8 @@ const RapportForm = ({
         clearRapportDraftStorageKey(key);
         clearRapportDraftPhotos(key).catch(() => {});
       }
-      setDraftSaveEnabled(true);
-      return;
     }
-    setDraftDialog({ open: true, payload: draft });
+    setDraftSaveEnabled(true);
   }, [isEdit, rapportId, rapportData]);
 
   const handleFieldChange = (field, value) => {
@@ -2336,7 +2300,7 @@ const RapportForm = ({
               />
               {/* Question 1 : Présence de platine */}
               <Typography variant="subtitle2" sx={{ gridColumn: { md: "1 / -1" }, fontWeight: 600, mb: 0.5 }}>
-                Presence de platine :
+                Presence de platine Vigik+ :
               </Typography>
               <Box sx={{ gridColumn: { md: "1 / -1" }, display: "flex", gap: 1, flexWrap: "wrap" }}>
                 <Button
@@ -2963,80 +2927,6 @@ const RapportForm = ({
           </Button>
         </Paper>
       )}
-
-      <Dialog
-        open={draftDialog.open}
-        onClose={() => {
-          const k = getRapportDraftStorageKey(isEdit ? rapportId : null);
-          clearRapportDraftStorageKey(k);
-          clearRapportDraftPhotos(k).catch(() => {});
-          setDraftDialog({ open: false, payload: null });
-          setDraftSaveEnabled(true);
-        }}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <DialogTitle>Brouillon enregistré sur cet appareil</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 1.5 }}>
-            Un brouillon de ce formulaire a été trouvé
-            {draftDialog.payload?.savedAt ? (
-              <> (sauvegardé le {formatDraftSavedAt(draftDialog.payload.savedAt)})</>
-            ) : null}
-            . Souhaitez-vous le reprendre ?
-          </Typography>
-          <Typography variant="caption" color="text.secondary" display="block">
-            Les photos en attente d&apos;envoi et la signature dessinée sur le canvas sont conservées sur cet appareil
-            (navigateur).
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, flexWrap: "wrap", gap: 1 }}>
-          <Button
-            disabled={draftRestoreLoading}
-            onClick={() => {
-              const k = getRapportDraftStorageKey(isEdit ? rapportId : null);
-              clearRapportDraftStorageKey(k);
-              clearRapportDraftPhotos(k).catch(() => {});
-              setDraftDialog({ open: false, payload: null });
-              setDraftSaveEnabled(true);
-            }}
-          >
-            Ignorer le brouillon
-          </Button>
-          <Button
-            variant="contained"
-            disabled={draftRestoreLoading}
-            startIcon={draftRestoreLoading ? <CircularProgress size={18} color="inherit" /> : null}
-            onClick={async () => {
-              const p = draftDialog.payload;
-              const k = getRapportDraftStorageKey(isEdit ? rapportId : null);
-              setDraftRestoreLoading(true);
-              try {
-                if (p) {
-                  setFormData(mergeFormDataFromDraft(p));
-                  setSelectedResidence(p.selectedResidence ?? null);
-                  setSignatureDraftRestoreUrl(p.signatureDraftDataUrl || null);
-                }
-                const snapshot = await loadRapportDraftPhotos(k);
-                const ph = applyPhotoSnapshotToState(snapshot);
-                setPendingPhotos(ph.pendingPhotos);
-                setPendingPhotoPlatine(ph.pendingPhotoPlatine);
-                setPendingPhotoPlatinePortail(ph.pendingPhotoPlatinePortail);
-                setDraftDialog({ open: false, payload: null });
-                setDraftSaveEnabled(true);
-                if (!p?.signatureDraftDataUrl) {
-                  scheduleDraftPersistence();
-                }
-              } finally {
-                setDraftRestoreLoading(false);
-              }
-            }}
-          >
-            Reprendre le brouillon
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Dialog nouveau titre */}
       <Dialog open={newTitreDialog} onClose={() => setNewTitreDialog(false)} maxWidth="xs" fullWidth>
