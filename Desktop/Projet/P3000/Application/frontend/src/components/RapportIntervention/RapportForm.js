@@ -328,7 +328,12 @@ const readRapportDraftFromStorage = (key) => {
   }
 };
 
-const writeRapportDraftToStorage = (key, formData, selectedResidence, { cachedPhotos = false } = {}) => {
+const writeRapportDraftToStorage = (
+  key,
+  formData,
+  selectedResidence,
+  { cachedPhotos = false, signatureDraftDataUrl = null } = {}
+) => {
   try {
     localStorage.setItem(
       key,
@@ -338,6 +343,7 @@ const writeRapportDraftToStorage = (key, formData, selectedResidence, { cachedPh
         formData,
         selectedResidence: selectedResidence ?? null,
         cachedPhotos: !!cachedPhotos,
+        signatureDraftDataUrl: signatureDraftDataUrl && String(signatureDraftDataUrl).length > 32 ? signatureDraftDataUrl : null,
       })
     );
   } catch (e) {
@@ -357,6 +363,7 @@ const nonEmptyStr = (s) => String(s || "").trim().length > 0;
 
 /** Indique si le brouillon contient plus que les valeurs par défaut (évite dialogue / stockage inutile). */
 const isDraftPayloadMeaningful = (payload) => {
+  if (nonEmptyStr(payload?.signatureDraftDataUrl)) return true;
   const fd = payload?.formData;
   if (!fd) return false;
   if (nonEmptyStr(fd.technicien)) return true;
@@ -488,6 +495,38 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const [draftDialog, setDraftDialog] = useState({ open: false, payload: null });
   const [draftRestoreLoading, setDraftRestoreLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [signatureDraftRestoreUrl, setSignatureDraftRestoreUrl] = useState(null);
+
+  const formDataRef = useRef(null);
+  const selectedResidenceRef = useRef(null);
+  const pendingPhotosRef = useRef(null);
+  const pendingPhotoPlatineRef = useRef(null);
+  const pendingPhotoPlatinePortailRef = useRef(null);
+  const rapportDataRef = useRef(null);
+  const draftSaveEnabledRef = useRef(false);
+  const savingRef = useRef(false);
+  const isEditRef = useRef(isEdit);
+  const rapportIdRef = useRef(rapportId);
+  const draftPersistCoalesceRef = useRef({ pending: false, running: false });
+  const scheduleDraftPersistenceImplRef = useRef(() => {});
+
+  const handleSignatureDraftRestoreHandled = useCallback(() => {
+    setSignatureDraftRestoreUrl(null);
+    scheduleDraftPersistenceImplRef.current();
+  }, []);
+
+  formDataRef.current = formData;
+  selectedResidenceRef.current = selectedResidence;
+  pendingPhotosRef.current = pendingPhotos;
+  pendingPhotoPlatineRef.current = pendingPhotoPlatine;
+  pendingPhotoPlatinePortailRef.current = pendingPhotoPlatinePortail;
+  rapportDataRef.current = rapportData;
+  draftSaveEnabledRef.current = draftSaveEnabled;
+  savingRef.current = saving;
+  isEditRef.current = isEdit;
+  rapportIdRef.current = rapportId;
+
+  const scheduleDraftPersistence = () => scheduleDraftPersistenceImplRef.current();
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
@@ -610,54 +649,6 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     setDraftDialog({ open: true, payload: draft });
   }, [isEdit, rapportId, rapportData]);
 
-  /** Sauvegarde automatique du brouillon (localStorage + IndexedDB pour les photos). */
-  useEffect(() => {
-    if (!draftSaveEnabled) return;
-    if (rapportData?.statut === "termine") return;
-    const key = getRapportDraftStorageKey(isEdit ? rapportId : null);
-    const handle = setTimeout(() => {
-      const hasPendingPhotos =
-        Object.values(pendingPhotos).some((arr) => arr?.length > 0) ||
-        pendingPhotoPlatine ||
-        pendingPhotoPlatinePortail;
-
-      const run = async () => {
-        if (!isDraftPayloadMeaningful({ formData }) && !hasPendingPhotos) {
-          clearRapportDraftStorageKey(key);
-          try {
-            await clearRapportDraftPhotos(key);
-          } catch {
-            /* ignore */
-          }
-          return;
-        }
-
-        const snapshot = buildPhotoSnapshot(pendingPhotos, pendingPhotoPlatine, pendingPhotoPlatinePortail);
-        try {
-          await saveRapportDraftPhotos(key, snapshot);
-          writeRapportDraftToStorage(key, formData, selectedResidence, {
-            cachedPhotos: !photoSnapshotIsEmpty(snapshot),
-          });
-        } catch (e) {
-          console.warn("Brouillon photos (IndexedDB) :", e);
-          writeRapportDraftToStorage(key, formData, selectedResidence, { cachedPhotos: false });
-        }
-      };
-      run();
-    }, 650);
-    return () => clearTimeout(handle);
-  }, [
-    formData,
-    selectedResidence,
-    pendingPhotos,
-    pendingPhotoPlatine,
-    pendingPhotoPlatinePortail,
-    draftSaveEnabled,
-    isEdit,
-    rapportId,
-    rapportData?.statut,
-  ]);
-
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -690,6 +681,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         residence_adresse: "",
         chantier: "",
       }));
+      scheduleDraftPersistence();
       return;
     }
     if (typeof value === "string") {
@@ -701,6 +693,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         residence_adresse: "",
         chantier: "",
       }));
+      scheduleDraftPersistence();
       return;
     }
     if (value && typeof value === "object" && value.inputValue != null) {
@@ -713,6 +706,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         residence_adresse: "",
         chantier: "",
       }));
+      scheduleDraftPersistence();
       return;
     }
     if (value && typeof value === "object" && value.optionType === "chantier") {
@@ -736,6 +730,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           : prev.client_societe,
         technicien: prev.technicien,
       }));
+      scheduleDraftPersistence();
       return;
     }
     if (value && typeof value === "object" && (value.optionType === "residence" || value.id) && !value.inputValue) {
@@ -751,6 +746,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         chantier: dr?.chantier || res.chantier || "",
         technicien: dr?.technicien || prev.technicien,
       }));
+      scheduleDraftPersistence();
       return;
     }
     const newName = typeof value === "string" ? value : "";
@@ -762,6 +758,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       residence_adresse: "",
       chantier: "",
     }));
+    scheduleDraftPersistence();
   };
 
   /** Champ Chantier (liste dediee) : garde le meme etat que si le chantier est choisi dans Residence. */
@@ -778,6 +775,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       } else {
         handleFieldChange("chantier", "");
       }
+      scheduleDraftPersistence();
       return;
     }
     const addr = formatChantierAddress(val);
@@ -799,6 +797,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       adresse: addr,
       optionType: "chantier",
     });
+    scheduleDraftPersistence();
   };
 
   const handleResidenceInputChange = (_, value, reason) => {
@@ -854,6 +853,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         }],
       };
     });
+    scheduleDraftPersistence();
   };
 
   const handleRemovePendingPhoto = (prestationIndex, photoIndex) => {
@@ -865,6 +865,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       current.splice(photoIndex, 1);
       return { ...prev, [prestationIndex]: current };
     });
+    scheduleDraftPersistence();
   };
 
   const handleAddPrestation = () => {
@@ -872,6 +873,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       ...prev,
       prestations: [...prev.prestations, { ...EMPTY_PRESTATION }],
     }));
+    scheduleDraftPersistence();
   };
 
   const handleRemovePrestation = (index) => {
@@ -879,6 +881,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       ...prev,
       prestations: prev.prestations.filter((_, i) => i !== index),
     }));
+    scheduleDraftPersistence();
   };
 
   const uploadPendingPhotos = async (savedResult) => {
@@ -1181,7 +1184,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     suppressDraftAutosaveRef.current = true;
     setSaving(true);
     try {
-      await persistRapportCore("termine", { silent: false });
+      await persistRapportCore("en_cours", { silent: false });
     } catch (err) {
       const payload = buildSaveErrorFromApi(err);
       setSaveErrorModal({ open: true, ...payload });
@@ -1194,38 +1197,86 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const persistRapportCoreRef = useRef(persistRapportCore);
   persistRapportCoreRef.current = persistRapportCore;
 
-  /** Sauvegarde serveur périodique tant que le rapport n'est pas terminé (brouillon, à faire, en cours). */
-  useEffect(() => {
-    if (!draftSaveEnabled) return;
-    if (rapportData?.statut === "termine") return;
-    if (saving || savingDraft) return;
+  /**
+   * Brouillon local + sauvegarde serveur déclenchés à la fin d’interaction (blur, liste, photo…),
+   * pas sur chaque frappe ni sur un intervalle fixe.
+   */
+  scheduleDraftPersistenceImplRef.current = () => {
+    if (!draftSaveEnabledRef.current) return;
+    if (rapportDataRef.current?.statut === "termine") return;
+    if (suppressDraftAutosaveRef.current) return;
+    if (savingRef.current) return;
 
-    const t = setTimeout(async () => {
-      if (suppressDraftAutosaveRef.current) return;
-      const ds = rapportData?.statut ?? formData.statut ?? "brouillon";
-      if (ds === "termine") return;
-      setSavingDraft(true);
+    const q = draftPersistCoalesceRef.current;
+    if (q.running) {
+      q.pending = true;
+      return;
+    }
+    q.running = true;
+    q.pending = false;
+    setTimeout(async () => {
+      const runOnce = async () => {
+        if (suppressDraftAutosaveRef.current) return;
+        const key = getRapportDraftStorageKey(isEditRef.current ? rapportIdRef.current : null);
+        const fd = formDataRef.current;
+        const sr = selectedResidenceRef.current;
+        const pp = pendingPhotosRef.current;
+        const pPlat = pendingPhotoPlatineRef.current;
+        const pPort = pendingPhotoPlatinePortailRef.current;
+        const hasPendingPhotos =
+          Object.values(pp || {}).some((arr) => arr?.length > 0) || pPlat || pPort;
+        const sigDraft = signaturePadRef.current?.getSignatureDataUrl?.() ?? null;
+        const draftHasContent =
+          isDraftPayloadMeaningful({ formData: fd, signatureDraftDataUrl: sigDraft }) || hasPendingPhotos;
+
+        if (!draftHasContent) {
+          clearRapportDraftStorageKey(key);
+          try {
+            await clearRapportDraftPhotos(key);
+          } catch {
+            /* ignore */
+          }
+        } else {
+          const snapshot = buildPhotoSnapshot(pp, pPlat, pPort);
+          try {
+            await saveRapportDraftPhotos(key, snapshot);
+            writeRapportDraftToStorage(key, fd, sr, {
+              cachedPhotos: !photoSnapshotIsEmpty(snapshot),
+              signatureDraftDataUrl: sigDraft,
+            });
+          } catch (e) {
+            console.warn("Brouillon photos (IndexedDB) :", e);
+            writeRapportDraftToStorage(key, fd, sr, {
+              cachedPhotos: false,
+              signatureDraftDataUrl: sigDraft,
+            });
+          }
+        }
+
+        if (suppressDraftAutosaveRef.current) return;
+        if (savingRef.current) return;
+        const ds = rapportDataRef.current?.statut ?? fd.statut ?? "brouillon";
+        if (ds === "termine") return;
+        setSavingDraft(true);
+        try {
+          await persistRapportCoreRef.current(ds, { silent: true, navigateAfterCreate: true });
+        } catch (err) {
+          console.warn("Sauvegarde brouillon :", err);
+        } finally {
+          setSavingDraft(false);
+        }
+      };
+
       try {
-        await persistRapportCoreRef.current(ds, { silent: true, navigateAfterCreate: true });
-      } catch (err) {
-        console.warn("Sauvegarde brouillon :", err);
+        do {
+          q.pending = false;
+          await runOnce();
+        } while (q.pending);
       } finally {
-        setSavingDraft(false);
+        q.running = false;
       }
-    }, 2800);
-    return () => clearTimeout(t);
-  }, [
-    formData,
-    selectedResidence,
-    pendingPhotos,
-    pendingPhotoPlatine,
-    pendingPhotoPlatinePortail,
-    rapportData?.statut,
-    rapportId,
-    draftSaveEnabled,
-    saving,
-    savingDraft,
-  ]);
+    }, 0);
+  };
 
   const handleGeneratePdf = async () => {
     if (!rapportId) return;
@@ -1281,6 +1332,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       setNewTitreDialog(false);
       setNewTitreName("");
       showSnackbar("Nouveau titre cree");
+      scheduleDraftPersistence();
     } catch (err) {
       showSnackbar("Erreur creation titre", "error");
     }
@@ -1306,6 +1358,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       setDeleteTitreDialogOpen(false);
       setTitreToDelete(null);
       showSnackbar("Titre supprime");
+      scheduleDraftPersistence();
     } catch (err) {
       showSnackbar("Impossible de supprimer ce titre (il est peut-etre deja utilise)", "error");
     }
@@ -1448,7 +1501,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             <Select
               value={formData.type_rapport}
               label="Type de rapport"
-              onChange={(e) => handleFieldChange("type_rapport", e.target.value)}
+              onChange={(e) => {
+                handleFieldChange("type_rapport", e.target.value);
+                scheduleDraftPersistence();
+              }}
               disabled={isDisabled}
               MenuProps={selectMenuProps}
             >
@@ -1464,7 +1520,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
               <Select
                 value={formData.titre}
                 label="Titre"
-                onChange={(e) => handleFieldChange("titre", e.target.value)}
+                onChange={(e) => {
+                  handleFieldChange("titre", e.target.value);
+                  scheduleDraftPersistence();
+                }}
                 disabled={isDisabled}
                 MenuProps={selectMenuProps}
               >
@@ -1550,6 +1609,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 label="Residence *"
                 size="small"
                 helperText="Residences enregistrees et chantiers (nom + adresse du chantier)"
+                onBlur={(e) => {
+                  params.inputProps?.onBlur?.(e);
+                  scheduleDraftPersistence();
+                }}
               />
             )}
             disabled={isDisabled}
@@ -1589,6 +1652,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
               label="Adresse de la nouvelle residence"
               value={formData.residence_adresse}
               onChange={(e) => handleFieldChange("residence_adresse", e.target.value)}
+              onBlur={scheduleDraftPersistence}
               fullWidth
               size="small"
               disabled={isDisabled}
@@ -1617,6 +1681,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     next[idx] = e.target.value;
                     setFormData((prev) => ({ ...prev, dates_intervention: next }));
                   }}
+                  onBlur={scheduleDraftPersistence}
                   size="small"
                   InputLabelProps={{ shrink: true }}
                   disabled={isDisabled}
@@ -1631,6 +1696,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                         ...prev,
                         dates_intervention: (prev.dates_intervention || []).filter((_, i) => i !== idx),
                       }));
+                      scheduleDraftPersistence();
                     }}
                     disabled={isDisabled}
                     sx={{ color: "error.main" }}
@@ -1650,6 +1716,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                   ...prev,
                   dates_intervention: [...(prev.dates_intervention || []), todayISO()],
                 }));
+                scheduleDraftPersistence();
               }}
               disabled={isDisabled}
               sx={{ mt: 0.5 }}
@@ -1662,9 +1729,22 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             freeSolo
             options={techniciensSuggestions}
             value={formData.technicien || ""}
-            onChange={(_, val) => handleFieldChange("technicien", val || "")}
+            onChange={(_, val) => {
+              handleFieldChange("technicien", val || "");
+              scheduleDraftPersistence();
+            }}
             onInputChange={(_, val) => handleFieldChange("technicien", val || "")}
-            renderInput={(params) => <TextField {...params} label="Technicien *" size="small" />}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Technicien *"
+                size="small"
+                onBlur={(e) => {
+                  params.inputProps?.onBlur?.(e);
+                  scheduleDraftPersistence();
+                }}
+              />
+            )}
             disabled={isDisabled}
             ListboxProps={autocompleteListboxProps}
           />
@@ -1684,6 +1764,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                           devis_fait: checked ? prev.devis_fait : false,
                           devis_lie: checked ? prev.devis_lie : null,
                         }));
+                        scheduleDraftPersistence();
                       }}
                       disabled={isDisabled}
                     />
@@ -1705,6 +1786,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 type="time"
                 value={formData.temps_trajet}
                 onChange={(e) => handleFieldChange("temps_trajet", e.target.value || "")}
+                onBlur={scheduleDraftPersistence}
                 fullWidth
                 size="small"
                 disabled={isDisabled}
@@ -1717,6 +1799,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 type="time"
                 value={formData.temps_taches}
                 onChange={(e) => handleFieldChange("temps_taches", e.target.value || "")}
+                onBlur={scheduleDraftPersistence}
                 fullWidth
                 size="small"
                 disabled={isDisabled}
@@ -1733,7 +1816,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             options={societes}
             getOptionLabel={(opt) => opt?.nom_societe || ""}
             value={societes.find((s) => s.id === formData.client_societe) || null}
-            onChange={(_, val) => handleFieldChange("client_societe", val?.id || "")}
+            onChange={(_, val) => {
+              handleFieldChange("client_societe", val?.id || "");
+              scheduleDraftPersistence();
+            }}
             renderInput={(params) => <TextField {...params} label="Client / Bailleur" size="small" />}
             disabled={isDisabled}
             ListboxProps={autocompleteListboxProps}
@@ -1756,6 +1842,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 label="Adresse *"
                 value={formData.adresse_vigik}
                 onChange={(e) => handleFieldChange("adresse_vigik", e.target.value)}
+                onBlur={scheduleDraftPersistence}
                 fullWidth
                 size="small"
                 disabled={isDisabled}
@@ -1766,6 +1853,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 label="Numero du batiment *"
                 value={formData.numero_batiment}
                 onChange={(e) => handleFieldChange("numero_batiment", e.target.value)}
+                onBlur={scheduleDraftPersistence}
                 fullWidth
                 size="small"
                 disabled={isDisabled}
@@ -1774,6 +1862,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 label="Type d'installation"
                 value={formData.type_installation}
                 onChange={(e) => handleFieldChange("type_installation", e.target.value)}
+                onBlur={scheduleDraftPersistence}
                 fullWidth
                 size="small"
                 disabled={isDisabled}
@@ -1786,7 +1875,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 <Button
                   variant={formData.presence_platine === true ? "contained" : "outlined"}
                   size="small"
-                  onClick={() => handleFieldChange("presence_platine", true)}
+                  onClick={() => {
+                    handleFieldChange("presence_platine", true);
+                    scheduleDraftPersistence();
+                  }}
                   disabled={isDisabled}
                 >
                   Oui
@@ -1795,7 +1887,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                   variant={formData.presence_platine === false ? "contained" : "outlined"}
                   size="small"
                   color={formData.presence_platine === false ? "error" : "primary"}
-                  onClick={() => handleFieldChange("presence_platine", false)}
+                  onClick={() => {
+                    handleFieldChange("presence_platine", false);
+                    scheduleDraftPersistence();
+                  }}
                   disabled={isDisabled}
                 >
                   Non
@@ -1815,6 +1910,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     if (file) {
                       const previewUrl = URL.createObjectURL(file);
                       setPendingPhotoPlatine({ file, name: file.name, previewUrl });
+                      scheduleDraftPersistence();
                     }
                     e.target.value = "";
                   }}
@@ -1830,6 +1926,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     if (file) {
                       const previewUrl = URL.createObjectURL(file);
                       setPendingPhotoPlatine({ file, name: file.name, previewUrl });
+                      scheduleDraftPersistence();
                     }
                     e.target.value = "";
                   }}
@@ -1858,6 +1955,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                             onClick={() => {
                               if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
                               setPendingPhotoPlatine(null);
+                              scheduleDraftPersistence();
                             }}
                             sx={{
                               position: "absolute", top: 2, right: 2,
@@ -1979,7 +2077,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 <Button
                   variant={formData.presence_platine_portail === true ? "contained" : "outlined"}
                   size="small"
-                  onClick={() => handleFieldChange("presence_platine_portail", true)}
+                  onClick={() => {
+                    handleFieldChange("presence_platine_portail", true);
+                    scheduleDraftPersistence();
+                  }}
                   disabled={isDisabled}
                 >
                   Oui
@@ -1988,7 +2089,10 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                   variant={formData.presence_platine_portail === false ? "contained" : "outlined"}
                   size="small"
                   color={formData.presence_platine_portail === false ? "error" : "primary"}
-                  onClick={() => handleFieldChange("presence_platine_portail", false)}
+                  onClick={() => {
+                    handleFieldChange("presence_platine_portail", false);
+                    scheduleDraftPersistence();
+                  }}
                   disabled={isDisabled}
                 >
                   Non
@@ -2008,6 +2112,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     if (file) {
                       const previewUrl = URL.createObjectURL(file);
                       setPendingPhotoPlatinePortail({ file, name: file.name, previewUrl });
+                      scheduleDraftPersistence();
                     }
                     e.target.value = "";
                   }}
@@ -2023,6 +2128,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                     if (file) {
                       const previewUrl = URL.createObjectURL(file);
                       setPendingPhotoPlatinePortail({ file, name: file.name, previewUrl });
+                      scheduleDraftPersistence();
                     }
                     e.target.value = "";
                   }}
@@ -2051,6 +2157,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                             onClick={() => {
                               if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
                               setPendingPhotoPlatinePortail(null);
+                              scheduleDraftPersistence();
                             }}
                             sx={{
                               position: "absolute", top: 2, right: 2,
@@ -2175,6 +2282,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           placeholder="Dire pourquoi tu viens sur site..."
           value={formData.objet_recherche}
           onChange={(e) => handleFieldChange("objet_recherche", e.target.value)}
+          onBlur={scheduleDraftPersistence}
           fullWidth
           multiline
           rows={isMobile ? 3 : 2}
@@ -2187,6 +2295,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           label="Resultat"
           value={formData.resultat}
           onChange={(e) => handleFieldChange("resultat", e.target.value)}
+          onBlur={scheduleDraftPersistence}
           fullWidth
           multiline
           rows={isMobile ? 3 : 2}
@@ -2217,6 +2326,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             label="Lieu d'intervention"
             value={formData.logement}
             onChange={(e) => handleFieldChange("logement", e.target.value)}
+            onBlur={scheduleDraftPersistence}
             fullWidth
             size="small"
             disabled={isDisabled}
@@ -2228,6 +2338,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             label="Nom locataire"
             value={formData.locataire_nom}
             onChange={(e) => handleFieldChange("locataire_nom", e.target.value)}
+            onBlur={scheduleDraftPersistence}
             fullWidth
             size="small"
             disabled={isDisabled}
@@ -2236,6 +2347,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             label="Prenom locataire"
             value={formData.locataire_prenom}
             onChange={(e) => handleFieldChange("locataire_prenom", e.target.value)}
+            onBlur={scheduleDraftPersistence}
             fullWidth
             size="small"
             disabled={isDisabled}
@@ -2244,6 +2356,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             label="Telephone locataire"
             value={formData.locataire_telephone}
             onChange={(e) => handleFieldChange("locataire_telephone", e.target.value)}
+            onBlur={scheduleDraftPersistence}
             fullWidth
             size="small"
             disabled={isDisabled}
@@ -2252,6 +2365,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             label="Email locataire"
             value={formData.locataire_email}
             onChange={(e) => handleFieldChange("locataire_email", e.target.value)}
+            onBlur={scheduleDraftPersistence}
             fullWidth
             size="small"
             disabled={isDisabled}
@@ -2281,6 +2395,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             prestation={prestation}
             index={index}
             onChange={handlePrestationChange}
+            onDraftCommit={scheduleDraftPersistence}
             onRemove={handleRemovePrestation}
             onUploadPhoto={handleUploadPhoto}
             onDeletePhoto={handleDeletePhoto}
@@ -2322,6 +2437,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         <SignaturePad
           ref={signaturePadRef}
           existingSignatureUrl={rapportData?.signature_url}
+          restoreFromDataUrl={signatureDraftRestoreUrl}
+          onRestoreFromDataUrlHandled={handleSignatureDraftRestoreHandled}
+          onSignatureCommit={scheduleDraftPersistence}
           disabled={isDisabled}
         />
       </Paper>
@@ -2378,8 +2496,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
             . Souhaitez-vous le reprendre ?
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
-            Les photos en attente d&apos;envoi sont conservées sur cet appareil (cache du navigateur). La signature
-            dessinée n&apos;est pas mise en cache.
+            Les photos en attente d&apos;envoi et la signature dessinée sur le canvas sont conservées sur cet appareil
+            (navigateur).
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, flexWrap: "wrap", gap: 1 }}>
@@ -2407,6 +2525,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 if (p) {
                   setFormData(mergeFormDataFromDraft(p));
                   setSelectedResidence(p.selectedResidence ?? null);
+                  setSignatureDraftRestoreUrl(p.signatureDraftDataUrl || null);
                 }
                 const snapshot = await loadRapportDraftPhotos(k);
                 const ph = applyPhotoSnapshotToState(snapshot);
@@ -2415,6 +2534,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
                 setPendingPhotoPlatinePortail(ph.pendingPhotoPlatinePortail);
                 setDraftDialog({ open: false, payload: null });
                 setDraftSaveEnabled(true);
+                if (!p?.signatureDraftDataUrl) {
+                  scheduleDraftPersistence();
+                }
               } finally {
                 setDraftRestoreLoading(false);
               }
@@ -2616,8 +2738,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {successModalContext?.isEdit
-              ? "Vos modifications ont bien été enregistrées."
-              : "Votre rapport a bien été créé."}
+              ? "Vos modifications ont bien été enregistrées. Le rapport est en cours pour vérification."
+              : "Votre rapport a bien été créé. Il est en cours pour vérification."}
           </Typography>
         </Box>
         <Box

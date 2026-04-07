@@ -10,6 +10,7 @@ const PrestationSection = ({
   prestation,
   index,
   onChange,
+  onDraftCommit,
   onRemove,
   onUploadPhoto,
   onDeletePhoto,
@@ -81,6 +82,7 @@ const PrestationSection = ({
           placeholder="Ex: Bat A03, hall d'entree bat 2..."
           value={prestation.localisation || ""}
           onChange={(e) => handleFieldChange("localisation", e.target.value)}
+          onBlur={() => onDraftCommit?.()}
           fullWidth
           size="small"
           disabled={disabled}
@@ -91,6 +93,7 @@ const PrestationSection = ({
           placeholder="Dysfonction constatee..."
           value={prestation.probleme || ""}
           onChange={(e) => handleFieldChange("probleme", e.target.value)}
+          onBlur={() => onDraftCommit?.()}
           fullWidth
           multiline
           minRows={2}
@@ -104,6 +107,7 @@ const PrestationSection = ({
           placeholder="Solution pour regler le probleme..."
           value={prestation.solution || ""}
           onChange={(e) => handleFieldChange("solution", e.target.value)}
+          onBlur={() => onDraftCommit?.()}
           fullWidth
           multiline
           minRows={2}
@@ -117,6 +121,7 @@ const PrestationSection = ({
           placeholder="Commentaire libre..."
           value={prestation.commentaire || ""}
           onChange={(e) => handleFieldChange("commentaire", e.target.value)}
+          onBlur={() => onDraftCommit?.()}
           fullWidth
           multiline
           rows={rowsMultiline}
@@ -128,7 +133,10 @@ const PrestationSection = ({
           control={
             <Switch
               checked={prestation.prestation_possible !== false}
-              onChange={(e) => handleFieldChange("prestation_possible", e.target.checked)}
+              onChange={(e) => {
+                handleFieldChange("prestation_possible", e.target.checked);
+                onDraftCommit?.();
+              }}
               disabled={disabled}
             />
           }
@@ -141,6 +149,7 @@ const PrestationSection = ({
           placeholder="Liste des prestations realisees..."
           value={prestation.prestation_realisee || ""}
           onChange={(e) => handleFieldChange("prestation_realisee", e.target.value)}
+          onBlur={() => onDraftCommit?.()}
           fullWidth
           multiline
           rows={rowsMultiline}
