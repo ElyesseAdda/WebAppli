@@ -1,5 +1,14 @@
 from rest_framework import serializers
-from .models_rapport import TitreRapport, Residence, RapportIntervention, PrestationRapport, PhotoRapport
+from .models_rapport import (
+    TitreRapport,
+    Residence,
+    RapportIntervention,
+    PrestationRapport,
+    PhotoRapport,
+    RapportInterventionBrouillon,
+)
+from .rapport_brouillon import compute_champs_manquants
+from .rapport_brouillon_media import enrich_draft_media_with_presigned_urls
 from .models import Societe, Chantier, Devis
 
 
@@ -526,3 +535,197 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
                 PrestationRapport.objects.filter(id__in=ids_to_delete).delete()
 
         return instance
+
+
+class RapportInterventionBrouillonListSerializer(serializers.ModelSerializer):
+    """Ligne liste : champs alignés sur RapportInterventionListSerializer (depuis payload JSON)."""
+
+    statut = serializers.SerializerMethodField()
+    is_brouillon_serveur = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
+    dates_intervention = serializers.SerializerMethodField()
+    titre = serializers.SerializerMethodField()
+    titre_nom = serializers.SerializerMethodField()
+    technicien = serializers.SerializerMethodField()
+    client_societe = serializers.SerializerMethodField()
+    client_societe_nom = serializers.SerializerMethodField()
+    chantier = serializers.SerializerMethodField()
+    chantier_nom = serializers.SerializerMethodField()
+    residence = serializers.SerializerMethodField()
+    residence_nom = serializers.SerializerMethodField()
+    residence_adresse = serializers.SerializerMethodField()
+    adresse_vigik = serializers.SerializerMethodField()
+    logement = serializers.SerializerMethodField()
+    type_rapport = serializers.SerializerMethodField()
+    devis_a_faire = serializers.SerializerMethodField()
+    devis_fait = serializers.SerializerMethodField()
+    devis_lie = serializers.SerializerMethodField()
+    devis_lie_numero = serializers.SerializerMethodField()
+    devis_lie_preview_url = serializers.SerializerMethodField()
+    nb_prestations = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RapportInterventionBrouillon
+        fields = [
+            'id', 'date', 'dates_intervention', 'titre', 'titre_nom', 'technicien',
+            'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
+            'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
+            'type_rapport', 'statut', 'is_brouillon_serveur', 'devis_a_faire', 'devis_fait',
+            'devis_lie', 'devis_lie_numero', 'devis_lie_preview_url',
+            'created_at', 'updated_at', 'nb_prestations',
+        ]
+
+    def _p(self, obj):
+        p = obj.payload
+        return p if isinstance(p, dict) else {}
+
+    def get_statut(self, obj):
+        return 'brouillon_serveur'
+
+    def get_is_brouillon_serveur(self, obj):
+        return True
+
+    def get_dates_intervention(self, obj):
+        p = self._p(obj)
+        di = p.get('dates_intervention')
+        if isinstance(di, list) and di:
+            return [str(x)[:10] for x in di if x]
+        d = p.get('date')
+        if d:
+            return [str(d)[:10]]
+        return []
+
+    def get_date(self, obj):
+        di = self.get_dates_intervention(obj)
+        if not di:
+            return None
+        return max(di)
+
+    def get_titre(self, obj):
+        return self._p(obj).get('titre')
+
+    def get_titre_nom(self, obj):
+        tid = self._p(obj).get('titre')
+        if not tid:
+            return None
+        t = TitreRapport.objects.filter(pk=tid).first()
+        return t.nom if t else None
+
+    def get_technicien(self, obj):
+        return self._p(obj).get('technicien') or ''
+
+    def get_client_societe(self, obj):
+        return self._p(obj).get('client_societe')
+
+    def get_client_societe_nom(self, obj):
+        cid = self._p(obj).get('client_societe')
+        if not cid:
+            return None
+        s = Societe.objects.filter(pk=cid).first()
+        return s.nom_societe if s else None
+
+    def get_chantier(self, obj):
+        return self._p(obj).get('chantier')
+
+    def get_chantier_nom(self, obj):
+        cid = self._p(obj).get('chantier')
+        if not cid:
+            return None
+        c = Chantier.objects.filter(pk=cid).first()
+        return c.chantier_name if c else None
+
+    def get_residence(self, obj):
+        return self._p(obj).get('residence')
+
+    def get_residence_nom(self, obj):
+        p = self._p(obj)
+        nom = p.get('residence_nom')
+        if nom:
+            return nom
+        rid = p.get('residence')
+        if not rid:
+            return None
+        res = Residence.objects.filter(pk=rid).first()
+        return res.nom if res else None
+
+    def get_residence_adresse(self, obj):
+        p = self._p(obj)
+        addr = p.get('residence_adresse')
+        if addr:
+            return addr
+        rid = p.get('residence')
+        if not rid:
+            return None
+        res = Residence.objects.filter(pk=rid).first()
+        return res.adresse if res else None
+
+    def get_adresse_vigik(self, obj):
+        return self._p(obj).get('adresse_vigik') or ''
+
+    def get_logement(self, obj):
+        return self._p(obj).get('logement') or ''
+
+    def get_type_rapport(self, obj):
+        return self._p(obj).get('type_rapport') or 'intervention'
+
+    def get_devis_a_faire(self, obj):
+        return bool(self._p(obj).get('devis_a_faire'))
+
+    def get_devis_fait(self, obj):
+        return bool(self._p(obj).get('devis_fait'))
+
+    def get_devis_lie(self, obj):
+        return self._p(obj).get('devis_lie')
+
+    def get_devis_lie_numero(self, obj):
+        did = self._p(obj).get('devis_lie')
+        if not did:
+            return None
+        d = Devis.objects.filter(pk=did).first()
+        return d.numero if d else None
+
+    def get_devis_lie_preview_url(self, obj):
+        did = self._p(obj).get('devis_lie')
+        if not did:
+            return None
+        return f'/api/preview-saved-devis-v2/{did}/'
+
+    def get_nb_prestations(self, obj):
+        pres = self._p(obj).get('prestations')
+        if isinstance(pres, list):
+            return len(pres)
+        return 0
+
+
+class RapportInterventionBrouillonSerializer(serializers.ModelSerializer):
+    """Brouillon serveur : payload JSON aligné sur le corps du POST/PUT rapport (sans contraintes obligatoires)."""
+
+    class Meta:
+        model = RapportInterventionBrouillon
+        fields = ["id", "payload", "champs_manquants", "created_at", "updated_at"]
+        read_only_fields = ["champs_manquants", "created_at", "updated_at"]
+
+    def validate_payload(self, value):
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Le payload doit être un objet JSON.")
+        return value
+
+    def create(self, validated_data):
+        validated_data["champs_manquants"] = compute_champs_manquants(validated_data.get("payload") or {})
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if "payload" in validated_data:
+            validated_data["champs_manquants"] = compute_champs_manquants(validated_data.get("payload") or {})
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        p = ret.get("payload")
+        if isinstance(p, dict) and p.get("_draft_media"):
+            p = dict(p)
+            p["_draft_media"] = enrich_draft_media_with_presigned_urls(p["_draft_media"])
+            ret["payload"] = p
+        return ret

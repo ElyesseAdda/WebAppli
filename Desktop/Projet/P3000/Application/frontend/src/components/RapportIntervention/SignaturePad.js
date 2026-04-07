@@ -37,21 +37,42 @@ const SignaturePad = forwardRef(
       if (!restoreFromDataUrl || !canvasRef.current) return;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
-      const img = new Image();
-      img.onload = () => {
-        try {
-          ctx.save();
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          ctx.restore();
-          setHasSignature(true);
-        } finally {
-          onRestoreFromDataUrlHandled?.();
+      const src = restoreFromDataUrl;
+      const load = (withCrossOrigin) => {
+        const img = new Image();
+        if (typeof src === "string" && /^https?:\/\//i.test(src) && withCrossOrigin) {
+          try {
+            const u = new URL(src);
+            if (u.origin !== window.location.origin) {
+              img.crossOrigin = "anonymous";
+            }
+          } catch {
+            /* ignore */
+          }
         }
+        img.onload = () => {
+          try {
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            setHasSignature(true);
+          } finally {
+            onRestoreFromDataUrlHandled?.();
+          }
+        };
+        img.onerror = () => {
+          // Sans CORS sur le bucket S3 : repli sans crossOrigin (affichage OK, canvas parfois non exportable — clé S3 conservée côté brouillon).
+          if (withCrossOrigin && typeof src === "string" && /^https?:\/\//i.test(src)) {
+            load(false);
+            return;
+          }
+          onRestoreFromDataUrlHandled?.();
+        };
+        img.src = src;
       };
-      img.onerror = () => onRestoreFromDataUrlHandled?.();
-      img.src = restoreFromDataUrl;
+      load(true);
     }, [restoreFromDataUrl, onRestoreFromDataUrlHandled]);
 
     const getPos = useCallback((e) => {
@@ -81,7 +102,11 @@ const SignaturePad = forwardRef(
       () => ({
         getSignatureDataUrl: () => {
           if (!hasSignature) return null;
-          return canvasRef.current?.toDataURL("image/png") || null;
+          try {
+            return canvasRef.current?.toDataURL("image/png") || null;
+          } catch {
+            return null;
+          }
         },
         hasSignature: () => hasSignature,
         clear: () => clearCanvas(),

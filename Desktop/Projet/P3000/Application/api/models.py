@@ -3560,4 +3560,10 @@ def create_default_emetteurs(sender, **kwargs):
             print(f"❌ Erreur lors de la création des émetteurs : {e}")
 
 
-from .models_rapport import TitreRapport, RapportIntervention, PrestationRapport, PhotoRapport
+from .models_rapport import (
+    TitreRapport,
+    RapportIntervention,
+    RapportInterventionBrouillon,
+    PrestationRapport,
+    PhotoRapport,
+)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Box, Button, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton,
@@ -17,6 +17,7 @@ import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const STATUT_LABELS = {
   brouillon: "Brouillon",
+  brouillon_serveur: "Brouillon serveur",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -37,6 +38,8 @@ const getStatusStyles = (statut) => ({
       ? "success.light"
       : statut === "en_cours"
       ? "warning.light"
+      : statut === "brouillon_serveur"
+      ? "secondary.light"
       : statut === "brouillon"
       ? "info.light"
       : "grey.200",
@@ -45,18 +48,21 @@ const getStatusStyles = (statut) => ({
       ? "success.dark"
       : statut === "en_cours"
       ? "warning.dark"
+      : statut === "brouillon_serveur"
+      ? "secondary.dark"
       : statut === "brouillon"
       ? "info.dark"
       : "grey.700",
   fontWeight: 500,
   textTransform: "capitalize",
-  cursor: "pointer",
-  "&:hover": { opacity: 0.9 },
+  cursor: statut === "brouillon_serveur" ? "default" : "pointer",
+  "&:hover": { opacity: statut === "brouillon_serveur" ? 1 : 0.9 },
 });
 
 const ChantierRapportsList = ({ chantierData }) => {
   const navigate = useNavigate();
-  const { rapports, fetchRapports, lierChantier, deleteRapport, patchRapport, loading } = useRapports();
+  const { rapports, fetchRapports, lierChantier, deleteRapport, patchRapport, deleteRapportBrouillon, loading } = useRapports();
+  const [brouillonsServeur, setBrouillonsServeur] = useState([]);
   const [linkDialog, setLinkDialog] = useState(false);
   const [allRapports, setAllRapports] = useState([]);
   const [selectedRapport, setSelectedRapport] = useState(null);
@@ -71,8 +77,25 @@ const ChantierRapportsList = ({ chantierData }) => {
 
   const loadRapports = useCallback(async () => {
     if (!chantierData?.id) return;
-    await fetchRapports({ chantier: chantierData.id }, { page: 1, pageSize: 200 });
+    const cid = chantierData.id;
+    axios
+      .get("/api/rapports-intervention-brouillons/")
+      .then((r) => {
+        const d = r.data;
+        const list = Array.isArray(d) ? d : [];
+        setBrouillonsServeur(list.filter((b) => Number(b.chantier) === Number(cid)));
+      })
+      .catch(() => setBrouillonsServeur([]));
+    await fetchRapports({ chantier: cid }, { page: 1, pageSize: 200 });
   }, [chantierData?.id, fetchRapports]);
+
+  const brouillonsSorted = useMemo(() => {
+    return [...brouillonsServeur].sort(
+      (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+    );
+  }, [brouillonsServeur]);
+
+  const displayRapports = useMemo(() => [...brouillonsSorted, ...rapports], [brouillonsSorted, rapports]);
 
   useEffect(() => {
     loadRapports();
@@ -104,10 +127,21 @@ const ChantierRapportsList = ({ chantierData }) => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (row) => {
+    if (row?.is_brouillon_serveur) {
+      if (!window.confirm("Supprimer ce brouillon en ligne ?")) return;
+      try {
+        await deleteRapportBrouillon(row.id);
+        setSnackbar({ open: true, message: "Brouillon supprimé", severity: "success" });
+        loadRapports();
+      } catch {
+        setSnackbar({ open: true, message: "Erreur lors de la suppression du brouillon", severity: "error" });
+      }
+      return;
+    }
     if (!window.confirm("Supprimer ce rapport ?")) return;
     try {
-      await deleteRapport(id);
+      await deleteRapport(row.id);
       setSnackbar({ open: true, message: "Rapport supprime", severity: "success" });
       loadRapports();
     } catch {
@@ -315,7 +349,7 @@ const ChantierRapportsList = ({ chantierData }) => {
     <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, color: COLORS.textOnDark }}>
-          Rapports d'intervention ({rapports.length})
+          Rapports d&apos;intervention ({displayRapports.length})
         </Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
@@ -354,7 +388,7 @@ const ChantierRapportsList = ({ chantierData }) => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rapports.length === 0 ? (
+            {displayRapports.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} sx={{ textAlign: "center", py: 3 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -363,14 +397,23 @@ const ChantierRapportsList = ({ chantierData }) => {
                 </TableCell>
               </TableRow>
             ) : (
-              rapports.map((rapport) => (
+              displayRapports.map((rapport) => {
+                const rowKey = rapport.is_brouillon_serveur ? `br-${rapport.id}` : rapport.id;
+                const st = rapport.statut || "a_faire";
+                return (
                 <TableRow
-                  key={rapport.id}
+                  key={rowKey}
                   hover
                   sx={{ cursor: "pointer" }}
-                  onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
+                  onClick={() => {
+                    if (rapport.is_brouillon_serveur) {
+                      navigate(`/RapportIntervention/nouveau?brouillon=${rapport.id}`);
+                    } else {
+                      window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank");
+                    }
+                  }}
                 >
-                  <TableCell>{new Date(rapport.date).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>{rapport.date ? new Date(rapport.date).toLocaleDateString("fr-FR") : "-"}</TableCell>
                   <TableCell>{TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}</TableCell>
                   <TableCell sx={{ fontWeight: 500 }}>{rapport.titre_nom || "-"}</TableCell>
                   <TableCell>{rapport.technicien || "-"}</TableCell>
@@ -383,7 +426,9 @@ const ChantierRapportsList = ({ chantierData }) => {
                       : (rapport.logement || "-")}
                   </TableCell>
                   <TableCell sx={{ textAlign: "center" }}>
-                    {rapport.devis_fait ? (
+                    {rapport.is_brouillon_serveur ? (
+                      <Typography variant="caption" color="text.disabled">—</Typography>
+                    ) : rapport.devis_fait ? (
                       <IconButton
                         size="small"
                         onClick={(e) => handleBlueThumbClick(e, rapport)}
@@ -401,14 +446,23 @@ const ChantierRapportsList = ({ chantierData }) => {
                     )}
                   </TableCell>
                   <TableCell
-                    onClick={(e) => handleStatusClick(e, rapport)}
-                    sx={{ cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }}
+                    onClick={(e) => {
+                      if (rapport.is_brouillon_serveur) e.stopPropagation();
+                      else handleStatusClick(e, rapport);
+                    }}
+                    sx={
+                      rapport.is_brouillon_serveur
+                        ? { cursor: "default" }
+                        : { cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }
+                    }
                   >
-                    <Typography variant="body2" sx={getStatusStyles(rapport.statut || "a_faire")}>
-                      {STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
+                    <Typography variant="body2" sx={getStatusStyles(st)}>
+                      {STATUT_LABELS[st] || st || "A faire"}
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    {!rapport.is_brouillon_serveur && (
+                      <>
                     <IconButton
                       size="small"
                       onClick={() => handleGeneratePDF(rapport)}
@@ -424,15 +478,26 @@ const ChantierRapportsList = ({ chantierData }) => {
                       color="primary"
                       tooltipPlacement="top"
                     />
-                    <IconButton size="small" color="primary" onClick={() => navigate(`/RapportIntervention/${rapport.id}`)}>
+                      </>
+                    )}
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() =>
+                        rapport.is_brouillon_serveur
+                          ? navigate(`/RapportIntervention/nouveau?brouillon=${rapport.id}`)
+                          : navigate(`/RapportIntervention/${rapport.id}`)
+                      }
+                    >
                       <MdEdit />
                     </IconButton>
-                    <IconButton size="small" color="error" onClick={() => handleDelete(rapport.id)}>
+                    <IconButton size="small" color="error" onClick={() => handleDelete(rapport)}>
                       <MdDelete />
                     </IconButton>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

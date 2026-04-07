@@ -149,3 +149,117 @@ export function applyPhotoSnapshotToState(snapshot) {
     : null;
   return { pendingPhotos, pendingPhotoPlatine, pendingPhotoPlatinePortail };
 }
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function dataUrlToBlob(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.includes(",")) return null;
+  const parts = dataUrl.split(",");
+  const mime = parts[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+  const b64 = parts[1];
+  if (!b64) return null;
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], { type: mime });
+}
+
+/**
+ * Sérialise le snapshot (blobs) pour inclusion JSON dans le payload brouillon serveur.
+ */
+export async function serializePhotoSnapshotForPayload(snapshot) {
+  if (!snapshot || photoSnapshotIsEmpty(snapshot)) return null;
+  const out = { pendingPhotos: {}, pendingPhotoPlatine: null, pendingPhotoPlatinePortail: null };
+  for (const [idxStr, arr] of Object.entries(snapshot.pendingPhotos || {})) {
+    if (!arr?.length) continue;
+    out.pendingPhotos[idxStr] = [];
+    for (const p of arr) {
+      const blob = p.blob;
+      if (!(blob instanceof Blob)) continue;
+      const dataUrl = await blobToDataUrl(blob);
+      out.pendingPhotos[idxStr].push({
+        dataUrl,
+        type_photo: p.type_photo,
+        filename: p.filename || p.file?.name || "photo.jpg",
+        date_photo: p.date_photo,
+      });
+    }
+  }
+  if (snapshot.pendingPhotoPlatine?.blob instanceof Blob) {
+    out.pendingPhotoPlatine = {
+      dataUrl: await blobToDataUrl(snapshot.pendingPhotoPlatine.blob),
+      name: snapshot.pendingPhotoPlatine.name || "photo.jpg",
+    };
+  }
+  if (snapshot.pendingPhotoPlatinePortail?.blob instanceof Blob) {
+    out.pendingPhotoPlatinePortail = {
+      dataUrl: await blobToDataUrl(snapshot.pendingPhotoPlatinePortail.blob),
+      name: snapshot.pendingPhotoPlatinePortail.name || "photo.jpg",
+    };
+  }
+  for (const k of Object.keys(out.pendingPhotos)) {
+    if (!out.pendingPhotos[k]?.length) delete out.pendingPhotos[k];
+  }
+  if (
+    !Object.keys(out.pendingPhotos).length &&
+    !out.pendingPhotoPlatine &&
+    !out.pendingPhotoPlatinePortail
+  ) {
+    return null;
+  }
+  return out;
+}
+
+/**
+ * Repasse du JSON serveur au format snapshot interne (blobs) pour applyPhotoSnapshotToState.
+ */
+export function deserializePhotoSnapshotFromPayload(serialized) {
+  if (!serialized) return null;
+  const pendingPhotosOut = {};
+  for (const [idxStr, arr] of Object.entries(serialized.pendingPhotos || {})) {
+    if (!Array.isArray(arr)) continue;
+    pendingPhotosOut[idxStr] = arr
+      .map((item) => {
+        const blob = dataUrlToBlob(item.dataUrl);
+        if (!blob) return null;
+        return {
+          blob,
+          type_photo: item.type_photo,
+          filename: item.filename || "photo.jpg",
+          date_photo: item.date_photo,
+        };
+      })
+      .filter(Boolean);
+  }
+  const snapshot = {
+    pendingPhotos: pendingPhotosOut,
+    pendingPhotoPlatine: null,
+    pendingPhotoPlatinePortail: null,
+  };
+  if (serialized.pendingPhotoPlatine?.dataUrl) {
+    const blob = dataUrlToBlob(serialized.pendingPhotoPlatine.dataUrl);
+    if (blob) {
+      snapshot.pendingPhotoPlatine = {
+        blob,
+        name: serialized.pendingPhotoPlatine.name || "photo.jpg",
+      };
+    }
+  }
+  if (serialized.pendingPhotoPlatinePortail?.dataUrl) {
+    const blob = dataUrlToBlob(serialized.pendingPhotoPlatinePortail.dataUrl);
+    if (blob) {
+      snapshot.pendingPhotoPlatinePortail = {
+        blob,
+        name: serialized.pendingPhotoPlatinePortail.name || "photo.jpg",
+      };
+    }
+  }
+  return photoSnapshotIsEmpty(snapshot) ? null : snapshot;
+}

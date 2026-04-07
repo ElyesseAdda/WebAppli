@@ -5,6 +5,7 @@ import tempfile
 import uuid
 import base64
 import traceback
+from django.db import transaction
 from django.db.models import Count
 from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets, status
@@ -19,7 +20,13 @@ from .models_rapport import (
     RapportIntervention,
     PrestationRapport,
     PhotoRapport,
+    RapportInterventionBrouillon,
     assign_numero_rapport_si_absent,
+)
+from .rapport_brouillon_media import (
+    collect_s3_keys_from_draft_media,
+    delete_s3_keys,
+    transfer_brouillon_media_to_rapport,
 )
 from .serializers_rapport import (
     TitreRapportSerializer,
@@ -27,6 +34,8 @@ from .serializers_rapport import (
     RapportInterventionSerializer,
     RapportInterventionListSerializer,
     RapportInterventionCreateSerializer,
+    RapportInterventionBrouillonSerializer,
+    RapportInterventionBrouillonListSerializer,
     PrestationRapportSerializer,
     PrestationRapportWriteSerializer,
     PhotoRapportSerializer,
@@ -766,3 +775,217 @@ def generate_rapport_intervention_pdf_drive(request):
         rapport.save()
     status_code = 200 if pdf_result.get('success') else 400
     return JsonResponse(pdf_result, status=status_code)
+
+
+class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
+    """
+    Brouillons serveur (JSON). CRUD limité au propriétaire.
+    promouvoir : crée un RapportIntervention valide puis supprime le brouillon (transaction atomique).
+    """
+
+    serializer_class = RapportInterventionBrouillonSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return RapportInterventionBrouillonListSerializer
+        return RapportInterventionBrouillonSerializer
+
+    def get_queryset(self):
+        return RapportInterventionBrouillon.objects.filter(created_by=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        dm = (instance.payload or {}).get("_draft_media")
+        if dm:
+            delete_s3_keys(collect_s3_keys_from_draft_media(dm))
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def upload_photo(self, request, pk=None):
+        """Photo prestation (brouillon) → S3 sous rapports_intervention/brouillons/{id}/…"""
+        brouillon = self.get_object()
+        try:
+            prestation_index = int(request.data.get("prestation_index", 0))
+        except (TypeError, ValueError):
+            return Response({"error": "prestation_index invalide"}, status=status.HTTP_400_BAD_REQUEST)
+        type_photo = request.data.get("type_photo", "avant")
+        date_photo = request.data.get("date_photo")
+        file = request.FILES.get("photo")
+        if not file:
+            return Response({"error": "photo requise"}, status=status.HTTP_400_BAD_REQUEST)
+        brouillon_id = brouillon.pk
+        ext = file.name.split(".")[-1] if "." in file.name else "jpg"
+        s3_key = (
+            f"rapports_intervention/brouillons/{brouillon_id}/p{prestation_index}/"
+            f"{type_photo}_{uuid.uuid4().hex[:8]}.{ext}"
+        )
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file.read(),
+                ContentType=file.content_type or "image/jpeg",
+            )
+            presigned_url = None
+            try:
+                presigned_url = generate_presigned_url_for_display(s3_key)
+            except Exception:
+                pass
+            return Response(
+                {
+                    "success": True,
+                    "s3_key": s3_key,
+                    "type_photo": type_photo,
+                    "prestation_index": prestation_index,
+                    "filename": file.name,
+                    "date_photo": date_photo,
+                    "presigned_url": presigned_url,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        except Exception as e:
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=["post"])
+    def upload_signature(self, request, pk=None):
+        brouillon = self.get_object()
+        signature_data = request.data.get("signature")
+        if not signature_data:
+            return Response({"error": "signature requise (base64)"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            if "," in signature_data:
+                signature_data = signature_data.split(",", 1)[1]
+            image_bytes = base64.b64decode(signature_data)
+            s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/signature_{uuid.uuid4().hex[:8]}.png"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            p = brouillon.payload or {}
+            dm = p.get("_draft_media") or {}
+            old = dm.get("signature_s3_key")
+            if old and is_s3_available():
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=old)
+                except Exception:
+                    pass
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=image_bytes,
+                ContentType="image/png",
+            )
+            presigned_url = None
+            try:
+                presigned_url = generate_presigned_url_for_display(s3_key)
+            except Exception:
+                pass
+            return Response({"success": True, "s3_key": s3_key, "presigned_url": presigned_url})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=["post"])
+    def upload_photo_platine(self, request, pk=None):
+        brouillon = self.get_object()
+        file = request.FILES.get("photo")
+        if not file:
+            return Response({"error": "photo requise"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            ext = file.name.split(".")[-1] if "." in file.name else "jpg"
+            s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/platine_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            p = brouillon.payload or {}
+            dm = p.get("_draft_media") or {}
+            old = dm.get("photo_platine_s3_key")
+            if old and is_s3_available():
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=old)
+                except Exception:
+                    pass
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file.read(),
+                ContentType=file.content_type or "image/jpeg",
+            )
+            presigned_url = None
+            try:
+                presigned_url = generate_presigned_url_for_display(s3_key)
+            except Exception:
+                pass
+            return Response({"success": True, "s3_key": s3_key, "presigned_url": presigned_url})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=["post"])
+    def upload_photo_platine_portail(self, request, pk=None):
+        brouillon = self.get_object()
+        file = request.FILES.get("photo")
+        if not file:
+            return Response({"error": "photo requise"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            ext = file.name.split(".")[-1] if "." in file.name else "jpg"
+            s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/platine_portail_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            p = brouillon.payload or {}
+            dm = p.get("_draft_media") or {}
+            old = dm.get("photo_platine_portail_s3_key")
+            if old and is_s3_available():
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=old)
+                except Exception:
+                    pass
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=file.read(),
+                ContentType=file.content_type or "image/jpeg",
+            )
+            presigned_url = None
+            try:
+                presigned_url = generate_presigned_url_for_display(s3_key)
+            except Exception:
+                pass
+            return Response({"success": True, "s3_key": s3_key, "presigned_url": presigned_url})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=["post"])
+    def promouvoir(self, request, pk=None):
+        brouillon = self.get_object()
+        merge = request.data if isinstance(request.data, dict) else {}
+        merged = {**(brouillon.payload or {}), **merge}
+        draft_media = merged.pop("_draft_media", None)
+        data = merged
+        if "statut" not in data:
+            data["statut"] = "en_cours"
+        brouillon_id = brouillon.pk
+        with transaction.atomic():
+            ser = RapportInterventionCreateSerializer(data=data, context={"request": request})
+            ser.is_valid(raise_exception=True)
+            rapport = ser.save(created_by=request.user)
+            assign_numero_rapport_si_absent(rapport)
+            transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media)
+            brouillon.delete()
+        rapport.refresh_from_db()
+        out = RapportInterventionSerializer(rapport, context={"request": request})
+        return Response(out.data, status=status.HTTP_201_CREATED)

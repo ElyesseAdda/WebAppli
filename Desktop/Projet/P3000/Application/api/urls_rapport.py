@@ -4,6 +4,7 @@ from .views_rapport import (
     TitreRapportViewSet,
     ResidenceViewSet,
     RapportInterventionViewSet,
+    RapportInterventionBrouillonViewSet,
     preview_rapport_intervention,
     generate_rapport_intervention_pdf,
     generate_rapport_intervention_pdf_drive,
@@ -11,6 +12,11 @@ from .views_rapport import (
 
 router = DefaultRouter()
 router.register(r'rapports-intervention', RapportInterventionViewSet, basename='rapports-intervention')
+router.register(
+    r'rapports-intervention-brouillons',
+    RapportInterventionBrouillonViewSet,
+    basename='rapports-intervention-brouillons',
+)
 router.register(r'titres-rapport', TitreRapportViewSet, basename='titres-rapport')
 router.register(r'residences', ResidenceViewSet, basename='residences')
 

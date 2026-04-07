@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -39,6 +39,7 @@ import "./rapports-mobile.css";
 
 const STATUT_LABELS = {
   brouillon: "Brouillon",
+  brouillon_serveur: "Brouillon serveur",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -47,13 +48,6 @@ const STATUT_LABELS = {
 const TYPE_RAPPORT_LABELS = {
   intervention: "Rapport d'intervention",
   vigik_plus: "Vigik+",
-};
-
-const getStatusColor = (statut) => {
-  if (statut === "termine") return "success";
-  if (statut === "en_cours") return "warning";
-  if (statut === "brouillon") return "info";
-  return "default";
 };
 
 /** Couleurs des badges de statut (rectangulaires, cohérent avec COLORS) */
@@ -75,6 +69,14 @@ const getStatusChipSx = (statut) => {
   }
   if (statut === "brouillon") {
     return { ...base, color: COLORS.infoDark || "#1565c0", backgroundColor: "#e3f2fd", borderColor: COLORS.infoDark || "#1976d2" };
+  }
+  if (statut === "brouillon_serveur") {
+    return {
+      ...base,
+      color: "#6a1b9a",
+      backgroundColor: "#f3e5f5",
+      borderColor: "#8e24aa",
+    };
   }
   return { ...base, color: COLORS.primary, backgroundColor: COLORS.backgroundAlt, borderColor: COLORS.primary };
 };
@@ -101,6 +103,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
   const { rapports, rapportsCount, fetchRapports, loading } = useRapports();
+  const [brouillonsServeur, setBrouillonsServeur] = useState([]);
   const [residences, setResidences] = useState([]);
   const [filters, setFilters] = useState({
     residence: "",
@@ -136,6 +139,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
       cleanFilters.devis_a_faire = "true";
       cleanFilters.devis_fait = "false";
     }
+    axios
+      .get("/api/rapports-intervention-brouillons/")
+      .then((r) => {
+        const d = r.data;
+        setBrouillonsServeur(Array.isArray(d) ? d : []);
+      })
+      .catch(() => setBrouillonsServeur([]));
     return fetchRapports(cleanFilters, {
       page: listPage,
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
@@ -143,6 +153,30 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
       excludeStatutTermine: !showTermines,
     });
   }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
+
+  const brouillonsFiltres = useMemo(() => {
+    const log = (filters.logement || "").trim().toLowerCase();
+    return brouillonsServeur.filter((b) => {
+      if (filters.residence && Number(b.residence) !== Number(filters.residence)) return false;
+      if (filters.type_rapport && b.type_rapport !== filters.type_rapport) return false;
+      if (log && !String(b.logement || "").toLowerCase().includes(log)) return false;
+      if (showOnlyDevisAFaireV && (!b.devis_a_faire || b.devis_fait)) return false;
+      return true;
+    });
+  }, [brouillonsServeur, filters.residence, filters.logement, filters.type_rapport, showOnlyDevisAFaireV]);
+
+  const brouillonsSorted = useMemo(() => {
+    return [...brouillonsFiltres].sort((a, b) => {
+      const ta = new Date(a.updated_at || 0).getTime();
+      const tb = new Date(b.updated_at || 0).getTime();
+      return dateSortOrder === "desc" ? tb - ta : ta - tb;
+    });
+  }, [brouillonsFiltres, dateSortOrder]);
+
+  const displayRapports = listPage === 1 ? [...brouillonsSorted, ...rapports] : rapports;
+
+  const showInitialLoading =
+    loading && rapports.length === 0 && (listPage > 1 || brouillonsSorted.length === 0);
 
   useEffect(() => {
     loadRapports();
@@ -642,11 +676,11 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
       </Paper>
 
       {/* Liste paginée — mobile first */}
-      {loading && rapports.length === 0 ? (
+      {showInitialLoading ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
           Chargement...
         </Typography>
-      ) : !loading && rapportsCount === 0 ? (
+      ) : !loading && rapportsCount === 0 && brouillonsFiltres.length === 0 ? (
         <Paper
           elevation={0}
           sx={{
@@ -675,9 +709,12 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
             maxWidth: "100%",
           }}
         >
-          {rapports.map((rapport) => (
+          {displayRapports.map((rapport) => {
+            const rowKey = rapport.is_brouillon_serveur ? `br-${rapport.id}` : rapport.id;
+            const st = rapport.statut || "a_faire";
+            return (
             <Card
-              key={rapport.id}
+              key={rowKey}
               elevation={0}
               sx={{
                 border: `1px solid ${COLORS.border || "#e0e0e0"}`,
@@ -692,7 +729,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
               }}
             >
               <CardActionArea
-                onClick={() => onSelectRapport && onSelectRapport(rapport.id)}
+                onClick={() => {
+                  if (onSelectRapport) onSelectRapport(rapport);
+                }}
                 sx={{
                   minHeight: 48,
                   flex: 1,
@@ -731,9 +770,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                       {rapport.residence_nom || "Sans résidence"}
                     </Typography>
                     <Chip
-                      label={STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
+                      label={STATUT_LABELS[st] || st || "A faire"}
                       size="small"
-                      sx={getStatusChipSx(rapport.statut)}
+                      sx={getStatusChipSx(st)}
                     />
                   </Box>
                   <Box sx={{ fontSize: "0.8125rem", mb: 0.5, color: "text.secondary" }}>
@@ -743,7 +782,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                     <Typography component="span" variant="body2" sx={{ color: COLORS.primary, fontWeight: 600, fontSize: "0.8125rem" }}>
                       Devis à faire :
                     </Typography>
-                    {rapport.devis_fait ? (
+                    {rapport.is_brouillon_serveur ? (
+                      <Typography variant="caption" color="text.disabled">—</Typography>
+                    ) : rapport.devis_fait ? (
                       <IconButton
                         size="small"
                         onClick={(e) => handleBlueThumbClick(e, rapport)}
@@ -822,12 +863,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                   startIcon={<MdVisibility />}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelectRapport && onSelectRapport(rapport.id);
+                    if (onSelectRapport) onSelectRapport(rapport);
                   }}
                   sx={btnRectSx(COLORS.primary, COLORS.background, COLORS.textOnDark)}
                 >
                   Voir
                 </Button>
+                {!rapport.is_brouillon_serveur && (
                 <Button
                   size="small"
                   startIcon={<AiFillFilePdf style={{ fontSize: 18 }} />}
@@ -836,12 +878,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                 >
                   PDF
                 </Button>
+                )}
                 <Button
                   size="small"
                   startIcon={<MdEdit />}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEditRapport && onEditRapport(rapport.id);
+                    if (onEditRapport) onEditRapport(rapport);
                   }}
                   sx={btnRectSx(COLORS.accent, COLORS.background, COLORS.textOnDark)}
                 >
@@ -849,7 +892,8 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                 </Button>
               </Box>
             </Card>
-          ))}
+          );
+          })}
         </Box>
         {listPageCount > 1 && (
           <Stack alignItems="center" sx={{ py: 2, pb: 1 }}>

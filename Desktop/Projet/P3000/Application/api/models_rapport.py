@@ -156,6 +156,27 @@ class RapportInterventionNumeroCompteur(models.Model):
         return f"{self.annee} → {self.dernier_numero}"
 
 
+class RapportInterventionBrouillon(models.Model):
+    """
+    Brouillon serveur : payload JSON libre (pas de contraintes DB du rapport réel).
+    Supprimé uniquement après création réussie d'un RapportIntervention (promouvoir).
+    """
+
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="rapports_intervention_brouillons")
+    payload = models.JSONField(default=dict, blank=True)
+    champs_manquants = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        verbose_name = "Brouillon de rapport d'intervention"
+        verbose_name_plural = "Brouillons de rapports d'intervention"
+
+    def __str__(self):
+        return f"Brouillon #{self.pk} — {self.created_by}"
+
+
 def assign_numero_rapport_si_absent(rapport):
     """
     Attribue un numéro séquentiel pour l'année de rapport.date.

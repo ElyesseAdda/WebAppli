@@ -243,6 +243,26 @@ export const useRapports = () => {
     }
   }, []);
 
+  /** Brouillons serveur (modèle RapportInterventionBrouillon) — sans `setLoading` global pour éviter de bloquer le formulaire. */
+  const createRapportBrouillon = useCallback(async (data) => {
+    const response = await axios.post("/api/rapports-intervention-brouillons/", data);
+    return response.data;
+  }, []);
+
+  const patchRapportBrouillon = useCallback(async (id, data) => {
+    const response = await axios.patch(`/api/rapports-intervention-brouillons/${id}/`, data);
+    return response.data;
+  }, []);
+
+  const promouvoirRapportBrouillon = useCallback(async (id, data = {}) => {
+    const response = await axios.post(`/api/rapports-intervention-brouillons/${id}/promouvoir/`, data);
+    return response.data;
+  }, []);
+
+  const deleteRapportBrouillon = useCallback(async (id) => {
+    await axios.delete(`/api/rapports-intervention-brouillons/${id}/`);
+  }, []);
+
   return {
     rapports,
     rapport,
@@ -266,5 +286,9 @@ export const useRapports = () => {
     fetchTitres,
     createTitre,
     deleteTitre,
+    createRapportBrouillon,
+    patchRapportBrouillon,
+    promouvoirRapportBrouillon,
+    deleteRapportBrouillon,
   };
 };

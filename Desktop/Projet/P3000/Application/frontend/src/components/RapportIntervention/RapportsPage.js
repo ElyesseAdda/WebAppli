@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Box, Button, Typography, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, IconButton, TextField,
@@ -22,6 +22,7 @@ import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
 const STATUT_LABELS = {
   brouillon: "Brouillon",
+  brouillon_serveur: "Brouillon serveur",
   a_faire: "A faire",
   en_cours: "En cours",
   termine: "Terminé",
@@ -42,6 +43,8 @@ const getStatusStyles = (statut) => ({
       ? "success.light"
       : statut === "en_cours"
       ? "warning.light"
+      : statut === "brouillon_serveur"
+      ? "secondary.light"
       : statut === "brouillon"
       ? "info.light"
       : "grey.200",
@@ -50,18 +53,21 @@ const getStatusStyles = (statut) => ({
       ? "success.dark"
       : statut === "en_cours"
       ? "warning.dark"
+      : statut === "brouillon_serveur"
+      ? "secondary.dark"
       : statut === "brouillon"
       ? "info.dark"
       : "grey.700",
   fontWeight: 500,
   textTransform: "capitalize",
-  cursor: "pointer",
-  "&:hover": { opacity: 0.9 },
+  cursor: statut === "brouillon_serveur" ? "default" : "pointer",
+  "&:hover": { opacity: statut === "brouillon_serveur" ? 1 : 0.9 },
 });
 
 const RapportsPage = () => {
   const navigate = useNavigate();
-  const { rapports, rapportsCount, fetchRapports, deleteRapport, patchRapport, loading } = useRapports();
+  const { rapports, rapportsCount, fetchRapports, deleteRapport, patchRapport, deleteRapportBrouillon, loading } = useRapports();
+  const [brouillonsServeur, setBrouillonsServeur] = useState([]);
   const [filters, setFilters] = useState({
     technicien: "",
     client_societe: "",
@@ -101,6 +107,13 @@ const RapportsPage = () => {
       cleanFilters.devis_a_faire = "true";
       cleanFilters.devis_fait = "false";
     }
+    axios
+      .get("/api/rapports-intervention-brouillons/")
+      .then((r) => {
+        const d = r.data;
+        setBrouillonsServeur(Array.isArray(d) ? d : []);
+      })
+      .catch(() => setBrouillonsServeur([]));
     return fetchRapports(cleanFilters, {
       page: listPage,
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
@@ -109,15 +122,58 @@ const RapportsPage = () => {
     });
   }, [fetchRapports, filters, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
+  const brouillonsFiltres = useMemo(() => {
+    return brouillonsServeur.filter((b) => {
+      if (filters.residence && Number(b.residence) !== Number(filters.residence)) return false;
+      if (filters.type_rapport && b.type_rapport !== filters.type_rapport) return false;
+      if (filters.date_creation) {
+        const ds = b.date ? String(b.date).slice(0, 10) : "";
+        if (ds !== filters.date_creation) return false;
+      }
+      if (filters.technicien) {
+        const t = String(b.technicien || "").toLowerCase();
+        if (!t.includes(String(filters.technicien).toLowerCase())) return false;
+      }
+      if (filters.client_societe && Number(b.client_societe) !== Number(filters.client_societe)) return false;
+      if (showOnlyDevisAFaireV && (!b.devis_a_faire || b.devis_fait)) return false;
+      return true;
+    });
+  }, [brouillonsServeur, filters, showOnlyDevisAFaireV]);
+
+  const brouillonsSorted = useMemo(() => {
+    return [...brouillonsFiltres].sort((a, b) => {
+      const ta = new Date(a.updated_at || 0).getTime();
+      const tb = new Date(b.updated_at || 0).getTime();
+      return dateSortOrder === "desc" ? tb - ta : ta - tb;
+    });
+  }, [brouillonsFiltres, dateSortOrder]);
+
+  const displayRapports = listPage === 1 ? [...brouillonsSorted, ...rapports] : rapports;
+
+  const showInitialLoading =
+    loading && rapports.length === 0 && (listPage > 1 || brouillonsSorted.length === 0);
+
   useEffect(() => {
     loadRapports();
   }, [loadRapports]);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (row) => {
+    if (row?.is_brouillon_serveur) {
+      if (!window.confirm("Supprimer ce brouillon en ligne ?")) return;
+      try {
+        await deleteRapportBrouillon(row.id);
+        setSnackbar({ open: true, message: "Brouillon supprimé", severity: "success" });
+        loadRapports();
+      } catch {
+        setSnackbar({ open: true, message: "Erreur lors de la suppression du brouillon", severity: "error" });
+      }
+      return;
+    }
     if (!window.confirm("Supprimer ce rapport ?")) return;
     try {
-      await deleteRapport(id);
+      await deleteRapport(row.id);
       setSnackbar({ open: true, message: "Rapport supprime", severity: "success" });
+      loadRapports();
     } catch {
       setSnackbar({ open: true, message: "Erreur lors de la suppression", severity: "error" });
     }
@@ -550,13 +606,13 @@ const RapportsPage = () => {
       </Paper>
 
       {/* Liste paginée côté serveur (tri + filtre terminés) */}
-      {loading && rapports.length === 0 ? (
+      {showInitialLoading ? (
         <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
           <Typography variant="body1" color="text.secondary">
             Chargement...
           </Typography>
         </Paper>
-      ) : !loading && rapportsCount === 0 ? (
+      ) : !loading && rapportsCount === 0 && brouillonsFiltres.length === 0 ? (
         <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
           <Typography variant="body1" color="text.secondary">
             Aucun rapport d&apos;intervention ne correspond à ces critères.
@@ -587,12 +643,21 @@ const RapportsPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {rapports.map((rapport) => (
+                {displayRapports.map((rapport) => {
+                  const rowKey = rapport.is_brouillon_serveur ? `br-${rapport.id}` : rapport.id;
+                  const st = rapport.statut || "a_faire";
+                  return (
                   <TableRow
-                    key={rapport.id}
+                    key={rowKey}
                     hover
                     sx={{ cursor: "pointer" }}
-                    onClick={() => window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank")}
+                    onClick={() => {
+                      if (rapport.is_brouillon_serveur) {
+                        navigate(`/RapportIntervention/nouveau?brouillon=${rapport.id}`);
+                      } else {
+                        window.open(`/api/preview-rapport-intervention/${rapport.id}/`, "_blank");
+                      }
+                    }}
                   >
                     <TableCell sx={{ fontWeight: 600 }}>
                       {rapport.residence_nom || "Sans residence"}
@@ -608,7 +673,9 @@ const RapportsPage = () => {
                     <TableCell>{rapport.technicien || "-"}</TableCell>
                     <TableCell>{rapport.client_societe_nom || "-"}</TableCell>
                     <TableCell sx={{ textAlign: "center" }}>
-                      {rapport.devis_fait ? (
+                      {rapport.is_brouillon_serveur ? (
+                        <Typography variant="caption" color="text.disabled">—</Typography>
+                      ) : rapport.devis_fait ? (
                         <IconButton
                           size="small"
                           onClick={(e) => handleBlueThumbClick(e, rapport)}
@@ -626,16 +693,25 @@ const RapportsPage = () => {
                       )}
                     </TableCell>
                     <TableCell
-                      onClick={(e) => handleStatusClick(e, rapport)}
-                      sx={{ cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }}
+                      onClick={(e) => {
+                        if (rapport.is_brouillon_serveur) e.stopPropagation();
+                        else handleStatusClick(e, rapport);
+                      }}
+                      sx={
+                        rapport.is_brouillon_serveur
+                          ? { cursor: "default" }
+                          : { cursor: "pointer", "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" } }
+                      }
                     >
-                      <Typography variant="body2" sx={getStatusStyles(rapport.statut || "a_faire")}>
-                        {STATUT_LABELS[rapport.statut] || rapport.statut || "A faire"}
+                      <Typography variant="body2" sx={getStatusStyles(st)}>
+                        {STATUT_LABELS[st] || st || "A faire"}
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: "center", whiteSpace: "nowrap" }}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {!rapport.is_brouillon_serveur && (
+                        <>
                       <IconButton
                         size="small"
                         onClick={() => handleGeneratePDF(rapport)}
@@ -651,17 +727,27 @@ const RapportsPage = () => {
                         color="primary"
                         tooltipPlacement="top"
                       />
+                        </>
+                      )}
                       <IconButton size="small" color="primary"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/RapportIntervention/${rapport.id}`); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (rapport.is_brouillon_serveur) {
+                            navigate(`/RapportIntervention/nouveau?brouillon=${rapport.id}`);
+                          } else {
+                            navigate(`/RapportIntervention/${rapport.id}`);
+                          }
+                        }}
                       >
                         <MdEdit />
                       </IconButton>
-                      <IconButton size="small" color="error" onClick={() => handleDelete(rapport.id)}>
+                      <IconButton size="small" color="error" onClick={() => handleDelete(rapport)}>
                         <MdDelete />
                       </IconButton>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

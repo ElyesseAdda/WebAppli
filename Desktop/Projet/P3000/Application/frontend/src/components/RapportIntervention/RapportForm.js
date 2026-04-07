@@ -14,7 +14,7 @@ import {
   MdCheckCircle, MdErrorOutline,
 } from "react-icons/md";
 import axios from "axios";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { COLORS } from "../../constants/colors";
 import { useRapports } from "../../hooks/useRapports";
 import PrestationSection from "./PrestationSection";
@@ -27,6 +27,7 @@ import {
   loadRapportDraftPhotos,
   applyPhotoSnapshotToState,
   photoSnapshotIsEmpty,
+  deserializePhotoSnapshotFromPayload,
 } from "../../utils/rapportDraftIDB";
 
 const EMPTY_PRESTATION = {
@@ -36,6 +37,15 @@ const EMPTY_PRESTATION = {
   commentaire: "",
   prestation_possible: true,
   prestation_realisee: "",
+};
+
+/** Export PNG du pad ; null si vide ou canvas « tainted » (évite SecurityError en promotion / autosave). */
+const safeGetSignatureDataUrl = (padRef) => {
+  try {
+    return padRef?.current?.getSignatureDataUrl?.() ?? null;
+  } catch {
+    return null;
+  }
 };
 
 /** Libellés français pour les clés d'erreur API (DRF). */
@@ -426,6 +436,45 @@ const mergeFormDataFromDraft = (draft) => {
   };
 };
 
+/** Hydratation depuis le JSON `payload` d'un RapportInterventionBrouillon (API). */
+const mergeFormDataFromApiPayload = (data) => {
+  if (!data || typeof data !== "object") return createInitialFormData();
+  const prestationsSrc = Array.isArray(data.prestations) && data.prestations.length
+    ? data.prestations.map((p) => ({ ...EMPTY_PRESTATION, ...p }))
+    : [{ ...EMPTY_PRESTATION }];
+  return {
+    ...createInitialFormData(),
+    titre: data.titre || "",
+    dates_intervention: normalizeDatesInterventionFromApi(data),
+    technicien: data.technicien || "",
+    objet_recherche: data.objet_recherche || "",
+    resultat: data.resultat || "",
+    temps_trajet: floatHoursToTimeInput(data.temps_trajet),
+    temps_taches: floatHoursToTimeInput(data.temps_taches),
+    client_societe: data.client_societe || "",
+    chantier: data.chantier || "",
+    residence: data.residence ?? null,
+    residence_nom: data.residence_nom || "",
+    residence_adresse: data.residence_adresse || "",
+    adresse_vigik: data.adresse_vigik ?? "",
+    logement: data.logement || "",
+    locataire_nom: data.locataire_nom || "",
+    locataire_prenom: data.locataire_prenom || "",
+    locataire_telephone: data.locataire_telephone || "",
+    locataire_email: data.locataire_email || "",
+    type_rapport: data.type_rapport || "intervention",
+    statut: data.statut || "brouillon",
+    prestations: prestationsSrc,
+    numero_batiment: data.numero_batiment ?? "",
+    type_installation: data.type_installation ?? "",
+    presence_platine: data.presence_platine ?? null,
+    presence_platine_portail: data.presence_platine_portail ?? null,
+    devis_a_faire: !!data.devis_a_faire,
+    devis_fait: !!data.devis_fait,
+    devis_lie: data.devis_lie ?? null,
+  };
+};
+
 const formatDraftSavedAt = (savedAt) => {
   if (!savedAt || typeof savedAt !== "number") return "";
   try {
@@ -438,18 +487,32 @@ const formatDraftSavedAt = (savedAt) => {
   }
 };
 
-const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onReportCreated, onRapportIdAssigned }) => {
+const RapportForm = ({
+  rapportId: propRapportId,
+  onBack,
+  saveButtonAtBottom,
+  onReportCreated,
+  onRapportIdAssigned,
+  serverBrouillonIdToLoad = null,
+}) => {
   const { id: paramId } = useParams();
+  const [searchParams] = useSearchParams();
   const rapportId = propRapportId || paramId;
   const isEdit = !!rapportId;
   const navigate = useNavigate();
+  const brouillonLoadRaw =
+    serverBrouillonIdToLoad != null && String(serverBrouillonIdToLoad).trim() !== ""
+      ? String(serverBrouillonIdToLoad).trim()
+      : searchParams.get("brouillon");
+  const brouillonLoadId = brouillonLoadRaw && /^\d+$/.test(brouillonLoadRaw) ? brouillonLoadRaw : null;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const {
-    fetchRapport, createRapport, updateRapport, uploadPhoto, updatePhoto,
+    fetchRapport, updateRapport, uploadPhoto, updatePhoto,
     deletePhoto, uploadSignature, genererPdf,
     fetchTitres, createTitre, deleteTitre, loading,
+    createRapportBrouillon, patchRapportBrouillon, promouvoirRapportBrouillon,
   } = useRapports();
 
   const [formData, setFormData] = useState(createInitialFormData);
@@ -496,6 +559,8 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const [draftRestoreLoading, setDraftRestoreLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [signatureDraftRestoreUrl, setSignatureDraftRestoreUrl] = useState(null);
+  /** Brouillon serveur (nouveau rapport sans id) — promouvoir → RapportIntervention. */
+  const [serverBrouillonId, setServerBrouillonId] = useState(null);
 
   const formDataRef = useRef(null);
   const selectedResidenceRef = useRef(null);
@@ -507,6 +572,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   const savingRef = useRef(false);
   const isEditRef = useRef(isEdit);
   const rapportIdRef = useRef(rapportId);
+  const serverBrouillonIdRef = useRef(null);
+  const serverBrouillonLoadedRef = useRef(null);
+  const lastDraftMediaRef = useRef(null);
   const draftPersistCoalesceRef = useRef({ pending: false, running: false });
   const scheduleDraftPersistenceImplRef = useRef(() => {});
 
@@ -525,6 +593,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   savingRef.current = saving;
   isEditRef.current = isEdit;
   rapportIdRef.current = rapportId;
+  serverBrouillonIdRef.current = serverBrouillonId;
 
   const scheduleDraftPersistence = () => scheduleDraftPersistenceImplRef.current();
 
@@ -610,12 +679,169 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   }, [rapportId, loadRapport]);
 
   useEffect(() => {
+    if (!brouillonLoadId) {
+      serverBrouillonLoadedRef.current = null;
+    }
+  }, [brouillonLoadId]);
+
+  useEffect(() => {
+    if (isEdit || !brouillonLoadId) return;
+    if (serverBrouillonLoadedRef.current === brouillonLoadId) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const { data } = await axios.get(`/api/rapports-intervention-brouillons/${brouillonLoadId}/`);
+        if (cancel || !data?.payload) return;
+        serverBrouillonLoadedRef.current = brouillonLoadId;
+        setFormData(mergeFormDataFromApiPayload(data.payload));
+        setServerBrouillonId(data.id);
+        const dm = data.payload._draft_media;
+        lastDraftMediaRef.current = dm || null;
+        const typeRap = data.payload.type_rapport || "intervention";
+        const isVigik = typeRap === "vigik_plus";
+        const isV2 = dm && (dm.version === 2 || dm.signature_s3_key || dm.prestation_photos || dm.photo_platine_s3_key);
+        if (isV2) {
+          const sigUrl = dm.signature_presigned_url || dm.signature_draft_data_url;
+          setSignatureDraftRestoreUrl(sigUrl && String(sigUrl).length > 32 ? sigUrl : null);
+          if (!isVigik && dm.prestation_photos && Object.keys(dm.prestation_photos).length > 0) {
+            const out = {};
+            for (const [idxStr, items] of Object.entries(dm.prestation_photos)) {
+              if (!Array.isArray(items)) continue;
+              out[idxStr] = [];
+              for (const meta of items) {
+                if (!meta?.s3_key) continue;
+                const url = meta.presigned_url;
+                if (url) {
+                  try {
+                    const blob = await fetch(url).then((r) => r.blob());
+                    const file = new File([blob], meta.filename || "photo.jpg", { type: blob.type || "image/jpeg" });
+                    out[idxStr].push({
+                      file,
+                      _previewUrl: URL.createObjectURL(file),
+                      type_photo: meta.type_photo,
+                      filename: meta.filename,
+                      date_photo: meta.date_photo,
+                      _draftS3Key: meta.s3_key,
+                    });
+                    continue;
+                  } catch {
+                    /* fallback _draftS3Key seul */
+                  }
+                }
+                out[idxStr].push({
+                  type_photo: meta.type_photo,
+                  filename: meta.filename,
+                  date_photo: meta.date_photo,
+                  _draftS3Key: meta.s3_key,
+                });
+              }
+            }
+            setPendingPhotos(out);
+          } else if (!isVigik) {
+            setPendingPhotos({});
+          }
+          if (isVigik) {
+            setPendingPhotos({});
+            if (dm.photo_platine_s3_key) {
+              if (dm.photo_platine_presigned_url) {
+                try {
+                  const blob = await fetch(dm.photo_platine_presigned_url).then((r) => r.blob());
+                  const file = new File([blob], "platine.jpg", { type: blob.type || "image/jpeg" });
+                  setPendingPhotoPlatine({
+                    file,
+                    previewUrl: URL.createObjectURL(file),
+                    name: file.name,
+                    _draftS3Key: dm.photo_platine_s3_key,
+                  });
+                } catch {
+                  setPendingPhotoPlatine({
+                    name: "platine.jpg",
+                    previewUrl: null,
+                    _draftS3Key: dm.photo_platine_s3_key,
+                  });
+                }
+              } else {
+                setPendingPhotoPlatine({
+                  name: "platine.jpg",
+                  previewUrl: null,
+                  _draftS3Key: dm.photo_platine_s3_key,
+                });
+              }
+            } else {
+              setPendingPhotoPlatine(null);
+            }
+            if (dm.photo_platine_portail_s3_key) {
+              if (dm.photo_platine_portail_presigned_url) {
+                try {
+                  const blob = await fetch(dm.photo_platine_portail_presigned_url).then((r) => r.blob());
+                  const file = new File([blob], "platine_portail.jpg", { type: blob.type || "image/jpeg" });
+                  setPendingPhotoPlatinePortail({
+                    file,
+                    previewUrl: URL.createObjectURL(file),
+                    name: file.name,
+                    _draftS3Key: dm.photo_platine_portail_s3_key,
+                  });
+                } catch {
+                  setPendingPhotoPlatinePortail({
+                    name: "platine_portail.jpg",
+                    previewUrl: null,
+                    _draftS3Key: dm.photo_platine_portail_s3_key,
+                  });
+                }
+              } else {
+                setPendingPhotoPlatinePortail({
+                  name: "platine_portail.jpg",
+                  previewUrl: null,
+                  _draftS3Key: dm.photo_platine_portail_s3_key,
+                });
+              }
+            } else {
+              setPendingPhotoPlatinePortail(null);
+            }
+          } else {
+            setPendingPhotoPlatine(null);
+            setPendingPhotoPlatinePortail(null);
+          }
+        } else {
+          const sigUrl = dm?.signature_draft_data_url;
+          setSignatureDraftRestoreUrl(sigUrl && String(sigUrl).length > 32 ? sigUrl : null);
+          const snap = deserializePhotoSnapshotFromPayload(dm?.photo_snapshot);
+          if (snap && !photoSnapshotIsEmpty(snap)) {
+            const applied = applyPhotoSnapshotToState(snap);
+            setPendingPhotos(applied.pendingPhotos);
+            setPendingPhotoPlatine(applied.pendingPhotoPlatine);
+            setPendingPhotoPlatinePortail(applied.pendingPhotoPlatinePortail);
+          } else {
+            setPendingPhotos({});
+            setPendingPhotoPlatine(null);
+            setPendingPhotoPlatinePortail(null);
+          }
+        }
+      } catch {
+        serverBrouillonLoadedRef.current = null;
+        setSnackbar({
+          open: true,
+          message: "Impossible de charger le brouillon serveur",
+          severity: "error",
+        });
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [isEdit, brouillonLoadId]);
+
+  useEffect(() => {
     draftPromptForIdRef.current = null;
   }, [rapportId]);
 
   /** Brouillon local : proposition de restauration (nouveau rapport). */
   useEffect(() => {
     if (isEdit) return;
+    if (brouillonLoadId) {
+      setDraftSaveEnabled(true);
+      return;
+    }
     const key = getRapportDraftStorageKey(null);
     const draft = readRapportDraftFromStorage(key);
     const hasPhotos = !!draft?.cachedPhotos;
@@ -628,7 +854,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
       return;
     }
     setDraftDialog({ open: true, payload: draft });
-  }, [isEdit]);
+  }, [isEdit, brouillonLoadId]);
 
   /** Brouillon local : proposition de restauration (modification). */
   useEffect(() => {
@@ -830,6 +1056,18 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     });
   }, [rapportId, formData.chantier, formData.residence, rapportData?.residence_data, chantiers]);
 
+  /** Nouveau rapport : résidence choisie par id (ex. chargement brouillon serveur) avant options chargées. */
+  useEffect(() => {
+    if (rapportId) return;
+    if (!formData.residence) return;
+    const r = residences.find((x) => x.id === formData.residence);
+    if (!r) return;
+    setSelectedResidence((prev) => {
+      if (prev?.id === r.id && prev?.optionType === "residence" && !prev._fromChantier) return prev;
+      return { ...r, optionType: "residence" };
+    });
+  }, [rapportId, formData.residence, residences]);
+
   const handlePrestationChange = (index, updatedPrestation) => {
     setFormData((prev) => {
       const newPrestations = [...prev.prestations];
@@ -906,7 +1144,7 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   };
 
   const uploadPendingSignature = async (savedRapportId) => {
-    const signatureData = signaturePadRef.current?.getSignatureDataUrl?.();
+    const signatureData = safeGetSignatureDataUrl(signaturePadRef);
     if (!signatureData) return;
     try {
       await uploadSignature(savedRapportId, signatureData);
@@ -1111,7 +1349,9 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     };
   };
 
-  const uploadPhotosAndSignatureAfterSave = async (savedId, result) => {
+  const uploadPhotosAndSignatureAfterSave = async (savedId, result, opts = {}) => {
+    if (opts.skipPendingUpload) return;
+    if (savedId == null || savedId === undefined) return;
     if (!isVigikPlus && result?.prestations) {
       await uploadPendingPhotos(result);
     } else if (!isVigikPlus) {
@@ -1144,28 +1384,166 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
   };
 
   /**
+   * Brouillon serveur : upload S3 (même logique que les rapports) puis manifeste `_draft_media` v2.
+   * Sans `bid`, retourne null (pas de médias dans le JSON tant que le brouillon n’existe pas).
+   */
+  const buildDraftMediaForServer = useCallback(async (bid) => {
+    if (!bid) return null;
+    const pp = pendingPhotosRef.current || {};
+    const pPlat = pendingPhotoPlatineRef.current;
+    const pPort = pendingPhotoPlatinePortailRef.current;
+    const vigik = formDataRef.current?.type_rapport === "vigik_plus";
+    const dateRef = latestInterventionISO(formDataRef.current?.dates_intervention) || todayISO();
+
+    const prestation_photos = {};
+    for (const [idxStr, arr] of Object.entries(pp)) {
+      if (!arr?.length) continue;
+      const row = [];
+      for (const p of arr) {
+        if (p._draftS3Key) {
+          row.push({
+            s3_key: p._draftS3Key,
+            type_photo: p.type_photo || "avant",
+            filename: p.filename || p.file?.name || "photo.jpg",
+            date_photo: p.date_photo || dateRef,
+          });
+          continue;
+        }
+        if (!p.file) continue;
+        const fd = new FormData();
+        fd.append("photo", p.file);
+        fd.append("prestation_index", idxStr);
+        fd.append("type_photo", p.type_photo || "avant");
+        fd.append("date_photo", p.date_photo || dateRef);
+        const { data } = await axios.post(
+          `/api/rapports-intervention-brouillons/${bid}/upload_photo/`,
+          fd,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        row.push({
+          s3_key: data.s3_key,
+          type_photo: data.type_photo || p.type_photo || "avant",
+          filename: data.filename || p.filename || "photo.jpg",
+          date_photo: data.date_photo || p.date_photo || dateRef,
+        });
+      }
+      if (row.length) prestation_photos[idxStr] = row;
+    }
+
+    let signature_s3_key = lastDraftMediaRef.current?.signature_s3_key ?? null;
+    const sigData = safeGetSignatureDataUrl(signaturePadRef);
+    const padHasVisual = signaturePadRef.current?.hasSignature?.() ?? false;
+    if (sigData && String(sigData).length > 32) {
+      const { data: sigRes } = await axios.post(`/api/rapports-intervention-brouillons/${bid}/upload_signature/`, {
+        signature: sigData,
+      });
+      signature_s3_key = sigRes.s3_key || null;
+    } else if (padHasVisual && signature_s3_key) {
+      /* Canvas non exportable (ex. image sans CORS avant correctif) : on garde la clé S3 déjà enregistrée. */
+    }
+
+    let photo_platine_s3_key = null;
+    let photo_platine_portail_s3_key = null;
+    if (vigik) {
+      if (pPlat?.file && !pPlat._draftS3Key) {
+        const fd = new FormData();
+        fd.append("photo", pPlat.file);
+        const { data } = await axios.post(
+          `/api/rapports-intervention-brouillons/${bid}/upload_photo_platine/`,
+          fd,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        photo_platine_s3_key = data.s3_key || null;
+      } else if (pPlat?._draftS3Key) {
+        photo_platine_s3_key = pPlat._draftS3Key;
+      }
+      if (pPort?.file && !pPort._draftS3Key) {
+        const fd = new FormData();
+        fd.append("photo", pPort.file);
+        const { data } = await axios.post(
+          `/api/rapports-intervention-brouillons/${bid}/upload_photo_platine_portail/`,
+          fd,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        photo_platine_portail_s3_key = data.s3_key || null;
+      } else if (pPort?._draftS3Key) {
+        photo_platine_portail_s3_key = pPort._draftS3Key;
+      }
+    }
+
+    const hasV2 =
+      signature_s3_key ||
+      photo_platine_s3_key ||
+      photo_platine_portail_s3_key ||
+      Object.keys(prestation_photos).length > 0;
+    if (!hasV2) return null;
+
+    setPendingPhotos((prev) => {
+      const next = { ...prev };
+      for (const idxStr of Object.keys(prestation_photos)) {
+        const metaList = prestation_photos[idxStr];
+        const arr = next[idxStr] || [];
+        next[idxStr] = arr.map((item, i) => {
+          const m = metaList[i];
+          if (m?.s3_key && !item._draftS3Key) return { ...item, _draftS3Key: m.s3_key };
+          return item;
+        });
+      }
+      return next;
+    });
+    if (photo_platine_s3_key && pPlat) {
+      setPendingPhotoPlatine((prev) => (prev ? { ...prev, _draftS3Key: photo_platine_s3_key } : prev));
+    }
+    if (photo_platine_portail_s3_key && pPort) {
+      setPendingPhotoPlatinePortail((prev) => (prev ? { ...prev, _draftS3Key: photo_platine_portail_s3_key } : prev));
+    }
+
+    return {
+      version: 2,
+      signature_s3_key,
+      photo_platine_s3_key: vigik ? photo_platine_s3_key : null,
+      photo_platine_portail_s3_key: vigik ? photo_platine_portail_s3_key : null,
+      prestation_photos: vigik ? {} : prestation_photos,
+    };
+  }, []);
+
+  /**
    * @param {string} statutToSend
    * @param {{ silent?: boolean, navigateAfterCreate?: boolean }} opts — silent = brouillon auto, pas de modale succès
    */
   const persistRapportCore = async (statutToSend, { silent = false, navigateAfterCreate = true } = {}) => {
-    const dataToSend = buildRapportPayload(statutToSend);
+    let dataToSend = buildRapportPayload(statutToSend);
     const hadNoId = !rapportId;
 
-    let result;
-    if (rapportId) {
-      result = await updateRapport(rapportId, dataToSend);
-    } else {
-      result = await createRapport(dataToSend);
+    if (!rapportId) {
+      try {
+        let bid = serverBrouillonIdRef.current;
+        if (!bid) {
+          const br = await createRapportBrouillon({
+            payload: { ...buildRapportPayload(statutToSend), _draft_media: null },
+          });
+          setServerBrouillonId(br.id);
+          bid = br.id;
+        }
+        const media = await buildDraftMediaForServer(bid);
+        dataToSend = { ...buildRapportPayload(statutToSend), _draft_media: media };
+        lastDraftMediaRef.current = media;
+        await patchRapportBrouillon(bid, { payload: dataToSend });
+      } catch (err) {
+        console.warn("Sauvegarde brouillon serveur :", err);
+        throw err;
+      }
+      if (silent) {
+        return null;
+      }
+      return null;
     }
 
+    const result = await updateRapport(rapportId, dataToSend);
     const savedId = result?.id || rapportId;
     await uploadPhotosAndSignatureAfterSave(savedId, result);
 
     if (silent) {
-      if (navigateAfterCreate && hadNoId && savedId) {
-        onRapportIdAssigned?.(savedId);
-        navigate(`/RapportIntervention/${savedId}`, { replace: true });
-      }
       await loadRapport(savedId);
       setFormData((prev) => ({ ...prev, statut: statutToSend }));
       return savedId;
@@ -1184,7 +1562,40 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
     suppressDraftAutosaveRef.current = true;
     setSaving(true);
     try {
-      await persistRapportCore("en_cours", { silent: false });
+      if (!rapportId) {
+        let bid = serverBrouillonIdRef.current;
+        if (!bid) {
+          const br = await createRapportBrouillon({
+            payload: { ...buildRapportPayload("brouillon"), _draft_media: null },
+          });
+          bid = br.id;
+          setServerBrouillonId(bid);
+        }
+        const media = await buildDraftMediaForServer(bid);
+        await patchRapportBrouillon(bid, {
+          payload: { ...buildRapportPayload("brouillon"), _draft_media: media },
+        });
+        lastDraftMediaRef.current = media;
+        const mergePayload = buildRapportPayload("en_cours");
+        const result = await promouvoirRapportBrouillon(bid, mergePayload);
+        const savedId = result?.id;
+        if (!savedId) {
+          throw new Error("Réponse invalide après promotion du brouillon");
+        }
+        setPendingPhotos({});
+        setPendingPhotoPlatine(null);
+        setPendingPhotoPlatinePortail(null);
+        setSignatureDraftRestoreUrl(null);
+        await uploadPhotosAndSignatureAfterSave(savedId, result, { skipPendingUpload: true });
+        setSuccessModalContext({ isEdit: false, savedId });
+        setSuccessModalOpen(true);
+        setServerBrouillonId(null);
+        lastDraftMediaRef.current = null;
+        clearRapportDraftStorageKey(getRapportDraftStorageKey(null));
+        clearRapportDraftPhotos(getRapportDraftStorageKey(null)).catch(() => {});
+      } else {
+        await persistRapportCore("en_cours", { silent: false });
+      }
     } catch (err) {
       const payload = buildSaveErrorFromApi(err);
       setSaveErrorModal({ open: true, ...payload });
@@ -1225,9 +1636,13 @@ const RapportForm = ({ rapportId: propRapportId, onBack, saveButtonAtBottom, onR
         const pPort = pendingPhotoPlatinePortailRef.current;
         const hasPendingPhotos =
           Object.values(pp || {}).some((arr) => arr?.length > 0) || pPlat || pPort;
-        const sigDraft = signaturePadRef.current?.getSignatureDataUrl?.() ?? null;
+        const sigDraft = safeGetSignatureDataUrl(signaturePadRef);
+        const padHasSig = signaturePadRef.current?.hasSignature?.() ?? false;
+        const signatureTaintedButPresent = padHasSig && !sigDraft;
         const draftHasContent =
-          isDraftPayloadMeaningful({ formData: fd, signatureDraftDataUrl: sigDraft }) || hasPendingPhotos;
+          isDraftPayloadMeaningful({ formData: fd, signatureDraftDataUrl: sigDraft }) ||
+          hasPendingPhotos ||
+          signatureTaintedButPresent;
 
         if (!draftHasContent) {
           clearRapportDraftStorageKey(key);

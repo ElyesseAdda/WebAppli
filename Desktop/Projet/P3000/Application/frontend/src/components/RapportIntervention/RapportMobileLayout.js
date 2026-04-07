@@ -10,17 +10,25 @@ import { COLORS } from "../../constants/colors";
 const RapportMobileLayout = () => {
   const [currentView, setCurrentView] = useState("list");
   const [selectedRapportId, setSelectedRapportId] = useState(null);
+  const [selectedServerBrouillonId, setSelectedServerBrouillonId] = useState(null);
   const [navValue, setNavValue] = useState(0);
   const { logout, user } = useAuth();
 
   const handleCreateNew = () => {
     setSelectedRapportId(null);
+    setSelectedServerBrouillonId(null);
     setCurrentView("form");
     setNavValue(1);
   };
 
-  const handleEditRapport = (id) => {
-    setSelectedRapportId(id);
+  const handleEditRapport = (rapport) => {
+    if (rapport?.is_brouillon_serveur) {
+      setSelectedRapportId(null);
+      setSelectedServerBrouillonId(rapport.id);
+    } else {
+      setSelectedRapportId(typeof rapport === "object" ? rapport.id : rapport);
+      setSelectedServerBrouillonId(null);
+    }
     setCurrentView("form");
     setNavValue(1);
   };
@@ -28,10 +36,20 @@ const RapportMobileLayout = () => {
   const handleBackToList = () => {
     setCurrentView("list");
     setSelectedRapportId(null);
+    setSelectedServerBrouillonId(null);
     setNavValue(0);
   };
 
-  const handleSelectRapport = (id) => {
+  const handleSelectRapport = (rapport) => {
+    if (rapport?.is_brouillon_serveur) {
+      setSelectedRapportId(null);
+      setSelectedServerBrouillonId(rapport.id);
+      setCurrentView("form");
+      setNavValue(1);
+      return;
+    }
+    const id = typeof rapport === "object" ? rapport.id : rapport;
+    setSelectedServerBrouillonId(null);
     setSelectedRapportId(id);
     setCurrentView("detail");
   };
@@ -39,10 +57,12 @@ const RapportMobileLayout = () => {
   const handleBackFromDetail = () => {
     setCurrentView("list");
     setSelectedRapportId(null);
+    setSelectedServerBrouillonId(null);
     setNavValue(0);
   };
 
   const handleReportCreated = (id) => {
+    setSelectedServerBrouillonId(null);
     setSelectedRapportId(id);
     setCurrentView("detail");
     setNavValue(0);
@@ -53,8 +73,10 @@ const RapportMobileLayout = () => {
     if (newValue === 0) {
       setCurrentView("list");
       setSelectedRapportId(null);
+      setSelectedServerBrouillonId(null);
     } else if (newValue === 1) {
       setSelectedRapportId(null);
+      setSelectedServerBrouillonId(null);
       setCurrentView("form");
     }
   };
@@ -64,10 +86,14 @@ const RapportMobileLayout = () => {
       return (
         <RapportForm
           rapportId={selectedRapportId}
+          serverBrouillonIdToLoad={selectedServerBrouillonId}
           onBack={handleBackToList}
           saveButtonAtBottom
           onReportCreated={handleReportCreated}
-          onRapportIdAssigned={(id) => setSelectedRapportId(id)}
+          onRapportIdAssigned={(id) => {
+            setSelectedServerBrouillonId(null);
+            setSelectedRapportId(id);
+          }}
         />
       );
     }
