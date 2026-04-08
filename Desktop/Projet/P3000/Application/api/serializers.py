@@ -2153,6 +2153,7 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
     agent_name = serializers.CharField(source='agent.name', read_only=True)
     agent_surname = serializers.CharField(source='agent.surname', read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True, allow_null=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True, allow_null=True)
     type_affectation_display = serializers.CharField(source='get_type_affectation_display', read_only=True)
     
     class Meta:
@@ -2162,25 +2163,33 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
             'mois', 'annee', 'montant', 'description',
             'type_affectation', 'type_affectation_display',
             'chantier', 'chantier_name',
+            'agence', 'agence_nom',
             'created_at', 'updated_at', 'created_by'
         ]
         read_only_fields = ['created_at', 'updated_at', 'created_by']
     
     def validate(self, data):
         """Validation personnalisée"""
-        # Si type_affectation = 'chantier', chantier est obligatoire
         if data.get('type_affectation') == 'chantier' and not data.get('chantier'):
             raise serializers.ValidationError({
                 'chantier': "Un chantier doit être spécifié pour une prime de type 'chantier'"
             })
         
-        # Si type_affectation = 'agence', chantier doit être null
+        if data.get('type_affectation') == 'agence' and not data.get('agence'):
+            raise serializers.ValidationError({
+                'agence': "Une agence doit être spécifiée pour une prime de type 'agence'"
+            })
+        
         if data.get('type_affectation') == 'agence' and data.get('chantier'):
             raise serializers.ValidationError({
                 'chantier': "Une prime de type 'agence' ne peut pas avoir de chantier associé"
             })
         
-        # Vérifier que le montant est positif
+        if data.get('type_affectation') == 'chantier' and data.get('agence'):
+            raise serializers.ValidationError({
+                'agence': "Une prime de type 'chantier' ne peut pas avoir d'agence associée"
+            })
+        
         if data.get('montant') and data['montant'] <= 0:
             raise serializers.ValidationError({
                 'montant': "Le montant de la prime doit être positif"

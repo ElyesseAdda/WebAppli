@@ -799,6 +799,8 @@ const TableauSousTraitant = () => {
       ajustement_montant: item.ajustement_montant || 0,
       ajustement_description: item.ajustement_description || "",
       chantiersDetails: item.chantiersDetails || [],
+      primes: item.primes || [],
+      total_primes: item.total_primes || 0,
     });
     setAjustementFormData({
       montant: item.ajustement_montant || "",
@@ -814,7 +816,6 @@ const TableauSousTraitant = () => {
     setAjustementFormData({ montant: "", description: "" });
   };
   
-  // Sauvegarder l'ajustement
   const handleSaveAjustement = async () => {
     if (!currentAjustement || !currentAjustement.agent_id) {
       return;
@@ -822,12 +823,18 @@ const TableauSousTraitant = () => {
     
     setSavingAjustement(true);
     try {
+      // Extraire les chantier_ids des détails de la ligne pour déduire l'agence côté backend
+      const chantierIds = (currentAjustement.chantiersDetails || [])
+        .map(ch => ch.chantier_id)
+        .filter(id => id && id !== 0);
+      
       const response = await axios.post("/api/ajustement-agent-journalier/", {
         agent_id: currentAjustement.agent_id,
         mois: currentAjustement.mois,
         annee: currentAjustement.annee,
         montant_ajustement: parseFloat(ajustementFormData.montant) || 0,
-        description: ajustementFormData.description.trim()
+        description: ajustementFormData.description.trim(),
+        chantier_ids: chantierIds,
       });
       
       // Rafraîchir les données
@@ -1766,6 +1773,10 @@ const TableauSousTraitant = () => {
         const ajustementDescription = chantiers[0]?.ajustement_description || '';
         const agentId = chantiers[0]?.agent_id || null;
         
+        // Récupérer les primes depuis le premier chantier (elles sont identiques pour tous)
+        const primes = chantiers[0]?.primes || [];
+        const totalPrimes = chantiers[0]?.total_primes || 0;
+        
         chantiers.forEach((chantier) => {
           totalLaborCost += chantier.a_payer || 0;
           totalPaye += chantier.paye || 0;
@@ -1779,14 +1790,13 @@ const TableauSousTraitant = () => {
             ecart: chantier.ecart || 0,
           });
           
-          // Collecter toutes les factures
           if (chantier.factures && chantier.factures.length > 0) {
             allFactures.push(...chantier.factures);
           }
         });
         
-        // Montant total à payer = LaborCost + ajustement
-        const totalAPayer = totalLaborCost + ajustementMontant;
+        // Montant total à payer = LaborCost + ajustement + primes
+        const totalAPayer = totalLaborCost + ajustementMontant + totalPrimes;
         
         // Pour les agents journaliers, utiliser une clé sans chantier_id pour le montant payé et les factures
         const keyAgentJournalier = `${mois}_${sous_traitant}_AGENT_JOURNALIER`;
@@ -1825,6 +1835,9 @@ const TableauSousTraitant = () => {
           ajustement_id: ajustementId,
           ajustement_montant: ajustementMontant,
           ajustement_description: ajustementDescription,
+          // Infos de primes
+          primes: primes,
+          total_primes: totalPrimes,
         }];
       });
     });
@@ -2509,16 +2522,15 @@ const TableauSousTraitant = () => {
                                 {formatNumber(item.a_payer)} €
                               </Typography>
                             ) : item.isAgentJournalier ? (
-                              // Pour les agents journaliers, afficher avec Tooltip détaillé et clic pour ajustement
                               <Tooltip
                                 title={
-                                  <Box sx={{ p: 1 }}>
+                                  <Box sx={{ p: 1, minWidth: 280 }}>
                                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, borderBottom: '1px solid rgba(255,255,255,0.3)', pb: 0.5 }}>
                                       {item.sous_traitant} - Détail
                                     </Typography>
                                     {item.chantiersDetails && item.chantiersDetails.length > 0 && (
                                       <Box sx={{ mb: 1 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5, opacity: 0.9 }}>
                                           Par chantier :
                                         </Typography>
                                         {item.chantiersDetails.map((ch, idx) => (
@@ -2531,12 +2543,27 @@ const TableauSousTraitant = () => {
                                     )}
                                     <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.3)', pt: 0.5, mt: 0.5 }}>
                                       <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                        <span>Total planning :</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#90a4ae', display: 'inline-block' }} />
+                                          Planning :
+                                        </span>
                                         <span style={{ fontWeight: 600 }}>{formatNumber(item.a_payer_labor_cost || item.a_payer)} €</span>
                                       </Box>
+                                      {item.primes && item.primes.length > 0 && item.primes.map((prime, idx) => (
+                                        <Box key={`prime-${idx}`} sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ff9800' }}>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff9800', display: 'inline-block' }} />
+                                            Prime ({prime.description}) :
+                                          </span>
+                                          <span style={{ fontWeight: 600 }}>+{formatNumber(prime.montant)} €</span>
+                                        </Box>
+                                      ))}
                                       {(item.ajustement_montant !== 0 && item.ajustement_montant !== undefined) && (
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: item.ajustement_montant > 0 ? '#4caf50' : '#f44336' }}>
-                                          <span>Ajustement ({item.ajustement_description || 'Manuel'}) :</span>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: item.ajustement_montant > 0 ? '#4caf50' : '#f44336', display: 'inline-block' }} />
+                                            Ajust. ({item.ajustement_description || 'Manuel'}) :
+                                          </span>
                                           <span style={{ fontWeight: 600 }}>
                                             {item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)} €
                                           </span>
@@ -2558,10 +2585,10 @@ const TableauSousTraitant = () => {
                                 <Typography
                                   sx={{
                                     fontSize: "0.8rem",
-                                    color: item.ajustement_montant ? "rgba(27, 120, 188, 1)" : "text.primary",
+                                    color: (item.ajustement_montant || item.total_primes) ? "rgba(27, 120, 188, 1)" : "text.primary",
                                     textAlign: "center",
                                     cursor: "pointer",
-                                    fontWeight: item.ajustement_montant ? 500 : 400,
+                                    fontWeight: (item.ajustement_montant || item.total_primes) ? 500 : 400,
                                     "&:hover": {
                                       backgroundColor: "rgba(27, 120, 188, 0.1)",
                                       borderRadius: "4px",
@@ -2570,18 +2597,6 @@ const TableauSousTraitant = () => {
                                   onClick={() => handleOpenAjustementModal(item)}
                                 >
                                   {formatNumber(item.a_payer)} €
-                                  {item.ajustement_montant !== 0 && item.ajustement_montant !== undefined && (
-                                    <Typography 
-                                      component="span" 
-                                      sx={{ 
-                                        fontSize: "0.65rem", 
-                                        color: item.ajustement_montant > 0 ? "#4caf50" : "#f44336",
-                                        ml: 0.5 
-                                      }}
-                                    >
-                                      ({item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)})
-                                    </Typography>
-                                  )}
                                 </Typography>
                               </Tooltip>
                             ) : (
@@ -3579,16 +3594,50 @@ const TableauSousTraitant = () => {
                 sx={{ mb: 2 }}
               />
               
+              {/* Primes existantes (lecture seule) */}
+              {currentAjustement?.primes && currentAjustement.primes.length > 0 && (
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 152, 0, 0.06)', borderRadius: 1, border: '1px solid rgba(255, 152, 0, 0.2)' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#f57c00' }}>
+                    Primes (depuis Planning)
+                  </Typography>
+                  {currentAjustement.primes.map((prime, idx) => (
+                    <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                      <Typography variant="body2" sx={{ color: '#f57c00' }}>
+                        {prime.description} {prime.agence_nom ? `(${prime.agence_nom})` : prime.chantier_name ? `(${prime.chantier_name})` : ''}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: '#f57c00' }}>
+                        +{formatNumber(prime.montant)} €
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              
               {/* Récapitulatif */}
               <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="body2">Total planning :</Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#90a4ae', display: 'inline-block' }} />
+                    Planning :
+                  </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {formatNumber(currentAjustement?.a_payer_labor_cost || 0)} €
                   </Typography>
                 </Box>
+                {currentAjustement?.primes && currentAjustement.primes.length > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: '#f57c00' }}>
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff9800', display: 'inline-block' }} />
+                      Primes ({currentAjustement.primes.length}) :
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      +{formatNumber(currentAjustement.total_primes || 0)} €
+                    </Typography>
+                  </Box>
+                )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
-                  <Typography variant="body2">
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#4caf50' : '#f44336', display: 'inline-block' }} />
                     Ajustement {ajustementFormData.description ? `(${ajustementFormData.description})` : ''} :
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -3598,7 +3647,11 @@ const TableauSousTraitant = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, mt: 1, borderTop: '1px dashed #90caf9' }}>
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>TOTAL À PAYER :</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                    {formatNumber((currentAjustement?.a_payer_labor_cost || 0) + (parseFloat(ajustementFormData.montant) || 0))} €
+                    {formatNumber(
+                      (currentAjustement?.a_payer_labor_cost || 0) + 
+                      (currentAjustement?.total_primes || 0) + 
+                      (parseFloat(ajustementFormData.montant) || 0)
+                    )} €
                   </Typography>
                 </Box>
               </Box>

@@ -12395,14 +12395,44 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         ajust_key = (agent_id, mois, annee)
         if ajust_key in ajustements_map:
             ajust_data = ajustements_map[ajust_key]
-            # Appliquer l'ajustement à chaque chantier de cet agent/mois
-            # L'ajustement est global pour l'agent/mois, on le stocke pour le premier chantier
-            # (le frontend regroupera et l'appliquera au total)
             if agent_nom in data[key]:
                 for chantier_id_agent in data[key][agent_nom]:
                     data[key][agent_nom][chantier_id_agent]['ajustement_id'] = ajust_data['id']
                     data[key][agent_nom][chantier_id_agent]['ajustement_montant'] = float(ajust_data['montant'])
                     data[key][agent_nom][chantier_id_agent]['ajustement_description'] = ajust_data['description']
+    
+    # 2c. Récupérer les primes (AgentPrime) des agents journaliers pour le tooltip
+    primes_agents = AgentPrime.objects.filter(
+        agent__type_paiement='journalier'
+    ).select_related('agent', 'agence', 'chantier')
+    
+    primes_map = {}  # {(agent_id, mois, annee): [{id, montant, description, type_affectation, agence_nom, chantier_name}]}
+    for prime in primes_agents:
+        prime_key = (prime.agent_id, prime.mois, prime.annee)
+        if prime_key not in primes_map:
+            primes_map[prime_key] = []
+        primes_map[prime_key].append({
+            'id': prime.id,
+            'montant': float(prime.montant),
+            'description': prime.description,
+            'type_affectation': prime.type_affectation,
+            'agence_nom': prime.agence.nom if prime.agence else None,
+            'chantier_name': prime.chantier.chantier_name if prime.chantier else None,
+        })
+    
+    # Appliquer les primes aux données des agents journaliers
+    for (agent_id, mois, annee), agent_nom in agents_mois_info.items():
+        annee_2_digits = str(annee)[-2:]
+        key = f"{mois:02d}/{annee_2_digits}"
+        
+        prime_key = (agent_id, mois, annee)
+        if prime_key in primes_map:
+            agent_primes = primes_map[prime_key]
+            total_primes = sum(p['montant'] for p in agent_primes)
+            if agent_nom in data[key]:
+                for chantier_id_agent in data[key][agent_nom]:
+                    data[key][agent_nom][chantier_id_agent]['primes'] = agent_primes
+                    data[key][agent_nom][chantier_id_agent]['total_primes'] = total_primes
     
     # 3. Récupérer les AgencyExpenseMonth avec catégorie "Sous-traitant"
     if chantier_id:
@@ -12747,6 +12777,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     item['ajustement_id'] = valeurs.get('ajustement_id')
                     item['ajustement_montant'] = valeurs.get('ajustement_montant', 0)
                     item['ajustement_description'] = valeurs.get('ajustement_description', '')
+                    item['primes'] = valeurs.get('primes', [])
+                    item['total_primes'] = valeurs.get('total_primes', 0)
                 
                 result.append(item)
     
@@ -12840,6 +12872,7 @@ def ajustement_agent_journalier(request):
     annee = request.data.get('annee')
     montant_ajustement = request.data.get('montant_ajustement', 0)
     description = request.data.get('description', '')
+    chantier_ids = request.data.get('chantier_ids', [])
     
     if not agent_id or not mois or not annee:
         return Response(
@@ -12848,7 +12881,6 @@ def ajustement_agent_journalier(request):
         )
     
     try:
-        # Vérifier que l'agent existe et est journalier
         agent = Agent.objects.get(id=agent_id)
         if agent.type_paiement != 'journalier':
             return Response(
@@ -12856,11 +12888,14 @@ def ajustement_agent_journalier(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Construire la description pour AgencyExpenseMonth
         agent_nom = f"{agent.name} {agent.surname}".strip()
         expense_description = f"{agent_nom} - {description}" if description else agent_nom
         
-        # Chercher un ajustement existant pour cet agent/mois/année
+        # Déduire l'agence depuis les chantiers de la ligne (chantiers système des agences)
+        agence = None
+        if chantier_ids:
+            agence = Agence.objects.filter(chantier_id__in=chantier_ids).first()
+        
         existing = AgencyExpenseMonth.objects.filter(
             agent_id=agent_id,
             month=mois,
@@ -12869,14 +12904,14 @@ def ajustement_agent_journalier(request):
         ).first()
         
         if existing:
-            # Mettre à jour l'existant
             existing.amount = Decimal(str(montant_ajustement))
             existing.description = expense_description
+            if agence:
+                existing.agence = agence
             existing.save()
             ajustement = existing
             created = False
         else:
-            # Créer un nouveau
             ajustement = AgencyExpenseMonth.objects.create(
                 description=expense_description,
                 amount=Decimal(str(montant_ajustement)),
@@ -12884,7 +12919,8 @@ def ajustement_agent_journalier(request):
                 month=mois,
                 year=annee,
                 agent_id=agent_id,
-                chantier=None,  # Pas de chantier spécifique
+                agence=agence,
+                chantier=None,
             )
             created = True
         
@@ -12895,7 +12931,9 @@ def ajustement_agent_journalier(request):
             "mois": ajustement.month,
             "annee": ajustement.year,
             "montant_ajustement": float(ajustement.amount),
-            "description": description,  # Retourner la description originale (sans le nom de l'agent)
+            "description": description,
+            "agence_id": agence.id if agence else None,
+            "agence_nom": agence.nom if agence else None,
             "created": created
         }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
         
@@ -15499,29 +15537,28 @@ class AgentPrimeViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtrer selon les paramètres de requête"""
-        queryset = AgentPrime.objects.select_related('agent', 'chantier', 'created_by')
+        queryset = AgentPrime.objects.select_related('agent', 'chantier', 'agence', 'created_by')
         
-        # Filtre par mois
         mois = self.request.query_params.get('mois')
         if mois:
             queryset = queryset.filter(mois=int(mois))
         
-        # Filtre par année
         annee = self.request.query_params.get('annee')
         if annee:
             queryset = queryset.filter(annee=int(annee))
         
-        # Filtre par agent
         agent_id = self.request.query_params.get('agent_id')
         if agent_id:
             queryset = queryset.filter(agent_id=int(agent_id))
         
-        # Filtre par chantier
         chantier_id = self.request.query_params.get('chantier_id')
         if chantier_id:
             queryset = queryset.filter(chantier_id=int(chantier_id))
         
-        # Filtre par type d'affectation
+        agence_id = self.request.query_params.get('agence_id')
+        if agence_id:
+            queryset = queryset.filter(agence_id=int(agence_id))
+        
         type_affectation = self.request.query_params.get('type_affectation')
         if type_affectation:
             queryset = queryset.filter(type_affectation=type_affectation)

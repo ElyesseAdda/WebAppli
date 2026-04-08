@@ -2770,6 +2770,9 @@ class AgentPrime(models.Model):
     # Chantier optionnel (si type = 'chantier')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='primes_chantier')
     
+    # Agence optionnelle (si type = 'agence')
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='primes_agence')
+    
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2782,72 +2785,86 @@ class AgentPrime(models.Model):
         indexes = [
             models.Index(fields=['agent', 'mois', 'annee']),
             models.Index(fields=['chantier', 'mois', 'annee']),
+            models.Index(fields=['agence', 'mois', 'annee']),
         ]
     
     def __str__(self):
-        affectation = self.chantier.chantier_name if self.chantier else "Agence"
+        if self.chantier:
+            affectation = self.chantier.chantier_name
+        elif self.agence:
+            affectation = f"Agence {self.agence.nom}"
+        else:
+            affectation = "Agence"
         return f"Prime {self.agent.name} {self.agent.surname} - {self.mois}/{self.annee} - {affectation} - {self.montant}€"
     
     def clean(self):
         """Validation personnalisée"""
         if self.type_affectation == 'chantier' and not self.chantier:
             raise ValidationError("Un chantier doit être spécifié pour une prime de type 'chantier'")
+        if self.type_affectation == 'agence' and not self.agence:
+            raise ValidationError("Une agence doit être spécifiée pour une prime de type 'agence'")
         if self.type_affectation == 'agence' and self.chantier:
             raise ValidationError("Une prime de type 'agence' ne peut pas avoir de chantier associé")
+        if self.type_affectation == 'chantier' and self.agence:
+            raise ValidationError("Une prime de type 'chantier' ne peut pas avoir d'agence associée")
     
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
-# Signal pour créer automatiquement une AgencyExpense quand une prime de type 'agence' est créée
+# Signal pour créer automatiquement une AgencyExpenseMonth quand une prime de type 'agence' est créée
 @receiver(post_save, sender=AgentPrime)
 def create_agency_expense_from_prime(sender, instance, created, **kwargs):
     """
-    Crée ou met à jour automatiquement une AgencyExpense quand type_affectation='agence'
-    Format: "Prime - Nom Prenom - Description de la prime"
-    L'ID de la prime est stocké de manière cachée pour la gestion interne
+    Crée ou met à jour automatiquement une AgencyExpenseMonth quand type_affectation='agence'
+    Format: "Prime - Nom Prenom - Description de la prime [PRIME_ID:X]"
+    Rattachée à l'agence choisie par l'utilisateur
     """
     if instance.type_affectation == 'agence':
-        # Format description: "Prime - Jean Dupont - Performance Q3"
         description = f"Prime - {instance.agent.name} {instance.agent.surname} - {instance.description}"
+        final_description = f"{description} [PRIME_ID:{instance.id}]"
         
-        # Calculer la date (premier jour du mois)
-        expense_date = date(instance.annee, instance.mois, 1)
-        
-        # Chercher une dépense existante pour cette prime
-        # On stocke l'ID de manière invisible pour pouvoir faire le lien
-        existing_expense = AgencyExpense.objects.filter(
+        existing_expense = AgencyExpenseMonth.objects.filter(
             description__contains=f"[PRIME_ID:{instance.id}]",
             category='Prime'
         ).first()
         
-        # Format final avec ID caché : "Prime - Jean Dupont - Performance Q3 [PRIME_ID:5]"
-        final_description = f"{description} [PRIME_ID:{instance.id}]"
-        
         if existing_expense:
-            # Mettre à jour la dépense existante
             existing_expense.description = final_description
             existing_expense.amount = instance.montant
-            existing_expense.date = expense_date
+            existing_expense.month = instance.mois
+            existing_expense.year = instance.annee
+            existing_expense.agence = instance.agence
+            existing_expense.agent = instance.agent
             existing_expense.save()
         else:
-            # Créer une nouvelle dépense
-            AgencyExpense.objects.create(
+            AgencyExpenseMonth.objects.create(
                 description=final_description,
                 amount=instance.montant,
-                type='punctual',
                 category='Prime',
-                date=expense_date,
+                month=instance.mois,
+                year=instance.annee,
                 agent=instance.agent,
+                agence=instance.agence,
             )
+        
+        # Nettoyage : supprimer l'ancien AgencyExpense s'il existe (migration depuis l'ancien système)
+        AgencyExpense.objects.filter(
+            description__contains=f"[PRIME_ID:{instance.id}]",
+            category='Prime'
+        ).delete()
 
 @receiver(post_delete, sender=AgentPrime)
 def delete_agency_expense_from_prime(sender, instance, **kwargs):
     """
-    Supprime l'AgencyExpense associée quand une prime de type 'agence' est supprimée
+    Supprime l'AgencyExpenseMonth associée quand une prime de type 'agence' est supprimée
     """
     if instance.type_affectation == 'agence':
-        # Supprimer l'AgencyExpense correspondante en utilisant l'ID caché dans la description
+        AgencyExpenseMonth.objects.filter(
+            description__contains=f"[PRIME_ID:{instance.id}]",
+            category='Prime'
+        ).delete()
+        # Nettoyage : supprimer aussi l'ancien AgencyExpense si présent
         AgencyExpense.objects.filter(
             description__contains=f"[PRIME_ID:{instance.id}]",
             category='Prime'

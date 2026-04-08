@@ -24,7 +24,7 @@ import {
 import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { FaEdit, FaTrash } from "react-icons/fa";
+import { FaEdit, FaTrash, FaChevronRight, FaChevronDown } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
 const AgencyExpenses = () => {
@@ -61,6 +61,7 @@ const AgencyExpenses = () => {
   const [agenceChantierId, setAgenceChantierId] = useState(null);
   const [yearlyRefresh, setYearlyRefresh] = useState(0);
   const triggerYearlyRefresh = () => setYearlyRefresh((n) => n + 1);
+  const [expandedAgentGroups, setExpandedAgentGroups] = useState({});
 
   // Catégories de dépenses
   const categories = [
@@ -426,10 +427,79 @@ const AgencyExpenses = () => {
     });
   }, [planningRowsVirtual, filters]);
 
-  const tableRowsCombined = useMemo(
-    () => [...expenses, ...planningRowsFiltered],
-    [expenses, planningRowsFiltered]
-  );
+  const tableRowsCombined = useMemo(() => {
+    const allRows = [...expenses, ...planningRowsFiltered];
+    
+    // Identifier les lignes liées à un agent (Planning, Prime, Ajustement Sous-traitant)
+    const agentCategories = new Set(["Planning agence", "Prime", "Ajustement Sous-traitant"]);
+    const agentGroups = {};
+    const standaloneRows = [];
+    
+    allRows.forEach((row) => {
+      if (!agentCategories.has(row.category)) {
+        standaloneRows.push(row);
+        return;
+      }
+      
+      // Déterminer l'identifiant agent
+      let agentKey = null;
+      let agentLabel = null;
+      
+      if (row.isPlanningRow) {
+        // Format id: "planning-agence-{agent_id}"
+        const match = row.id?.toString().match(/planning-agence-(\d+)/);
+        agentKey = match ? `agent-${match[1]}` : null;
+        // Extraire le nom depuis la description "Nom Prénom — planning agence (...)"
+        agentLabel = row.description?.split("—")[0]?.trim() || "Agent";
+      } else if (row.category === "Prime") {
+        agentKey = row.agent ? `agent-${row.agent}` : null;
+        agentLabel = row.agent_name || row.description?.split(" - ")[1]?.trim() || "Agent";
+      } else if (row.category === "Ajustement Sous-traitant") {
+        agentKey = row.agent ? `agent-${row.agent}` : null;
+        // Description format: "Nom Prénom - Description"
+        agentLabel = row.agent_name || row.description?.split(" - ")[0]?.trim() || "Agent";
+      }
+      
+      if (!agentKey) {
+        standaloneRows.push(row);
+        return;
+      }
+      
+      if (!agentGroups[agentKey]) {
+        agentGroups[agentKey] = { label: agentLabel, rows: [] };
+      }
+      agentGroups[agentKey].rows.push(row);
+    });
+    
+    // Construire le résultat final avec les groupes agents
+    const result = [...standaloneRows];
+    
+    Object.entries(agentGroups).forEach(([key, group]) => {
+      const totalAmount = group.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+      
+      // Ligne de header (total agent)
+      result.push({
+        id: `group-header-${key}`,
+        description: group.label,
+        category: "",
+        amount: totalAmount,
+        isGroupHeader: true,
+        agentKey: key,
+        subRowCount: group.rows.length,
+      });
+      
+      // Sous-lignes détaillées
+      group.rows.forEach((row) => {
+        result.push({
+          ...row,
+          isSubRow: true,
+          agentKey: key,
+        });
+      });
+    });
+    
+    return result;
+  }, [expenses, planningRowsFiltered]);
 
   /** Catégories avec montant annuel > 0, ordre fixe puis catégories « extra » triées */
   const yearlyCategoryDisplayRows = useMemo(() => {
@@ -476,6 +546,11 @@ const AgencyExpenses = () => {
   const getExpenseDescriptionCourte = (expense) => {
     if (expense.category === "Prime" && expense.description) {
       const parts = expense.description.split(" - ");
+      if (parts.length >= 3) {
+        let desc = parts.slice(2).join(" - ");
+        desc = desc.replace(/\s*\[PRIME_ID:\d+\]\s*$/g, "").trim();
+        return `Prime - ${desc}`;
+      }
       if (parts.length >= 2) {
         return `${parts[0]} - ${parts[1]}`;
       }
@@ -640,38 +715,197 @@ const AgencyExpenses = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {tableRowsCombined.map((row, index) => (
-              <TableRow
-                key={row.id}
-                sx={{
-                  backgroundColor:
-                    row.isPlanningRow
-                      ? "rgba(123, 31, 162, 0.06)"
-                      : index % 2 === 0
-                        ? "#ffffff"
-                        : "#f5f5f5",
-                  "&:hover": {
-                    backgroundColor: "rgba(27, 120, 188, 0.1)",
-                  },
-                }}
-              >
-                <TableCell
+            {tableRowsCombined.map((row, index) => {
+              // Ligne de header de groupe agent
+              if (row.isGroupHeader) {
+                const isExpanded = !!expandedAgentGroups[row.agentKey];
+                return (
+                  <TableRow
+                    key={row.id}
+                    sx={{
+                      backgroundColor: "rgba(27, 120, 188, 0.08)",
+                      borderTop: "2px solid rgba(27, 120, 188, 0.3)",
+                      cursor: "pointer",
+                      "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.14)" },
+                    }}
+                    onClick={() => setExpandedAgentGroups((prev) => ({
+                      ...prev,
+                      [row.agentKey]: !prev[row.agentKey],
+                    }))}
+                  >
+                    <TableCell
+                      sx={{
+                        textAlign: "left",
+                        fontWeight: 700,
+                        color: "rgba(27, 120, 188, 1)",
+                        fontSize: "0.9rem",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      {isExpanded ? (
+                        <FaChevronDown style={{ marginRight: 8, fontSize: "0.7rem" }} />
+                      ) : (
+                        <FaChevronRight style={{ marginRight: 8, fontSize: "0.7rem" }} />
+                      )}
+                      {row.description}
+                      <Typography component="span" sx={{ ml: 1, fontSize: "0.75rem", color: "#888", fontWeight: 400 }}>
+                        ({row.subRowCount} ligne{row.subRowCount > 1 ? "s" : ""})
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center" sx={{ color: "#888", fontSize: "0.75rem" }}>
+                      Total agent
+                    </TableCell>
+                    <TableCell
+                      align="center"
+                      sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", fontSize: "0.9rem" }}
+                    >
+                      {parseFloat(row.amount).toFixed(2)} €
+                    </TableCell>
+                    <TableCell />
+                    <TableCell />
+                  </TableRow>
+                );
+              }
+              
+              // Sous-ligne d'un groupe agent (masquée si groupe fermé)
+              if (row.isSubRow) {
+                if (!expandedAgentGroups[row.agentKey]) return null;
+                const sourceColor = row.isPlanningRow
+                  ? "#6a1b9a"
+                  : row.category === "Prime"
+                    ? "#f57c00"
+                    : row.category === "Ajustement Sous-traitant"
+                      ? "#1976d2"
+                      : "#333";
+                const sourceDot = (
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    backgroundColor: sourceColor,
+                    display: "inline-block", marginRight: 6, flexShrink: 0,
+                  }} />
+                );
+                
+                let displayDescription = row.description;
+                if (row.isPlanningRow) {
+                  displayDescription = row.description;
+                } else if (row.category === "Prime") {
+                  displayDescription = getExpenseDescriptionCourte(row);
+                } else if (row.category === "Ajustement Sous-traitant") {
+                  displayDescription = row.description;
+                }
+                
+                return (
+                  <TableRow
+                    key={row.id}
+                    sx={{
+                      backgroundColor: row.isPlanningRow
+                        ? "rgba(123, 31, 162, 0.04)"
+                        : row.category === "Prime"
+                          ? "rgba(255, 152, 0, 0.04)"
+                          : "rgba(25, 118, 210, 0.04)",
+                      "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" },
+                    }}
+                  >
+                    <TableCell
+                      sx={{
+                        textAlign: "left",
+                        fontWeight: 500,
+                        color: sourceColor,
+                        pl: 4,
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      {sourceDot}
+                      {displayDescription}
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontSize: "0.8rem", color: sourceColor }}>
+                      {row.category}
+                    </TableCell>
+                    <TableCell align="center" sx={{ color: sourceColor }}>
+                      {parseFloat(row.amount).toFixed(2)} €
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
+                      {(row.isPlanningRow || row.category === "Prime") ? null : (
+                        <TextField
+                          size="small"
+                          variant="standard"
+                          fullWidth
+                          multiline
+                          minRows={1}
+                          maxRows={6}
+                          placeholder="—"
+                          defaultValue={row.commentaire || ""}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val !== (row.commentaire || "")) {
+                              axios
+                                .patch(`/api/agency-expenses-month/${row.id}/`, { commentaire: val || null })
+                                .catch(() => {});
+                            }
+                          }}
+                          InputProps={{
+                            disableUnderline: true,
+                            sx: {
+                              fontSize: "0.82rem", color: "#555", lineHeight: 1.4,
+                              alignItems: "flex-start",
+                              "&:hover": { borderBottom: "1px solid #ccc" },
+                              "&.Mui-focused": { borderBottom: "1px solid #1976d2" },
+                            },
+                          }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        {row.isPlanningRow ? (
+                          <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                            Planning hebdo
+                          </Typography>
+                        ) : row.category === "Prime" ? (
+                          <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                            Gérer via "Gérer les Primes"
+                          </Typography>
+                        ) : row.category === "Ajustement Sous-traitant" ? (
+                          <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                            Gérer via Tableau Sous-traitant
+                          </Typography>
+                        ) : (
+                          <>
+                            <IconButton size="small" color="primary" onClick={() => handleEditExpense(row)} disabled={loading}>
+                              <FaEdit />
+                            </IconButton>
+                            <IconButton size="small" color="error" onClick={() => openDeleteConfirm(row)} disabled={loading}>
+                              <FaTrash />
+                            </IconButton>
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+              
+              // Ligne standard (non groupée)
+              return (
+                <TableRow
+                  key={row.id}
                   sx={{
-                    textAlign: "left",
-                    fontWeight: "bold",
-                    color: row.isPlanningRow ? "#6a1b9a" : "rgba(27, 120, 188, 1)",
+                    backgroundColor: index % 2 === 0 ? "#ffffff" : "#f5f5f5",
+                    "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.1)" },
                   }}
                 >
-                  {row.isPlanningRow
-                    ? row.description
-                    : getExpenseDescriptionCourte(row)}
-                </TableCell>
-                <TableCell align="center">{row.category}</TableCell>
-                <TableCell align="center">
-                  {parseFloat(row.amount).toFixed(2)} €
-                </TableCell>
-                <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
-                  {row.isPlanningRow ? null : (
+                  <TableCell
+                    sx={{ textAlign: "left", fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}
+                  >
+                    {getExpenseDescriptionCourte(row)}
+                  </TableCell>
+                  <TableCell align="center">{row.category}</TableCell>
+                  <TableCell align="center">
+                    {parseFloat(row.amount).toFixed(2)} €
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                     <TextField
                       size="small"
                       variant="standard"
@@ -685,74 +919,34 @@ const AgencyExpenses = () => {
                         const val = e.target.value.trim();
                         if (val !== (row.commentaire || "")) {
                           axios
-                            .patch(`/api/agency-expenses-month/${row.id}/`, {
-                              commentaire: val || null,
-                            })
+                            .patch(`/api/agency-expenses-month/${row.id}/`, { commentaire: val || null })
                             .catch(() => {});
                         }
                       }}
                       InputProps={{
                         disableUnderline: true,
                         sx: {
-                          fontSize: "0.82rem",
-                          color: "#555",
-                          lineHeight: 1.4,
+                          fontSize: "0.82rem", color: "#555", lineHeight: 1.4,
                           alignItems: "flex-start",
                           "&:hover": { borderBottom: "1px solid #ccc" },
                           "&.Mui-focused": { borderBottom: "1px solid #1976d2" },
                         },
                       }}
                     />
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    {row.isPlanningRow ? (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "#666",
-                          fontStyle: "italic",
-                          padding: "8px",
-                        }}
-                      >
-                        Planning hebdo
-                      </Typography>
-                    ) : row.category === "Prime" ? (
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "#666",
-                          fontStyle: "italic",
-                          padding: "8px",
-                        }}
-                      >
-                        Gérer via "Gérer les Primes"
-                      </Typography>
-                    ) : (
-                      <>
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          onClick={() => handleEditExpense(row)}
-                          disabled={loading}
-                        >
-                          <FaEdit />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => openDeleteConfirm(row)}
-                          disabled={loading}
-                        >
-                          <FaTrash />
-                        </IconButton>
-                      </>
-                    )}
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <IconButton size="small" color="primary" onClick={() => handleEditExpense(row)} disabled={loading}>
+                        <FaEdit />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => openDeleteConfirm(row)} disabled={loading}>
+                        <FaTrash />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
               <TableCell colSpan={2} sx={{ fontWeight: "bold" }}>
                 Total Mensuel
