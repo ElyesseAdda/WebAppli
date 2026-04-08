@@ -1131,7 +1131,7 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
 class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
-        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav', 'overtime_hours']
+        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav', 'overtime_hours', 'comment']
 
 class LaborCostSerializer(serializers.ModelSerializer):
     # Champs calculés/dérivés

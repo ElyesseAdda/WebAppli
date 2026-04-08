@@ -1994,6 +1994,7 @@ class Schedule(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
     is_sav = models.BooleanField(default=False)  # True si c'est du SAV (Service Après-Vente)
     overtime_hours = models.DecimalField(max_digits=4, decimal_places=2, default=0, blank=True, null=True, help_text="Heures supplémentaires (+25%)")
+    comment = models.TextField(blank=True, default='')
 
     class Meta:
         unique_together = ('agent', 'week', 'year', 'day', 'hour')

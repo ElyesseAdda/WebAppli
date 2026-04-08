@@ -3626,6 +3626,7 @@ def assign_chantier(request):
                 chantier_id = update.get('chantierId')
                 is_sav = update.get('isSav', False)  # Par défaut False si non fourni
                 overtime_hours = update.get('overtimeHours', 0)  # Par défaut 0 si non fourni
+                comment = update.get('comment', '')
 
                 # Validation des données
                 if not all([agent_id, week, year, day, hour_str, chantier_id]):
@@ -3682,7 +3683,8 @@ def assign_chantier(request):
                     hour=hour,
                     chantier=chantier,
                     is_sav=is_sav,
-                    overtime_hours=overtime_hours
+                    overtime_hours=overtime_hours,
+                    comment=comment,
                 )
 
         logger.info("Chantiers assignés avec succès.")
@@ -3779,7 +3781,8 @@ def copy_schedule(request):
                     year=target_year,
                     hour=schedule.hour,
                     day=schedule.day,
-                    chantier_id=schedule.chantier_id
+                    chantier_id=schedule.chantier_id,
+                    comment=schedule.comment,
                 )
                 copied_schedules.append(new_schedule)
             Schedule.objects.bulk_create(copied_schedules)
@@ -3825,6 +3828,38 @@ def copy_schedule(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+def update_schedule_comment(request):
+    """
+    Met à jour le commentaire de plages horaires existantes.
+    Attendu : { agentId, week, year, cells: [{day, hour}], comment }
+    """
+    agent_id = request.data.get('agentId')
+    week = request.data.get('week')
+    year = request.data.get('year')
+    cells = request.data.get('cells', [])
+    comment = request.data.get('comment', '')
+
+    if not all([agent_id, week, year, cells]):
+        return Response({'error': 'Paramètres manquants.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        updated = 0
+        for cell in cells:
+            day = cell.get('day')
+            hour = cell.get('hour')
+            if not day or not hour:
+                continue
+            count = Schedule.objects.filter(
+                agent_id=agent_id, week=week, year=year, day=day, hour=hour
+            ).update(comment=comment)
+            updated += count
+        return Response({'status': 'ok', 'updated': updated})
+    except Exception as e:
+        logger.exception("Erreur lors de la mise à jour du commentaire.")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -10962,6 +10997,7 @@ def preview_planning_hebdo(request):
     days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
     planning_data = {}
+    planning_comments = {}
     chantier_names = set()
     agent_hours_map = {}  # Map pour stocker les heures par agent
     
@@ -10974,14 +11010,13 @@ def preview_planning_hebdo(request):
         
         agent_hours_map[agent.id] = hours
         planning_data[agent.id] = {hour: {day: "" for day in days_of_week} for hour in hours}
+        planning_comments[agent.id] = {hour: {day: "" for day in days_of_week} for hour in hours}
         
         schedules = Schedule.objects.filter(agent=agent, week=week, year=year)
         for s in schedules:
             if agent.type_paiement == 'journalier':
-                # Pour les agents journaliers, s.hour est déjà "Matin" ou "Après-midi"
                 hour = s.hour
             else:
-                # Pour les agents horaires, formater l'heure
                 try:
                     hour = str(int(s.hour.split(':')[0])) + ":00"
                 except Exception:
@@ -10993,31 +11028,35 @@ def preview_planning_hebdo(request):
                 chantier_names.add(chantier_name)
             if hour in planning_data[agent.id] and day in planning_data[agent.id][hour]:
                 planning_data[agent.id][hour][day] = chantier_name
+                planning_comments[agent.id][hour][day] = s.comment or ""
 
     chantier_names = sorted(list(chantier_names))
     palette = generate_pastel_palette(100)  # 100 couleurs pastel
     chantier_colors = {name: get_color_for_chantier(name, palette) for name in chantier_names}
 
-    # Préparation des rowspans pour fusionner les cellules
+    # Préparation des rowspans pour fusionner les cellules (même chantier ET même commentaire)
     planning_rowspan = {agent.id: {day: [] for day in days_of_week} for agent in agents}
     for agent in agents:
-        agent_hours = agent_hours_map[agent.id]  # Récupérer les heures spécifiques à cet agent
+        agent_hours = agent_hours_map[agent.id]
         for day in days_of_week:
             prev_chantier = None
+            prev_comment = None
             start_hour = None
             span = 0
             for hour in agent_hours:
                 chantier = planning_data[agent.id][hour][day]
-                if chantier == prev_chantier:
+                comment = planning_comments[agent.id][hour][day]
+                if chantier == prev_chantier and comment == prev_comment:
                     span += 1
                 else:
                     if prev_chantier and prev_chantier != '':
-                        planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
+                        planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span, prev_comment or ''))
                     prev_chantier = chantier
+                    prev_comment = comment
                     start_hour = hour
                     span = 1
             if prev_chantier and prev_chantier != '':
-                planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
+                planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span, prev_comment or ''))
 
     # Calculer les dates de la semaine pour l'affichage
     from datetime import datetime, timedelta
@@ -11055,6 +11094,7 @@ def preview_planning_hebdo(request):
         'week_dates': week_dates,
         'agent_hours_map': agent_hours_map,
         'planning_data': planning_data,
+        'planning_comments': planning_comments,
         'chantier_colors': chantier_colors,
         'planning_rowspan': planning_rowspan,
     })

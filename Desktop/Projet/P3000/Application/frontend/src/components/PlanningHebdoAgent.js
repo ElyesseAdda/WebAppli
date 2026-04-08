@@ -88,6 +88,7 @@ const PlanningHebdoAgent = ({
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
   const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
   const [overtimeHours, setOvertimeHours] = useState(0); // État pour les heures supplémentaires
+  const [scheduleComment, setScheduleComment] = useState("");
   const [chantierSearchQuery, setChantierSearchQuery] = useState("");
   const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
   const chantierDropdownRef = useRef(null);
@@ -100,7 +101,10 @@ const PlanningHebdoAgent = ({
   const [isCopying, setIsCopying] = useState(false);
 
   const [showCostsSummary, setShowCostsSummary] = useState(false);
-  const [publicHolidays, setPublicHolidays] = useState({}); // État pour stocker les jours fériés de la semaine
+  const [publicHolidays, setPublicHolidays] = useState({});
+  const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+  const [editingCommentCells, setEditingCommentCells] = useState([]);
+  const [editingComment, setEditingComment] = useState("");
 
   const currentYear = dayjs().year();
   const currentWeek = dayjs().isoWeek();
@@ -363,6 +367,7 @@ const PlanningHebdoAgent = ({
                     chantierName: getChantierName(item.chantier_id),
                     isSav: item.is_sav || false,
                     overtimeHours: item.overtime_hours || 0,
+                    comment: item.comment || "",
                   }
                 : "";
             }
@@ -481,16 +486,124 @@ const PlanningHebdoAgent = ({
     return range;
   };
 
+  const getCellKey = (agentSchedule, hour, day) => {
+    const cellData = agentSchedule?.[hour]?.[day];
+    if (!cellData || cellData === "") return null;
+    const name = typeof cellData === "object" ? cellData.chantierName : cellData;
+    const comment = typeof cellData === "object" ? (cellData.comment || "") : "";
+    return name ? `${name}|||${comment}` : null;
+  };
+
+  const mergedBlocks = useMemo(() => {
+    const agentSchedule = schedule[selectedAgentId];
+    if (!agentSchedule) return { cells: {}, skipped: new Set() };
+
+    const vertBlocks = {};
+    daysOfWeek.forEach((day, dayIdx) => {
+      vertBlocks[dayIdx] = [];
+      let prevKey = null;
+      let spanStart = null;
+      let spanCount = 0;
+      hours.forEach((hour) => {
+        const cellKey = getCellKey(agentSchedule, hour, day);
+        if (cellKey && cellKey === prevKey) {
+          spanCount++;
+        } else {
+          if (prevKey && spanStart !== null) {
+            vertBlocks[dayIdx].push({ startHour: spanStart, rowSpan: spanCount, key: prevKey });
+          }
+          prevKey = cellKey;
+          spanStart = cellKey ? hour : null;
+          spanCount = cellKey ? 1 : 0;
+        }
+      });
+      if (prevKey && spanStart !== null) {
+        vertBlocks[dayIdx].push({ startHour: spanStart, rowSpan: spanCount, key: prevKey });
+      }
+    });
+
+    const cells = {};
+    const skipped = new Set();
+    const usedBlocks = new Set();
+
+    daysOfWeek.forEach((day, dayIdx) => {
+      vertBlocks[dayIdx].forEach((block, blockIdx) => {
+        const blockId = `${dayIdx}-${blockIdx}`;
+        if (usedBlocks.has(blockId)) return;
+
+        let colSpan = 1;
+        for (let nextDayIdx = dayIdx + 1; nextDayIdx < daysOfWeek.length; nextDayIdx++) {
+          const match = vertBlocks[nextDayIdx].find(
+            (b, idx) =>
+              !usedBlocks.has(`${nextDayIdx}-${idx}`) &&
+              b.startHour === block.startHour &&
+              b.rowSpan === block.rowSpan &&
+              b.key === block.key
+          );
+          if (match) {
+            const matchIdx = vertBlocks[nextDayIdx].indexOf(match);
+            usedBlocks.add(`${nextDayIdx}-${matchIdx}`);
+            colSpan++;
+          } else {
+            break;
+          }
+        }
+
+        cells[`${block.startHour}-${day}`] = { rowSpan: block.rowSpan, colSpan };
+
+        const startHourIdx = hours.indexOf(block.startHour);
+        for (let r = 0; r < block.rowSpan; r++) {
+          for (let c = 0; c < colSpan; c++) {
+            if (r === 0 && c === 0) continue;
+            skipped.add(`${hours[startHourIdx + r]}-${daysOfWeek[dayIdx + c]}`);
+          }
+        }
+      });
+    });
+
+    return { cells, skipped };
+  }, [schedule, selectedAgentId, hours, daysOfWeek]);
+
+  const getSpanCells = (hour, day) => {
+    const info = mergedBlocks.cells[`${hour}-${day}`];
+    if (info) {
+      const result = [];
+      const startHourIdx = hours.indexOf(hour);
+      const startDayIdx = daysOfWeek.indexOf(day);
+      for (let r = 0; r < info.rowSpan; r++) {
+        for (let c = 0; c < info.colSpan; c++) {
+          result.push({ hour: hours[startHourIdx + r], day: daysOfWeek[startDayIdx + c] });
+        }
+      }
+      return result;
+    }
+    return [{ hour, day }];
+  };
+
   // Double-clic pour ouvrir directement le modal
   const handleCellDoubleClick = (hour, day, event) => {
     event.preventDefault();
     event.stopPropagation();
 
-    const newCell = { hour, day };
-    setSelectedCells([newCell]);
-    setLastSelectedCell(newCell);
-    
-    openChantierModal();
+    const cellData = schedule[selectedAgentId]?.[hour]?.[day];
+    if (cellData && cellData !== "") {
+      const cellsInGroup = getSpanCells(hour, day);
+      const comments = cellsInGroup
+        .map((c) => {
+          const d = schedule[selectedAgentId]?.[c.hour]?.[c.day];
+          return d && typeof d === "object" ? d.comment : "";
+        })
+        .filter((c) => c);
+      const currentComment = [...new Set(comments)].join("; ");
+      setEditingCommentCells(cellsInGroup);
+      setEditingComment(currentComment);
+      setIsCommentModalOpen(true);
+    } else {
+      const newCell = { hour, day };
+      setSelectedCells([newCell]);
+      setLastSelectedCell(newCell);
+      openChantierModal();
+    }
   };
 
   // Gestionnaire pour onMouseDown pour capturer les modificateurs plus tôt
@@ -523,49 +636,38 @@ const PlanningHebdoAgent = ({
     // Récupérer les informations stockées
     const cellInfo = window.tempCellInfo;
     if (!cellInfo || cellInfo.hour !== hour || cellInfo.day !== day) {
-      return; // Pas le même élément
+      return;
     }
 
     // Nettoyer
     delete window.tempCellInfo;
 
-    const newCell = { hour, day };
+    const groupCells = getSpanCells(hour, day);
 
     if (cellInfo.ctrlKey || cellInfo.metaKey) {
-      // Ctrl/Cmd + clic : ajouter/supprimer de la sélection
-
       setSelectedCells((prev) => {
         const exists = prev.some(
-          (cell) => cell.hour === newCell.hour && cell.day === newCell.day
+          (cell) => cell.hour === hour && cell.day === day
         );
         if (exists) {
-          // Supprimer la cellule de la sélection
-
-          return prev.filter(
-            (cell) => !(cell.hour === newCell.hour && cell.day === newCell.day)
-          );
+          const groupSet = new Set(groupCells.map((c) => `${c.hour}-${c.day}`));
+          return prev.filter((cell) => !groupSet.has(`${cell.hour}-${cell.day}`));
         } else {
-          // Ajouter la cellule à la sélection
-
-          setLastSelectedCell(newCell);
-          return [...prev, newCell];
+          setLastSelectedCell({ hour, day });
+          const existingSet = new Set(prev.map((c) => `${c.hour}-${c.day}`));
+          const toAdd = groupCells.filter((c) => !existingSet.has(`${c.hour}-${c.day}`));
+          return [...prev, ...toAdd];
         }
       });
     } else if (cellInfo.shiftKey && lastSelectedCell) {
-      // Shift + clic : sélection de plage depuis la dernière cellule sélectionnée
-      const range = getCellRange(lastSelectedCell, newCell);
+      const range = getCellRange(lastSelectedCell, { hour, day });
       setSelectedCells(range);
-      // Ne pas changer lastSelectedCell pour permettre des extensions de sélection
     } else if (cellInfo.shiftKey && !lastSelectedCell) {
-      // Shift sans cellule de référence - traiter comme un clic simple
-
-      setSelectedCells([newCell]);
-      setLastSelectedCell(newCell);
+      setSelectedCells(groupCells);
+      setLastSelectedCell({ hour, day });
     } else {
-      // Clic simple : nouvelle sélection
-
-      setSelectedCells([newCell]);
-      setLastSelectedCell(newCell);
+      setSelectedCells(groupCells);
+      setLastSelectedCell({ hour, day });
     }
   };
 
@@ -576,6 +678,24 @@ const PlanningHebdoAgent = ({
 
   // Fonctions pour gérer le modal des chantiers
   const openChantierModal = () => {
+    if (selectedCells.length > 0) {
+      const firstCell = selectedCells[0];
+      const cellData = schedule[selectedAgentId]?.[firstCell.hour]?.[firstCell.day];
+      if (cellData && cellData !== "" && typeof cellData === "object") {
+        const existingChantier = chantiers.find(
+          (c) => c.chantier_name === cellData.chantierName
+        ) || agenceChantiers.find(
+          (c) => c.chantier_name === cellData.chantierName
+        );
+        if (existingChantier) {
+          setSelectedChantier(existingChantier);
+          setChantierSearchQuery(existingChantier.chantier_name);
+        }
+        setIsSav(cellData.isSav || false);
+        setOvertimeHours(cellData.overtimeHours || 0);
+        setScheduleComment(cellData.comment || "");
+      }
+    }
     setIsChantierModalOpen(true);
   };
 
@@ -586,6 +706,7 @@ const PlanningHebdoAgent = ({
     setLastSelectedCell(null); // Réinitialiser la dernière cellule sélectionnée
     setIsSav(false); // Réinitialiser la checkbox SAV
     setOvertimeHours(0); // Réinitialiser les heures supplémentaires
+    setScheduleComment("");
     setChantierSearchQuery("");
     setChantierDropdownOpen(false);
   };
@@ -700,8 +821,9 @@ const PlanningHebdoAgent = ({
           day: cell.day,
           hour: cell.hour,
           chantierId: selectedChantier.id,
-          isSav: isSav, // Ajouter le paramètre SAV
-          overtimeHours: overtimeHours, // Ajouter les heures supplémentaires
+          isSav: isSav,
+          overtimeHours: overtimeHours,
+          comment: scheduleComment,
         };
 
         return update;
@@ -724,6 +846,7 @@ const PlanningHebdoAgent = ({
             chantierName: selectedChantier.chantier_name,
             isSav: isSav,
             overtimeHours: overtimeHours,
+            comment: scheduleComment,
           };
         });
 
@@ -997,7 +1120,48 @@ const PlanningHebdoAgent = ({
     return "";
   };
 
-  // Ajouter cette fonction après les autres fonctions utilitaires
+  const saveComment = async () => {
+    if (editingCommentCells.length === 0) return;
+    try {
+      const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
+      const cells = editingCommentCells.map((cell) => {
+        const dayIndex = daysOfWeek.indexOf(cell.day);
+        const date = startOfWeek.add(dayIndex, "day");
+        return {
+          day: cell.day,
+          hour: cell.hour,
+          week: date.isoWeek(),
+          year: date.isoWeekYear(),
+        };
+      });
+      await axios.post("/api/update_schedule_comment/", {
+        agentId: selectedAgentId,
+        week: cells[0].week,
+        year: cells[0].year,
+        cells: cells.map((c) => ({ day: c.day, hour: c.hour })),
+        comment: editingComment,
+      });
+      setSchedule((prev) => {
+        const newSchedule = { ...prev };
+        const agentSch = { ...newSchedule[selectedAgentId] };
+        editingCommentCells.forEach((cell) => {
+          if (agentSch[cell.hour]?.[cell.day] && typeof agentSch[cell.hour][cell.day] === "object") {
+            agentSch[cell.hour] = { ...agentSch[cell.hour] };
+            agentSch[cell.hour][cell.day] = { ...agentSch[cell.hour][cell.day], comment: editingComment };
+          }
+        });
+        newSchedule[selectedAgentId] = agentSch;
+        return newSchedule;
+      });
+      setIsCommentModalOpen(false);
+      setEditingCommentCells([]);
+      setEditingComment("");
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde du commentaire:", error);
+      alert("Erreur lors de la sauvegarde du commentaire.");
+    }
+  };
+
   const fetchSchedule = async (agentId, week, year) => {
     setIsLoading(true);
     try {
@@ -1289,8 +1453,14 @@ const PlanningHebdoAgent = ({
                   <tr key={hour}>
                     <td className="hour-cell">{formatHourDisplay(hour)}</td>
                     {daysOfWeek.map((day) => {
-                      // Détermination de l'événement pour la cellule
-                      // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+                      const spanKey = `${hour}-${day}`;
+
+                      if (mergedBlocks.skipped.has(spanKey)) return null;
+
+                      const mergeInfo = mergedBlocks.cells[spanKey];
+                      const rowSpan = mergeInfo?.rowSpan > 1 ? mergeInfo.rowSpan : undefined;
+                      const colSpan = mergeInfo?.colSpan > 1 ? mergeInfo.colSpan : undefined;
+
                       const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
                       const dayIndex = daysOfWeek.indexOf(day) + 1;
                       const currentDate = startOfWeek
@@ -1307,21 +1477,23 @@ const PlanningHebdoAgent = ({
                           event.agent === selectedAgentId
                         );
                       });
+
+                      const blockCells = mergeInfo ? getSpanCells(hour, day) : [{ hour, day }];
+                      const isAnySelected = blockCells.some(
+                        (c) => selectedCells.some((s) => s.hour === c.hour && s.day === c.day)
+                      );
+
                       return (
                         <td
-                          key={`${hour}-${day}`}
+                          key={spanKey}
+                          rowSpan={rowSpan}
+                          colSpan={colSpan}
                           onMouseDown={(e) => handleCellMouseDown(hour, day, e)}
                           onMouseUp={(e) => handleCellMouseUp(hour, day, e)}
                           onDoubleClick={(e) =>
                             handleCellDoubleClick(hour, day, e)
                           }
-                          className={`schedule-cell ${
-                            selectedCells.some(
-                              (cell) => cell.hour === hour && cell.day === day
-                            )
-                              ? "selected"
-                              : ""
-                          }`}
+                          className={`schedule-cell ${isAnySelected ? "selected" : ""}`}
                           style={{
                             backgroundColor: getCellStyle(
                               hour,
@@ -1331,14 +1503,11 @@ const PlanningHebdoAgent = ({
                             fontWeight: cellEvent ? "bold" : "normal",
                             color: cellEvent ? "#222" : undefined,
                             textAlign: "center",
-                            border: selectedCells.some(
-                              (cell) => cell.hour === hour && cell.day === day
-                            )
+                            verticalAlign: "middle",
+                            border: isAnySelected
                               ? "3px solid #1976d2"
                               : "1px solid #ddd",
-                            boxShadow: selectedCells.some(
-                              (cell) => cell.hour === hour && cell.day === day
-                            )
+                            boxShadow: isAnySelected
                               ? "0 0 8px rgba(25, 118, 210, 0.5)"
                               : "none",
                             cursor: "pointer",
@@ -1347,7 +1516,6 @@ const PlanningHebdoAgent = ({
                           {cellEvent
                             ? getEventInitials(cellEvent)
                             : (() => {
-                                // Ne pas afficher le nom du chantier dans les heures de pause
                                 if (isPauseHour(hour)) {
                                   return "";
                                 }
@@ -1356,12 +1524,13 @@ const PlanningHebdoAgent = ({
                                   schedule[selectedAgentId]?.[hour]?.[day];
                                 if (!cellData) return "";
 
-                                // Si c'est un objet (nouveau format)
                                 if (typeof cellData === "object") {
-                                  // Vérifier que les chantiers sont chargés avant d'afficher le nom
                                   if (!chantiers || chantiers.length === 0) {
                                     return "Chargement...";
                                   }
+
+                                  const comment = cellData.comment || "";
+
                                   return (
                                     <span>
                                       {cellData.chantierName}
@@ -1395,11 +1564,27 @@ const PlanningHebdoAgent = ({
                                           ⏰ +{cellData.overtimeHours}h SUP
                                         </div>
                                       )}
+                                      {comment && (
+                                        <Tooltip title={comment} arrow placement="top">
+                                          <div
+                                            style={{
+                                              marginTop: "4px",
+                                              fontSize: "13px",
+                                              fontWeight: "600",
+                                              fontStyle: "italic",
+                                              lineHeight: "1.3",
+                                              wordBreak: "break-word",
+                                              whiteSpace: "normal",
+                                            }}
+                                          >
+                                            {comment}
+                                          </div>
+                                        </Tooltip>
+                                      )}
                                     </span>
                                   );
                                 }
 
-                                // Si c'est une chaîne (ancien format pour compatibilité)
                                 return cellData;
                               })()}
                         </td>
@@ -1612,6 +1797,49 @@ const PlanningHebdoAgent = ({
               </div>
             </div>
 
+            {/* Champ Commentaire */}
+            <div
+              style={{
+                marginTop: "10px",
+                marginBottom: "10px",
+                padding: "16px",
+                backgroundColor: "#f8f9fa",
+                borderRadius: "12px",
+                border: "2px solid #e0e0e0",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: "#333",
+                  marginBottom: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span style={{ fontSize: "18px" }}>💬</span>
+                <span>Commentaire</span>
+              </div>
+              <textarea
+                value={scheduleComment}
+                onChange={(e) => setScheduleComment(e.target.value)}
+                placeholder="Ajouter un commentaire (optionnel)..."
+                rows={2}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "2px solid #e0e0e0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
+
             {/* Checkbox SAV Modernisée */}
             <div
               style={{
@@ -1727,6 +1955,73 @@ const PlanningHebdoAgent = ({
                   "&:hover": {
                     backgroundColor: "#999",
                   },
+                }}
+              >
+                Annuler
+              </StyledButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'édition de commentaire */}
+      {isCommentModalOpen && (
+        <div className="modal">
+          <div
+            className="modal-content"
+            style={{
+              width: "420px",
+              maxWidth: "95vw",
+              padding: "24px",
+              borderRadius: "12px",
+            }}
+          >
+            <h2 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "22px" }}>💬</span>
+              Modifier le commentaire
+            </h2>
+            <p style={{ fontSize: "13px", color: "#666", margin: "0 0 12px" }}>
+              {editingCommentCells.length} créneau(x) concerné(s)
+            </p>
+            <textarea
+              value={editingComment}
+              onChange={(e) => setEditingComment(e.target.value)}
+              placeholder="Saisir un commentaire..."
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "2px solid #e0e0e0",
+                borderRadius: "8px",
+                fontSize: "14px",
+                resize: "vertical",
+                boxSizing: "border-box",
+                fontFamily: "inherit",
+              }}
+              autoFocus
+            />
+            <div style={{ marginTop: "16px", display: "flex", gap: "8px" }}>
+              <StyledButton
+                variant="contained"
+                onClick={saveComment}
+                sx={{
+                  backgroundColor: "rgba(27, 120, 188, 1)",
+                  "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.8)" },
+                }}
+              >
+                Enregistrer
+              </StyledButton>
+              <StyledButton
+                variant="contained"
+                onClick={() => {
+                  setIsCommentModalOpen(false);
+                  setEditingCommentCells([]);
+                  setEditingComment("");
+                }}
+                sx={{
+                  backgroundColor: "#ccc",
+                  color: "black",
+                  "&:hover": { backgroundColor: "#999" },
                 }}
               >
                 Annuler
