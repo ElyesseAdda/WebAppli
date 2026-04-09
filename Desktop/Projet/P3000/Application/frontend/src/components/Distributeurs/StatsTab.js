@@ -128,7 +128,7 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
 
       byDist.sort((a, b) => b.benefice_total - a.benefice_total);
 
-      // Meilleures ventes + CA total : resume_produits par distributeur (fusion par nom + somme CA)
+      // Meilleures ventes + CA : fusion par stock_product_id si présent, sinon par nom (casse ignorée)
       const byProduct = {};
       for (const dist of distributeurs) {
         const params = {};
@@ -147,13 +147,24 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
           const caDist = produits.reduce((acc, p) => acc + Number(p.ca_ventes || 0), 0);
           totalCA += caDist;
           for (const p of produits) {
-            const nom = (p.nom_produit || "").trim() || "Sans nom";
-            if (!byProduct[nom]) {
-              byProduct[nom] = { nom_produit: nom, benefice: 0, quantite_vendue: 0, ca_ventes: 0 };
+            const sid = p.stock_product_id;
+            const nomDisplay = (p.nom_produit || "").trim() || "Sans nom";
+            const mergeKey =
+              sid != null && sid !== undefined
+                ? `sp:${sid}`
+                : `nom:${nomDisplay.toLowerCase()}`;
+            if (!byProduct[mergeKey]) {
+              byProduct[mergeKey] = {
+                nom_produit: nomDisplay,
+                stock_product_id: sid != null && sid !== undefined ? sid : null,
+                benefice: 0,
+                quantite_vendue: 0,
+                ca_ventes: 0,
+              };
             }
-            byProduct[nom].benefice += Number(p.benefice || 0);
-            byProduct[nom].quantite_vendue += Number(p.quantite_vendue || 0);
-            byProduct[nom].ca_ventes += Number(p.ca_ventes || 0);
+            byProduct[mergeKey].benefice += Number(p.benefice || 0);
+            byProduct[mergeKey].quantite_vendue += Number(p.quantite_vendue || 0);
+            byProduct[mergeKey].ca_ventes += Number(p.ca_ventes || 0);
           }
         } catch (err) {
           console.error(`Erreur resume_produits distributeur ${dist.id}:`, err);

@@ -1535,7 +1535,13 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                   const barColor = colors[idx % colors.length];
 
                   return (
-                    <Box key={p.cell_id ?? `${p.nom_produit}-${idx}`}>
+                    <Box
+                      key={
+                        p.stock_product_id != null
+                          ? `sp-${p.stock_product_id}`
+                          : `free-${(p.nom_produit || "").toLowerCase()}-${idx}`
+                      }
+                    >
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", mb: 0.5 }}>
                         <Box sx={{ flex: 1, minWidth: 0, pr: 2 }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary", fontSize: "0.9rem", lineHeight: 1.2 }}>

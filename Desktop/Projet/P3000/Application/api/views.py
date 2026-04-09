@@ -2491,9 +2491,12 @@ class DistributeurViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def resume_produits(self, request, pk=None):
         """
-        Liste des produits du distributeur (toutes les cellules) avec bénéfice et CA
-        pour la période sélectionnée (year/month ou year seul ou global).
-        Trié par bénéfice décroissant pour voir les meilleures ventes.
+        Liste des produits du distributeur avec bénéfice et CA pour la période
+        (year/month ou year seul ou global).
+        Regroupement : si la case a un produit stock lié, clé = stock_product_id et
+        nom affiché = StockProduct.nom (source de vérité). Sinon regroupement par nom
+        libre sur la case (insensible à la casse). Les stats sont additionnées.
+        Tri par bénéfice décroissant.
         """
         import calendar as cal_module
         distributeur = self.get_object()
@@ -2544,22 +2547,53 @@ class DistributeurViewSet(viewsets.ModelViewSet):
         qte_by_cell = {r['cell_id']: int(r['quantite_vendue'] or 0) for r in lignes_agg}
         ca_by_cell = {r['cell_id']: float(r['ca_ventes'] or 0) for r in lignes_agg}
 
-        cells = distributeur.cells.all().order_by('row_index', 'col_index')
-        produits = []
+        # Agrégation : par stock_product_id si lié (nom = StockProduct.nom), sinon par nom libre
+        cells = distributeur.cells.select_related('stock_product').order_by(
+            'row_index', 'col_index'
+        )
+        by_key = {}
         for cell in cells:
-            nom = (cell.nom_produit or cell.stock_product.nom if cell.stock_product else f"L{cell.row_index + 1}C{cell.col_index + 1}").strip() or f"L{cell.row_index + 1}C{cell.col_index + 1}"
             benefice = benefice_by_cell.get(cell.id, 0)
             quantite_vendue = qte_by_cell.get(cell.id, 0)
             ca_ventes = ca_by_cell.get(cell.id, 0)
-            produits.append({
-                'cell_id': cell.id,
-                'nom_produit': nom,
-                'row_index': cell.row_index,
-                'col_index': cell.col_index,
-                'benefice': round(benefice, 2),
-                'ca_ventes': round(ca_ventes, 2),
-                'quantite_vendue': quantite_vendue,
-            })
+
+            if cell.stock_product_id:
+                cle = f"stock:{cell.stock_product_id}"
+                sp = cell.stock_product
+                nom = (
+                    (sp.nom or sp.nom_produit or "").strip()
+                    or f"Produit #{cell.stock_product_id}"
+                )
+                stock_product_id = cell.stock_product_id
+            else:
+                nom = (cell.nom_produit or "").strip() or (
+                    f"L{cell.row_index + 1}C{cell.col_index + 1}"
+                )
+                cle = f"free:{nom.lower()}"
+                stock_product_id = None
+
+            if cle not in by_key:
+                by_key[cle] = {
+                    'nom_produit': nom,
+                    'stock_product_id': stock_product_id,
+                    'benefice': 0.0,
+                    'ca_ventes': 0.0,
+                    'quantite_vendue': 0,
+                }
+            by_key[cle]['benefice'] += float(benefice)
+            by_key[cle]['ca_ventes'] += float(ca_ventes)
+            by_key[cle]['quantite_vendue'] += int(quantite_vendue)
+
+        produits = [
+            {
+                'nom_produit': v['nom_produit'],
+                'stock_product_id': v['stock_product_id'],
+                'benefice': round(v['benefice'], 2),
+                'ca_ventes': round(v['ca_ventes'], 2),
+                'quantite_vendue': v['quantite_vendue'],
+            }
+            for v in by_key.values()
+        ]
         produits.sort(key=lambda x: (-x['benefice'], -x['ca_ventes']))
 
         return Response({
