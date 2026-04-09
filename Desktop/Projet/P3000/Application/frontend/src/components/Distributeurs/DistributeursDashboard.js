@@ -34,6 +34,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import {
@@ -139,6 +141,8 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
   const [benefitViewMode, setBenefitViewMode] = useState("mois");
   const [openBenefitModal, setOpenBenefitModal] = useState(false);
   const [openProductStatsModal, setOpenProductStatsModal] = useState(false);
+  /** Classement du modal produits : part du bénéfice (défaut) ou part des unités vendues */
+  const [productPerformanceRankBy, setProductPerformanceRankBy] = useState("benefice");
   const [resumeProduits, setResumeProduits] = useState({ produits: [] });
   const [loadingResumeProduits, setLoadingResumeProduits] = useState(false);
   const [meilleurMois, setMeilleurMois] = useState({ year: null, month: null, benefice: null });
@@ -1445,6 +1449,29 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ pb: 4, px: 2 }}>
+          <Typography variant="caption" sx={{ display: "block", mb: 1, fontWeight: 700, color: "text.secondary" }}>
+            Classement
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            size="small"
+            value={productPerformanceRankBy}
+            onChange={(_, v) => v != null && setProductPerformanceRankBy(v)}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="benefice" sx={{ textTransform: "none", fontWeight: 700 }}>
+              Performance (bénéfice)
+            </ToggleButton>
+            <ToggleButton value="unites" sx={{ textTransform: "none", fontWeight: 700 }}>
+              Unités vendues
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" sx={{ display: "block", mb: 2, color: "text.disabled", fontSize: "0.7rem" }}>
+            {productPerformanceRankBy === "unites"
+              ? "Le % indique la part de chaque produit dans le total des unités vendues sur la période."
+              : "Le % indique la part de chaque produit dans le bénéfice total sur la période."}
+          </Typography>
           {loadingResumeProduits ? (
             <Box sx={{ py: 6, textAlign: "center" }}>
               <LinearProgress sx={{ borderRadius: 2, height: 4, mb: 2 }} />
@@ -1452,7 +1479,12 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                 Analyse des ventes en cours...
               </Typography>
             </Box>
-          ) : (resumeProduits?.produits || []).filter(p => p.ca_ventes > 0 || p.benefice > 0).length === 0 ? (
+          ) : (resumeProduits?.produits || []).filter(
+              (p) =>
+                Number(p.ca_ventes || 0) > 0 ||
+                Number(p.benefice || 0) > 0 ||
+                Number(p.quantite_vendue || 0) > 0
+            ).length === 0 ? (
             <Box sx={{ py: 6, textAlign: "center", opacity: 0.6 }}>
               <MdHistory size={48} color="#ccc" />
               <Typography variant="body2" sx={{ mt: 2, fontWeight: 700, color: "text.secondary" }}>
@@ -1462,60 +1494,73 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
               {(() => {
-                // % = part du bénéfice total représentée par ce produit
-                const prods = (resumeProduits?.produits || []).filter(p => p.ca_ventes > 0 || p.benefice > 0);
+                const prods = (resumeProduits?.produits || []).filter(
+                  (p) => Number(p.ca_ventes || 0) > 0 || Number(p.benefice || 0) > 0 || Number(p.quantite_vendue || 0) > 0
+                );
                 const totalBenefice = prods.reduce((acc, p) => acc + Number(p.benefice || 0), 0);
-                const scoredProds = prods
-                  .map(p => ({
-                    ...p,
-                    pctBenefice: totalBenefice > 0 ? (Number(p.benefice || 0) / totalBenefice) * 100 : 0,
-                  }))
-                  .sort((a, b) => b.pctBenefice - a.pctBenefice);
+                const totalUnites = prods.reduce((acc, p) => acc + Number(p.quantite_vendue || 0), 0);
+                const byBenefice = [...prods].sort(
+                  (a, b) => Number(b.benefice || 0) - Number(a.benefice || 0)
+                );
+                const byUnites = [...prods].sort(
+                  (a, b) => Number(b.quantite_vendue || 0) - Number(a.quantite_vendue || 0)
+                );
+                const ordered =
+                  productPerformanceRankBy === "unites"
+                    ? byUnites
+                    : byBenefice;
 
                 const colors = [
-                  "#2196f3", // Bleu
-                  "#4caf50", // Vert
-                  "#ff9800", // Orange
-                  "#f44336", // Rouge
-                  "#9c27b0", // Violet
-                  "#00bcd4", // Cyan
-                  "#e91e63", // Rose
-                  "#3f51b5", // Indigo
-                  "#ffc107", // Ambre
-                  "#009688", // Teal
+                  "#2196f3",
+                  "#4caf50",
+                  "#ff9800",
+                  "#f44336",
+                  "#9c27b0",
+                  "#00bcd4",
+                  "#e91e63",
+                  "#3f51b5",
+                  "#ffc107",
+                  "#009688",
                 ];
 
-                return scoredProds.map((p, idx) => {
-                  const pctBenefice = p.pctBenefice ?? 0;
+                return ordered.map((p, idx) => {
+                  const pct =
+                    productPerformanceRankBy === "unites"
+                      ? totalUnites > 0
+                        ? (Number(p.quantite_vendue || 0) / totalUnites) * 100
+                        : 0
+                      : totalBenefice > 0
+                        ? (Number(p.benefice || 0) / totalBenefice) * 100
+                        : 0;
                   const barColor = colors[idx % colors.length];
-                  
+
                   return (
-                    <Box key={p.cell_id}>
+                    <Box key={p.cell_id ?? `${p.nom_produit}-${idx}`}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", mb: 0.5 }}>
                         <Box sx={{ flex: 1, minWidth: 0, pr: 2 }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary", fontSize: "0.9rem", lineHeight: 1.2 }}>
                             {idx + 1}. {p.nom_produit}
                           </Typography>
                           <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, fontSize: "0.7rem" }}>
-                            {p.quantite_vendue} u. • {p.benefice.toFixed(2)} €
+                            {p.quantite_vendue} u. • {Number(p.benefice || 0).toFixed(2)} €
                           </Typography>
                         </Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 900, color: barColor, fontSize: "0.85rem" }}>
-                          {pctBenefice.toFixed(1)}%
+                          {pct.toFixed(1)}%
                         </Typography>
                       </Box>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={Math.max(pctBenefice, 2)} 
-                        sx={{ 
-                          height: 6, 
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(100, Math.max(pct, pct > 0 ? 2 : 0))}
+                        sx={{
+                          height: 6,
                           borderRadius: 3,
                           bgcolor: "grey.100",
                           "& .MuiLinearProgress-bar": {
                             borderRadius: 3,
-                            bgcolor: barColor
-                          }
-                        }} 
+                            bgcolor: barColor,
+                          },
+                        }}
                       />
                     </Box>
                   );

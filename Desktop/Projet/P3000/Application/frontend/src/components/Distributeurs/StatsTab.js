@@ -17,6 +17,8 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   MdTrendingUp,
@@ -49,6 +51,8 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [openPeriodModal, setOpenPeriodModal] = useState(false);
   const [openMeilleursProduitsModal, setOpenMeilleursProduitsModal] = useState(false);
+  /** Classement du modal produits global : bénéfice ou unités vendues */
+  const [productPerformanceRankBy, setProductPerformanceRankBy] = useState("benefice");
   const [topProduits, setTopProduits] = useState([]);
   const [chartDistributeurId, setChartDistributeurId] = useState(null); // null = tous
   const [monthlyData, setMonthlyData] = useState([]);
@@ -1015,6 +1019,29 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ pb: 4, px: 2, pt: 2 }}>
+          <Typography variant="caption" sx={{ display: "block", mb: 1, fontWeight: 700, color: "text.secondary" }}>
+            Classement
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            size="small"
+            value={productPerformanceRankBy}
+            onChange={(_, v) => v != null && setProductPerformanceRankBy(v)}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="benefice" sx={{ textTransform: "none", fontWeight: 700 }}>
+              Performance (bénéfice)
+            </ToggleButton>
+            <ToggleButton value="unites" sx={{ textTransform: "none", fontWeight: 700 }}>
+              Unités vendues
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" sx={{ display: "block", mb: 1, color: "text.disabled", fontSize: "0.7rem" }}>
+            {productPerformanceRankBy === "unites"
+              ? "Classement et % selon le volume d’unités vendues (agrégé sur tous les distributeurs)."
+              : "Classement et % selon le bénéfice (agrégé sur tous les distributeurs)."}
+          </Typography>
           {topProduits.length === 0 ? (
             <Box sx={{ py: 8, textAlign: "center", opacity: 0.6 }}>
               <Box sx={{ p: 2, bgcolor: "white", borderRadius: "50%", width: 80, height: 80, display: "flex", alignItems: "center", justifyContent: "center", mx: "auto", mb: 2, boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
@@ -1027,17 +1054,32 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
               {(() => {
-                // % = part du bénéfice total représentée par ce produit
                 const totalBenefice = topProduits.reduce((acc, x) => acc + Number(x.benefice || 0), 0);
-                
-                return topProduits.map((p, index) => {
+                const totalUnites = topProduits.reduce((acc, x) => acc + Number(x.quantite_vendue || 0), 0);
+                const ordered =
+                  productPerformanceRankBy === "unites"
+                    ? [...topProduits].sort(
+                        (a, b) => Number(b.quantite_vendue || 0) - Number(a.quantite_vendue || 0)
+                      )
+                    : [...topProduits].sort(
+                        (a, b) => Number(b.benefice || 0) - Number(a.benefice || 0)
+                      );
+
+                return ordered.map((p, index) => {
                   const rank = index + 1;
-                  const pct = totalBenefice > 0 ? (Number(p.benefice || 0) / totalBenefice) * 100 : 0;
+                  const pct =
+                    productPerformanceRankBy === "unites"
+                      ? totalUnites > 0
+                        ? (Number(p.quantite_vendue || 0) / totalUnites) * 100
+                        : 0
+                      : totalBenefice > 0
+                        ? (Number(p.benefice || 0) / totalBenefice) * 100
+                        : 0;
                   const isTop3 = rank <= 3;
                   
                   return (
                     <Paper 
-                      key={`${p.nom_produit}-${index}`}
+                      key={`${p.nom_produit}-${index}-${productPerformanceRankBy}`}
                       elevation={0}
                       sx={{ 
                         p: 2, 
@@ -1089,7 +1131,7 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
                               left: 0, 
                               top: 0, 
                               height: "100%", 
-                              width: `${Math.max(pct, 2)}%`, 
+                              width: `${Math.min(100, Math.max(pct, pct > 0 ? 2 : 0))}%`, 
                               bgcolor: isTop3 ? "primary.main" : "primary.light",
                               borderRadius: 4,
                               transition: "width 1s ease-out"
