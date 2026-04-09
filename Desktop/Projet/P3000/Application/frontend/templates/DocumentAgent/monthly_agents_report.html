@@ -216,9 +216,9 @@
                 <tr>
                     <td>{{ detail.date }}</td>
                     <td>
-                        {% if detail.type == 'samedi' or detail.type == 'Samedi' %}🏖️ <strong>Samedi</strong>
-                        {% elif detail.type == 'dimanche' or detail.type == 'Dimanche' %}🌅 <strong>Dimanche</strong>
-                        {% elif detail.type == 'ferie' or detail.type == 'Férié' %}🎉 <strong>Jour férié</strong>
+                        {% if detail.type == 'samedi' or detail.type == 'Samedi' %}<strong>Samedi</strong>
+                        {% elif detail.type == 'dimanche' or detail.type == 'Dimanche' %}<strong>Dimanche</strong>
+                        {% elif detail.type == 'ferie' or detail.type == 'Férié' %}<strong>Jour férié</strong>
                         {% else %}<strong>{{ detail.type|capfirst }}</strong>
                         {% endif %}
                     </td>
@@ -246,7 +246,6 @@
             <thead>
                 <tr>
                     <th>Description</th>
-                    <th>Affectation</th>
                     <th style="text-align: right;">Montant</th>
                 </tr>
             </thead>
@@ -254,20 +253,13 @@
                 {% for prime in agent_data.primes %}
                 <tr>
                     <td>{{ prime.description }}</td>
-                    <td>
-                        {% if prime.type_affectation == 'agence' %}
-                            <span class="prime-badge prime-agence">📍 Agence</span>
-                        {% else %}
-                            <span class="prime-badge prime-chantier">🏗️ {{ prime.chantier_nom }}</span>
-                        {% endif %}
-                    </td>
                     <td style="text-align: right; font-weight: bold; color: #2e7d32;">
                         {{ prime.montant|floatformat:2 }} €
                     </td>
                 </tr>
                 {% endfor %}
                 <tr class="prime-total">
-                    <td colspan="2"><strong>TOTAL PRIMES</strong></td>
+                    <td><strong>TOTAL PRIMES</strong></td>
                     <td style="text-align: right;">
                         <strong>{{ agent_data.total_primes|floatformat:2 }} €</strong>
                     </td>
