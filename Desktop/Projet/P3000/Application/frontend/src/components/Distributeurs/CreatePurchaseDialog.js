@@ -339,19 +339,9 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
             />
           </Box>
 
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "text.primary" }}>
-              Panier ({items.length})
-            </Typography>
-            <Button
-              startIcon={<MdAdd size={20} />}
-              onClick={handleAddItem}
-              variant="text"
-              sx={{ fontWeight: 700, borderRadius: "10px", textTransform: "none" }}
-            >
-              Ajouter un produit
-            </Button>
-          </Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "text.primary" }}>
+            Panier ({items.length})
+          </Typography>
 
           {/* Liste des produits - Modern Shopping List */}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -561,6 +551,22 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
               );
             })}
           </Box>
+
+          <Button
+            fullWidth
+            startIcon={<MdAdd size={20} />}
+            onClick={handleAddItem}
+            variant="outlined"
+            sx={{
+              fontWeight: 700,
+              borderRadius: "14px",
+              textTransform: "none",
+              py: 1.25,
+              borderStyle: "dashed",
+            }}
+          >
+            Ajouter un produit
+          </Button>
         </Box>
       </DialogContent>
 
