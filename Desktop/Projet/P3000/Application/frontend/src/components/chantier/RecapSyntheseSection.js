@@ -2,16 +2,15 @@ import { Box, Grid, Paper, Typography } from "@mui/material";
 import { ResponsivePie } from "@nivo/pie";
 import React from "react";
 
-const RecapSyntheseSection = ({ data }) => {
+const RecapSyntheseSection = ({ data, depensesPaye }) => {
   if (!data) return null;
+  const paye = depensesPaye || data.sorties?.paye || {};
   const montant_ht = Number(data.montant_ht || 0);
   const taux_fixe = Number(data.taux_fixe || 0);
   const montant_taux_fixe = Number(data.montant_taux_fixe || 0);
-  const total_materiel = Number(data.sorties?.paye?.materiel?.total || 0);
-  const total_main_oeuvre = Number(data.sorties?.paye?.main_oeuvre?.total || 0);
-  const total_sous_traitant = Number(
-    data.sorties?.paye?.sous_traitant?.total || 0
-  );
+  const total_materiel = Number(paye.materiel?.total || 0);
+  const total_main_oeuvre = Number(paye.main_oeuvre?.total || 0);
+  const total_sous_traitant = Number(paye.sous_traitant?.total || 0);
   // Coût chantier = main d'oeuvre + sous-traitance + matériel
   const cout_chantier =
     total_main_oeuvre + total_sous_traitant + total_materiel;

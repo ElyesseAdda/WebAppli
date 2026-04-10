@@ -1548,7 +1548,10 @@ class LigneDetail(models.Model):
     # Nouveaux champs pour la décomposition du prix
     cout_main_oeuvre = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cout_materiel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    taux_fixe = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    # null = non renseigné à la création (rempli par TauxFixe dans save). 0 % est une valeur valide.
+    taux_fixe = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )  # en pourcentage
     marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
@@ -1598,15 +1601,14 @@ class LigneDetail(models.Model):
         self.prix = sous_total + montant_marge
 
     def save(self, *args, **kwargs):
-        if not self.taux_fixe:
-            # Utiliser le dernier taux fixe enregistré
+        # Ne pas utiliser `if not self.taux_fixe` : Decimal('0') est falsy en Python et serait remplacé par 20 %.
+        if self.taux_fixe is None:
             try:
                 dernier_taux = TauxFixe.objects.latest()
                 self.taux_fixe = dernier_taux.valeur
             except TauxFixe.DoesNotExist:
-                # Aucun taux fixe en base, utiliser 20% par défaut
                 self.taux_fixe = 20
-        
+
         # Ne recalculer le prix que si on a des coûts (sinon c'est un prix manuel)
         has_couts = self.cout_main_oeuvre > 0 or self.cout_materiel > 0
         if has_couts:

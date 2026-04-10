@@ -155,8 +155,6 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* Section de synthèse financière */}
-      <RecapSyntheseSection data={data} />
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box display="flex" alignItems="center" gap={2}>
           <Typography variant="h5" sx={{ flex: 1 }}>
@@ -222,7 +220,12 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
       ) : error ? (
         <Alert severity="error">{error}</Alert>
       ) : data ? (
-        <Grid container spacing={3}>
+        <>
+          <RecapSyntheseSection
+            data={data}
+            depensesPaye={getDepensesData()}
+          />
+          <Grid container spacing={3}>
           {/* Sorties */}
           <Grid item xs={12} md={6}>
             <RecapSection
@@ -262,6 +265,7 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
             />
           </Grid>
         </Grid>
+        </>
       ) : null}
     </Box>
   );
