@@ -11765,7 +11765,13 @@ class RecapFinancierChantierAPIView(APIView):
             }
         }
 
-        montant_ht = chantier.montant_ht or 0
+        # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
+        montant_ht = float(chantier.montant_ht or 0)
+        devis_marche = Devis.objects.filter(
+            chantier=chantier, devis_chantier=True
+        ).first()
+        if devis_marche is not None and devis_marche.price_ht is not None:
+            montant_ht = float(devis_marche.price_ht)
         taux_fixe = chantier.taux_fixe or 0
         montant_taux_fixe = montant_ht * taux_fixe / 100
 

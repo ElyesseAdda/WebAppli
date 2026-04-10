@@ -6,7 +6,6 @@ const RecapSyntheseSection = ({ data, depensesPaye }) => {
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
   const montant_ht = Number(data.montant_ht || 0);
-  const taux_fixe = Number(data.taux_fixe || 0);
   const montant_taux_fixe = Number(data.montant_taux_fixe || 0);
   const total_materiel = Number(paye.materiel?.total || 0);
   const total_main_oeuvre = Number(paye.main_oeuvre?.total || 0);
@@ -91,15 +90,6 @@ const RecapSyntheseSection = ({ data, depensesPaye }) => {
                     minimumFractionDigits: 2,
                   })}{" "}
                   €
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">Taux fixe</Typography>
-                <Typography variant="h6">
-                  {taux_fixe.toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  %
                 </Typography>
               </Grid>
               <Grid item xs={12} md={4}>

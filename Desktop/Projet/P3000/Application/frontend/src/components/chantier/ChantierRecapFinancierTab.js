@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FaSync } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
@@ -26,7 +26,7 @@ const CATEGORY_COLORS = {
   facture: "#FF8042",
 };
 
-const ChantierRecapFinancierTab = ({ chantierId }) => {
+const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   const {
     filters,
     setFilters,
@@ -131,6 +131,15 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
     }
     // eslint-disable-next-line
   }, [chantierId, JSON.stringify(periode), global]);
+
+  const wasActiveRef = useRef(isActive);
+  useEffect(() => {
+    if (chantierId && isActive && !wasActiveRef.current) {
+      fetchData();
+    }
+    wasActiveRef.current = isActive;
+    // eslint-disable-next-line
+  }, [chantierId, isActive]);
 
   // Gestion du changement de période
   const handleMoisChange = (e) => {

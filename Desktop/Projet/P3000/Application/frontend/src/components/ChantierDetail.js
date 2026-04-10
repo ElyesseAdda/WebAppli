@@ -555,7 +555,10 @@ const ChantierDetail = () => {
               />
             </TabPanel>
             <TabPanel value={selectedTab} index={3}>
-              <ChantierRecapFinancierTab chantierId={id} />
+              <ChantierRecapFinancierTab
+                chantierId={id}
+                isActive={selectedTab === 3}
+              />
             </TabPanel>
           </Paper>
         </Box>
