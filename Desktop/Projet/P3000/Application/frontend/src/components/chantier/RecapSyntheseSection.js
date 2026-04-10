@@ -2,11 +2,20 @@ import { Box, Grid, Paper, Typography } from "@mui/material";
 import { ResponsivePie } from "@nivo/pie";
 import React from "react";
 
-const RecapSyntheseSection = ({ data, depensesPaye }) => {
+const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
   const montant_ht = Number(data.montant_ht || 0);
-  const montant_taux_fixe = Number(data.montant_taux_fixe || 0);
+  const montant_factures = Number(tauxFacturation?.montant_factures ?? 0);
+  const montant_avenants = Number(tauxFacturation?.montant_avenants ?? 0);
+  const montant_avenants_et_factures = montant_factures + montant_avenants;
+  const montantTfBrut = data.montant_taux_fixe;
+  const montant_taux_fixe = Number(montantTfBrut ?? 0);
+  const afficherMontantTauxFixe =
+    montantTfBrut != null &&
+    montantTfBrut !== "" &&
+    !Number.isNaN(montant_taux_fixe) &&
+    montant_taux_fixe !== 0;
   const total_materiel = Number(paye.materiel?.total || 0);
   const total_main_oeuvre = Number(paye.main_oeuvre?.total || 0);
   const total_sous_traitant = Number(paye.sous_traitant?.total || 0);
@@ -23,33 +32,22 @@ const RecapSyntheseSection = ({ data, depensesPaye }) => {
         )
       : 0;
 
-  // Nouveau calcul du bénéfice
-  const benefice =
-    total_paiements_recus -
-    montant_taux_fixe -
-    total_materiel -
-    total_main_oeuvre -
-    total_sous_traitant;
+  // Bénéfice = encaissements (paiements reçus) − coûts chantier payés (MO + ST + matériel)
+  const benefice = total_paiements_recus - cout_chantier;
 
-  // Préparer les données pour le PieChart (regroupement)
+  // Camembert = répartition des encaissements : coût chantier vs solde (bénéfice). Pas de part « taux fixe » ici.
   const pieData = [
-    {
-      id: "Taux fixe",
-      label: "Taux fixe",
-      value: montant_taux_fixe,
-      color: "#1976d2", // bleu
-    },
     {
       id: "Coût chantier",
       label: "Coût chantier",
       value: cout_chantier,
-      color: "#FF7043", // orange foncé
+      color: "#FF7043",
     },
     {
       id: "Bénéfice",
       label: "Bénéfice",
-      value: benefice,
-      color: benefice >= 0 ? "#43A047" : "#d32f2f", // vert ou rouge
+      value: Math.max(benefice, 0),
+      color: "#43A047",
     },
   ];
 
@@ -84,8 +82,8 @@ const RecapSyntheseSection = ({ data, depensesPaye }) => {
           >
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">Montant marché</Typography>
-                <Typography variant="h6">
+                <Typography color="text.secondary">Marché</Typography>
+                <Typography variant="h6" sx={{ color: "primary.main" }}>
                   {montant_ht.toLocaleString("fr-FR", {
                     minimumFractionDigits: 2,
                   })}{" "}
@@ -94,18 +92,31 @@ const RecapSyntheseSection = ({ data, depensesPaye }) => {
               </Grid>
               <Grid item xs={12} md={4}>
                 <Typography color="text.secondary">
-                  Montant taux fixe
+                  Avenants + Factures
                 </Typography>
-                <Typography
-                  variant="h6"
-                  sx={{ color: "#1976d2", fontWeight: 700 }}
-                >
-                  {montant_taux_fixe.toLocaleString("fr-FR", {
+                <Typography variant="h6" sx={{ color: "primary.main" }}>
+                  {montant_avenants_et_factures.toLocaleString("fr-FR", {
                     minimumFractionDigits: 2,
                   })}{" "}
                   €
                 </Typography>
               </Grid>
+              {afficherMontantTauxFixe ? (
+                <Grid item xs={12} md={4}>
+                  <Typography color="text.secondary">
+                    Montant taux fixe
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    sx={{ color: "#1976d2", fontWeight: 700 }}
+                  >
+                    {montant_taux_fixe.toLocaleString("fr-FR", {
+                      minimumFractionDigits: 2,
+                    })}{" "}
+                    €
+                  </Typography>
+                </Grid>
+              ) : null}
               <Grid item xs={12} md={4}>
                 <Typography color="text.secondary">Paiements reçus</Typography>
                 <Typography

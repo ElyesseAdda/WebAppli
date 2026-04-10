@@ -40,6 +40,7 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
 
   // State local pour la donnée API et le statut
   const [data, setData] = useState(null);
+  const [tauxFacturationData, setTauxFacturationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -81,13 +82,22 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
       }
       const res = await axios.get(url);
       setData(res.data);
-      
+
       // Recharger aussi la main d'oeuvre depuis les mêmes données
       const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || {
         total: 0,
         documents: [],
       };
       setMainOeuvreData(mainOeuvre);
+
+      try {
+        const resTaux = await axios.get(
+          `/api/chantier/${chantierId}/taux-facturation/`
+        );
+        setTauxFacturationData(resTaux.data);
+      } catch {
+        setTauxFacturationData(null);
+      }
     } catch (err) {
       setError("Erreur lors du chargement des données financières.");
     } finally {
@@ -233,6 +243,7 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
           <RecapSyntheseSection
             data={data}
             depensesPaye={getDepensesData()}
+            tauxFacturation={tauxFacturationData}
           />
           <Grid container spacing={3}>
           {/* Sorties */}
