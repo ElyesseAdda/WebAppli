@@ -157,7 +157,8 @@ class OnlyOfficeManager:
             'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
             'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
             'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
-            'pdf'  # Support PDF depuis OnlyOffice 8.1+
+            'fodt', 'fods', 'fodp', 'ott', 'ots', 'otp',
+            'pdf',
         ]
         return extension in editable_extensions
     

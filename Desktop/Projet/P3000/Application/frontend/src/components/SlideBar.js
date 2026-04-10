@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoClose } from "react-icons/io5";
 import {
@@ -6,19 +6,59 @@ import {
   MdCreateNewFolder,
   MdEventAvailable,
   MdFolderOpen,
+  MdAdminPanelSettings,
   MdBusiness,
   MdTableChart,
+  MdAdd,
+  MdExpandMore,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
 import { MdFolderShared } from "react-icons/md";
+import { MdManageAccounts, MdRestorePage } from "react-icons/md";
 import { NavLink, useLocation } from "react-router-dom";
+import axios from "axios";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
 
-const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
+const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [agences, setAgences] = useState([]);
+  const [agenceExpanded, setAgenceExpanded] = useState(true);
+
+  const fetchAgences = useCallback(() => {
+    axios
+      .get("/api/agences/")
+      .then((res) => setAgences(res.data || []))
+      .catch(() => setAgences([]));
+  }, []);
+
+  useEffect(() => {
+    fetchAgences();
+  }, [fetchAgences]);
+
+  const handleCreateAgence = () => {
+    const nom = prompt("Nom de la nouvelle agence :");
+    if (!nom || !nom.trim()) return;
+    axios
+      .post("/api/agences/", { nom: nom.trim() })
+      .then(() => fetchAgences())
+      .catch((err) => {
+        const msg = err.response?.data?.nom?.[0] || "Erreur lors de la création";
+        alert(msg);
+      });
+  };
+
+  const agenceItems = useMemo(() => {
+    if (!agences.length) return [{ isMainAgence: true, label: "Agence", to: null }];
+    return agences.map((a, idx) => ({
+      label: a.nom,
+      to: `/agence/${a.id}/expenses`,
+      isMainAgence: idx === 0,
+      isSubAgence: idx > 0,
+    }));
+  }, [agences]);
 
   const menu = useMemo(
     () => [
@@ -30,7 +70,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           { label: "Dashboard", to: "/" },
           { label: "Récap Chantier", to: "/ChantierDetail/1" },
           { label: "Appel d'Offre", to: "/GestionAppelsOffres" },
-          { label: "Agence", to: "/AgencyExpenses" },
+          ...agenceItems,
         ],
       },
       {
@@ -87,6 +127,19 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
           { label: "Comparateur", to: "/ComparateurFournisseurs" },
         ],
       },
+      ...(user?.is_superuser
+        ? [
+            {
+              key: "admin",
+              label: "Admin",
+              icon: MdAdminPanelSettings,
+              children: [
+                { label: "Utilisateurs", to: "/UsersManagement", icon: MdManageAccounts },
+                { label: "Récupération Drive", to: "/drive-recovery", icon: MdRestorePage },
+              ],
+            },
+          ]
+        : []),
       {
         key: "drive_v2",
         label: "Drive",
@@ -107,12 +160,15 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
         to: "/distributeurs",
       },
     ],
-    []
+    [user, agenceItems]
   );
 
   const isPathActive = (to) => {
     if (!to) return false;
     if (to === "/") return location.pathname === "/";
+    if (to.startsWith("/agence/") && location.pathname.startsWith("/agence/")) {
+      return location.pathname === to;
+    }
     return location.pathname.startsWith(to);
   };
 
@@ -222,6 +278,58 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible }) => {
                     style={{ display: isExpanded ? "block" : "none" }}
                   >
                     {item.children.map((child) => {
+                      if (child.isMainAgence) {
+                        const hasSubAgences = agenceItems.some((a) => a.isSubAgence);
+                        return (
+                          <li key={`${item.key}-main-agence`} className="agence-main-row">
+                            {child.to ? (
+                              <NavLink
+                                to={child.to}
+                                className={({ isActive }) =>
+                                  isActive ? "active" : ""
+                                }
+                              >
+                                {child.label}
+                              </NavLink>
+                            ) : (
+                              <span className="agence-main-label">{child.label}</span>
+                            )}
+                            <button
+                              type="button"
+                              className="add-agence-btn"
+                              onClick={handleCreateAgence}
+                              title="Créer une nouvelle agence"
+                            >
+                              <MdAdd />
+                            </button>
+                            {hasSubAgences && (
+                              <button
+                                type="button"
+                                className={`agence-toggle-btn${agenceExpanded ? " expanded" : ""}`}
+                                onClick={() => setAgenceExpanded((v) => !v)}
+                                aria-label="Déplier/replier les agences"
+                              >
+                                <MdExpandMore />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      }
+                      if (child.isSubAgence) {
+                        if (!agenceExpanded) return null;
+                        return (
+                          <li key={`${item.key}-${child.to}`} className="agence-sub-row">
+                            <NavLink
+                              to={child.to}
+                              className={({ isActive }) =>
+                                isActive ? "active" : ""
+                              }
+                            >
+                              {child.label}
+                            </NavLink>
+                          </li>
+                        );
+                      }
                       if (child.children && child.children.length > 0) {
                         return (
                           <li

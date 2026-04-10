@@ -32,6 +32,11 @@ const CellEditDialog = ({
   const [prixVente, setPrixVente] = useState("");
   const [stockProductId, setStockProductId] = useState(null);
   const [stockProducts, setStockProducts] = useState([]);
+  const [openChangeProductFlow, setOpenChangeProductFlow] = useState(false);
+  const [oldRemainingQty, setOldRemainingQty] = useState("");
+  const [remainingAction, setRemainingAction] = useState("restock");
+  const [feedbackModal, setFeedbackModal] = useState({ open: false, title: "", message: "" });
+  const [openDeleteWarning, setOpenDeleteWarning] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -57,7 +62,11 @@ const CellEditDialog = ({
 
   const handleSave = () => {
     if (!stockProductId) {
-      alert("Veuillez sélectionner un produit du stock.");
+      setFeedbackModal({
+        open: true,
+        title: "Validation requise",
+        message: "Veuillez sélectionner un produit du stock.",
+      });
       return;
     }
     const p = stockProducts.find((x) => x.id === stockProductId);
@@ -83,7 +92,57 @@ const CellEditDialog = ({
         }
       }
     });
+    const isRealProductChange =
+      cell &&
+      cell.id &&
+      cell.stock_product != null &&
+      stockProductId != null &&
+      Number(cell.stock_product) !== Number(stockProductId);
+
+    if (isRealProductChange) {
+      setOldRemainingQty("");
+      setRemainingAction("restock");
+      setOpenChangeProductFlow(true);
+      return;
+    }
+
     onSave(cellData);
+    onClose();
+  };
+
+  const handleConfirmChangeProductFlow = () => {
+    const parsedRemaining = parseInt(oldRemainingQty, 10);
+    if (isNaN(parsedRemaining) || parsedRemaining < 0) {
+      setFeedbackModal({
+        open: true,
+        title: "Valeur invalide",
+        message: "Veuillez saisir une quantité restante valide (0 ou plus).",
+      });
+      return;
+    }
+    const p = stockProducts.find((x) => x.id === stockProductId);
+    const hasNom = !!nomProduit.trim();
+    const hasImage = !!imageUrl.trim();
+    const cellData = {
+      distributeur: parseInt(distributeurId),
+      row_index: parseInt(rowIndex),
+      col_index: parseInt(colIndex),
+      nom_produit: hasNom ? nomProduit.trim() : (p ? (p.nom || p.nom_produit) : null),
+      image_url: hasImage ? imageUrl.trim() : (p ? (p.image_display_url || p.image_url) : null),
+      image_s3_key: null,
+      image_position: imagePosition || "center",
+      prix_vente: prixVente.trim() !== "" && !isNaN(parseFloat(prixVente)) && parseFloat(prixVente) >= 0
+        ? parseFloat(prixVente)
+        : null,
+      stock_product: stockProductId,
+    };
+    onSave(cellData, {
+      changeWorkflow: {
+        old_remaining_qty: parsedRemaining,
+        remaining_action: remainingAction,
+      },
+    });
+    setOpenChangeProductFlow(false);
     onClose();
   };
 
@@ -103,12 +162,19 @@ const CellEditDialog = ({
         })
         .catch((err) => {
           console.error("Erreur en vidant la case:", err);
-          if (err.response?.data) alert(`Erreur: ${JSON.stringify(err.response.data)}`);
+          if (err.response?.data) {
+            setFeedbackModal({
+              open: true,
+              title: "Erreur",
+              message: `Erreur: ${JSON.stringify(err.response.data)}`,
+            });
+          }
         });
     }
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -248,7 +314,7 @@ const CellEditDialog = ({
 
       <DialogActions sx={{ px: 2, pb: 2, justifyContent: "space-between" }}>
         <Button
-          onClick={handleDelete}
+          onClick={() => setOpenDeleteWarning(true)}
           color="error"
           disabled={!cell || !cell.id}
           sx={{ borderRadius: "12px" }}
@@ -270,6 +336,111 @@ const CellEditDialog = ({
         </Box>
       </DialogActions>
     </Dialog>
+
+    <Dialog
+      open={openDeleteWarning}
+      onClose={() => setOpenDeleteWarning(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ fontWeight: 800, color: "error.main" }}>
+        Vider la case ?
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Cette action supprimera toutes les informations relatives à ce produit pour ce distributeur.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 700 }}>
+          Cette action est irréversible et ne pourra pas être annulée.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Pour modifier simplement le produit présent dans la case, utilisez la barre de sélection du produit en haut du formulaire.
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 2, pb: 2 }}>
+        <Button onClick={() => setOpenDeleteWarning(false)}>
+          Annuler
+        </Button>
+        <Button
+          variant="contained"
+          color="error"
+          onClick={() => {
+            setOpenDeleteWarning(false);
+            handleDelete();
+          }}
+        >
+          Oui, vider la case
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={openChangeProductFlow}
+      onClose={() => setOpenChangeProductFlow(false)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle sx={{ fontWeight: 800 }}>
+        Changement de produit
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Combien d'unités de l'ancien produit restent dans le distributeur pour cette case ?
+        </Typography>
+        <TextField
+          fullWidth
+          type="number"
+          label="Unités restantes ancien produit"
+          value={oldRemainingQty}
+          onChange={(e) => setOldRemainingQty(e.target.value)}
+          inputProps={{ min: 0 }}
+          sx={{ mb: 2 }}
+        />
+        <FormControl fullWidth>
+          <InputLabel>Traitement du reliquat</InputLabel>
+          <Select
+            value={remainingAction}
+            label="Traitement du reliquat"
+            onChange={(e) => setRemainingAction(e.target.value)}
+          >
+            <MenuItem value="restock">Remettre le reliquat en stock</MenuItem>
+            <MenuItem value="loss">Considérer le reliquat comme perte</MenuItem>
+          </Select>
+        </FormControl>
+        <Typography variant="caption" sx={{ mt: 1.5, display: "block", color: "text.secondary" }}>
+          La différence (ancien niveau - restant) sera ajoutée automatiquement dans le prochain mouvement.
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 2, pb: 2 }}>
+        <Button onClick={() => setOpenChangeProductFlow(false)}>Annuler</Button>
+        <Button variant="contained" onClick={handleConfirmChangeProductFlow}>
+          Valider le changement
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={feedbackModal.open}
+      onClose={() => setFeedbackModal((s) => ({ ...s, open: false }))}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle sx={{ fontWeight: 800 }}>{feedbackModal.title || "Information"}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary">
+          {feedbackModal.message}
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 2, pb: 2 }}>
+        <Button
+          variant="contained"
+          onClick={() => setFeedbackModal((s) => ({ ...s, open: false }))}
+        >
+          OK
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 };
 

@@ -19,6 +19,11 @@ import {
   FormControlLabel,
   Checkbox,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Collapse,
 } from "@mui/material";
 import {
   MdAdd,
@@ -34,6 +39,7 @@ import {
   MdExpandLess,
   MdSettings,
   MdChevronRight,
+  MdDelete,
 } from "react-icons/md";
 import StockProductDialog from "./StockProductDialog";
 import CreatePurchaseDialog from "./CreatePurchaseDialog";
@@ -62,6 +68,44 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   const [productForLots, setProductForLots] = useState(null);
   const [lots, setLots] = useState([]);
   const [loadingLots, setLoadingLots] = useState(false);
+  const [openDeletePurchaseDialog, setOpenDeletePurchaseDialog] = useState(false);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
+  const [stockFilter, setStockFilter] = useState("all"); // all | low | out
+  const [stockSort, setStockSort] = useState("asc"); // asc: faible->fort, desc: fort->faible
+  const [purchaseSummaryMode, setPurchaseSummaryMode] = useState("global"); // global | month | year
+  const [purchaseSummaryProductId, setPurchaseSummaryProductId] = useState("all");
+  const [purchaseSummaryMonth, setPurchaseSummaryMonth] = useState(new Date().getMonth() + 1);
+  const [purchaseSummaryYear, setPurchaseSummaryYear] = useState(new Date().getFullYear());
+  /** Mobile : replié par défaut pour libérer l’écran (FAB bas) ; desktop : ouvert */
+  const [purchaseSummaryOpen, setPurchaseSummaryOpen] = useState(!!propIsDesktop);
+
+  const getFilterChipSx = (active, type = "default") => {
+    const paletteByType = {
+      default: { bg: "primary.50", color: "primary.main", border: "primary.200" },
+      warning: { bg: "warning.50", color: "warning.main", border: "warning.200" },
+      error: { bg: "error.50", color: "error.main", border: "error.200" },
+    };
+    const p = paletteByType[type] || paletteByType.default;
+    return {
+      borderRadius: "12px",
+      fontWeight: 800,
+      height: 34,
+      border: "1px solid",
+      borderColor: active ? p.border : "divider",
+      bgcolor: active ? p.color : "background.paper",
+      color: active ? "common.white" : "text.secondary",
+      transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      boxShadow: active ? "0 4px 12px rgba(0,0,0,0.08)" : "none",
+      "&:hover": {
+        bgcolor: active ? p.color : "grey.50",
+        borderColor: active ? p.border : "grey.300",
+      },
+      "& .MuiChip-label": {
+        px: 1.5,
+        fontSize: "0.72rem",
+      },
+    };
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -128,6 +172,64 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     });
   }, [purchases, purchaseSearchTerm]);
 
+  const purchaseYears = React.useMemo(() => {
+    const years = new Set();
+    purchases.forEach((p) => {
+      const d = p?.date_achat ? new Date(p.date_achat) : null;
+      if (d && !Number.isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [purchases]);
+
+  const purchaseSummary = React.useMemo(() => {
+    let totalMontant = 0;
+    let totalUnites = 0;
+    let nombreAchats = 0;
+    let nombreLignes = 0;
+    const selectedProductId = purchaseSummaryProductId === "all" ? null : Number(purchaseSummaryProductId);
+
+    purchases.forEach((purchase) => {
+      const d = purchase?.date_achat ? new Date(purchase.date_achat) : null;
+      if (!d || Number.isNaN(d.getTime())) return;
+      if (purchaseSummaryMode === "month") {
+        if (d.getFullYear() !== Number(purchaseSummaryYear) || d.getMonth() + 1 !== Number(purchaseSummaryMonth)) return;
+      } else if (purchaseSummaryMode === "year") {
+        if (d.getFullYear() !== Number(purchaseSummaryYear)) return;
+      }
+
+      const items = Array.isArray(purchase.items) ? purchase.items : [];
+      const selectedItems = selectedProductId
+        ? items.filter((it) => Number(it.produit) === selectedProductId)
+        : items;
+      if (!selectedItems.length) return;
+
+      nombreAchats += 1;
+      nombreLignes += selectedItems.length;
+
+      selectedItems.forEach((it) => {
+        const qte = parseFloat(it.quantite) || 0;
+        const prix = parseFloat(it.prix_unitaire) || 0;
+        const montant = it.montant_total != null ? parseFloat(it.montant_total) || 0 : qte * prix;
+        totalUnites += qte;
+        totalMontant += montant;
+      });
+    });
+
+    return {
+      totalMontant,
+      totalUnites,
+      nombreAchats,
+      nombreLignes,
+      prixMoyenUnitaire: totalUnites > 0 ? totalMontant / totalUnites : 0,
+    };
+  }, [
+    purchases,
+    purchaseSummaryMode,
+    purchaseSummaryProductId,
+    purchaseSummaryMonth,
+    purchaseSummaryYear,
+  ]);
+
   // Meilleur prix par produit (prix min + lieu d'achat), clé = nom produit (normalisé minuscules pour match)
   const bestPriceByProduct = React.useMemo(() => {
     const map = {};
@@ -146,6 +248,13 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   }, [purchases]);
 
   const getBestPriceForProduct = (product) => {
+    if (product?.best_purchase_price != null && product?.best_purchase_location) {
+      return {
+        prix: product.best_purchase_price,
+        lieu: product.best_purchase_location,
+        nom: product.nom || product.nom_produit || "",
+      };
+    }
     if (!product?.nom) return null;
     const key = product.nom.trim().toLowerCase();
     return bestPriceByProduct[key] || null;
@@ -160,13 +269,33 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     }, 0);
   }, [lots]);
 
-  const filteredProducts = products.filter((product) => {
+  const filteredProducts = React.useMemo(() => {
+    const lowStockThreshold = 10;
     const search = searchTerm.toLowerCase();
-    return (
-      (product.nom && product.nom.toLowerCase().includes(search)) ||
-      (product.nom_produit && product.nom_produit.toLowerCase().includes(search))
-    );
-  });
+
+    const searched = products.filter((product) => {
+      return (
+        (product.nom && product.nom.toLowerCase().includes(search)) ||
+        (product.nom_produit && product.nom_produit.toLowerCase().includes(search))
+      );
+    });
+
+    const filteredByStock = searched.filter((product) => {
+      if (stockFilter === "out") return (parseInt(product.quantite, 10) || 0) === 0;
+      if (stockFilter === "low") {
+        const qte = parseInt(product.quantite, 10) || 0;
+        return qte > 0 && qte <= lowStockThreshold;
+      }
+      return true;
+    });
+
+    return [...filteredByStock].sort((a, b) => {
+      const qa = parseInt(a.quantite, 10) || 0;
+      const qb = parseInt(b.quantite, 10) || 0;
+      if (stockSort === "desc") return qb - qa;
+      return qa - qb;
+    });
+  }, [products, searchTerm, stockFilter, stockSort]);
 
   const handleOpenQuantityDialog = (product, type) => {
     setSelectedProduct(product);
@@ -261,6 +390,29 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     }
   };
 
+  const handleDeletePurchase = async () => {
+    if (!purchaseToDelete?.id) return;
+    try {
+      await axios.delete(`/api/stock-purchases/${purchaseToDelete.id}/`);
+      setOpenDeletePurchaseDialog(false);
+      setPurchaseToDelete(null);
+      fetchProducts(true);
+      fetchPurchases(true);
+      fetchLots(true);
+    } catch (error) {
+      console.error("Erreur suppression achat:", error);
+      alert(
+        error.response?.data?.error ||
+          "Erreur lors de la suppression de l'historique d'achat"
+      );
+    }
+  };
+
+  const handleAskDeletePurchase = (purchase) => {
+    setPurchaseToDelete(purchase);
+    setOpenDeletePurchaseDialog(true);
+  };
+
   return (
     <Box
       sx={{
@@ -337,6 +489,36 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             },
           }}
         />
+          <Box sx={{ mt: 1.5, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip
+              label="Tous"
+              clickable
+              color={stockFilter === "all" ? "primary" : "default"}
+              onClick={() => setStockFilter("all")}
+              sx={getFilterChipSx(stockFilter === "all", "default")}
+            />
+            <Chip
+              label="Stock faible (1-10)"
+              clickable
+              color={stockFilter === "low" ? "warning" : "default"}
+              onClick={() => setStockFilter("low")}
+              sx={getFilterChipSx(stockFilter === "low", "warning")}
+            />
+            <Chip
+              label="Rupture (0)"
+              clickable
+              color={stockFilter === "out" ? "error" : "default"}
+              onClick={() => setStockFilter("out")}
+              sx={getFilterChipSx(stockFilter === "out", "error")}
+            />
+            <Chip
+              label={stockSort === "asc" ? "Tri: faible -> fort" : "Tri: fort -> faible"}
+              clickable
+              variant="outlined"
+              onClick={() => setStockSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+              sx={getFilterChipSx(true, "default")}
+            />
+          </Box>
         </Box>
       )}
 
@@ -367,6 +549,36 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               ),
             }}
           />
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip
+              label="Tous"
+              clickable
+              color={stockFilter === "all" ? "primary" : "default"}
+              onClick={() => setStockFilter("all")}
+              sx={getFilterChipSx(stockFilter === "all", "default")}
+            />
+            <Chip
+              label="Stock faible (1-10)"
+              clickable
+              color={stockFilter === "low" ? "warning" : "default"}
+              onClick={() => setStockFilter("low")}
+              sx={getFilterChipSx(stockFilter === "low", "warning")}
+            />
+            <Chip
+              label="Rupture (0)"
+              clickable
+              color={stockFilter === "out" ? "error" : "default"}
+              onClick={() => setStockFilter("out")}
+              sx={getFilterChipSx(stockFilter === "out", "error")}
+            />
+            <Chip
+              label={stockSort === "asc" ? "Tri: faible -> fort" : "Tri: fort -> faible"}
+              clickable
+              variant="outlined"
+              onClick={() => setStockSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+              sx={getFilterChipSx(true, "default")}
+            />
+          </Box>
           {loadingLots ? (
             <Typography variant="body2" color="text.secondary">Valeur…</Typography>
           ) : (
@@ -382,6 +594,186 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
           </IconButton>
         </Box>
       )}
+
+      {/* Résumé achats (replié par défaut sur mobile pour laisser la place aux FAB / scroll) */}
+      <Box sx={{ px: isDesktop ? 0 : 2, mb: 2 }}>
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: isDesktop ? "18px" : "22px",
+            border: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.paper",
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            role="button"
+            tabIndex={0}
+            aria-expanded={purchaseSummaryOpen}
+            aria-label={purchaseSummaryOpen ? "Replier le résumé des achats" : "Déplier le résumé des achats"}
+            onClick={() => setPurchaseSummaryOpen((o) => !o)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setPurchaseSummaryOpen((o) => !o);
+              }
+            }}
+            sx={{
+              px: 2,
+              py: isMobile ? 1.75 : 1.5,
+              minHeight: isMobile ? 52 : 48,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              cursor: "pointer",
+              userSelect: "none",
+              WebkitTapHighlightColor: "transparent",
+              "&:hover": { bgcolor: "action.hover" },
+            }}
+          >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                Résumé des achats
+              </Typography>
+              {!purchaseSummaryOpen && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600, mt: 0.25 }}
+                  noWrap
+                >
+                  {Number(purchaseSummary.totalMontant).toFixed(2)} € ·{" "}
+                  {Number(purchaseSummary.totalUnites).toFixed(0)} u. ·{" "}
+                  {purchaseSummary.nombreAchats} achat{purchaseSummary.nombreAchats !== 1 ? "s" : ""}
+                </Typography>
+              )}
+            </Box>
+            <IconButton
+              size="small"
+              aria-hidden
+              onClick={(e) => {
+                e.stopPropagation();
+                setPurchaseSummaryOpen((o) => !o);
+              }}
+              sx={{ borderRadius: "12px", flexShrink: 0 }}
+            >
+              {purchaseSummaryOpen ? <MdExpandLess size={24} /> : <MdExpandMore size={24} />}
+            </IconButton>
+          </Box>
+          <Collapse in={purchaseSummaryOpen} timeout="auto">
+            <CardContent sx={{ pt: 0, px: 2, pb: 2 }}>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
+                <FormControl size="small" sx={{ minWidth: 140 }}>
+                  <InputLabel id="purchase-summary-mode-label">Période</InputLabel>
+                  <Select
+                    labelId="purchase-summary-mode-label"
+                    value={purchaseSummaryMode}
+                    label="Période"
+                    onChange={(e) => setPurchaseSummaryMode(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MenuItem value="global">Global</MenuItem>
+                    <MenuItem value="month">Mois</MenuItem>
+                    <MenuItem value="year">Année</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 170, flex: 1 }}>
+                  <InputLabel id="purchase-summary-product-label">Produit</InputLabel>
+                  <Select
+                    labelId="purchase-summary-product-label"
+                    value={purchaseSummaryProductId}
+                    label="Produit"
+                    onChange={(e) => setPurchaseSummaryProductId(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MenuItem value="all">Tous les produits</MenuItem>
+                    {products.map((p) => (
+                      <MenuItem key={p.id} value={String(p.id)}>
+                        {p.nom || p.nom_produit || `Produit #${p.id}`}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {purchaseSummaryMode === "month" && (
+                  <FormControl size="small" sx={{ minWidth: 110 }}>
+                    <InputLabel id="purchase-summary-month-label">Mois</InputLabel>
+                    <Select
+                      labelId="purchase-summary-month-label"
+                      value={purchaseSummaryMonth}
+                      label="Mois"
+                      onChange={(e) => setPurchaseSummaryMonth(Number(e.target.value))}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <MenuItem key={i + 1} value={i + 1}>
+                          {String(i + 1).padStart(2, "0")}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+
+                {purchaseSummaryMode !== "global" && (
+                  <FormControl size="small" sx={{ minWidth: 110 }}>
+                    <InputLabel id="purchase-summary-year-label">Année</InputLabel>
+                    <Select
+                      labelId="purchase-summary-year-label"
+                      value={purchaseSummaryYear}
+                      label="Année"
+                      onChange={(e) => setPurchaseSummaryYear(Number(e.target.value))}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {(purchaseYears.length ? purchaseYears : [new Date().getFullYear()]).map((y) => (
+                        <MenuItem key={y} value={y}>
+                          {y}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              </Box>
+
+              <Grid container spacing={1.5}>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ p: 1.2, borderRadius: "12px", bgcolor: "grey.50" }}>
+                    <Typography variant="caption" color="text.secondary">Montant total</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "primary.main" }}>
+                      {Number(purchaseSummary.totalMontant).toFixed(2)} €
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ p: 1.2, borderRadius: "12px", bgcolor: "grey.50" }}>
+                    <Typography variant="caption" color="text.secondary">Unités achetées</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
+                      {Number(purchaseSummary.totalUnites).toFixed(0)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ p: 1.2, borderRadius: "12px", bgcolor: "grey.50" }}>
+                    <Typography variant="caption" color="text.secondary">Achats</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
+                      {purchaseSummary.nombreAchats}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Box sx={{ p: 1.2, borderRadius: "12px", bgcolor: "grey.50" }}>
+                    <Typography variant="caption" color="text.secondary">Prix moyen / unité</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
+                      {Number(purchaseSummary.prixMoyenUnitaire).toFixed(2)} €
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Collapse>
+        </Card>
+      </Box>
 
       {/* Liste des produits - Modern Grid */}
       <Box sx={{ p: isDesktop ? 0 : 2 }}>
@@ -817,6 +1209,21 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
                           </Box>
                         </Box>
                         <Box sx={{ textAlign: "right", display: "flex", alignItems: "center", gap: 1.5 }}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAskDeletePurchase(p);
+                            }}
+                            sx={{
+                              bgcolor: "error.50",
+                              color: "error.main",
+                              borderRadius: "10px",
+                              "&:hover": { bgcolor: "error.100" },
+                            }}
+                          >
+                            <MdDelete size={18} />
+                          </IconButton>
                           <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "primary.main", lineHeight: 1 }}>
                               {Number(p.total).toFixed(2)} €
@@ -877,6 +1284,50 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             )}
           </Box>
         </Box>
+      </Dialog>
+
+      <Dialog
+        open={openDeletePurchaseDialog}
+        onClose={() => {
+          setOpenDeletePurchaseDialog(false);
+          setPurchaseToDelete(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          Supprimer cet historique d'achat ?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Cette action retirera du stock les quantités encore présentes dans les lots liés à cet achat.
+          </Typography>
+          {purchaseToDelete && (
+            <Typography variant="body2" sx={{ mt: 1.5, fontWeight: 700 }}>
+              {purchaseToDelete.lieu_achat || "Lieu inconnu"} • {Number(purchaseToDelete.total || 0).toFixed(2)} €
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => {
+              setOpenDeletePurchaseDialog(false);
+              setPurchaseToDelete(null);
+            }}
+            variant="outlined"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleDeletePurchase}
+            color="error"
+            variant="contained"
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Floating Action Buttons - Modern Stack */}
@@ -1130,12 +1581,14 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             
             fetchProducts(true);
             fetchPurchases(true);
+            return true;
           } catch (error) {
             console.error("Erreur création achat:", error);
             alert(
               error.response?.data?.error ||
                 "Erreur lors de l'enregistrement de l'achat"
             );
+            return false;
           }
         }}
         existingProducts={products}

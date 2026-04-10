@@ -167,7 +167,13 @@ const FilePreviewPage = () => {
     if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension) || type.includes('image')) return 'image';
     if (['mp4', 'webm', 'ogg', 'avi', 'mov'].includes(extension) || type.includes('video')) return 'video';
     if (['mp3', 'wav', 'ogg', 'flac', 'aac'].includes(extension) || type.includes('audio')) return 'audio';
-    if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(extension)) return 'office';
+    if ([
+      'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
+      'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
+      'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
+      'odt', 'ods', 'odp', 'rtf',
+      'fodt', 'fods', 'fodp', 'ott', 'ots', 'otp',
+    ].includes(extension)) return 'office';
     if (['txt', 'json', 'xml', 'csv', 'md'].includes(extension) || type.includes('text')) return 'text';
     return 'unknown';
   };
@@ -182,7 +188,8 @@ const FilePreviewPage = () => {
       'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
       'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
       'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
-      'pdf'  // Support PDF depuis OnlyOffice 8.1+
+      'fodt', 'fods', 'fodp', 'ott', 'ots', 'otp',
+      'pdf',
     ];
     return editableExtensions.includes(extension);
   };

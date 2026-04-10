@@ -32,6 +32,7 @@ import MobileAppLayout from "./Distributeurs/MobileAppLayout";
 import DesktopAppLayout from "./Distributeurs/DesktopAppLayout";
 import Drive from "./Drive";
 import DriveV2 from "./DriveV2/DriveV2";
+import DriveRecovery from "./DriveV2/DriveRecovery";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";
 import OnlyOfficeEditor from "./DriveV2/OnlyOfficeEditor";
 import GestionAppelsOffres from "./GestionAppelsOffres";
@@ -58,6 +59,7 @@ import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
+import UsersManagement from "./UsersManagement";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -78,6 +80,16 @@ const theme = createTheme({
 const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+const SuperuserRoute = ({ children, isAuthenticated, user }) => {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!user?.is_superuser) {
+    return <Navigate to="/" replace />;
   }
   return children;
 };
@@ -362,6 +374,16 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/agence/:agenceId/expenses"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AgencyExpenses />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/BonCommandeModif"
@@ -496,6 +518,17 @@ function App() {
           />
 
           <Route
+            path="/UsersManagement"
+            element={
+              <SuperuserRoute isAuthenticated={isAuthenticated} user={user}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <UsersManagement />
+                </Layout>
+              </SuperuserRoute>
+            }
+          />
+
+          <Route
             path="/ChantierTabs"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
@@ -557,6 +590,17 @@ function App() {
                   fileName={new URLSearchParams(window.location.search).get('file_name')}
                   mode="edit"
                 />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-recovery"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <DriveRecovery />
+                </Layout>
               </ProtectedRoute>
             }
           />

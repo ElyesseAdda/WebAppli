@@ -108,6 +108,28 @@
   transform: translateX(2px);
 }
 
+.admin-user-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(25, 118, 210, 0.9);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.admin-user-button:hover {
+  background-color: rgba(25, 118, 210, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
 /* Responsive design pour le breadcrumb */
 @media (max-width: 768px) {
   .breadcrumb-header {

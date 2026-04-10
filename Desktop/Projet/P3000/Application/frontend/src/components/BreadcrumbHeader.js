@@ -1,6 +1,6 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness, MdTableChart } from "react-icons/md";
+import { MdConstruction, MdEventAvailable, MdFolderOpen, MdBusiness, MdTableChart, MdAdminPanelSettings } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { useLocation, useParams } from "react-router-dom";
 import "./../../static/css/breadcrumb.css";
@@ -21,6 +21,7 @@ const sectionConfigs = [
       "/ChantierDetail",
       "/GestionAppelsOffres",
       "/AgencyExpenses",
+      "/agence",
       "/ChantiersDashboard",
       "/TableauSuivi",
     ],
@@ -65,6 +66,14 @@ const sectionConfigs = [
     ],
   },
   {
+    key: "admin",
+    label: "Admin",
+    icon: MdAdminPanelSettings,
+    prefixes: [
+      "/UsersManagement",
+    ],
+  },
+  {
     key: "drive",
     label: "Drive",
     icon: SiGoogledrive,
@@ -92,6 +101,7 @@ const pageLabelByPrefix = [
   { prefix: "/ListeFactures", label: "Liste facture" },
   { prefix: "/ListeFournisseurs", label: "Liste Fournisseurs" },
   { prefix: "/ListeSousTraitants", label: "Sous traitant" },
+  { prefix: "/UsersManagement", label: "Gestion utilisateurs" },
   { prefix: "/paiements-sous-traitant", label: "Paiements sous-traitant" },
 ];
 
@@ -108,7 +118,19 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
   const pageLabelEntry = pageLabelByPrefix.find((e) =>
     e.prefix === "/" ? pathname === "/" : pathname.startsWith(e.prefix)
   );
-  const pageLabel = pageLabelEntry?.label || "";
+
+  const [agenceName, setAgenceName] = useState("");
+  const agenceMatch = pathname.match(/^\/agence\/(\d+)\/expenses/);
+  const agenceIdFromUrl = agenceMatch ? agenceMatch[1] : null;
+
+  useEffect(() => {
+    if (!agenceIdFromUrl) { setAgenceName(""); return; }
+    axios.get(`/api/agences/${agenceIdFromUrl}/`).then((res) => {
+      setAgenceName(res.data?.nom || "Agence");
+    }).catch(() => setAgenceName("Agence"));
+  }, [agenceIdFromUrl]);
+
+  const pageLabel = agenceIdFromUrl ? (agenceName || "Agence") : (pageLabelEntry?.label || "");
 
   // Suffix contextuel: pour /ChantierDetail/:id, afficher le nom du chantier si possible
   const [chantierName, setChantierName] = useState("");
@@ -213,6 +235,7 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

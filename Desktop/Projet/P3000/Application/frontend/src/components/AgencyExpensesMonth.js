@@ -51,6 +51,7 @@ const AgencyExpensesMonth = () => {
     "Prime",
     "Loyer",
     "Fournitures",
+    "Fournisseur",
     "Équipement",
     "Assurance",
     "Services",
@@ -333,6 +334,11 @@ const AgencyExpensesMonth = () => {
                   placeholder="Montant..."
                 />
               </FilterCell>
+              <FilterCell>
+                <Typography variant="caption" sx={{ color: "#fff", px: 1 }}>
+                  Commentaire
+                </Typography>
+              </FilterCell>
               <FilterCell />
             </TableRow>
           </TableHead>
@@ -359,6 +365,39 @@ const AgencyExpensesMonth = () => {
                 <TableCell align="center">{expense.category}</TableCell>
                 <TableCell align="center">
                   {parseFloat(expense.amount).toFixed(2)} €
+                </TableCell>
+                <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
+                  <TextField
+                    size="small"
+                    variant="standard"
+                    fullWidth
+                    multiline
+                    minRows={1}
+                    maxRows={6}
+                    placeholder="—"
+                    defaultValue={expense.commentaire || ""}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim();
+                      if (val !== (expense.commentaire || "")) {
+                        axios
+                          .patch(`/api/agency-expenses-month/${expense.id}/`, {
+                            commentaire: val || null,
+                          })
+                          .catch(() => {});
+                      }
+                    }}
+                    InputProps={{
+                      disableUnderline: true,
+                      sx: {
+                        fontSize: "0.82rem",
+                        color: "#555",
+                        lineHeight: 1.4,
+                        alignItems: "flex-start",
+                        "&:hover": { borderBottom: "1px solid #ccc" },
+                        "&.Mui-focused": { borderBottom: "1px solid #1976d2" },
+                      },
+                    }}
+                  />
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: "flex", gap: 1 }}>
@@ -407,6 +446,7 @@ const AgencyExpensesMonth = () => {
               >
                 {calculateMonthlyTotal().toFixed(2)} €
               </TableCell>
+              <TableCell />
               <TableCell />
             </TableRow>
           </TableBody>

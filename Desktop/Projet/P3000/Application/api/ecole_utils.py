@@ -32,6 +32,58 @@ def get_or_create_ecole_chantier():
     
     return ecole_chantier
 
+
+def get_agence_chantier_ids():
+    """
+    Identifiants des chantiers « agence » pour le planning :
+    - chantier_type = 'agence', ou nom exact « Agence » (insensible à la casse).
+    Si aucun n'existe, crée le chantier système « Agence ».
+    """
+    from django.db.models import Q
+
+    ids = list(
+        Chantier.objects.filter(
+            Q(chantier_type="agence") | Q(chantier_name__iexact="Agence")
+        )
+        .values_list("id", flat=True)
+        .distinct()
+    )
+    if not ids:
+        ch = get_or_create_agence_chantier()
+        ids = [ch.id]
+    return ids
+
+
+def get_or_create_agence_chantier():
+    """
+    Récupère un chantier agence existant (type ou nom) ou crée « Agence » (système).
+    """
+    from django.db.models import Q
+
+    existing = (
+        Chantier.objects.filter(
+            Q(chantier_type="agence") | Q(chantier_name__iexact="Agence")
+        )
+        .first()
+    )
+    if existing:
+        return existing
+    chantier, created = Chantier.objects.get_or_create(
+        chantier_name="Agence",
+        defaults={
+            "is_system_chantier": True,
+            "chantier_type": "agence",
+            "ville": "Système",
+            "rue": "Système",
+            "state_chantier": "En Cours",
+            "description": "Chantier système pour les heures au siège / agence (planning hebdomadaire)",
+        },
+    )
+    if created:
+        logger.info("Chantier système 'Agence' créé avec l'ID %s", chantier.id)
+    return chantier
+
+
 def create_ecole_assignments(agent_id, start_date, end_date):
     """
     Crée les assignations automatiques d'école pour un agent sur une période

@@ -97,6 +97,7 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
     },
   ]);
   const [expandedItems, setExpandedItems] = useState({}); // { index: true/false }
+  const [isSaving, setIsSaving] = useState(false);
 
   // Charger le brouillon au montage
   useEffect(() => {
@@ -196,7 +197,24 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
     return pt / q;
   };
 
-  const handleSave = () => {
+  const resetPurchaseForm = () => {
+    setLieuAchat("");
+    setDateAchat(getLocalDatetimeString());
+    setItems([
+      {
+        produit_id: null,
+        nom_produit: "",
+        quantite: "",
+        prix_total: "",
+        unite: "pièce",
+        creer_produit: true,
+      },
+    ]);
+    setExpandedItems({});
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const handleSave = async () => {
     const validItems = items.filter(
       (item) =>
         item.nom_produit && item.nom_produit.trim() &&
@@ -227,27 +245,20 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
       }),
     };
 
-    onSave(purchaseData);
-    // Réinitialiser après sauvegarde
-    localStorage.removeItem(STORAGE_KEY);
+    setIsSaving(true);
+    try {
+      const success = await onSave(purchaseData);
+      if (success) {
+        resetPurchaseForm();
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
     if (window.confirm("Voulez-vous vraiment réinitialiser la liste d'achat ?")) {
-      setLieuAchat("");
-      setDateAchat(getLocalDatetimeString());
-      setItems([
-        {
-          produit_id: null,
-          nom_produit: "",
-          quantite: "",
-          prix_total: "",
-          unite: "pièce",
-          creer_produit: true,
-        },
-      ]);
-      setExpandedItems({});
-      localStorage.removeItem(STORAGE_KEY);
+      resetPurchaseForm();
     }
   };
 
@@ -328,19 +339,9 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
             />
           </Box>
 
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "text.primary" }}>
-              Panier ({items.length})
-            </Typography>
-            <Button
-              startIcon={<MdAdd size={20} />}
-              onClick={handleAddItem}
-              variant="text"
-              sx={{ fontWeight: 700, borderRadius: "10px", textTransform: "none" }}
-            >
-              Ajouter un produit
-            </Button>
-          </Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "text.primary" }}>
+            Panier ({items.length})
+          </Typography>
 
           {/* Liste des produits - Modern Shopping List */}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -550,6 +551,22 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
               );
             })}
           </Box>
+
+          <Button
+            fullWidth
+            startIcon={<MdAdd size={20} />}
+            onClick={handleAddItem}
+            variant="outlined"
+            sx={{
+              fontWeight: 700,
+              borderRadius: "14px",
+              textTransform: "none",
+              py: 1.25,
+              borderStyle: "dashed",
+            }}
+          >
+            Ajouter un produit
+          </Button>
         </Box>
       </DialogContent>
 
@@ -581,7 +598,7 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
             fullWidth
             variant="contained"
             onClick={handleSave}
-            disabled={items.length === 0}
+            disabled={items.length === 0 || isSaving}
             sx={{ 
               borderRadius: "16px", 
               py: 1.5, 
@@ -591,7 +608,7 @@ const CreatePurchaseDialog = ({ open, onClose, onSave, existingProducts = [] }) 
               "&:hover": { bgcolor: "primary.main" }
             }}
           >
-            Enregistrer
+            {isSaving ? "Enregistrement..." : "Enregistrer"}
           </Button>
         </Box>
       </DialogActions>

@@ -1,6 +1,10 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
+  LinearProgress,
   Paper,
   Table,
   TableBody,
@@ -12,6 +16,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 
 import {
   formatDate,
@@ -44,7 +49,7 @@ const commonCellStyle = {
   minHeight: "60px",
   verticalAlign: "middle",
 };
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 
 const TableauFacturationTable = ({
   situationsAvecSousTotaux,
@@ -57,6 +62,45 @@ const TableauFacturationTable = ({
   onNumeroCPChange,
 }) => {
   const [showCumulColumn, setShowCumulColumn] = useState(false);
+
+  const hasNoEcart = (montantAttendu, montantRecu) =>
+    Math.abs((parseFloat(montantRecu) || 0) - (parseFloat(montantAttendu) || 0)) < 0.01;
+
+  const formatNum = (num) =>
+    Number(num ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const colorForAmount = (value, isEcart = false) => {
+    const n = Number(value ?? 0);
+    if (isEcart) return n > 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
+  };
+
+  const recapParChantier = useMemo(() => {
+    const parChantier = {};
+    situationsAvecSousTotaux.forEach((item) => {
+      if (item.isSousTotal) return;
+      const isFacture = item.price_ht !== undefined;
+      const chantierName = item.chantier_name || item.chantier?.chantier_name || "Inconnu";
+      const montantHT = isFacture
+        ? parseFloat(item.price_ht) || 0
+        : parseFloat(item.montant_apres_retenues) || 0;
+      const montantRecu = isFacture
+        ? (item.state_facture === "Payée" ? montantHT : 0)
+        : parseFloat(item.montant_reel_ht) || 0;
+
+      if (!parChantier[chantierName]) {
+        parChantier[chantierName] = { montantHT: 0, montantRecu: 0, ecart: 0 };
+      }
+      parChantier[chantierName].montantHT += montantHT;
+      parChantier[chantierName].montantRecu += montantRecu;
+      parChantier[chantierName].ecart += montantRecu - montantHT;
+    });
+
+    const totalHT = parseFloat(totaux.montantHTSituation) || 0;
+    const sorted = Object.keys(parChantier).sort((a, b) => parChantier[b].montantHT - parChantier[a].montantHT);
+    return { parChantier, totalHT, sorted };
+  }, [situationsAvecSousTotaux, totaux]);
+
   // Calculer le nombre de lignes par mois (sans les sous-totaux) pour la fusion des cellules
   const calculerLignesParMois = () => {
     const lignesParMois = {};
@@ -114,9 +158,33 @@ const TableauFacturationTable = ({
   let ligneMoisIndex = 0;
 
   return (
-    <TableContainer component={Paper} sx={{ maxWidth: "100%", overflowX: "auto", width: "100%" }}>
+    <>
+    <TableContainer
+      component={Paper}
+      sx={{
+        maxWidth: "100%",
+        overflowX: "auto",
+        width: "100%",
+        maxHeight: "calc(100vh - 180px)",
+        height: "calc(100vh - 180px)",
+        overflowY: "auto",
+        position: "relative",
+        scrollbarWidth: "none",
+        "&::-webkit-scrollbar": {
+          display: "none",
+        },
+        msOverflowStyle: "none",
+      }}
+    >
       <Table size="small" sx={{ tableLayout: "auto", width: "100%" }}>
-        <TableHead>
+        <TableHead
+          sx={{
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            backgroundColor: "rgba(27, 120, 188, 1)",
+          }}
+        >
           <TableRow
             sx={{
               backgroundColor: "rgba(27, 120, 188, 1)",
@@ -152,85 +220,79 @@ const TableauFacturationTable = ({
                 <TableRow
                   key={`sous-total-${item.mois}`}
                   sx={{
-                    backgroundColor: "rgba(27, 120, 188, 1)",
+                    backgroundColor: "#000000",
                     fontWeight: "bold",
+                    borderTop: "2px solid rgba(255, 255, 255, 0.2)",
+                    borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
                     "& td": {
                       fontWeight: "bold",
                       color: "white",
                     },
                   }}
                 >
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ fontWeight: "bold", color: "white", fontSize: "0.95rem" }}>
+                      Sous-total {getMoisName(item.mois)}
+                    </Typography>
+                  </TableCell>
                   <TableCell
-                    colSpan={showCumulColumn ? 15 : 14}
+                    colSpan={4}
+                    onClick={() => setShowCumulColumn(!showCumulColumn)}
                     sx={{
                       ...commonBodyCellStyle,
-                      padding: "8px 16px",
-                      width: "100%",
+                      cursor: "pointer",
+                      "&:hover": {
+                        textDecoration: "underline",
+                      },
                     }}
                   >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        width: "100%",
-                        position: "relative",
-                      }}
-                    >
-                      <Box sx={{ flex: 1 }} />
-                      <Typography
-                        sx={{
+                    <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.75rem" }}>
+                      Situation cumul :{" "}
+                      <span
+                        style={{
+                          color: "#ffffff",
+                          fontSize: "0.85rem",
                           fontWeight: "bold",
-                          color: "white",
-                          fontSize: "1.1rem",
-                          position: "absolute",
-                          left: "50%",
-                          transform: "translateX(-50%)",
                         }}
                       >
-                        Sous-total {getMoisName(item.mois)} :{" "}
-                        <span
-                          style={{
-                            fontSize: "1rem",
-                            fontWeight: "bold",
-                            marginLeft: "5px",
-                          }}
-                        >
-                          {(parseFloat(item.sousTotal) || 0).toLocaleString("fr-FR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })} €
-                        </span>
-                      </Typography>
-                      <Typography
-                        onClick={() => setShowCumulColumn(!showCumulColumn)}
-                        sx={{
-                          fontWeight: "bold",
-                          color: "white",
-                          fontSize: "1rem",
-                          flex: 1,
-                          textAlign: "right",
-                          cursor: "pointer",
-                          "&:hover": {
-                            textDecoration: "underline",
-                          },
-                        }}
-                      >
-                        Situation cumul :{" "}
-                        <span
-                          style={{
-                            fontSize: "1rem",
-                            fontWeight: "bold",
-                            marginLeft: "5px",
-                          }}
-                        >
-                          {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })} €
-                        </span>
-                      </Typography>
-                    </Box>
+                        {(parseFloat(item.cumulCumulatif) || 0).toLocaleString("fr-FR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} €
+                      </span>
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.85rem" }}>
+                      {(parseFloat(item.montantHTSituation ?? item.sousTotal) || 0).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} €
+                    </Typography>
+                  </TableCell>
+                  {showCumulColumn && (
+                    <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  )}
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell sx={commonBodyCellStyle}>
+                    <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.85rem" }}>
+                      {(parseFloat(item.montantRecuHT) || 0).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} €
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={commonBodyCellStyle}>-</TableCell>
+                  <TableCell colSpan={2} sx={commonBodyCellStyle}>
+                    <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
+                      {(parseFloat(item.ecartMois) || 0).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} €
+                    </Typography>
                   </TableCell>
                 </TableRow>
               );
@@ -239,6 +301,10 @@ const TableauFacturationTable = ({
               const facture = item;
               // Pour les factures, utiliser date_envoi (ou date_creation en fallback)
               const dateEnvoiFacture = facture.date_envoi || facture.date_creation;
+              const montantHTFacture = parseFloat(facture.price_ht) || 0;
+              const montantRecuFacture =
+                facture.state_facture === "Payée" ? montantHTFacture : 0;
+              const factureSansEcart = hasNoEcart(montantHTFacture, montantRecuFacture);
               const datePaiementPrevue = calculateDatePaiement(
                 dateEnvoiFacture,
                 facture.delai_paiement,
@@ -314,9 +380,7 @@ const TableauFacturationTable = ({
                       sx={{
                         fontWeight: 600,
                         fontSize: "0.8rem",
-                        color: (facture.state_facture === 'Payée' || facture.date_paiement)
-                          ? "rgba(27, 120, 188, 1)"
-                          : "error.main",
+                        color: factureSansEcart ? "rgba(27, 120, 188, 1)" : "error.main",
                       }}
                     >
                       {facture.chantier_name || facture.chantier?.chantier_name || "-"}
@@ -405,6 +469,10 @@ const TableauFacturationTable = ({
             } else {
               // Ligne de situation normale
               const situation = item;
+              const situationSansEcart = hasNoEcart(
+                situation.montant_apres_retenues,
+                situation.montant_reel_ht
+              );
               const cumul = calculerCumulSituationHT(situation);
               const datePaiementPrevue = calculateDatePaiement(
                 situation.date_envoi,
@@ -472,7 +540,7 @@ const TableauFacturationTable = ({
                       sx={{
                         fontWeight: 600,
                         fontSize: "0.8rem",
-                        color: situation.banque
+                        color: situationSansEcart
                           ? "rgba(27, 120, 188, 1)"
                           : "error.main",
                       }}
@@ -636,95 +704,259 @@ const TableauFacturationTable = ({
         <TableFooter>
           <TableRow
             sx={{
-              backgroundColor: "rgba(27, 120, 188, 0.1)",
+              backgroundColor: "#000000",
               fontWeight: "bold",
+              borderTop: "2px solid rgba(255, 255, 255, 0.2)",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
               "& td": {
                 fontWeight: "bold",
-                color: "rgba(27, 120, 188, 1)",
+                color: "white",
               },
             }}
           >
             <TableCell
               sx={{
-                textAlign: "center",
-                color: "black",
-                fontSize: "0.8rem",
+                ...commonBodyCellStyle,
+                fontSize: "0.95rem",
               }}
             >
-              Total Global
+              Récap Annuel
             </TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(totaux.montantHTSituation)}
-            </TableCell>
-            {showCumulColumn && (
-              <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            )}
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(totaux.montantRecuHT)}
-            </TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            
-            <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(totaux.ecartMois)}
-            </TableCell>
-          </TableRow>
-
-          {/* Ligne Reste à payer */}
-          <TableRow
-            sx={{
-              backgroundColor: "rgba(255, 193, 7, 0.1)",
-              fontWeight: "bold",
-              "& td": {
-                fontWeight: "bold",
-                color: "rgba(255, 193, 7, 1)",
-              },
-            }}
-          >
-            <TableCell sx={commonBodyCellStyle}>
-              <Typography
-                sx={{
-                  fontWeight: "bold",
-                  color: "rgba(255, 193, 7, 1)",
-                  fontSize: "0.9rem",
-                }}
-              >
-                Reste à payer
+            <TableCell colSpan={4} sx={commonBodyCellStyle}>
+              <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.75rem" }}>
+                Situation cumul annuel :{" "}
+                <span
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "0.75rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {(parseFloat(totaux.montantHTSituation) || 0).toLocaleString("fr-FR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} €
+                </span>
               </Typography>
             </TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>
-              {formatMontant(
-                totaux.montantHTSituation - totaux.montantRecuHT
-              )}
+              <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.75rem" }}>
+                {(parseFloat(totaux.montantHTSituation) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} €
+              </Typography>
             </TableCell>
             {showCumulColumn && (
               <TableCell sx={commonBodyCellStyle}>-</TableCell>
             )}
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
+            <TableCell sx={commonBodyCellStyle}>
+              <Typography sx={{ color: "#ffffff", fontWeight: "bold", fontSize: "0.85rem" }}>
+                {(parseFloat(totaux.montantRecuHT) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} €
+              </Typography>
+            </TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            <TableCell sx={commonBodyCellStyle}>-</TableCell>
-            
+            <TableCell colSpan={2} sx={commonBodyCellStyle}>
+              <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
+                {(parseFloat(totaux.ecartMois) || 0).toLocaleString("fr-FR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} €
+              </Typography>
+            </TableCell>
           </TableRow>
+
         </TableFooter>
       </Table>
     </TableContainer>
+
+    {/* Récapitulatif par chantier */}
+    {recapParChantier.sorted.length > 0 && (
+      <Box sx={{ width: "100%", mt: 3 }}>
+        <Typography
+          variant="h6"
+          sx={{ fontFamily: "Merriweather, serif", color: "white", fontWeight: "bold", mb: 2 }}
+        >
+          RÉCAPITULATIF PAR CHANTIER
+        </Typography>
+
+        <Paper
+          sx={{
+            p: 2,
+            mb: 3,
+            backgroundColor: "rgba(27, 120, 188, 0.1)",
+            border: "2px solid rgba(27, 120, 188, 0.3)",
+          }}
+        >
+          <Typography variant="h6" sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", mb: 2 }}>
+            Totaux Globaux
+          </Typography>
+          <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+            <Box>
+              <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Montant HT facturé</Typography>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.montantHTSituation) }}>
+                {formatNum(totaux.montantHTSituation)} €
+              </Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Montant reçu HT</Typography>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
+                {formatNum(totaux.montantRecuHT)} €
+              </Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Écart</Typography>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.ecartMois, true) }}>
+                {formatNum(totaux.ecartMois)} €
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
+
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {recapParChantier.sorted.map((chantier) => {
+            const ch = recapParChantier.parChantier[chantier];
+            const isPayeComplet = Math.abs(ch.montantHT - ch.montantRecu) < 0.01;
+            const pctCA = recapParChantier.totalHT
+              ? ((ch.montantHT / recapParChantier.totalHT) * 100).toFixed(1)
+              : "0.0";
+            const pctRecu = ch.montantHT
+              ? Math.min((ch.montantRecu / ch.montantHT) * 100, 100)
+              : 0;
+
+            return (
+              <Accordion
+                key={chantier}
+                sx={{ backgroundColor: "white", "&:before": { display: "none" }, boxShadow: 2 }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.1)" : "rgba(27, 120, 188, 0.1)",
+                    "&:hover": {
+                      backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.15)" : "rgba(27, 120, 188, 0.15)",
+                    },
+                  }}
+                >
+                  <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Typography
+                          sx={{
+                            fontWeight: "bold",
+                            fontSize: "1rem",
+                            color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                          }}
+                        >
+                          {chantier}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.15)" : "rgba(27, 120, 188, 0.15)",
+                            borderRadius: "12px",
+                            px: 1.2,
+                            py: 0.2,
+                            border: `1px solid ${isPayeComplet ? "rgba(46, 125, 50, 0.3)" : "rgba(27, 120, 188, 0.3)"}`,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {pctCA}%
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 3 }}>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Facturé HT</Typography>
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.montantHT) }}>
+                            {formatNum(ch.montantHT)} €
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Reçu HT</Typography>
+                          <Typography
+                            sx={{
+                              fontSize: "0.9rem",
+                              fontWeight: "bold",
+                              color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                            }}
+                          >
+                            {formatNum(ch.montantRecu)} €
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.ecart, true) }}>
+                            {formatNum(ch.ecart)} €
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={pctRecu}
+                      sx={{
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.12)" : "rgba(27, 120, 188, 0.12)",
+                        "& .MuiLinearProgress-bar": {
+                          borderRadius: 2,
+                          backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.7)" : "rgba(27, 120, 188, 0.7)",
+                        },
+                      }}
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: "flex", gap: 3, p: 1 }}>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Montant HT facturé</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.montantHT) }}>
+                        {formatNum(ch.montantHT)} €
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Montant reçu HT</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
+                        {formatNum(ch.montantRecu)} €
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Écart</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.ecart, true) }}>
+                        {formatNum(ch.ecart)} €
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>% du CA total</Typography>
+                      <Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>
+                        {pctCA}%
+                      </Typography>
+                    </Box>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            );
+          })}
+        </Box>
+      </Box>
+    )}
+    </>
   );
 };
 

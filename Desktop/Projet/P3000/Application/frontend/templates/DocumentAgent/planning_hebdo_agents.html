@@ -135,6 +135,14 @@
         overflow: hidden;
       }
       
+      .cell-comment {
+        font-size: 9px;
+        font-weight: 600;
+        font-style: italic;
+        margin-top: 3px;
+        line-height: 1.2;
+      }
+      
       .legend {
         margin-top: 15px;
         padding: 10px;
@@ -192,21 +200,26 @@
         return chantierColors[colorIndex];
       }
       
+      function getCellChantierName(cell) {
+        const clone = cell.cloneNode(true);
+        const commentEl = clone.querySelector('.cell-comment');
+        if (commentEl) commentEl.remove();
+        return clone.textContent.trim();
+      }
+
       // Appliquer les couleurs aux cellules de chantiers
       document.addEventListener('DOMContentLoaded', function() {
         const chantierCells = document.querySelectorAll('.chantier-cell');
         const colorMap = new Map();
         const uniqueChantiers = new Set();
         
-        // Collecter tous les chantiers uniques
         chantierCells.forEach(cell => {
-          const chantierName = cell.textContent.trim();
+          const chantierName = getCellChantierName(cell);
           if (chantierName) {
             uniqueChantiers.add(chantierName);
           }
         });
         
-        // Assigner une couleur à chaque chantier unique
         uniqueChantiers.forEach(chantier => {
           if (!colorMap.has(chantier)) {
             const color = getChantierColor(chantier);
@@ -214,9 +227,8 @@
           }
         });
         
-        // Appliquer les couleurs aux cellules
         chantierCells.forEach(cell => {
-          const chantierName = cell.textContent.trim();
+          const chantierName = getCellChantierName(cell);
           if (colorMap.has(chantierName)) {
             cell.style.backgroundColor = colorMap.get(chantierName);
             cell.classList.add('chantier-color-assign');
@@ -226,22 +238,19 @@
         // Créer la légende pour chaque page d'agent
         const legendContainers = document.querySelectorAll('[id^="legend-container-"]');
         legendContainers.forEach(container => {
-          // Vider le conteneur
           container.innerHTML = '';
           
-          // Trouver les chantiers de cette page spécifique
           const pageElement = container.closest('.page');
           const pageChantiers = new Set();
           const pageCells = pageElement.querySelectorAll('.chantier-cell');
           
           pageCells.forEach(cell => {
-            const chantierName = cell.textContent.trim();
+            const chantierName = getCellChantierName(cell);
             if (chantierName) {
               pageChantiers.add(chantierName);
             }
           });
           
-          // Créer les éléments de légende pour cette page
           pageChantiers.forEach(chantier => {
             const legendItem = document.createElement('span');
             legendItem.className = 'legend-item';
@@ -289,7 +298,7 @@
               <td class="hour-cell">{{ hour }}</td>
               {% for day_info in days_with_dates %} 
               {% with day=day_info.name cell_rendered=False %} 
-              {% for chantier, start_hour, span in planning_rowspan|dict_get:agent.id|dict_get:day %} 
+              {% for chantier, start_hour, span, comment in planning_rowspan|dict_get:agent.id|dict_get:day %} 
               {% if start_hour == hour %}
               <td
                 rowspan="{{ span }}"
@@ -297,6 +306,9 @@
                 data-chantier="{{ chantier }}"
                 style="color: #222; font-weight: 500;" >
                 {{ chantier }}
+                {% if comment %}
+                <div class="cell-comment">{{ comment }}</div>
+                {% endif %}
               </td>
               {% with cell_rendered=True %}{% endwith %} 
               {% endif %} 

@@ -10,7 +10,8 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    Agence
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -889,6 +890,8 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
 class StockProductSerializer(serializers.ModelSerializer):
     initiales = serializers.CharField(read_only=True)
     image_display_url = serializers.SerializerMethodField()
+    best_purchase_price = serializers.SerializerMethodField()
+    best_purchase_location = serializers.SerializerMethodField()
 
     class Meta:
         model = StockProduct
@@ -937,6 +940,18 @@ class StockProductSerializer(serializers.ModelSerializer):
             except Exception:
                 return obj.image_url
         return obj.image_url
+
+    def get_best_purchase_price(self, obj):
+        bp = getattr(obj, 'best_purchase', None)
+        if not bp:
+            return None
+        return float(bp.prix_unitaire)
+
+    def get_best_purchase_location(self, obj):
+        bp = getattr(obj, 'best_purchase', None)
+        if not bp:
+            return None
+        return bp.lieu_achat
 
 
 class StockPurchaseItemSerializer(serializers.ModelSerializer):
@@ -996,6 +1011,11 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
             if 'quantite' not in item or 'prix_unitaire' not in item or 'unite' not in item:
                 raise serializers.ValidationError("Chaque item doit avoir quantite, prix_unitaire et unite")
         return value
+
+    @staticmethod
+    def _is_useful_location(value):
+        v = (value or "").strip().lower()
+        return bool(v) and v not in ["non renseigné", "ajustement manuel", "—"]
 
     def create(self, validated_data):
         """Crée l'achat et ses items, et met à jour les stocks"""
@@ -1085,6 +1105,21 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
                 prix_achat_unitaire=prix_unitaire,
                 date_achat=achat.date_achat
             )
+
+            # 8. Mettre à jour le meilleur achat historique persisté (si lieu utile)
+            lieu_achat = (achat.lieu_achat or "").strip()
+            if produit and self._is_useful_location(lieu_achat):
+                current = StockProductBestPurchase.objects.filter(produit=produit).first()
+                candidate_price = Decimal(str(prix_unitaire))
+                if (not current) or (candidate_price < current.prix_unitaire):
+                    StockProductBestPurchase.objects.update_or_create(
+                        produit=produit,
+                        defaults={
+                            'prix_unitaire': candidate_price,
+                            'lieu_achat': lieu_achat,
+                            'purchase_item': item,
+                        }
+                    )
         
         # Mettre à jour le total de l'achat
         achat.total = total
@@ -1096,7 +1131,7 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
 class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
-        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav', 'overtime_hours']
+        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav', 'overtime_hours', 'comment']
 
 class LaborCostSerializer(serializers.ModelSerializer):
     # Champs calculés/dérivés
@@ -1618,17 +1653,28 @@ class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
         model = AgencyExpenseOverride
         fields = ['month', 'year', 'description', 'amount']
 
+class AgenceSerializer(serializers.ModelSerializer):
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+
+    class Meta:
+        model = Agence
+        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at']
+        read_only_fields = ['chantier', 'chantier_name', 'created_at']
+
+
 class AgencyExpenseSerializer(serializers.ModelSerializer):
     current_override = serializers.SerializerMethodField()
     sous_traitant_name = serializers.CharField(source='sous_traitant.entreprise', read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True)
 
     class Meta:
         model = AgencyExpense
         fields = [
             'id', 'description', 'amount', 'type', 'date', 'end_date', 
             'category', 'current_override', 'sous_traitant', 'sous_traitant_name',
-            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours'
+            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours',
+            'agence', 'agence_nom'
         ]
 
     def get_current_override(self, obj):
@@ -1644,11 +1690,12 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
     agent_name = serializers.SerializerMethodField()
     date_paiement_prevue = serializers.SerializerMethodField()
     recurrence_parent = serializers.PrimaryKeyRelatedField(read_only=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True)
 
     class Meta:
         model = AgencyExpenseMonth
         fields = [
-            'id', 'description', 'amount', 'category', 'month', 'year', 
+            'id', 'description', 'amount', 'montant_paye', 'category', 'month', 'year', 
             'date_paiement', 'date_reception_facture', 'date_paiement_reel', 'delai_paiement',
             'date_paiement_prevue', 'factures',
             'sous_traitant', 'sous_traitant_name', 'chantier', 'chantier_name',
@@ -1656,6 +1703,8 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
             'source_expense',
             'is_recurring_template', 'recurrence_start', 'recurrence_end',
             'closed_until', 'recurrence_parent',
+            'agence', 'agence_nom',
+            'commentaire',
             'created_at', 'updated_at'
         ]
     
@@ -2104,6 +2153,7 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
     agent_name = serializers.CharField(source='agent.name', read_only=True)
     agent_surname = serializers.CharField(source='agent.surname', read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True, allow_null=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True, allow_null=True)
     type_affectation_display = serializers.CharField(source='get_type_affectation_display', read_only=True)
     
     class Meta:
@@ -2113,25 +2163,33 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
             'mois', 'annee', 'montant', 'description',
             'type_affectation', 'type_affectation_display',
             'chantier', 'chantier_name',
+            'agence', 'agence_nom',
             'created_at', 'updated_at', 'created_by'
         ]
         read_only_fields = ['created_at', 'updated_at', 'created_by']
     
     def validate(self, data):
         """Validation personnalisée"""
-        # Si type_affectation = 'chantier', chantier est obligatoire
         if data.get('type_affectation') == 'chantier' and not data.get('chantier'):
             raise serializers.ValidationError({
                 'chantier': "Un chantier doit être spécifié pour une prime de type 'chantier'"
             })
         
-        # Si type_affectation = 'agence', chantier doit être null
+        if data.get('type_affectation') == 'agence' and not data.get('agence'):
+            raise serializers.ValidationError({
+                'agence': "Une agence doit être spécifiée pour une prime de type 'agence'"
+            })
+        
         if data.get('type_affectation') == 'agence' and data.get('chantier'):
             raise serializers.ValidationError({
                 'chantier': "Une prime de type 'agence' ne peut pas avoir de chantier associé"
             })
         
-        # Vérifier que le montant est positif
+        if data.get('type_affectation') == 'chantier' and data.get('agence'):
+            raise serializers.ValidationError({
+                'agence': "Une prime de type 'chantier' ne peut pas avoir d'agence associée"
+            })
+        
         if data.get('montant') and data['montant'] <= 0:
             raise serializers.ValidationError({
                 'montant': "Le montant de la prime doit être positif"

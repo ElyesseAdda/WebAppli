@@ -22,13 +22,16 @@ import {
   DialogContentText,
   DialogActions,
   Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  LinearProgress,
 } from "@mui/material";
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
-// import RecapSousTraitant from "./RecapSousTraitant"; // À créer plus tard
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -796,6 +799,8 @@ const TableauSousTraitant = () => {
       ajustement_montant: item.ajustement_montant || 0,
       ajustement_description: item.ajustement_description || "",
       chantiersDetails: item.chantiersDetails || [],
+      primes: item.primes || [],
+      total_primes: item.total_primes || 0,
     });
     setAjustementFormData({
       montant: item.ajustement_montant || "",
@@ -811,7 +816,6 @@ const TableauSousTraitant = () => {
     setAjustementFormData({ montant: "", description: "" });
   };
   
-  // Sauvegarder l'ajustement
   const handleSaveAjustement = async () => {
     if (!currentAjustement || !currentAjustement.agent_id) {
       return;
@@ -819,12 +823,18 @@ const TableauSousTraitant = () => {
     
     setSavingAjustement(true);
     try {
+      // Extraire les chantier_ids des détails de la ligne pour déduire l'agence côté backend
+      const chantierIds = (currentAjustement.chantiersDetails || [])
+        .map(ch => ch.chantier_id)
+        .filter(id => id && id !== 0);
+      
       const response = await axios.post("/api/ajustement-agent-journalier/", {
         agent_id: currentAjustement.agent_id,
         mois: currentAjustement.mois,
         annee: currentAjustement.annee,
         montant_ajustement: parseFloat(ajustementFormData.montant) || 0,
-        description: ajustementFormData.description.trim()
+        description: ajustementFormData.description.trim(),
+        chantier_ids: chantierIds,
       });
       
       // Rafraîchir les données
@@ -1664,6 +1674,12 @@ const TableauSousTraitant = () => {
       });
     }
 
+    // Ne pas afficher les lignes avec montant à payer = 0 (inclut "0", "0.00", etc.)
+    filteredData = filteredData.filter((item) => {
+      const aPayer = Number(item.a_payer ?? 0);
+      return !Number.isNaN(aPayer) && aPayer !== 0;
+    });
+
     // Séparer les agents journaliers des autres sous-traitants
     const agentsJournaliers = {};
     const autresSousTraitants = {};
@@ -1757,6 +1773,10 @@ const TableauSousTraitant = () => {
         const ajustementDescription = chantiers[0]?.ajustement_description || '';
         const agentId = chantiers[0]?.agent_id || null;
         
+        // Récupérer les primes depuis le premier chantier (elles sont identiques pour tous)
+        const primes = chantiers[0]?.primes || [];
+        const totalPrimes = chantiers[0]?.total_primes || 0;
+        
         chantiers.forEach((chantier) => {
           totalLaborCost += chantier.a_payer || 0;
           totalPaye += chantier.paye || 0;
@@ -1770,14 +1790,13 @@ const TableauSousTraitant = () => {
             ecart: chantier.ecart || 0,
           });
           
-          // Collecter toutes les factures
           if (chantier.factures && chantier.factures.length > 0) {
             allFactures.push(...chantier.factures);
           }
         });
         
-        // Montant total à payer = LaborCost + ajustement
-        const totalAPayer = totalLaborCost + ajustementMontant;
+        // Montant total à payer = LaborCost + ajustement + primes
+        const totalAPayer = totalLaborCost + ajustementMontant + totalPrimes;
         
         // Pour les agents journaliers, utiliser une clé sans chantier_id pour le montant payé et les factures
         const keyAgentJournalier = `${mois}_${sous_traitant}_AGENT_JOURNALIER`;
@@ -1816,6 +1835,9 @@ const TableauSousTraitant = () => {
           ajustement_id: ajustementId,
           ajustement_montant: ajustementMontant,
           ajustement_description: ajustementDescription,
+          // Infos de primes
+          primes: primes,
+          total_primes: totalPrimes,
         }];
       });
     });
@@ -1960,6 +1982,7 @@ const TableauSousTraitant = () => {
   // Créer la structure de lignes avec récap entre chaque mois
   const buildTableRows = () => {
     const rows = [];
+    let cumulSituation = 0;
 
     moisSorted.forEach((mois, moisIndex) => {
       const sous_traitants = Object.keys(organized[mois]).sort();
@@ -2016,10 +2039,12 @@ const TableauSousTraitant = () => {
 
       // Ajouter la ligne de récap après chaque mois
       const totaux = calculerTotauxMois(mois);
+      cumulSituation += totaux.totalAPayer || 0;
       rows.push({
         type: "recap",
         mois: mois,
         totaux: totaux,
+        cumulSituation: cumulSituation,
       });
     });
 
@@ -2031,6 +2056,63 @@ const TableauSousTraitant = () => {
     () => buildTableRows(),
     [organizedData, organized, moisSorted]
   );
+
+  const recapTotaux = useMemo(() => {
+    let globalAPayer = 0, globalPaye = 0, globalEcart = 0, globalAPayerTTC = 0;
+    const parSousTraitant = {};
+
+    moisSorted.forEach((mois) => {
+      const sousTraitants = organized[mois] || {};
+      Object.keys(sousTraitants).forEach((st) => {
+        if (!parSousTraitant[st]) {
+          parSousTraitant[st] = { totalAPayer: 0, totalPaye: 0, totalEcart: 0, totalAPayerTTC: 0, mois: {} };
+        }
+        const chantiers = sousTraitants[st];
+        chantiers.forEach((item) => {
+          const ap = item.a_payer || 0;
+          const apTTC = item.a_payer_ttc || 0;
+          const p = item.paye || 0;
+          const e = item.ecart || 0;
+          globalAPayer += ap;
+          globalPaye += p;
+          globalEcart += e;
+          globalAPayerTTC += apTTC;
+          parSousTraitant[st].totalAPayer += ap;
+          parSousTraitant[st].totalPaye += p;
+          parSousTraitant[st].totalEcart += e;
+          parSousTraitant[st].totalAPayerTTC += apTTC;
+          if (!parSousTraitant[st].mois[mois]) {
+            parSousTraitant[st].mois[mois] = { totalAPayer: 0, totalPaye: 0, totalEcart: 0, totalAPayerTTC: 0 };
+          }
+          parSousTraitant[st].mois[mois].totalAPayer += ap;
+          parSousTraitant[st].mois[mois].totalPaye += p;
+          parSousTraitant[st].mois[mois].totalEcart += e;
+          parSousTraitant[st].mois[mois].totalAPayerTTC += apTTC;
+        });
+      });
+    });
+
+    return {
+      global: { totalAPayer: globalAPayer, totalPaye: globalPaye, totalEcart: globalEcart, totalAPayerTTC: globalAPayerTTC },
+      parSousTraitant,
+      sorted: Object.keys(parSousTraitant).sort(),
+    };
+  }, [organized, moisSorted]);
+
+  const colorForAmount = (value, isEcart = false) => {
+    const n = Number(value ?? 0);
+    if (isEcart) return n > 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
+  };
+
+  const trierMoisRecap = (moisArray) => {
+    return [...moisArray].sort((a, b) => {
+      const [moisA, anneeA] = a.split("/").map(Number);
+      const [moisB, anneeB] = b.split("/").map(Number);
+      if (anneeA !== anneeB) return anneeA - anneeB;
+      return moisA - moisB;
+    });
+  };
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
@@ -2232,7 +2314,15 @@ const TableauSousTraitant = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
+                            <Typography
+                              sx={{
+                                color: "#ffffff",
+                                fontWeight: "bold",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              Facture cumul : {formatNumber(row.cumulSituation || 0)} €
+                            </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography sx={{ color: "#ffffff" }}>-</Typography>
@@ -2375,6 +2465,33 @@ const TableauSousTraitant = () => {
                                   </span>
                                 ))}
                               </Typography>
+                            ) : item.commentaire ? (
+                              <Tooltip
+                                title={item.commentaire}
+                                arrow
+                                placement="top"
+                                slotProps={{
+                                  tooltip: {
+                                    sx: {
+                                      maxWidth: 350,
+                                      fontSize: "0.8rem",
+                                      whiteSpace: "pre-line",
+                                    },
+                                  },
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.8rem",
+                                    color: "text.primary",
+                                    cursor: "help",
+                                    borderBottom: "1px dashed rgba(27, 120, 188, 0.4)",
+                                    display: "inline",
+                                  }}
+                                >
+                                  {item.chantier_name}
+                                </Typography>
+                              </Tooltip>
                             ) : (
                               <Typography
                                 sx={{
@@ -2405,16 +2522,15 @@ const TableauSousTraitant = () => {
                                 {formatNumber(item.a_payer)} €
                               </Typography>
                             ) : item.isAgentJournalier ? (
-                              // Pour les agents journaliers, afficher avec Tooltip détaillé et clic pour ajustement
                               <Tooltip
                                 title={
-                                  <Box sx={{ p: 1 }}>
+                                  <Box sx={{ p: 1, minWidth: 280 }}>
                                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, borderBottom: '1px solid rgba(255,255,255,0.3)', pb: 0.5 }}>
                                       {item.sous_traitant} - Détail
                                     </Typography>
                                     {item.chantiersDetails && item.chantiersDetails.length > 0 && (
                                       <Box sx={{ mb: 1 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5, opacity: 0.9 }}>
                                           Par chantier :
                                         </Typography>
                                         {item.chantiersDetails.map((ch, idx) => (
@@ -2427,12 +2543,27 @@ const TableauSousTraitant = () => {
                                     )}
                                     <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.3)', pt: 0.5, mt: 0.5 }}>
                                       <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                        <span>Total planning :</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#90a4ae', display: 'inline-block' }} />
+                                          Planning :
+                                        </span>
                                         <span style={{ fontWeight: 600 }}>{formatNumber(item.a_payer_labor_cost || item.a_payer)} €</span>
                                       </Box>
+                                      {item.primes && item.primes.length > 0 && item.primes.map((prime, idx) => (
+                                        <Box key={`prime-${idx}`} sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ff9800' }}>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff9800', display: 'inline-block' }} />
+                                            Prime ({prime.description}) :
+                                          </span>
+                                          <span style={{ fontWeight: 600 }}>+{formatNumber(prime.montant)} €</span>
+                                        </Box>
+                                      ))}
                                       {(item.ajustement_montant !== 0 && item.ajustement_montant !== undefined) && (
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: item.ajustement_montant > 0 ? '#4caf50' : '#f44336' }}>
-                                          <span>Ajustement ({item.ajustement_description || 'Manuel'}) :</span>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: item.ajustement_montant > 0 ? '#4caf50' : '#f44336', display: 'inline-block' }} />
+                                            Ajust. ({item.ajustement_description || 'Manuel'}) :
+                                          </span>
                                           <span style={{ fontWeight: 600 }}>
                                             {item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)} €
                                           </span>
@@ -2454,10 +2585,10 @@ const TableauSousTraitant = () => {
                                 <Typography
                                   sx={{
                                     fontSize: "0.8rem",
-                                    color: item.ajustement_montant ? "rgba(27, 120, 188, 1)" : "text.primary",
+                                    color: (item.ajustement_montant || item.total_primes) ? "rgba(27, 120, 188, 1)" : "text.primary",
                                     textAlign: "center",
                                     cursor: "pointer",
-                                    fontWeight: item.ajustement_montant ? 500 : 400,
+                                    fontWeight: (item.ajustement_montant || item.total_primes) ? 500 : 400,
                                     "&:hover": {
                                       backgroundColor: "rgba(27, 120, 188, 0.1)",
                                       borderRadius: "4px",
@@ -2466,18 +2597,6 @@ const TableauSousTraitant = () => {
                                   onClick={() => handleOpenAjustementModal(item)}
                                 >
                                   {formatNumber(item.a_payer)} €
-                                  {item.ajustement_montant !== 0 && item.ajustement_montant !== undefined && (
-                                    <Typography 
-                                      component="span" 
-                                      sx={{ 
-                                        fontSize: "0.65rem", 
-                                        color: item.ajustement_montant > 0 ? "#4caf50" : "#f44336",
-                                        ml: 0.5 
-                                      }}
-                                    >
-                                      ({item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)})
-                                    </Typography>
-                                  )}
                                 </Typography>
                               </Tooltip>
                             ) : (
@@ -3024,15 +3143,269 @@ const TableauSousTraitant = () => {
             </Table>
           </TableContainer>
 
-          {/* Récapitulatif par sous-traitant - À créer plus tard */}
-          {/* {tableRows.length > 0 && (
-            <RecapSousTraitant
-              data={data}
-              selectedAnnee={selectedAnnee}
-              organized={organized}
-              moisSorted={moisSorted}
-            />
-          )} */}
+          {/* Récapitulatif par sous-traitant */}
+          {tableRows.length > 0 && (
+            <Box sx={{ width: "100%", mt: 3 }}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontFamily: "Merriweather, serif",
+                  color: "white",
+                  fontWeight: "bold",
+                  mb: 2,
+                }}
+              >
+                RÉCAPITULATIF ANNÉE {selectedAnnee}
+              </Typography>
+
+              <Paper
+                sx={{
+                  p: 2,
+                  mb: 3,
+                  backgroundColor: "rgba(27, 120, 188, 0.1)",
+                  border: "2px solid rgba(27, 120, 188, 0.3)",
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", mb: 2 }}
+                >
+                  Totaux Globaux
+                </Typography>
+                <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant à payer HT
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalAPayer),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalAPayer)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant à payer TTC
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalAPayerTTC),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalAPayerTTC)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant payé
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}
+                    >
+                      {formatNumber(recapTotaux.global.totalPaye)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Écart
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalEcart, true),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalEcart)} €
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {recapTotaux.sorted.map((st) => {
+                  const totaux = recapTotaux.parSousTraitant[st];
+                  const moisST = trierMoisRecap(Object.keys(totaux.mois));
+                  const isPayeComplet = Math.abs(totaux.totalAPayer - totaux.totalPaye) < 0.01;
+                  const pctCA = recapTotaux.global.totalAPayer
+                    ? ((totaux.totalAPayer / recapTotaux.global.totalAPayer) * 100).toFixed(1)
+                    : "0.0";
+                  const pctPaye = totaux.totalAPayer
+                    ? Math.min((totaux.totalPaye / totaux.totalAPayer) * 100, 100)
+                    : 0;
+
+                  return (
+                    <Accordion
+                      key={st}
+                      sx={{
+                        backgroundColor: "white",
+                        "&:before": { display: "none" },
+                        boxShadow: 2,
+                      }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        sx={{
+                          backgroundColor: isPayeComplet
+                            ? "rgba(46, 125, 50, 0.1)"
+                            : "rgba(27, 120, 188, 0.1)",
+                          "&:hover": {
+                            backgroundColor: isPayeComplet
+                              ? "rgba(46, 125, 50, 0.15)"
+                              : "rgba(27, 120, 188, 0.15)",
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
+                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "1rem",
+                                  color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                }}
+                              >
+                                {st}
+                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  backgroundColor: isPayeComplet
+                                    ? "rgba(46, 125, 50, 0.15)"
+                                    : "rgba(27, 120, 188, 0.15)",
+                                  borderRadius: "12px",
+                                  px: 1.2,
+                                  py: 0.2,
+                                  border: `1px solid ${isPayeComplet ? "rgba(46, 125, 50, 0.3)" : "rgba(27, 120, 188, 0.3)"}`,
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.78rem",
+                                    fontWeight: 700,
+                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  {pctCA}%
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <Box sx={{ display: "flex", gap: 3 }}>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>À payer</Typography>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>
+                                  {formatNumber(totaux.totalAPayer)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Payé</Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.9rem",
+                                    fontWeight: "bold",
+                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                  }}
+                                >
+                                  {formatNumber(totaux.totalPaye)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalEcart, true) }}>
+                                  {formatNumber(totaux.totalEcart)} €
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={pctPaye}
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.12)" : "rgba(27, 120, 188, 0.12)",
+                              "& .MuiLinearProgress-bar": {
+                                borderRadius: 2,
+                                backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.7)" : "rgba(27, 120, 188, 0.7)",
+                              },
+                            }}
+                          />
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <TableContainer component={Paper} variant="outlined">
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.1)" }}>
+                                <TableCell sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Mois</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer HT</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer TTC</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant payé</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Écart</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {moisST.map((mois) => {
+                                const [moisNum, annee2d] = mois.split("/").map(Number);
+                                const moisName = getMoisName(moisNum);
+                                const anneeComplete = annee2d < 50 ? 2000 + annee2d : 1900 + annee2d;
+                                const tm = totaux.mois[mois];
+                                return (
+                                  <TableRow key={mois} hover>
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 500, color: "text.primary" }}>
+                                        {moisName} {anneeComplete}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalAPayer)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalAPayerTTC)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: "rgba(46, 125, 50, 1)", fontWeight: 500 }}>
+                                        {formatNumber(tm.totalPaye)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalEcart, true), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalEcart)} €
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.05)", borderTop: "2px solid rgba(27, 120, 188, 0.3)" }}>
+                                <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)" }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalEcart, true) }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
 
           {/* Modal pour ajouter/modifier une facture */}
           <FactureModal
@@ -3221,16 +3594,50 @@ const TableauSousTraitant = () => {
                 sx={{ mb: 2 }}
               />
               
+              {/* Primes existantes (lecture seule) */}
+              {currentAjustement?.primes && currentAjustement.primes.length > 0 && (
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 152, 0, 0.06)', borderRadius: 1, border: '1px solid rgba(255, 152, 0, 0.2)' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#f57c00' }}>
+                    Primes (depuis Planning)
+                  </Typography>
+                  {currentAjustement.primes.map((prime, idx) => (
+                    <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                      <Typography variant="body2" sx={{ color: '#f57c00' }}>
+                        {prime.description} {prime.agence_nom ? `(${prime.agence_nom})` : prime.chantier_name ? `(${prime.chantier_name})` : ''}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: '#f57c00' }}>
+                        +{formatNumber(prime.montant)} €
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              
               {/* Récapitulatif */}
               <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="body2">Total planning :</Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#90a4ae', display: 'inline-block' }} />
+                    Planning :
+                  </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {formatNumber(currentAjustement?.a_payer_labor_cost || 0)} €
                   </Typography>
                 </Box>
+                {currentAjustement?.primes && currentAjustement.primes.length > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: '#f57c00' }}>
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff9800', display: 'inline-block' }} />
+                      Primes ({currentAjustement.primes.length}) :
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      +{formatNumber(currentAjustement.total_primes || 0)} €
+                    </Typography>
+                  </Box>
+                )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
-                  <Typography variant="body2">
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#4caf50' : '#f44336', display: 'inline-block' }} />
                     Ajustement {ajustementFormData.description ? `(${ajustementFormData.description})` : ''} :
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -3240,7 +3647,11 @@ const TableauSousTraitant = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, mt: 1, borderTop: '1px dashed #90caf9' }}>
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>TOTAL À PAYER :</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                    {formatNumber((currentAjustement?.a_payer_labor_cost || 0) + (parseFloat(ajustementFormData.montant) || 0))} €
+                    {formatNumber(
+                      (currentAjustement?.a_payer_labor_cost || 0) + 
+                      (currentAjustement?.total_primes || 0) + 
+                      (parseFloat(ajustementFormData.montant) || 0)
+                    )} €
                   </Typography>
                 </Box>
               </Box>

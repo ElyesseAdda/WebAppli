@@ -17,6 +17,8 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   MdTrendingUp,
@@ -49,6 +51,8 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [openPeriodModal, setOpenPeriodModal] = useState(false);
   const [openMeilleursProduitsModal, setOpenMeilleursProduitsModal] = useState(false);
+  /** Classement du modal produits global : bénéfice ou unités vendues */
+  const [productPerformanceRankBy, setProductPerformanceRankBy] = useState("benefice");
   const [topProduits, setTopProduits] = useState([]);
   const [chartDistributeurId, setChartDistributeurId] = useState(null); // null = tous
   const [monthlyData, setMonthlyData] = useState([]);
@@ -124,7 +128,7 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
 
       byDist.sort((a, b) => b.benefice_total - a.benefice_total);
 
-      // Meilleures ventes + CA total : resume_produits par distributeur (fusion par nom + somme CA)
+      // Meilleures ventes + CA : fusion par stock_product_id si présent, sinon par nom (casse ignorée)
       const byProduct = {};
       for (const dist of distributeurs) {
         const params = {};
@@ -143,13 +147,24 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
           const caDist = produits.reduce((acc, p) => acc + Number(p.ca_ventes || 0), 0);
           totalCA += caDist;
           for (const p of produits) {
-            const nom = (p.nom_produit || "").trim() || "Sans nom";
-            if (!byProduct[nom]) {
-              byProduct[nom] = { nom_produit: nom, benefice: 0, quantite_vendue: 0, ca_ventes: 0 };
+            const sid = p.stock_product_id;
+            const nomDisplay = (p.nom_produit || "").trim() || "Sans nom";
+            const mergeKey =
+              sid != null && sid !== undefined
+                ? `sp:${sid}`
+                : `nom:${nomDisplay.toLowerCase()}`;
+            if (!byProduct[mergeKey]) {
+              byProduct[mergeKey] = {
+                nom_produit: nomDisplay,
+                stock_product_id: sid != null && sid !== undefined ? sid : null,
+                benefice: 0,
+                quantite_vendue: 0,
+                ca_ventes: 0,
+              };
             }
-            byProduct[nom].benefice += Number(p.benefice || 0);
-            byProduct[nom].quantite_vendue += Number(p.quantite_vendue || 0);
-            byProduct[nom].ca_ventes += Number(p.ca_ventes || 0);
+            byProduct[mergeKey].benefice += Number(p.benefice || 0);
+            byProduct[mergeKey].quantite_vendue += Number(p.quantite_vendue || 0);
+            byProduct[mergeKey].ca_ventes += Number(p.ca_ventes || 0);
           }
         } catch (err) {
           console.error(`Erreur resume_produits distributeur ${dist.id}:`, err);
@@ -1015,6 +1030,29 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ pb: 4, px: 2, pt: 2 }}>
+          <Typography variant="caption" sx={{ display: "block", mb: 1, fontWeight: 700, color: "text.secondary" }}>
+            Classement
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            size="small"
+            value={productPerformanceRankBy}
+            onChange={(_, v) => v != null && setProductPerformanceRankBy(v)}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="benefice" sx={{ textTransform: "none", fontWeight: 700 }}>
+              Performance (bénéfice)
+            </ToggleButton>
+            <ToggleButton value="unites" sx={{ textTransform: "none", fontWeight: 700 }}>
+              Unités vendues
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" sx={{ display: "block", mb: 1, color: "text.disabled", fontSize: "0.7rem" }}>
+            {productPerformanceRankBy === "unites"
+              ? "Classement et % selon le volume d’unités vendues (agrégé sur tous les distributeurs)."
+              : "Classement et % selon le bénéfice (agrégé sur tous les distributeurs)."}
+          </Typography>
           {topProduits.length === 0 ? (
             <Box sx={{ py: 8, textAlign: "center", opacity: 0.6 }}>
               <Box sx={{ p: 2, bgcolor: "white", borderRadius: "50%", width: 80, height: 80, display: "flex", alignItems: "center", justifyContent: "center", mx: "auto", mb: 2, boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
@@ -1027,17 +1065,32 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
               {(() => {
-                // % = part du bénéfice total représentée par ce produit
                 const totalBenefice = topProduits.reduce((acc, x) => acc + Number(x.benefice || 0), 0);
-                
-                return topProduits.map((p, index) => {
+                const totalUnites = topProduits.reduce((acc, x) => acc + Number(x.quantite_vendue || 0), 0);
+                const ordered =
+                  productPerformanceRankBy === "unites"
+                    ? [...topProduits].sort(
+                        (a, b) => Number(b.quantite_vendue || 0) - Number(a.quantite_vendue || 0)
+                      )
+                    : [...topProduits].sort(
+                        (a, b) => Number(b.benefice || 0) - Number(a.benefice || 0)
+                      );
+
+                return ordered.map((p, index) => {
                   const rank = index + 1;
-                  const pct = totalBenefice > 0 ? (Number(p.benefice || 0) / totalBenefice) * 100 : 0;
+                  const pct =
+                    productPerformanceRankBy === "unites"
+                      ? totalUnites > 0
+                        ? (Number(p.quantite_vendue || 0) / totalUnites) * 100
+                        : 0
+                      : totalBenefice > 0
+                        ? (Number(p.benefice || 0) / totalBenefice) * 100
+                        : 0;
                   const isTop3 = rank <= 3;
                   
                   return (
                     <Paper 
-                      key={`${p.nom_produit}-${index}`}
+                      key={`${p.nom_produit}-${index}-${productPerformanceRankBy}`}
                       elevation={0}
                       sx={{ 
                         p: 2, 
@@ -1089,7 +1142,7 @@ const StatsTab = ({ onOpenDistributeur, isDesktop: propIsDesktop }) => {
                               left: 0, 
                               top: 0, 
                               height: "100%", 
-                              width: `${Math.max(pct, 2)}%`, 
+                              width: `${Math.min(100, Math.max(pct, pct > 0 ? 2 : 0))}%`, 
                               bgcolor: isTop3 ? "primary.main" : "primary.light",
                               borderRadius: 4,
                               transition: "width 1s ease-out"

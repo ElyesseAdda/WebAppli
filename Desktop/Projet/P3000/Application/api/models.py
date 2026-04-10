@@ -1055,6 +1055,32 @@ class StockProduct(models.Model):
         return self.nom_produit[:2].upper()
 
 
+class StockProductBestPurchase(models.Model):
+    """Meilleur prix d'achat historique d'un produit (persisté pour pilotage des futurs achats)."""
+    produit = models.OneToOneField(
+        StockProduct,
+        on_delete=models.CASCADE,
+        related_name='best_purchase'
+    )
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    lieu_achat = models.CharField(max_length=150)
+    purchase_item = models.ForeignKey(
+        'StockPurchaseItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='best_purchase_refs'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Meilleur achat produit"
+        verbose_name_plural = "Meilleurs achats produits"
+
+    def __str__(self):
+        return f"{self.produit.nom} -> {self.prix_unitaire}€ ({self.lieu_achat})"
+
+
 class StockPurchase(models.Model):
     """Achat de stock - enregistre un achat avec lieu et date"""
     lieu_achat = models.CharField(max_length=150, help_text="Lieu d'achat (ex: Leclerc, Intermarché)")
@@ -1522,7 +1548,10 @@ class LigneDetail(models.Model):
     # Nouveaux champs pour la décomposition du prix
     cout_main_oeuvre = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cout_materiel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    taux_fixe = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    # null = non renseigné à la création (rempli par TauxFixe dans save). 0 % est une valeur valide.
+    taux_fixe = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )  # en pourcentage
     marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
@@ -1572,15 +1601,14 @@ class LigneDetail(models.Model):
         self.prix = sous_total + montant_marge
 
     def save(self, *args, **kwargs):
-        if not self.taux_fixe:
-            # Utiliser le dernier taux fixe enregistré
+        # Ne pas utiliser `if not self.taux_fixe` : Decimal('0') est falsy en Python et serait remplacé par 20 %.
+        if self.taux_fixe is None:
             try:
                 dernier_taux = TauxFixe.objects.latest()
                 self.taux_fixe = dernier_taux.valeur
             except TauxFixe.DoesNotExist:
-                # Aucun taux fixe en base, utiliser 20% par défaut
                 self.taux_fixe = 20
-        
+
         # Ne recalculer le prix que si on a des coûts (sinon c'est un prix manuel)
         has_couts = self.cout_main_oeuvre > 0 or self.cout_materiel > 0
         if has_couts:
@@ -1968,6 +1996,7 @@ class Schedule(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
     is_sav = models.BooleanField(default=False)  # True si c'est du SAV (Service Après-Vente)
     overtime_hours = models.DecimalField(max_digits=4, decimal_places=2, default=0, blank=True, null=True, help_text="Heures supplémentaires (+25%)")
+    comment = models.TextField(blank=True, default='')
 
     class Meta:
         unique_together = ('agent', 'week', 'year', 'day', 'hour')
@@ -2430,6 +2459,23 @@ class SituationFactureCIE(models.Model):
     facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
 
+class Agence(models.Model):
+    nom = models.CharField(max_length=200, unique=True)
+    chantier = models.OneToOneField(
+        'Chantier', on_delete=models.SET_NULL,
+        related_name='agence_linked', null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+        verbose_name = "Agence"
+        verbose_name_plural = "Agences"
+
+    def __str__(self):
+        return self.nom
+
+
 class AgencyExpense(models.Model):
     EXPENSE_TYPES = [
         ('fixed', 'Mensuel fixe'),
@@ -2445,6 +2491,7 @@ class AgencyExpense(models.Model):
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE, null=True, blank=True)
     sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2465,6 +2512,14 @@ class AgencyExpenseMonth(models.Model):
     """
     description = models.CharField(max_length=500)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    montant_paye = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=0,
+        help_text="Montant payé (suivi tableau fournisseur, dépenses agence)",
+    )
     category = models.CharField(max_length=50)
     month = models.IntegerField()  # 1-12
     year = models.IntegerField()
@@ -2484,6 +2539,9 @@ class AgencyExpenseMonth(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
+    
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
+    commentaire = models.TextField(blank=True, null=True)
     
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
@@ -2506,7 +2564,7 @@ class AgencyExpenseMonth(models.Model):
 
     class Meta:
         ordering = ['-year', '-month']
-        unique_together = ('description', 'category', 'month', 'year')
+        unique_together = ('description', 'category', 'month', 'year', 'agence')
         verbose_name = "Dépense Mensuelle Agence"
         verbose_name_plural = "Dépenses Mensuelles Agence"
         indexes = [
@@ -2533,10 +2591,11 @@ class AgencyExpenseAggregate(models.Model):
     month = models.IntegerField()  # 1-12
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     totals_by_category = models.JSONField(default=list, blank=True)
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='expense_aggregates')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('year', 'month')
+        unique_together = ('year', 'month', 'agence')
         ordering = ['year', 'month']
         indexes = [
             models.Index(fields=['year', 'month'])
@@ -2714,6 +2773,9 @@ class AgentPrime(models.Model):
     # Chantier optionnel (si type = 'chantier')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='primes_chantier')
     
+    # Agence optionnelle (si type = 'agence')
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='primes_agence')
+    
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2726,72 +2788,86 @@ class AgentPrime(models.Model):
         indexes = [
             models.Index(fields=['agent', 'mois', 'annee']),
             models.Index(fields=['chantier', 'mois', 'annee']),
+            models.Index(fields=['agence', 'mois', 'annee']),
         ]
     
     def __str__(self):
-        affectation = self.chantier.chantier_name if self.chantier else "Agence"
+        if self.chantier:
+            affectation = self.chantier.chantier_name
+        elif self.agence:
+            affectation = f"Agence {self.agence.nom}"
+        else:
+            affectation = "Agence"
         return f"Prime {self.agent.name} {self.agent.surname} - {self.mois}/{self.annee} - {affectation} - {self.montant}€"
     
     def clean(self):
         """Validation personnalisée"""
         if self.type_affectation == 'chantier' and not self.chantier:
             raise ValidationError("Un chantier doit être spécifié pour une prime de type 'chantier'")
+        if self.type_affectation == 'agence' and not self.agence:
+            raise ValidationError("Une agence doit être spécifiée pour une prime de type 'agence'")
         if self.type_affectation == 'agence' and self.chantier:
             raise ValidationError("Une prime de type 'agence' ne peut pas avoir de chantier associé")
+        if self.type_affectation == 'chantier' and self.agence:
+            raise ValidationError("Une prime de type 'chantier' ne peut pas avoir d'agence associée")
     
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
-# Signal pour créer automatiquement une AgencyExpense quand une prime de type 'agence' est créée
+# Signal pour créer automatiquement une AgencyExpenseMonth quand une prime de type 'agence' est créée
 @receiver(post_save, sender=AgentPrime)
 def create_agency_expense_from_prime(sender, instance, created, **kwargs):
     """
-    Crée ou met à jour automatiquement une AgencyExpense quand type_affectation='agence'
-    Format: "Prime - Nom Prenom - Description de la prime"
-    L'ID de la prime est stocké de manière cachée pour la gestion interne
+    Crée ou met à jour automatiquement une AgencyExpenseMonth quand type_affectation='agence'
+    Format: "Prime - Nom Prenom - Description de la prime [PRIME_ID:X]"
+    Rattachée à l'agence choisie par l'utilisateur
     """
     if instance.type_affectation == 'agence':
-        # Format description: "Prime - Jean Dupont - Performance Q3"
         description = f"Prime - {instance.agent.name} {instance.agent.surname} - {instance.description}"
+        final_description = f"{description} [PRIME_ID:{instance.id}]"
         
-        # Calculer la date (premier jour du mois)
-        expense_date = date(instance.annee, instance.mois, 1)
-        
-        # Chercher une dépense existante pour cette prime
-        # On stocke l'ID de manière invisible pour pouvoir faire le lien
-        existing_expense = AgencyExpense.objects.filter(
+        existing_expense = AgencyExpenseMonth.objects.filter(
             description__contains=f"[PRIME_ID:{instance.id}]",
             category='Prime'
         ).first()
         
-        # Format final avec ID caché : "Prime - Jean Dupont - Performance Q3 [PRIME_ID:5]"
-        final_description = f"{description} [PRIME_ID:{instance.id}]"
-        
         if existing_expense:
-            # Mettre à jour la dépense existante
             existing_expense.description = final_description
             existing_expense.amount = instance.montant
-            existing_expense.date = expense_date
+            existing_expense.month = instance.mois
+            existing_expense.year = instance.annee
+            existing_expense.agence = instance.agence
+            existing_expense.agent = instance.agent
             existing_expense.save()
         else:
-            # Créer une nouvelle dépense
-            AgencyExpense.objects.create(
+            AgencyExpenseMonth.objects.create(
                 description=final_description,
                 amount=instance.montant,
-                type='punctual',
                 category='Prime',
-                date=expense_date,
+                month=instance.mois,
+                year=instance.annee,
                 agent=instance.agent,
+                agence=instance.agence,
             )
+        
+        # Nettoyage : supprimer l'ancien AgencyExpense s'il existe (migration depuis l'ancien système)
+        AgencyExpense.objects.filter(
+            description__contains=f"[PRIME_ID:{instance.id}]",
+            category='Prime'
+        ).delete()
 
 @receiver(post_delete, sender=AgentPrime)
 def delete_agency_expense_from_prime(sender, instance, **kwargs):
     """
-    Supprime l'AgencyExpense associée quand une prime de type 'agence' est supprimée
+    Supprime l'AgencyExpenseMonth associée quand une prime de type 'agence' est supprimée
     """
     if instance.type_affectation == 'agence':
-        # Supprimer l'AgencyExpense correspondante en utilisant l'ID caché dans la description
+        AgencyExpenseMonth.objects.filter(
+            description__contains=f"[PRIME_ID:{instance.id}]",
+            category='Prime'
+        ).delete()
+        # Nettoyage : supprimer aussi l'ancien AgencyExpense si présent
         AgencyExpense.objects.filter(
             description__contains=f"[PRIME_ID:{instance.id}]",
             category='Prime'

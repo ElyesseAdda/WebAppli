@@ -10,7 +10,7 @@ from .views import (
     generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
     historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
     get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
-    delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
+    delete_schedule, update_schedule_comment, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
     list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, preview_facture_v2,
     create_facture_from_devis, get_next_facture_number, check_facture_numero, generate_facture_pdf_from_preview, get_chantier_details, check_chantier_name, check_client, check_societe, get_chantiers_drive_paths,
     calculate_special_lines, get_devis_special_lines, get_devis_factures, update_facture_status, get_fournisseurs,
@@ -57,6 +57,7 @@ from .views import (
     preview_situation,
     generate_situation_pdf,
     AgencyExpenseViewSet,
+    AgenceViewSet,
     get_chantier_bons_commande,
     get_chantier_stats,
     SousTraitantViewSet,
@@ -90,6 +91,7 @@ from .views import (
     BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
+    schedule_yearly_summary,
     preview_monthly_agents_report,
     generate_monthly_agents_pdf,
     AppelOffresViewSet,
@@ -172,7 +174,17 @@ from .bon_commande_modification_views import (
 from .search_views import search_in_drive
 
 # Import des vues d'authentification
-from .auth_views import login_view, logout_view, check_auth_view, create_user_view
+from .auth_views import (
+    login_view,
+    logout_view,
+    check_auth_view,
+    create_user_view,
+    list_users_view,
+    toggle_user_active_view,
+    reset_user_password_view,
+    manage_emetteurs_view,
+    toggle_emetteur_active_view,
+)
 
 # Import de la vue de version
 from .views import app_version_view
@@ -209,6 +221,7 @@ router.register(r'situation-lignes', SituationLigneViewSet, basename='situation-
 router.register(r'situation-lignes-supplementaires', SituationLigneSupplementaireViewSet)
 router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
+router.register(r'agences', AgenceViewSet, basename='agences')
 router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'agency-expenses-month', AgencyExpenseMonthViewSet, basename='agency-expenses-month')
 router.register(r'sous-traitants', SousTraitantViewSet)
@@ -235,6 +248,11 @@ auth_urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/check/', check_auth_view, name='check_auth'),
     path('auth/create-user/', create_user_view, name='create_user'),
+    path('auth/users/', list_users_view, name='list_users'),
+    path('auth/users/<int:user_id>/toggle-active/', toggle_user_active_view, name='toggle_user_active'),
+    path('auth/users/<int:user_id>/reset-password/', reset_user_password_view, name='reset_user_password'),
+    path('auth/emetteurs/', manage_emetteurs_view, name='manage_emetteurs'),
+    path('auth/emetteurs/<int:emetteur_id>/toggle-active/', toggle_emetteur_active_view, name='toggle_emetteur_active'),
 ]
 
 urlpatterns = [
@@ -264,6 +282,7 @@ urlpatterns = [
     path('get_schedule/', get_schedule, name='get_schedule'),
     path('copy_schedule/', copy_schedule, name='copy_schedule'),
     path('delete_schedule/', delete_schedule, name='delete_schedule'),
+    path('update_schedule_comment/', update_schedule_comment, name='update_schedule_comment'),
     path('save_labor_costs/', save_labor_costs, name='save_labor_costs'),
     path('get_labor_costs/', get_labor_costs, name='get_labor_costs'),
     path('create_chantier_from_devis/', create_chantier_from_devis, name='create_chantier_from_devis'),
@@ -388,6 +407,7 @@ urlpatterns = [
 urlpatterns += [
     path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
+    path('schedule/yearly_summary/', schedule_yearly_summary, name='schedule_yearly_summary'),
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
     path('app-version/', app_version_view, name='app-version'),
@@ -486,6 +506,7 @@ urlpatterns += [
 
 # --- URLs POUR LE DRIVE V2 (NOUVEAU SYSTÈME) ---
 from .views_drive.views import DriveV2ViewSet, proxy_file_view, onlyoffice_callback_view, check_onlyoffice_view
+from .views_drive.admin_views import DriveAdminViewSet
 
 urlpatterns += [
     # Navigation et contenu
@@ -536,6 +557,40 @@ urlpatterns += [
         'post': 'get_onlyoffice_config'
     }), name='drive-v2-onlyoffice-config'),
     path('drive-v2/onlyoffice-callback/', onlyoffice_callback_view, name='drive-v2-onlyoffice-callback'),  # Vue fonction simple
+]
+
+# --- URLs ADMIN POUR LE VERSIONING S3 (récupération de fichiers supprimés) ---
+urlpatterns += [
+    path('drive-admin/versioning-status/', DriveAdminViewSet.as_view({
+        'get': 'versioning_status'
+    }), name='drive-admin-versioning-status'),
+    path('drive-admin/deleted-files/', DriveAdminViewSet.as_view({
+        'get': 'list_deleted_files'
+    }), name='drive-admin-deleted-files'),
+    path('drive-admin/restore-file/', DriveAdminViewSet.as_view({
+        'post': 'restore_file'
+    }), name='drive-admin-restore-file'),
+    path('drive-admin/restore-batch/', DriveAdminViewSet.as_view({
+        'post': 'restore_batch'
+    }), name='drive-admin-restore-batch'),
+    path('drive-admin/restore-folder/', DriveAdminViewSet.as_view({
+        'post': 'restore_folder'
+    }), name='drive-admin-restore-folder'),
+    path('drive-admin/file-versions/', DriveAdminViewSet.as_view({
+        'get': 'file_versions'
+    }), name='drive-admin-file-versions'),
+    path('drive-admin/restore-version/', DriveAdminViewSet.as_view({
+        'post': 'restore_version'
+    }), name='drive-admin-restore-version'),
+    path('drive-admin/download-deleted-file/', DriveAdminViewSet.as_view({
+        'get': 'download_deleted_file'
+    }), name='drive-admin-download-deleted-file'),
+    path('drive-admin/restore-to-drive/', DriveAdminViewSet.as_view({
+        'post': 'restore_to_drive'
+    }), name='drive-admin-restore-to-drive'),
+    path('drive-admin/restore-to-drive-batch/', DriveAdminViewSet.as_view({
+        'post': 'restore_to_drive_batch'
+    }), name='drive-admin-restore-to-drive-batch'),
 ]
 
 # --- URLs POUR LES NOUVELLES VUES PDF AVEC STOCKAGE AWS S3 ---

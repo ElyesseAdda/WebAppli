@@ -36,7 +36,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -48,7 +48,8 @@ from .models import (
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    Agence,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -272,6 +273,20 @@ class ChantierViewSet(viewsets.ModelViewSet):
                 'error': f'Erreur lors de la mise à jour : {str(e)}'
             }, status=500)
 
+    @action(detail=False, methods=['get'], url_path='agence_reference')
+    def agence_reference(self, request):
+        """Chantier utilisé pour les heures « Agence » dans le planning (existant ou système)."""
+        from .ecole_utils import get_or_create_agence_chantier
+        chantier = get_or_create_agence_chantier()
+        return Response(self.get_serializer(chantier).data)
+
+    @action(detail=False, methods=['get'], url_path='agences_list')
+    def agences_list(self, request):
+        """Retourne tous les chantiers de type agence (pour le planning multi-agence)."""
+        chantiers = Chantier.objects.filter(
+            Q(chantier_type='agence') | Q(chantier_name__iexact='Agence')
+        ).distinct()
+        return Response(self.get_serializer(chantiers, many=True).data)
 
 
 class SocieteViewSet(viewsets.ModelViewSet):
@@ -2443,9 +2458,12 @@ class DistributeurViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def resume_produits(self, request, pk=None):
         """
-        Liste des produits du distributeur (toutes les cellules) avec bénéfice et CA
-        pour la période sélectionnée (year/month ou year seul ou global).
-        Trié par bénéfice décroissant pour voir les meilleures ventes.
+        Liste des produits du distributeur avec bénéfice et CA pour la période
+        (year/month ou year seul ou global).
+        Regroupement : si la case a un produit stock lié, clé = stock_product_id et
+        nom affiché = StockProduct.nom (source de vérité). Sinon regroupement par nom
+        libre sur la case (insensible à la casse). Les stats sont additionnées.
+        Tri par bénéfice décroissant.
         """
         import calendar as cal_module
         distributeur = self.get_object()
@@ -2496,22 +2514,53 @@ class DistributeurViewSet(viewsets.ModelViewSet):
         qte_by_cell = {r['cell_id']: int(r['quantite_vendue'] or 0) for r in lignes_agg}
         ca_by_cell = {r['cell_id']: float(r['ca_ventes'] or 0) for r in lignes_agg}
 
-        cells = distributeur.cells.all().order_by('row_index', 'col_index')
-        produits = []
+        # Agrégation : par stock_product_id si lié (nom = StockProduct.nom), sinon par nom libre
+        cells = distributeur.cells.select_related('stock_product').order_by(
+            'row_index', 'col_index'
+        )
+        by_key = {}
         for cell in cells:
-            nom = (cell.nom_produit or cell.stock_product.nom if cell.stock_product else f"L{cell.row_index + 1}C{cell.col_index + 1}").strip() or f"L{cell.row_index + 1}C{cell.col_index + 1}"
             benefice = benefice_by_cell.get(cell.id, 0)
             quantite_vendue = qte_by_cell.get(cell.id, 0)
             ca_ventes = ca_by_cell.get(cell.id, 0)
-            produits.append({
-                'cell_id': cell.id,
-                'nom_produit': nom,
-                'row_index': cell.row_index,
-                'col_index': cell.col_index,
-                'benefice': round(benefice, 2),
-                'ca_ventes': round(ca_ventes, 2),
-                'quantite_vendue': quantite_vendue,
-            })
+
+            if cell.stock_product_id:
+                cle = f"stock:{cell.stock_product_id}"
+                sp = cell.stock_product
+                nom = (
+                    (sp.nom or sp.nom_produit or "").strip()
+                    or f"Produit #{cell.stock_product_id}"
+                )
+                stock_product_id = cell.stock_product_id
+            else:
+                nom = (cell.nom_produit or "").strip() or (
+                    f"L{cell.row_index + 1}C{cell.col_index + 1}"
+                )
+                cle = f"free:{nom.lower()}"
+                stock_product_id = None
+
+            if cle not in by_key:
+                by_key[cle] = {
+                    'nom_produit': nom,
+                    'stock_product_id': stock_product_id,
+                    'benefice': 0.0,
+                    'ca_ventes': 0.0,
+                    'quantite_vendue': 0,
+                }
+            by_key[cle]['benefice'] += float(benefice)
+            by_key[cle]['ca_ventes'] += float(ca_ventes)
+            by_key[cle]['quantite_vendue'] += int(quantite_vendue)
+
+        produits = [
+            {
+                'nom_produit': v['nom_produit'],
+                'stock_product_id': v['stock_product_id'],
+                'benefice': round(v['benefice'], 2),
+                'ca_ventes': round(v['ca_ventes'], 2),
+                'quantite_vendue': v['quantite_vendue'],
+            }
+            for v in by_key.values()
+        ]
         produits.sort(key=lambda x: (-x['benefice'], -x['ca_ventes']))
 
         return Response({
@@ -2648,6 +2697,149 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
                          'Utilisez "Vider la case" dans l\'interface (PATCH avec stock_product=null) pour libérer l\'emplacement tout en conservant les bénéfices passés.'
             },
             status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    @action(detail=True, methods=['post'], url_path='change-product')
+    def change_product(self, request, pk=None):
+        """
+        Changement de produit d'une case:
+        - calcule les ventes à valider via (dernier niveau réappro - restant saisi),
+        - ajoute cette vente dans la prochaine session de mouvement (en cours, sinon créée),
+        - traite le reliquat (remis en stock via lot d'ajustement, ou perte),
+        - met à jour la case avec le nouveau produit.
+        """
+        cell = self.get_object()
+        old_product = cell.stock_product
+        old_product_id = old_product.id if old_product else None
+        new_product_id = request.data.get('stock_product')
+
+        try:
+            new_product_id = int(new_product_id) if new_product_id is not None else None
+        except (TypeError, ValueError):
+            return Response({'error': 'Nouveau produit invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not old_product_id or not new_product_id or old_product_id == new_product_id:
+            return Response(
+                {'error': "Ce flux s'applique uniquement lors d'un changement réel de produit"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            old_remaining_qty = int(request.data.get('old_remaining_qty', 0))
+        except (TypeError, ValueError):
+            return Response({'error': 'Quantité restante invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if old_remaining_qty < 0:
+            return Response({'error': 'La quantité restante ne peut pas être négative'}, status=status.HTTP_400_BAD_REQUEST)
+
+        remaining_action = (request.data.get('remaining_action') or 'restock').strip().lower()
+        if remaining_action not in ['restock', 'loss']:
+            return Response({'error': "remaining_action doit être 'restock' ou 'loss'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        last_line = DistributeurReapproLigne.objects.filter(
+            cell=cell,
+            session__statut='termine'
+        ).select_related('session').order_by('-session__date_fin', '-id').first()
+        previous_level = int(last_line.quantite) if last_line else 0
+        if old_remaining_qty > previous_level:
+            return Response(
+                {
+                    'error': 'La quantité restante dépasse le dernier niveau connu pour cette case',
+                    'previous_level': previous_level,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        sold_qty = max(previous_level - old_remaining_qty, 0)
+
+        # Nettoyer la payload pour la mise à jour de la case (sans les champs métier du workflow)
+        cell_payload = dict(request.data)
+        cell_payload.pop('old_remaining_qty', None)
+        cell_payload.pop('remaining_action', None)
+
+        with transaction.atomic():
+            # Coût unitaire moyen pour l'ancien produit (lots disponibles puis fallback tous lots)
+            cout_unitaire = Decimal('0')
+            lots_avec_stock = StockLot.objects.filter(produit=old_product, quantite_restante__gt=0)
+            agg = lots_avec_stock.aggregate(
+                total_val=Sum(F('prix_achat_unitaire') * F('quantite_restante')),
+                total_qty=Sum('quantite_restante'),
+            )
+            total_val = agg.get('total_val')
+            total_qty = agg.get('total_qty')
+            if total_qty and total_qty > 0 and total_val is not None:
+                cout_unitaire = total_val / total_qty
+            else:
+                cout_moyen = StockLot.objects.filter(produit=old_product).aggregate(avg=Avg('prix_achat_unitaire'))['avg']
+                if cout_moyen is not None:
+                    cout_unitaire = cout_moyen
+
+            # 1) Ventes validées dans la prochaine session de mouvement
+            if sold_qty > 0:
+                session = DistributeurReapproSession.objects.filter(
+                    distributeur_id=cell.distributeur_id,
+                    statut='en_cours'
+                ).order_by('-date_debut').first()
+                if not session:
+                    session = DistributeurReapproSession.objects.create(
+                        distributeur_id=cell.distributeur_id,
+                        statut='en_cours',
+                        date_debut=timezone.now(),
+                    )
+                ligne = DistributeurReapproLigne.objects.filter(session=session, cell=cell).first()
+                old_prix_vente = cell.prix_vente or 0
+                if ligne:
+                    ligne.quantite = int(ligne.quantite) + sold_qty
+                    ligne.prix_vente = old_prix_vente
+                    ligne.cout_unitaire = cout_unitaire
+                    ligne.save(update_fields=['quantite', 'prix_vente', 'cout_unitaire'])
+                else:
+                    DistributeurReapproLigne.objects.create(
+                        session=session,
+                        cell=cell,
+                        quantite=sold_qty,
+                        prix_vente=old_prix_vente,
+                        cout_unitaire=cout_unitaire,
+                    )
+
+            # 2) Reliquat ancien produit -> retour stock + lot ajustement, ou perte
+            if old_remaining_qty > 0 and remaining_action == 'restock':
+                nom_produit = (old_product.nom or old_product.nom_produit or '').strip() or f'Produit #{old_product.pk}'
+                achat = StockPurchase.objects.create(
+                    lieu_achat='Retour distributeur',
+                    date_achat=timezone.now(),
+                )
+                item = StockPurchaseItem.objects.create(
+                    achat=achat,
+                    produit=old_product,
+                    nom_produit=nom_produit,
+                    quantite=old_remaining_qty,
+                    prix_unitaire=cout_unitaire,
+                    montant_total=Decimal(old_remaining_qty) * cout_unitaire,
+                    unite='pièce',
+                )
+                StockProduct.objects.filter(pk=old_product.pk).update(quantite=F('quantite') + old_remaining_qty)
+                StockLot.objects.create(
+                    produit=old_product,
+                    purchase_item=item,
+                    quantite_restante=old_remaining_qty,
+                    prix_achat_unitaire=cout_unitaire,
+                    date_achat=achat.date_achat,
+                )
+
+            # 3) Mise à jour de la case vers le nouveau produit
+            serializer = self.get_serializer(cell, data=cell_payload, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
+        return Response(
+            {
+                'message': 'Produit de case changé avec prise en compte des ventes/reliquats',
+                'previous_level': previous_level,
+                'sold_qty': sold_qty,
+                'remaining_qty': old_remaining_qty,
+                'remaining_action': remaining_action,
+            },
+            status=status.HTTP_200_OK
         )
 
 
@@ -2819,12 +3011,25 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='terminer')
     def terminer(self, request, pk=None):
         """Termine la session : vérifie le stock, retire les quantités du stock (FIFO), puis marque la session terminée."""
+        from django.utils.dateparse import parse_datetime
         session = self.get_object()
         if session.statut != 'en_cours':
             return Response(
                 {'error': 'Cette session est déjà terminée'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        date_fin_input = request.data.get('date_fin')
+        date_fin_value = timezone.now()
+        if date_fin_input:
+            parsed_date = parse_datetime(str(date_fin_input))
+            if parsed_date is None:
+                return Response(
+                    {'error': 'Format date_fin invalide. Utilisez une date/heure valide.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if timezone.is_naive(parsed_date):
+                parsed_date = timezone.make_aware(parsed_date, timezone.get_current_timezone())
+            date_fin_value = parsed_date
         lignes = list(session.lignes.select_related('cell', 'cell__stock_product').all())
         # Quantité requise par produit (plusieurs lignes peuvent concerner le même produit)
         from collections import defaultdict
@@ -2877,7 +3082,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     restant_a_retirer -= prise
                 StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
             session.statut = 'termine'
-            session.date_fin = timezone.now()
+            session.date_fin = date_fin_value
             session.save()
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -3078,6 +3283,74 @@ class StockPurchaseViewSet(viewsets.ModelViewSet):
         response_serializer = StockPurchaseSerializer(achat)
         headers = self.get_success_headers(response_serializer.data)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Supprime un historique d'achat et retire du stock uniquement les quantités
+        encore présentes dans les lots liés à cet achat.
+        """
+        purchase = self.get_object()
+
+        with transaction.atomic():
+            items = list(
+                StockPurchaseItem.objects.filter(achat=purchase)
+                .select_related('produit')
+                .prefetch_related('lots')
+            )
+            impacted_product_ids = set()
+
+            for item in items:
+                if not item.produit_id:
+                    continue
+                impacted_product_ids.add(item.produit_id)
+
+                qty_lots_restante = item.lots.aggregate(
+                    total=Sum('quantite_restante')
+                )['total'] or 0
+
+                if qty_lots_restante <= 0:
+                    continue
+
+                produit = StockProduct.objects.select_for_update().filter(pk=item.produit_id).first()
+                if not produit:
+                    continue
+
+                produit.quantite = max(0, int(produit.quantite or 0) - int(qty_lots_restante))
+                produit.save(update_fields=['quantite', 'updated_at'])
+
+            # CASCADE: supprime automatiquement StockPurchaseItem et StockLot liés
+            purchase.delete()
+
+            # Recalculer le meilleur achat persisté pour les produits impactés
+            for product_id in impacted_product_ids:
+                candidates = StockPurchaseItem.objects.filter(
+                    produit_id=product_id
+                ).select_related('achat').exclude(
+                    achat__lieu_achat__isnull=True
+                ).exclude(
+                    achat__lieu_achat__exact=''
+                ).exclude(
+                    achat__lieu_achat__iexact='Non renseigné'
+                ).exclude(
+                    achat__lieu_achat__iexact='Ajustement manuel'
+                )
+                best_item = candidates.order_by('prix_unitaire', 'achat__date_achat', 'id').first()
+                if best_item:
+                    StockProductBestPurchase.objects.update_or_create(
+                        produit_id=product_id,
+                        defaults={
+                            'prix_unitaire': best_item.prix_unitaire,
+                            'lieu_achat': best_item.achat.lieu_achat,
+                            'purchase_item': best_item,
+                        }
+                    )
+                else:
+                    StockProductBestPurchase.objects.filter(produit_id=product_id).delete()
+
+        return Response(
+            {'message': "Historique d'achat supprimé et stock synchronisé"},
+            status=status.HTTP_200_OK
+        )
 
     @action(detail=False, methods=['get'], url_path='history-by-product')
     def history_by_product(self, request):
@@ -3354,6 +3627,7 @@ def assign_chantier(request):
                 chantier_id = update.get('chantierId')
                 is_sav = update.get('isSav', False)  # Par défaut False si non fourni
                 overtime_hours = update.get('overtimeHours', 0)  # Par défaut 0 si non fourni
+                comment = update.get('comment', '')
 
                 # Validation des données
                 if not all([agent_id, week, year, day, hour_str, chantier_id]):
@@ -3410,7 +3684,8 @@ def assign_chantier(request):
                     hour=hour,
                     chantier=chantier,
                     is_sav=is_sav,
-                    overtime_hours=overtime_hours
+                    overtime_hours=overtime_hours,
+                    comment=comment,
                 )
 
         logger.info("Chantiers assignés avec succès.")
@@ -3507,7 +3782,8 @@ def copy_schedule(request):
                     year=target_year,
                     hour=schedule.hour,
                     day=schedule.day,
-                    chantier_id=schedule.chantier_id
+                    chantier_id=schedule.chantier_id,
+                    comment=schedule.comment,
                 )
                 copied_schedules.append(new_schedule)
             Schedule.objects.bulk_create(copied_schedules)
@@ -3553,6 +3829,38 @@ def copy_schedule(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+def update_schedule_comment(request):
+    """
+    Met à jour le commentaire de plages horaires existantes.
+    Attendu : { agentId, week, year, cells: [{day, hour}], comment }
+    """
+    agent_id = request.data.get('agentId')
+    week = request.data.get('week')
+    year = request.data.get('year')
+    cells = request.data.get('cells', [])
+    comment = request.data.get('comment', '')
+
+    if not all([agent_id, week, year, cells]):
+        return Response({'error': 'Paramètres manquants.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        updated = 0
+        for cell in cells:
+            day = cell.get('day')
+            hour = cell.get('hour')
+            if not day or not hour:
+                continue
+            count = Schedule.objects.filter(
+                agent_id=agent_id, week=week, year=year, day=day, hour=hour
+            ).update(comment=comment)
+            updated += count
+        return Response({'status': 'ok', 'updated': updated})
+    except Exception as e:
+        logger.exception("Erreur lors de la mise à jour du commentaire.")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -8926,6 +9234,39 @@ def generate_situation_pdf(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+class AgenceViewSet(viewsets.ModelViewSet):
+    queryset = Agence.objects.all()
+    serializer_class = AgenceSerializer
+    permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        agence = serializer.save()
+        chantier = Chantier.objects.create(
+            chantier_name=agence.nom,
+            is_system_chantier=True,
+            chantier_type='agence',
+            ville='Système',
+            rue='Système',
+            state_chantier='En Cours',
+            description=f'Chantier système pour l\'agence "{agence.nom}"',
+        )
+        agence.chantier = chantier
+        agence.save(update_fields=['chantier'])
+
+    def perform_update(self, serializer):
+        agence = serializer.save()
+        if agence.chantier:
+            agence.chantier.chantier_name = agence.nom
+            agence.chantier.description = f'Chantier système pour l\'agence "{agence.nom}"'
+            agence.chantier.save(update_fields=['chantier_name', 'description'])
+
+    def perform_destroy(self, instance):
+        chantier = instance.chantier
+        instance.delete()
+        if chantier:
+            chantier.delete()
+
+
 class AgencyExpenseViewSet(viewsets.ModelViewSet):
     queryset = AgencyExpense.objects.all()
     serializer_class = AgencyExpenseSerializer
@@ -9086,6 +9427,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 category=template.category,
                 month=m,
                 year=y,
+                agence=template.agence,
                 defaults={
                     'amount': template.amount,
                     'date_paiement': date(y, m, 1),
@@ -9144,10 +9486,11 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 y += 1
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('agence')
         month = self.request.query_params.get('month')
         year = self.request.query_params.get('year')
         category = self.request.query_params.get('category')
+        agence_id = self.request.query_params.get('agence_id')
         
         if month:
             queryset = queryset.filter(month=int(month))
@@ -9155,6 +9498,8 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(year=int(year))
         if category:
             queryset = queryset.filter(category=category)
+        if agence_id:
+            queryset = queryset.filter(agence_id=int(agence_id))
         
         return queryset.order_by('year', 'month', 'description')
 
@@ -9163,6 +9508,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         """Résumé mensuel des dépenses"""
         month = request.query_params.get('month')
         year = request.query_params.get('year')
+        agence_id = request.query_params.get('agence_id')
         
         if not month or not year:
             return Response({"error": "Month and year are required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -9171,6 +9517,8 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             month=int(month),
             year=int(year)
         )
+        if agence_id:
+            expenses = expenses.filter(agence_id=int(agence_id))
         
         total = sum(float(e.amount) for e in expenses)
         totals_by_category = {}
@@ -9186,6 +9534,38 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             'totals_by_category': [{'category': k, 'total': v} for k, v in totals_by_category.items()],
             'total': total
         })
+
+    @action(detail=False, methods=['get'], url_path='yearly_summary')
+    def yearly_summary(self, request):
+        """Totaux par mois et par catégorie pour une année complète — remplace 12 appels monthly_summary."""
+        year = request.query_params.get('year')
+        agence_id = request.query_params.get('agence_id')
+        if not year:
+            return Response({"error": "year is required"}, status=status.HTTP_400_BAD_REQUEST)
+        year = int(year)
+        expenses = self.queryset.filter(year=year)
+        if agence_id:
+            expenses = expenses.filter(agence_id=int(agence_id))
+
+        months = {}
+        for exp in expenses:
+            m = exp.month
+            if m not in months:
+                months[m] = {'total': 0, 'by_category': {}}
+            amt = float(exp.amount)
+            months[m]['total'] += amt
+            cat = exp.category or 'Autres'
+            months[m]['by_category'][cat] = months[m]['by_category'].get(cat, 0) + amt
+
+        result = []
+        for m in range(1, 13):
+            info = months.get(m, {'total': 0, 'by_category': {}})
+            result.append({
+                'month': m,
+                'total': info['total'],
+                'totals_by_category': [{'category': k, 'total': v} for k, v in info['by_category'].items()],
+            })
+        return Response({'year': year, 'months': result, 'yearly_total': sum(d['total'] for d in result)})
 
     @action(detail=True, methods=['post'])
     def recurring_generate(self, request, pk=None):
@@ -9203,7 +9583,11 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         return Response({"generated": generated_ids}, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
-        instance = serializer.save()
+        agence_id = self.request.data.get('agence') or self.request.query_params.get('agence_id')
+        extra = {}
+        if agence_id:
+            extra['agence_id'] = int(agence_id)
+        instance = serializer.save(**extra)
         if instance.is_recurring_template:
             self._generate_from_template(instance, horizon_months=60)
         return instance
@@ -10614,6 +10998,7 @@ def preview_planning_hebdo(request):
     days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
     planning_data = {}
+    planning_comments = {}
     chantier_names = set()
     agent_hours_map = {}  # Map pour stocker les heures par agent
     
@@ -10626,14 +11011,13 @@ def preview_planning_hebdo(request):
         
         agent_hours_map[agent.id] = hours
         planning_data[agent.id] = {hour: {day: "" for day in days_of_week} for hour in hours}
+        planning_comments[agent.id] = {hour: {day: "" for day in days_of_week} for hour in hours}
         
         schedules = Schedule.objects.filter(agent=agent, week=week, year=year)
         for s in schedules:
             if agent.type_paiement == 'journalier':
-                # Pour les agents journaliers, s.hour est déjà "Matin" ou "Après-midi"
                 hour = s.hour
             else:
-                # Pour les agents horaires, formater l'heure
                 try:
                     hour = str(int(s.hour.split(':')[0])) + ":00"
                 except Exception:
@@ -10645,31 +11029,35 @@ def preview_planning_hebdo(request):
                 chantier_names.add(chantier_name)
             if hour in planning_data[agent.id] and day in planning_data[agent.id][hour]:
                 planning_data[agent.id][hour][day] = chantier_name
+                planning_comments[agent.id][hour][day] = s.comment or ""
 
     chantier_names = sorted(list(chantier_names))
     palette = generate_pastel_palette(100)  # 100 couleurs pastel
     chantier_colors = {name: get_color_for_chantier(name, palette) for name in chantier_names}
 
-    # Préparation des rowspans pour fusionner les cellules
+    # Préparation des rowspans pour fusionner les cellules (même chantier ET même commentaire)
     planning_rowspan = {agent.id: {day: [] for day in days_of_week} for agent in agents}
     for agent in agents:
-        agent_hours = agent_hours_map[agent.id]  # Récupérer les heures spécifiques à cet agent
+        agent_hours = agent_hours_map[agent.id]
         for day in days_of_week:
             prev_chantier = None
+            prev_comment = None
             start_hour = None
             span = 0
             for hour in agent_hours:
                 chantier = planning_data[agent.id][hour][day]
-                if chantier == prev_chantier:
+                comment = planning_comments[agent.id][hour][day]
+                if chantier == prev_chantier and comment == prev_comment:
                     span += 1
                 else:
                     if prev_chantier and prev_chantier != '':
-                        planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
+                        planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span, prev_comment or ''))
                     prev_chantier = chantier
+                    prev_comment = comment
                     start_hour = hour
                     span = 1
             if prev_chantier and prev_chantier != '':
-                planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span))
+                planning_rowspan[agent.id][day].append((prev_chantier, start_hour, span, prev_comment or ''))
 
     # Calculer les dates de la semaine pour l'affichage
     from datetime import datetime, timedelta
@@ -10707,6 +11095,7 @@ def preview_planning_hebdo(request):
         'week_dates': week_dates,
         'agent_hours_map': agent_hours_map,
         'planning_data': planning_data,
+        'planning_comments': planning_comments,
         'chantier_colors': chantier_colors,
         'planning_rowspan': planning_rowspan,
     })
@@ -11343,7 +11732,13 @@ class RecapFinancierChantierAPIView(APIView):
             }
         }
 
-        montant_ht = chantier.montant_ht or 0
+        # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
+        montant_ht = float(chantier.montant_ht or 0)
+        devis_marche = Devis.objects.filter(
+            chantier=chantier, devis_chantier=True
+        ).first()
+        if devis_marche is not None and devis_marche.price_ht is not None:
+            montant_ht = float(devis_marche.price_ht)
         taux_fixe = chantier.taux_fixe or 0
         montant_taux_fixe = montant_ht * taux_fixe / 100
 
@@ -11599,7 +11994,10 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         'date_paiement_prevue': None,
         'ecart_paiement_reel': None,
         'date_modification': None,
-        'historique_modifications': []
+        'historique_modifications': [],
+        'source_type': None,
+        'agency_expense_id': None,
+        'delai_paiement': 45,
     })))
     
     # Traiter les paiements pour calculer les montants à payer et payés
@@ -11659,6 +12057,64 @@ def _get_tableau_fournisseur_data(chantier_id=None):
         ]
         data[key][paiement.fournisseur][paiement.chantier_id]['historique_modifications'] = historique_list
     
+    # Dépenses agence (catégorie Fournisseur) — même principe que le tableau sous-traitant / Sous-traitant
+    from datetime import datetime as dt_class, timedelta as td_class
+    agency_fournisseur_qs = AgencyExpenseMonth.objects.filter(category='Fournisseur')
+    if chantier_id:
+        agency_fournisseur_qs = agency_fournisseur_qs.filter(chantier_id=chantier_id)
+    agency_fournisseur_qs = agency_fournisseur_qs.select_related('chantier', 'agence', 'agence__chantier')
+
+    for expense_month in agency_fournisseur_qs:
+        annee_2_digits = str(expense_month.year)[-2:]
+        key = f"{expense_month.month:02d}/{annee_2_digits}"
+        fournisseur_nom = expense_month.description
+        chantier_id_val = expense_month.agence.chantier_id if expense_month.agence and expense_month.agence.chantier_id else 0
+        chantier_name = expense_month.agence.nom if expense_month.agence else "Agence"
+        montant_a_payer = Decimal(str(expense_month.amount))
+        montant_paye_dec = (
+            Decimal(str(expense_month.montant_paye))
+            if expense_month.montant_paye is not None
+            else Decimal('0')
+        )
+
+        cell = data[key][fournisseur_nom][chantier_id_val]
+        cell['a_payer'] += montant_a_payer
+        cell['paye'] += montant_paye_dec
+        cell['chantier_name'] = chantier_name
+        cell['source_type'] = 'agency_expense_fournisseur'
+        cell['agency_expense_id'] = expense_month.id
+        cell['commentaire'] = expense_month.commentaire or ''
+        delai = expense_month.delai_paiement if getattr(expense_month, 'delai_paiement', None) else 45
+        cell['delai_paiement'] = delai
+
+        if expense_month.factures and isinstance(expense_month.factures, list):
+            factures_norm = []
+            for f in expense_month.factures:
+                if isinstance(f, dict):
+                    factures_norm.append({
+                        'id': f.get('id'),
+                        'numero_facture': f.get('numero_facture', '') or '',
+                        'montant_facture': float(f.get('montant_facture') or 0),
+                        'payee': bool(f.get('payee')),
+                        'date_paiement_facture': f.get('date_paiement_facture'),
+                    })
+            cell['factures'] = factures_norm
+
+        date_reception = (expense_month.date_reception_facture or expense_month.date_paiement)
+        cell['date_envoi'] = date_reception.isoformat() if date_reception else None
+        cell['date_paiement'] = expense_month.date_paiement_reel.isoformat() if expense_month.date_paiement_reel else None
+
+        if cell['date_envoi'] and delai:
+            try:
+                date_reception_obj = dt_class.fromisoformat(cell['date_envoi']).date()
+                date_prevue = date_reception_obj + td_class(days=delai)
+                cell['date_paiement_prevue'] = date_prevue.isoformat()
+                if cell['date_paiement']:
+                    date_reel_obj = dt_class.fromisoformat(cell['date_paiement']).date()
+                    cell['ecart_paiement_reel'] = (date_reel_obj - date_prevue).days
+            except Exception:
+                pass
+
     # Calculer les écarts et préparer la réponse
     result = []
     for mois_key, fournisseurs_data in data.items():
@@ -11682,6 +12138,10 @@ def _get_tableau_fournisseur_data(chantier_id=None):
                     'ecart_paiement_reel': valeurs.get('ecart_paiement_reel'),
                     'date_modification': valeurs.get('date_modification'),
                     'historique_modifications': valeurs.get('historique_modifications', []),
+                    'source_type': valeurs.get('source_type'),
+                    'agency_expense_id': valeurs.get('agency_expense_id'),
+                    'delai_paiement': valeurs.get('delai_paiement', 45),
+                    'commentaire': valeurs.get('commentaire', ''),
                 })
     
     return result
@@ -11982,14 +12442,44 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         ajust_key = (agent_id, mois, annee)
         if ajust_key in ajustements_map:
             ajust_data = ajustements_map[ajust_key]
-            # Appliquer l'ajustement à chaque chantier de cet agent/mois
-            # L'ajustement est global pour l'agent/mois, on le stocke pour le premier chantier
-            # (le frontend regroupera et l'appliquera au total)
             if agent_nom in data[key]:
                 for chantier_id_agent in data[key][agent_nom]:
                     data[key][agent_nom][chantier_id_agent]['ajustement_id'] = ajust_data['id']
                     data[key][agent_nom][chantier_id_agent]['ajustement_montant'] = float(ajust_data['montant'])
                     data[key][agent_nom][chantier_id_agent]['ajustement_description'] = ajust_data['description']
+    
+    # 2c. Récupérer les primes (AgentPrime) des agents journaliers pour le tooltip
+    primes_agents = AgentPrime.objects.filter(
+        agent__type_paiement='journalier'
+    ).select_related('agent', 'agence', 'chantier')
+    
+    primes_map = {}  # {(agent_id, mois, annee): [{id, montant, description, type_affectation, agence_nom, chantier_name}]}
+    for prime in primes_agents:
+        prime_key = (prime.agent_id, prime.mois, prime.annee)
+        if prime_key not in primes_map:
+            primes_map[prime_key] = []
+        primes_map[prime_key].append({
+            'id': prime.id,
+            'montant': float(prime.montant),
+            'description': prime.description,
+            'type_affectation': prime.type_affectation,
+            'agence_nom': prime.agence.nom if prime.agence else None,
+            'chantier_name': prime.chantier.chantier_name if prime.chantier else None,
+        })
+    
+    # Appliquer les primes aux données des agents journaliers
+    for (agent_id, mois, annee), agent_nom in agents_mois_info.items():
+        annee_2_digits = str(annee)[-2:]
+        key = f"{mois:02d}/{annee_2_digits}"
+        
+        prime_key = (agent_id, mois, annee)
+        if prime_key in primes_map:
+            agent_primes = primes_map[prime_key]
+            total_primes = sum(p['montant'] for p in agent_primes)
+            if agent_nom in data[key]:
+                for chantier_id_agent in data[key][agent_nom]:
+                    data[key][agent_nom][chantier_id_agent]['primes'] = agent_primes
+                    data[key][agent_nom][chantier_id_agent]['total_primes'] = total_primes
     
     # 3. Récupérer les AgencyExpenseMonth avec catégorie "Sous-traitant"
     if chantier_id:
@@ -12000,7 +12490,7 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
     else:
         agency_expenses_month = AgencyExpenseMonth.objects.filter(category='Sous-traitant')
     
-    agency_expenses_month = agency_expenses_month.select_related('chantier', 'sous_traitant')
+    agency_expenses_month = agency_expenses_month.select_related('chantier', 'sous_traitant', 'agence', 'agence__chantier')
     
     for expense_month in agency_expenses_month:
         # Format: MM/YY
@@ -12009,8 +12499,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         
         # Utiliser la description comme nom de "sous-traitant" dans le tableau
         sous_traitant_nom = expense_month.description
-        chantier_id_val = 0  # Toujours 0 pour AgencyExpenseMonth (pas de chantier spécifique)
-        chantier_name = "Agence"
+        chantier_id_val = expense_month.agence.chantier_id if expense_month.agence and expense_month.agence.chantier_id else 0
+        chantier_name = expense_month.agence.nom if expense_month.agence else "Agence"
         
         montant = Decimal(str(expense_month.amount))
         
@@ -12021,7 +12511,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         # data[key][sous_traitant_nom][chantier_id_val]['paye'] += montant  # SUPPRIMÉ
         data[key][sous_traitant_nom][chantier_id_val]['chantier_name'] = chantier_name
         data[key][sous_traitant_nom][chantier_id_val]['source_type'] = 'agency_expense'
-        data[key][sous_traitant_nom][chantier_id_val]['agency_expense_id'] = expense_month.id  # ID pour modification
+        data[key][sous_traitant_nom][chantier_id_val]['agency_expense_id'] = expense_month.id
+        data[key][sous_traitant_nom][chantier_id_val]['commentaire'] = expense_month.commentaire or ''
         
         # Récupérer les factures depuis AgencyExpenseMonth
         if not data[key][sous_traitant_nom][chantier_id_val]['factures']:
@@ -12322,8 +12813,9 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     'ecart_paiement_reel': valeurs.get('ecart_paiement_reel'),
                     'delai_paiement': valeurs.get('delai_paiement', 45),
                     'source_type': valeurs.get('source_type', 'facture_sous_traitant'),  # Par défaut facture_sous_traitant
-                    'agency_expense_id': valeurs.get('agency_expense_id'),  # ID pour modification des AgencyExpenseMonth
-                    'suivi_paiement_id': valeurs.get('suivi_paiement_id'),  # ID du suivi de paiement pour mise à jour
+                    'agency_expense_id': valeurs.get('agency_expense_id'),
+                    'suivi_paiement_id': valeurs.get('suivi_paiement_id'),
+                    'commentaire': valeurs.get('commentaire', ''),
                 }
                 
                 # Ajouter les champs spécifiques aux agents journaliers
@@ -12332,6 +12824,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     item['ajustement_id'] = valeurs.get('ajustement_id')
                     item['ajustement_montant'] = valeurs.get('ajustement_montant', 0)
                     item['ajustement_description'] = valeurs.get('ajustement_description', '')
+                    item['primes'] = valeurs.get('primes', [])
+                    item['total_primes'] = valeurs.get('total_primes', 0)
                 
                 result.append(item)
     
@@ -12425,6 +12919,7 @@ def ajustement_agent_journalier(request):
     annee = request.data.get('annee')
     montant_ajustement = request.data.get('montant_ajustement', 0)
     description = request.data.get('description', '')
+    chantier_ids = request.data.get('chantier_ids', [])
     
     if not agent_id or not mois or not annee:
         return Response(
@@ -12433,7 +12928,6 @@ def ajustement_agent_journalier(request):
         )
     
     try:
-        # Vérifier que l'agent existe et est journalier
         agent = Agent.objects.get(id=agent_id)
         if agent.type_paiement != 'journalier':
             return Response(
@@ -12441,11 +12935,14 @@ def ajustement_agent_journalier(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Construire la description pour AgencyExpenseMonth
         agent_nom = f"{agent.name} {agent.surname}".strip()
         expense_description = f"{agent_nom} - {description}" if description else agent_nom
         
-        # Chercher un ajustement existant pour cet agent/mois/année
+        # Déduire l'agence depuis les chantiers de la ligne (chantiers système des agences)
+        agence = None
+        if chantier_ids:
+            agence = Agence.objects.filter(chantier_id__in=chantier_ids).first()
+        
         existing = AgencyExpenseMonth.objects.filter(
             agent_id=agent_id,
             month=mois,
@@ -12454,14 +12951,14 @@ def ajustement_agent_journalier(request):
         ).first()
         
         if existing:
-            # Mettre à jour l'existant
             existing.amount = Decimal(str(montant_ajustement))
             existing.description = expense_description
+            if agence:
+                existing.agence = agence
             existing.save()
             ajustement = existing
             created = False
         else:
-            # Créer un nouveau
             ajustement = AgencyExpenseMonth.objects.create(
                 description=expense_description,
                 amount=Decimal(str(montant_ajustement)),
@@ -12469,7 +12966,8 @@ def ajustement_agent_journalier(request):
                 month=mois,
                 year=annee,
                 agent_id=agent_id,
-                chantier=None,  # Pas de chantier spécifique
+                agence=agence,
+                chantier=None,
             )
             created = True
         
@@ -12480,7 +12978,9 @@ def ajustement_agent_journalier(request):
             "mois": ajustement.month,
             "annee": ajustement.year,
             "montant_ajustement": float(ajustement.amount),
-            "description": description,  # Retourner la description originale (sans le nom de l'agent)
+            "description": description,
+            "agence_id": agence.id if agence else None,
+            "agence_nom": agence.nom if agence else None,
             "created": created
         }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
         
@@ -12612,6 +13112,7 @@ def schedule_monthly_summary(request):
     month_str = request.GET.get('month')  # format attendu : 'YYYY-MM'
     agent_id_filter = request.GET.get('agent_id')
     chantier_id_filter = request.GET.get('chantier_id')
+    agence_only = request.GET.get('agence') == '1'
     if not month_str:
         return Response({'error': 'Paramètre month requis (format YYYY-MM)'}, status=400)
     try:
@@ -12650,7 +13151,14 @@ def schedule_monthly_summary(request):
     schedules = Schedule.objects.filter(q_objects).select_related('agent', 'chantier')
     if agent_id_filter:
         schedules = schedules.filter(agent_id=agent_id_filter)
-    if chantier_id_filter:
+    if agence_only:
+        from .ecole_utils import get_agence_chantier_ids
+        agence_ids = get_agence_chantier_ids()
+        if chantier_id_filter and int(chantier_id_filter) in agence_ids:
+            schedules = schedules.filter(chantier_id=int(chantier_id_filter))
+        else:
+            schedules = schedules.filter(chantier_id__in=agence_ids)
+    elif chantier_id_filter:
         schedules = schedules.filter(chantier_id=chantier_id_filter)
 
     # Agrégation par agent et chantier
@@ -12791,7 +13299,194 @@ def schedule_monthly_summary(request):
         chantier_map[chantier_id]['total_montant_overtime'] += data['montant_overtime']
         chantier_map[chantier_id]['jours_majoration'].extend(data['jours_majoration'])
 
+    if agence_only:
+        from .ecole_utils import get_agence_chantier_ids
+        agence_ids = get_agence_chantier_ids()
+        merged_by_agent = {}
+        for (_agent_id, _chantier_id), data in result.items():
+            aid = data['agent_id']
+            if aid not in merged_by_agent:
+                merged_by_agent[aid] = {
+                    'agent_id': data['agent_id'],
+                    'agent_nom': data['agent_nom'],
+                    'chantier_id': agence_ids[0] if agence_ids else None,
+                    'chantier_nom': data['chantier_nom'],
+                    'type_paiement': data['type_paiement'],
+                    'heures_normal': 0,
+                    'heures_samedi': 0,
+                    'heures_dimanche': 0,
+                    'heures_ferie': 0,
+                    'heures_overtime': 0,
+                    'montant_normal': 0,
+                    'montant_samedi': 0,
+                    'montant_dimanche': 0,
+                    'montant_ferie': 0,
+                    'montant_overtime': 0,
+                    'jours_majoration': [],
+                }
+            m = merged_by_agent[aid]
+            for k in (
+                'heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
+                'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime',
+            ):
+                m[k] += data[k]
+            m['jours_majoration'].extend(data['jours_majoration'])
+
+        details = sorted(merged_by_agent.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        tot_h = (
+            sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
+        )
+        tot_m = (
+            sum(d['montant_normal'] + d['montant_samedi'] + d['montant_dimanche'] + d['montant_ferie'] + d['montant_overtime'] for d in details)
+        )
+        return Response({
+            'chantier_id': agence_ids[0] if agence_ids else None,
+            'chantier_nom': 'Agence (planning)',
+            'details': details,
+            'total_heures_normal': sum(d['heures_normal'] for d in details),
+            'total_heures_samedi': sum(d['heures_samedi'] for d in details),
+            'total_heures_dimanche': sum(d['heures_dimanche'] for d in details),
+            'total_heures_ferie': sum(d['heures_ferie'] for d in details),
+            'total_heures_overtime': sum(d['heures_overtime'] for d in details),
+            'total_heures': tot_h,
+            'total_montant_normal': sum(d['montant_normal'] for d in details),
+            'total_montant_samedi': sum(d['montant_samedi'] for d in details),
+            'total_montant_dimanche': sum(d['montant_dimanche'] for d in details),
+            'total_montant_ferie': sum(d['montant_ferie'] for d in details),
+            'total_montant_overtime': sum(d['montant_overtime'] for d in details),
+            'total_montant': tot_m,
+        }, status=200)
+
     return Response(list(chantier_map.values()), status=200)
+
+
+@api_view(['GET'])
+def schedule_yearly_summary(request):
+    """
+    /api/schedule/yearly_summary/?year=YYYY&agence=1[&chantier_id=...]
+    Renvoie {months: [{month:1, total_montant:..., total_heures:..., details:[...]}, ...]}
+    en un seul appel (remplace 12 appels à monthly_summary).
+    """
+    from calendar import monthrange
+    from datetime import date, timedelta as td, datetime as dt
+
+    year_str = request.GET.get('year')
+    if not year_str:
+        return Response({'error': 'Paramètre year requis'}, status=400)
+    year = int(year_str)
+
+    agence_only = request.GET.get('agence') == '1'
+    chantier_id_filter = request.GET.get('chantier_id')
+
+    first_day = date(year, 1, 1)
+    last_day = date(year, 12, 31)
+    fr_holidays = holidays.country_holidays('FR', years=[year])
+
+    def get_date_from_week(yr, week, day_name):
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        day_index = days_of_week.index(day_name)
+        lundi = dt.strptime(f'{yr}-W{int(week):02d}-1', "%G-W%V-%u")
+        return (lundi + td(days=day_index)).date()
+
+    week_year_pairs = set()
+    d = first_day
+    while d <= last_day:
+        week_year_pairs.add((d.isocalendar()[0], d.isocalendar()[1]))
+        d += td(days=1)
+
+    q_objects = Q()
+    for iso_year, iso_week in week_year_pairs:
+        q_objects |= Q(year=iso_year, week=iso_week)
+
+    schedules = Schedule.objects.filter(q_objects).select_related('agent', 'chantier')
+
+    if agence_only:
+        from .ecole_utils import get_agence_chantier_ids
+        agence_ids = get_agence_chantier_ids()
+        if chantier_id_filter and int(chantier_id_filter) in agence_ids:
+            schedules = schedules.filter(chantier_id=int(chantier_id_filter))
+        else:
+            schedules = schedules.filter(chantier_id__in=agence_ids)
+    elif chantier_id_filter:
+        schedules = schedules.filter(chantier_id=chantier_id_filter)
+
+    monthly_agents = {}  # {month: {agent_id: {...}}}
+    for s in schedules:
+        if not s.chantier:
+            continue
+        try:
+            date_creneau = get_date_from_week(s.year, s.week, s.day)
+        except (ValueError, IndexError):
+            continue
+        if date_creneau.year != year:
+            continue
+        m = date_creneau.month
+        agent_id = s.agent.id
+
+        is_journalier = s.agent.type_paiement == 'journalier'
+        if is_journalier:
+            heures_increment = 4
+            taux_horaire = (s.agent.taux_journalier or 0) / 8
+        else:
+            heures_increment = 1
+            taux_horaire = s.agent.taux_Horaire or 0
+
+        if m not in monthly_agents:
+            monthly_agents[m] = {}
+        if agent_id not in monthly_agents[m]:
+            monthly_agents[m][agent_id] = {
+                'agent_id': agent_id,
+                'agent_nom': f"{s.agent.name} {s.agent.surname}",
+                'type_paiement': s.agent.type_paiement,
+                'heures_normal': 0, 'heures_samedi': 0, 'heures_dimanche': 0,
+                'heures_ferie': 0, 'heures_overtime': 0,
+                'montant_normal': 0, 'montant_samedi': 0, 'montant_dimanche': 0,
+                'montant_ferie': 0, 'montant_overtime': 0,
+            }
+        data = monthly_agents[m][agent_id]
+        has_overtime = s.overtime_hours and s.overtime_hours > 0
+
+        if is_journalier:
+            if not has_overtime:
+                data['heures_normal'] += heures_increment
+                data['montant_normal'] += taux_horaire * heures_increment
+        else:
+            if not has_overtime:
+                if date_creneau in fr_holidays:
+                    data['heures_ferie'] += heures_increment
+                    data['montant_ferie'] += taux_horaire * heures_increment * 1.5
+                elif s.day == "Samedi":
+                    data['heures_samedi'] += heures_increment
+                    data['montant_samedi'] += taux_horaire * heures_increment * 1.25
+                elif s.day == "Dimanche":
+                    data['heures_dimanche'] += heures_increment
+                    data['montant_dimanche'] += taux_horaire * heures_increment * 1.5
+                else:
+                    data['heures_normal'] += heures_increment
+                    data['montant_normal'] += taux_horaire * heures_increment
+
+        if has_overtime:
+            overtime_hours = float(s.overtime_hours)
+            data['heures_overtime'] += overtime_hours
+            data['montant_overtime'] += taux_horaire * overtime_hours * 1.25
+
+    result_months = []
+    for m in range(1, 13):
+        agents = monthly_agents.get(m, {})
+        details = sorted(agents.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        keys = ('heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
+                'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime')
+        tot_h = sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
+        tot_m_val = sum(d['montant_normal'] + d['montant_samedi'] + d['montant_dimanche'] + d['montant_ferie'] + d['montant_overtime'] for d in details)
+        result_months.append({
+            'month': m,
+            'details': details,
+            'total_heures': tot_h,
+            'total_montant': tot_m_val,
+        })
+
+    return Response({'year': year, 'months': result_months})
+
 
 def preview_monthly_agents_report(request):
     """
@@ -14889,29 +15584,28 @@ class AgentPrimeViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtrer selon les paramètres de requête"""
-        queryset = AgentPrime.objects.select_related('agent', 'chantier', 'created_by')
+        queryset = AgentPrime.objects.select_related('agent', 'chantier', 'agence', 'created_by')
         
-        # Filtre par mois
         mois = self.request.query_params.get('mois')
         if mois:
             queryset = queryset.filter(mois=int(mois))
         
-        # Filtre par année
         annee = self.request.query_params.get('annee')
         if annee:
             queryset = queryset.filter(annee=int(annee))
         
-        # Filtre par agent
         agent_id = self.request.query_params.get('agent_id')
         if agent_id:
             queryset = queryset.filter(agent_id=int(agent_id))
         
-        # Filtre par chantier
         chantier_id = self.request.query_params.get('chantier_id')
         if chantier_id:
             queryset = queryset.filter(chantier_id=int(chantier_id))
         
-        # Filtre par type d'affectation
+        agence_id = self.request.query_params.get('agence_id')
+        if agence_id:
+            queryset = queryset.filter(agence_id=int(agence_id))
+        
         type_affectation = self.request.query_params.get('type_affectation')
         if type_affectation:
             queryset = queryset.filter(type_affectation=type_affectation)
@@ -15317,6 +16011,27 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         date_frais__lte=end_date
     )
     total_frais = sum(float(f.montant or 0) for f in frais)
+
+    # ========== 3.bis RÉCUPÉRER LES PERTES STOCK DU MOIS ==========
+    # Note: StockLoss n'est pas rattaché à un distributeur dans le modèle actuel.
+    # On agrège donc les pertes du mois et on les rattache par nom de produit.
+    pertes_qs = StockLoss.objects.filter(
+        date_perte__date__gte=start_date,
+        date_perte__date__lte=end_date
+    ).select_related('produit')
+    pertes_by_product = defaultdict(lambda: {'quantite': 0, 'montant': 0.0})
+    total_pertes_unites = 0
+    total_pertes_montant = 0.0
+    for perte in pertes_qs:
+        produit_nom = (perte.produit.nom or '').strip() if perte.produit else ''
+        if not produit_nom:
+            continue
+        qte = int(perte.quantite or 0)
+        montant = float(perte.montant_total or 0)
+        pertes_by_product[produit_nom]['quantite'] += qte
+        pertes_by_product[produit_nom]['montant'] += montant
+        total_pertes_unites += qte
+        total_pertes_montant += montant
     
     # ========== 4. CALCULER LES DONNÉES AGRÉGÉES ==========
     
@@ -15383,6 +16098,10 @@ def preview_distributeur_monthly_report(request, distributeur_id):
             produits_detail[cell_name]['ventes'] += ligne.quantite
             produits_detail[cell_name]['ca'] += ca_ligne
             produits_detail[cell_name]['prix_vente'] = float(ligne.prix_vente or 0)
+
+    # Injecter les pertes (par nom produit) dans le détail
+    for produit_nom, perte_data in pertes_by_product.items():
+        produits_detail[produit_nom]['pertes'] += int(perte_data['quantite'] or 0)
     
     # Calculer bénéfice mouvements
     benefice_mouvements = 0
@@ -15423,6 +16142,8 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         'ca_total': round(ca_total, 2),
         'total_produits_vendus': total_produits_vendus,
         'valeur_stock_reappro': round(valeur_stock_reappro, 2),
+        'total_pertes_unites': int(total_pertes_unites),
+        'total_pertes_montant': round(total_pertes_montant, 2),
         'total_frais': round(total_frais, 2),
         'benefice_total': round(benefice_total, 2),
         # Journal des entrées

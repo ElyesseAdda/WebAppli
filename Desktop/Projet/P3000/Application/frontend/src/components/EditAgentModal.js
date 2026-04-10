@@ -20,6 +20,8 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     address: "",
     phone_Number: "",
     taux_Horaire: "",
+    type_paiement: "horaire",
+    taux_journalier: "",
     conge: "",
     heure_debut: "",
     heure_fin: "",
@@ -123,8 +125,12 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
         surname: agentData.surname,
         address: agentData.address,
         phone_Number: String(agentData.phone_Number),
+        type_paiement: agentData.type_paiement || "horaire",
         taux_Horaire: agentData.taux_Horaire
           ? parseFloat(agentData.taux_Horaire)
+          : null,
+        taux_journalier: agentData.taux_journalier
+          ? parseFloat(agentData.taux_journalier)
           : null,
         conge: agentData.conge ? agentData.conge : null,
         heure_debut: agentData.heure_debut || null,
@@ -133,6 +139,15 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
         heure_pause_fin: agentData.heure_pause_fin || null,
         jours_travail: jours_travail_uniques.join(","),
       };
+      if (agentData.type_paiement === "journalier") {
+        agentDataToSubmit.taux_Horaire = null;
+        agentDataToSubmit.heure_debut = null;
+        agentDataToSubmit.heure_fin = null;
+        agentDataToSubmit.heure_pause_debut = null;
+        agentDataToSubmit.heure_pause_fin = null;
+      } else {
+        agentDataToSubmit.taux_journalier = null;
+      }
       console.log(
         "[DEBUG] Données envoyées à l'API pour modification agent:",
         agentDataToSubmit
@@ -261,6 +276,8 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
                     address: "",
                     phone_Number: "",
                     taux_Horaire: "",
+                    type_paiement: "horaire",
+                    taux_journalier: "",
                     conge: "",
                     heure_debut: "",
                     heure_fin: "",
@@ -396,13 +413,37 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             margin="normal"
           />
           <TextField
-            label="Taux Horaire"
-            name="taux_Horaire"
-            value={agentData.taux_Horaire}
+            label="Type de paiement"
+            name="type_paiement"
+            value={agentData.type_paiement || "horaire"}
             onChange={handleChange}
             fullWidth
             margin="normal"
-          />
+            select
+          >
+            <MenuItem value="horaire">Horaire</MenuItem>
+            <MenuItem value="journalier">Journalier</MenuItem>
+          </TextField>
+          {agentData.type_paiement === "horaire" && (
+            <TextField
+              label="Taux horaire"
+              name="taux_Horaire"
+              value={agentData.taux_Horaire}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+            />
+          )}
+          {agentData.type_paiement === "journalier" && (
+            <TextField
+              label="Taux journalier"
+              name="taux_journalier"
+              value={agentData.taux_journalier}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+            />
+          )}
           <TextField
             label="Congé"
             name="conge"
@@ -411,46 +452,50 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             fullWidth
             margin="normal"
           />
-          <TextField
-            label="Heure de début"
-            name="heure_debut"
-            type="time"
-            value={agentData.heure_debut}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            label="Heure de fin"
-            name="heure_fin"
-            type="time"
-            value={agentData.heure_fin}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            label="Heure de pause début"
-            name="heure_pause_debut"
-            type="time"
-            value={agentData.heure_pause_debut}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            label="Heure de pause fin"
-            name="heure_pause_fin"
-            type="time"
-            value={agentData.heure_pause_fin}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
-          />
+          {agentData.type_paiement === "horaire" && (
+            <>
+              <TextField
+                label="Heure de début"
+                name="heure_debut"
+                type="time"
+                value={agentData.heure_debut}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Heure de fin"
+                name="heure_fin"
+                type="time"
+                value={agentData.heure_fin}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Heure de pause début"
+                name="heure_pause_debut"
+                type="time"
+                value={agentData.heure_pause_debut}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Heure de pause fin"
+                name="heure_pause_fin"
+                type="time"
+                value={agentData.heure_pause_fin}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          )}
           <TextField
             label="Jours de travail"
             name="jours_travail"

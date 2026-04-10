@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FaSync } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
@@ -26,7 +26,7 @@ const CATEGORY_COLORS = {
   facture: "#FF8042",
 };
 
-const ChantierRecapFinancierTab = ({ chantierId }) => {
+const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   const {
     filters,
     setFilters,
@@ -40,6 +40,7 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
 
   // State local pour la donnée API et le statut
   const [data, setData] = useState(null);
+  const [tauxFacturationData, setTauxFacturationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -81,13 +82,22 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
       }
       const res = await axios.get(url);
       setData(res.data);
-      
+
       // Recharger aussi la main d'oeuvre depuis les mêmes données
       const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || {
         total: 0,
         documents: [],
       };
       setMainOeuvreData(mainOeuvre);
+
+      try {
+        const resTaux = await axios.get(
+          `/api/chantier/${chantierId}/taux-facturation/`
+        );
+        setTauxFacturationData(resTaux.data);
+      } catch {
+        setTauxFacturationData(null);
+      }
     } catch (err) {
       setError("Erreur lors du chargement des données financières.");
     } finally {
@@ -132,6 +142,15 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
     // eslint-disable-next-line
   }, [chantierId, JSON.stringify(periode), global]);
 
+  const wasActiveRef = useRef(isActive);
+  useEffect(() => {
+    if (chantierId && isActive && !wasActiveRef.current) {
+      fetchData();
+    }
+    wasActiveRef.current = isActive;
+    // eslint-disable-next-line
+  }, [chantierId, isActive]);
+
   // Gestion du changement de période
   const handleMoisChange = (e) => {
     setPeriode({ ...periode, mois: Number(e.target.value) });
@@ -155,8 +174,6 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* Section de synthèse financière */}
-      <RecapSyntheseSection data={data} />
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box display="flex" alignItems="center" gap={2}>
           <Typography variant="h5" sx={{ flex: 1 }}>
@@ -222,7 +239,13 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
       ) : error ? (
         <Alert severity="error">{error}</Alert>
       ) : data ? (
-        <Grid container spacing={3}>
+        <>
+          <RecapSyntheseSection
+            data={data}
+            depensesPaye={getDepensesData()}
+            tauxFacturation={tauxFacturationData}
+          />
+          <Grid container spacing={3}>
           {/* Sorties */}
           <Grid item xs={12} md={6}>
             <RecapSection
@@ -262,6 +285,7 @@ const ChantierRecapFinancierTab = ({ chantierId }) => {
             />
           </Grid>
         </Grid>
+        </>
       ) : null}
     </Box>
   );
