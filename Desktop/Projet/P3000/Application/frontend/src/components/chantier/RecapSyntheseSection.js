@@ -32,24 +32,53 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
         )
       : 0;
 
-  // Bénéfice = encaissements (paiements reçus) − coûts chantier payés (MO + ST + matériel)
-  const benefice = total_paiements_recus - cout_chantier;
+  // Bénéfice = marché (HT) + avenants + factures (TTC, comme l’onglet Info) − coût chantier — pas les paiements reçus
+  const total_marche_avenants_factures =
+    montant_ht + montant_avenants_et_factures;
+  const benefice = total_marche_avenants_factures - cout_chantier;
 
-  // Camembert = répartition des encaissements : coût chantier vs solde (bénéfice). Pas de part « taux fixe » ici.
-  const pieData = [
-    {
-      id: "Coût chantier",
-      label: "Coût chantier",
-      value: cout_chantier,
-      color: "#FF7043",
-    },
-    {
-      id: "Bénéfice",
-      label: "Bénéfice",
-      value: Math.max(benefice, 0),
-      color: "#43A047",
-    },
-  ];
+  // Camembert : sous « CA » (marché + av. + fact.), coûts vs bénéfice ; si bénéfice < 0, CA vs dépassement (coûts − CA)
+  let pieData;
+  if (benefice >= 0) {
+    pieData = [
+      {
+        id: "Coût chantier",
+        label: "Coût chantier",
+        value: cout_chantier,
+        color: "#FF7043",
+      },
+      {
+        id: "Bénéfice",
+        label: "Bénéfice",
+        value: benefice,
+        color: "#43A047",
+      },
+    ];
+  } else if (total_marche_avenants_factures > 0) {
+    pieData = [
+      {
+        id: "ca",
+        label: "Marché + av. + fact.",
+        value: total_marche_avenants_factures,
+        color: "#1976d2",
+      },
+      {
+        id: "depassement",
+        label: "Dépassement",
+        value: -benefice,
+        color: "#d32f2f",
+      },
+    ];
+  } else {
+    pieData = [
+      {
+        id: "Coût chantier",
+        label: "Coût chantier",
+        value: Math.max(cout_chantier, 0.0001),
+        color: "#FF7043",
+      },
+    ];
+  }
 
   // Déterminer dynamiquement la taille de police
   const getFontSize = (value) => {
