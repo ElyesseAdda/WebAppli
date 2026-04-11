@@ -16,6 +16,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { FaSync } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
+import RecapTabsSection from "./RecapTabsSection";
 import RecapSyntheseSection from "./RecapSyntheseSection";
 
 const CATEGORY_COLORS = {
@@ -247,18 +248,13 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
           />
           <Grid container spacing={3}>
           {/* Sorties */}
-          <Grid item xs={12} md={6}>
-            <RecapSection
-              title={`Dépenses`}
-              data={getDepensesData()}
-              colors={CATEGORY_COLORS}
-              chantierId={chantierId}
-              periode={periode}
-              refreshRecap={fetchData}
-            />
-            <RecapSection
-              title={`Dépenses restantes`}
-              data={data.sorties.reste_a_payer}
+          <Grid item xs={12}>
+            <RecapTabsSection
+              title="Dépenses"
+              tabs={[
+                { label: "Payées", data: getDepensesData() },
+                { label: "Restantes", data: data.sorties.reste_a_payer }
+              ]}
               colors={CATEGORY_COLORS}
               chantierId={chantierId}
               periode={periode}
@@ -266,18 +262,13 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             />
           </Grid>
           {/* Entrées */}
-          <Grid item xs={12} md={6}>
-            <RecapSection
-              title={`Paiements reçus`}
-              data={data.entrees.paye}
-              colors={CATEGORY_COLORS}
-              chantierId={chantierId}
-              periode={periode}
-              refreshRecap={fetchData}
-            />
-            <RecapSection
-              title={`Paiements en attente`}
-              data={data.entrees.reste_a_encaisser}
+          <Grid item xs={12}>
+            <RecapTabsSection
+              title="Paiements"
+              tabs={[
+                { label: "Reçus", data: data.entrees.paye },
+                { label: "En attente", data: data.entrees.reste_a_encaisser }
+              ]}
               colors={CATEGORY_COLORS}
               chantierId={chantierId}
               periode={periode}
