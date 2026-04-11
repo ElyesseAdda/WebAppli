@@ -1,60 +1,143 @@
-import { Box, Grid, Paper, Typography, Card, CardContent } from "@mui/material";
-import { ResponsivePie } from "@nivo/pie";
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  Card,
+  CardContent,
+  CircularProgress,
+} from "@mui/material";
 import React from "react";
+import {
+  Area,
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Cell,
+} from "recharts";
 
-// Sous-composant pour un affichage moderne des indicateurs
+const COL_MAT = "#FF9800"; // Orange (pour correspondre au reste de la page)
+const COL_MO = "#2196F3"; // Bleu
+const COL_ST = "#4CAF50"; // Vert
+const COL_COUT_CUM = "rgba(211, 47, 47, 0.1)"; // Rouge très léger
+const COL_COUT_LINE = "#d32f2f"; // Rouge (comme dans les cartes)
+const COL_BENEF = "#43A047"; // Vert
+
+const formatEuro = (v) =>
+  Number(v || 0).toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 const StatCard = ({ title, amount, color, isNegative = false }) => (
-  <Card 
-    elevation={0} 
-    sx={{ 
-      height: '100%',
+  <Card
+    elevation={0}
+    sx={{
+      height: "100%",
       borderRadius: 3,
-      border: '1px solid',
-      borderColor: 'divider',
-      position: 'relative',
-      overflow: 'hidden',
-      transition: 'transform 0.2s, box-shadow 0.2s',
-      '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: '0 4px 20px 0 rgba(0,0,0,0.05)',
-      }
+      border: "1px solid",
+      borderColor: "divider",
+      position: "relative",
+      overflow: "hidden",
+      transition: "transform 0.2s, box-shadow 0.2s",
+      "&:hover": {
+        transform: "translateY(-2px)",
+        boxShadow: "0 4px 20px 0 rgba(0,0,0,0.05)",
+      },
     }}
   >
-    {/* Ligne de couleur d'accentuation sur la gauche */}
-    <Box 
-      sx={{ 
-        position: 'absolute', 
-        left: 0, 
-        top: 0, 
-        bottom: 0, 
-        width: '4px', 
-        bgcolor: color 
-      }} 
+    <Box
+      sx={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: "4px",
+        bgcolor: color,
+      }}
     />
-    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-      <Typography 
-        variant="body2" 
-        color="text.secondary" 
-        fontWeight={600} 
-        gutterBottom 
-        sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}
+    <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        fontWeight={600}
+        gutterBottom
+        sx={{
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+          fontSize: "0.7rem",
+        }}
       >
         {title}
       </Typography>
-      <Typography 
-        variant="h6" 
+      <Typography
+        variant="h6"
         style={{ color: color }}
-        sx={{ fontWeight: 700, display: 'flex', alignItems: 'baseline', gap: 0.5 }}
+        sx={{ fontWeight: 700, display: "flex", alignItems: "baseline", gap: 0.5 }}
       >
         {isNegative ? "- " : ""}
         {amount.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
-        <Typography component="span" variant="body2" fontWeight={600} style={{ color: color }}>€</Typography>
+        <Typography component="span" variant="body2" fontWeight={600} style={{ color: color }}>
+          €
+        </Typography>
       </Typography>
     </CardContent>
   </Card>
 );
 
-const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
+const ChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        bgcolor: "background.paper",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        boxShadow: 2,
+        maxWidth: 280,
+      }}
+    >
+      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+        {label}
+      </Typography>
+      <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.5 }}>
+        Cliquer sur une barre pour le détail du mois
+      </Typography>
+      <Typography variant="body2">Matériel : {formatEuro(row.materiel)} €</Typography>
+      <Typography variant="body2">Main d&apos;œuvre : {formatEuro(row.main_oeuvre)} €</Typography>
+      <Typography variant="body2">Sous-traitant : {formatEuro(row.sous_traitant)} €</Typography>
+      <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={600}>
+        Coût du mois : {formatEuro(row.cout_chantier)} €
+      </Typography>
+      <Typography variant="body2">Coût cumulé : {formatEuro(row.cout_chantier_cumule)} €</Typography>
+      {row.benefice != null && (
+        <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={600}>
+          Bénéfice (fin de mois) : {formatEuro(row.benefice)} €
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+const RecapSyntheseSection = ({
+  data,
+  depensesPaye,
+  tauxFacturation,
+  syntheseMensuelle,
+  syntheseMensuelleLoading,
+}) => {
+  const [selectedMonth, setSelectedMonth] = React.useState(null);
+
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
   const montant_ht = Number(data.montant_ht || 0);
@@ -64,11 +147,8 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
   const total_materiel = Number(paye.materiel?.total || 0);
   const total_main_oeuvre = Number(paye.main_oeuvre?.total || 0);
   const total_sous_traitant = Number(paye.sous_traitant?.total || 0);
-  // Coût chantier (période / filtre courant) — cartes et alignement avec les tableaux du récap
-  const cout_chantier =
-    total_main_oeuvre + total_sous_traitant + total_materiel;
+  const cout_chantier = total_main_oeuvre + total_sous_traitant + total_materiel;
 
-  // En mode mois : l’API fournit les coûts cumulés jusqu’à fin du mois (bénéfice « tel qu’à cette date »). En mode global : même base que la carte coût.
   const cumulCout = data.cout_chantier_cumul_jusqua_fin_mois;
   const cout_chantier_pour_benefice =
     cumulCout != null &&
@@ -77,164 +157,235 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
       ? Number(cumulCout.total)
       : cout_chantier;
 
-  // Calcul du total des paiements reçus
   const total_paiements_recus =
     data.entrees && data.entrees.paye
-      ? Object.values(data.entrees.paye).reduce(
-          (acc, cat) => acc + (cat.total || 0),
-          0
-        )
+      ? Object.values(data.entrees.paye).reduce((acc, cat) => acc + (cat.total || 0), 0)
       : 0;
 
-  // Bénéfice = marché (HT) + avenants + factures (TTC, comme l’onglet Info) − coût chantier — pas les paiements reçus
-  const total_marche_avenants_factures =
-    montant_ht + montant_avenants_et_factures;
-  const benefice =
-    total_marche_avenants_factures - cout_chantier_pour_benefice;
+  const total_marche_avenants_factures = montant_ht + montant_avenants_et_factures;
+  const benefice = total_marche_avenants_factures - cout_chantier_pour_benefice;
 
-  // Camembert : coûts cumulés (global) vs bénéfice
-  let pieData;
-  if (benefice >= 0) {
-    pieData = [
-      {
-        id: "Coût chantier",
-        label: "Coût chantier",
-        value: cout_chantier_pour_benefice,
-        color: "#FF7043",
-      },
-      {
-        id: "Bénéfice",
-        label: "Bénéfice",
-        value: benefice,
-        color: "#43A047",
-      },
-    ];
-  } else if (total_marche_avenants_factures > 0) {
-    pieData = [
-      {
-        id: "ca",
-        label: "Marché + av. + fact.",
-        value: total_marche_avenants_factures,
-        color: "#1976d2",
-      },
-      {
-        id: "depassement",
-        label: "Dépassement",
-        value: -benefice,
-        color: "#d32f2f",
-      },
-    ];
-  } else {
-    pieData = [
-      {
-        id: "Coût chantier",
-        label: "Coût chantier",
-        value: Math.max(cout_chantier_pour_benefice, 0.0001),
-        color: "#FF7043",
-      },
-    ];
-  }
+  const chartData = React.useMemo(() => {
+    const rows = syntheseMensuelle?.par_mois;
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const base = total_marche_avenants_factures;
+    return rows.map((row) => ({
+      ...row,
+      benefice: base - Number(row.cout_chantier_cumule || 0),
+      cout_cumul_line: Number(row.cout_chantier_cumule || 0),
+    }));
+  }, [syntheseMensuelle, total_marche_avenants_factures]);
 
-  // Déterminer dynamiquement la taille de police
-  const getFontSize = (value) => {
-    const length = String(Math.floor(Math.abs(value))).length;
-    if (length <= 2) return 32;
-    if (length === 3) return 28;
-    if (length === 4) return 24;
-    if (length === 5) return 20;
-    if (length === 6) return 18;
-    return 16;
-  };
+  const displayCards = selectedMonth ? [
+    { title: `Matériel (${selectedMonth.label})`, amount: Number(selectedMonth.materiel), color: COL_MAT },
+    { title: `Main d'œuvre (${selectedMonth.label})`, amount: Number(selectedMonth.main_oeuvre), color: COL_MO },
+    { title: `Sous-traitant (${selectedMonth.label})`, amount: Number(selectedMonth.sous_traitant), color: COL_ST },
+    { title: `Coût du mois (${selectedMonth.label})`, amount: Number(selectedMonth.cout_chantier), color: COL_COUT_LINE, isNegative: true },
+    { title: `Coût cumulé (fin ${selectedMonth.label})`, amount: Number(selectedMonth.cout_chantier_cumule), color: COL_COUT_LINE, isNegative: true },
+    { title: `Bénéfice (fin ${selectedMonth.label})`, amount: Number(selectedMonth.benefice), color: Number(selectedMonth.benefice) >= 0 ? COL_BENEF : "#d32f2f" }
+  ] : [
+    { title: "Marché", amount: montant_ht, color: "#1976d2" },
+    { title: "Avenants + Factures", amount: montant_avenants_et_factures, color: "#1976d2" },
+    { title: "Total", amount: total_marche_avenants_factures, color: "#1565c0" },
+    { title: "Paiements reçus", amount: total_paiements_recus, color: COL_BENEF },
+    { title: "Coût chantier", amount: cout_chantier, color: "#d32f2f", isNegative: true },
+    { title: "Bénéfice", amount: benefice, color: benefice >= 0 ? COL_BENEF : "#d32f2f" }
+  ];
 
   return (
-    <Paper 
-      sx={{ 
-        p: 3, 
-        mb: 3, 
-        borderRadius: 4, 
-        boxShadow: '0 4px 24px 0 rgba(0,0,0,0.06)' 
-      }} 
+    <Paper
+      sx={{
+        p: 3,
+        mb: 3,
+        borderRadius: 4,
+        boxShadow: "0 4px 24px 0 rgba(0,0,0,0.06)",
+      }}
       elevation={0}
     >
-      <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: 'text.primary' }}>
+      <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: "text.primary" }}>
         Synthèse Financière du Chantier
       </Typography>
-      
-      <Grid container spacing={4} alignItems="center">
-        {/* Section Gauche : Textes dans des cartes */}
-        <Grid item xs={12} md={8}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={4}>
-              <StatCard title="Marché" amount={montant_ht} color="#1976d2" />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={4}>
-              <StatCard title="Avenants + Factures" amount={montant_avenants_et_factures} color="#1976d2" />
-            </Grid>
 
-            <Grid item xs={12} sm={6} md={4}>
-              <StatCard
-                title="Total"
-                amount={total_marche_avenants_factures}
-                color="#1565c0"
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={4}>
-              <StatCard title="Paiements reçus" amount={total_paiements_recus} color="#43A047" />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={4}>
-              <StatCard title="Coût chantier" amount={cout_chantier} color="#d32f2f" isNegative={true} />
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={4}>
-              <StatCard 
-                title="Bénéfice" 
-                amount={benefice} 
-                color={benefice >= 0 ? "#43A047" : "#d32f2f"} 
-              />
-            </Grid>
+      <Grid container spacing={4} alignItems="stretch">
+        <Grid item xs={12}>
+          <Grid container spacing={2}>
+            {displayCards.map((card, idx) => (
+              <Grid item xs={12} sm={6} md={4} key={idx}>
+                <StatCard title={card.title} amount={card.amount} color={card.color} isNegative={card.isNegative} />
+              </Grid>
+            ))}
           </Grid>
         </Grid>
 
-        {/* Section Droite : PieChart */}
-        <Grid item xs={12} md={4}>
-          <Box sx={{ width: '100%', maxWidth: 260, height: 260, position: "relative", mx: "auto" }}>
-            <ResponsivePie
-              data={pieData}
-              margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              innerRadius={0.75}
-              padAngle={2}
-              cornerRadius={4}
-              colors={{ datum: "data.color" }}
-              borderWidth={0}
-              enableArcLabels={false}
-              enableArcLinkLabels={false}
-              activeOuterRadiusOffset={8}
-            />
-            {/* Afficher le bénéfice au centre */}
-            <Box
-              sx={{
-                position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                pointerEvents: "none", flexDirection: "column",
-              }}
-            >
-              <Typography
-                variant="h4"
-                fontWeight={800}
+        <Grid item xs={12}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            {selectedMonth 
+              ? `Détails du mois : ${selectedMonth.label} (Cliquez à nouveau sur le graphique pour revenir à la synthèse globale)`
+              : `Évolution par mois (cliquez sur un mois pour voir ses détails dans les cartes ci-dessus)`}
+          </Typography>
+          <Box sx={{ 
+            width: "100%", 
+            height: 380, 
+            position: "relative",
+            "& .recharts-bar-rectangle path": {
+              transition: "all 0.25s ease-in-out",
+              transformOrigin: "center",
+            },
+            "& .recharts-bar-rectangle path:hover": {
+              filter: "brightness(1.1)",
+            },
+            "& .recharts-bar-rectangle path:active": {
+              transform: "scale(0.98)",
+              filter: "brightness(0.9)",
+            }
+          }}>
+            {syntheseMensuelleLoading ? (
+              <Box
                 sx={{
-                  fontSize: getFontSize(benefice),
-                  color: benefice >= 0 ? "#43A047" : "#d32f2f",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
                 }}
               >
-                {Number(benefice).toLocaleString("fr-FR", { minimumFractionDigits: 0 })}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.7rem' }}>
-                Bénéfice
-              </Typography>
-            </Box>
+                <CircularProgress />
+              </Box>
+            ) : chartData.length === 0 ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  border: "1px dashed",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                }}
+              >
+                <Typography color="text.secondary">
+                  Pas encore de coûts ventilés par mois pour ce chantier.
+                </Typography>
+              </Box>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 20, right: 20, left: 10, bottom: 20 }}
+                  barCategoryGap="25%"
+                  barSize={40} // Barres plus épaisses et uniformes
+                  onClick={(state) => {
+                    if (state && state.activePayload && state.activePayload.length > 0) {
+                      const clickedData = state.activePayload[0].payload;
+                      if (selectedMonth && selectedMonth.label === clickedData.label) {
+                        setSelectedMonth(null); // Toggle off
+                      } else {
+                        setSelectedMonth(clickedData);
+                      }
+                    } else {
+                      setSelectedMonth(null);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+                  <XAxis 
+                    dataKey="label" 
+                    tick={{ fontSize: 12, fill: '#666', fontWeight: 500 }} 
+                    interval={0} 
+                    axisLine={{ stroke: '#e0e0e0' }}
+                    tickLine={false}
+                    dy={10}
+                  />
+                  <YAxis
+                    yAxisId="mois"
+                    tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                    width={50}
+                    tick={{ fontSize: 12, fill: '#666' }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-10}
+                  />
+                  <YAxis
+                    yAxisId="cumul"
+                    orientation="right"
+                    tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                    width={50}
+                    tick={{ fontSize: 12, fill: '#666' }}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={10}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(0, 0, 0, 0.04)' }} // Survol plus doux sur la colonne
+                    content={() => null} // On désactive l'affichage du tooltip flottant
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: 20 }} 
+                    iconType="circle" // Légende avec des petits ronds au lieu de carrés
+                    iconSize={10}
+                  />
+                  {/* Les Barres sont rendues en PREMIER pour être en arrière-plan */}
+                  <Bar
+                    yAxisId="mois"
+                    dataKey="materiel"
+                    name="Matériel"
+                    stackId="cout"
+                    fill={COL_MAT}
+                    radius={[0, 0, 4, 4]} // Arrondi en bas
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-mat-${index}`} fillOpacity={selectedMonth && selectedMonth.label !== entry.label ? 0.3 : 1} />
+                    ))}
+                  </Bar>
+                  <Bar
+                    yAxisId="mois"
+                    dataKey="main_oeuvre"
+                    name="Main d'œuvre"
+                    stackId="cout"
+                    fill={COL_MO}
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-mo-${index}`} fillOpacity={selectedMonth && selectedMonth.label !== entry.label ? 0.3 : 1} />
+                    ))}
+                  </Bar>
+                  <Bar
+                    yAxisId="mois"
+                    dataKey="sous_traitant"
+                    name="Sous-traitant"
+                    stackId="cout"
+                    fill={COL_ST}
+                    radius={[4, 4, 0, 0]} // Arrondi en haut
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-st-${index}`} fillOpacity={selectedMonth && selectedMonth.label !== entry.label ? 0.3 : 1} />
+                    ))}
+                  </Bar>
+                  {/* Les Lignes et Zones sont rendues en DERNIER pour être au premier plan */}
+                  <Area
+                    yAxisId="cumul"
+                    type="monotone"
+                    dataKey="cout_cumul_line"
+                    name="Coût cumulé"
+                    stroke={COL_COUT_LINE}
+                    fill={COL_COUT_CUM}
+                    fillOpacity={1}
+                    strokeWidth={3} // Ligne plus épaisse
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    yAxisId="cumul"
+                    type="monotone"
+                    dataKey="benefice"
+                    name="Bénéfice"
+                    stroke={COL_BENEF}
+                    strokeWidth={3} // Ligne plus épaisse
+                    dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} // Points plus jolis
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
           </Box>
         </Grid>
       </Grid>

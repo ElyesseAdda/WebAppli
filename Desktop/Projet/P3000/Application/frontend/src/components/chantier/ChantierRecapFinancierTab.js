@@ -28,20 +28,13 @@ const CATEGORY_COLORS = {
 };
 
 const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
-  const {
-    filters,
-    setFilters,
-    openAccordions,
-    setOpenAccordions,
-    periode,
-    setPeriode,
-    global,
-    setGlobal,
-  } = useRecapFinancier();
+  const { periode, setPeriode, global, setGlobal } = useRecapFinancier();
 
   // State local pour la donnée API et le statut
   const [data, setData] = useState(null);
   const [tauxFacturationData, setTauxFacturationData] = useState(null);
+  const [syntheseMensuelle, setSyntheseMensuelle] = useState(null);
+  const [syntheseMensuelleLoading, setSyntheseMensuelleLoading] = useState(false);
   /** Premier chargement ou changement de chantier : masque le corps du récap */
   const [loading, setLoading] = useState(false);
   /** Changement mois / année / global : mise à jour sans démonter la page */
@@ -139,6 +132,27 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
     }
     fetchData({ background: true });
   }, [chantierId, periode.mois, periode.annee, global, fetchData]);
+
+  /** Séries mensuelles pour le graphique de synthèse (indépendant du mois / global du récap) */
+  useEffect(() => {
+    if (!chantierId) return;
+    let cancelled = false;
+    setSyntheseMensuelleLoading(true);
+    axios
+      .get(`/api/chantier/${chantierId}/recap-synthese-mensuelle/`)
+      .then((res) => {
+        if (!cancelled) setSyntheseMensuelle(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setSyntheseMensuelle(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSyntheseMensuelleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chantierId]);
 
   /** Retour sur l’onglet récap : rafraîchir sans masquer l’UI (évite doublon au 1er montage si isActive déjà true) */
   const prevIsActiveRef = useRef(isActive);
@@ -269,6 +283,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             data={data}
             depensesPaye={getDepensesData()}
             tauxFacturation={tauxFacturationData}
+            syntheseMensuelle={syntheseMensuelle}
+            syntheseMensuelleLoading={syntheseMensuelleLoading}
           />
           <Grid container spacing={3}>
           {/* Sorties */}

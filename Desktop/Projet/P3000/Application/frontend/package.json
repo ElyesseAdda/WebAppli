@@ -46,6 +46,7 @@
     "react-router-dom": "^6.26.0",
     "react-select": "^5.10.2",
     "react-toastify": "^10.0.6",
-    "react-tooltip": "^5.28.0"
+    "react-tooltip": "^5.28.0",
+    "recharts": "^2.12.7"
   }
 }

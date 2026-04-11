@@ -259,13 +259,15 @@ const RecapTabsSection = ({
           </Grid>
         </Grid>
 
-        {/* Section Droite : PieChart */}
+        {/* Section Droite : PieChart (Style Jauge / Demi-cercle) */}
         <Grid item xs={12} md={showDocumentsPane ? 12 : 5}>
-          <Box sx={{ width: '100%', maxWidth: 240, height: 240, position: "relative", mx: "auto" }}>
+          <Box sx={{ width: '100%', maxWidth: 300, height: 200, position: "relative", mx: "auto", mt: 2 }}>
             <ResponsivePie
               data={pieData}
               margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              innerRadius={0.75}
+              startAngle={-90}
+              endAngle={90}
+              innerRadius={0.8}
               padAngle={2}
               cornerRadius={4}
               colors={{ datum: "data.color" }}
@@ -275,11 +277,11 @@ const RecapTabsSection = ({
               activeOuterRadiusOffset={8}
               activeId={hoveredCategory}
               tooltip={({ datum }) => (
-                <Box sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1, boxShadow: 1 }}>
-                  <Typography variant="body2" fontWeight={700}>
+                <Box sx={{ p: 1.5, bgcolor: 'background.paper', borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+                  <Typography variant="body2" fontWeight={800} sx={{ textTransform: 'uppercase', mb: 0.5 }}>
                     {datum.label}
                   </Typography>
-                  <Typography variant="body2">
+                  <Typography variant="body1" color="primary.main" fontWeight={700}>
                     {Number(datum.value).toLocaleString("fr-FR", {
                       minimumFractionDigits: 2,
                     })}{" "}
@@ -288,14 +290,13 @@ const RecapTabsSection = ({
                 </Box>
               )}
             />
-            {/* Afficher la somme totale au centre du Pie Chart */}
+            {/* Afficher la somme totale au centre-bas de la jauge */}
             <Box
               sx={{
                 position: "absolute",
-                top: 0,
+                bottom: "10%",
                 left: 0,
                 width: "100%",
-                height: "100%",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -303,18 +304,23 @@ const RecapTabsSection = ({
                 flexDirection: "column",
               }}
             >
-              <Typography
-                variant="h4"
-                fontWeight={800}
-                sx={{ fontSize: getFontSize(totalSum), color: 'text.primary' }}
-              >
-                {Number(totalSum).toLocaleString("fr-FR", {
-                  minimumFractionDigits: 0,
-                })}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.7rem' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', fontSize: '0.75rem' }}>
                 Total
               </Typography>
+              <Box display="flex" alignItems="baseline" gap={0.5}>
+                <Typography
+                  variant="h4"
+                  fontWeight={800}
+                  sx={{ fontSize: getFontSize(totalSum), color: 'text.primary', lineHeight: 1 }}
+                >
+                  {Number(totalSum).toLocaleString("fr-FR", {
+                    minimumFractionDigits: 0,
+                  })}
+                </Typography>
+                <Typography variant="body2" fontWeight={700} color="text.secondary">
+                  €
+                </Typography>
+              </Box>
             </Box>
           </Box>
         </Grid>

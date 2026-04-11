@@ -11869,6 +11869,148 @@ class RecapFinancierChantierAPIView(APIView):
         serializer = RecapFinancierSerializer(data)
         return Response(serializer.data)
 
+
+class RecapSyntheseMensuelleAPIView(APIView):
+    """
+    Séries mensuelles pour le graphique de synthèse (indépendant du filtre mois/année du récap).
+    Même logique de ventilation que le récap : matériel (paiements mensuels), ST (mois de date_reception),
+    main d'œuvre (créneaux + primes du mois).
+    """
+    permission_classes = []
+
+    def get(self, request, chantier_id):
+        from collections import defaultdict
+
+        chantier = Chantier.objects.get(pk=chantier_id)
+        buckets = defaultdict(lambda: {"materiel": 0.0, "main_oeuvre": 0.0, "sous_traitant": 0.0})
+
+        # Matériel : mois / année saisis
+        for pm in PaiementFournisseurMateriel.objects.filter(chantier=chantier):
+            try:
+                y, m = int(pm.annee), int(pm.mois)
+            except (TypeError, ValueError):
+                continue
+            amt = float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0)
+            buckets[(y, m)]["materiel"] += amt
+
+        # Sous-traitant : même règle que le récap (attribution au mois de date_reception de la facture)
+        for p in PaiementFactureSousTraitant.objects.filter(facture__chantier=chantier).select_related(
+            "facture"
+        ):
+            dr = p.facture.date_reception
+            if not dr:
+                continue
+            buckets[(dr.year, dr.month)]["sous_traitant"] += float(p.montant_paye)
+
+        # Primes chantier
+        for pr in AgentPrime.objects.filter(chantier=chantier, type_affectation="chantier"):
+            try:
+                y, m = int(pr.annee), int(pr.mois)
+            except (TypeError, ValueError):
+                continue
+            buckets[(y, m)]["main_oeuvre"] += float(pr.montant)
+
+        # Planning (créneaux)
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        years_in_schedules = list(
+            Schedule.objects.filter(chantier=chantier).values_list("year", flat=True).distinct()
+        )
+        fr_holidays = set()
+        for yy in years_in_schedules:
+            if yy is None:
+                continue
+            try:
+                fr_holidays.update(holidays.country_holidays("FR", years=[int(yy)]))
+            except (TypeError, ValueError):
+                continue
+
+        for s in Schedule.objects.filter(chantier=chantier).select_related("agent"):
+            try:
+                day_index = days_of_week.index(s.day)
+            except ValueError:
+                continue
+            try:
+                lundi = datetime.strptime(f"{s.year}-W{int(s.week):02d}-1", "%G-W%V-%u")
+            except ValueError:
+                continue
+            date_creneau = (lundi + timedelta(days=day_index)).date()
+            yb, mb = date_creneau.year, date_creneau.month
+
+            is_journalier = s.agent.type_paiement == "journalier"
+            if is_journalier:
+                taux_horaire = (s.agent.taux_journalier or 0) / 8
+                heures_increment = 4
+            else:
+                taux_horaire = s.agent.taux_Horaire or 0
+                heures_increment = 1
+
+            if is_journalier:
+                cost = taux_horaire * heures_increment
+            else:
+                if date_creneau in fr_holidays:
+                    cost = taux_horaire * heures_increment * 1.5
+                elif s.day == "Samedi":
+                    cost = taux_horaire * heures_increment * 1.25
+                elif s.day == "Dimanche":
+                    cost = taux_horaire * heures_increment * 1.5
+                else:
+                    cost = taux_horaire * heures_increment
+            buckets[(yb, mb)]["main_oeuvre"] += cost
+
+        if not buckets:
+            return Response({"par_mois": []})
+
+        mois_labels = [
+            "janv.",
+            "févr.",
+            "mars",
+            "avr.",
+            "mai",
+            "juin",
+            "juil.",
+            "août",
+            "sept.",
+            "oct.",
+            "nov.",
+            "déc.",
+        ]
+
+        keys_sorted = sorted(buckets.keys())
+        y1, m1 = keys_sorted[0]
+        y2, m2 = keys_sorted[-1]
+
+        par_mois = []
+        cumul = 0.0
+        y, m = y1, m1
+        while True:
+            b = buckets[(y, m)]
+            mat = b["materiel"]
+            mo = b["main_oeuvre"]
+            st = b["sous_traitant"]
+            cout = mat + mo + st
+            cumul += cout
+            par_mois.append(
+                {
+                    "annee": y,
+                    "mois": m,
+                    "label": f"{mois_labels[m - 1]} {y}",
+                    "materiel": round(mat, 2),
+                    "main_oeuvre": round(mo, 2),
+                    "sous_traitant": round(st, 2),
+                    "cout_chantier": round(cout, 2),
+                    "cout_chantier_cumule": round(cumul, 2),
+                }
+            )
+            if (y, m) == (y2, m2):
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+
+        return Response({"par_mois": par_mois})
+
+
 class PaiementFournisseurMaterielAPIView(APIView):
     permission_classes = [AllowAny]
 
