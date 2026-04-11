@@ -11775,6 +11775,87 @@ class RecapFinancierChantierAPIView(APIView):
         taux_fixe = chantier.taux_fixe or 0
         montant_taux_fixe = montant_ht * taux_fixe / 100
 
+        # Coûts chantier cumulés jusqu'à la fin du mois affiché (bénéfice « tel qu'à cette date »)
+        cout_chantier_cumul_jusqua_fin_mois = None
+        if date_debut and date_fin:
+            yf, mf = int(annee), int(mois)
+
+            pm_cumul = PaiementFournisseurMateriel.objects.filter(chantier=chantier).filter(
+                Q(annee__lt=yf) | Q(annee=yf, mois__lte=mf)
+            )
+            c_mat = float(sum(
+                (float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0))
+                for pm in pm_cumul
+            ))
+
+            c_st = float(sum(
+                float(p.montant_paye)
+                for p in PaiementFactureSousTraitant.objects.filter(
+                    facture__chantier=chantier,
+                    date_paiement_reel__lte=date_fin,
+                )
+            ))
+
+            sch_year_min = Schedule.objects.filter(chantier=chantier).aggregate(
+                mn=Min('year')
+            )['mn']
+            _ymin = int(sch_year_min) if sch_year_min is not None else date_fin.year
+            _ymax = int(date_fin.year)
+            fr_h_cumul = set()
+            for yy in range(_ymin, _ymax + 1):
+                fr_h_cumul.update(holidays.country_holidays('FR', years=[yy]))
+
+            days_of_week_c = [
+                "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"
+            ]
+            c_mo = 0.0
+            for s in Schedule.objects.filter(chantier=chantier).select_related('agent'):
+                try:
+                    day_index = days_of_week_c.index(s.day)
+                except ValueError:
+                    continue
+                lundi = datetime.strptime(
+                    f'{s.year}-W{int(s.week):02d}-1', "%G-W%V-%u"
+                )
+                date_creneau = (lundi + timedelta(days=day_index)).date()
+                if date_creneau > date_fin:
+                    continue
+
+                is_journalier = s.agent.type_paiement == 'journalier'
+                if is_journalier:
+                    taux_horaire = (s.agent.taux_journalier or 0) / 8
+                    heures_increment = 4
+                else:
+                    taux_horaire = s.agent.taux_Horaire or 0
+                    heures_increment = 1
+
+                if is_journalier:
+                    c_mo += taux_horaire * heures_increment
+                else:
+                    if date_creneau in fr_h_cumul:
+                        c_mo += taux_horaire * heures_increment * 1.5
+                    elif s.day == "Samedi":
+                        c_mo += taux_horaire * heures_increment * 1.25
+                    elif s.day == "Dimanche":
+                        c_mo += taux_horaire * heures_increment * 1.5
+                    else:
+                        c_mo += taux_horaire * heures_increment
+
+            primes_cumul = AgentPrime.objects.filter(
+                chantier=chantier,
+                type_affectation='chantier',
+            ).filter(Q(annee__lt=yf) | Q(annee=yf, mois__lte=mf))
+            c_mo += float(sum(float(p.montant) for p in primes_cumul))
+
+            c_total = c_mat + c_st + c_mo
+            cout_chantier_cumul_jusqua_fin_mois = {
+                "materiel": c_mat,
+                "sous_traitant": c_st,
+                "main_oeuvre": c_mo,
+                "total": c_total,
+                "date_fin_incluse": date_fin.isoformat(),
+            }
+
         data = {
             "periode": periode,
             "sorties": sorties,
@@ -11782,6 +11863,7 @@ class RecapFinancierChantierAPIView(APIView):
             "montant_ht": montant_ht,
             "taux_fixe": taux_fixe,
             "montant_taux_fixe": montant_taux_fixe,
+            "cout_chantier_cumul_jusqua_fin_mois": cout_chantier_cumul_jusqua_fin_mois,
         }
 
         serializer = RecapFinancierSerializer(data)

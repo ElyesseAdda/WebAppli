@@ -1,6 +1,58 @@
-import { Box, Grid, Paper, Typography } from "@mui/material";
+import { Box, Grid, Paper, Typography, Card, CardContent } from "@mui/material";
 import { ResponsivePie } from "@nivo/pie";
 import React from "react";
+
+// Sous-composant pour un affichage moderne des indicateurs
+const StatCard = ({ title, amount, color, isNegative = false }) => (
+  <Card 
+    elevation={0} 
+    sx={{ 
+      height: '100%',
+      borderRadius: 3,
+      border: '1px solid',
+      borderColor: 'divider',
+      position: 'relative',
+      overflow: 'hidden',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: '0 4px 20px 0 rgba(0,0,0,0.05)',
+      }
+    }}
+  >
+    {/* Ligne de couleur d'accentuation sur la gauche */}
+    <Box 
+      sx={{ 
+        position: 'absolute', 
+        left: 0, 
+        top: 0, 
+        bottom: 0, 
+        width: '4px', 
+        bgcolor: color 
+      }} 
+    />
+    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+      <Typography 
+        variant="body2" 
+        color="text.secondary" 
+        fontWeight={600} 
+        gutterBottom 
+        sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}
+      >
+        {title}
+      </Typography>
+      <Typography 
+        variant="h6" 
+        style={{ color: color }}
+        sx={{ fontWeight: 700, display: 'flex', alignItems: 'baseline', gap: 0.5 }}
+      >
+        {isNegative ? "- " : ""}
+        {amount.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
+        <Typography component="span" variant="body2" fontWeight={600} style={{ color: color }}>€</Typography>
+      </Typography>
+    </CardContent>
+  </Card>
+);
 
 const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
   if (!data) return null;
@@ -9,19 +61,21 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
   const montant_factures = Number(tauxFacturation?.montant_factures ?? 0);
   const montant_avenants = Number(tauxFacturation?.montant_avenants ?? 0);
   const montant_avenants_et_factures = montant_factures + montant_avenants;
-  const montantTfBrut = data.montant_taux_fixe;
-  const montant_taux_fixe = Number(montantTfBrut ?? 0);
-  const afficherMontantTauxFixe =
-    montantTfBrut != null &&
-    montantTfBrut !== "" &&
-    !Number.isNaN(montant_taux_fixe) &&
-    montant_taux_fixe !== 0;
   const total_materiel = Number(paye.materiel?.total || 0);
   const total_main_oeuvre = Number(paye.main_oeuvre?.total || 0);
   const total_sous_traitant = Number(paye.sous_traitant?.total || 0);
-  // Coût chantier = main d'oeuvre + sous-traitance + matériel
+  // Coût chantier (période / filtre courant) — cartes et alignement avec les tableaux du récap
   const cout_chantier =
     total_main_oeuvre + total_sous_traitant + total_materiel;
+
+  // En mode mois : l’API fournit les coûts cumulés jusqu’à fin du mois (bénéfice « tel qu’à cette date »). En mode global : même base que la carte coût.
+  const cumulCout = data.cout_chantier_cumul_jusqua_fin_mois;
+  const cout_chantier_pour_benefice =
+    cumulCout != null &&
+    cumulCout.total != null &&
+    !Number.isNaN(Number(cumulCout.total))
+      ? Number(cumulCout.total)
+      : cout_chantier;
 
   // Calcul du total des paiements reçus
   const total_paiements_recus =
@@ -35,16 +89,17 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
   // Bénéfice = marché (HT) + avenants + factures (TTC, comme l’onglet Info) − coût chantier — pas les paiements reçus
   const total_marche_avenants_factures =
     montant_ht + montant_avenants_et_factures;
-  const benefice = total_marche_avenants_factures - cout_chantier;
+  const benefice =
+    total_marche_avenants_factures - cout_chantier_pour_benefice;
 
-  // Camembert : sous « CA » (marché + av. + fact.), coûts vs bénéfice ; si bénéfice < 0, CA vs dépassement (coûts − CA)
+  // Camembert : coûts cumulés (global) vs bénéfice
   let pieData;
   if (benefice >= 0) {
     pieData = [
       {
         id: "Coût chantier",
         label: "Coût chantier",
-        value: cout_chantier,
+        value: cout_chantier_pour_benefice,
         color: "#FF7043",
       },
       {
@@ -74,7 +129,7 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
       {
         id: "Coût chantier",
         label: "Coût chantier",
-        value: Math.max(cout_chantier, 0.0001),
+        value: Math.max(cout_chantier_pour_benefice, 0.0001),
         color: "#FF7043",
       },
     ];
@@ -92,173 +147,91 @@ const RecapSyntheseSection = ({ data, depensesPaye, tauxFacturation }) => {
   };
 
   return (
-    <Paper sx={{ p: 2, mb: 3 }} elevation={3}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
+    <Paper 
+      sx={{ 
+        p: 3, 
+        mb: 3, 
+        borderRadius: 4, 
+        boxShadow: '0 4px 24px 0 rgba(0,0,0,0.06)' 
+      }} 
+      elevation={0}
+    >
+      <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: 'text.primary' }}>
         Synthèse Financière du Chantier
       </Typography>
-      <Grid container spacing={0} alignItems="stretch">
-        {/* Section Gauche : Textes */}
-        <Grid item xs={12} md={7}>
-          <Box
-            sx={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              pl: 2,
-              pr: 2,
-            }}
-          >
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">Marché</Typography>
-                <Typography variant="h6" sx={{ color: "primary.main" }}>
-                  {montant_ht.toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">
-                  Avenants + Factures
-                </Typography>
-                <Typography variant="h6" sx={{ color: "primary.main" }}>
-                  {montant_avenants_et_factures.toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </Typography>
-              </Grid>
-              {afficherMontantTauxFixe ? (
-                <Grid item xs={12} md={4}>
-                  <Typography color="text.secondary">
-                    Montant taux fixe
-                  </Typography>
-                  <Typography
-                    variant="h6"
-                    sx={{ color: "#1976d2", fontWeight: 700 }}
-                  >
-                    {montant_taux_fixe.toLocaleString("fr-FR", {
-                      minimumFractionDigits: 2,
-                    })}{" "}
-                    €
-                  </Typography>
-                </Grid>
-              ) : null}
-              <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">Paiements reçus</Typography>
-                <Typography
-                  variant="h6"
-                  style={{ color: "#43A047", fontWeight: 700 }}
-                >
-                  {total_paiements_recus.toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">Coût chantier</Typography>
-                <Typography
-                  variant="h6"
-                  style={{ color: "#d32f2f", fontWeight: 700 }}
-                >
-                  -{" "}
-                  {cout_chantier.toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography color="text.secondary">Bénéfice</Typography>
-                <Typography
-                  variant="h6"
-                  style={{
-                    color: benefice >= 0 ? "#43A047" : "#d32f2f",
-                    fontWeight: 700,
-                  }}
-                >
-                  {benefice.toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </Typography>
-              </Grid>
+      
+      <Grid container spacing={4} alignItems="center">
+        {/* Section Gauche : Textes dans des cartes */}
+        <Grid item xs={12} md={8}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard title="Marché" amount={montant_ht} color="#1976d2" />
             </Grid>
-          </Box>
+            
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard title="Avenants + Factures" amount={montant_avenants_et_factures} color="#1976d2" />
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard
+                title="Total"
+                amount={total_marche_avenants_factures}
+                color="#1565c0"
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard title="Paiements reçus" amount={total_paiements_recus} color="#43A047" />
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard title="Coût chantier" amount={cout_chantier} color="#d32f2f" isNegative={true} />
+            </Grid>
+            
+            <Grid item xs={12} sm={6} md={4}>
+              <StatCard 
+                title="Bénéfice" 
+                amount={benefice} 
+                color={benefice >= 0 ? "#43A047" : "#d32f2f"} 
+              />
+            </Grid>
+          </Grid>
         </Grid>
-        {/* Ligne de séparation verticale */}
-        <Grid
-          item
-          md={1}
-          sx={{
-            display: { xs: "none", md: "flex" },
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Box
-            sx={{ width: "2px", height: "90%", bgcolor: "#BDBDBD", mx: "auto" }}
-          />
-        </Grid>
+
         {/* Section Droite : PieChart */}
         <Grid item xs={12} md={4}>
-          <Box
-            sx={{ width: 220, height: 220, position: "relative", mx: "auto" }}
-          >
+          <Box sx={{ width: '100%', maxWidth: 260, height: 260, position: "relative", mx: "auto" }}>
             <ResponsivePie
               data={pieData}
-              margin={{ top: 20, right: 20, bottom: 40, left: 20 }}
-              innerRadius={0.6}
-              padAngle={1}
-              cornerRadius={3}
+              margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+              innerRadius={0.75}
+              padAngle={2}
+              cornerRadius={4}
               colors={{ datum: "data.color" }}
-              borderWidth={1}
-              borderColor={{ from: "color", modifiers: [["darker", 0.2]] }}
+              borderWidth={0}
               enableArcLabels={false}
               enableArcLinkLabels={false}
+              activeOuterRadiusOffset={8}
             />
             {/* Afficher le bénéfice au centre */}
             <Box
               sx={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                pointerEvents: "none",
-                flexDirection: "column",
+                position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                pointerEvents: "none", flexDirection: "column",
               }}
             >
               <Typography
-                variant="h6"
-                fontWeight={700}
+                variant="h4"
+                fontWeight={800}
                 sx={{
                   fontSize: getFontSize(benefice),
                   color: benefice >= 0 ? "#43A047" : "#d32f2f",
                 }}
               >
-                {Number(benefice).toLocaleString("fr-FR", {
-                  minimumFractionDigits: 2,
-                })}
+                {Number(benefice).toLocaleString("fr-FR", { minimumFractionDigits: 0 })}
               </Typography>
-              <Typography
-                variant="h6"
-                fontWeight={700}
-                sx={{
-                  fontSize: getFontSize(benefice) * 0.7,
-                  ml: 0.5,
-                  color: benefice >= 0 ? "#43A047" : "#d32f2f",
-                }}
-              >
-                €
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.7rem' }}>
                 Bénéfice
               </Typography>
             </Box>

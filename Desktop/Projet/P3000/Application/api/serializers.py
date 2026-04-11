@@ -1947,6 +1947,10 @@ class RecapFinancierSerializer(serializers.Serializer):
     montant_ht = serializers.FloatField()
     taux_fixe = serializers.FloatField()
     montant_taux_fixe = serializers.FloatField()
+    # Présent uniquement en mode mois/année : coûts payés cumulés depuis l'origine jusqu'à fin du mois
+    cout_chantier_cumul_jusqua_fin_mois = serializers.DictField(
+        required=False, allow_null=True
+    )
 
 class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:
