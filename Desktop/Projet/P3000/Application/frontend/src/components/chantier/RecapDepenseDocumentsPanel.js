@@ -213,7 +213,7 @@ const RecapDepenseDocumentsPanel = ({
                       fontWeight={700}
                       sx={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}
                     >
-                      BC {bc.numero || bc.id}
+                      {bc.numero?.trim() || `BC ${bc.id}`}
                     </Typography>
                     <Typography
                       variant="subtitle2"

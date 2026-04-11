@@ -1,8 +1,6 @@
 import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import RemoveIcon from "@mui/icons-material/Remove";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import {
   Box,
   Card,
@@ -67,31 +65,6 @@ const CategoryCard = ({
       },
     }}
   >
-    {showDocumentsPane ? (
-      <IconButton
-        size="small"
-        aria-label={isHidden ? "Afficher dans le graphique" : "Masquer du graphique"}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleVisibility?.();
-        }}
-        sx={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          zIndex: 1,
-          bgcolor: "background.paper",
-          boxShadow: 1,
-          "&:hover": { bgcolor: "action.hover" },
-        }}
-      >
-        {isHidden ? (
-          <VisibilityOffIcon fontSize="small" />
-        ) : (
-          <VisibilityIcon fontSize="small" />
-        )}
-      </IconButton>
-    ) : null}
     {/* Ligne de couleur d'accentuation sur la gauche */}
     <Box
       sx={{
@@ -114,7 +87,6 @@ const CategoryCard = ({
             letterSpacing: "0.5px",
             fontSize: "0.7rem",
             textDecoration: isHidden ? "line-through" : "none",
-            pr: showDocumentsPane ? 4 : 0,
           }}
         >
           {title}
@@ -368,7 +340,8 @@ const RecapTabsSection = ({
         ) : null}
       </Grid>
 
-      {/* Bouton pour activer/désactiver l'accordéon général (déplacé en bas à droite) */}
+      {/* Bouton + accordéons détail : masqués pour « Dépenses » (détail dans le panneau latéral) */}
+      {!showDocumentsPane ? (
       <Box display="flex" justifyContent="flex-end" mt={2}>
         <IconButton
           onClick={handleToggleDetailsMode}
@@ -388,9 +361,10 @@ const RecapTabsSection = ({
           )}
         </IconButton>
       </Box>
+      ) : null}
 
       {/* Accordéons de détails */}
-      {detailsMode && generalAccordionOpen && (
+      {!showDocumentsPane && detailsMode && generalAccordionOpen && (
         <Accordion
           expanded={true}
           onChange={handleToggleDetailsMode}

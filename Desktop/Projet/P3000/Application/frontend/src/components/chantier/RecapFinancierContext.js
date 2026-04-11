@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useMemo, useState } from "react";
 
 const defaultPeriode = {
   mois: new Date().getMonth() + 1,
@@ -13,19 +13,22 @@ export const RecapFinancierProvider = ({ children }) => {
   const [filters, setFilters] = useState({});
   const [openAccordions, setOpenAccordions] = useState({});
 
+  const value = useMemo(
+    () => ({
+      periode,
+      setPeriode,
+      global,
+      setGlobal,
+      filters,
+      setFilters,
+      openAccordions,
+      setOpenAccordions,
+    }),
+    [periode, global, filters, openAccordions]
+  );
+
   return (
-    <RecapFinancierContext.Provider
-      value={{
-        periode,
-        setPeriode,
-        global,
-        setGlobal,
-        filters,
-        setFilters,
-        openAccordions,
-        setOpenAccordions,
-      }}
-    >
+    <RecapFinancierContext.Provider value={value}>
       {children}
     </RecapFinancierContext.Provider>
   );

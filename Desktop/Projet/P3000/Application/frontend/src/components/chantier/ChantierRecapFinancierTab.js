@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FaSync } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
 import RecapSection from "./RecapSection";
@@ -42,7 +42,10 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   // State local pour la donnée API et le statut
   const [data, setData] = useState(null);
   const [tauxFacturationData, setTauxFacturationData] = useState(null);
+  /** Premier chargement ou changement de chantier : masque le corps du récap */
   const [loading, setLoading] = useState(false);
+  /** Changement mois / année / global : mise à jour sans démonter la page */
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   // Main d'oeuvre Schedule
@@ -72,85 +75,89 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
     (_, i) => anneeCourante - 2 + i
   );
 
-  // Récupérer les données API (autres catégories)
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let url = `/api/chantier/${chantierId}/recap-financier/`;
-      if (!global) {
-        url += `?mois=${periode.mois}&annee=${periode.annee}`;
+  const lastChantierIdRef = useRef(null);
+
+  // Récupérer les données API (récap + taux facturation) — une seule requête récap par rafraîchissement
+  const fetchData = useCallback(
+    async (opts = {}) => {
+      const { background = false } = opts;
+      if (!chantierId) return;
+
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-      const res = await axios.get(url);
-      setData(res.data);
-
-      // Recharger aussi la main d'oeuvre depuis les mêmes données
-      const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || {
-        total: 0,
-        documents: [],
-      };
-      setMainOeuvreData(mainOeuvre);
-
-      try {
-        const resTaux = await axios.get(
-          `/api/chantier/${chantierId}/taux-facturation/`
-        );
-        setTauxFacturationData(resTaux.data);
-      } catch {
-        setTauxFacturationData(null);
-      }
-    } catch (err) {
-      setError("Erreur lors du chargement des données financières.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Récupérer la main d'oeuvre depuis l'API recap-financier
-  useEffect(() => {
-    const fetchMainOeuvre = async () => {
-      if (!chantierId) {
-        setMainOeuvreData({ total: 0, documents: [] });
-        return;
-      }
-
+      setError(null);
       try {
         let url = `/api/chantier/${chantierId}/recap-financier/`;
-        if (!global && periode?.mois && periode?.annee) {
+        if (!global) {
           url += `?mois=${periode.mois}&annee=${periode.annee}`;
         }
-
         const res = await axios.get(url);
+        setData(res.data);
 
-        // Extraire la main d'œuvre des données recap-financier
         const mainOeuvre = res.data.sorties?.paye?.main_oeuvre || {
           total: 0,
           documents: [],
         };
-
         setMainOeuvreData(mainOeuvre);
-      } catch (e) {
-        setMainOeuvreData({ total: 0, documents: [] });
+
+        try {
+          const resTaux = await axios.get(
+            `/api/chantier/${chantierId}/taux-facturation/`
+          );
+          setTauxFacturationData(resTaux.data);
+        } catch {
+          setTauxFacturationData(null);
+        }
+      } catch (err) {
+        setError("Erreur lors du chargement des données financières.");
+      } finally {
+        if (background) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
       }
-    };
-    fetchMainOeuvre();
-  }, [chantierId, periode.mois, periode.annee, global]);
+    },
+    [chantierId, global, periode.mois, periode.annee]
+  );
 
+  /** Changement de chantier → rechargement complet ; mois/année/global → mise à jour en tâche de fond */
   useEffect(() => {
-    if (chantierId) {
-      fetchData();
+    if (!chantierId) return;
+    const switched = lastChantierIdRef.current !== chantierId;
+    if (switched) {
+      lastChantierIdRef.current = chantierId;
+      setData(null);
+      setTauxFacturationData(null);
+      setMainOeuvreData({ total: 0, documents: [] });
+      setError(null);
+      fetchData({ background: false });
+      return;
     }
-    // eslint-disable-next-line
-  }, [chantierId, JSON.stringify(periode), global]);
+    fetchData({ background: true });
+  }, [chantierId, periode.mois, periode.annee, global, fetchData]);
 
-  const wasActiveRef = useRef(isActive);
+  /** Retour sur l’onglet récap : rafraîchir sans masquer l’UI (évite doublon au 1er montage si isActive déjà true) */
+  const prevIsActiveRef = useRef(isActive);
   useEffect(() => {
-    if (chantierId && isActive && !wasActiveRef.current) {
-      fetchData();
+    if (
+      chantierId &&
+      isActive &&
+      !prevIsActiveRef.current &&
+      data != null
+    ) {
+      fetchData({ background: true });
     }
-    wasActiveRef.current = isActive;
-    // eslint-disable-next-line
-  }, [chantierId, isActive]);
+    prevIsActiveRef.current = isActive;
+  }, [chantierId, isActive, data, fetchData]);
+
+  const refreshRecapSilently = useCallback(
+    () => fetchData({ background: true }),
+    [fetchData]
+  );
 
   // Gestion du changement de période
   const handleMoisChange = (e) => {
@@ -175,11 +182,24 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box display="flex" alignItems="center" gap={2}>
-          <Typography variant="h5" sx={{ flex: 1 }}>
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          position: "sticky",
+          top: 0,
+          zIndex: (theme) => theme.zIndex.appBar - 1,
+          bgcolor: "background.paper",
+          boxShadow: (theme) => theme.shadows[2],
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
+          <Typography variant="h5" sx={{ flex: 1, minWidth: 200 }}>
             Récapitulatif Financier du Chantier
           </Typography>
+          {refreshing ? (
+            <CircularProgress size={22} thickness={5} aria-label="Mise à jour des données" />
+          ) : null}
           <FormControl sx={{ minWidth: 120 }} size="small">
             <InputLabel>Mois</InputLabel>
             <Select
@@ -219,16 +239,17 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             {global ? "Désactiver" : "Global"}
           </Button>
           <Button
-            onClick={fetchData}
+            onClick={() => fetchData({ background: true })}
             color="primary"
             sx={{ ml: 1 }}
             startIcon={<FaSync />}
+            disabled={refreshing}
           >
             Actualiser
           </Button>
         </Box>
       </Paper>
-      {loading ? (
+      {loading && !data ? (
         <Box
           display="flex"
           justifyContent="center"
@@ -237,10 +258,13 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
         >
           <CircularProgress />
         </Box>
-      ) : error ? (
-        <Alert severity="error">{error}</Alert>
       ) : data ? (
         <>
+          {error ? (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          ) : null}
           <RecapSyntheseSection
             data={data}
             depensesPaye={getDepensesData()}
@@ -258,7 +282,7 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
               colors={CATEGORY_COLORS}
               chantierId={chantierId}
               periode={periode}
-              refreshRecap={fetchData}
+              refreshRecap={refreshRecapSilently}
               showDocumentsPane
             />
           </Grid>
@@ -273,11 +297,13 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
               colors={CATEGORY_COLORS}
               chantierId={chantierId}
               periode={periode}
-              refreshRecap={fetchData}
+              refreshRecap={refreshRecapSilently}
             />
           </Grid>
         </Grid>
         </>
+      ) : error ? (
+        <Alert severity="error">{error}</Alert>
       ) : null}
     </Box>
   );
