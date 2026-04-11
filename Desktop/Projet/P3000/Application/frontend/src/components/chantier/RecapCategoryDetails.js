@@ -33,9 +33,12 @@ const RecapCategoryDetails = ({
   chantierId,
   periode,
   refreshRecap,
+  /** Affichage dans le panneau latéral récap : pas de Collapse, pas de bouton Fermer */
+  embedded = false,
 }) => {
   // Récupérer le contexte pour accéder au mode global
   const { global } = useRecapFinancier();
+  const detailsActive = embedded || open;
   
   // État pour stocker les primes du chantier
   const [primes, setPrimes] = React.useState([]);
@@ -81,11 +84,11 @@ const RecapCategoryDetails = ({
 
   // Charger les primes du chantier pour la catégorie main_oeuvre
   React.useEffect(() => {
-    if (category === "main_oeuvre" && open && chantierId) {
+    if (category === "main_oeuvre" && detailsActive && chantierId) {
       loadChantierPrimes();
     }
     // eslint-disable-next-line
-  }, [category, open, chantierId, periode, global]);
+  }, [category, detailsActive, chantierId, periode, global]);
 
   const loadChantierPrimes = async () => {
     setLoadingPrimes(true);
@@ -310,7 +313,7 @@ const RecapCategoryDetails = ({
 
   // Fonction pour charger les paiements depuis l'API
   const loadPaiements = React.useCallback(async () => {
-    if (category === "materiel" && open && chantierId) {
+    if (category === "materiel" && detailsActive && chantierId) {
       try {
         // Récupérer tous les fournisseurs depuis le modèle Fournisseur
         const fournisseursRes = await axios.get("/api/fournisseurs/");
@@ -410,12 +413,12 @@ const RecapCategoryDetails = ({
         setPaiements(paiementsInit);
       }
     }
-  }, [category, open, chantierId, periode, global, documents]);
+  }, [category, detailsActive, embedded, open, chantierId, periode, global, documents]);
 
   React.useEffect(() => {
     loadPaiements();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, open, chantierId, periode?.mois, periode?.annee, global, loadPaiements]);
+  }, [category, detailsActive, embedded, open, chantierId, periode?.mois, periode?.annee, global, loadPaiements]);
 
   const handleChangeMontant = (fournisseur, value) => {
     setPaiements((prev) => ({ ...prev, [fournisseur]: value }));
@@ -461,9 +464,24 @@ const RecapCategoryDetails = ({
     }
   };
 
-  return (
-    <Collapse in={open} timeout="auto" unmountOnExit>
-      <Paper elevation={3} sx={{ mt: 2, p: 2 }}>
+  const innerPaper = (
+      <Paper
+        elevation={embedded ? 0 : 3}
+        sx={{
+          mt: embedded ? 0 : 2,
+          p: embedded ? 1 : 2,
+          ...(embedded && {
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 2,
+            bgcolor: "background.paper",
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+          }),
+        }}
+      >
+        {!embedded ? (
         <Box
           display="flex"
           alignItems="center"
@@ -480,6 +498,11 @@ const RecapCategoryDetails = ({
             Fermer
           </Button>
         </Box>
+        ) : (
+          <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ mb: 1.5, textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+            {title}
+          </Typography>
+        )}
         {/* Tableau édition matériel */}
         {category === "materiel" && (
           <Box mb={2}>
@@ -502,8 +525,14 @@ const RecapCategoryDetails = ({
                 )}
               </Button>
             </Box>
-            <TableContainer>
-              <Table size="small">
+            <TableContainer
+              sx={
+                embedded
+                  ? { overflowX: "auto", width: "100%", maxWidth: "100%" }
+                  : undefined
+              }
+            >
+              <Table size="small" sx={embedded ? { minWidth: 280 } : undefined}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Fournisseur</TableCell>
@@ -653,8 +682,28 @@ const RecapCategoryDetails = ({
         )}
         {/* Tableau classique pour les autres catégories */}
         {category !== "materiel" && (
-          <TableContainer>
-            <Table size="small">
+          <TableContainer
+            sx={
+              embedded
+                ? { overflowX: "auto", width: "100%", maxWidth: "100%" }
+                : undefined
+            }
+          >
+            <Table
+              size="small"
+              sx={
+                embedded
+                  ? {
+                      minWidth:
+                        category === "main_oeuvre"
+                          ? 520
+                          : category === "sous_traitant"
+                          ? 400
+                          : 360,
+                    }
+                  : undefined
+              }
+            >
               <TableHead>
                 <TableRow>
                   {columns.map((col) => (
@@ -795,6 +844,15 @@ const RecapCategoryDetails = ({
           </TableContainer>
         )}
       </Paper>
+  );
+
+  if (embedded) {
+    return innerPaper;
+  }
+
+  return (
+    <Collapse in={open} timeout="auto" unmountOnExit>
+      {innerPaper}
     </Collapse>
   );
 };

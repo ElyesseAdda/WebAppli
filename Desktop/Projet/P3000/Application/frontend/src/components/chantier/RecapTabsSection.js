@@ -18,7 +18,7 @@ import AccordionDetails from "@mui/material/AccordionDetails";
 import AccordionSummary from "@mui/material/AccordionSummary";
 import IconButton from "@mui/material/IconButton";
 import { ResponsivePie } from "@nivo/pie";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import RecapCategoryDetails from "./RecapCategoryDetails";
 import RecapDepenseDocumentsPanel from "./RecapDepenseDocumentsPanel";
 
@@ -155,6 +155,8 @@ const RecapTabsSection = ({
   const [hoveredCategory, setHoveredCategory] = useState(null);
   const [hiddenCategories, setHiddenCategories] = useState([]);
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState(null);
+  /** Onglet Tableau / Documents du panneau droit « Détails dépenses » (largeur colonne fixe 5/12 + 7/12) */
+  const [depensePaneMode, setDepensePaneMode] = useState("tableau");
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
@@ -166,6 +168,7 @@ const RecapTabsSection = ({
     setHiddenCategories([]);
     const keys = Object.keys(tabs[newValue]?.data || {});
     setSelectedExpenseCategory(keys[0] || null);
+    if (showDocumentsPane) setDepensePaneMode("tableau");
   };
 
   const data = tabs[currentTab].data;
@@ -174,6 +177,10 @@ const RecapTabsSection = ({
     selectedExpenseCategory && categoryKeys.includes(selectedExpenseCategory)
       ? selectedExpenseCategory
       : categoryKeys[0] || null;
+
+  useEffect(() => {
+    if (showDocumentsPane) setDepensePaneMode("tableau");
+  }, [effectiveExpenseCategory, showDocumentsPane]);
 
   // Définir les couleurs fixes pour chaque catégorie
   const fixedColors = {
@@ -255,7 +262,7 @@ const RecapTabsSection = ({
       </Tabs>
 
       <Grid container spacing={3} alignItems="stretch">
-        <Grid item xs={12} md={showDocumentsPane ? 7 : 12}>
+        <Grid item xs={12} md={showDocumentsPane ? 5 : 12}>
           <Grid container spacing={3} alignItems="center">
         {/* Section Gauche : Textes dans des cartes */}
         <Grid item xs={12} md={showDocumentsPane ? 12 : 7}>
@@ -343,10 +350,19 @@ const RecapTabsSection = ({
         </Grid>
 
         {showDocumentsPane && chantierId ? (
-          <Grid item xs={12} md={5}>
+          <Grid item xs={12} md={7} sx={{ minWidth: 0, maxWidth: "100%" }}>
             <RecapDepenseDocumentsPanel
               chantierId={chantierId}
               category={effectiveExpenseCategory}
+              documents={
+                effectiveExpenseCategory && data[effectiveExpenseCategory]
+                  ? data[effectiveExpenseCategory].documents || []
+                  : []
+              }
+              periode={periode}
+              refreshRecap={refreshRecap}
+              paneMode={depensePaneMode}
+              onPaneModeChange={setDepensePaneMode}
             />
           </Grid>
         ) : null}

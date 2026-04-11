@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import RecapCategoryDetails from "./RecapCategoryDetails";
 
 const formatMontant = (v) =>
   Number(v || 0).toLocaleString("fr-FR", {
@@ -24,10 +25,18 @@ const openPreview = (url) => {
 };
 
 /**
- * Panneau latéral du récap « Dépenses » : documents liés à la catégorie sélectionnée
- * (BC pour matériel, contrats & avenants ST pour sous-traitant).
+ * Panneau latéral du récap « Dépenses » : onglet Tableau (même contenu que l’accordéon détail)
+ * ou Documents (BC / contrats & avenants).
  */
-const RecapDepenseDocumentsPanel = ({ chantierId, category }) => {
+const RecapDepenseDocumentsPanel = ({
+  chantierId,
+  category,
+  documents = [],
+  periode,
+  refreshRecap,
+  paneMode = "tableau",
+  onPaneModeChange,
+}) => {
   const [loading, setLoading] = useState(true);
   const [bonsCommande, setBonsCommande] = useState([]);
   const [contrats, setContrats] = useState([]);
@@ -91,6 +100,11 @@ const RecapDepenseDocumentsPanel = ({ chantierId, category }) => {
     };
     return m[category] || category;
   }, [category]);
+
+  const categoryAccordionTitle = useMemo(
+    () => (category || "").replace(/_/g, " ").toUpperCase(),
+    [category]
+  );
 
   /** BC du chantier regroupés par fournisseur (libellé lisible, sans troncature) */
   const bonsParFournisseur = useMemo(() => {
@@ -328,98 +342,101 @@ const RecapDepenseDocumentsPanel = ({ chantierId, category }) => {
     );
   };
 
-  let body;
-  if (!category) {
-    body = (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-        Aucune catégorie de dépense à afficher.
-      </Typography>
-    );
-  } else if (loading) {
-    body = (
-      <Box display="flex" justifyContent="center" py={4}>
-        <CircularProgress size={28} />
-      </Box>
-    );
-  } else if (category === "materiel") {
-    body = (
-      <>
-        <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}>
-          Bons de commande du chantier
-        </Typography>
-        {renderBonCommandeCards()}
-      </>
-    );
-  } else if (category === "sous_traitant") {
-    body = (
-      <Box sx={{ display: "flex", flexDirection: "column" }}>
-        {contrats.length > 0 ? (
-          <Tabs
-            value={stSousTraitantTab}
-            onChange={(_, v) => setStSousTraitantTab(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            sx={{
-              minHeight: 48,
-              mb: 1.5,
-              borderBottom: 1,
-              borderColor: "divider",
-              "& .MuiTab-root": { minHeight: 48 },
-            }}
+  const renderDocumentsTabContent = () => {
+    if (!category) return null;
+    if (loading) {
+      return (
+        <Box display="flex" justifyContent="center" py={4}>
+          <CircularProgress size={28} />
+        </Box>
+      );
+    }
+    if (category === "materiel") {
+      return (
+        <>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            fontWeight={600}
+            sx={{ textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1 }}
           >
-            {contratsParSousTraitant.map((g) => {
-              const nbAv = g.contrats.reduce((acc, c) => acc + (c.avenants?.length || 0), 0);
-              const nbC = g.contrats.length;
-              return (
-                <Tab
-                  key={String(g.stId)}
-                  label={
-                    <Box sx={{ textAlign: "center", py: 0.25, px: 0.25, maxWidth: 160 }}>
-                      <Typography
-                        variant="caption"
-                        component="span"
-                        sx={{
-                          fontWeight: 700,
-                          display: "block",
-                          lineHeight: 1.25,
-                          textTransform: "none",
-                          wordBreak: "break-word",
-                          overflowWrap: "anywhere",
-                          fontSize: "0.72rem",
-                        }}
-                      >
-                        {g.stName}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontSize: "0.65rem", display: "block", mt: 0.25, lineHeight: 1.2 }}
-                      >
-                        {nbC} contrat{nbC > 1 ? "s" : ""}
-                        {nbAv > 0 ? ` · ${nbAv} avenant${nbAv > 1 ? "s" : ""}` : ""}
-                      </Typography>
-                    </Box>
-                  }
-                  sx={{ minWidth: 88, maxWidth: 176, px: 0.75 }}
-                />
-              );
-            })}
-          </Tabs>
-        ) : null}
-        {renderSousTraitantDocuments()}
-      </Box>
-    );
-  } else if (category === "main_oeuvre") {
-    body = (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2, lineHeight: 1.6 }}>
-        Les dépenses main d&apos;œuvre ne sont pas reliées ici à un document unique. Utilisez le planning, les
-        fiches de pointage ou les tableaux de coûts du chantier pour le détail.
-      </Typography>
-    );
-  } else {
-    body = null;
-  }
+            Bons de commande du chantier
+          </Typography>
+          {renderBonCommandeCards()}
+        </>
+      );
+    }
+    if (category === "sous_traitant") {
+      return (
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
+          {contrats.length > 0 ? (
+            <Tabs
+              value={stSousTraitantTab}
+              onChange={(_, v) => setStSousTraitantTab(v)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{
+                minHeight: 48,
+                mb: 1.5,
+                borderBottom: 1,
+                borderColor: "divider",
+                "& .MuiTab-root": { minHeight: 48 },
+              }}
+            >
+              {contratsParSousTraitant.map((g) => {
+                const nbAv = g.contrats.reduce((acc, c) => acc + (c.avenants?.length || 0), 0);
+                const nbC = g.contrats.length;
+                return (
+                  <Tab
+                    key={String(g.stId)}
+                    label={
+                      <Box sx={{ textAlign: "center", py: 0.25, px: 0.25, maxWidth: 160 }}>
+                        <Typography
+                          variant="caption"
+                          component="span"
+                          sx={{
+                            fontWeight: 700,
+                            display: "block",
+                            lineHeight: 1.25,
+                            textTransform: "none",
+                            wordBreak: "break-word",
+                            overflowWrap: "anywhere",
+                            fontSize: "0.72rem",
+                          }}
+                        >
+                          {g.stName}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: "0.65rem", display: "block", mt: 0.25, lineHeight: 1.2 }}
+                        >
+                          {nbC} contrat{nbC > 1 ? "s" : ""}
+                          {nbAv > 0 ? ` · ${nbAv} avenant${nbAv > 1 ? "s" : ""}` : ""}
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ minWidth: 88, maxWidth: 176, px: 0.75 }}
+                  />
+                );
+              })}
+            </Tabs>
+          ) : null}
+          {renderSousTraitantDocuments()}
+        </Box>
+      );
+    }
+    if (category === "main_oeuvre") {
+      return (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 2, lineHeight: 1.6 }}>
+          Les dépenses main d&apos;œuvre ne sont pas reliées ici à un document unique. Utilisez le planning, les
+          fiches de pointage ou les tableaux de coûts du chantier pour le détail.
+        </Typography>
+      );
+    }
+    return null;
+  };
 
   return (
     <Paper
@@ -434,15 +451,69 @@ const RecapDepenseDocumentsPanel = ({ chantierId, category }) => {
         boxShadow: "0 4px 24px 0 rgba(0,0,0,0.06)",
         display: "flex",
         flexDirection: "column",
+        minWidth: 0,
+        width: "100%",
+        maxWidth: "100%",
+        overflow: paneMode === "tableau" ? "visible" : "hidden",
       }}
     >
       <Typography variant="subtitle2" fontWeight={800} color="text.primary" sx={{ mb: 0.5 }}>
-        Documents
+        Détails dépenses
       </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-        Liés à : <strong>{titreCategorie}</strong> — clic pour ouvrir l&apos;aperçu PDF dans un nouvel onglet.
-      </Typography>
-      {body}
+      {!category ? (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+          Aucune catégorie de dépense à afficher.
+        </Typography>
+      ) : (
+        <>
+          <Tabs
+            value={paneMode}
+            onChange={(_, v) => onPaneModeChange?.(v)}
+            sx={{
+              minHeight: 40,
+              mb: 1,
+              borderBottom: 1,
+              borderColor: "divider",
+              "& .MuiTab-root": { minHeight: 40, py: 0.5, fontWeight: 600, fontSize: "0.8rem", textTransform: "none" },
+            }}
+          >
+            <Tab label="Tableau" value="tableau" />
+            <Tab label="Documents" value="documents" />
+          </Tabs>
+          {paneMode === "tableau" ? (
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                minWidth: 0,
+                width: "100%",
+                pt: 0.5,
+                overflowX: "auto",
+                overflowY: "auto",
+              }}
+            >
+              <RecapCategoryDetails
+                embedded
+                open={false}
+                documents={documents}
+                title={categoryAccordionTitle}
+                category={category}
+                chantierId={chantierId}
+                periode={periode}
+                refreshRecap={refreshRecap}
+                onClose={() => {}}
+              />
+            </Box>
+          ) : (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                Liés à : <strong>{titreCategorie}</strong> — clic pour ouvrir l&apos;aperçu PDF dans un nouvel onglet.
+              </Typography>
+              <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>{renderDocumentsTabContent()}</Box>
+            </>
+          )}
+        </>
+      )}
     </Paper>
   );
 };
