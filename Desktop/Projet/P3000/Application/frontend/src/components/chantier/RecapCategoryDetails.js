@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   InputAdornment,
   Paper,
   Table,
@@ -17,8 +18,13 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import axios from "axios";
 import React from "react";
 import { FaFilter, FaTimes } from "react-icons/fa";
@@ -244,12 +250,14 @@ const RecapCategoryDetails = ({
   const [visibleFournisseurs, setVisibleFournisseurs] = React.useState(null);
   const [modalFournisseursOpen, setModalFournisseursOpen] = React.useState(false);
   const [modalSearch, setModalSearch] = React.useState("");
+  const [modalAttrFilter, setModalAttrFilter] = React.useState("all");
   const [modalSelected, setModalSelected] = React.useState(new Set());
   const [savingFournisseursFilter, setSavingFournisseursFilter] = React.useState(false);
 
   // Ouvrir le modal : initialiser la sélection (tous cochés si "tous visibles", sinon sélection actuelle)
   const handleOpenFournisseursModal = () => {
     setModalSearch("");
+    setModalAttrFilter("all");
     setModalSelected(
       visibleFournisseurs === null
         ? new Set(fournisseurs)
@@ -261,6 +269,7 @@ const RecapCategoryDetails = ({
   const handleCloseFournisseursModal = () => {
     setModalFournisseursOpen(false);
     setModalSearch("");
+    setModalAttrFilter("all");
   };
 
   const handleApplyFournisseursFilter = async () => {
@@ -306,10 +315,59 @@ const RecapCategoryDetails = ({
       ? fournisseurs
       : fournisseurs.filter((f) => visibleFournisseurs.has(f));
 
-  // Pour le modal : fournisseurs filtrés par la barre de recherche
-  const fournisseursFilteredBySearch = fournisseurs.filter((f) =>
-    f.toLowerCase().includes((modalSearch || "").toLowerCase().trim())
+  // Fournisseurs ayant au moins un document matériel (BC) dans le récap courant
+  const fournisseursAvecBcNormalized = React.useMemo(() => {
+    const set = new Set();
+    if (category !== "materiel" || !Array.isArray(documents)) return set;
+    documents.forEach((d) => {
+      const n = String(d.fournisseur || "").trim().toLowerCase();
+      if (n) set.add(n);
+    });
+    return set;
+  }, [category, documents]);
+
+  const supplierHasBcChantier = React.useCallback(
+    (f) => {
+      const key = String(f || "").trim().toLowerCase();
+      return Boolean(key && fournisseursAvecBcNormalized.has(key));
+    },
+    [fournisseursAvecBcNormalized]
   );
+
+  /** Montant significatif (≠ 0) : la liste est initialisée à 0 pour tous les fournisseurs, donc 0 seul ne compte pas comme « renseigné ». */
+  const supplierHasMontantRenseigne = React.useCallback((f) => {
+    const v = paiements[f];
+    if (v === undefined || v === null) return false;
+    const s = String(v).trim();
+    if (s === "") return false;
+    const n = Number(String(s).replace(",", "."));
+    if (Number.isNaN(n)) return false;
+    return n !== 0;
+  }, [paiements]);
+
+  const fournisseursMatchModalSearch = React.useMemo(() => {
+    const q = (modalSearch || "").toLowerCase().trim();
+    return fournisseurs.filter((f) => f.toLowerCase().includes(q));
+  }, [fournisseurs, modalSearch]);
+
+  // Pour le modal : recherche + filtre attributs (BC / montant)
+  const fournisseursFilteredForModal = React.useMemo(() => {
+    if (modalAttrFilter === "all") return fournisseursMatchModalSearch;
+    return fournisseursMatchModalSearch.filter((f) => {
+      const bc = supplierHasBcChantier(f);
+      const m = supplierHasMontantRenseigne(f);
+      if (modalAttrFilter === "bc") return bc;
+      if (modalAttrFilter === "montant") return m;
+      if (modalAttrFilter === "either") return bc || m;
+      if (modalAttrFilter === "both") return bc && m;
+      return true;
+    });
+  }, [
+    fournisseursMatchModalSearch,
+    modalAttrFilter,
+    supplierHasBcChantier,
+    supplierHasMontantRenseigne,
+  ]);
 
   // Fonction pour charger les paiements depuis l'API
   const loadPaiements = React.useCallback(async () => {
@@ -420,8 +478,26 @@ const RecapCategoryDetails = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, detailsActive, embedded, open, chantierId, periode?.mois, periode?.annee, global, loadPaiements]);
 
-  const handleChangeMontant = (fournisseur, value) => {
-    setPaiements((prev) => ({ ...prev, [fournisseur]: value }));
+  /** Saisie montant : espaces retirés, virgule → point, états intermédiaires autorisés (ex. « 12, ») */
+  const handleChangeMontant = (fournisseur, raw) => {
+    if (raw === "" || raw === null) {
+      setPaiements((prev) => ({ ...prev, [fournisseur]: "" }));
+      return;
+    }
+    const cleaned = String(raw).replace(/\s/g, "").replace(",", ".");
+    if (cleaned === "-" || cleaned === "." || cleaned === "-.") {
+      setPaiements((prev) => ({ ...prev, [fournisseur]: cleaned }));
+      return;
+    }
+    if (/^-?\d*\.?\d*$/.test(cleaned)) {
+      setPaiements((prev) => ({ ...prev, [fournisseur]: cleaned }));
+    }
+  };
+
+  const montantFieldValue = (fournisseur) => {
+    const v = paiements[fournisseur];
+    if (v === undefined || v === null || v === "") return "";
+    return String(v);
   };
 
   const handleSave = async () => {
@@ -432,11 +508,16 @@ const RecapCategoryDetails = ({
       // N'envoyer que les fournisseurs visibles (filtrés) pour éviter de créer des lignes à 0 pour tous les fournisseurs
       const fournisseursAEnvoyer = visibleFournisseurs === null ? fournisseurs : fournisseurs.filter((f) => visibleFournisseurs.has(f));
       const payload = fournisseursAEnvoyer
-        .filter((f) => paiements[f] !== undefined && paiements[f] !== '' && paiements[f] !== null && !isNaN(Number(paiements[f])))
+        .filter((f) => {
+          const v = paiements[f];
+          if (v === undefined || v === null || v === "") return false;
+          const n = Number(String(v).replace(",", "."));
+          return !Number.isNaN(n);
+        })
         .map((f) => ({
           fournisseur: f,
           montant: 0, // Montant payé reste à 0 (non modifiable par l'utilisateur ici)
-          montant_a_payer: Number(paiements[f]), // Les montants saisis sont les montants à payer
+          montant_a_payer: Number(String(paiements[f]).replace(",", ".")), // Les montants saisis sont les montants à payer
           mois: periode.mois,
           annee: periode.annee,
         }));
@@ -506,24 +587,56 @@ const RecapCategoryDetails = ({
         {/* Tableau édition matériel */}
         {category === "materiel" && (
           <Box mb={2}>
-            <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1} sx={{ mb: 1 }}>
-              <Typography variant="subtitle1">
+            <Box
+              display="flex"
+              alignItems="center"
+              justifyContent="space-between"
+              flexWrap="wrap"
+              gap={1}
+              sx={{ mb: 1.5 }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, pr: 1 }}>
                 Paiements matériel par fournisseur (mois/année)
               </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<FaFilter />}
-                onClick={handleOpenFournisseursModal}
-                disabled={fournisseurs.length === 0}
-              >
-                Choisir les fournisseurs à afficher
-                {visibleFournisseurs !== null && (
-                  <Typography component="span" sx={{ ml: 0.5, opacity: 0.8 }}>
-                    ({displayedFournisseurs.length}/{fournisseurs.length})
+              <Box display="flex" alignItems="center" gap={0.75}>
+                <Tooltip
+                  title={
+                    fournisseurs.length === 0
+                      ? "Aucun fournisseur"
+                      : visibleFournisseurs === null
+                      ? `Tous les fournisseurs (${fournisseurs.length}) — cliquer pour en afficher une sélection`
+                      : `${displayedFournisseurs.length} affiché(s) sur ${fournisseurs.length} — cliquer pour modifier`
+                  }
+                >
+                  <span>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={handleOpenFournisseursModal}
+                      disabled={fournisseurs.length === 0}
+                      aria-label="Filtrer les fournisseurs affichés"
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "primary.main",
+                        borderRadius: 1,
+                      }}
+                    >
+                      <FaFilter />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                {fournisseurs.length > 0 ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontWeight: 600, minWidth: "2.75rem", textAlign: "center" }}
+                  >
+                    {visibleFournisseurs === null
+                      ? `${fournisseurs.length}/${fournisseurs.length}`
+                      : `${displayedFournisseurs.length}/${fournisseurs.length}`}
                   </Typography>
-                )}
-              </Button>
+                ) : null}
+              </Box>
             </Box>
             <TableContainer
               sx={
@@ -532,11 +645,19 @@ const RecapCategoryDetails = ({
                   : undefined
               }
             >
-              <Table size="small" sx={embedded ? { minWidth: 280 } : undefined}>
+              <Table
+                size="small"
+                sx={{
+                  ...(embedded ? { minWidth: 320 } : {}),
+                  "& .MuiTableCell-root": { verticalAlign: "middle" },
+                }}
+              >
                 <TableHead>
                   <TableRow>
-                    <TableCell>Fournisseur</TableCell>
-                    <TableCell>Montant (€)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: "48%" }}>Fournisseur</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, minWidth: 140 }}>
+                      Montant à payer
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -545,23 +666,44 @@ const RecapCategoryDetails = ({
                       <TableCell colSpan={2} align="center">
                         {fournisseurs.length === 0
                           ? "Aucun fournisseur"
-                          : "Aucun fournisseur sélectionné. Cliquez sur « Choisir les fournisseurs à afficher »."}
+                          : "Aucun fournisseur sélectionné. Utilisez l’icône filtre pour en choisir."}
                       </TableCell>
                     </TableRow>
                   ) : (
                     displayedFournisseurs.map((f) => (
-                      <TableRow key={f}>
-                        <TableCell>{f}</TableCell>
-                        <TableCell>
-                          <input
-                            type="number"
-                            step={0.01}
-                            placeholder="0"
-                            value={paiements[f] !== undefined && paiements[f] !== null && paiements[f] !== '' ? paiements[f] : ""}
-                            onChange={(e) =>
-                              handleChangeMontant(f, e.target.value)
-                            }
-                            style={{ width: 100 }}
+                      <TableRow key={f} hover>
+                        <TableCell
+                          sx={{
+                            wordBreak: "break-word",
+                            maxWidth: embedded ? 220 : 360,
+                          }}
+                        >
+                          {f}
+                        </TableCell>
+                        <TableCell align="right" sx={{ py: 1 }}>
+                          <TextField
+                            size="small"
+                            placeholder="0,00"
+                            value={montantFieldValue(f)}
+                            onChange={(e) => handleChangeMontant(f, e.target.value)}
+                            inputProps={{
+                              inputMode: "decimal",
+                              "aria-label": `Montant à payer ${f}`,
+                            }}
+                            sx={{
+                              width: "100%",
+                              minWidth: 120,
+                              maxWidth: 180,
+                              "& .MuiInputBase-input": {
+                                textAlign: "right",
+                                fontVariantNumeric: "tabular-nums",
+                              },
+                            }}
+                            InputProps={{
+                              endAdornment: (
+                                <InputAdornment position="end">€</InputAdornment>
+                              ),
+                            }}
                           />
                         </TableCell>
                       </TableRow>
@@ -570,7 +712,7 @@ const RecapCategoryDetails = ({
                 </TableBody>
               </Table>
             </TableContainer>
-            <Box mt={1} display="flex" alignItems="center" gap={2}>
+            <Box mt={2} display="flex" alignItems="center" flexWrap="wrap" gap={2}>
               <Button
                 variant="contained"
                 color="primary"
@@ -580,10 +722,14 @@ const RecapCategoryDetails = ({
                 Sauvegarder
               </Button>
               {saveSuccess && (
-                <Typography color="success.main">Sauvegardé !</Typography>
+                <Typography color="success.main" fontWeight={600}>
+                  Sauvegardé !
+                </Typography>
               )}
               {saveError && (
-                <Typography color="error.main">{saveError}</Typography>
+                <Typography color="error.main" fontWeight={600}>
+                  {saveError}
+                </Typography>
               )}
             </Box>
 
@@ -614,6 +760,36 @@ const RecapCategoryDetails = ({
                     ),
                   }}
                 />
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                  Légende :{" "}
+                  <DescriptionOutlinedIcon
+                    fontSize="inherit"
+                    color="primary"
+                    sx={{ verticalAlign: "text-bottom", mx: 0.25 }}
+                  />{" "}
+                  BC dans le récap —{" "}
+                  <PaymentsOutlinedIcon
+                    fontSize="inherit"
+                    color="success"
+                    sx={{ verticalAlign: "text-bottom", mx: 0.25 }}
+                  />{" "}
+                  montant saisi
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  value={modalAttrFilter}
+                  onChange={(_, v) => {
+                    if (v != null) setModalAttrFilter(v);
+                  }}
+                  size="small"
+                  sx={{ flexWrap: "wrap", gap: 0.5, mb: 1.5 }}
+                >
+                  <ToggleButton value="all">Tous</ToggleButton>
+                  <ToggleButton value="bc">Avec BC</ToggleButton>
+                  <ToggleButton value="montant">Montant saisi</ToggleButton>
+                  <ToggleButton value="either">BC ou montant saisi</ToggleButton>
+                  <ToggleButton value="both">Les deux</ToggleButton>
+                </ToggleButtonGroup>
                 <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
                   <Button
                     size="small"
@@ -640,23 +816,84 @@ const RecapCategoryDetails = ({
                     p: 0.5,
                   }}
                 >
-                  {fournisseursFilteredBySearch.length === 0 ? (
+                  {fournisseursFilteredForModal.length === 0 ? (
                     <Typography color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
-                      Aucun fournisseur ne correspond à la recherche.
+                      {fournisseursMatchModalSearch.length === 0
+                        ? "Aucun fournisseur ne correspond à la recherche."
+                        : "Aucun fournisseur ne correspond aux filtres sélectionnés."}
                     </Typography>
                   ) : (
-                    fournisseursFilteredBySearch.map((f) => (
+                    fournisseursFilteredForModal.map((f) => (
                       <FormControlLabel
                         key={f}
+                        disableTypography
                         control={
                           <Checkbox
                             checked={modalSelected.has(f)}
                             onChange={() => handleToggleFournisseurModal(f)}
                             size="small"
+                            sx={{ alignSelf: "center", py: 0 }}
                           />
                         }
-                        label={f}
-                        sx={{ display: "block", mr: 0 }}
+                        label={
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.75,
+                              width: "100%",
+                              minWidth: 0,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                lineHeight: "inherit",
+                              }}
+                            >
+                              {f}
+                            </Typography>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.25,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {supplierHasBcChantier(f) && (
+                                <Tooltip title="Bon de commande présent dans le récap">
+                                  <DescriptionOutlinedIcon
+                                    fontSize="small"
+                                    color="primary"
+                                    aria-label="BC récap"
+                                  />
+                                </Tooltip>
+                              )}
+                              {supplierHasMontantRenseigne(f) && (
+                                <Tooltip title="Montant saisi">
+                                  <PaymentsOutlinedIcon
+                                    fontSize="small"
+                                    color="success"
+                                    aria-label="Montant saisi"
+                                  />
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </Box>
+                        }
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          mr: 0,
+                          ml: 0,
+                          py: 0.25,
+                          "& .MuiFormControlLabel-label": { minWidth: 0 },
+                        }}
                       />
                     ))
                   )}
