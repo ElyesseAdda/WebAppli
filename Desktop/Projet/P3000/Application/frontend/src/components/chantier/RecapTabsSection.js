@@ -1,8 +1,8 @@
 import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import RemoveIcon from "@mui/icons-material/Remove";
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import {
   Box,
   Card,
@@ -20,60 +20,101 @@ import IconButton from "@mui/material/IconButton";
 import { ResponsivePie } from "@nivo/pie";
 import React, { useState } from "react";
 import RecapCategoryDetails from "./RecapCategoryDetails";
+import RecapDepenseDocumentsPanel from "./RecapDepenseDocumentsPanel";
 
 // Sous-composant pour un affichage moderne des catégories
-const CategoryCard = ({ 
-  title, 
-  amount, 
-  color, 
-  isHidden, 
-  onToggleVisibility, 
-  onMouseEnter, 
-  onMouseLeave
+const CategoryCard = ({
+  title,
+  amount,
+  color,
+  isHidden,
+  onToggleVisibility,
+  onMouseEnter,
+  onMouseLeave,
+  categoryKey,
+  showDocumentsPane,
+  isSelected,
+  onSelectCategory,
 }) => (
-  <Card 
-    elevation={0} 
+  <Card
+    elevation={0}
     onMouseEnter={onMouseEnter}
     onMouseLeave={onMouseLeave}
-    onClick={onToggleVisibility}
-    sx={{ 
-      height: '100%',
-      borderRadius: 3,
-      border: '1px solid',
-      borderColor: 'divider',
-      position: 'relative',
-      overflow: 'hidden',
-      transition: 'all 0.2s',
-      opacity: isHidden ? 0.5 : 1,
-      cursor: 'pointer',
-      '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: '0 4px 20px 0 rgba(0,0,0,0.05)',
+    onClick={() => {
+      if (showDocumentsPane && onSelectCategory) {
+        onSelectCategory(categoryKey);
+      } else {
+        onToggleVisibility?.();
       }
     }}
+    sx={{
+      height: "100%",
+      borderRadius: 3,
+      border: "2px solid",
+      borderColor: showDocumentsPane && isSelected ? color : "divider",
+      position: "relative",
+      overflow: "hidden",
+      transition: "all 0.2s",
+      opacity: isHidden ? 0.5 : 1,
+      cursor: "pointer",
+      boxShadow:
+        showDocumentsPane && isSelected
+          ? `0 4px 20px 0 ${color}33`
+          : "none",
+      "&:hover": {
+        transform: "translateY(-2px)",
+        boxShadow: "0 4px 20px 0 rgba(0,0,0,0.05)",
+      },
+    }}
   >
+    {showDocumentsPane ? (
+      <IconButton
+        size="small"
+        aria-label={isHidden ? "Afficher dans le graphique" : "Masquer du graphique"}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleVisibility?.();
+        }}
+        sx={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          zIndex: 1,
+          bgcolor: "background.paper",
+          boxShadow: 1,
+          "&:hover": { bgcolor: "action.hover" },
+        }}
+      >
+        {isHidden ? (
+          <VisibilityOffIcon fontSize="small" />
+        ) : (
+          <VisibilityIcon fontSize="small" />
+        )}
+      </IconButton>
+    ) : null}
     {/* Ligne de couleur d'accentuation sur la gauche */}
-    <Box 
-      sx={{ 
-        position: 'absolute', 
-        left: 0, 
-        top: 0, 
-        bottom: 0, 
-        width: '4px', 
-        bgcolor: isHidden ? '#ccc' : color 
-      }} 
+    <Box
+      sx={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: "4px",
+        bgcolor: isHidden ? "#ccc" : color,
+      }}
     />
-    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+    <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
       <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-        <Typography 
-          variant="body2" 
-          color="text.secondary" 
-          fontWeight={600} 
-          sx={{ 
-            textTransform: 'uppercase', 
-            letterSpacing: '0.5px', 
-            fontSize: '0.7rem',
-            textDecoration: isHidden ? 'line-through' : 'none'
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          fontWeight={600}
+          sx={{
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+            fontSize: "0.7rem",
+            textDecoration: isHidden ? "line-through" : "none",
+            pr: showDocumentsPane ? 4 : 0,
           }}
         >
           {title}
@@ -105,6 +146,7 @@ const RecapTabsSection = ({
   chantierId,
   periode,
   refreshRecap,
+  showDocumentsPane = false,
 }) => {
   const [currentTab, setCurrentTab] = useState(0);
   const [openDetails, setOpenDetails] = useState({});
@@ -112,6 +154,7 @@ const RecapTabsSection = ({
   const [generalAccordionOpen, setGeneralAccordionOpen] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState(null);
   const [hiddenCategories, setHiddenCategories] = useState([]);
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState(null);
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
@@ -121,9 +164,16 @@ const RecapTabsSection = ({
     setGeneralAccordionOpen(false);
     setHoveredCategory(null);
     setHiddenCategories([]);
+    const keys = Object.keys(tabs[newValue]?.data || {});
+    setSelectedExpenseCategory(keys[0] || null);
   };
 
   const data = tabs[currentTab].data;
+  const categoryKeys = Object.keys(data || {});
+  const effectiveExpenseCategory =
+    selectedExpenseCategory && categoryKeys.includes(selectedExpenseCategory)
+      ? selectedExpenseCategory
+      : categoryKeys[0] || null;
 
   // Définir les couleurs fixes pour chaque catégorie
   const fixedColors = {
@@ -204,9 +254,11 @@ const RecapTabsSection = ({
         ))}
       </Tabs>
 
-      <Grid container spacing={4} alignItems="center">
+      <Grid container spacing={3} alignItems="stretch">
+        <Grid item xs={12} md={showDocumentsPane ? 7 : 12}>
+          <Grid container spacing={3} alignItems="center">
         {/* Section Gauche : Textes dans des cartes */}
-        <Grid item xs={12} md={7}>
+        <Grid item xs={12} md={showDocumentsPane ? 12 : 7}>
           <Grid container spacing={2}>
             {Object.keys(data).map((cat) => (
               <Grid item xs={12} sm={6} key={cat}>
@@ -216,6 +268,10 @@ const RecapTabsSection = ({
                   color={fixedColors[cat] || colors[cat] || "primary.main"}
                   isHidden={hiddenCategories.includes(cat)}
                   onToggleVisibility={() => handleToggleCategory(cat)}
+                  categoryKey={cat}
+                  showDocumentsPane={showDocumentsPane}
+                  isSelected={showDocumentsPane && effectiveExpenseCategory === cat}
+                  onSelectCategory={setSelectedExpenseCategory}
                   onMouseEnter={() => setHoveredCategory(cat.replace("_", " ").toUpperCase())}
                   onMouseLeave={() => setHoveredCategory(null)}
                 />
@@ -225,7 +281,7 @@ const RecapTabsSection = ({
         </Grid>
 
         {/* Section Droite : PieChart */}
-        <Grid item xs={12} md={5}>
+        <Grid item xs={12} md={showDocumentsPane ? 12 : 5}>
           <Box sx={{ width: '100%', maxWidth: 240, height: 240, position: "relative", mx: "auto" }}>
             <ResponsivePie
               data={pieData}
@@ -283,6 +339,17 @@ const RecapTabsSection = ({
             </Box>
           </Box>
         </Grid>
+          </Grid>
+        </Grid>
+
+        {showDocumentsPane && chantierId ? (
+          <Grid item xs={12} md={5}>
+            <RecapDepenseDocumentsPanel
+              chantierId={chantierId}
+              category={effectiveExpenseCategory}
+            />
+          </Grid>
+        ) : null}
       </Grid>
 
       {/* Bouton pour activer/désactiver l'accordéon général (déplacé en bas à droite) */}

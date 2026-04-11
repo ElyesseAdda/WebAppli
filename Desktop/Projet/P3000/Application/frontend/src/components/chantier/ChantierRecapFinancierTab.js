@@ -259,6 +259,7 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
               chantierId={chantierId}
               periode={periode}
               refreshRecap={fetchData}
+              showDocumentsPane
             />
           </Grid>
           {/* Entrées */}
