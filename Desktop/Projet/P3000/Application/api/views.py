@@ -10737,14 +10737,14 @@ def get_taux_facturation_data(request, chantier_id):
             'paye': (montant_paye / montant_total * 100) if montant_total > 0 else 0,
         }
 
-        # Montants des factures classiques du chantier (hors CIE)
+        # Montants des factures classiques du chantier (hors CIE) — HT pour cohérence avec montant_ht du marché
         factures_chantier = Facture.objects.filter(chantier=chantier, type_facture='classique')
-        montant_factures = factures_chantier.aggregate(total=Sum('price_ttc'))['total'] or 0
+        montant_factures = factures_chantier.aggregate(total=Sum('price_ht'))['total'] or 0
         montant_factures = float(montant_factures)
 
-        # Montants des avenants (FactureTS du chantier)
+        # Montants des avenants (FactureTS du chantier) — HT (montant_total des avenants est en HT)
         factures_ts = FactureTS.objects.filter(chantier=chantier)
-        montant_avenants = factures_ts.aggregate(total=Sum('montant_ttc'))['total'] or 0
+        montant_avenants = factures_ts.aggregate(total=Sum('montant_ht'))['total'] or 0
         montant_avenants = float(montant_avenants)
 
         return Response({
