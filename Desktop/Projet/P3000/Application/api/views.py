@@ -11765,6 +11765,64 @@ class RecapFinancierChantierAPIView(APIView):
             }
         }
 
+        # Encours client global (hors filtre mois du récap), montants HT :
+        # - situations : net HT après retenues (montant_apres_retenues), pas la TVA
+        # - factures classiques : price_ht
+        # Ventilation : situations non échues | factures non échues (« facturé ») | tout ce qui est en retard
+        aujourd_hui = date.today()
+        enc_total = 0.0
+        enc_situations_a_encaisser_ht = 0.0
+        enc_factures_a_encaisser_ht = 0.0
+        enc_en_retard_ht = 0.0
+
+        def date_echeance_situation(s):
+            if s.date_envoi and s.delai_paiement is not None:
+                try:
+                    return s.date_envoi + timedelta(days=int(s.delai_paiement))
+                except Exception:
+                    return None
+            return None
+
+        def date_echeance_facture(fac):
+            due = fac.date_echeance
+            if due is None and fac.date_envoi and fac.delai_paiement is not None:
+                try:
+                    return fac.date_envoi + timedelta(days=int(fac.delai_paiement))
+                except Exception:
+                    return None
+            return due
+
+        for s in Situation.objects.filter(chantier=chantier, date_paiement_reel__isnull=True):
+            m = float(s.montant_apres_retenues or 0)
+            if m == 0:
+                continue
+            enc_total += m
+            due = date_echeance_situation(s)
+            if due is None or due >= aujourd_hui:
+                enc_situations_a_encaisser_ht += m
+            else:
+                enc_en_retard_ht += m
+
+        for fac in Facture.objects.filter(
+            chantier=chantier, type_facture="classique", date_paiement__isnull=True
+        ):
+            m = float(fac.price_ht or 0)
+            if m == 0:
+                continue
+            enc_total += m
+            due = date_echeance_facture(fac)
+            if due is None or due >= aujourd_hui:
+                enc_factures_a_encaisser_ht += m
+            else:
+                enc_en_retard_ht += m
+
+        encours_paiements_clients = {
+            "total": round(enc_total, 2),
+            "situations_a_encaisser_ht": round(enc_situations_a_encaisser_ht, 2),
+            "factures_a_encaisser_ht": round(enc_factures_a_encaisser_ht, 2),
+            "en_retard_ht": round(enc_en_retard_ht, 2),
+        }
+
         # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
         montant_ht = float(chantier.montant_ht or 0)
         devis_marche = Devis.objects.filter(
@@ -11864,6 +11922,7 @@ class RecapFinancierChantierAPIView(APIView):
             "taux_fixe": taux_fixe,
             "montant_taux_fixe": montant_taux_fixe,
             "cout_chantier_cumul_jusqua_fin_mois": cout_chantier_cumul_jusqua_fin_mois,
+            "encours_paiements_clients": encours_paiements_clients,
         }
 
         serializer = RecapFinancierSerializer(data)

@@ -1951,6 +1951,8 @@ class RecapFinancierSerializer(serializers.Serializer):
     cout_chantier_cumul_jusqua_fin_mois = serializers.DictField(
         required=False, allow_null=True
     )
+    # Encaissements clients encore dus (toutes périodes), ventilés par échéance vs aujourd'hui
+    encours_paiements_clients = serializers.DictField(required=False, allow_null=True)
 
 class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:

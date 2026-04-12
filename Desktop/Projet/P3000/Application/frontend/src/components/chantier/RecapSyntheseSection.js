@@ -11,6 +11,9 @@ import {
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
+import EventOutlinedIcon from "@mui/icons-material/EventOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import React from "react";
 import {
   Area,
@@ -32,6 +35,9 @@ const COL_ST = "#4CAF50"; // Vert
 const COL_COUT_CUM = "rgba(211, 47, 47, 0.1)"; // Rouge très léger
 const COL_COUT_LINE = "#d32f2f"; // Rouge (comme dans les cartes)
 const COL_BENEF = "#43A047"; // Vert
+const COL_ENC_SITUATION = "#0277bd";
+const COL_ENC_FACTURE = "#1565c0";
+const COL_ENC_RETARD = "#c62828";
 
 const formatEuro = (v) =>
   Number(v || 0).toLocaleString("fr-FR", {
@@ -45,23 +51,33 @@ const montantCoutVisible = (v) => {
   return !Number.isNaN(n) && n !== 0;
 };
 
-const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) => {
+const StatCard = ({
+  title,
+  amount,
+  color,
+  isNegative = false,
+  costBreakdown,
+  paymentEncours,
+}) => {
   const breakdownRows = costBreakdown
     ? [
         montantCoutVisible(costBreakdown.main_oeuvre) && {
           label: "Main d'œuvre",
+          tip: "Part MO déjà payée (période ou vue globale).",
           value: Number(costBreakdown.main_oeuvre),
           lineColor: COL_MO,
           Icon: GroupsOutlinedIcon,
         },
         montantCoutVisible(costBreakdown.materiel) && {
           label: "Matériel",
+          tip: "Matériel déjà payé.",
           value: Number(costBreakdown.materiel),
           lineColor: COL_MAT,
           Icon: Inventory2OutlinedIcon,
         },
         montantCoutVisible(costBreakdown.sous_traitant) && {
           label: "Sous-traitant",
+          tip: "Sous-traitance déjà réglée.",
           value: Number(costBreakdown.sous_traitant),
           lineColor: COL_ST,
           Icon: HandshakeOutlinedIcon,
@@ -69,7 +85,38 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
       ].filter(Boolean)
     : [];
 
-  const hasBreakdown = breakdownRows.length > 0;
+  const paymentRows = paymentEncours
+    ? [
+        montantCoutVisible(paymentEncours.situationsHt) && {
+          key: "sit",
+          label: "Situations (HT)",
+          tip: "Net HT après retenues — pas encore en retard.",
+          value: Number(paymentEncours.situationsHt),
+          lineColor: COL_ENC_SITUATION,
+          Icon: EventOutlinedIcon,
+        },
+        montantCoutVisible(paymentEncours.facturesHt) && {
+          key: "fac",
+          label: "Facturé (HT)",
+          tip: "Factures clients impayées, échéance OK.",
+          value: Number(paymentEncours.facturesHt),
+          lineColor: COL_ENC_FACTURE,
+          Icon: ReceiptLongOutlinedIcon,
+        },
+        montantCoutVisible(paymentEncours.enRetardHt) && {
+          key: "retard",
+          label: "En retard (HT)",
+          tip: "Échéance dépassée (date prévue ou envoi + délai).",
+          value: Number(paymentEncours.enRetardHt),
+          lineColor: COL_ENC_RETARD,
+          Icon: ErrorOutlineIcon,
+        },
+      ].filter(Boolean)
+    : [];
+
+  const hasCostBreakdown = breakdownRows.length > 0;
+  const hasPaymentEncours = paymentRows.length > 0;
+  const hasCompact = hasCostBreakdown || hasPaymentEncours;
 
   return (
   <Card
@@ -102,7 +149,7 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
       sx={{
         p: 2,
         "&:last-child": { pb: 2 },
-        ...(hasBreakdown && {
+        ...(hasCompact && {
           pt: 1.25,
           px: 1.75,
           pb: 1.15,
@@ -114,12 +161,12 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
         variant="body2"
         color="text.secondary"
         fontWeight={600}
-        gutterBottom={!hasBreakdown}
+        gutterBottom={!hasCompact}
         sx={{
           textTransform: "uppercase",
           letterSpacing: "0.5px",
           fontSize: "0.7rem",
-          ...(hasBreakdown && { mb: 0.2 }),
+          ...(hasCompact && { mb: 0.2 }),
         }}
       >
         {title}
@@ -132,7 +179,7 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
           display: "flex",
           alignItems: "baseline",
           gap: 0.5,
-          ...(hasBreakdown && { mb: 0, lineHeight: 1.1 }),
+          ...(hasCompact && { mb: 0, lineHeight: 1.1 }),
         }}
       >
         {isNegative ? "- " : ""}
@@ -141,7 +188,7 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
           €
         </Typography>
       </Typography>
-      {hasBreakdown && (
+      {hasCostBreakdown && (
         <Box
           sx={{
             mt: 0.35,
@@ -181,8 +228,16 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
                 )}
                 <MuiTooltip
                   title={
-                    <Box component="span" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {row.label}
+                    <Box sx={{ maxWidth: 240, textAlign: "center" }}>
+                      <Box component="span" sx={{ fontWeight: 700, fontSize: "0.8rem", display: "block" }}>
+                        {row.label}
+                      </Box>
+                      <Box
+                        component="span"
+                        sx={{ fontSize: "0.72rem", opacity: 0.9, display: "block", mt: 0.35, lineHeight: 1.3 }}
+                      >
+                        {row.tip}
+                      </Box>
                     </Box>
                   }
                   placement="top"
@@ -193,10 +248,8 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
                       sx: {
                         bgcolor: "grey.900",
                         color: "common.white",
-                        fontWeight: 600,
-                        maxWidth: 220,
-                        textAlign: "center",
-                        py: 0.75,
+                        fontWeight: 500,
+                        py: 0.65,
                         px: 1,
                       },
                     },
@@ -275,6 +328,145 @@ const StatCard = ({ title, amount, color, isNegative = false, costBreakdown }) =
           })}
         </Box>
       )}
+      {hasPaymentEncours && (
+        <Box
+          sx={{
+            mt: hasCostBreakdown ? 0.5 : 0.35,
+            pt: 0.45,
+            borderTop: "1px solid",
+            borderColor: "divider",
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            columnGap: 0.75,
+            rowGap: 0.15,
+            minHeight: 22,
+            contain: "layout style",
+          }}
+        >
+          {paymentRows.map((row, i) => {
+            const EncIcon = row.Icon;
+            return (
+              <React.Fragment key={row.key}>
+                {i > 0 && (
+                  <Box
+                    component="span"
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: "0.55rem",
+                      lineHeight: 1,
+                      userSelect: "none",
+                      px: 0.15,
+                      alignSelf: "center",
+                      opacity: 0.9,
+                    }}
+                    aria-hidden
+                  >
+                    ·
+                  </Box>
+                )}
+                <MuiTooltip
+                  title={
+                    <Box sx={{ maxWidth: 240, textAlign: "center" }}>
+                      <Box component="span" sx={{ fontWeight: 700, fontSize: "0.8rem", display: "block" }}>
+                        {row.label}
+                      </Box>
+                      <Box
+                        component="span"
+                        sx={{ fontSize: "0.72rem", opacity: 0.9, display: "block", mt: 0.35, lineHeight: 1.3 }}
+                      >
+                        {row.tip}
+                      </Box>
+                    </Box>
+                  }
+                  placement="top"
+                  arrow
+                  enterDelay={100}
+                  componentsProps={{
+                    tooltip: {
+                      sx: {
+                        bgcolor: "grey.900",
+                        color: "common.white",
+                        fontWeight: 500,
+                        py: 0.65,
+                        px: 1,
+                      },
+                    },
+                    arrow: { sx: { color: "grey.900" } },
+                  }}
+                >
+                  <Box
+                    className="cout-chantier-bd-seg"
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 0.3,
+                      py: 0,
+                      px: 0.35,
+                      mx: -0.1,
+                      borderRadius: 1,
+                      cursor: "default",
+                      position: "relative",
+                      zIndex: 0,
+                      transformOrigin: "center center",
+                      backfaceVisibility: "hidden",
+                      transition:
+                        "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease",
+                      "&:hover": {
+                        zIndex: 3,
+                        transform: "scale(1.14)",
+                        bgcolor: "action.hover",
+                        boxShadow: (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "0 2px 12px rgba(0,0,0,0.45)"
+                            : "0 2px 10px rgba(0,0,0,0.1)",
+                      },
+                    }}
+                  >
+                    <EncIcon
+                      className="cout-chantier-bd-ico"
+                      sx={{
+                        fontSize: 12,
+                        color: row.lineColor,
+                        opacity: 1,
+                        flexShrink: 0,
+                      }}
+                      aria-hidden
+                    />
+                    <Box
+                      component="span"
+                      className="cout-chantier-bd-amt"
+                      sx={{
+                        fontSize: "0.58rem",
+                        lineHeight: 1.15,
+                        color: row.lineColor,
+                        opacity: 1,
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.01em",
+                      }}
+                    >
+                      {formatEuro(row.value)}
+                      <Box
+                        component="span"
+                        sx={{
+                          fontSize: "0.5rem",
+                          ml: 0.08,
+                          opacity: 1,
+                        }}
+                      >
+                        {" "}
+                        €
+                      </Box>
+                    </Box>
+                  </Box>
+                </MuiTooltip>
+              </React.Fragment>
+            );
+          })}
+        </Box>
+      )}
     </CardContent>
   </Card>
   );
@@ -300,7 +492,7 @@ const ChartTooltip = ({ active, payload, label }) => {
         {label}
       </Typography>
       <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.5 }}>
-        Cliquer sur une barre pour le détail du mois
+        Clic sur une barre : détail du mois
       </Typography>
       <Typography variant="body2">Matériel : {formatEuro(row.materiel)} €</Typography>
       <Typography variant="body2">Main d&apos;œuvre : {formatEuro(row.main_oeuvre)} €</Typography>
@@ -386,7 +578,18 @@ const RecapSyntheseSection = ({
     { title: "Marché", amount: montant_ht, color: "#1976d2" },
     { title: "Avenants + Factures", amount: montant_avenants_et_factures, color: "#1976d2" },
     { title: "Total", amount: total_marche_avenants_factures, color: "#1565c0" },
-    { title: "Paiements reçus", amount: total_paiements_recus, color: COL_BENEF },
+    {
+      title: "Paiements reçus",
+      amount: total_paiements_recus,
+      color: COL_BENEF,
+      ...(data.encours_paiements_clients && {
+        paymentEncours: {
+          situationsHt: Number(data.encours_paiements_clients.situations_a_encaisser_ht ?? 0),
+          facturesHt: Number(data.encours_paiements_clients.factures_a_encaisser_ht ?? 0),
+          enRetardHt: Number(data.encours_paiements_clients.en_retard_ht ?? 0),
+        },
+      }),
+    },
     {
       title: "Coût chantier",
       amount: cout_chantier,
@@ -426,6 +629,7 @@ const RecapSyntheseSection = ({
                   color={card.color}
                   isNegative={card.isNegative}
                   costBreakdown={card.costBreakdown}
+                  paymentEncours={card.paymentEncours}
                 />
               </Grid>
             ))}

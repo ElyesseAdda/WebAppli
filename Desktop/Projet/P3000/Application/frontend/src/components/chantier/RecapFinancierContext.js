@@ -9,7 +9,8 @@ const RecapFinancierContext = createContext();
 
 export const RecapFinancierProvider = ({ children }) => {
   const [periode, setPeriode] = useState(defaultPeriode);
-  const [global, setGlobal] = useState(false);
+  /** Vue « Global » activée par défaut (toutes périodes pour le récap chantier) */
+  const [global, setGlobal] = useState(true);
   const [filters, setFilters] = useState({});
   const [openAccordions, setOpenAccordions] = useState({});
 
