@@ -25,10 +25,18 @@ def enrich_draft_media_with_presigned_urls(draft_media):
     out = dict(draft_media)
     if out.get("signature_s3_key"):
         out["signature_presigned_url"] = _safe_presign(out["signature_s3_key"])
-    if out.get("photo_platine_s3_key"):
-        out["photo_platine_presigned_url"] = _safe_presign(out["photo_platine_s3_key"])
-    if out.get("photo_platine_portail_s3_key"):
-        out["photo_platine_portail_presigned_url"] = _safe_presign(out["photo_platine_portail_s3_key"])
+    plat_keys = out.get("photos_platine_s3_keys")
+    if isinstance(plat_keys, list) and plat_keys:
+        out["photo_platine_presigned_urls"] = [_safe_presign(k) for k in plat_keys if k]
+    elif out.get("photo_platine_s3_key"):
+        out["photo_platine_presigned_urls"] = [_safe_presign(out["photo_platine_s3_key"])]
+        out["photo_platine_presigned_url"] = out["photo_platine_presigned_urls"][0]
+    port_keys = out.get("photos_platine_portail_s3_keys")
+    if isinstance(port_keys, list) and port_keys:
+        out["photo_platine_portail_presigned_urls"] = [_safe_presign(k) for k in port_keys if k]
+    elif out.get("photo_platine_portail_s3_key"):
+        out["photo_platine_portail_presigned_urls"] = [_safe_presign(out["photo_platine_portail_s3_key"])]
+        out["photo_platine_portail_presigned_url"] = out["photo_platine_portail_presigned_urls"][0]
     pp = out.get("prestation_photos")
     if isinstance(pp, dict):
         out_p = {}
@@ -53,10 +61,19 @@ def collect_s3_keys_from_draft_media(draft_media):
     keys = []
     if not isinstance(draft_media, dict):
         return keys
-    for k in ("signature_s3_key", "photo_platine_s3_key", "photo_platine_portail_s3_key"):
-        v = draft_media.get(k)
-        if v:
-            keys.append(v)
+    sig = draft_media.get("signature_s3_key")
+    if sig:
+        keys.append(sig)
+    for list_key in ("photos_platine_s3_keys", "photos_platine_portail_s3_keys"):
+        lst = draft_media.get(list_key)
+        if isinstance(lst, list):
+            for v in lst:
+                if v:
+                    keys.append(v)
+        elif list_key == "photos_platine_s3_keys" and draft_media.get("photo_platine_s3_key"):
+            keys.append(draft_media["photo_platine_s3_key"])
+        elif list_key == "photos_platine_portail_s3_keys" and draft_media.get("photo_platine_portail_s3_key"):
+            keys.append(draft_media["photo_platine_portail_s3_key"])
     pp = draft_media.get("prestation_photos") or {}
     if isinstance(pp, dict):
         for items in pp.values():
@@ -135,20 +152,37 @@ def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
         _transfer_signature_base64(rapport, draft_media["signature_draft_data_url"])
 
     if rapport.type_rapport == "vigik_plus":
-        pk_src = draft_media.get("photo_platine_s3_key")
-        if pk_src:
+        plat_keys = draft_media.get("photos_platine_s3_keys")
+        if not isinstance(plat_keys, list) or not plat_keys:
+            legacy = draft_media.get("photo_platine_s3_key")
+            plat_keys = [legacy] if legacy else []
+        new_plat = []
+        for pk_src in plat_keys:
+            if not pk_src:
+                continue
             ext = pk_src.split(".")[-1] if "." in pk_src else "jpg"
             dest = f"rapports_intervention/vigik_platine/rapport_{rapport.id}_{uuid.uuid4().hex[:8]}.{ext}"
             if copy_s3_file(pk_src, dest):
-                rapport.photo_platine_s3_key = dest
-                rapport.save(update_fields=["photo_platine_s3_key"])
-        pk2 = draft_media.get("photo_platine_portail_s3_key")
-        if pk2:
-            ext = pk2.split(".")[-1] if "." in pk2 else "jpg"
+                new_plat.append(dest)
+        if new_plat:
+            rapport.photos_platine_s3_keys = new_plat
+            rapport.save(update_fields=["photos_platine_s3_keys"])
+
+        port_keys = draft_media.get("photos_platine_portail_s3_keys")
+        if not isinstance(port_keys, list) or not port_keys:
+            legacy2 = draft_media.get("photo_platine_portail_s3_key")
+            port_keys = [legacy2] if legacy2 else []
+        new_port = []
+        for pk_src in port_keys:
+            if not pk_src:
+                continue
+            ext = pk_src.split(".")[-1] if "." in pk_src else "jpg"
             dest = f"rapports_intervention/vigik_platine_portail/rapport_{rapport.id}_{uuid.uuid4().hex[:8]}.{ext}"
-            if copy_s3_file(pk2, dest):
-                rapport.photo_platine_portail_s3_key = dest
-                rapport.save(update_fields=["photo_platine_portail_s3_key"])
+            if copy_s3_file(pk_src, dest):
+                new_port.append(dest)
+        if new_port:
+            rapport.photos_platine_portail_s3_keys = new_port
+            rapport.save(update_fields=["photos_platine_portail_s3_keys"])
 
     prestation_photos = draft_media.get("prestation_photos")
     if isinstance(prestation_photos, dict) and rapport.type_rapport != "vigik_plus":

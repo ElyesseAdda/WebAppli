@@ -238,13 +238,15 @@
                     {% endif %}
                 </span>
             </div>
-            {% if photo_platine_url %}
+            {% if photo_platine_urls %}
             <div class="photos-section">
-                <h4>Photo</h4>
+                <h4>Photos</h4>
                 <div class="photos-grid">
+                    {% for u in photo_platine_urls %}
                     <div class="photo-item">
-                        <img src="{{ photo_platine_url }}" alt="Photo platine" />
+                        <img src="{{ u }}" alt="Photo platine" />
                     </div>
+                    {% endfor %}
                 </div>
             </div>
             {% endif %}
@@ -281,13 +283,15 @@
                     {% endif %}
                 </span>
             </div>
-            {% if rapport.presence_platine_portail and photo_platine_portail_url %}
+            {% if rapport.presence_platine_portail and photo_platine_portail_urls %}
             <div class="photos-section">
-                <h4>Photo (facultatif)</h4>
+                <h4>Photos (facultatif)</h4>
                 <div class="photos-grid">
+                    {% for u in photo_platine_portail_urls %}
                     <div class="photo-item">
-                        <img src="{{ photo_platine_portail_url }}" alt="Photo platine portail" />
+                        <img src="{{ u }}" alt="Photo platine portail" />
                     </div>
+                    {% endfor %}
                 </div>
             </div>
             {% endif %}
@@ -308,13 +312,15 @@
                     {% endif %}
                 </span>
             </div>
-            {% if photo_platine_portail_url %}
+            {% if photo_platine_portail_urls %}
             <div class="photos-section">
-                <h4>Photo</h4>
+                <h4>Photos</h4>
                 <div class="photos-grid">
+                    {% for u in photo_platine_portail_urls %}
                     <div class="photo-item">
-                        <img src="{{ photo_platine_portail_url }}" alt="Photo platine portail" />
+                        <img src="{{ u }}" alt="Photo platine portail" />
                     </div>
+                    {% endfor %}
                 </div>
             </div>
             {% endif %}

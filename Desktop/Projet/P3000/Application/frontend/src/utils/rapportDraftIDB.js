@@ -23,8 +23,18 @@ const openDb = () =>
     req.onerror = () => reject(req.error);
   });
 
+function vigikSnapshotEntries(arr) {
+  if (!arr?.length) return [];
+  return arr
+    .filter((p) => p?.file)
+    .map((p) => ({
+      blob: p.file,
+      name: p.name || p.file.name || "photo.jpg",
+    }));
+}
+
 /** Construit l’objet à stocker à partir de l’état React. */
-export function buildPhotoSnapshot(pendingPhotos, pendingPhotoPlatine, pendingPhotoPlatinePortail) {
+export function buildPhotoSnapshot(pendingPhotos, pendingPhotosPlatine, pendingPhotosPlatinePortail) {
   const pendingPhotosOut = {};
   for (const [idxStr, arr] of Object.entries(pendingPhotos || {})) {
     if (!arr?.length) continue;
@@ -37,15 +47,8 @@ export function buildPhotoSnapshot(pendingPhotos, pendingPhotoPlatine, pendingPh
   }
   return {
     pendingPhotos: pendingPhotosOut,
-    pendingPhotoPlatine: pendingPhotoPlatine?.file
-      ? { blob: pendingPhotoPlatine.file, name: pendingPhotoPlatine.name || pendingPhotoPlatine.file.name }
-      : null,
-    pendingPhotoPlatinePortail: pendingPhotoPlatinePortail?.file
-      ? {
-          blob: pendingPhotoPlatinePortail.file,
-          name: pendingPhotoPlatinePortail.name || pendingPhotoPlatinePortail.file.name,
-        }
-      : null,
+    pendingPhotosPlatine: vigikSnapshotEntries(pendingPhotosPlatine),
+    pendingPhotosPlatinePortail: vigikSnapshotEntries(pendingPhotosPlatinePortail),
   };
 }
 
@@ -53,8 +56,8 @@ export function photoSnapshotIsEmpty(snapshot) {
   if (!snapshot) return true;
   const p = snapshot.pendingPhotos || {};
   if (Object.keys(p).some((k) => p[k]?.length)) return false;
-  if (snapshot.pendingPhotoPlatine?.blob) return false;
-  if (snapshot.pendingPhotoPlatinePortail?.blob) return false;
+  if (snapshot.pendingPhotosPlatine?.length) return false;
+  if (snapshot.pendingPhotosPlatinePortail?.length) return false;
   return true;
 }
 
@@ -136,18 +139,18 @@ export function applyPhotoSnapshotToState(snapshot) {
   if (!snapshot || photoSnapshotIsEmpty(snapshot)) {
     return {
       pendingPhotos: {},
-      pendingPhotoPlatine: null,
-      pendingPhotoPlatinePortail: null,
+      pendingPhotosPlatine: [],
+      pendingPhotosPlatinePortail: [],
     };
   }
   const pendingPhotos = restorePendingPhotosFromSnapshot(snapshot);
-  const pendingPhotoPlatine = snapshot.pendingPhotoPlatine?.blob
-    ? restoreVigikPhotoFromSnapshot(snapshot.pendingPhotoPlatine)
-    : null;
-  const pendingPhotoPlatinePortail = snapshot.pendingPhotoPlatinePortail?.blob
-    ? restoreVigikPhotoFromSnapshot(snapshot.pendingPhotoPlatinePortail)
-    : null;
-  return { pendingPhotos, pendingPhotoPlatine, pendingPhotoPlatinePortail };
+  const pendingPhotosPlatine = (snapshot.pendingPhotosPlatine || [])
+    .map((e) => restoreVigikPhotoFromSnapshot(e))
+    .filter(Boolean);
+  const pendingPhotosPlatinePortail = (snapshot.pendingPhotosPlatinePortail || [])
+    .map((e) => restoreVigikPhotoFromSnapshot(e))
+    .filter(Boolean);
+  return { pendingPhotos, pendingPhotosPlatine, pendingPhotosPlatinePortail };
 }
 
 function blobToDataUrl(blob) {
@@ -176,7 +179,7 @@ function dataUrlToBlob(dataUrl) {
  */
 export async function serializePhotoSnapshotForPayload(snapshot) {
   if (!snapshot || photoSnapshotIsEmpty(snapshot)) return null;
-  const out = { pendingPhotos: {}, pendingPhotoPlatine: null, pendingPhotoPlatinePortail: null };
+  const out = { pendingPhotos: {}, pendingPhotosPlatine: [], pendingPhotosPlatinePortail: [] };
   for (const [idxStr, arr] of Object.entries(snapshot.pendingPhotos || {})) {
     if (!arr?.length) continue;
     out.pendingPhotos[idxStr] = [];
@@ -192,25 +195,27 @@ export async function serializePhotoSnapshotForPayload(snapshot) {
       });
     }
   }
-  if (snapshot.pendingPhotoPlatine?.blob instanceof Blob) {
-    out.pendingPhotoPlatine = {
-      dataUrl: await blobToDataUrl(snapshot.pendingPhotoPlatine.blob),
-      name: snapshot.pendingPhotoPlatine.name || "photo.jpg",
-    };
+  for (const e of snapshot.pendingPhotosPlatine || []) {
+    if (!(e.blob instanceof Blob)) continue;
+    out.pendingPhotosPlatine.push({
+      dataUrl: await blobToDataUrl(e.blob),
+      name: e.name || "photo.jpg",
+    });
   }
-  if (snapshot.pendingPhotoPlatinePortail?.blob instanceof Blob) {
-    out.pendingPhotoPlatinePortail = {
-      dataUrl: await blobToDataUrl(snapshot.pendingPhotoPlatinePortail.blob),
-      name: snapshot.pendingPhotoPlatinePortail.name || "photo.jpg",
-    };
+  for (const e of snapshot.pendingPhotosPlatinePortail || []) {
+    if (!(e.blob instanceof Blob)) continue;
+    out.pendingPhotosPlatinePortail.push({
+      dataUrl: await blobToDataUrl(e.blob),
+      name: e.name || "photo.jpg",
+    });
   }
   for (const k of Object.keys(out.pendingPhotos)) {
     if (!out.pendingPhotos[k]?.length) delete out.pendingPhotos[k];
   }
   if (
     !Object.keys(out.pendingPhotos).length &&
-    !out.pendingPhotoPlatine &&
-    !out.pendingPhotoPlatinePortail
+    !out.pendingPhotosPlatine.length &&
+    !out.pendingPhotosPlatinePortail.length
   ) {
     return null;
   }
@@ -240,26 +245,26 @@ export function deserializePhotoSnapshotFromPayload(serialized) {
   }
   const snapshot = {
     pendingPhotos: pendingPhotosOut,
-    pendingPhotoPlatine: null,
-    pendingPhotoPlatinePortail: null,
+    pendingPhotosPlatine: [],
+    pendingPhotosPlatinePortail: [],
   };
-  if (serialized.pendingPhotoPlatine?.dataUrl) {
-    const blob = dataUrlToBlob(serialized.pendingPhotoPlatine.dataUrl);
-    if (blob) {
-      snapshot.pendingPhotoPlatine = {
-        blob,
-        name: serialized.pendingPhotoPlatine.name || "photo.jpg",
-      };
-    }
+  const legacyPlat = serialized.pendingPhotoPlatine?.dataUrl
+    ? [{ dataUrl: serialized.pendingPhotoPlatine.dataUrl, name: serialized.pendingPhotoPlatine.name }]
+    : [];
+  const arrPlat = serialized.pendingPhotosPlatine?.length ? serialized.pendingPhotosPlatine : legacyPlat;
+  for (const item of arrPlat || []) {
+    const blob = dataUrlToBlob(item.dataUrl);
+    if (blob) snapshot.pendingPhotosPlatine.push({ blob, name: item.name || "photo.jpg" });
   }
-  if (serialized.pendingPhotoPlatinePortail?.dataUrl) {
-    const blob = dataUrlToBlob(serialized.pendingPhotoPlatinePortail.dataUrl);
-    if (blob) {
-      snapshot.pendingPhotoPlatinePortail = {
-        blob,
-        name: serialized.pendingPhotoPlatinePortail.name || "photo.jpg",
-      };
-    }
+  const legacyPort = serialized.pendingPhotoPlatinePortail?.dataUrl
+    ? [{ dataUrl: serialized.pendingPhotoPlatinePortail.dataUrl, name: serialized.pendingPhotoPlatinePortail.name }]
+    : [];
+  const arrPort = serialized.pendingPhotosPlatinePortail?.length
+    ? serialized.pendingPhotosPlatinePortail
+    : legacyPort;
+  for (const item of arrPort || []) {
+    const blob = dataUrlToBlob(item.dataUrl);
+    if (blob) snapshot.pendingPhotosPlatinePortail.push({ blob, name: item.name || "photo.jpg" });
   }
   return photoSnapshotIsEmpty(snapshot) ? null : snapshot;
 }

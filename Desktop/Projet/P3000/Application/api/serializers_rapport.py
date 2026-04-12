@@ -49,9 +49,9 @@ def _normalize_vigik_portail_answers(validated_data, instance=None):
 
     if pp is False:
         validated_data['presence_platine_portail'] = None
-        validated_data['photo_platine_portail_s3_key'] = ''
+        validated_data['photos_platine_portail_s3_keys'] = []
     elif pp is True and ppp is False:
-        validated_data['photo_platine_portail_s3_key'] = ''
+        validated_data['photos_platine_portail_s3_keys'] = []
     return validated_data
 
 
@@ -211,8 +211,8 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
     signature_url = serializers.SerializerMethodField()
     pdf_url = serializers.SerializerMethodField()
     pdf_drive_url = serializers.SerializerMethodField()
-    photo_platine_url = serializers.SerializerMethodField()
-    photo_platine_portail_url = serializers.SerializerMethodField()
+    vigik_platine_photos = serializers.SerializerMethodField()
+    vigik_platine_portail_photos = serializers.SerializerMethodField()
     devis_lie_numero = serializers.SerializerMethodField()
     devis_lie_preview_url = serializers.SerializerMethodField()
 
@@ -225,12 +225,12 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
             'signature_s3_key', 'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'pdf_s3_key',
             'adresse_vigik', 'numero_batiment', 'type_installation',
-            'presence_platine', 'photo_platine_s3_key',
-            'presence_portail', 'presence_platine_portail', 'photo_platine_portail_s3_key',
+            'presence_platine', 'photos_platine_s3_keys',
+            'presence_portail', 'presence_platine_portail', 'photos_platine_portail_s3_keys',
             'created_by', 'created_at', 'updated_at',
             'prestations', 'residence_data', 'residence_nom', 'residence_adresse',
             'client_societe_nom', 'client_societe_logo_url', 'chantier_nom',
-            'signature_url', 'pdf_url', 'pdf_drive_url', 'photo_platine_url', 'photo_platine_portail_url',
+            'signature_url', 'pdf_url', 'pdf_drive_url', 'vigik_platine_photos', 'vigik_platine_portail_photos',
             'devis_lie_numero', 'devis_lie_preview_url',
         ]
         read_only_fields = ['created_by', 'created_at', 'updated_at', 'signature_s3_key', 'pdf_s3_key']
@@ -287,23 +287,27 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
             return f"/drive-v2?path={obj.pdf_s3_key}&focus=file"
         return None
 
-    def get_photo_platine_url(self, obj):
-        if obj.photo_platine_s3_key:
-            try:
-                from .utils import generate_presigned_url_for_display
-                return generate_presigned_url_for_display(obj.photo_platine_s3_key, expires_in=3600)
-            except Exception:
-                return None
-        return None
+    def _vigik_photo_rows(self, keys):
+        rows = []
+        if not isinstance(keys, list):
+            return rows
+        from .utils import generate_presigned_url_for_display
 
-    def get_photo_platine_portail_url(self, obj):
-        if obj.photo_platine_portail_s3_key:
+        for k in keys:
+            if not k or not isinstance(k, str):
+                continue
             try:
-                from .utils import generate_presigned_url_for_display
-                return generate_presigned_url_for_display(obj.photo_platine_portail_s3_key, expires_in=3600)
+                url = generate_presigned_url_for_display(k, expires_in=3600)
             except Exception:
-                return None
-        return None
+                url = None
+            rows.append({'s3_key': k, 'url': url})
+        return rows
+
+    def get_vigik_platine_photos(self, obj):
+        return self._vigik_photo_rows(getattr(obj, 'photos_platine_s3_keys', None) or [])
+
+    def get_vigik_platine_portail_photos(self, obj):
+        return self._vigik_photo_rows(getattr(obj, 'photos_platine_portail_s3_keys', None) or [])
 
     def get_devis_lie_numero(self, obj):
         return obj.devis_lie.numero if obj.devis_lie else None
@@ -418,7 +422,6 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'prestations',
             'numero_batiment', 'type_installation',
             'presence_platine', 'presence_portail', 'presence_platine_portail',
-            'photo_platine_portail_s3_key',
         ]
 
     def _resolve_vigik_defaults(self, validated_data):
@@ -466,8 +469,8 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche.
         Statut brouillon : champs assouplis pour sauvegarde auto sans tout remplir."""
-        attrs.pop('photo_platine_s3_key', None)
-        attrs.pop('photo_platine_portail_s3_key', None)
+        attrs.pop('photos_platine_s3_keys', None)
+        attrs.pop('photos_platine_portail_s3_keys', None)
         attrs = _normalize_dates_intervention_attrs(attrs, instance=getattr(self, 'instance', None))
         instance = getattr(self, 'instance', None)
 
@@ -562,8 +565,13 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
         prestations_data = validated_data.pop('prestations', None)
         validated_data = self._resolve_vigik_defaults(validated_data)
         validated_data = _normalize_vigik_portail_answers(validated_data, instance=instance)
-        if validated_data.get('photo_platine_portail_s3_key') == '' and instance.photo_platine_portail_s3_key:
-            _safe_delete_s3_key(instance.photo_platine_portail_s3_key)
+        new_pp = validated_data.get('photos_platine_portail_s3_keys')
+        if new_pp is not None:
+            old_pp = list(instance.photos_platine_portail_s3_keys or [])
+            new_set = set(new_pp)
+            for k in old_pp:
+                if k and k not in new_set:
+                    _safe_delete_s3_key(k)
         validated_data = self._resolve_residence(validated_data)
 
         for attr, value in validated_data.items():

@@ -499,8 +499,8 @@ const RapportForm = ({
   const [residences, setResidences] = useState([]);
   const [selectedResidence, setSelectedResidence] = useState(null);
   const [pendingPhotos, setPendingPhotos] = useState({});
-  const [pendingPhotoPlatine, setPendingPhotoPlatine] = useState(null);
-  const [pendingPhotoPlatinePortail, setPendingPhotoPlatinePortail] = useState(null);
+  const [pendingPhotosPlatine, setPendingPhotosPlatine] = useState([]);
+  const [pendingPhotosPlatinePortail, setPendingPhotosPlatinePortail] = useState([]);
   const photoPlatineInputRef = useRef(null);
   const photoPlatineCameraInputRef = useRef(null);
   const photoPlatinePortailInputRef = useRef(null);
@@ -537,8 +537,8 @@ const RapportForm = ({
   const formDataRef = useRef(null);
   const selectedResidenceRef = useRef(null);
   const pendingPhotosRef = useRef(null);
-  const pendingPhotoPlatineRef = useRef(null);
-  const pendingPhotoPlatinePortailRef = useRef(null);
+  const pendingPhotosPlatineRef = useRef(null);
+  const pendingPhotosPlatinePortailRef = useRef(null);
   const rapportDataRef = useRef(null);
   const draftSaveEnabledRef = useRef(false);
   const savingRef = useRef(false);
@@ -558,8 +558,8 @@ const RapportForm = ({
   formDataRef.current = formData;
   selectedResidenceRef.current = selectedResidence;
   pendingPhotosRef.current = pendingPhotos;
-  pendingPhotoPlatineRef.current = pendingPhotoPlatine;
-  pendingPhotoPlatinePortailRef.current = pendingPhotoPlatinePortail;
+  pendingPhotosPlatineRef.current = pendingPhotosPlatine;
+  pendingPhotosPlatinePortailRef.current = pendingPhotosPlatinePortail;
   rapportDataRef.current = rapportData;
   draftSaveEnabledRef.current = draftSaveEnabled;
   savingRef.current = saving;
@@ -638,6 +638,33 @@ const RapportForm = ({
       } else {
         setSelectedResidence(null);
       }
+      if (data.type_rapport === "vigik_plus") {
+        const platRows = data.vigik_platine_photos || [];
+        setPendingPhotosPlatine(
+          platRows
+            .filter((row) => row?.s3_key || row?.url)
+            .map((row, i) => ({
+              file: null,
+              previewUrl: row.url || null,
+              name: `photo-${i + 1}`,
+              _draftS3Key: row.s3_key || null,
+            }))
+        );
+        const portRows = data.vigik_platine_portail_photos || [];
+        setPendingPhotosPlatinePortail(
+          portRows
+            .filter((row) => row?.s3_key || row?.url)
+            .map((row, i) => ({
+              file: null,
+              previewUrl: row.url || null,
+              name: `photo-portail-${i + 1}`,
+              _draftS3Key: row.s3_key || null,
+            }))
+        );
+      } else {
+        setPendingPhotosPlatine([]);
+        setPendingPhotosPlatinePortail([]);
+      }
     } catch (err) {
       showSnackbar("Erreur lors du chargement du rapport", "error");
     }
@@ -672,7 +699,13 @@ const RapportForm = ({
         lastDraftMediaRef.current = dm || null;
         const typeRap = data.payload.type_rapport || "intervention";
         const isVigik = typeRap === "vigik_plus";
-        const isV2 = dm && (dm.version === 2 || dm.signature_s3_key || dm.prestation_photos || dm.photo_platine_s3_key);
+        const isV2 =
+          dm &&
+          (dm.version === 2 ||
+            dm.signature_s3_key ||
+            dm.prestation_photos ||
+            dm.photo_platine_s3_key ||
+            (Array.isArray(dm.photos_platine_s3_keys) && dm.photos_platine_s3_keys.length > 0));
         if (isV2) {
           const sigUrl = dm.signature_presigned_url || dm.signature_draft_data_url;
           setSignatureDraftRestoreUrl(sigUrl && String(sigUrl).length > 32 ? sigUrl : null);
@@ -715,65 +748,81 @@ const RapportForm = ({
           }
           if (isVigik) {
             setPendingPhotos({});
-            if (dm.photo_platine_s3_key) {
-              if (dm.photo_platine_presigned_url) {
+            const platKeys = Array.isArray(dm.photos_platine_s3_keys)
+              ? dm.photos_platine_s3_keys
+              : dm.photo_platine_s3_key
+                ? [dm.photo_platine_s3_key]
+                : [];
+            const platUrls = Array.isArray(dm.photo_platine_presigned_urls)
+              ? dm.photo_platine_presigned_urls
+              : dm.photo_platine_presigned_url
+                ? [dm.photo_platine_presigned_url]
+                : [];
+            const platOut = [];
+            for (let i = 0; i < platKeys.length; i++) {
+              const k = platKeys[i];
+              const u = platUrls[i];
+              if (!k) continue;
+              if (u) {
                 try {
-                  const blob = await fetch(dm.photo_platine_presigned_url).then((r) => r.blob());
-                  const file = new File([blob], "platine.jpg", { type: blob.type || "image/jpeg" });
-                  setPendingPhotoPlatine({
+                  const blob = await fetch(u).then((r) => r.blob());
+                  const file = new File([blob], `platine-${i + 1}.jpg`, { type: blob.type || "image/jpeg" });
+                  platOut.push({
                     file,
                     previewUrl: URL.createObjectURL(file),
                     name: file.name,
-                    _draftS3Key: dm.photo_platine_s3_key,
+                    _draftS3Key: k,
                   });
                 } catch {
-                  setPendingPhotoPlatine({
-                    name: "platine.jpg",
-                    previewUrl: null,
-                    _draftS3Key: dm.photo_platine_s3_key,
-                  });
+                  platOut.push({ name: `platine-${i + 1}.jpg`, previewUrl: null, _draftS3Key: k, file: null });
                 }
               } else {
-                setPendingPhotoPlatine({
-                  name: "platine.jpg",
-                  previewUrl: null,
-                  _draftS3Key: dm.photo_platine_s3_key,
-                });
+                platOut.push({ name: `platine-${i + 1}.jpg`, previewUrl: null, _draftS3Key: k, file: null });
               }
-            } else {
-              setPendingPhotoPlatine(null);
             }
-            if (dm.photo_platine_portail_s3_key) {
-              if (dm.photo_platine_portail_presigned_url) {
+            setPendingPhotosPlatine(platOut);
+
+            const portKeys = Array.isArray(dm.photos_platine_portail_s3_keys)
+              ? dm.photos_platine_portail_s3_keys
+              : dm.photo_platine_portail_s3_key
+                ? [dm.photo_platine_portail_s3_key]
+                : [];
+            const portUrls = Array.isArray(dm.photo_platine_portail_presigned_urls)
+              ? dm.photo_platine_portail_presigned_urls
+              : dm.photo_platine_portail_presigned_url
+                ? [dm.photo_platine_portail_presigned_url]
+                : [];
+            const portOut = [];
+            for (let i = 0; i < portKeys.length; i++) {
+              const k = portKeys[i];
+              const u = portUrls[i];
+              if (!k) continue;
+              if (u) {
                 try {
-                  const blob = await fetch(dm.photo_platine_portail_presigned_url).then((r) => r.blob());
-                  const file = new File([blob], "platine_portail.jpg", { type: blob.type || "image/jpeg" });
-                  setPendingPhotoPlatinePortail({
+                  const blob = await fetch(u).then((r) => r.blob());
+                  const file = new File([blob], `platine-portail-${i + 1}.jpg`, { type: blob.type || "image/jpeg" });
+                  portOut.push({
                     file,
                     previewUrl: URL.createObjectURL(file),
                     name: file.name,
-                    _draftS3Key: dm.photo_platine_portail_s3_key,
+                    _draftS3Key: k,
                   });
                 } catch {
-                  setPendingPhotoPlatinePortail({
-                    name: "platine_portail.jpg",
+                  portOut.push({
+                    name: `platine-portail-${i + 1}.jpg`,
                     previewUrl: null,
-                    _draftS3Key: dm.photo_platine_portail_s3_key,
+                    _draftS3Key: k,
+                    file: null,
                   });
                 }
               } else {
-                setPendingPhotoPlatinePortail({
-                  name: "platine_portail.jpg",
-                  previewUrl: null,
-                  _draftS3Key: dm.photo_platine_portail_s3_key,
-                });
+                portOut.push({ name: `platine-portail-${i + 1}.jpg`, previewUrl: null, _draftS3Key: k, file: null });
               }
-            } else {
-              setPendingPhotoPlatinePortail(null);
             }
+            setPendingPhotosPlatinePortail(portOut);
           } else {
-            setPendingPhotoPlatine(null);
-            setPendingPhotoPlatinePortail(null);
+            setPendingPhotosPlatine([]);
+            setPendingPhotosPlatinePortail([]);
           }
         } else {
           const sigUrl = dm?.signature_draft_data_url;
@@ -782,12 +831,12 @@ const RapportForm = ({
           if (snap && !photoSnapshotIsEmpty(snap)) {
             const applied = applyPhotoSnapshotToState(snap);
             setPendingPhotos(applied.pendingPhotos);
-            setPendingPhotoPlatine(applied.pendingPhotoPlatine);
-            setPendingPhotoPlatinePortail(applied.pendingPhotoPlatinePortail);
+            setPendingPhotosPlatine(applied.pendingPhotosPlatine || []);
+            setPendingPhotosPlatinePortail(applied.pendingPhotosPlatinePortail || []);
           } else {
             setPendingPhotos({});
-            setPendingPhotoPlatine(null);
-            setPendingPhotoPlatinePortail(null);
+            setPendingPhotosPlatine([]);
+            setPendingPhotosPlatinePortail([]);
           }
         }
       } catch {
@@ -856,18 +905,22 @@ const RapportForm = ({
       }
       return next;
     });
-    if (value === false && pendingPhotoPlatinePortail?.previewUrl) {
-      URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
-      setPendingPhotoPlatinePortail(null);
+    if (value === false) {
+      (pendingPhotosPlatinePortail || []).forEach((p) => {
+        if (p?.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+      });
+      setPendingPhotosPlatinePortail([]);
     }
     scheduleDraftPersistence();
   };
 
   const handleVigikPlatinePortailChange = (value) => {
     setFormData((prev) => ({ ...prev, presence_platine_portail: value }));
-    if (value === false && pendingPhotoPlatinePortail?.previewUrl) {
-      URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
-      setPendingPhotoPlatinePortail(null);
+    if (value === false) {
+      (pendingPhotosPlatinePortail || []).forEach((p) => {
+        if (p?.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+      });
+      setPendingPhotosPlatinePortail([]);
     }
     scheduleDraftPersistence();
   };
@@ -1150,51 +1203,45 @@ const RapportForm = ({
   const isVigikPlus = formData.type_rapport === "vigik_plus";
   const vigikShowPortailPhoto =
     formData.presence_portail === true && formData.presence_platine_portail === true;
-  const vigikPhotos = [
-    pendingPhotoPlatine
-      ? {
-          image_url: pendingPhotoPlatine.previewUrl,
-          label: "Photo platine",
-          date_photo: latestInterventionISO(formData.dates_intervention) || todayISO(),
-          pending: true,
-        }
-      : (rapportData?.photo_platine_url
-        ? {
-            image_url: rapportData.photo_platine_url,
-            label: "Photo platine",
-            date_photo:
-              latestInterventionISO(rapportData?.dates_intervention) ||
-              (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
-              latestInterventionISO(formData.dates_intervention) ||
-              todayISO(),
-            pending: false,
-          }
-        : null),
-    vigikShowPortailPhoto &&
-      (pendingPhotoPlatinePortail
-        ? {
-            image_url: pendingPhotoPlatinePortail.previewUrl,
-            label: "Photo platine portail",
-            date_photo: latestInterventionISO(formData.dates_intervention) || todayISO(),
-            pending: true,
-          }
-        : rapportData?.photo_platine_portail_url
-          ? {
-              image_url: rapportData.photo_platine_portail_url,
-              label: "Photo platine portail",
-              date_photo:
-                latestInterventionISO(rapportData?.dates_intervention) ||
-                (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
-                latestInterventionISO(formData.dates_intervention) ||
-                todayISO(),
-              pending: false,
-            }
-          : null),
-  ].filter(Boolean);
+  const vigikPhotos = useMemo(() => {
+    const out = [];
+    const datePlat =
+      latestInterventionISO(formData.dates_intervention) ||
+      (rapportData?.date ? String(rapportData.date).slice(0, 10) : null) ||
+      todayISO();
+    (pendingPhotosPlatine || []).forEach((p, i) => {
+      if (!p?.previewUrl) return;
+      out.push({
+        image_url: p.previewUrl,
+        label: `Photo platine (${i + 1})`,
+        date_photo: datePlat,
+        pending: !!p.file,
+      });
+    });
+    if (vigikShowPortailPhoto) {
+      (pendingPhotosPlatinePortail || []).forEach((p, i) => {
+        if (!p?.previewUrl) return;
+        out.push({
+          image_url: p.previewUrl,
+          label: `Photo platine portail (${i + 1})`,
+          date_photo: datePlat,
+          pending: !!p.file,
+        });
+      });
+    }
+    return out;
+  }, [
+    pendingPhotosPlatine,
+    pendingPhotosPlatinePortail,
+    formData.dates_intervention,
+    vigikShowPortailPhoto,
+    rapportData?.date,
+  ]);
 
-  const openVigikGallery = (label) => {
-    const idx = vigikPhotos.findIndex((p) => p.label === label);
-    setVigikGalleryIndex(idx >= 0 ? idx : 0);
+  const openVigikGallery = (index) => {
+    if (!vigikPhotos.length) return;
+    const idx = Math.max(0, Math.min(index, vigikPhotos.length - 1));
+    setVigikGalleryIndex(idx);
     setVigikGalleryOpen(true);
   };
 
@@ -1265,7 +1312,9 @@ const RapportForm = ({
           });
         }
       }
-      const hasPhotoPlatine = pendingPhotoPlatine || rapportData?.photo_platine_s3_key;
+      const hasPhotoPlatine =
+        (pendingPhotosPlatine || []).some((p) => p?.file || p?._draftS3Key || p?.previewUrl) ||
+        (rapportData?.vigik_platine_photos || []).length > 0;
       if (!hasPhotoPlatine) {
         items.push({
           field: "Photo — présence de platine",
@@ -1367,30 +1416,33 @@ const RapportForm = ({
       await uploadPendingPhotos(fullResult);
     }
 
-    if (isVigikPlus && pendingPhotoPlatine?.file) {
-      const fd = new FormData();
-      fd.append("rapport_id", savedId);
-      fd.append("photo", pendingPhotoPlatine.file);
-      await axios.post("/api/rapports-intervention/upload_photo_platine/", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
-      setPendingPhotoPlatine(null);
-    }
-    if (
-      isVigikPlus &&
-      pendingPhotoPlatinePortail?.file &&
-      formData.presence_portail === true &&
-      formData.presence_platine_portail === true
-    ) {
-      const fd = new FormData();
-      fd.append("rapport_id", savedId);
-      fd.append("photo", pendingPhotoPlatinePortail.file);
-      await axios.post("/api/rapports-intervention/upload_photo_platine_portail/", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
-      setPendingPhotoPlatinePortail(null);
+    if (isVigikPlus) {
+      for (const p of pendingPhotosPlatineRef.current || []) {
+        if (!p?.file) continue;
+        const fd = new FormData();
+        fd.append("rapport_id", savedId);
+        fd.append("photo", p.file);
+        await axios.post("/api/rapports-intervention/upload_photo_platine/", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+      }
+      if (
+        formDataRef.current?.presence_portail === true &&
+        formDataRef.current?.presence_platine_portail === true
+      ) {
+        for (const p of pendingPhotosPlatinePortailRef.current || []) {
+          if (!p?.file) continue;
+          const fd = new FormData();
+          fd.append("rapport_id", savedId);
+          fd.append("photo", p.file);
+          await axios.post("/api/rapports-intervention/upload_photo_platine_portail/", fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+        }
+      }
+      await loadRapport(savedId);
     }
 
     if (!isVigikPlus) await uploadPendingSignature(savedId);
@@ -1403,8 +1455,8 @@ const RapportForm = ({
   const buildDraftMediaForServer = useCallback(async (bid) => {
     if (!bid) return null;
     const pp = pendingPhotosRef.current || {};
-    const pPlat = pendingPhotoPlatineRef.current;
-    const pPort = pendingPhotoPlatinePortailRef.current;
+    const platItems = pendingPhotosPlatineRef.current || [];
+    const portItems = pendingPhotosPlatinePortailRef.current || [];
     const vigik = formDataRef.current?.type_rapport === "vigik_plus";
     const dateRef = latestInterventionISO(formDataRef.current?.dates_intervention) || todayISO();
 
@@ -1455,42 +1507,73 @@ const RapportForm = ({
       /* Canvas non exportable (ex. image sans CORS avant correctif) : on garde la clé S3 déjà enregistrée. */
     }
 
-    let photo_platine_s3_key = null;
-    let photo_platine_portail_s3_key = null;
+    const photos_platine_s3_keys = [];
+    const photos_platine_portail_s3_keys = [];
     if (vigik) {
-      if (pPlat?.file && !pPlat._draftS3Key) {
+      const nextPlatState = [];
+      for (const p of platItems) {
+        if (p._draftS3Key) {
+          photos_platine_s3_keys.push(p._draftS3Key);
+          nextPlatState.push({ ...p, file: null });
+          continue;
+        }
+        if (!p.file) continue;
         const fd = new FormData();
-        fd.append("photo", pPlat.file);
+        fd.append("photo", p.file);
         const { data } = await axios.post(
           `/api/rapports-intervention-brouillons/${bid}/upload_photo_platine/`,
           fd,
           { headers: { "Content-Type": "multipart/form-data" } }
         );
-        photo_platine_s3_key = data.s3_key || null;
-      } else if (pPlat?._draftS3Key) {
-        photo_platine_s3_key = pPlat._draftS3Key;
+        if (data.s3_key) photos_platine_s3_keys.push(data.s3_key);
+        if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+        nextPlatState.push({
+          _draftS3Key: data.s3_key,
+          name: p.name || "photo.jpg",
+          file: null,
+          previewUrl: data.presigned_url || null,
+        });
       }
+      setPendingPhotosPlatine(nextPlatState);
+
       const fdVigik = formDataRef.current;
       const allowPortailPhoto =
         fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === true;
-      if (allowPortailPhoto && pPort?.file && !pPort._draftS3Key) {
-        const fd = new FormData();
-        fd.append("photo", pPort.file);
-        const { data } = await axios.post(
-          `/api/rapports-intervention-brouillons/${bid}/upload_photo_platine_portail/`,
-          fd,
-          { headers: { "Content-Type": "multipart/form-data" } }
-        );
-        photo_platine_portail_s3_key = data.s3_key || null;
-      } else if (allowPortailPhoto && pPort?._draftS3Key) {
-        photo_platine_portail_s3_key = pPort._draftS3Key;
+      const nextPortState = [];
+      if (allowPortailPhoto) {
+        for (const p of portItems) {
+          if (p._draftS3Key) {
+            photos_platine_portail_s3_keys.push(p._draftS3Key);
+            nextPortState.push({ ...p, file: null });
+            continue;
+          }
+          if (!p.file) continue;
+          const fd = new FormData();
+          fd.append("photo", p.file);
+          const { data } = await axios.post(
+            `/api/rapports-intervention-brouillons/${bid}/upload_photo_platine_portail/`,
+            fd,
+            { headers: { "Content-Type": "multipart/form-data" } }
+          );
+          if (data.s3_key) photos_platine_portail_s3_keys.push(data.s3_key);
+          if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+          nextPortState.push({
+            _draftS3Key: data.s3_key,
+            name: p.name || "photo.jpg",
+            file: null,
+            previewUrl: data.presigned_url || null,
+          });
+        }
+        setPendingPhotosPlatinePortail(nextPortState);
+      } else if (!allowPortailPhoto) {
+        setPendingPhotosPlatinePortail([]);
       }
     }
 
     const hasV2 =
       signature_s3_key ||
-      photo_platine_s3_key ||
-      photo_platine_portail_s3_key ||
+      (vigik && photos_platine_s3_keys.length > 0) ||
+      (vigik && photos_platine_portail_s3_keys.length > 0) ||
       Object.keys(prestation_photos).length > 0;
     if (!hasV2) return null;
 
@@ -1507,20 +1590,17 @@ const RapportForm = ({
       }
       return next;
     });
-    if (photo_platine_s3_key && pPlat) {
-      setPendingPhotoPlatine((prev) => (prev ? { ...prev, _draftS3Key: photo_platine_s3_key } : prev));
-    }
-    if (photo_platine_portail_s3_key && pPort) {
-      setPendingPhotoPlatinePortail((prev) => (prev ? { ...prev, _draftS3Key: photo_platine_portail_s3_key } : prev));
-    }
 
-    return {
+    const media = {
       version: 2,
       signature_s3_key,
-      photo_platine_s3_key: vigik ? photo_platine_s3_key : null,
-      photo_platine_portail_s3_key: vigik ? photo_platine_portail_s3_key : null,
       prestation_photos: vigik ? {} : prestation_photos,
     };
+    if (vigik) {
+      media.photos_platine_s3_keys = photos_platine_s3_keys;
+      media.photos_platine_portail_s3_keys = photos_platine_portail_s3_keys;
+    }
+    return media;
   }, []);
 
   /**
@@ -1599,8 +1679,8 @@ const RapportForm = ({
           throw new Error("Réponse invalide après promotion du brouillon");
         }
         setPendingPhotos({});
-        setPendingPhotoPlatine(null);
-        setPendingPhotoPlatinePortail(null);
+        setPendingPhotosPlatine([]);
+        setPendingPhotosPlatinePortail([]);
         setSignatureDraftRestoreUrl(null);
         await uploadPhotosAndSignatureAfterSave(savedId, result, { skipPendingUpload: true });
         setSuccessModalContext({ isEdit: false, savedId });
@@ -1648,10 +1728,12 @@ const RapportForm = ({
         const fd = formDataRef.current;
         const sr = selectedResidenceRef.current;
         const pp = pendingPhotosRef.current;
-        const pPlat = pendingPhotoPlatineRef.current;
-        const pPort = pendingPhotoPlatinePortailRef.current;
+        const pPlat = pendingPhotosPlatineRef.current;
+        const pPort = pendingPhotosPlatinePortailRef.current;
         const hasPendingPhotos =
-          Object.values(pp || {}).some((arr) => arr?.length > 0) || pPlat || pPort;
+          Object.values(pp || {}).some((arr) => arr?.length > 0) ||
+          (pPlat && pPlat.length > 0) ||
+          (pPort && pPort.length > 0);
         const sigDraft = safeGetSignatureDataUrl(signaturePadRef);
         const padHasSig = signaturePadRef.current?.hasSignature?.() ?? false;
         const signatureTaintedButPresent = padHasSig && !sigDraft;
@@ -1742,6 +1824,86 @@ const RapportForm = ({
     } catch (err) {
       showSnackbar("Erreur suppression photo", "error");
     }
+  };
+
+  const appendVigikPlatineFiles = (fileList) => {
+    const arr = Array.from(fileList || []).filter(Boolean);
+    if (!arr.length) return;
+    setPendingPhotosPlatine((prev) => {
+      const next = [...prev];
+      for (const file of arr) {
+        next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
+      }
+      return next;
+    });
+    scheduleDraftPersistence();
+  };
+
+  const removeVigikPlatineAt = async (index) => {
+    const list = pendingPhotosPlatineRef.current || [];
+    const p = list[index];
+    if (!p) return;
+    if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+    const rid = rapportIdRef.current;
+    const bid = serverBrouillonIdRef.current;
+    try {
+      if (p._draftS3Key && rid) {
+        await axios.post("/api/rapports-intervention/delete_photo_vigik/", {
+          rapport_id: rid,
+          s3_key: p._draftS3Key,
+          question: "platine",
+        });
+      } else if (p._draftS3Key && bid) {
+        await axios.post(`/api/rapports-intervention-brouillons/${bid}/delete_photo_vigik/`, {
+          s3_key: p._draftS3Key,
+          question: "platine",
+        });
+      }
+    } catch (e) {
+      console.warn("Suppression photo Vigik+ platine:", e);
+    }
+    setPendingPhotosPlatine((prev) => prev.filter((_, i) => i !== index));
+    scheduleDraftPersistence();
+  };
+
+  const appendVigikPortailFiles = (fileList) => {
+    const arr = Array.from(fileList || []).filter(Boolean);
+    if (!arr.length) return;
+    setPendingPhotosPlatinePortail((prev) => {
+      const next = [...prev];
+      for (const file of arr) {
+        next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
+      }
+      return next;
+    });
+    scheduleDraftPersistence();
+  };
+
+  const removeVigikPortailAt = async (index) => {
+    const list = pendingPhotosPlatinePortailRef.current || [];
+    const p = list[index];
+    if (!p) return;
+    if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+    const rid = rapportIdRef.current;
+    const bid = serverBrouillonIdRef.current;
+    try {
+      if (p._draftS3Key && rid) {
+        await axios.post("/api/rapports-intervention/delete_photo_vigik/", {
+          rapport_id: rid,
+          s3_key: p._draftS3Key,
+          question: "portail",
+        });
+      } else if (p._draftS3Key && bid) {
+        await axios.post(`/api/rapports-intervention-brouillons/${bid}/delete_photo_vigik/`, {
+          s3_key: p._draftS3Key,
+          question: "portail",
+        });
+      }
+    } catch (e) {
+      console.warn("Suppression photo Vigik+ portail:", e);
+    }
+    setPendingPhotosPlatinePortail((prev) => prev.filter((_, i) => i !== index));
+    scheduleDraftPersistence();
   };
 
   const handleUpdatePhoto = async (photoId, data) => {
@@ -2329,20 +2491,16 @@ const RapportForm = ({
               </Box>
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Joindre une photo (obligatoire)
+                  Joindre au moins une photo (obligatoire). Vous pouvez en ajouter plusieurs.
                 </Typography>
                 <input
                   ref={photoPlatineInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const previewUrl = URL.createObjectURL(file);
-                      setPendingPhotoPlatine({ file, name: file.name, previewUrl });
-                      scheduleDraftPersistence();
-                    }
+                    appendVigikPlatineFiles(e.target.files);
                     e.target.value = "";
                   }}
                 />
@@ -2353,41 +2511,39 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const previewUrl = URL.createObjectURL(file);
-                      setPendingPhotoPlatine({ file, name: file.name, previewUrl });
-                      scheduleDraftPersistence();
-                    }
+                    appendVigikPlatineFiles(e.target.files);
                     e.target.value = "";
                   }}
                 />
-                {pendingPhotoPlatine ? (
-                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                  {(pendingPhotosPlatine || []).map((p, i) => (
                     <Box
+                      key={`plat-${i}-${p._draftS3Key || p.name || ""}`}
                       sx={{
                         width: 140,
                         borderRadius: 1,
                         overflow: "hidden",
-                        border: "2px solid #1976d240",
+                        border: p.file ? "2px solid #1976d240" : "2px solid #2e7d3240",
                         position: "relative",
                       }}
                     >
                       <Box sx={{ width: "100%", height: 100, position: "relative" }}>
-                        <img
-                          src={pendingPhotoPlatine.previewUrl}
-                          alt={pendingPhotoPlatine.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
-                          onClick={() => openVigikGallery("Photo platine")}
-                        />
+                        {p.previewUrl ? (
+                          <img
+                            src={p.previewUrl}
+                            alt={p.name}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                            onClick={() => openVigikGallery(i)}
+                          />
+                        ) : (
+                          <Box sx={{ width: "100%", height: "100%", bgcolor: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Typography variant="caption">...</Typography>
+                          </Box>
+                        )}
                         {!isDisabled && (
                           <IconButton
                             size="small"
-                            onClick={() => {
-                              if (pendingPhotoPlatine.previewUrl) URL.revokeObjectURL(pendingPhotoPlatine.previewUrl);
-                              setPendingPhotoPlatine(null);
-                              scheduleDraftPersistence();
-                            }}
+                            onClick={() => removeVigikPlatineAt(i)}
                             sx={{
                               position: "absolute", top: 2, right: 2,
                               backgroundColor: "rgba(255,255,255,0.85)",
@@ -2400,105 +2556,29 @@ const RapportForm = ({
                         )}
                       </Box>
                       <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {pendingPhotoPlatine.name}
+                        {p.name}
                       </Typography>
                     </Box>
-                    {!isDisabled && (
-                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                        {isMobile && (
-                          <>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatineCameraInputRef.current?.click()}>
-                              Prendre une photo
-                            </Button>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
-                              Galerie
-                            </Button>
-                          </>
-                        )}
-                        {!isMobile && (
-                          <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
-                            Remplacer
+                  ))}
+                  {!isDisabled && (
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                      {isMobile ? (
+                        <>
+                          <Button size="small" variant="outlined" onClick={() => photoPlatineCameraInputRef.current?.click()}>
+                            Prendre une photo
                           </Button>
-                        )}
-                      </Box>
-                    )}
-                  </Box>
-                ) : rapportData?.photo_platine_url ? (
-                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
-                    <Box
-                      sx={{
-                        width: 140,
-                        borderRadius: 1,
-                        overflow: "hidden",
-                        border: "2px solid #2e7d3240",
-                        position: "relative",
-                      }}
-                    >
-                      <Box sx={{ width: "100%", height: 100 }}>
-                        <img
-                          src={rapportData.photo_platine_url}
-                          alt="Photo platine"
-                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
-                          onClick={() => openVigikGallery("Photo platine")}
-                        />
-                      </Box>
-                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, color: "success.main" }}>
-                        Photo jointe
-                      </Typography>
+                          <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                            Galerie
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                          Ajouter des photos
+                        </Button>
+                      )}
                     </Box>
-                    {!isDisabled && (
-                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                        {isMobile && (
-                          <>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatineCameraInputRef.current?.click()}>
-                              Prendre une photo
-                            </Button>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
-                              Galerie
-                            </Button>
-                          </>
-                        )}
-                        {!isMobile && (
-                          <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
-                            Remplacer
-                          </Button>
-                        )}
-                      </Box>
-                    )}
-                  </Box>
-                ) : (
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-                    {isMobile ? (
-                      <>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => photoPlatineCameraInputRef.current?.click()}
-                          disabled={isDisabled}
-                        >
-                          Prendre une photo
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => photoPlatineInputRef.current?.click()}
-                          disabled={isDisabled}
-                        >
-                          Galerie
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => photoPlatineInputRef.current?.click()}
-                        disabled={isDisabled}
-                      >
-                        Choisir une photo
-                      </Button>
-                    )}
-                  </Box>
-                )}
+                  )}
+                </Box>
               </Box>
               {/* Portail : étape 1 — présence d'un portail */}
               <Typography variant="subtitle2" sx={{ gridColumn: { md: "1 / -1" }, fontWeight: 600, mb: 0.5, mt: 2 }}>
@@ -2554,20 +2634,16 @@ const RapportForm = ({
               {formData.presence_portail === true && formData.presence_platine_portail === true && (
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Joindre une photo (facultatif)
+                  Joindre des photos (facultatif). Vous pouvez en ajouter plusieurs.
                 </Typography>
                 <input
                   ref={photoPlatinePortailInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const previewUrl = URL.createObjectURL(file);
-                      setPendingPhotoPlatinePortail({ file, name: file.name, previewUrl });
-                      scheduleDraftPersistence();
-                    }
+                    appendVigikPortailFiles(e.target.files);
                     e.target.value = "";
                   }}
                 />
@@ -2578,152 +2654,77 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const previewUrl = URL.createObjectURL(file);
-                      setPendingPhotoPlatinePortail({ file, name: file.name, previewUrl });
-                      scheduleDraftPersistence();
-                    }
+                    appendVigikPortailFiles(e.target.files);
                     e.target.value = "";
                   }}
                 />
-                {pendingPhotoPlatinePortail ? (
-                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
-                    <Box
-                      sx={{
-                        width: 140,
-                        borderRadius: 1,
-                        overflow: "hidden",
-                        border: "2px solid #1976d240",
-                        position: "relative",
-                      }}
-                    >
-                      <Box sx={{ width: "100%", height: 100, position: "relative" }}>
-                        <img
-                          src={pendingPhotoPlatinePortail.previewUrl}
-                          alt={pendingPhotoPlatinePortail.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
-                          onClick={() => openVigikGallery("Photo platine portail")}
-                        />
-                        {!isDisabled && (
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              if (pendingPhotoPlatinePortail.previewUrl) URL.revokeObjectURL(pendingPhotoPlatinePortail.previewUrl);
-                              setPendingPhotoPlatinePortail(null);
-                              scheduleDraftPersistence();
-                            }}
-                            sx={{
-                              position: "absolute", top: 2, right: 2,
-                              backgroundColor: "rgba(255,255,255,0.85)",
-                              "&:hover": { backgroundColor: "#ffebee" },
-                              padding: "2px",
-                            }}
-                          >
-                            <MdDelete size={16} color="#c62828" />
-                          </IconButton>
-                        )}
-                      </Box>
-                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {pendingPhotoPlatinePortail.name}
-                      </Typography>
-                    </Box>
-                    {!isDisabled && (
-                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                        {isMobile && (
-                          <>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailCameraInputRef.current?.click()}>
-                              Prendre une photo
-                            </Button>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
-                              Galerie
-                            </Button>
-                          </>
-                        )}
-                        {!isMobile && (
-                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
-                            Remplacer
-                          </Button>
-                        )}
-                      </Box>
-                    )}
-                  </Box>
-                ) : rapportData?.photo_platine_portail_url ? (
-                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
-                    <Box
-                      sx={{
-                        width: 140,
-                        borderRadius: 1,
-                        overflow: "hidden",
-                        border: "2px solid #2e7d3240",
-                        position: "relative",
-                      }}
-                    >
-                      <Box sx={{ width: "100%", height: 100 }}>
-                        <img
-                          src={rapportData.photo_platine_portail_url}
-                          alt="Photo platine portail"
-                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
-                          onClick={() => openVigikGallery("Photo platine portail")}
-                        />
-                      </Box>
-                      <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, color: "success.main" }}>
-                        Photo jointe
-                      </Typography>
-                    </Box>
-                    {!isDisabled && (
-                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                        {isMobile && (
-                          <>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailCameraInputRef.current?.click()}>
-                              Prendre une photo
-                            </Button>
-                            <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
-                              Galerie
-                            </Button>
-                          </>
-                        )}
-                        {!isMobile && (
-                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
-                            Remplacer
-                          </Button>
-                        )}
-                      </Box>
-                    )}
-                  </Box>
-                ) : (
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-                    {isMobile ? (
-                      <>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => photoPlatinePortailCameraInputRef.current?.click()}
-                          disabled={isDisabled}
-                        >
-                          Prendre une photo
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => photoPlatinePortailInputRef.current?.click()}
-                          disabled={isDisabled}
-                        >
-                          Galerie
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => photoPlatinePortailInputRef.current?.click()}
-                        disabled={isDisabled}
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+                  {(pendingPhotosPlatinePortail || []).map((p, i) => {
+                    const platCount = (pendingPhotosPlatine || []).length;
+                    return (
+                      <Box
+                        key={`port-${i}-${p._draftS3Key || p.name || ""}`}
+                        sx={{
+                          width: 140,
+                          borderRadius: 1,
+                          overflow: "hidden",
+                          border: p.file ? "2px solid #1976d240" : "2px solid #2e7d3240",
+                          position: "relative",
+                        }}
                       >
-                        Choisir une photo
-                      </Button>
-                    )}
-                  </Box>
-                )}
+                        <Box sx={{ width: "100%", height: 100, position: "relative" }}>
+                          {p.previewUrl ? (
+                            <img
+                              src={p.previewUrl}
+                              alt={p.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                              onClick={() => openVigikGallery(platCount + i)}
+                            />
+                          ) : (
+                            <Box sx={{ width: "100%", height: "100%", bgcolor: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <Typography variant="caption">...</Typography>
+                            </Box>
+                          )}
+                          {!isDisabled && (
+                            <IconButton
+                              size="small"
+                              onClick={() => removeVigikPortailAt(i)}
+                              sx={{
+                                position: "absolute", top: 2, right: 2,
+                                backgroundColor: "rgba(255,255,255,0.85)",
+                                "&:hover": { backgroundColor: "#ffebee" },
+                                padding: "2px",
+                              }}
+                            >
+                              <MdDelete size={16} color="#c62828" />
+                            </IconButton>
+                          )}
+                        </Box>
+                        <Typography variant="caption" sx={{ display: "block", px: 0.5, py: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {p.name}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                  {!isDisabled && (
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                      {isMobile ? (
+                        <>
+                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailCameraInputRef.current?.click()}>
+                            Prendre une photo
+                          </Button>
+                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                            Galerie
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                          Ajouter des photos
+                        </Button>
+                      )}
+                    </Box>
+                  )}
+                </Box>
               </Box>
               )}
             </>

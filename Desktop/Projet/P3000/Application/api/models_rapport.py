@@ -125,12 +125,22 @@ class RapportIntervention(models.Model):
     numero_batiment = models.CharField(max_length=100, blank=True, default='', verbose_name="Numéro du bâtiment")
     type_installation = models.CharField(max_length=255, blank=True, default='', verbose_name="Type d'installation")
     presence_platine = models.BooleanField(null=True, blank=True, verbose_name="Présence de platine")
-    photo_platine_s3_key = models.CharField(max_length=500, blank=True, default='', verbose_name="Photo platine")
+    photos_platine_s3_keys = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Photos platine (Vigik+)",
+        help_text="Liste ordonnée de clés S3.",
+    )
     presence_portail = models.BooleanField(
         null=True, blank=True, verbose_name="Présence d'un portail (Vigik+)"
     )
     presence_platine_portail = models.BooleanField(null=True, blank=True, verbose_name="Présence de platine au niveau du portail")
-    photo_platine_portail_s3_key = models.CharField(max_length=500, blank=True, default='', verbose_name="Photo platine portail")
+    photos_platine_portail_s3_keys = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Photos platine portail (Vigik+)",
+        help_text="Liste ordonnée de clés S3.",
+    )
 
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='rapports_crees')
     created_at = models.DateTimeField(auto_now_add=True)

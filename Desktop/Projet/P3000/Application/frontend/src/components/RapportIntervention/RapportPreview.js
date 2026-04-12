@@ -130,15 +130,15 @@ const RapportPreview = ({ rapport }) => {
                 variant="outlined"
                 sx={{ mr: 1 }}
               />
-              {rapport.photo_platine_url && (
-                <Box sx={{ mt: 1 }}>
+              {(rapport.vigik_platine_photos || []).filter((x) => x?.url).map((row, idx) => (
+                <Box key={row.s3_key || idx} sx={{ mt: 1 }}>
                   <img
-                    src={rapport.photo_platine_url}
-                    alt="Photo platine"
+                    src={row.url}
+                    alt={`Photo platine ${idx + 1}`}
                     style={{ maxWidth: "100%", width: 280, height: 210, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
                   />
                 </Box>
-              )}
+              ))}
             </Box>
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: COLORS.infoDark || "#1976d2" }}>
@@ -164,15 +164,16 @@ const RapportPreview = ({ rapport }) => {
                   variant="outlined"
                   sx={{ mr: 1 }}
                 />
-                {rapport.presence_platine_portail === true && rapport.photo_platine_portail_url && (
-                  <Box sx={{ mt: 1 }}>
-                    <img
-                      src={rapport.photo_platine_portail_url}
-                      alt="Photo platine portail"
-                      style={{ maxWidth: "100%", width: 280, height: 210, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
-                    />
-                  </Box>
-                )}
+                {rapport.presence_platine_portail === true &&
+                  (rapport.vigik_platine_portail_photos || []).filter((x) => x?.url).map((row, idx) => (
+                    <Box key={row.s3_key || idx} sx={{ mt: 1 }}>
+                      <img
+                        src={row.url}
+                        alt={`Photo platine portail ${idx + 1}`}
+                        style={{ maxWidth: "100%", width: 280, height: 210, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
+                      />
+                    </Box>
+                  ))}
               </Box>
             )}
           </Box>

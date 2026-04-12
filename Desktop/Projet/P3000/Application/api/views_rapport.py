@@ -398,7 +398,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def upload_photo_platine(self, request):
-        """Upload de la photo platine pour un rapport Vigik+."""
+        """Ajoute une photo platine (Vigik+) — plusieurs fichiers possibles."""
         rapport_id = request.data.get('rapport_id')
         file = request.FILES.get('photo')
         if not rapport_id or not file:
@@ -418,30 +418,28 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
             s3_key = f"rapports_intervention/vigik_platine/rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
-            if rapport.photo_platine_s3_key and is_s3_available():
-                try:
-                    s3_client.delete_object(Bucket=bucket_name, Key=rapport.photo_platine_s3_key)
-                except Exception:
-                    pass
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=file.read(),
                 ContentType=file.content_type or 'image/jpeg'
             )
-            rapport.photo_platine_s3_key = s3_key
-            rapport.save()
+            keys = list(rapport.photos_platine_s3_keys or [])
+            keys.append(s3_key)
+            rapport.photos_platine_s3_keys = keys
+            rapport.save(update_fields=['photos_platine_s3_keys', 'updated_at'])
             return Response({
                 'success': True,
                 's3_key': s3_key,
                 'photo_platine_url': generate_presigned_url_for_display(s3_key),
+                'photos_platine_s3_keys': keys,
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'])
     def upload_photo_platine_portail(self, request):
-        """Upload de la photo platine portail pour un rapport Vigik+ (2e question)."""
+        """Ajoute une photo platine portail (Vigik+) — plusieurs fichiers possibles."""
         rapport_id = request.data.get('rapport_id')
         file = request.FILES.get('photo')
         if not rapport_id or not file:
@@ -461,24 +459,55 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
             s3_key = f"rapports_intervention/vigik_platine_portail/rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
-            if getattr(rapport, 'photo_platine_portail_s3_key', None) and is_s3_available():
-                try:
-                    s3_client.delete_object(Bucket=bucket_name, Key=rapport.photo_platine_portail_s3_key)
-                except Exception:
-                    pass
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=file.read(),
                 ContentType=file.content_type or 'image/jpeg'
             )
-            rapport.photo_platine_portail_s3_key = s3_key
-            rapport.save()
+            keys = list(rapport.photos_platine_portail_s3_keys or [])
+            keys.append(s3_key)
+            rapport.photos_platine_portail_s3_keys = keys
+            rapport.save(update_fields=['photos_platine_portail_s3_keys', 'updated_at'])
             return Response({
                 'success': True,
                 's3_key': s3_key,
                 'photo_platine_portail_url': generate_presigned_url_for_display(s3_key),
+                'photos_platine_portail_s3_keys': keys,
             }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def delete_photo_vigik(self, request):
+        """Retire une photo Vigik+ (platine ou portail) du rapport et supprime l'objet S3."""
+        rapport_id = request.data.get('rapport_id')
+        s3_key = (request.data.get('s3_key') or '').strip()
+        question = (request.data.get('question') or '').strip().lower()
+        if not rapport_id or not s3_key or question not in ('platine', 'portail'):
+            return Response(
+                {'error': 'rapport_id, s3_key et question (platine|portail) requis'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            rapport = RapportIntervention.objects.get(id=rapport_id)
+        except RapportIntervention.DoesNotExist:
+            return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+            attr = 'photos_platine_s3_keys' if question == 'platine' else 'photos_platine_portail_s3_keys'
+            keys = list(getattr(rapport, attr) or [])
+            if s3_key not in keys:
+                return Response({'error': 'Clé absente du rapport'}, status=status.HTTP_404_NOT_FOUND)
+            keys = [k for k in keys if k != s3_key]
+            setattr(rapport, attr, keys)
+            rapport.save(update_fields=[attr, 'updated_at'])
+            if is_s3_available():
+                try:
+                    get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=s3_key)
+                except Exception:
+                    pass
+            return Response({'success': True, attr: keys}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -653,17 +682,21 @@ def preview_rapport_intervention(request, rapport_id):
     intervention_date_rows = _intervention_date_rows_for_template(rapport)
     temps_ctx = _build_temps_intervention_for_template(rapport)
 
-    photo_platine_url = ""
-    photo_platine_portail_url = ""
+    photo_platine_urls = []
+    photo_platine_portail_urls = []
     if rapport.type_rapport == 'vigik_plus':
-        if rapport.photo_platine_s3_key:
+        for k in rapport.photos_platine_s3_keys or []:
+            if not k:
+                continue
             try:
-                photo_platine_url = generate_presigned_url_for_display(rapport.photo_platine_s3_key)
+                photo_platine_urls.append(generate_presigned_url_for_display(k))
             except Exception:
                 pass
-        if getattr(rapport, 'photo_platine_portail_s3_key', None):
+        for k in rapport.photos_platine_portail_s3_keys or []:
+            if not k:
+                continue
             try:
-                photo_platine_portail_url = generate_presigned_url_for_display(rapport.photo_platine_portail_s3_key)
+                photo_platine_portail_urls.append(generate_presigned_url_for_display(k))
             except Exception:
                 pass
 
@@ -675,8 +708,8 @@ def preview_rapport_intervention(request, rapport_id):
             'societe_nom': societe_nom,
             'societe_adresse': societe_adresse,
             'signature_url': signature_url,
-            'photo_platine_url': photo_platine_url,
-            'photo_platine_portail_url': photo_platine_portail_url,
+            'photo_platine_urls': photo_platine_urls,
+            'photo_platine_portail_urls': photo_platine_portail_urls,
             'intervention_date_rows': intervention_date_rows,
         })
     return render(request, 'rapport_intervention.html', {
@@ -909,14 +942,6 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/platine_{uuid.uuid4().hex[:8]}.{ext}"
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
-            p = brouillon.payload or {}
-            dm = p.get("_draft_media") or {}
-            old = dm.get("photo_platine_s3_key")
-            if old and is_s3_available():
-                try:
-                    s3_client.delete_object(Bucket=bucket_name, Key=old)
-                except Exception:
-                    pass
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=s3_key,
@@ -946,14 +971,6 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/platine_portail_{uuid.uuid4().hex[:8]}.{ext}"
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
-            p = brouillon.payload or {}
-            dm = p.get("_draft_media") or {}
-            old = dm.get("photo_platine_portail_s3_key")
-            if old and is_s3_available():
-                try:
-                    s3_client.delete_object(Bucket=bucket_name, Key=old)
-                except Exception:
-                    pass
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=s3_key,
@@ -966,6 +983,50 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
             return Response({"success": True, "s3_key": s3_key, "presigned_url": presigned_url})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=["post"])
+    def delete_photo_vigik(self, request, pk=None):
+        """Retire une clé S3 du manifeste _draft_media et supprime l'objet (brouillon Vigik+)."""
+        brouillon = self.get_object()
+        s3_key = (request.data.get("s3_key") or "").strip()
+        question = (request.data.get("question") or "").strip().lower()
+        if not s3_key or question not in ("platine", "portail"):
+            return Response(
+                {"error": "s3_key et question (platine|portail) requis"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+
+            p = dict(brouillon.payload or {})
+            dm = dict(p.get("_draft_media") or {})
+            attr = "photos_platine_s3_keys" if question == "platine" else "photos_platine_portail_s3_keys"
+            keys = list(dm.get(attr) or [])
+            if question == "platine" and not keys and dm.get("photo_platine_s3_key"):
+                keys = [dm["photo_platine_s3_key"]]
+            if question == "portail" and not keys and dm.get("photo_platine_portail_s3_key"):
+                keys = [dm["photo_platine_portail_s3_key"]]
+            if s3_key not in keys:
+                return Response({"error": "Clé absente du brouillon"}, status=status.HTTP_404_NOT_FOUND)
+            keys = [k for k in keys if k != s3_key]
+            dm[attr] = keys
+            dm.pop("photo_platine_s3_key", None)
+            dm.pop("photo_platine_presigned_url", None)
+            dm.pop("photo_platine_portail_s3_key", None)
+            dm.pop("photo_platine_portail_presigned_url", None)
+            dm.pop("photo_platine_presigned_urls", None)
+            dm.pop("photo_platine_portail_presigned_urls", None)
+            p["_draft_media"] = dm
+            brouillon.payload = p
+            brouillon.save(update_fields=["payload", "updated_at"])
+            if is_s3_available():
+                try:
+                    get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=s3_key)
+                except Exception:
+                    pass
+            return Response({"success": True, attr: keys}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
